@@ -5,18 +5,26 @@
 __pycache__/
 *.py[cod]
 
-# Test / type-check caches
+# Python tooling caches
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
 
-# Environment secrets
+# Environment variables and secrets
 .env
 .env.*
+!.env.example
 
 # Node / Next.js
 node_modules/
 .next/
 
-# OS/editor noise
+# IDE / editor configuration
+.vscode/
+.idea/
+
+# Operating system files
 .DS_Store
+Thumbs.db
