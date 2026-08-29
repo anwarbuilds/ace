@@ -10,26 +10,17 @@ This document records what was built, why it exists, bugs discovered during impl
 
 ACE uses Python 3.12.12 selected with `pyenv` and a project-local `.venv`.
 
-### What I Learned
-
-- `pyenv` selects the Python interpreter version.
-- `.venv` isolates project dependencies.
-- `.venv` belongs to the local development environment and is not committed to Git.
-- `requirements.txt` records dependencies required to recreate the Python environment.
-
-### Environment Flow
+Key lesson:
 
 ```text
 pyenv
     ↓
-Python 3.12.12
+Python version
     ↓
-ACE .venv
+project .venv
     ↓
-ACE-specific dependencies
+project dependencies
 ```
-
----
 
 ## Git and GitHub
 
@@ -37,25 +28,7 @@ Git provides local version history.
 
 GitHub stores the remote repository.
 
-### Git Flow
-
-```text
-Working Directory
-    ↓
-git add
-    ↓
-Staging Area
-    ↓
-git commit
-    ↓
-Local Repository
-    ↓
-git push
-    ↓
-GitHub
-```
-
-### Concepts Learned
+Key concepts learned:
 
 - repository
 - working directory
@@ -63,12 +36,9 @@ GitHub
 - commit
 - commit hash
 - branch
-- `main`
 - remote
-- `origin`
+- origin
 - push
-- local versus global Git identity
-- GitHub authentication
 - `.gitignore`
 
 ---
@@ -77,9 +47,7 @@ GitHub
 
 ## Problem
 
-ACE needs to retrieve jobs directly from employer hiring systems rather than relying only on third-party aggregators.
-
-Many employers use Applicant Tracking Systems such as Greenhouse.
+ACE needs employer job data directly from ATS systems instead of relying only on third-party aggregators.
 
 ## Architecture
 
@@ -97,96 +65,16 @@ CanonicalJob
 
 ## What Was Built
 
-ACE can retrieve live Greenhouse job postings and convert provider-specific JSON into ACE's normalized `CanonicalJob` representation.
+Greenhouse-specific payloads are normalized into `CanonicalJob`.
 
-The normalized model currently contains:
+Important lessons:
 
-- source
-- company
-- external ID
-- requisition ID
-- title
-- location
-- description
-- official employer URL
-- publication timestamp
-- update timestamp
-
-## Why a Canonical Model Exists
-
-The rest of ACE should not depend on Greenhouse-specific field names.
-
-Instead:
-
-```text
-Greenhouse
-    ↓
-Greenhouse Adapter
-    ↓
-CanonicalJob
-```
-
-Future adapters can produce the same normalized model:
-
-```text
-Greenhouse ─┐
-Lever ──────┼──→ CanonicalJob → ACE
-Ashby ──────┘
-```
-
-This is an example of the adapter pattern.
-
-## Network Reliability Decisions
-
-The Greenhouse adapter uses:
-
-- explicit HTTP timeout
-- descriptive User-Agent
-- `response.raise_for_status()`
-- safe handling of missing fields
-
-A third-party network dependency should never be allowed to hang an ACE worker indefinitely.
-
-## Full Description Retrieval
-
-Greenhouse is queried with job content enabled.
-
-HTML descriptions are converted into normalized text.
-
-This allows downstream modules to inspect:
-
-- experience requirements
-- degree requirements
-- sponsorship language
-- citizenship language
-- skills
-- education
-
-## Testing Strategy
-
-The live Greenhouse API is exercised through a manual smoke-test script.
-
-Unit tests are kept deterministic and independent of the external network.
-
-## Concepts Learned
-
-- ATS
-- APIs
-- HTTP
-- GET requests
-- status codes
-- JSON
-- dictionaries
-- lists
-- loops
-- functions
-- type hints
-- Pydantic
-- immutable models
 - adapter pattern
+- canonical data models
+- HTTP timeout handling
+- descriptive User-Agent
 - HTML normalization
-- HTTP timeouts
-- smoke testing
+- live smoke testing
 
 ---
 
@@ -194,86 +82,23 @@ Unit tests are kept deterministic and independent of the external network.
 
 ## Problem
 
-Retrieving every employer job is not useful by itself.
-
-ACE needs to answer two separate questions:
-
-1. Does this posting belong to a target role family?
-2. Does this posting contain a deterministic blocker?
-
-These questions are intentionally separated.
-
-## Target Opportunity Profile
-
-### Geography
-
-- United States
-- Remote-US
-
-Generic `Remote` is not automatically assumed to mean Remote-US.
-
-### Primary Roles
-
-- Software Engineering / SDE
-- AI / Machine Learning Engineering
-
-### Secondary Role
-
-- Forward Deployed Engineering
-
-### Hard Exclusions
-
-ACE currently rejects jobs that clearly contain:
-
-- non-target role family
-- non-US geography
-- senior/staff/principal/lead/manager/director level
-- explicit PhD targeting
-- explicit PhD or doctoral-degree requirement
-- excessive required experience
-- explicit US citizenship or US-person restriction
-- explicit security-clearance restriction
-- explicit no-sponsorship language
-
-PhD preferred does not automatically reject a job.
-
-Missing sponsorship language does not automatically reject a job.
-
----
+ACE needs to distinguish target roles from irrelevant roles and reject deterministic blockers.
 
 ## Architecture
 
 ```text
 CanonicalJob
-    │
-    ├──→ Role Classifier
-    │       ↓
-    │   RoleFamily
-    │
-    └──→ Eligibility Gate
-            ↓
-      PASS / STRETCH / REJECT
+    ↓
+Role Classifier
+    ↓
+RoleFamily
+    ↓
+Eligibility Gate
+    ↓
+PASS / STRETCH / REJECT
 ```
 
-Later:
-
-```text
-PASS / STRETCH
-    ↓
-Resume Relevance
-    ↓
-HIGH / MEDIUM / MINIMAL
-    ↓
-Ranking
-```
-
-Resume relevance does not control inclusion.
-
----
-
-## Role Classification
-
-Current role families:
+## Role Families
 
 ```text
 SOFTWARE_ENGINEERING
@@ -282,409 +107,624 @@ FORWARD_DEPLOYED_ENGINEERING
 OTHER
 ```
 
-Priority:
+## Important Bugs
+
+### Excessive Experience False Stretch
+
+A high-experience role incorrectly survived because unrelated degree-substitution language was interpreted as an early-career signal.
+
+Fix: clearly excessive required experience remains a hard rejection.
+
+### `PhD preferred` False Rejection
+
+Loose regex proximity caused `PhD preferred` to be treated as `PhD required`.
+
+Fix: explicit requirement grammar is now used.
+
+Key lessons:
+
+- false negatives matter
+- regression tests protect real bugs
+- real employer data should validate deterministic assumptions
+- do not overfit one employer corpus
+
+---
+
+# Module 3 — PostgreSQL Persistence and Job Lifecycle
+
+## Problem
+
+Before Module 3, ACE could fetch, normalize, classify, and evaluate jobs, but every process execution forgot previous runs.
+
+ACE could not answer:
 
 ```text
-PRIMARY
-├── SOFTWARE_ENGINEERING
-└── AI_ML_ENGINEERING
-
-SECONDARY
-└── FORWARD_DEPLOYED_ENGINEERING
+Have I seen this job before?
+Is this job genuinely new?
+Did the employer change it?
+Did it disappear?
+Did it reopen?
 ```
 
-### Specific-Before-General Matching
+Real-time alerting requires durable state.
 
-More specific role patterns must be checked before generic Software Engineering.
+---
+
+## Infrastructure Architecture
+
+```text
+ACE Python
+    ↓
+SQLAlchemy
+    ↓
+psycopg
+    ↓
+localhost:5433
+    ↓
+Docker port mapping
+    ↓
+PostgreSQL container:5432
+```
+
+A native PostgreSQL service already occupied host port `5432`, so ACE uses host port `5433`.
+
+Important lesson:
+
+```text
+host port != container port
+```
+
+Docker allows ACE's PostgreSQL container to keep its internal default `5432` while exposing it as `5433` on the host.
+
+---
+
+## Docker Compose and Persistent Volumes
+
+PostgreSQL runs through Docker Compose.
+
+A named volume preserves database state across container recreation.
+
+Important distinction:
+
+```text
+docker compose down
+→ stop/remove containers
+→ keep volume
+
+docker compose down -v
+→ also delete volume
+→ database data removed
+```
+
+---
+
+## Environment Configuration
+
+ACE stores real local configuration in:
+
+```text
+.env
+```
+
+and safe example configuration in:
+
+```text
+.env.example
+```
+
+`.env` is ignored by Git.
+
+Key lesson:
+
+```text
+source code
+!=
+runtime secrets/configuration
+```
+
+---
+
+## Database Technologies
+
+### PostgreSQL
+
+Durable relational database.
+
+### psycopg
+
+Python PostgreSQL driver.
+
+### SQLAlchemy
+
+ORM/database abstraction.
+
+### Alembic
+
+Database-schema migration system.
+
+### pydantic-settings
+
+Environment-based application configuration.
+
+---
+
+## Pydantic vs SQLAlchemy
+
+ACE now has two model types.
+
+### `CanonicalJob`
+
+Domain/application representation.
+
+Question answered:
+
+```text
+What does a normalized job look like inside ACE?
+```
+
+### `JobRecord`
+
+Persistent SQLAlchemy representation.
+
+Question answered:
+
+```text
+How is the job stored in PostgreSQL?
+```
+
+Separating domain and persistence models reduces coupling.
+
+---
+
+## Database Schema
+
+### `jobs`
+
+Stores durable job state.
+
+Important fields:
+
+```text
+id
+source
+source_account
+external_id
+company
+requisition_id
+title
+location
+description
+official_url
+posted_at
+source_updated_at
+content_hash
+first_seen_at
+last_seen_at
+is_active
+closed_at
+```
+
+### `source_states`
+
+Stores per-source baseline and polling state.
+
+```text
+source
+source_account
+initialized_at
+last_success_at
+last_job_count
+```
+
+---
+
+## Durable Job Identity
+
+Provider-local IDs alone are not sufficient across many employer boards.
+
+ACE uses:
+
+```text
+source
++
+source_account
++
+external_id
+```
 
 Example:
 
 ```text
-Machine Learning Software Engineer
-    ↓
-AI_ML_ENGINEERING
+greenhouse
++
+databricks
++
+8559344002
 ```
 
-rather than:
+A PostgreSQL unique constraint enforces this identity.
+
+Lesson:
 
 ```text
-SOFTWARE_ENGINEERING
+application deduplication
++
+database constraint
+=
+defense in depth
 ```
-
-Similarly:
-
-```text
-Forward Deployed Software Engineer
-    ↓
-FORWARD_DEPLOYED_ENGINEERING
-```
-
-This prevents generic patterns from capturing titles too early.
 
 ---
 
-## Eligibility Outcomes
+## Alembic
 
-### PASS
+Initial schema migration:
 
-No hard deterministic blocker detected.
+```text
+0001_create_jobs_and_source_states
+```
 
-### STRETCH
+Git versions source code.
 
-The role remains visible but contains a significant qualification stretch.
+Alembic versions database schema.
 
-### REJECT
-
-At least one deterministic hard blocker was detected.
+Manual production schema changes should be avoided.
 
 ---
 
-## Experience Rules
+## Source Snapshot Model
 
-Current MVP rules:
-
-```text
-0–2 required years
-→ PASS
-
-3 required years
-→ STRETCH
-
-4 required years
-→ REJECT
-
-4 required years + explicit early-career signal
-→ STRETCH
-
-5+ required years
-→ REJECT
-```
-
-Preferred experience is not treated as a hard requirement.
-
----
-
-## PhD Rules
-
-Reject:
-
-```text
-Software Engineer - PhD
-Machine Learning Engineer - PhD
-PhD required
-A PhD in Computer Science is required
-Doctoral degree required
-Doctorate required
-```
-
-Do not automatically reject:
-
-```text
-PhD preferred
-BS / MS / PhD preferred
-Bachelor's or Master's required; PhD preferred
-```
-
-The final matcher uses explicit requirement grammar rather than loose keyword proximity.
-
----
-
-## Sponsorship Rule
-
-Explicit language such as:
-
-```text
-without current or future sponsorship
-will not sponsor
-cannot sponsor
-no visa sponsorship
-```
-
-causes rejection.
-
-No sponsorship statement:
-
-```text
-UNKNOWN
-```
-
-does not cause rejection.
-
-This supports a recall-first design, especially for startups and smaller employers that may not include immigration details in every posting.
-
----
-
-## Explainability
-
-Each eligibility decision contains:
-
-- `status`
-- `role_family`
-- `role_priority`
-- `rule_version`
-- machine-readable reason codes
-- human-readable reasons
-- extracted required-experience years
-
-This makes future dashboard explanations possible.
+One complete employer response is treated as a source snapshot.
 
 Example:
 
 ```text
-Role family:
-AI_ML_ENGINEERING
+Databricks Greenhouse
+    ↓
+855 jobs
+    ↓
+one snapshot
+```
 
-Eligibility:
-REJECT
+That snapshot is compared against durable state.
 
-Reason codes:
-EXPERIENCE_TOO_HIGH
-SENIOR_TITLE
+---
+
+## Baseline Protection
+
+First successful source run:
+
+```text
+855 current jobs
+    ↓
+855 NEW to database
+    ↓
+baseline = true
+    ↓
+0 evaluation candidates
+```
+
+Key lesson:
+
+```text
+NEW to database
+!=
+newly posted after ACE started
+```
+
+Without this distinction, first deployment could create hundreds of false alerts.
+
+---
+
+## Persistence Lifecycle
+
+### NEW
+
+Identity does not exist.
+
+### UNCHANGED
+
+Identity exists and meaningful content hash is the same.
+
+### UPDATED
+
+Identity exists and meaningful content changed.
+
+### CLOSED
+
+Previously active job is absent from a successful complete snapshot.
+
+### REOPENED
+
+Previously inactive job appears again.
+
+State flow:
+
+```text
+NEW
+ ↓
+UNCHANGED
+ ↓
+UPDATED
+
+missing
+ ↓
+CLOSED
+
+returns
+ ↓
+REOPENED
 ```
 
 ---
 
-## Rule Versioning
+## Content Hashing
 
-Role and eligibility logic include explicit rule versions.
+ACE computes a deterministic SHA-256 fingerprint over meaningful normalized job content.
 
-This makes it possible to evolve the classifier while preserving which rules produced an earlier decision.
+Provider bookkeeping update timestamps are excluded.
 
----
+Why?
 
-## Automated Testing
+Because a provider may change internal timestamps without changing the job posting.
 
-Current suite:
-
-```text
-33 tests passing
-```
-
-Coverage includes:
-
-- canonical job creation
-- Software Engineering classification
-- SDE classification
-- AI/ML classification
-- Forward Deployed classification
-- classification precedence
-- role priority
-- US geography
-- Remote-US geography
-- unspecified remote behavior
-- foreign location rejection
-- non-target roles
-- senior roles
-- experience thresholds
-- early-career exceptions
-- preferred experience
-- high-experience rejection
-- PhD-targeted titles
-- required PhD
-- doctoral degree requirement
-- preferred PhD
-- unknown sponsorship
-- explicit no-sponsorship language
-- citizenship restrictions
-- security-clearance restrictions
+Including such timestamps would generate false `UPDATED` events.
 
 ---
 
-## Live Databricks Audit
+## N+1 Query Avoidance
 
-A live Databricks Greenhouse board was used as a real integration corpus.
-
-During the final Module 2 audit snapshot:
+Naive design:
 
 ```text
-Total Databricks jobs:         855
-Detected target-role jobs:     257
-Qualifying target-role jobs:     1
+for each job:
+    SELECT job
 ```
 
-Target roles detected before eligibility:
+For 855 jobs, that can mean approximately 855 database round trips.
 
-```text
-Software Engineering:          167
-AI / ML Engineering:             6
-Forward Deployed Engineering:   84
-```
+ACE instead batch-loads existing source identities and compares them in memory.
 
-Target roles surviving eligibility:
+Key lesson:
 
-```text
-Software Engineering:            0
-AI / ML Engineering:             0
-Forward Deployed Engineering:    1
-```
-
-Main overlapping rejection reasons among target-role jobs:
-
-```text
-SENIOR_TITLE          236
-EXPERIENCE_TOO_HIGH   217
-OUTSIDE_US             96
-PHD_TARGETED_ROLE       2
-```
-
-The counts overlap because a single job may fail several rules.
-
-The result is only a live snapshot and is not a permanent expectation for Databricks.
+Database round trips matter at scale.
 
 ---
 
-## Bug 1 — Excessive Experience Incorrectly Became STRETCH
+## Atomic Transactions
 
-### Observed Behavior
+Repository methods do not commit independently.
 
-A live posting contained approximately:
-
-```text
-7+ years experience
-```
-
-but the earlier rule also saw unrelated degree-substitution language such as:
+The caller owns the complete source-snapshot transaction.
 
 ```text
-Bachelor's degree or equivalent experience
+successful snapshot
+→ COMMIT
+
+failure
+→ ROLLBACK
 ```
 
-and incorrectly returned:
-
-```text
-STRETCH
-```
-
-### Why This Was Wrong
-
-A seven-year required-experience threshold is clearly outside the intended early-career search profile.
-
-Degree-substitution wording elsewhere in the description should not weaken that hard blocker.
-
-### Fix
-
-The rule was changed so:
-
-```text
-5+ required years
-→ REJECT
-```
-
-regardless of unrelated degree-substitution text.
-
-### Regression Protection
-
-A dedicated unit test now verifies this behavior.
+This prevents partially persisted source state.
 
 ---
 
-## Bug 2 — `PhD preferred` Incorrectly Became REJECT
+## Empty Snapshot Protection
 
-### Observed Behavior
-
-The earlier regex interpreted:
+Dangerous scenario:
 
 ```text
-Bachelor's or Master's degree required.
-PhD preferred.
+provider/API failure
+    ↓
+0 parsed jobs
 ```
 
-as if the PhD itself were required.
-
-### Root Cause
-
-The regex used loose proximity between:
+If interpreted as authoritative:
 
 ```text
-required
+all active jobs
+→ CLOSED
 ```
 
-and:
+ACE instead rejects an empty complete snapshot and rolls back.
 
-```text
-PhD
-```
-
-Those words belonged to different qualification clauses.
-
-### Fix
-
-The PhD matcher now looks for explicit requirement grammar such as:
-
-```text
-PhD required
-A PhD in Computer Science is required
-Requires a PhD
-Must hold a PhD
-Doctoral degree required
-```
-
-while allowing:
-
-```text
-PhD preferred
-```
-
-### Regression Protection
-
-A dedicated unit test now protects the preferred-PhD case.
+This is an example of designing for upstream failure.
 
 ---
 
-## Important Engineering Lessons from Module 2
+## Persistence vs Notification Separation
 
-### Unit Tests Answer
+An architecture refinement was made during Module 3.
 
-> Does the code behave according to the rules we wrote?
+Persistence initially exposed:
 
-### Live Smoke Tests Answer
+```text
+notification_candidates
+```
 
-> Are those rules sensible against real-world employer data?
+That was too coupled.
 
-Both are necessary.
+It was replaced with:
 
-### False Negatives Matter
+```text
+evaluation_candidates
+```
 
-ACE is intended to be recall-oriented.
+Correct separation:
 
-A false negative can hide an opportunity that should have been surfaced.
+```text
+Persistence
+→ What changed?
 
-Therefore:
+Intelligence
+→ Is it relevant/eligible?
 
-- missing sponsorship information stays unknown
-- preferred qualifications do not become hard requirements
-- real corpora are audited before rules are frozen
-
-### Do Not Overfit One Employer
-
-Databricks provided a valuable validation corpus, but ACE should not tune all heuristics to one company's job-board wording.
-
-The rules should be validated again as more ATS sources and employers are added.
+Notification
+→ Should the user be alerted?
+```
 
 ---
 
-## Known MVP Limitations
+## Synthetic Lifecycle Smoke Test
 
-Current Module 2 limitations include:
+A synthetic source account validates real PostgreSQL transitions.
 
-- heuristic US geography matching
-- regex-based experience extraction
-- finite title-pattern dictionaries
-- finite sponsorship phrase dictionaries
-- no graduation-window compatibility yet
-- no dedicated OPT evidence model
-- no dedicated STEM OPT / E-Verify model
-- no dedicated H-1B historical evidence model
-- no semantic description classifier
-- limited multi-employer validation
+### Pass 1
 
-These are known limitations, not hidden assumptions.
+```text
+2 NEW
+baseline = true
+0 evaluation candidates
+```
+
+### Pass 2
+
+```text
+1 NEW
+1 UPDATED
+1 UNCHANGED
+2 evaluation candidates
+```
+
+### Pass 3
+
+```text
+1 CLOSED
+```
+
+### Pass 4
+
+```text
+1 REOPENED
+1 evaluation candidate
+```
+
+The test cleans up synthetic data afterward.
+
+Verified cleanup:
+
+```text
+source_account = ace-module3-smoke
+count = 0
+```
+
+---
+
+## Live Databricks Persistence Validation
+
+Current durable source state:
+
+```text
+source: greenhouse
+source_account: databricks
+last_job_count: 855
+```
+
+Current database state:
+
+```text
+total_jobs:  855
+active_jobs: 855
+closed_jobs:   0
+```
+
+Repeated live polling produced:
+
+```text
+Baseline:               False
+Fetched:                855
+Unique:                 855
+Duplicates:               0
+NEW:                      0
+UPDATED:                  0
+REOPENED:                 0
+UNCHANGED:              855
+CLOSED:                   0
+Evaluation candidates:    0
+```
+
+This demonstrates idempotency.
+
+---
+
+## Debugging Incident — Wrong Smoke-Test File Contents
+
+`backend/scripts/persistence_smoke.py` accidentally contained unrelated test code.
+
+Symptom:
+
+```bash
+python -m backend.scripts.persistence_smoke
+```
+
+returned immediately with no output.
+
+Because imports succeeded, there was no traceback.
+
+Inspecting the file showed the intended executable script had been overwritten/mixed.
+
+The file was replaced completely and checked using:
+
+```bash
+python -m py_compile backend/scripts/persistence_smoke.py
+```
+
+Then the live smoke test worked.
+
+Lesson:
+
+A silent Python module can mean the module imported successfully but never reached an executable entry point.
+
+---
+
+## Module 3 Test Status
+
+Final deterministic suite:
+
+```text
+47 passed
+```
+
+---
+
+## Concepts Learned in Module 3
+
+- PostgreSQL
+- Docker
+- Docker Compose
+- host vs container ports
+- named volumes
+- environment configuration
+- database URLs
+- SQLAlchemy ORM
+- declarative models
+- sessions
+- connection pooling
+- Alembic migrations
+- schema versioning
+- primary keys
+- composite keys
+- unique constraints
+- indexes
+- transactions
+- commit
+- rollback
+- atomicity
+- repositories
+- source snapshots
+- baselines
+- state machines
+- SHA-256 hashing
+- idempotency
+- N+1 query avoidance
+- deduplication
+- synthetic integration testing
+- upstream failure protection
+- separation of persistence and notification policy
 
 ---
 
 # Current Architecture Checkpoint
-
-ACE currently implements:
 
 ```text
 Greenhouse API
@@ -693,87 +733,64 @@ Greenhouse Adapter
     ↓
 CanonicalJob
     ↓
-Role Classifier
+PostgreSQL Persistence
     ↓
-Eligibility Gate
+NEW / UPDATED / REOPENED / UNCHANGED / CLOSED
     ↓
-PASS / STRETCH / REJECT
+Role Classification
+    ↓
+Eligibility
 ```
 
 Completed:
 
 ```text
-Module 0 — Project Foundation
+Module 0 — Foundation
 ✅
 
-Module 1 — Greenhouse Job Ingestion
+Module 1 — Greenhouse Ingestion
 ✅
 
-Module 2 — Role Classification
+Module 2 — Role Classification + Eligibility
 ✅
 
-Module 2 — Eligibility Gate
+Module 3 — PostgreSQL Persistence + Lifecycle
 ✅
 
-Automated Tests — 33 passing
+Automated Tests
+47 passing
 ✅
 
-Live Databricks Audit
+Live Databricks Persistence Validation
+✅
+
+Synthetic PostgreSQL Lifecycle Validation
 ✅
 ```
 
 ---
 
-# Next Module — Module 3: Persistence and New-Job Detection
+# Next Architecture Stage
 
-## Problem
+ACE now knows what changed.
 
-ACE currently processes jobs correctly but has no persistent memory.
-
-Without persistence it cannot know whether a job:
+Next target flow:
 
 ```text
-was already seen
-```
-
-or:
-
-```text
-appeared after the previous poll
-```
-
-## Target Capability
-
-Initial poll:
-
-```text
-Job A → NEW
-Job B → NEW
-Job C → NEW
-```
-
-Later poll:
-
-```text
-Job A → ALREADY_SEEN
-Job B → ALREADY_SEEN
-Job C → ALREADY_SEEN
-Job D → NEW
-```
-
-Then:
-
-```text
-Job D
+NEW / UPDATED / REOPENED
     ↓
-target role
+Role Classification
     ↓
-PASS / STRETCH
+Eligibility
     ↓
-notification candidate
+Work-Authorization Intelligence
+    ↓
+Resume Relevance
+    ↓
+Ranking
+    ↓
+Notification Decision
 ```
-
-Module 3 will introduce PostgreSQL persistence, deduplication, first-seen tracking, last-seen tracking, and new-job detection.
 
 ---
 
@@ -781,62 +798,22 @@ Module 3 will introduce PostgreSQL persistence, deduplication, first-seen tracki
 
 Every completed ACE module updates:
 
-## `README.md`
-
-Project-facing summary:
-
-- what ACE is
-- what it can currently do
-- how to run it
-- current status
-
-## `docs/overview.md`
-
-Architecture map:
-
-- module responsibilities
-- module boundaries
-- how modules connect
-- what comes next
-
-## `docs/learning-log.md`
-
-Engineering history:
-
-- concepts learned
-- design decisions
-- debugging
-- bugs
-- trade-offs
-- regression fixes
+- `README.md`
+- `docs/overview.md`
+- `docs/learning-log.md`
 
 ---
 
 # Module Development Workflow
 
-Every ACE module follows:
-
 ```text
 1. Explain architecture
-
 2. Identify exact affected files
-
 3. Provide complete file contents
-
 4. Run deterministic tests
-
-5. Run real integration smoke test when relevant
-
+5. Run integration smoke tests when relevant
 6. Inspect actual behavior
-
 7. Update documentation
-   ├── README.md
-   ├── docs/overview.md
-   └── docs/learning-log.md
-
 8. Commit and push
-
 9. Move to the next module
 ```
-
-The goal is to preserve both hackathon speed and a codebase that can be revisited, explained, and defended later.

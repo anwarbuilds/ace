@@ -1,8 +1,8 @@
 # ACE System Overview
 
-ACE is a personal career-intelligence platform designed to discover relevant US engineering opportunities, determine whether they match the configured eligibility profile, remember previously seen jobs, rank opportunities, and eventually deliver immediate alerts with official employer application links.
+ACE is a personal career-intelligence platform designed to discover relevant US engineering opportunities, normalize employer job data, persist source history, detect newly appearing or changed jobs, evaluate eligibility, rank opportunities, and eventually deliver alerts with official employer application links.
 
-This document is the high-level architecture map for the project.
+This document is the high-level architecture and module map for the project.
 
 For detailed implementation notes, debugging history, trade-offs, and lessons learned, see:
 
@@ -39,13 +39,15 @@ ACE discovers jobs
     ↓
 ACE normalizes them
     ↓
+ACE persists complete source snapshots
+    ↓
+ACE detects job lifecycle changes
+    ↓
 ACE identifies target roles
     ↓
 ACE evaluates eligibility
     ↓
-ACE remembers previously seen jobs
-    ↓
-ACE detects newly discovered openings
+ACE evaluates work-authorization evidence
     ↓
 ACE evaluates resume relevance
     ↓
@@ -55,8 +57,6 @@ ACE sends alerts
     ↓
 User opens official employer application link
 ```
-
-The primary product goal is to minimize time spent searching, sorting, and checking irrelevant jobs so the user can spend the available job-search window primarily on applications.
 
 ---
 
@@ -80,7 +80,6 @@ Examples include:
 - Software Engineer
 - Software Development Engineer
 - Backend Engineer
-- Backend Developer
 - Platform Engineer
 - Infrastructure Engineer
 - Full-Stack Engineer
@@ -104,12 +103,10 @@ PRIMARY
 Examples include:
 
 - AI Engineer
-- Artificial Intelligence Engineer
 - Machine Learning Engineer
 - ML Engineer
 - Applied AI Engineer
 - Generative AI Engineer
-- GenAI Engineer
 - LLM Engineer
 - AI Software Engineer
 - Machine Learning Software Engineer
@@ -154,146 +151,110 @@ Priority:
 SECONDARY
 ```
 
-These opportunities remain eligible for discovery and notification, but they are secondary to Software Engineering and AI/ML Engineering.
-
 ---
 
-# 3. Current Exclusions
+# 3. Core Architectural Invariants
 
-ACE currently rejects opportunities that clearly contain one or more hard blockers.
+## Canonical Data Before Intelligence
 
-Examples include:
-
-- outside United States / Remote-US scope
-- non-target role families
-- clearly senior-level roles
-- staff-level roles
-- principal-level roles
-- lead-level roles
-- manager-level roles
-- director-level roles
-- explicitly PhD-targeted opportunities
-- explicit PhD requirements
-- explicit doctoral-degree requirements
-- clearly excessive required experience
-- explicit US citizenship requirements
-- explicit US-person requirements
-- explicit security-clearance requirements
-- explicit statements that current or future sponsorship is unavailable
-
-A PhD that is merely preferred does not cause automatic rejection.
-
-Missing sponsorship information does not cause automatic rejection.
-
----
-
-# 4. Core Product Invariants
-
-## Eligibility Controls Inclusion
-
-Eligibility determines whether a job belongs in the candidate set.
-
-The intended flow is:
+Provider-specific payloads are converted to `CanonicalJob` before downstream logic.
 
 ```text
-Job
+Greenhouse ─┐
+Lever ──────┼──→ CanonicalJob
+Ashby ──────┘
+```
+
+## Persistence Happens Before Eligibility Filtering
+
+ACE persists the complete normalized employer snapshot.
+
+```text
+ATS
+    ↓
+CanonicalJob
+    ↓
+Persistence
+    ↓
+Role Classification
     ↓
 Eligibility
-    ↓
-PASS / STRETCH / REJECT
 ```
 
-Only after that do ranking and resume relevance operate.
+This allows ACE to remember jobs even if they are currently rejected, because:
 
-## Resume Relevance Does Not Hide Qualifying Jobs
+- employer postings can change
+- eligibility rules can evolve
+- previously irrelevant jobs may become relevant later
 
-Later ACE will evaluate each qualifying job against the current resume.
+## Persistence Reports What Changed
 
-Expected relevance tiers:
+Persistence answers:
 
 ```text
-HIGH
-MEDIUM
-MINIMAL
+What changed in the source?
 ```
 
-These tiers control prioritization and context.
-
-They do not silently remove an otherwise qualifying opportunity.
-
-The intended architecture is:
+using:
 
 ```text
-Eligibility
-    ↓
-PASS / STRETCH
-    ↓
-Resume Relevance
-    ↓
-HIGH / MEDIUM / MINIMAL
-    ↓
-Ranking
+NEW
+UPDATED
+REOPENED
+UNCHANGED
+CLOSED
 ```
+
+It does not decide whether an alert should be sent.
+
+## Eligibility Controls Candidate Inclusion
+
+Eligibility determines whether an opportunity belongs in the candidate set.
+
+Resume relevance does not silently hide qualifying jobs.
 
 ## Missing Information Is Not Automatically Negative
 
 For example:
 
 ```text
-No sponsorship language found
+no sponsorship evidence found
+→ UNKNOWN
 ```
 
-means:
-
-```text
-UNKNOWN
-```
-
-rather than:
+not:
 
 ```text
 REJECT
 ```
 
-This protects recall, especially for startups and smaller employers whose job descriptions may not explicitly discuss immigration policy.
-
 ## Official Application Links Are Preferred
 
-Whenever possible, ACE stores and surfaces the employer's official application URL returned by the ATS.
+ACE surfaces official employer application URLs whenever the source provides them.
 
-The desired flow is:
+## Baseline Runs Must Not Spam Alerts
 
-```text
-ACE alert
-    ↓
-official employer careers page
-    ↓
-apply
-```
-
-rather than forcing the user through third-party job aggregators.
-
-## Newly Discovered Qualifying Jobs Should Be Notification Candidates
-
-The intended notification rule is:
+The first successful snapshot for a source account is historical baseline data.
 
 ```text
-NEW
-+
-target role
-+
-PASS or STRETCH
+first successful snapshot
     ↓
-notification candidate
+persist jobs
+    ↓
+mark source initialized
+    ↓
+0 downstream evaluation candidates
 ```
 
-Resume relevance can enrich or prioritize the alert, but it should not suppress it.
+## Empty Snapshots Are Not Trusted
+
+An unexpectedly empty provider response is not treated as proof that every job closed.
+
+ACE refuses to process such a snapshot as authoritative.
 
 ---
 
-# 5. High-Level Architecture
-
-Current architecture:
+# 4. Current High-Level Architecture
 
 ```text
 Greenhouse
@@ -301,6 +262,10 @@ Greenhouse
 Greenhouse Adapter
     ↓
 CanonicalJob
+    ↓
+Snapshot Persistence
+    ↓
+NEW / UPDATED / REOPENED / UNCHANGED / CLOSED
     ↓
 Role Classification
     ↓
@@ -318,15 +283,13 @@ Source Adapters
         ↓
 CanonicalJob
         ↓
+Persistence + Source Lifecycle
+        ↓
+Changed-Job Evaluation
+        ↓
 Role Classification
         ↓
 Eligibility Gate
-        ↓
-Persistence
-        ↓
-Deduplication
-        ↓
-New-Job Detection
         ↓
 Work-Authorization Intelligence
         ↓
@@ -341,176 +304,39 @@ Web Application
 
 ---
 
-# 6. Module Map
+# 5. Module Map
 
-# Module 0 — Project Foundation
+## Module 0 — Project Foundation
 
-## Purpose
+Purpose: establish a reproducible development environment and source-control workflow.
 
-Establish a reproducible development environment and source-control workflow.
+Status: implemented.
 
-## Responsibilities
+## Module 1 — Greenhouse Job Ingestion
 
-- Python version management
-- project-specific virtual environment
-- dependency isolation
-- Git repository
-- GitHub remote
-- `.gitignore`
-- repository documentation
-- consistent testing workflow
+Purpose: retrieve live employer postings directly from Greenhouse and normalize them into `CanonicalJob`.
 
-## Technologies
-
-- Linux
-- Python 3.12
-- pyenv
-- Python virtual environments
-- Git
-- GitHub
-- VS Code
-
-## Result
-
-ACE has:
-
-- isolated Python runtime
-- isolated dependencies
-- version-controlled source code
-- public GitHub history
-- reproducible project structure
-
-## Status
-
-Implemented.
-
----
-
-# Module 1 — Greenhouse Job Ingestion
-
-## Purpose
-
-Retrieve live job postings directly from employers using Greenhouse.
-
-## Input
-
-A Greenhouse board token.
-
-Example:
-
-```text
-databricks
-```
-
-## Processing
+Flow:
 
 ```text
 Greenhouse API
     ↓
 HTTP GET
     ↓
-JSON payload
-    ↓
-Greenhouse Adapter
-    ↓
-normalization
-```
-
-## Output
-
-```text
-list[CanonicalJob]
-```
-
-## CanonicalJob Fields
-
-The current normalized job model includes:
-
-- source
-- company
-- external job ID
-- requisition ID
-- title
-- location
-- description
-- official application URL
-- publication timestamp
-- update timestamp
-
-## Why Normalization Exists
-
-The rest of ACE should not depend directly on Greenhouse field names.
-
-Instead:
-
-```text
-Greenhouse
+JSON
     ↓
 Greenhouse Adapter
     ↓
 CanonicalJob
 ```
 
-Future ATS systems will follow the same pattern:
+Status: implemented.
 
-```text
-Greenhouse ─┐
-Lever ──────┼──→ CanonicalJob
-Ashby ──────┘
-```
+## Module 2 — Role Classification and Eligibility
 
-This allows the downstream ACE pipeline to operate on one stable data model regardless of source.
+Purpose: determine target-role membership and deterministic blockers.
 
-## Reliability Practices
-
-The Greenhouse adapter currently includes:
-
-- explicit HTTP timeout
-- descriptive User-Agent
-- `raise_for_status()` handling
-- full job-description retrieval
-- HTML-to-text normalization
-- safe handling of missing location values
-
-## Full Description Retrieval
-
-Greenhouse is queried with job content enabled.
-
-Descriptions are converted from HTML into plain normalized text so downstream modules can inspect:
-
-- experience requirements
-- education requirements
-- sponsorship language
-- citizenship language
-- skills
-- degree requirements
-
-## Testing Strategy
-
-The live Greenhouse API is exercised through a manual smoke-test script.
-
-Automated unit tests do not depend on an external network.
-
-## Status
-
-Implemented.
-
----
-
-# Module 2 — Role Classification and Eligibility Gate
-
-## Purpose
-
-Determine:
-
-1. whether a posting belongs to an ACE target role family
-2. whether the posting contains a deterministic eligibility blocker
-
-These are intentionally separate concerns.
-
-## Role Classification
-
-Each title is mapped into one of:
+Role families:
 
 ```text
 SOFTWARE_ENGINEERING
@@ -519,46 +345,7 @@ FORWARD_DEPLOYED_ENGINEERING
 OTHER
 ```
 
-Priority:
-
-```text
-PRIMARY
-├── SOFTWARE_ENGINEERING
-└── AI_ML_ENGINEERING
-
-SECONDARY
-└── FORWARD_DEPLOYED_ENGINEERING
-```
-
-More specific role families are evaluated before generic software engineering.
-
-Example:
-
-```text
-Machine Learning Software Engineer
-    ↓
-AI_ML_ENGINEERING
-```
-
-rather than:
-
-```text
-SOFTWARE_ENGINEERING
-```
-
-Similarly:
-
-```text
-Forward Deployed Software Engineer
-    ↓
-FORWARD_DEPLOYED_ENGINEERING
-```
-
-This uses specific-before-general classification precedence.
-
-## Eligibility Outcomes
-
-Every evaluated job receives one of:
+Eligibility states:
 
 ```text
 PASS
@@ -566,815 +353,334 @@ STRETCH
 REJECT
 ```
 
-### PASS
+Status: implemented as deterministic MVP v1.
 
-No deterministic hard blocker was detected.
+## Module 3 — PostgreSQL Persistence and Job Lifecycle
 
-### STRETCH
+Purpose: give ACE durable memory and source lifecycle awareness.
 
-The job remains visible but contains a meaningful qualification stretch.
-
-### REJECT
-
-A deterministic hard blocker was detected.
-
-## Current Experience Rules
-
-Current MVP rules:
+### Infrastructure
 
 ```text
-0–2 required years
-→ PASS
-
-3 required years
-→ STRETCH
-
-4 required years
-→ REJECT
-
-4 required years
-+ explicit early-career signal
-→ STRETCH
-
-5+ required years
-→ REJECT
+ACE Python
+    ↓
+SQLAlchemy
+    ↓
+psycopg
+    ↓
+localhost:5433
+    ↓
+Docker port mapping
+    ↓
+PostgreSQL container:5432
 ```
 
-Preferred experience is not automatically treated as a hard requirement.
+Technologies:
 
-## Seniority Rules
+- PostgreSQL 16
+- Docker Compose
+- SQLAlchemy 2.x
+- psycopg 3
+- Alembic
+- pydantic-settings
 
-Current clear senior-level title signals include:
+### Database Schema
 
-- Senior
-- Sr.
-- Staff
-- Principal
-- Lead
-- Manager
-- Director
-- Engineer III
-- Engineer IV
+`jobs` stores every normalized job ACE has observed.
 
-These are rejected by the current early-career eligibility gate.
+`source_states` stores baseline and successful polling state.
 
-## PhD Handling
-
-Reject:
+Durable job identity:
 
 ```text
-Software Engineer - PhD
-PhD Software Engineer Intern
-Machine Learning Engineer - PhD
-PhD required
-A PhD in Computer Science is required
-Doctoral degree required
-Doctorate required
-```
-
-Do not automatically reject:
-
-```text
-PhD preferred
-BS / MS / PhD preferred
-Bachelor's or Master's required; PhD preferred
-```
-
-The PhD detector uses explicit requirement grammar rather than loose keyword proximity.
-
-This is designed to reduce false rejection.
-
-## Work-Authorization Blockers
-
-Current deterministic blockers include:
-
-- explicit US citizenship requirement
-- explicit US-person requirement
-- explicit security-clearance requirement
-- explicit no-sponsorship language
-
-Examples of sponsorship blockers include phrases such as:
-
-```text
-without current or future sponsorship
-will not sponsor
-cannot sponsor
-no visa sponsorship
-sponsorship is not available
-```
-
-Missing sponsorship language remains unknown and does not automatically reject the job.
-
-## Explainability
-
-Each eligibility decision contains:
-
-- status
-- role family
-- role priority
-- eligibility rule version
-- machine-readable reason codes
-- human-readable explanations
-- extracted experience requirement
-
-This will later allow the web application and alerts to explain why ACE accepted, stretched, or rejected a posting.
-
-## Rule Versioning
-
-Role and eligibility rules are versioned.
-
-Examples:
-
-```text
-ROLE_RULE_VERSION
-ELIGIBILITY_RULE_VERSION
-```
-
-This allows ACE rules to evolve while preserving explainability.
-
-## Automated Tests
-
-Module 2 currently includes deterministic tests covering:
-
-- Software Engineering classification
-- Software Development Engineer classification
-- AI/ML classification
-- Forward Deployed classification
-- classification precedence
-- role priority
-- United States geography
-- Remote-US geography
-- unspecified remote handling
-- non-US rejection
-- non-target role rejection
-- seniority
-- experience thresholds
-- preferred experience
-- high-experience rejection
-- early-career exception behavior
-- PhD-targeted titles
-- required PhD
-- required doctoral degrees
-- preferred PhD
-- unknown sponsorship
-- explicit sponsorship blockers
-- citizenship restrictions
-- security-clearance restrictions
-
-Current automated suite:
-
-```text
-33 tests passing
-```
-
-## Live Databricks Validation
-
-A live Databricks Greenhouse board was used as an integration corpus.
-
-During the Module 2 audit snapshot:
-
-```text
-Total Databricks jobs:         855
-Detected target-role jobs:     257
-Qualifying target-role jobs:     1
-```
-
-Target roles detected before eligibility:
-
-```text
-Software Engineering:          167
-AI / ML Engineering:             6
-Forward Deployed Engineering:   84
-```
-
-Target roles surviving eligibility:
-
-```text
-Software Engineering:            0
-AI / ML Engineering:             0
-Forward Deployed Engineering:    1
-```
-
-Major overlapping rejection reasons among target-role jobs included:
-
-```text
-SENIOR_TITLE          236
-EXPERIENCE_TOO_HIGH   217
-OUTSIDE_US             96
-PHD_TARGETED_ROLE       2
-```
-
-The rejection counts overlap because one job can fail multiple deterministic checks.
-
-The only qualifying opportunity in that snapshot was a Forward Deployed Engineering role.
-
-This result is a live snapshot and is not treated as a permanent expectation.
-
-## Bugs Found During Module 2
-
-### Excessive Experience False Stretch
-
-Earlier logic incorrectly allowed a high-experience role to survive because unrelated degree-substitution language was present.
-
-Example:
-
-```text
-7+ years required
+source
 +
-Bachelor's degree or equivalent experience
+source_account
++
+external_id
 ```
 
-Incorrect behavior:
+Example:
 
 ```text
-STRETCH
+greenhouse
++
+databricks
++
+8559344002
 ```
 
-Correct behavior:
+A database unique constraint protects this identity.
+
+### Persistence Lifecycle
 
 ```text
-REJECT
+NEW
+UPDATED
+REOPENED
+UNCHANGED
+CLOSED
 ```
 
-A regression test now protects this rule.
+### Content Hashing
 
-### PhD Preferred False Rejection
+ACE creates a deterministic SHA-256 content hash over meaningful normalized job content.
 
-Earlier regex logic interpreted:
+Provider update timestamps are excluded to avoid false update events.
+
+### Baseline Protection
+
+The first successful source snapshot establishes historical baseline data and generates zero evaluation candidates.
+
+### Snapshot Deduplication
+
+Incoming duplicate external IDs are collapsed before persistence.
+
+### N+1 Query Avoidance
+
+Existing source jobs are loaded in a batch rather than queried one job at a time.
+
+### Atomic Transactions
+
+Each source snapshot is processed as one transaction.
+
+### Empty Snapshot Protection
+
+Unexpected zero-job snapshots are rejected as authoritative input.
+
+### Evaluation Candidates
+
+Persistence returns:
 
 ```text
-Bachelor's or Master's degree required.
-PhD preferred.
+NEW
+UPDATED
+REOPENED
 ```
 
-as though the PhD itself were required.
-
-Incorrect:
-
-```text
-REJECT
-```
-
-Correct:
-
-```text
-PASS
-```
-
-The PhD matcher was changed to recognize explicit requirement grammar rather than loose proximity between `required` and `PhD`.
-
-A regression test now protects this behavior.
-
-## Known MVP Limitations
-
-Module 2 is intentionally a deterministic MVP.
-
-Current limitations include:
-
-- heuristic US location normalization
-- regex-based experience extraction
-- finite title-pattern dictionaries
-- finite sponsorship phrase dictionaries
-- no graduation-window compatibility yet
-- no dedicated OPT evidence model yet
-- no dedicated STEM OPT / E-Verify evidence model yet
-- no dedicated H-1B sponsorship-history model yet
-- no semantic job-description classifier yet
-- validation so far is primarily against one live employer corpus
-
-These rules should be validated across many employers rather than tuned only to Databricks.
-
-## Status
-
-Implemented as MVP v1.
-
----
-
-# Module 3 — Persistence and New-Job Detection
-
-## Purpose
-
-Give ACE memory.
-
-Without persistence ACE cannot distinguish:
-
-```text
-job already seen yesterday
-```
-
-from:
-
-```text
-job appeared after the previous polling run
-```
-
-## Planned Responsibilities
-
-- PostgreSQL
-- database connection management
-- database schema
-- job persistence
-- deduplication
-- first-seen timestamp
-- last-seen timestamp
-- source identity
-- job lifecycle
-- new-job detection
-
-## Target Flow
-
-Initial poll:
-
-```text
-Job A
-Job B
-Job C
-    ↓
-stored
-```
-
-Later poll:
-
-```text
-Job A → already known
-Job B → already known
-Job C → already known
-Job D → NEW
-```
+as downstream evaluation candidates.
 
 Then:
 
 ```text
-Job D
+evaluation candidate
     ↓
-target role?
+Role Classification
     ↓
-eligible?
+Eligibility
     ↓
-PASS / STRETCH?
-    ↓
-notification candidate
+future notification policy
 ```
 
-## Status
+### Real Databricks Validation
 
-Next module.
-
----
-
-# 7. Future Modules
-
-The exact sequence may evolve during implementation, but the architecture is expected to include the following capabilities.
-
-# Work-Authorization Intelligence
-
-## Purpose
-
-Track immigration/work-authorization evidence independently rather than collapsing everything into one binary sponsorship field.
-
-Expected dimensions include:
-
-- OPT compatibility
-- STEM OPT / E-Verify
-- future H-1B sponsorship
-- citizenship / clearance restrictions
-
-Unknown evidence should remain explicitly unknown.
-
----
-
-# Resume Intelligence
-
-## Purpose
-
-Evaluate every qualifying job against the user's current resume.
-
-The resume can change over time, so relevance must be recomputed against the latest active resume.
-
-Expected relevance tiers:
+Current state:
 
 ```text
-HIGH
-MEDIUM
-MINIMAL
+Total jobs:   855
+Active jobs:  855
+Closed jobs:    0
 ```
 
-Resume relevance may consider:
-
-- technologies
-- languages
-- frameworks
-- systems experience
-- AI/ML experience
-- backend experience
-- cloud experience
-- project similarity
-- required qualifications
-- preferred qualifications
-
-Resume relevance affects prioritization.
-
-It does not redefine eligibility.
-
----
-
-# Ranking
-
-## Purpose
-
-Determine the order in which qualifying jobs should be reviewed.
-
-Potential signals include:
-
-- role priority
-- job freshness
-- resume relevance
-- work-authorization evidence
-- employer signals
-- required experience
-- application urgency
-
-Ranking must not silently remove qualifying jobs.
-
----
-
-# Notification Engine
-
-## Purpose
-
-Notify the user when newly discovered qualifying jobs appear.
-
-Target condition:
+Repeated live polling:
 
 ```text
-NEW
-+
-target role
-+
-PASS or STRETCH
-    ↓
-notification candidate
+Baseline:               False
+Fetched:                855
+Unique:                 855
+Duplicates:               0
+NEW:                      0
+UPDATED:                  0
+REOPENED:                 0
+UNCHANGED:              855
+CLOSED:                   0
+Evaluation candidates:    0
 ```
 
-Notifications should eventually contain:
+### Synthetic PostgreSQL Lifecycle Validation
 
-- company
-- job title
-- role family
-- role priority
-- location
-- eligibility status
-- resume relevance tier
-- experience requirement
-- useful explanation
-- official employer application URL
+Synthetic state transitions validate:
 
-The notification mechanism can begin with email and evolve if needed.
+- baseline
+- NEW
+- UPDATED
+- CLOSED
+- REOPENED
 
----
+Synthetic data is cleaned up after execution.
 
-# Scheduler and Continuous Ingestion
-
-## Purpose
-
-Continuously discover opportunities throughout the day rather than relying only on one daily refresh.
-
-Target behavior:
-
-```text
-scheduler
-    ↓
-source polling
-    ↓
-normalize
-    ↓
-persist
-    ↓
-detect new jobs
-    ↓
-evaluate
-    ↓
-notify
-```
-
-Different sources may eventually use different polling intervals.
+Status: implemented.
 
 ---
 
-# Additional ATS Adapters
-
-The adapter architecture is intended to support multiple employer systems.
-
-Potential future sources include:
+# 6. Current Data Flow
 
 ```text
-Greenhouse
-Lever
-Ashby
-Workday
-SmartRecruiters
-custom employer career APIs
-selected high-quality public job sources
-```
-
-Every source should normalize into:
-
-```text
-CanonicalJob
-```
-
-before entering downstream intelligence.
-
----
-
-# Web Application
-
-## Purpose
-
-Provide a clean UI for reviewing opportunities without manually searching external job boards.
-
-Expected capabilities include:
-
-- opportunity feed
-- role-family filters
-- PASS / STRETCH labels
-- resume relevance tiers
-- freshness indicators
-- company information
-- eligibility explanation
-- official application links
-- search
-- sorting
-- notification state
-- application-related workflow if needed later
-
-The initial priority remains job discovery and fast application rather than building UI features for their own sake.
-
----
-
-# 8. Data Flow
-
-The intended full ACE data flow is:
-
-```text
-Employer ATS / Job Source
-        ↓
+Employer ATS
+    ↓
 Source Adapter
-        ↓
+    ↓
 CanonicalJob
-        ↓
-Role Classifier
-        ↓
-Eligibility Gate
-        ↓
+    ↓
 Persistence
-        ↓
-Deduplication
-        ↓
-New-Job Detection
-        ↓
-Work-Authorization Intelligence
-        ↓
-Resume Relevance
-        ↓
-Ranking
-        ↓
-Notification
-        ↓
-Web Application
-        ↓
-Official Application Link
+    ↓
+Source Lifecycle State
+    ├── NEW
+    ├── UPDATED
+    ├── REOPENED
+    ├── UNCHANGED
+    └── CLOSED
+    ↓
+Evaluation Candidates
+    ↓
+Role Classifier
+    ↓
+Eligibility Gate
 ```
 
----
-
-# 9. Testing Strategy
-
-ACE uses several testing layers.
-
-## Unit Tests
-
-Used for deterministic application logic.
-
-Examples:
-
-- role classification
-- experience rules
-- PhD rules
-- eligibility
-- persistence logic
-- deduplication logic
-
-Unit tests should not depend on external network services.
-
-## Integration Smoke Tests
-
-Used to validate external systems.
-
-Examples:
-
-- Greenhouse API
-- PostgreSQL
-- email provider
-- future ATS integrations
-
-Smoke tests may use real external services.
-
-## Regression Tests
-
-Whenever a real bug is discovered, a test should be added before the fix is considered complete.
-
-Examples already captured:
+Future:
 
 ```text
-7-year requirement incorrectly becoming STRETCH
-PhD preferred incorrectly becoming REJECT
+Eligibility Gate
+    ↓
+Work-Authorization Intelligence
+    ↓
+Resume Relevance
+    ↓
+Ranking
+    ↓
+Notification Engine
+    ↓
+Web Application
+    ↓
+Official Employer Application Link
 ```
 
 ---
 
-# 10. Observability Philosophy
+# 7. Testing Strategy
+
+Current deterministic suite:
+
+```text
+47 tests passing
+```
+
+Integration smoke tests validate:
+
+- Greenhouse API behavior
+- PostgreSQL behavior
+- persistence lifecycle transitions
+
+---
+
+# 8. Observability Philosophy
 
 ACE should not behave like a black box.
 
-Important decisions should be inspectable.
+Important states and decisions must be inspectable.
 
 Examples:
 
 ```text
-Role family:
+source:
+greenhouse
+
+source_account:
+databricks
+
+persistence state:
+UPDATED
+```
+
+and:
+
+```text
+role family:
 AI_ML_ENGINEERING
 
-Eligibility:
+eligibility:
 REJECT
 
-Reasons:
+reason codes:
 EXPERIENCE_TOO_HIGH
 SENIOR_TITLE
 ```
 
-Later operational metrics may include:
-
-- jobs fetched per source
-- jobs normalized
-- target roles detected
-- PASS count
-- STRETCH count
-- rejection reasons
-- new jobs discovered
-- notification count
-- source failures
-- request latency
-- duplicate count
-
 ---
 
-# 11. Documentation Structure
+# 9. Documentation Structure
 
-ACE maintains three primary documentation layers.
+ACE maintains three documentation layers.
 
-## README.md
+## `README.md`
 
-Purpose:
+Project-facing summary.
 
-Public and project-facing summary.
-
-Answers:
-
-```text
-What is ACE?
-What can it currently do?
-How do I run it?
-```
-
-## docs/overview.md
-
-Purpose:
+## `docs/overview.md`
 
 Architecture and module map.
 
-Answers:
+## `docs/learning-log.md`
 
-```text
-What modules exist?
-What does each module do?
-How do the modules connect?
-What is currently implemented?
-What comes next?
-```
-
-This document should remain concise enough to quickly understand the system while still preserving important architectural decisions.
-
-## docs/learning-log.md
-
-Purpose:
-
-Detailed engineering history.
-
-Answers:
-
-```text
-What did I learn?
-Why was a decision made?
-What bugs appeared?
-How were they debugged?
-What alternatives were considered?
-What trade-offs exist?
-```
+Engineering history, decisions, bugs, and lessons learned.
 
 ---
 
-# 12. Module Development Workflow
-
-Every ACE module follows the same process.
+# 10. Module Development Workflow
 
 ```text
 1. Explain architecture
-
 2. Identify exact affected files
-
 3. Provide complete file contents
-
 4. Run deterministic tests
-
-5. Run real integration smoke test when relevant
-
-6. Inspect real behavior
-
-7. Update documentation
-   ├── README.md
-   ├── docs/overview.md
-   └── docs/learning-log.md
-
+5. Run integration smoke tests when relevant
+6. Inspect actual behavior
+7. Update README + overview + learning log
 8. Commit and push
-
 9. Move to the next module
 ```
 
-The objective is to preserve:
-
-- hackathon speed
-- code quality
-- reproducibility
-- architectural clarity
-- interview explainability
-- durable project knowledge
-
 ---
 
-# 13. Current Project Status
-
-Completed:
+# 11. Current Project Status
 
 ```text
-Module 0
-Project Foundation
+Module 0 — Foundation
 ✅
 
-Module 1
-Greenhouse Job Ingestion
+Module 1 — Greenhouse Ingestion
 ✅
 
-Module 2
-Role Classification
+Module 2 — Role Classification + Eligibility
 ✅
 
-Module 2
-Eligibility Gate
+Module 3 — PostgreSQL Persistence + Job Lifecycle
 ✅
 
-Automated Tests
-33 passing
+Automated Tests — 47 passing
 ✅
 
-Live Employer Validation
-Databricks Greenhouse audit
+Live Greenhouse Validation
+✅
+
+Live PostgreSQL Validation
+✅
+
+Synthetic Lifecycle Validation
 ✅
 ```
 
-Next:
+Next architecture stage:
 
 ```text
-Module 3
-PostgreSQL Persistence
-+
-Deduplication
-+
-New-Job Detection
+NEW / UPDATED / REOPENED
+    ↓
+role + eligibility
+    ↓
+work-authorization evidence
+    ↓
+resume relevance
+    ↓
+notification decision
 ```
-
-The key capability unlocked by Module 3 will be:
-
-```text
-ACE remembers what it has already seen
-        ↓
-new posting appears
-        ↓
-ACE recognizes it as NEW
-        ↓
-eligibility check
-        ↓
-notification candidate
-```
-
-That is the foundation required for real-time job alerts.
