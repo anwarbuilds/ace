@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${ACE_DB_NAME:-ace}
+      POSTGRES_USER: ${ACE_DB_USER:-ace}
+      POSTGRES_PASSWORD: ${ACE_DB_PASSWORD:-ace_local_dev}
+
+    ports:
+      - "${ACE_DB_PORT:-5432}:5432"
+
+    volumes:
+      - ace_postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${ACE_DB_USER:-ace} -d ${ACE_DB_NAME:-ace}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+
+volumes:
+  ace_postgres_data:

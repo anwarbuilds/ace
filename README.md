@@ -1,6 +1,6 @@
 # ACE
 
-ACE is a personal real-time career intelligence platform for discovering, filtering, ranking, and alerting on relevant US engineering opportunities.
+ACE is a personal real-time career intelligence platform for discovering, filtering, ranking, persisting, and eventually alerting on relevant US engineering opportunities.
 
 The project is being built from scratch as an end-to-end backend, data, systems, and full-stack engineering project.
 
@@ -33,13 +33,13 @@ ACE discovers jobs
     ↓
 ACE normalizes them
     ↓
+ACE persists source snapshots
+    ↓
+ACE detects NEW / UPDATED / REOPENED / CLOSED jobs
+    ↓
 ACE identifies target roles
     ↓
 ACE evaluates eligibility
-    ↓
-ACE remembers previously seen jobs
-    ↓
-ACE detects newly posted opportunities
     ↓
 ACE evaluates resume relevance
     ↓
@@ -50,12 +50,16 @@ ACE sends alerts
 User opens the official employer application link
 ```
 
+The primary product goal is to minimize time spent searching, sorting, and checking irrelevant jobs so the available job-search window can be spent primarily on applications.
+
 ## Target Opportunity Profile
 
 ### Geography
 
+ACE targets:
+
 - United States
-- Remote-US
+- Remote-US opportunities
 
 A generic `Remote` location is not automatically assumed to mean Remote-US.
 
@@ -92,7 +96,7 @@ Missing sponsorship information is treated as unknown rather than as rejection.
 
 Eligibility decides whether a job belongs in the candidate set.
 
-Resume relevance and ranking will only control prioritization.
+Resume relevance and ranking will control prioritization, not inclusion.
 
 A qualifying opportunity must not disappear simply because resume relevance is low.
 
@@ -112,19 +116,43 @@ These tiers will help order and explain opportunities, but they will not suppres
 
 ACE stores and surfaces the employer's official application URL whenever the ATS provides one.
 
-### Newly Discovered Qualifying Jobs Become Notification Candidates
+### Persistence Reports What Changed
 
-Target rule:
+Persistence is responsible for determining source lifecycle state:
 
 ```text
 NEW
-+
-target role
-+
-PASS or STRETCH
-    ↓
-notification candidate
+UPDATED
+REOPENED
+UNCHANGED
+CLOSED
 ```
+
+It does not decide whether an alert should be sent.
+
+The downstream intelligence and notification layers decide whether a changed job should be surfaced.
+
+### First-Run Baselines Must Not Spam Alerts
+
+The first successful source snapshot is treated as historical baseline data.
+
+```text
+first source run
+    ↓
+persist all current jobs
+    ↓
+establish baseline
+    ↓
+0 evaluation candidates
+```
+
+Only subsequent changes become downstream evaluation candidates.
+
+### Empty Source Snapshots Are Not Trusted as Authoritative
+
+An unexpectedly empty provider response could indicate an upstream failure.
+
+ACE therefore refuses to treat an empty complete snapshot as proof that every job has closed.
 
 ## Current Architecture
 
@@ -134,6 +162,10 @@ Greenhouse
 Greenhouse Adapter
     ↓
 CanonicalJob
+    ↓
+PostgreSQL Persistence
+    ↓
+NEW / UPDATED / REOPENED / UNCHANGED / CLOSED
     ↓
 Role Classification
     ↓
@@ -151,15 +183,13 @@ Source Adapters
         ↓
 CanonicalJob
         ↓
+Persistence + Source Lifecycle
+        ↓
+New/Changed Job Detection
+        ↓
 Role Classification
         ↓
 Eligibility Gate
-        ↓
-Persistence
-        ↓
-Deduplication
-        ↓
-New-Job Detection
         ↓
 Work-Authorization Intelligence
         ↓
@@ -274,95 +304,160 @@ Current experience rules:
 
 Preferred experience is not automatically treated as a hard requirement.
 
+### Module 3 — PostgreSQL Persistence and Job Lifecycle
+
+Module 3 gives ACE durable memory.
+
+#### Infrastructure
+
+Implemented:
+
+- PostgreSQL 16
+- Docker Compose
+- persistent Docker volume
+- local PostgreSQL isolation on host port `5433`
+- `psycopg`
+- SQLAlchemy 2.x
+- Alembic migrations
+- environment-based database configuration
+
+#### Database Tables
+
+`jobs` stores durable job records including:
+
+- source
+- source account
+- external ID
+- company
+- requisition ID
+- title
+- location
+- description
+- official URL
+- posted timestamp
+- source update timestamp
+- content hash
+- first-seen timestamp
+- last-seen timestamp
+- active/closed state
+
+Durable identity:
+
+```text
+source + source_account + external_id
+```
+
+`source_states` stores:
+
+- source
+- source account
+- initialized timestamp
+- last successful snapshot timestamp
+- last successful job count
+
+This prevents first-deployment alert floods.
+
+#### Persistence States
+
+ACE now recognizes:
+
+```text
+NEW
+UPDATED
+REOPENED
+UNCHANGED
+CLOSED
+```
+
+#### Content Hashing
+
+ACE computes a deterministic SHA-256 content fingerprint over meaningful normalized job content.
+
+#### Baseline Protection
+
+The first successful snapshot persists historical jobs but produces zero evaluation candidates.
+
+#### Snapshot Deduplication
+
+Duplicate external IDs inside one provider response are collapsed before persistence.
+
+#### N+1 Query Avoidance
+
+Existing jobs for an incoming snapshot are loaded in a batch rather than queried one-by-one.
+
+#### Atomic Transactions
+
+A complete source snapshot is processed inside one transaction.
+
+#### Empty Snapshot Protection
+
+A zero-job provider response is rejected as authoritative input.
+
+#### Live Databricks Validation
+
+Current persisted Databricks state:
+
+```text
+Total persisted jobs: 855
+Active jobs:          855
+Closed jobs:            0
+```
+
+Repeated live persistence passes produced:
+
+```text
+NEW:                    0
+UPDATED:                0
+REOPENED:               0
+UNCHANGED:            855
+CLOSED:                 0
+Evaluation candidates:  0
+```
+
+#### Synthetic Lifecycle Validation
+
+A dedicated real-PostgreSQL smoke test validates:
+
+```text
+baseline
+NEW
+UPDATED
+CLOSED
+REOPENED
+```
+
+Synthetic records are cleaned up after execution.
+
 ## Testing
 
 Current automated backend suite:
 
 ```text
-33 tests passing
+47 tests passing
 ```
 
 Tests cover:
 
 - canonical job creation
-- Software Engineering classification
-- AI/ML classification
-- Forward Deployed classification
+- role classification
 - classification precedence
 - role priority
-- US geography
-- Remote-US geography
+- geography
 - seniority
-- experience thresholds
-- preferred experience
-- PhD targeting
-- required versus preferred PhD
-- sponsorship blockers
-- unknown sponsorship
-- citizenship restrictions
-- security-clearance restrictions
-
-Unit tests do not depend on live external APIs.
-
-## Live Validation
-
-ACE has been validated against the live Databricks Greenhouse board.
-
-One Module 2 audit snapshot contained:
-
-```text
-Total Databricks jobs:         855
-Detected target-role jobs:     257
-Qualifying target-role jobs:     1
-```
-
-Target roles detected before eligibility:
-
-```text
-Software Engineering:          167
-AI / ML Engineering:             6
-Forward Deployed Engineering:   84
-```
-
-Major overlapping rejection reasons among target-role jobs included:
-
-```text
-SENIOR_TITLE          236
-EXPERIENCE_TOO_HIGH   217
-OUTSIDE_US             96
-PHD_TARGETED_ROLE       2
-```
-
-These values are only a live snapshot. They are not permanent expectations.
-
-## Important Bugs Already Captured by Regression Tests
-
-### Excessive Experience False Stretch
-
-Earlier logic allowed a `7+ years` posting to become `STRETCH` because unrelated degree-substitution language appeared nearby.
-
-The rule was corrected so clearly excessive required experience remains a hard rejection.
-
-### PhD Preferred False Rejection
-
-Earlier regex logic incorrectly interpreted:
-
-```text
-Bachelor's or Master's degree required.
-PhD preferred.
-```
-
-as a required PhD.
-
-The matcher was changed to detect explicit requirement grammar instead of loose keyword proximity.
-
-## Documentation
-
-ACE maintains three documentation layers:
-
-- `README.md` — project-facing summary and current capabilities
-- `docs/overview.md` — system architecture and module map
-- `docs/learning-log.md` — implementation history, decisions, bugs, and lessons learned
+- experience rules
+- PhD rules
+- sponsorship/citizenship/clearance rules
+- database model structure
+- persistent identity constraints
+- stable content hashing
+- source snapshot behavior
+- baseline suppression
+- NEW detection
+- UPDATED detection
+- REOPENED detection
+- CLOSED reporting
+- duplicate-source-record handling
+- empty snapshot rejection
 
 ## Development
 
@@ -372,17 +467,61 @@ Activate the environment:
 source .venv/bin/activate
 ```
 
-Run automated backend tests:
+Start PostgreSQL:
+
+```bash
+docker compose up -d postgres
+```
+
+Check health:
+
+```bash
+docker compose ps
+```
+
+Apply migrations:
+
+```bash
+alembic upgrade head
+```
+
+Run tests:
 
 ```bash
 python -m pytest backend/tests -q
 ```
 
-Run the live Greenhouse audit:
+Run live Greenhouse eligibility audit:
 
 ```bash
 python -m backend.scripts.greenhouse_smoke
 ```
+
+Run live persistence audit:
+
+```bash
+python -m backend.scripts.persistence_smoke
+```
+
+Run synthetic lifecycle test:
+
+```bash
+python -m backend.scripts.persistence_state_smoke
+```
+
+Stop services:
+
+```bash
+docker compose down
+```
+
+## Documentation
+
+ACE maintains three documentation layers:
+
+- `README.md` — project-facing summary and current capabilities
+- `docs/overview.md` — system architecture and module map
+- `docs/learning-log.md` — implementation history, decisions, bugs, and lessons learned
 
 ## Current Status
 
@@ -395,28 +534,32 @@ Module 0 — Project Foundation
 Module 1 — Greenhouse Job Ingestion
 ✅
 
-Module 2 — Role Classification
+Module 2 — Role Classification + Eligibility
 ✅
 
-Module 2 — Eligibility Gate
+Module 3 — PostgreSQL Persistence + Job Lifecycle
 ✅
 
-Automated Tests — 33 passing
+Automated Tests — 47 passing
 ✅
 
-Live Employer Validation
+Live Databricks Persistence Validation
+✅
+
+Real PostgreSQL Lifecycle Validation
 ✅
 ```
 
-Next:
+Next major capability:
 
 ```text
-Module 3
-PostgreSQL Persistence
-+
-Deduplication
-+
-New-Job Detection
+changed/new job
+    ↓
+role + eligibility evaluation
+    ↓
+work-authorization evidence
+    ↓
+resume relevance
+    ↓
+notification decision
 ```
-
-Module 3 will give ACE memory so it can distinguish an already-seen job from a newly discovered opportunity.
