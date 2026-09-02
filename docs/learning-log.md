@@ -1,6 +1,6 @@
 # ACE Learning Log
 
-This document records what was built, why it exists, bugs discovered during implementation, engineering decisions, and the concepts learned while building ACE.
+This document records what was built, why it exists, bugs discovered during implementation, engineering decisions, trade-offs, and the concepts learned while building ACE.
 
 ---
 
@@ -10,7 +10,7 @@ This document records what was built, why it exists, bugs discovered during impl
 
 ACE uses Python 3.12.12 selected with `pyenv` and a project-local `.venv`.
 
-Key lesson:
+Key relationship:
 
 ```text
 pyenv
@@ -113,13 +113,17 @@ OTHER
 
 A high-experience role incorrectly survived because unrelated degree-substitution language was interpreted as an early-career signal.
 
-Fix: clearly excessive required experience remains a hard rejection.
+Fix:
+
+Clearly excessive required experience remains a hard rejection.
 
 ### `PhD preferred` False Rejection
 
 Loose regex proximity caused `PhD preferred` to be treated as `PhD required`.
 
-Fix: explicit requirement grammar is now used.
+Fix:
+
+Explicit requirement grammar is used instead.
 
 Key lessons:
 
@@ -148,8 +152,6 @@ Did it reopen?
 
 Real-time alerting requires durable state.
 
----
-
 ## Infrastructure Architecture
 
 ```text
@@ -168,15 +170,11 @@ PostgreSQL container:5432
 
 A native PostgreSQL service already occupied host port `5432`, so ACE uses host port `5433`.
 
-Important lesson:
+Lesson:
 
 ```text
 host port != container port
 ```
-
-Docker allows ACE's PostgreSQL container to keep its internal default `5432` while exposing it as `5433` on the host.
-
----
 
 ## Docker Compose and Persistent Volumes
 
@@ -189,14 +187,12 @@ Important distinction:
 ```text
 docker compose down
 → stop/remove containers
-→ keep volume
+→ preserve volume
 
 docker compose down -v
 → also delete volume
 → database data removed
 ```
-
----
 
 ## Environment Configuration
 
@@ -214,7 +210,7 @@ and safe example configuration in:
 
 `.env` is ignored by Git.
 
-Key lesson:
+Lesson:
 
 ```text
 source code
@@ -222,35 +218,9 @@ source code
 runtime secrets/configuration
 ```
 
----
-
-## Database Technologies
-
-### PostgreSQL
-
-Durable relational database.
-
-### psycopg
-
-Python PostgreSQL driver.
-
-### SQLAlchemy
-
-ORM/database abstraction.
-
-### Alembic
-
-Database-schema migration system.
-
-### pydantic-settings
-
-Environment-based application configuration.
-
----
-
 ## Pydantic vs SQLAlchemy
 
-ACE now has two model types.
+ACE has separate model categories.
 
 ### `CanonicalJob`
 
@@ -274,53 +244,7 @@ How is the job stored in PostgreSQL?
 
 Separating domain and persistence models reduces coupling.
 
----
-
-## Database Schema
-
-### `jobs`
-
-Stores durable job state.
-
-Important fields:
-
-```text
-id
-source
-source_account
-external_id
-company
-requisition_id
-title
-location
-description
-official_url
-posted_at
-source_updated_at
-content_hash
-first_seen_at
-last_seen_at
-is_active
-closed_at
-```
-
-### `source_states`
-
-Stores per-source baseline and polling state.
-
-```text
-source
-source_account
-initialized_at
-last_success_at
-last_job_count
-```
-
----
-
 ## Durable Job Identity
-
-Provider-local IDs alone are not sufficient across many employer boards.
 
 ACE uses:
 
@@ -330,16 +254,6 @@ source
 source_account
 +
 external_id
-```
-
-Example:
-
-```text
-greenhouse
-+
-databricks
-+
-8559344002
 ```
 
 A PostgreSQL unique constraint enforces this identity.
@@ -353,24 +267,6 @@ database constraint
 =
 defense in depth
 ```
-
----
-
-## Alembic
-
-Initial schema migration:
-
-```text
-0001_create_jobs_and_source_states
-```
-
-Git versions source code.
-
-Alembic versions database schema.
-
-Manual production schema changes should be avoided.
-
----
 
 ## Source Snapshot Model
 
@@ -386,9 +282,7 @@ Databricks Greenhouse
 one snapshot
 ```
 
-That snapshot is compared against durable state.
-
----
+That snapshot is compared against durable database state.
 
 ## Baseline Protection
 
@@ -414,9 +308,15 @@ newly posted after ACE started
 
 Without this distinction, first deployment could create hundreds of false alerts.
 
----
-
 ## Persistence Lifecycle
+
+```text
+NEW
+UPDATED
+REOPENED
+UNCHANGED
+CLOSED
+```
 
 ### NEW
 
@@ -438,39 +338,15 @@ Previously active job is absent from a successful complete snapshot.
 
 Previously inactive job appears again.
 
-State flow:
-
-```text
-NEW
- ↓
-UNCHANGED
- ↓
-UPDATED
-
-missing
- ↓
-CLOSED
-
-returns
- ↓
-REOPENED
-```
-
----
-
 ## Content Hashing
 
-ACE computes a deterministic SHA-256 fingerprint over meaningful normalized job content.
+ACE computes a deterministic SHA-256 fingerprint over meaningful normalized content.
 
 Provider bookkeeping update timestamps are excluded.
 
-Why?
+Lesson:
 
-Because a provider may change internal timestamps without changing the job posting.
-
-Including such timestamps would generate false `UPDATED` events.
-
----
+A provider may change internal timestamps without changing the job posting. Including those timestamps would create false update events.
 
 ## N+1 Query Avoidance
 
@@ -481,15 +357,11 @@ for each job:
     SELECT job
 ```
 
-For 855 jobs, that can mean approximately 855 database round trips.
-
 ACE instead batch-loads existing source identities and compares them in memory.
 
-Key lesson:
+Lesson:
 
 Database round trips matter at scale.
-
----
 
 ## Atomic Transactions
 
@@ -507,8 +379,6 @@ failure
 
 This prevents partially persisted source state.
 
----
-
 ## Empty Snapshot Protection
 
 Dangerous scenario:
@@ -519,24 +389,24 @@ provider/API failure
 0 parsed jobs
 ```
 
-If interpreted as authoritative:
+If treated as authoritative:
 
 ```text
 all active jobs
 → CLOSED
 ```
 
-ACE instead rejects an empty complete snapshot and rolls back.
+ACE instead rejects an empty complete snapshot.
 
-This is an example of designing for upstream failure.
+Lesson:
 
----
+Systems must be designed for upstream failure, not only valid data.
 
 ## Persistence vs Notification Separation
 
 An architecture refinement was made during Module 3.
 
-Persistence initially exposed:
+Persistence originally exposed:
 
 ```text
 notification_candidates
@@ -544,7 +414,7 @@ notification_candidates
 
 That was too coupled.
 
-It was replaced with:
+It became:
 
 ```text
 evaluation_candidates
@@ -560,167 +430,609 @@ Intelligence
 → Is it relevant/eligible?
 
 Notification
-→ Should the user be alerted?
+→ Should/how should the user be alerted?
 ```
+
+## Real and Synthetic Validation
+
+Module 3 proved:
+
+- live Databricks idempotent persistence
+- baseline behavior
+- NEW
+- UPDATED
+- CLOSED
+- REOPENED
+- cleanup
+- 47 automated tests
 
 ---
 
-## Synthetic Lifecycle Smoke Test
+# Module 4 — Evaluation Pipeline and Source-Snapshot Workflow
 
-A synthetic source account validates real PostgreSQL transitions.
+## Problem
 
-### Pass 1
-
-```text
-2 NEW
-baseline = true
-0 evaluation candidates
-```
-
-### Pass 2
+After Module 3, ACE could independently answer:
 
 ```text
-1 NEW
-1 UPDATED
-1 UNCHANGED
-2 evaluation candidates
+What changed?
 ```
 
-### Pass 3
+and:
 
 ```text
-1 CLOSED
+Is this job eligible?
 ```
 
-### Pass 4
+but there was no application-level pipeline connecting those answers.
+
+Example:
 
 ```text
-1 REOPENED
-1 evaluation candidate
+Persistence:
+This job is NEW.
+
+Eligibility:
+This job is PRIMARY + PASS.
 ```
 
-The test cleans up synthetic data afterward.
-
-Verified cleanup:
+ACE still needed a use case that combined them into:
 
 ```text
-source_account = ace-module3-smoke
-count = 0
+NEW
++
+PRIMARY
++
+PASS
+→ ALERT candidate
 ```
 
----
+## Architecture
 
-## Live Databricks Persistence Validation
-
-Current durable source state:
+Module 4 introduces:
 
 ```text
-source: greenhouse
-source_account: databricks
-last_job_count: 855
+Persistence
+    ↓
+Evaluation Candidates
+    ↓
+Evaluation Service
+    ↓
+Role Classification
+    ↓
+Eligibility
+    ↓
+Alert Disposition
 ```
 
-Current database state:
+and then wraps persistence + evaluation in an application workflow:
 
 ```text
-total_jobs:  855
-active_jobs: 855
-closed_jobs:   0
+run_source_snapshot_workflow(...)
 ```
 
-Repeated live polling produced:
+## Evaluation Domain Types
+
+### `AlertDisposition`
+
+Values:
 
 ```text
-Baseline:               False
-Fetched:                855
-Unique:                 855
-Duplicates:               0
-NEW:                      0
-UPDATED:                  0
-REOPENED:                 0
-UNCHANGED:              855
-CLOSED:                   0
-Evaluation candidates:    0
+ALERT
+SUPPRESS
 ```
 
-This demonstrates idempotency.
+Important lesson:
 
----
+Eligibility and alert disposition are not the same concept.
 
-## Debugging Incident — Wrong Smoke-Test File Contents
+Eligibility asks:
 
-`backend/scripts/persistence_smoke.py` accidentally contained unrelated test code.
-
-Symptom:
-
-```bash
-python -m backend.scripts.persistence_smoke
+```text
+How does the job compare with deterministic candidate rules?
 ```
 
-returned immediately with no output.
+Alert disposition asks:
 
-Because imports succeeded, there was no traceback.
-
-Inspecting the file showed the intended executable script had been overwritten/mixed.
-
-The file was replaced completely and checked using:
-
-```bash
-python -m py_compile backend/scripts/persistence_smoke.py
+```text
+Should this evaluated change continue toward the notification layer?
 ```
 
-Then the live smoke test worked.
+Keeping them separate prevents notification policy from becoming embedded inside eligibility logic.
+
+### `EvaluatedJob`
+
+An evaluated job contains:
+
+```text
+CanonicalJob
++
+JobObservationStatus
++
+EligibilityDecision
++
+AlertDisposition
+```
+
+This creates one downstream object carrying both:
+
+- source change context
+- intelligence context
+
+### `EvaluationBatchResult`
+
+Provides:
+
+```text
+evaluated_jobs
+alert_candidates
+suppressed_jobs
+
+evaluated_count
+alert_candidate_count
+suppressed_count
+
+pass_count
+stretch_count
+reject_count
+```
+
+This is useful both for product behavior and observability.
+
+## Current Alert Policy
+
+```text
+PASS
+→ ALERT
+
+STRETCH
+→ ALERT
+
+REJECT
+→ SUPPRESS
+```
+
+Why keep `STRETCH` alertable?
+
+Because ACE is intentionally recall-oriented.
+
+A job requiring 3 years, for example, may still be worth applying to and should be clearly labeled rather than hidden.
 
 Lesson:
 
-A silent Python module can mean the module imported successfully but never reached an executable entry point.
-
----
-
-## Module 3 Test Status
-
-Final deterministic suite:
-
 ```text
-47 passed
+ranking uncertainty
+should not automatically become
+hard exclusion
 ```
 
----
+## Why UPDATED and REOPENED Are Re-Evaluated
 
-## Concepts Learned in Module 3
+Normal evaluation includes:
 
-- PostgreSQL
-- Docker
-- Docker Compose
-- host vs container ports
-- named volumes
-- environment configuration
-- database URLs
-- SQLAlchemy ORM
-- declarative models
-- sessions
-- connection pooling
-- Alembic migrations
-- schema versioning
-- primary keys
-- composite keys
-- unique constraints
-- indexes
-- transactions
-- commit
-- rollback
-- atomicity
-- repositories
-- source snapshots
-- baselines
-- state machines
-- SHA-256 hashing
-- idempotency
-- N+1 query avoidance
-- deduplication
-- synthetic integration testing
-- upstream failure protection
-- separation of persistence and notification policy
+```text
+NEW
+UPDATED
+REOPENED
+```
+
+A changed posting may become newly relevant.
+
+Example:
+
+```text
+old posting:
+5 years required
+→ REJECT
+
+employer updates posting:
+2 years required
+→ PASS
+```
+
+If ACE ignored `UPDATED`, it could miss this opportunity.
+
+Similarly:
+
+```text
+CLOSED
+→ later REOPENED
+```
+
+should become eligible for reevaluation.
+
+## Why UNCHANGED Jobs Are Not Re-Evaluated
+
+If a job is unchanged:
+
+```text
+same identity
++
+same meaningful content
+```
+
+there is no need to repeatedly run deterministic intelligence on every poll.
+
+This becomes important when ACE monitors many employers frequently.
+
+Lesson:
+
+```text
+change detection
+can be used as a computational gate
+```
+
+## Baseline Evaluation Suppression
+
+Module 4 preserves Module 3 baseline behavior.
+
+```text
+first snapshot
+    ↓
+jobs persisted
+    ↓
+evaluation candidates = 0
+    ↓
+evaluated jobs = 0
+    ↓
+alert candidates = 0
+```
+
+This was verified at the workflow level, not only inside persistence.
+
+Lesson:
+
+Important invariants should be tested through the complete pipeline that depends on them.
+
+## Application Workflow Layer
+
+A thin workflow package was added.
+
+Purpose:
+
+```text
+orchestrate domain/application services
+without duplicating orchestration everywhere
+```
+
+Without it, future callers might each repeat:
+
+```python
+snapshot = process_snapshot(...)
+evaluation = evaluate_snapshot(snapshot)
+```
+
+Possible callers include:
+
+- scheduler
+- API
+- email worker
+- CLI
+- background task
+- integration tests
+
+Instead they can call one use case:
+
+```text
+run_source_snapshot_workflow(...)
+```
+
+Lesson:
+
+A workflow/use-case layer can prevent orchestration duplication while keeping individual domain services focused.
+
+## Transaction Ownership
+
+The workflow does not commit or open its own database transaction.
+
+The caller owns the transaction.
+
+This keeps the transaction boundary explicit and preserves the Module 3 design.
+
+Lesson:
+
+The layer that understands the complete operation should own transaction scope.
+
+## Module 4 Unit Tests
+
+Module 4A added evaluation tests covering:
+
+- PRIMARY + PASS → ALERT
+- PRIMARY + STRETCH → ALERT
+- SECONDARY + PASS → ALERT
+- REJECT → SUPPRESS
+- UPDATED evaluation
+- REOPENED evaluation
+- baseline suppression
+- mixed PASS/STRETCH/REJECT counts
+
+Module 4B added workflow tests covering:
+
+- baseline persists but is not evaluated
+- NEW Software Engineer becomes alert candidate
+- NEW Senior Software Engineer is suppressed
+- NEW/UPDATED/REOPENED observation statuses survive orchestration
+- UNCHANGED jobs do not enter evaluation
+
+After Module 4B:
+
+```text
+59 automated tests passing
+```
+
+## Real PostgreSQL End-to-End Workflow Test
+
+Module 4C uses real PostgreSQL with synthetic source account:
+
+```text
+ace-module4-smoke
+```
+
+This avoids changing real Databricks state.
+
+### Pass 1 — Baseline
+
+Input:
+
+```text
+A Software Engineer
+B Software Engineer
+```
+
+Observed:
+
+```text
+Baseline:               True
+Fetched:                2
+Unique:                 2
+NEW:                    2
+Evaluation candidates:  0
+
+Evaluated:              0
+PASS:                   0
+STRETCH:                0
+REJECT:                 0
+Alert candidates:       0
+Suppressed:             0
+```
+
+This proves first-run suppression end to end.
+
+### Pass 2 — Changed Source
+
+Input:
+
+```text
+A unchanged Software Engineer
+
+B updated Software Engineer
+
+C new Software Engineer
+
+D new Senior Software Engineer
+
+E new Machine Learning Engineer
+  requires 3 years
+
+F new Forward Deployed Engineer
+```
+
+Persistence observed:
+
+```text
+Fetched:                6
+Unique:                 6
+NEW:                    4
+UPDATED:                1
+REOPENED:               0
+UNCHANGED:              1
+CLOSED:                 0
+Evaluation candidates:  5
+```
+
+Evaluation observed:
+
+```text
+Evaluated:              5
+PASS:                   3
+STRETCH:                1
+REJECT:                 1
+Alert candidates:       4
+Suppressed:             1
+```
+
+The smoke test asserted each important role/state mapping.
+
+## Alert-Candidate Details
+
+The smoke test prints details suitable for a future notification layer:
+
+```text
+Change
+Company
+Title
+Location
+Role family
+Priority
+Eligibility
+Posted relative age
+Posted exact timestamp
+Updated exact timestamp
+Official URL
+```
+
+Example:
+
+```text
+Change:      NEW
+Company:     ACE Module 4 Synthetic Company
+Title:       Software Engineer
+Location:    Seattle, Washington
+Role family: SOFTWARE_ENGINEERING
+Priority:    PRIMARY
+Eligibility: PASS
+Posted:      15 minutes ago
+Posted at:   2026-08-29 14:00:00 UTC
+Updated at:  2026-08-29 14:00:00 UTC
+Official URL: https://example.com/jobs/C
+```
+
+## Exact Timestamp vs Relative Age
+
+Important design decision:
+
+Do not store:
+
+```text
+15 minutes ago
+```
+
+because it becomes stale immediately.
+
+Store:
+
+```text
+2026-08-29T14:00:00+00:00
+```
+
+and compute relative age when rendering.
+
+Lesson:
+
+```text
+durable state
+should remain absolute
+
+presentation state
+can be relative
+```
+
+## Timezone Strategy
+
+The Module 4 smoke test renders exact timestamps in UTC for deterministic validation.
+
+Production behavior should eventually be:
+
+```text
+store UTC
+    ↓
+convert at presentation boundary
+    ↓
+user local timezone
+```
+
+This avoids timezone ambiguity in storage while still giving the user natural timestamps.
+
+## Employer Posted Time vs ACE Detection Time
+
+The source already gives ACE employer timestamps:
+
+```text
+posted_at
+updated_at
+```
+
+A future polling layer should also capture:
+
+```text
+ACE detected_at
+```
+
+These answer different questions:
+
+```text
+posted_at
+→ When the employer says the job opened
+
+updated_at
+→ When the employer says it changed
+
+detected_at
+→ When ACE observed the opening/change
+```
+
+This will let ACE measure source-to-detection latency.
+
+Example:
+
+```text
+Employer posted:
+9:14 AM
+
+ACE detected:
+9:22 AM
+
+Detection latency:
+8 minutes
+```
+
+This is not implemented yet.
+
+## Freshness as a Future Ranking Signal
+
+Freshness should later influence ordering, not eligibility.
+
+Possible UX classes:
+
+```text
+JUST OPENED
+VERY FRESH
+FRESH
+TODAY
+RECENT
+```
+
+A future ranking system may combine:
+
+```text
+Role priority
++
+Eligibility
++
+Resume relevance
++
+Posting freshness
+```
+
+Example trade-off:
+
+```text
+HIGH resume relevance
+posted 3 days ago
+
+vs
+
+MEDIUM resume relevance
+posted 9 minutes ago
+```
+
+ACE should be able to prioritize intelligently rather than sorting only by similarity.
+
+The exact ranking policy is not implemented yet.
+
+## Cleanup Discipline
+
+The Module 4 PostgreSQL smoke test deletes its synthetic `jobs` and `source_states` records in a `finally` block.
+
+This means cleanup is attempted even if an assertion fails.
+
+Lesson:
+
+Integration tests should avoid polluting long-lived development state.
+
+## Development Workflow Rule
+
+During Module 4, a workflow preference was reinforced:
+
+```text
+new file
+→ complete contents
+
+modified file
+→ complete replacement contents
+```
+
+This reduces copy/paste ambiguity and makes each implementation step reproducible.
 
 ---
 
@@ -737,9 +1049,15 @@ PostgreSQL Persistence
     ↓
 NEW / UPDATED / REOPENED / UNCHANGED / CLOSED
     ↓
+Evaluation Candidates
+    ↓
+Source-Snapshot Workflow
+    ↓
 Role Classification
     ↓
 Eligibility
+    ↓
+ALERT / SUPPRESS
 ```
 
 Completed:
@@ -757,14 +1075,17 @@ Module 2 — Role Classification + Eligibility
 Module 3 — PostgreSQL Persistence + Lifecycle
 ✅
 
+Module 4 — Evaluation Pipeline + Workflow
+✅
+
 Automated Tests
-47 passing
+59 passing
 ✅
 
-Live Databricks Persistence Validation
+Real PostgreSQL Persistence Validation
 ✅
 
-Synthetic PostgreSQL Lifecycle Validation
+Real PostgreSQL Evaluation Workflow Validation
 ✅
 ```
 
@@ -772,24 +1093,39 @@ Synthetic PostgreSQL Lifecycle Validation
 
 # Next Architecture Stage
 
-ACE now knows what changed.
+ACE can now produce clean alert candidates.
 
-Next target flow:
+Next target:
 
 ```text
-NEW / UPDATED / REOPENED
+Alert Candidate
     ↓
-Role Classification
+Notification Renderer
     ↓
-Eligibility
+Email Delivery
+```
+
+Then:
+
+```text
+Scheduler / polling
     ↓
-Work-Authorization Intelligence
+repeated employer source checks
     ↓
-Resume Relevance
+fast NEW-job detection
     ↓
-Ranking
-    ↓
-Notification Decision
+automatic notification
+```
+
+Later stages:
+
+```text
+Work-authorization intelligence
+Resume ingestion
+HIGH / MEDIUM / MINIMAL relevance
+Freshness-aware ranking
+Additional ATS adapters
+Web application
 ```
 
 ---
