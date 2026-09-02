@@ -1,6 +1,6 @@
 # ACE Learning Log
 
-This document records what was built, why it exists, bugs discovered during implementation, engineering decisions, trade-offs, and the concepts learned while building ACE.
+This document records what was built, why it exists, bugs discovered during implementation, engineering decisions, trade-offs, validation results, and concepts learned while building ACE.
 
 ---
 
@@ -8,19 +8,29 @@ This document records what was built, why it exists, bugs discovered during impl
 
 ## Python Environment
 
-ACE uses Python 3.12.12 selected with `pyenv` and a project-local `.venv`.
-
-Key relationship:
+ACE uses Python 3.12 with `pyenv` and a project-local virtual environment.
 
 ```text
 pyenv
     ↓
-Python version
+Python runtime
     ↓
 project .venv
     ↓
 project dependencies
 ```
+
+Important lesson:
+
+```text
+system Python
+!=
+project Python
+```
+
+Development and testing commands should run through the project environment.
+
+---
 
 ## Git and GitHub
 
@@ -28,10 +38,10 @@ Git provides local version history.
 
 GitHub stores the remote repository.
 
-Key concepts learned:
+Important concepts:
 
 - repository
-- working directory
+- working tree
 - staging area
 - commit
 - commit hash
@@ -41,13 +51,62 @@ Key concepts learned:
 - push
 - `.gitignore`
 
+Important workflow lesson:
+
+```text
+inspect
+→ stage intentionally
+→ inspect staged diff
+→ commit
+→ push
+```
+
+Avoid blindly staging unrelated changes.
+
+---
+
+## Secrets
+
+Real runtime secrets belong in:
+
+```text
+.env
+```
+
+Safe examples belong in:
+
+```text
+.env.example
+```
+
+`.env` must remain ignored by Git.
+
+Never commit:
+
+- SMTP passwords
+- Gmail App Passwords
+- API tokens
+- production database credentials
+
+Important lesson:
+
+```text
+configuration examples
+!=
+credentials
+```
+
 ---
 
 # Module 1 — Greenhouse Job Ingestion
 
 ## Problem
 
-ACE needs employer job data directly from ATS systems instead of relying only on third-party aggregators.
+ACE needs first-party employer job data instead of relying only on third-party aggregators.
+
+The first ATS integration is Greenhouse.
+
+---
 
 ## Architecture
 
@@ -56,33 +115,86 @@ Greenhouse API
     ↓
 HTTP GET
     ↓
-JSON
+JSON payload
     ↓
 Greenhouse Adapter
     ↓
 CanonicalJob
 ```
 
+---
+
 ## What Was Built
 
 Greenhouse-specific payloads are normalized into `CanonicalJob`.
 
-Important lessons:
+The normalized model protects downstream code from provider-specific schemas.
 
-- adapter pattern
-- canonical data models
-- HTTP timeout handling
-- descriptive User-Agent
-- HTML normalization
-- live smoke testing
+Fields include:
+
+- source
+- company
+- external ID
+- requisition ID
+- title
+- location
+- description
+- official URL
+- posting timestamp
+- update timestamp
 
 ---
 
-# Module 2 — Role Classification and Eligibility Gate
+## Engineering Lessons
+
+### Adapter Pattern
+
+Downstream layers should depend on the application's canonical model rather than directly depending on Greenhouse.
+
+Future design:
+
+```text
+Greenhouse ─┐
+Lever ──────┼──→ CanonicalJob
+Ashby ──────┘
+```
+
+### Explicit HTTP Timeouts
+
+Network calls should never depend on unbounded default waits.
+
+### Descriptive User-Agent
+
+External services should receive an identifiable application User-Agent.
+
+### HTML Normalization
+
+Job descriptions often arrive as HTML.
+
+Eligibility logic should operate on normalized text rather than raw markup.
+
+### Live Smoke Testing
+
+Unit tests are not enough for external integrations.
+
+A real request confirms:
+
+- endpoint behavior
+- network behavior
+- payload assumptions
+- provider compatibility
+
+---
+
+# Module 2 — Role Classification and Eligibility
 
 ## Problem
 
-ACE needs to distinguish target roles from irrelevant roles and reject deterministic blockers.
+ACE must distinguish relevant engineering opportunities from the much larger employer job corpus.
+
+It also needs deterministic early-career eligibility rules.
+
+---
 
 ## Architecture
 
@@ -98,6 +210,8 @@ Eligibility Gate
 PASS / STRETCH / REJECT
 ```
 
+---
+
 ## Role Families
 
 ```text
@@ -107,30 +221,293 @@ FORWARD_DEPLOYED_ENGINEERING
 OTHER
 ```
 
-## Important Bugs
+Priorities:
 
-### Excessive Experience False Stretch
+```text
+PRIMARY
+├── SOFTWARE_ENGINEERING
+└── AI_ML_ENGINEERING
 
-A high-experience role incorrectly survived because unrelated degree-substitution language was interpreted as an early-career signal.
+SECONDARY
+└── FORWARD_DEPLOYED_ENGINEERING
+```
+
+---
+
+## Eligibility Outcomes
+
+```text
+PASS
+STRETCH
+REJECT
+```
+
+`PASS` means no hard blocker was found.
+
+`STRETCH` means the opportunity remains worth surfacing but contains uncertainty or a moderate mismatch.
+
+`REJECT` means a deterministic blocker exists.
+
+---
+
+## Experience Policy
+
+Current required-experience policy:
+
+```text
+0–2 years
+→ PASS
+
+3 years
+→ STRETCH
+
+4 years
+→ REJECT
+
+4 years + explicit early-career evidence
+→ STRETCH
+
+5+ years
+→ REJECT
+```
+
+Preferred experience is not automatically interpreted as required experience.
+
+---
+
+## Bug — Excessive Experience False Stretch
+
+A high-experience job incorrectly survived because unrelated degree-substitution language was interpreted as an early-career signal.
+
+The classifier was effectively allowing a weak secondary phrase to override a strong experience requirement.
 
 Fix:
 
-Clearly excessive required experience remains a hard rejection.
+```text
+clearly excessive required experience
+→ remains a hard rejection
+```
 
-### `PhD preferred` False Rejection
+Lesson:
 
-Loose regex proximity caused `PhD preferred` to be treated as `PhD required`.
+```text
+weak contextual evidence
+should not override
+strong explicit requirements
+```
+
+Regression tests were added.
+
+---
+
+## Bug — `PhD preferred` False Rejection
+
+Loose proximity-based matching caused language such as:
+
+```text
+Bachelor's or Master's required.
+PhD preferred.
+```
+
+to be interpreted as:
+
+```text
+PhD required
+```
 
 Fix:
 
-Explicit requirement grammar is used instead.
+Use explicit requirement grammar rather than loose keyword proximity.
 
-Key lessons:
+Policy:
 
-- false negatives matter
-- regression tests protect real bugs
-- real employer data should validate deterministic assumptions
-- do not overfit one employer corpus
+```text
+PhD preferred
+→ not automatically rejected
+
+PhD targeted / explicitly required
+→ reject
+```
+
+Lesson:
+
+Regex-based eligibility rules require grammar-aware boundaries.
+
+---
+
+## Major Lesson
+
+False negatives matter heavily in job discovery.
+
+ACE should avoid hiding opportunities unless the available evidence is sufficiently deterministic.
+
+---
+
+# Module 2.1 — Recall Hardening
+
+## Motivation
+
+The initial eligibility implementation worked well for structured large-company postings but risked missing startup opportunities.
+
+Startups frequently publish titles such as:
+
+```text
+Founding Engineer
+Product Engineer
+Software Engineer I
+```
+
+and often omit:
+
+- sponsorship details
+- exact experience requirements
+- precise Remote-US wording
+
+Rejecting missing information would produce excessive false negatives.
+
+---
+
+## Recall Rule
+
+The hardened policy became:
+
+```text
+unknown
+!=
+negative evidence
+```
+
+Examples:
+
+```text
+sponsorship not mentioned
+→ retain
+```
+
+```text
+sponsorship explicitly unavailable
+→ reject
+```
+
+---
+
+## Generic Remote
+
+A generic:
+
+```text
+Remote
+```
+
+location does not prove US eligibility.
+
+But it also does not prove non-US eligibility.
+
+Therefore:
+
+```text
+generic Remote
+→ STRETCH / retained
+```
+
+An explicitly non-US location still rejects:
+
+```text
+Remote - Europe
+→ REJECT
+```
+
+This protects discovery recall without pretending the geography is known.
+
+---
+
+## Startup-Oriented Title Coverage
+
+Validated examples:
+
+```text
+Software Engineer I
+→ SOFTWARE_ENGINEERING
+```
+
+```text
+Founding Engineer
+→ SOFTWARE_ENGINEERING
+```
+
+```text
+Product Engineer
+→ SOFTWARE_ENGINEERING
+```
+
+```text
+Software Engineer - New Grad
+→ SOFTWARE_ENGINEERING
+```
+
+---
+
+## Sanity Check Results
+
+Observed behavior:
+
+```text
+Software Engineer I
+Location: Remote
+Decision: STRETCH
+Role: SOFTWARE_ENGINEERING
+```
+
+```text
+Founding Engineer
+Location: San Francisco, CA
+Decision: PASS
+Role: SOFTWARE_ENGINEERING
+```
+
+```text
+Product Engineer
+Location: Remote
+Decision: STRETCH
+Role: SOFTWARE_ENGINEERING
+```
+
+```text
+Software Engineer - New Grad
+Location: New York, NY
+Decision: PASS
+Role: SOFTWARE_ENGINEERING
+```
+
+```text
+Software Engineer
+explicit no sponsorship
+→ REJECT
+```
+
+```text
+Software Engineer
+Remote - Europe
+→ REJECT
+```
+
+---
+
+## Lesson
+
+Discovery systems should distinguish:
+
+```text
+known blocker
+```
+
+from:
+
+```text
+missing evidence
+```
+
+This is especially important when monitoring startups.
 
 ---
 
@@ -138,19 +515,21 @@ Key lessons:
 
 ## Problem
 
-Before Module 3, ACE could fetch, normalize, classify, and evaluate jobs, but every process execution forgot previous runs.
+Before Module 3, ACE forgot everything when the Python process exited.
 
 ACE could not answer:
 
 ```text
 Have I seen this job before?
-Is this job genuinely new?
-Did the employer change it?
+Is it actually new?
+Did the employer update it?
 Did it disappear?
 Did it reopen?
 ```
 
-Real-time alerting requires durable state.
+Real-time monitoring requires durable state.
+
+---
 
 ## Infrastructure Architecture
 
@@ -168,65 +547,70 @@ Docker port mapping
 PostgreSQL container:5432
 ```
 
-A native PostgreSQL service already occupied host port `5432`, so ACE uses host port `5433`.
+---
+
+## Port Conflict
+
+A native PostgreSQL service already occupied:
+
+```text
+localhost:5432
+```
+
+ACE's Docker PostgreSQL therefore uses:
+
+```text
+localhost:5433
+→ container:5432
+```
 
 Lesson:
 
 ```text
-host port != container port
+host port
+!=
+container port
 ```
 
-## Docker Compose and Persistent Volumes
+---
 
-PostgreSQL runs through Docker Compose.
+## Docker Persistence
 
-A named volume preserves database state across container recreation.
-
-Important distinction:
+A named Docker volume preserves PostgreSQL state across normal container recreation.
 
 ```text
 docker compose down
-→ stop/remove containers
-→ preserve volume
-
-docker compose down -v
-→ also delete volume
-→ database data removed
+→ container removed
+→ volume preserved
 ```
+
+```text
+docker compose down -v
+→ volume removed
+→ database data deleted
+```
+
+This distinction matters for development state.
+
+---
 
 ## Environment Configuration
 
-ACE stores real local configuration in:
+Runtime configuration moved into environment variables using `pydantic-settings`.
 
-```text
-.env
-```
+Benefits:
 
-and safe example configuration in:
+- no database credentials hardcoded in source
+- reproducible local configuration
+- clean production path later
 
-```text
-.env.example
-```
+---
 
-`.env` is ignored by Git.
-
-Lesson:
-
-```text
-source code
-!=
-runtime secrets/configuration
-```
-
-## Pydantic vs SQLAlchemy
-
-ACE has separate model categories.
+## Domain Model vs Database Model
 
 ### `CanonicalJob`
 
-Domain/application representation.
-
-Question answered:
+Answers:
 
 ```text
 What does a normalized job look like inside ACE?
@@ -234,15 +618,15 @@ What does a normalized job look like inside ACE?
 
 ### `JobRecord`
 
-Persistent SQLAlchemy representation.
-
-Question answered:
+Answers:
 
 ```text
-How is the job stored in PostgreSQL?
+How is a job persisted in PostgreSQL?
 ```
 
-Separating domain and persistence models reduces coupling.
+Separating the two prevents persistence details from leaking into domain logic.
+
+---
 
 ## Durable Job Identity
 
@@ -256,59 +640,71 @@ source_account
 external_id
 ```
 
-A PostgreSQL unique constraint enforces this identity.
+A PostgreSQL unique constraint enforces the identity.
 
 Lesson:
 
 ```text
 application deduplication
 +
-database constraint
+database uniqueness
 =
 defense in depth
 ```
 
-## Source Snapshot Model
+---
 
-One complete employer response is treated as a source snapshot.
+## Snapshot Model
+
+One complete employer response is treated as one source snapshot.
 
 Example:
 
 ```text
 Databricks Greenhouse
     ↓
-855 jobs
+hundreds of jobs
     ↓
-one snapshot
+one complete source snapshot
 ```
 
-That snapshot is compared against durable database state.
+The new snapshot is reconciled against existing durable state.
+
+---
 
 ## Baseline Protection
 
-First successful source run:
+A first run may produce:
 
 ```text
 855 current jobs
-    ↓
-855 NEW to database
-    ↓
-baseline = true
-    ↓
-0 evaluation candidates
 ```
 
-Key lesson:
+All are new to ACE's database.
+
+They are not necessarily newly posted.
+
+Therefore:
 
 ```text
 NEW to database
 !=
-newly posted after ACE started
+newly opened after ACE began monitoring
 ```
 
-Without this distinction, first deployment could create hundreds of false alerts.
+The first successful snapshot becomes baseline history.
 
-## Persistence Lifecycle
+Result:
+
+```text
+jobs persisted
+evaluation candidates = 0
+alerts = 0
+```
+
+---
+
+## Lifecycle
 
 ```text
 NEW
@@ -320,101 +716,116 @@ CLOSED
 
 ### NEW
 
-Identity does not exist.
-
-### UNCHANGED
-
-Identity exists and meaningful content hash is the same.
+Source identity did not previously exist.
 
 ### UPDATED
 
-Identity exists and meaningful content changed.
+Identity exists but meaningful normalized content changed.
+
+### UNCHANGED
+
+Identity and meaningful content are unchanged.
 
 ### CLOSED
 
-Previously active job is absent from a successful complete snapshot.
+Previously active identity is absent from a trustworthy complete snapshot.
 
 ### REOPENED
 
-Previously inactive job appears again.
+A previously closed job appears again.
+
+---
 
 ## Content Hashing
 
-ACE computes a deterministic SHA-256 fingerprint over meaningful normalized content.
+ACE computes a SHA-256 fingerprint over meaningful job content.
 
-Provider bookkeeping update timestamps are excluded.
+Provider bookkeeping timestamps are intentionally excluded from the content hash.
 
-Lesson:
+Why?
 
-A provider may change internal timestamps without changing the job posting. Including those timestamps would create false update events.
+A provider may change internal metadata timestamps without changing the actual posting.
+
+Including those timestamps would create false:
+
+```text
+UPDATED
+```
+
+events.
+
+---
 
 ## N+1 Query Avoidance
 
-Naive design:
+Naive approach:
 
 ```text
-for each job:
-    SELECT job
+for every source job:
+    SELECT existing job
 ```
 
-ACE instead batch-loads existing source identities and compares them in memory.
+ACE instead loads relevant existing records in bulk.
 
 Lesson:
 
-Database round trips matter at scale.
+Database round trips become expensive as employer coverage grows.
 
-## Atomic Transactions
+---
 
-Repository methods do not commit independently.
+## Transaction Ownership
 
-The caller owns the complete source-snapshot transaction.
+Repository methods do not independently commit.
+
+The caller owns the transaction.
 
 ```text
 successful snapshot
 → COMMIT
 
-failure
+exception
 → ROLLBACK
 ```
 
-This prevents partially persisted source state.
+This avoids partially persisted source state.
+
+---
 
 ## Empty Snapshot Protection
 
 Dangerous scenario:
 
 ```text
-provider/API failure
-    ↓
-0 parsed jobs
+API/parser failure
+→ 0 jobs
 ```
 
-If treated as authoritative:
+Naive interpretation:
 
 ```text
-all active jobs
+every previous job
 → CLOSED
 ```
 
-ACE instead rejects an empty complete snapshot.
+ACE rejects unexpectedly empty complete snapshots instead.
 
 Lesson:
 
-Systems must be designed for upstream failure, not only valid data.
+Systems must model upstream failure, not only valid input.
+
+---
 
 ## Persistence vs Notification Separation
 
-An architecture refinement was made during Module 3.
-
-Persistence originally exposed:
+An early persistence design exposed:
 
 ```text
 notification_candidates
 ```
 
-That was too coupled.
+This coupled storage and notification policy.
 
-It became:
+It was renamed/refined to:
 
 ```text
 evaluation_candidates
@@ -427,24 +838,36 @@ Persistence
 → What changed?
 
 Intelligence
-→ Is it relevant/eligible?
+→ Does it qualify?
 
 Notification
-→ Should/how should the user be alerted?
+→ How should it reach the user?
 ```
 
-## Real and Synthetic Validation
+This architectural correction became important in Module 5.
 
-Module 3 proved:
+---
 
-- live Databricks idempotent persistence
+## Real Validation
+
+Module 3 validated:
+
+- real PostgreSQL connectivity
+- live Databricks persistence
 - baseline behavior
 - NEW
 - UPDATED
 - CLOSED
 - REOPENED
 - cleanup
-- 47 automated tests
+
+At that point:
+
+```text
+47 automated tests
+```
+
+were passing.
 
 ---
 
@@ -452,44 +875,30 @@ Module 3 proved:
 
 ## Problem
 
-After Module 3, ACE could independently answer:
+After Module 3:
 
 ```text
-What changed?
+Persistence
+→ knows what changed
+
+Eligibility
+→ knows what qualifies
 ```
 
-and:
+but no application-level use case connected them.
+
+ACE needed:
 
 ```text
-Is this job eligible?
-```
-
-but there was no application-level pipeline connecting those answers.
-
-Example:
-
-```text
-Persistence:
-This job is NEW.
-
-Eligibility:
-This job is PRIMARY + PASS.
-```
-
-ACE still needed a use case that combined them into:
-
-```text
-NEW
+NEW / UPDATED / REOPENED
 +
-PRIMARY
-+
-PASS
-→ ALERT candidate
+eligibility
+→ alert disposition
 ```
+
+---
 
 ## Architecture
-
-Module 4 introduces:
 
 ```text
 Persistence
@@ -505,44 +914,36 @@ Eligibility
 Alert Disposition
 ```
 
-and then wraps persistence + evaluation in an application workflow:
+---
 
-```text
-run_source_snapshot_workflow(...)
-```
-
-## Evaluation Domain Types
+## Evaluation Types
 
 ### `AlertDisposition`
-
-Values:
 
 ```text
 ALERT
 SUPPRESS
 ```
 
-Important lesson:
-
-Eligibility and alert disposition are not the same concept.
+Eligibility and alert disposition remain separate concepts.
 
 Eligibility asks:
 
 ```text
-How does the job compare with deterministic candidate rules?
+How does this job compare with deterministic candidate rules?
 ```
 
 Alert disposition asks:
 
 ```text
-Should this evaluated change continue toward the notification layer?
+Should this evaluated change continue toward notification?
 ```
 
-Keeping them separate prevents notification policy from becoming embedded inside eligibility logic.
+---
 
-### `EvaluatedJob`
+## `EvaluatedJob`
 
-An evaluated job contains:
+Contains:
 
 ```text
 CanonicalJob
@@ -554,32 +955,27 @@ EligibilityDecision
 AlertDisposition
 ```
 
-This creates one downstream object carrying both:
+This gives downstream systems both lifecycle and intelligence context.
 
-- source change context
-- intelligence context
+---
 
-### `EvaluationBatchResult`
+## `EvaluationBatchResult`
 
 Provides:
 
-```text
-evaluated_jobs
-alert_candidates
-suppressed_jobs
+- evaluated jobs
+- alert candidates
+- suppressed jobs
+- evaluated count
+- alert count
+- suppression count
+- PASS count
+- STRETCH count
+- REJECT count
 
-evaluated_count
-alert_candidate_count
-suppressed_count
+---
 
-pass_count
-stretch_count
-reject_count
-```
-
-This is useful both for product behavior and observability.
-
-## Current Alert Policy
+## Alert Policy
 
 ```text
 PASS
@@ -592,248 +988,164 @@ REJECT
 → SUPPRESS
 ```
 
-Why keep `STRETCH` alertable?
-
-Because ACE is intentionally recall-oriented.
-
-A job requiring 3 years, for example, may still be worth applying to and should be clearly labeled rather than hidden.
+`STRETCH` stays alertable because ACE is recall-oriented.
 
 Lesson:
 
 ```text
-ranking uncertainty
+uncertainty
 should not automatically become
 hard exclusion
 ```
 
-## Why UPDATED and REOPENED Are Re-Evaluated
+---
 
-Normal evaluation includes:
+## Why UPDATED Jobs Are Re-Evaluated
 
-```text
-NEW
-UPDATED
-REOPENED
-```
-
-A changed posting may become newly relevant.
+An employer can change a previously rejected job.
 
 Example:
 
 ```text
-old posting:
+old:
 5 years required
 → REJECT
+```
 
-employer updates posting:
+Later:
+
+```text
+updated:
 2 years required
 → PASS
 ```
 
-If ACE ignored `UPDATED`, it could miss this opportunity.
+Ignoring updates would miss the newly relevant opportunity.
 
-Similarly:
+---
+
+## Why REOPENED Jobs Are Re-Evaluated
+
+A closed job may later return.
 
 ```text
 CLOSED
-→ later REOPENED
+→ REOPENED
+→ evaluate again
 ```
 
-should become eligible for reevaluation.
+---
 
-## Why UNCHANGED Jobs Are Not Re-Evaluated
+## Why UNCHANGED Jobs Are Skipped
 
-If a job is unchanged:
-
-```text
-same identity
-+
-same meaningful content
-```
-
-there is no need to repeatedly run deterministic intelligence on every poll.
-
-This becomes important when ACE monitors many employers frequently.
-
-Lesson:
+Repeatedly evaluating unchanged jobs wastes computation.
 
 ```text
 change detection
-can be used as a computational gate
+→ computational gate
 ```
 
-## Baseline Evaluation Suppression
+This becomes increasingly important when ACE polls many employers frequently.
 
-Module 4 preserves Module 3 baseline behavior.
+---
+
+## Baseline Suppression
+
+The Module 4 workflow preserved the baseline invariant:
 
 ```text
 first snapshot
-    ↓
-jobs persisted
-    ↓
-evaluation candidates = 0
-    ↓
-evaluated jobs = 0
-    ↓
-alert candidates = 0
+→ persist
+→ no evaluation
+→ no alerts
 ```
-
-This was verified at the workflow level, not only inside persistence.
-
-Lesson:
 
 Important invariants should be tested through the complete pipeline that depends on them.
 
-## Application Workflow Layer
+---
 
-A thin workflow package was added.
+## Workflow Layer
 
-Purpose:
+A reusable workflow coordinates:
 
 ```text
-orchestrate domain/application services
-without duplicating orchestration everywhere
+process_snapshot(...)
+    ↓
+evaluate_snapshot(...)
 ```
 
-Without it, future callers might each repeat:
+without owning:
 
-```python
-snapshot = process_snapshot(...)
-evaluation = evaluate_snapshot(snapshot)
-```
+- ATS fetching
+- notification transport
+- resume ranking
+- transaction creation
 
-Possible callers include:
+Possible callers:
 
+- CLI
 - scheduler
 - API
-- email worker
-- CLI
-- background task
+- worker
 - integration tests
 
-Instead they can call one use case:
+Lesson:
 
-```text
-run_source_snapshot_workflow(...)
-```
+A use-case layer prevents orchestration duplication.
+
+---
+
+## Transaction Boundary
+
+The workflow deliberately does not call `commit()`.
+
+The caller owns transaction scope.
 
 Lesson:
 
-A workflow/use-case layer can prevent orchestration duplication while keeping individual domain services focused.
-
-## Transaction Ownership
-
-The workflow does not commit or open its own database transaction.
-
-The caller owns the transaction.
-
-This keeps the transaction boundary explicit and preserves the Module 3 design.
-
-Lesson:
-
-The layer that understands the complete operation should own transaction scope.
-
-## Module 4 Unit Tests
-
-Module 4A added evaluation tests covering:
-
-- PRIMARY + PASS → ALERT
-- PRIMARY + STRETCH → ALERT
-- SECONDARY + PASS → ALERT
-- REJECT → SUPPRESS
-- UPDATED evaluation
-- REOPENED evaluation
-- baseline suppression
-- mixed PASS/STRETCH/REJECT counts
-
-Module 4B added workflow tests covering:
-
-- baseline persists but is not evaluated
-- NEW Software Engineer becomes alert candidate
-- NEW Senior Software Engineer is suppressed
-- NEW/UPDATED/REOPENED observation statuses survive orchestration
-- UNCHANGED jobs do not enter evaluation
-
-After Module 4B:
-
 ```text
-59 automated tests passing
+the layer that understands
+the complete operation
+should own the transaction
 ```
 
-## Real PostgreSQL End-to-End Workflow Test
+This later enabled source reconciliation and notification enqueueing to share one transaction.
 
-Module 4C uses real PostgreSQL with synthetic source account:
+---
+
+## Real PostgreSQL Workflow Validation
+
+Synthetic source account:
 
 ```text
 ace-module4-smoke
 ```
 
-This avoids changing real Databricks state.
-
-### Pass 1 — Baseline
-
-Input:
-
-```text
-A Software Engineer
-B Software Engineer
-```
-
-Observed:
+### Pass 1
 
 ```text
 Baseline:               True
 Fetched:                2
-Unique:                 2
 NEW:                    2
 Evaluation candidates:  0
-
 Evaluated:              0
-PASS:                   0
-STRETCH:                0
-REJECT:                 0
 Alert candidates:       0
-Suppressed:             0
 ```
 
-This proves first-run suppression end to end.
-
-### Pass 2 — Changed Source
-
-Input:
-
-```text
-A unchanged Software Engineer
-
-B updated Software Engineer
-
-C new Software Engineer
-
-D new Senior Software Engineer
-
-E new Machine Learning Engineer
-  requires 3 years
-
-F new Forward Deployed Engineer
-```
-
-Persistence observed:
+### Pass 2
 
 ```text
 Fetched:                6
 Unique:                 6
 NEW:                    4
 UPDATED:                1
-REOPENED:               0
 UNCHANGED:              1
-CLOSED:                 0
 Evaluation candidates:  5
 ```
 
-Evaluation observed:
+Evaluation:
 
 ```text
-Evaluated:              5
 PASS:                   3
 STRETCH:                1
 REJECT:                 1
@@ -841,198 +1153,749 @@ Alert candidates:       4
 Suppressed:             1
 ```
 
-The smoke test asserted each important role/state mapping.
-
-## Alert-Candidate Details
-
-The smoke test prints details suitable for a future notification layer:
+Mappings included:
 
 ```text
-Change
-Company
-Title
-Location
-Role family
-Priority
-Eligibility
-Posted relative age
-Posted exact timestamp
-Updated exact timestamp
-Official URL
+UPDATED Software Engineer
+→ PRIMARY
+→ PASS
+→ ALERT
 ```
+
+```text
+NEW Machine Learning Engineer
+→ PRIMARY
+→ STRETCH
+→ ALERT
+```
+
+```text
+NEW Forward Deployed Engineer
+→ SECONDARY
+→ PASS
+→ ALERT
+```
+
+```text
+NEW Senior Software Engineer
+→ REJECT
+→ SUPPRESS
+```
+
+---
+
+## Posting-Time Presentation
+
+Module 4 added user-facing timing information.
 
 Example:
 
 ```text
-Change:      NEW
-Company:     ACE Module 4 Synthetic Company
-Title:       Software Engineer
-Location:    Seattle, Washington
-Role family: SOFTWARE_ENGINEERING
-Priority:    PRIMARY
-Eligibility: PASS
-Posted:      15 minutes ago
-Posted at:   2026-08-29 14:00:00 UTC
-Updated at:  2026-08-29 14:00:00 UTC
-Official URL: https://example.com/jobs/C
+Posted:     15 minutes ago
+Posted at:  2026-08-29 14:00:00 UTC
+Updated at: 2026-08-29 14:00:00 UTC
 ```
 
-## Exact Timestamp vs Relative Age
+Important design:
 
-Important design decision:
+```text
+durable state
+→ exact timestamp
 
-Do not store:
+presentation
+→ relative age
+```
+
+Never persist:
 
 ```text
 15 minutes ago
 ```
 
-because it becomes stale immediately.
+because the value becomes stale.
 
-Store:
+---
+
+## Employer Time vs ACE Time
+
+Different timestamps answer different questions.
 
 ```text
-2026-08-29T14:00:00+00:00
+posted_at
+→ when employer says job opened
 ```
 
-and compute relative age when rendering.
+```text
+updated_at
+→ when employer says posting changed
+```
+
+```text
+detected_at
+→ when ACE observed it
+```
+
+This later enables source-to-detection latency metrics.
+
+---
+
+## Module 4 Checkpoint
+
+After Module 4:
+
+```text
+59 automated tests passing
+```
+
+---
+
+# Module 5 — Durable Notification Pipeline
+
+## Problem
+
+After Module 4, ACE could produce:
+
+```text
+ALERT candidates
+```
+
+but the user still had to inspect terminal output manually.
+
+The next requirement was real notification delivery.
+
+A naive implementation would be:
+
+```text
+evaluate job
+    ↓
+send email
+```
+
+This is insufficient for a reliable system.
+
+---
+
+# Module 5A — Notification Rendering
+
+## Goal
+
+Convert an `EvaluatedJob` into a transport-neutral notification.
+
+The renderer includes useful application details rather than sending a generic alert.
+
+Content includes:
+
+- lifecycle change
+- title
+- company
+- location
+- role family
+- role priority
+- eligibility
+- posting age
+- exact timestamps
+- official employer application URL
+
+---
+
+## Relative Job Age
+
+Notifications compute human-readable posting age dynamically.
+
+Examples:
+
+```text
+8 minutes ago
+2 hours ago
+3 days ago
+```
+
+The underlying `posted_at` remains exact.
 
 Lesson:
 
-```text
-durable state
-should remain absolute
+Presentation can be human-friendly without corrupting durable data.
 
-presentation state
-can be relative
-```
+---
 
-## Timezone Strategy
+## Official Application URL
 
-The Module 4 smoke test renders exact timestamps in UTC for deterministic validation.
+Every alert should make the shortest possible path to applying visible.
 
-Production behavior should eventually be:
+ACE therefore includes the employer-provided official URL when available.
 
-```text
-store UTC
-    ↓
-convert at presentation boundary
-    ↓
-user local timezone
-```
+---
 
-This avoids timezone ambiguity in storage while still giving the user natural timestamps.
+# Module 5B — SMTP Email Transport
 
-## Employer Posted Time vs ACE Detection Time
+## Goal
 
-The source already gives ACE employer timestamps:
+Deliver rendered notifications through real email.
+
+Initial implementation used Gmail SMTP.
+
+Configuration:
 
 ```text
-posted_at
-updated_at
+smtp.gmail.com
+port 587
+STARTTLS
 ```
 
-A future polling layer should also capture:
+---
+
+## Gmail Authentication Issue
+
+The first real SMTP attempt failed with:
 
 ```text
-ACE detected_at
+Application-specific password required
 ```
 
-These answer different questions:
+A normal Google account password is not valid for this SMTP flow when modern Google security is enabled.
 
-```text
-posted_at
-→ When the employer says the job opened
+The solution was a Google App Password.
 
-updated_at
-→ When the employer says it changed
+Lesson:
 
-detected_at
-→ When ACE observed the opening/change
-```
+Authentication errors from real external integrations often represent security-policy requirements rather than code defects.
 
-This will let ACE measure source-to-detection latency.
+---
+
+## Real Email Validation
+
+A test notification was successfully delivered to Gmail.
+
+This proved:
+
+- environment configuration
+- SMTP authentication
+- STARTTLS
+- sender configuration
+- recipient configuration
+- message construction
+- real external delivery
+
+---
+
+# Module 5C — Durable Notification Outbox
+
+## Reliability Problem
+
+Direct SMTP delivery from the source-processing transaction creates a dangerous failure scenario.
 
 Example:
 
 ```text
-Employer posted:
-9:14 AM
-
-ACE detected:
-9:22 AM
-
-Detection latency:
-8 minutes
+job marked NEW
+    ↓
+database commit
+    ↓
+SMTP fails
 ```
 
-This is not implemented yet.
-
-## Freshness as a Future Ranking Signal
-
-Freshness should later influence ordering, not eligibility.
-
-Possible UX classes:
+On the next poll:
 
 ```text
-JUST OPENED
-VERY FRESH
-FRESH
-TODAY
-RECENT
+job is UNCHANGED
 ```
 
-A future ranking system may combine:
+Without durable notification state, ACE may never attempt that alert again.
+
+The job would be silently lost.
+
+---
+
+## Transactional Outbox Pattern
+
+The solution is a durable notification outbox.
 
 ```text
-Role priority
+source processing
 +
-Eligibility
+evaluation
 +
-Resume relevance
+notification rendering
 +
-Posting freshness
+outbox insert
+        ↓
+single PostgreSQL transaction
+        ↓
+COMMIT
+        ↓
+external delivery worker
 ```
 
-Example trade-off:
+Now an external outage cannot erase notification intent.
+
+---
+
+## Database Migration
+
+Alembic migration:
 
 ```text
-HIGH resume relevance
-posted 3 days ago
-
-vs
-
-MEDIUM resume relevance
-posted 9 minutes ago
+0002_create_notification_outbox
 ```
 
-ACE should be able to prioritize intelligently rather than sorting only by similarity.
+added:
 
-The exact ranking policy is not implemented yet.
+```text
+notification_outbox
+```
 
-## Cleanup Discipline
+Current migration state:
 
-The Module 4 PostgreSQL smoke test deletes its synthetic `jobs` and `source_states` records in a `finally` block.
+```text
+0002 (head)
+```
 
-This means cleanup is attempted even if an assertion fails.
+---
+
+## Outbox Fields
+
+Important fields include:
+
+```text
+dedupe_key
+source
+source_account
+external_id
+observation_status
+job_content_hash
+source_updated_at
+recipient
+subject
+text_body
+status
+attempt_count
+next_attempt_at
+created_at
+last_attempt_at
+sent_at
+last_error
+```
+
+---
+
+## Outbox Status
+
+```text
+PENDING
+SENT
+DEAD
+```
+
+### PENDING
+
+Delivery has not completed.
+
+### SENT
+
+External transport completed successfully.
+
+### DEAD
+
+Maximum delivery attempts were exhausted.
+
+The record remains available for inspection rather than silently disappearing.
+
+---
+
+## Deduplication Design
+
+Notification identity must represent the logical job event, not the time ACE happened to poll.
+
+The dedupe key therefore includes:
+
+```text
+source
+source_account
+external job ID
+observation status
+meaningful job content hash
+source update timestamp
+recipient
+```
+
+ACE poll time is excluded.
+
+This means:
+
+```text
+same job event at 12:00
+same job event again at 12:05
+→ same notification identity
+```
+
+Meaningful content changes produce a different identity.
+
+---
+
+## Bug — Insert Detection Through `rowcount`
+
+The first real PostgreSQL outbox smoke test failed even though the schema was valid.
+
+The repository used:
+
+```python
+result.rowcount == 1
+```
+
+to determine whether:
+
+```text
+INSERT ... ON CONFLICT DO NOTHING
+```
+
+created a row.
+
+That behavior is not reliable enough across SQLAlchemy/DBAPI result semantics.
+
+Fix:
+
+```text
+INSERT
+...
+ON CONFLICT DO NOTHING
+RETURNING id
+```
+
+Then:
+
+```text
+returned ID
+→ inserted
+
+no returned ID
+→ duplicate
+```
 
 Lesson:
 
-Integration tests should avoid polluting long-lived development state.
+When the database can explicitly return the result of a mutation, prefer that over driver-dependent row-count assumptions.
 
-## Development Workflow Rule
-
-During Module 4, a workflow preference was reinforced:
+A real smoke test then confirmed:
 
 ```text
-new file
-→ complete contents
-
-modified file
-→ complete replacement contents
+First insert:     True
+Duplicate insert: False
+Persistent rows:  1
+Status:           PENDING
+Attempts:         0
 ```
 
-This reduces copy/paste ambiguity and makes each implementation step reproducible.
+---
+
+# Module 5C2 — Retry-Safe Delivery Worker
+
+## Goal
+
+Process due PENDING rows and update durable delivery state.
+
+---
+
+## Worker Claiming
+
+The PostgreSQL worker uses:
+
+```text
+FOR UPDATE SKIP LOCKED
+```
+
+This allows future concurrent workers to process different notifications safely.
+
+Concept:
+
+```text
+worker 1 locks row A
+
+worker 2 skips A
+and claims B
+```
+
+---
+
+## One Notification per Transaction
+
+Delivery draining uses one database transaction per processed message.
+
+Benefits:
+
+- isolated failure handling
+- reduced lock duration
+- smaller replay scope after worker failure
+- easier state reasoning
+
+---
+
+## Retry Scheduling
+
+A failed attempt increments:
+
+```text
+attempt_count
+```
+
+and stores:
+
+```text
+last_attempt_at
+last_error
+next_attempt_at
+```
+
+Initial exponential delays:
+
+```text
+attempt 1
+→ 60 seconds
+
+attempt 2
+→ 120 seconds
+
+attempt 3
+→ 240 seconds
+```
+
+The delay is capped.
+
+---
+
+## Maximum Attempts
+
+When maximum attempts are reached:
+
+```text
+status
+→ DEAD
+```
+
+This prevents infinite hot-loop retries while preserving operational visibility.
+
+---
+
+# At-Least-Once Delivery Semantics
+
+Perfect exactly-once email delivery cannot be guaranteed.
+
+Possible failure window:
+
+```text
+SMTP provider accepts email
+    ↓
+application process crashes
+    ↓
+PostgreSQL never records SENT
+```
+
+When the worker restarts, it may retry the still-PENDING row.
+
+Therefore a rare duplicate email is theoretically possible.
+
+ACE deliberately chooses:
+
+```text
+at-least-once delivery
+```
+
+because:
+
+```text
+rare duplicate
+<
+lost important job alert
+```
+
+Lesson:
+
+Distributed systems often require selecting the failure mode the product can tolerate better.
+
+---
+
+# Real Durable Delivery Smoke Test
+
+A notification was:
+
+```text
+inserted into PostgreSQL
+→ PENDING
+```
+
+Then the real delivery worker used Gmail.
+
+Observed:
+
+```text
+Queued:          True
+Attempted:       1
+Sent:            1
+Retry scheduled: 0
+Database status: SENT
+Attempt count:   1
+```
+
+The message arrived in Gmail.
+
+Synthetic state was cleaned up afterward.
+
+---
+
+# Real Failure-Recovery Validation
+
+The final Module 5 validation intentionally forced SMTP failure.
+
+A test notification began:
+
+```text
+status = PENDING
+attempt_count = 0
+```
+
+The worker was temporarily executed with an invalid local SMTP endpoint.
+
+Observed:
+
+```text
+Attempted:       1
+Sent:            0
+Retry scheduled: 1
+Dead:            0
+```
+
+PostgreSQL then contained:
+
+```text
+status = PENDING
+attempt_count = 1
+sent_at = NULL
+last_error = ConnectionRefusedError
+next_attempt_at = future time
+```
+
+This proved the notification was not lost.
+
+The retry timestamp was then moved forward for testing.
+
+The normal Gmail worker ran again.
+
+Observed:
+
+```text
+Attempted:       1
+Sent:            1
+Retry scheduled: 0
+Dead:            0
+```
+
+Final PostgreSQL state:
+
+```text
+status = SENT
+attempt_count = 2
+sent_at populated
+last_error cleared
+```
+
+The synthetic row was deleted afterward.
+
+This is the most important Module 5 reliability proof.
+
+---
+
+# Live Greenhouse Pipeline
+
+The live Greenhouse runner now performs:
+
+```text
+fetch live employer jobs
+    ↓
+persist/reconcile snapshot
+    ↓
+evaluate changed jobs
+    ↓
+create durable outbox rows
+    ↓
+commit
+    ↓
+deliver due notifications
+```
+
+One live Databricks checkpoint returned:
+
+```text
+Fetched:               859
+NEW:                     0
+UPDATED:                 0
+REOPENED:                0
+UNCHANGED:             859
+Evaluation candidates:   0
+```
+
+Therefore:
+
+```text
+Alert candidates: 0
+Queued:           0
+Sent:             0
+```
+
+This is correct behavior.
+
+ACE does not re-email unchanged jobs.
+
+---
+
+# Important Operational Distinction
+
+The pipeline is live, but automatic repeated polling is not yet implemented.
+
+Current:
+
+```text
+run command
+    ↓
+live source check
+    ↓
+possible notification
+```
+
+Future:
+
+```text
+scheduler
+    ↓
+automatic repeated runs
+    ↓
+possible notification
+```
+
+This distinction prevents overclaiming "real-time" behavior before the scheduling layer exists.
+
+---
+
+# Module 5 Automated Testing
+
+Module 5 added tests for:
+
+- notification rendering
+- exact and relative timestamps
+- email transport
+- Greenhouse runner behavior
+- outbox model
+- dedupe keys
+- duplicate enqueue behavior
+- retry scheduling
+- successful SENT transition
+- failed PENDING transition
+- DEAD transition
+- no-due-message behavior
+
+Final regression checkpoint:
+
+```text
+101 tests passing
+```
 
 ---
 
@@ -1051,13 +1914,23 @@ NEW / UPDATED / REOPENED / UNCHANGED / CLOSED
     ↓
 Evaluation Candidates
     ↓
-Source-Snapshot Workflow
-    ↓
 Role Classification
     ↓
 Eligibility
     ↓
 ALERT / SUPPRESS
+    ↓
+Notification Renderer
+    ↓
+PostgreSQL Outbox
+    ↓
+PENDING
+    ↓
+Delivery Worker
+    ↓
+SMTP
+    ↓
+SENT / retry / DEAD
 ```
 
 Completed:
@@ -1072,20 +1945,32 @@ Module 1 — Greenhouse Ingestion
 Module 2 — Role Classification + Eligibility
 ✅
 
+Module 2.1 — Recall Hardening
+✅
+
 Module 3 — PostgreSQL Persistence + Lifecycle
 ✅
 
 Module 4 — Evaluation Pipeline + Workflow
 ✅
 
+Module 5 — Durable Notifications
+✅
+
 Automated Tests
-59 passing
+101 passing
 ✅
 
-Real PostgreSQL Persistence Validation
+PostgreSQL
 ✅
 
-Real PostgreSQL Evaluation Workflow Validation
+Greenhouse
+✅
+
+Gmail SMTP
+✅
+
+Failure Recovery
 ✅
 ```
 
@@ -1093,40 +1978,139 @@ Real PostgreSQL Evaluation Workflow Validation
 
 # Next Architecture Stage
 
-ACE can now produce clean alert candidates.
+ACE now has a reliable single-run source-to-notification pipeline.
 
-Next target:
+The next infrastructure problem is automatic repeated execution.
 
-```text
-Alert Candidate
-    ↓
-Notification Renderer
-    ↓
-Email Delivery
-```
-
-Then:
+Target:
 
 ```text
-Scheduler / polling
+Scheduler
     ↓
-repeated employer source checks
+Source Registry
     ↓
-fast NEW-job detection
+Employer Polling
     ↓
-automatic notification
+Existing ACE Pipeline
+    ↓
+Durable Notifications
 ```
 
-Later stages:
+Important future considerations:
+
+- poll frequency
+- rate limits
+- employer/source isolation
+- transient source failures
+- concurrent source execution
+- scheduler crash recovery
+- per-source monitoring
+- source coverage configuration
+
+Then expand source coverage:
 
 ```text
-Work-authorization intelligence
-Resume ingestion
-HIGH / MEDIUM / MINIMAL relevance
-Freshness-aware ranking
-Additional ATS adapters
-Web application
+Greenhouse
+Lever
+Ashby
+other ATS providers
 ```
+
+Later intelligence:
+
+```text
+work-authorization intelligence
+resume ingestion
+resume relevance
+freshness-aware ranking
+startup prioritization
+notification preferences
+web UI
+```
+
+---
+
+# Engineering Lessons So Far
+
+## Keep Provider Logic Behind Adapters
+
+Provider-specific schemas should not infect the rest of the application.
+
+## Persist Before Filtering
+
+Historical source truth should survive changes in eligibility policy.
+
+## Separate Lifecycle From Eligibility
+
+```text
+NEW
+```
+
+does not mean:
+
+```text
+qualified
+```
+
+## Separate Eligibility From Notification
+
+```text
+PASS
+```
+
+does not mean:
+
+```text
+email successfully delivered
+```
+
+## Missing Information Is Not a Rejection
+
+Especially for startup discovery.
+
+## Use Database Constraints
+
+Application logic alone is insufficient for deduplication.
+
+## Make Important Operations Atomic
+
+Source mutation and notification intent should commit together.
+
+## Treat External Transports as Unreliable
+
+SMTP, APIs, and networks fail.
+
+Reliability must be designed around those failures.
+
+## Prefer Durable Intent Before Side Effects
+
+Persist:
+
+```text
+I need to send this
+```
+
+before attempting:
+
+```text
+send it
+```
+
+## Test Failure Paths Deliberately
+
+The successful SMTP test proved the happy path.
+
+The intentionally broken SMTP test proved the architecture.
+
+Both are necessary.
+
+## Exactly-Once Is Often Not Available
+
+Choose product-appropriate delivery semantics explicitly.
+
+## Real Bugs Become Regression Tests
+
+A bug that was difficult once should become cheap to catch forever.
 
 ---
 
@@ -1140,16 +2124,33 @@ Every completed ACE module updates:
 
 ---
 
-# Module Development Workflow
+# Development Workflow Convention
+
+For code changes:
+
+```text
+new file
+→ complete contents
+
+modified file
+→ complete replacement contents
+```
+
+For each module:
 
 ```text
 1. Explain architecture
-2. Identify exact affected files
+2. Identify affected files
 3. Provide complete file contents
-4. Run deterministic tests
-5. Run integration smoke tests when relevant
-6. Inspect actual behavior
-7. Update documentation
-8. Commit and push
-9. Move to the next module
+4. Run targeted tests
+5. Run full regression suite
+6. Run real integration tests when relevant
+7. Inspect behavior
+8. Update documentation
+9. Inspect staged changes
+10. Commit
+11. Push
+12. Move to next module
 ```
+
+This workflow is designed to retain hackathon speed without sacrificing traceability or engineering quality.
