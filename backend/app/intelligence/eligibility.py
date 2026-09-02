@@ -9,26 +9,39 @@ Core invariants:
 2. Eligibility determines inclusion.
 3. Ranking and resume relevance only control ordering.
 4. Missing sponsorship information is unknown, not rejection.
-5. Explicitly PhD-targeted roles are excluded.
+5. Missing experience information is unknown, not rejection.
+6. Explicitly PhD-targeted roles are excluded.
+7. Ambiguous remote geography is retained as STRETCH to protect recall.
+8. Explicit non-US geography remains excluded.
 """
 
 import re
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+)
 
 from backend.app.intelligence.roles import (
     RoleFamily,
     RolePriority,
     classify_role,
 )
-from backend.app.models.job import CanonicalJob
+from backend.app.models.job import (
+    CanonicalJob,
+)
 
 
-ELIGIBILITY_RULE_VERSION = "2026-08-28-v4"
+ELIGIBILITY_RULE_VERSION = (
+    "2026-09-02-v5"
+)
 
 
-class EligibilityStatus(str, Enum):
+class EligibilityStatus(
+    str,
+    Enum,
+):
     """Possible eligibility outcomes."""
 
     PASS = "PASS"
@@ -36,41 +49,85 @@ class EligibilityStatus(str, Enum):
     REJECT = "REJECT"
 
 
-class EligibilityReasonCode(str, Enum):
+class EligibilityReasonCode(
+    str,
+    Enum,
+):
     """Machine-readable explanation codes."""
 
     OUTSIDE_US = "OUTSIDE_US"
-    NON_TARGET_ROLE = "NON_TARGET_ROLE"
+
+    LOCATION_UNCERTAIN = (
+        "LOCATION_UNCERTAIN"
+    )
+
+    NON_TARGET_ROLE = (
+        "NON_TARGET_ROLE"
+    )
 
     SENIOR_TITLE = "SENIOR_TITLE"
-    PHD_TARGETED_ROLE = "PHD_TARGETED_ROLE"
 
-    EXPERIENCE_TOO_HIGH = "EXPERIENCE_TOO_HIGH"
-    EXPERIENCE_STRETCH = "EXPERIENCE_STRETCH"
+    PHD_TARGETED_ROLE = (
+        "PHD_TARGETED_ROLE"
+    )
 
-    CITIZENSHIP_BLOCKER = "CITIZENSHIP_BLOCKER"
-    CLEARANCE_BLOCKER = "CLEARANCE_BLOCKER"
-    SPONSORSHIP_BLOCKER = "SPONSORSHIP_BLOCKER"
+    EXPERIENCE_TOO_HIGH = (
+        "EXPERIENCE_TOO_HIGH"
+    )
 
-    NO_HARD_BLOCKER = "NO_HARD_BLOCKER"
+    EXPERIENCE_STRETCH = (
+        "EXPERIENCE_STRETCH"
+    )
+
+    CITIZENSHIP_BLOCKER = (
+        "CITIZENSHIP_BLOCKER"
+    )
+
+    CLEARANCE_BLOCKER = (
+        "CLEARANCE_BLOCKER"
+    )
+
+    SPONSORSHIP_BLOCKER = (
+        "SPONSORSHIP_BLOCKER"
+    )
+
+    NO_HARD_BLOCKER = (
+        "NO_HARD_BLOCKER"
+    )
 
 
-class EligibilityDecision(BaseModel):
+class EligibilityDecision(
+    BaseModel
+):
     """Explainable result of ACE's deterministic gate."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(
+        frozen=True
+    )
 
     status: EligibilityStatus
 
     role_family: RoleFamily
+
     role_priority: RolePriority
 
-    rule_version: str = ELIGIBILITY_RULE_VERSION
+    rule_version: str = (
+        ELIGIBILITY_RULE_VERSION
+    )
 
-    reason_codes: tuple[EligibilityReasonCode, ...]
-    reasons: tuple[str, ...]
+    reason_codes: tuple[
+        EligibilityReasonCode,
+        ...,
+    ]
 
-    required_experience_years: int | None = None
+    reasons: tuple[
+        str,
+        ...,
+    ]
+
+    required_experience_years: (
+        int | None
+    ) = None
 
 
 US_STATE_NAMES = {
@@ -190,8 +247,22 @@ US_LOCATION_MARKERS = (
     "remote - us",
     "remote us",
     "remote, us",
+    "remote / us",
+    "remote (us",
     "remote - united states",
     "remote, united states",
+    "remote / united states",
+)
+
+
+AMBIGUOUS_REMOTE_PATTERNS = (
+    r"^\s*remote\s*$",
+    r"^\s*remote\s*[-,/()]?\s*anywhere\s*\)?\s*$",
+    r"^\s*remote\s*[-,/()]?\s*worldwide\s*\)?\s*$",
+    r"^\s*anywhere\s*$",
+    r"^\s*worldwide\s*$",
+    r"^\s*distributed\s*$",
+    r"^\s*distributed\s+team\s*$",
 )
 
 
@@ -237,28 +308,20 @@ PHD_TITLE_PATTERNS = (
 
 
 PHD_REQUIRED_PATTERNS = (
-    # "PhD required"
     r"\bph\.?\s*d\.?\s+(?:is\s+)?required\b",
 
-    # "A PhD in Computer Science is required"
     r"\bph\.?\s*d\.?\s+in\s+[^.;]{1,100}\s+(?:is\s+)?required\b",
 
-    # "Requires a PhD"
     r"\brequires?\s+(?:an?\s+)?ph\.?\s*d\.?\b",
 
-    # "Must have/hold/possess a PhD"
     r"\bmust\s+(?:have|hold|possess)\s+(?:an?\s+)?ph\.?\s*d\.?\b",
 
-    # "Doctoral degree required"
     r"\bdoctoral\s+degree\s+(?:is\s+)?required\b",
 
-    # "Requires a doctoral degree"
     r"\brequires?\s+(?:an?\s+)?doctoral\s+degree\b",
 
-    # "Doctorate required"
     r"\bdoctorate\s+(?:is\s+)?required\b",
 
-    # "Requires a doctorate"
     r"\brequires?\s+(?:an?\s+)?doctorate\b",
 )
 
@@ -304,7 +367,11 @@ CLEARANCE_BLOCKERS = (
 
 
 EXPERIENCE_PATTERN = re.compile(
-    r"(?P<years>\d{1,2})\s*\+?\s*(?:years|yrs)\b",
+    (
+        r"(?P<years>\d{1,2})"
+        r"\s*\+?\s*"
+        r"(?:years|yrs)\b"
+    ),
     re.IGNORECASE,
 )
 
@@ -315,10 +382,13 @@ def _contains_any(
 ) -> bool:
     """Return whether text contains any configured phrase."""
 
-    normalized = text.casefold()
+    normalized = (
+        text.casefold()
+    )
 
     return any(
-        phrase.casefold() in normalized
+        phrase.casefold()
+        in normalized
         for phrase in phrases
     )
 
@@ -327,7 +397,7 @@ def _matches_any_regex(
     text: str,
     patterns: tuple[str, ...],
 ) -> bool:
-    """Return whether any configured regular expression matches text."""
+    """Return whether any configured regex matches text."""
 
     return any(
         re.search(
@@ -340,17 +410,22 @@ def _matches_any_regex(
     )
 
 
-def _is_us_location(location: str) -> bool:
-    """Conservatively identify US and Remote-US locations."""
+def _is_us_location(
+    location: str,
+) -> bool:
+    """Identify explicit US and Remote-US locations."""
 
-    normalized = location.casefold().strip()
+    normalized = (
+        location.casefold().strip()
+    )
 
     if not normalized:
         return False
 
     if any(
         marker in normalized
-        for marker in US_LOCATION_MARKERS
+        for marker
+        in US_LOCATION_MARKERS
     ):
         return True
 
@@ -359,14 +434,17 @@ def _is_us_location(location: str) -> bool:
             rf"\b{re.escape(state)}\b",
             normalized,
         )
-        for state in US_STATE_NAMES
+        for state
+        in US_STATE_NAMES
     ):
         return True
 
     abbreviation_pattern = (
         r",\s*("
         + "|".join(
-            sorted(US_STATE_ABBREVIATIONS)
+            sorted(
+                US_STATE_ABBREVIATIONS
+            )
         )
         + r")\b"
     )
@@ -380,7 +458,28 @@ def _is_us_location(location: str) -> bool:
     )
 
 
-def _is_clearly_senior(title: str) -> bool:
+def _is_ambiguous_remote_location(
+    location: str,
+) -> bool:
+    """Identify remote locations whose geography is not specified.
+
+    These locations are not assumed to be US-based. They are retained as
+    STRETCH opportunities so ACE does not silently lose startup roles
+    whose postings simply say "Remote", "Worldwide", or "Anywhere".
+    """
+
+    if not location.strip():
+        return False
+
+    return _matches_any_regex(
+        location,
+        AMBIGUOUS_REMOTE_PATTERNS,
+    )
+
+
+def _is_clearly_senior(
+    title: str,
+) -> bool:
     """Detect titles clearly outside ACE's early-career scope."""
 
     return _matches_any_regex(
@@ -395,8 +494,8 @@ def _is_phd_targeted_role(
     """Detect explicitly PhD-targeted opportunities.
 
     ACE rejects a posting when:
-    - the title itself explicitly targets PhD/doctoral candidates, or
-    - the job description explicitly requires a PhD/doctoral degree.
+    - the title explicitly targets PhD/doctoral candidates, or
+    - the description explicitly requires a PhD/doctoral degree.
 
     ACE does not reject postings where a PhD is merely preferred,
     optional, or listed alongside other acceptable degrees.
@@ -420,12 +519,14 @@ def _has_early_career_signal(
     """Detect explicit new-grad or early-career language."""
 
     combined_text = (
-        f"{job.title} {job.description}"
+        f"{job.title} "
+        f"{job.description}"
     ).casefold()
 
     return any(
         marker in combined_text
-        for marker in EARLY_CAREER_MARKERS
+        for marker
+        in EARLY_CAREER_MARKERS
     )
 
 
@@ -436,6 +537,8 @@ def _required_experience_years(
 
     Experience numbers in clearly optional or preferred context are
     ignored by the hard eligibility gate to protect recall.
+
+    No detected experience requirement means unknown, not rejection.
     """
 
     if not description:
@@ -443,8 +546,10 @@ def _required_experience_years(
 
     required_years: list[int] = []
 
-    for match in EXPERIENCE_PATTERN.finditer(
-        description
+    for match in (
+        EXPERIENCE_PATTERN.finditer(
+            description
+        )
     ):
         context_start = max(
             0,
@@ -457,23 +562,31 @@ def _required_experience_years(
         )
 
         context = description[
-            context_start:context_end
+            context_start:
+            context_end
         ].casefold()
 
         if any(
             marker in context
-            for marker in PREFERRED_CONTEXT_MARKERS
+            for marker
+            in PREFERRED_CONTEXT_MARKERS
         ):
             continue
 
         required_years.append(
-            int(match.group("years"))
+            int(
+                match.group(
+                    "years"
+                )
+            )
         )
 
     if not required_years:
         return None
 
-    return max(required_years)
+    return max(
+        required_years
+    )
 
 
 def evaluate_job(
@@ -481,62 +594,120 @@ def evaluate_job(
 ) -> EligibilityDecision:
     """Evaluate one normalized job against ACE eligibility rules."""
 
-    role = classify_role(job.title)
+    role = classify_role(
+        job.title
+    )
 
     reject_codes: list[
         EligibilityReasonCode
     ] = []
 
-    reject_reasons: list[str] = []
+    reject_reasons: list[
+        str
+    ] = []
 
     stretch_codes: list[
         EligibilityReasonCode
     ] = []
 
-    stretch_reasons: list[str] = []
+    stretch_reasons: list[
+        str
+    ] = []
 
-    if role.family == RoleFamily.OTHER:
+    if (
+        role.family
+        == RoleFamily.OTHER
+    ):
         reject_codes.append(
-            EligibilityReasonCode.NON_TARGET_ROLE
+            EligibilityReasonCode
+            .NON_TARGET_ROLE
         )
 
         reject_reasons.append(
-            "Role is outside ACE target role families."
+            (
+                "Role is outside ACE "
+                "target role families."
+            )
         )
 
-    if not _is_us_location(job.location):
+    if _is_us_location(
+        job.location
+    ):
+        pass
+
+    elif (
+        _is_ambiguous_remote_location(
+            job.location
+        )
+    ):
+        stretch_codes.append(
+            EligibilityReasonCode
+            .LOCATION_UNCERTAIN
+        )
+
+        stretch_reasons.append(
+            (
+                "Posting is remote but does "
+                "not specify geographic scope; "
+                "retained to protect discovery "
+                "recall."
+            )
+        )
+
+    else:
         reject_codes.append(
-            EligibilityReasonCode.OUTSIDE_US
+            EligibilityReasonCode
+            .OUTSIDE_US
         )
 
         reject_reasons.append(
-            "Location is outside US / Remote-US scope."
+            (
+                "Location is outside US / "
+                "Remote-US scope."
+            )
         )
 
-    if _is_clearly_senior(job.title):
+    if _is_clearly_senior(
+        job.title
+    ):
         reject_codes.append(
-            EligibilityReasonCode.SENIOR_TITLE
+            EligibilityReasonCode
+            .SENIOR_TITLE
         )
 
         reject_reasons.append(
-            "Title is clearly senior-level."
+            (
+                "Title is clearly "
+                "senior-level."
+            )
         )
 
-    if _is_phd_targeted_role(job):
+    if _is_phd_targeted_role(
+        job
+    ):
         reject_codes.append(
-            EligibilityReasonCode.PHD_TARGETED_ROLE
+            EligibilityReasonCode
+            .PHD_TARGETED_ROLE
         )
 
         reject_reasons.append(
-            "Posting is explicitly targeted to or requires PhD-level candidates."
+            (
+                "Posting is explicitly "
+                "targeted to or requires "
+                "PhD-level candidates."
+            )
         )
 
-    required_years = _required_experience_years(
-        job.description
+    required_years = (
+        _required_experience_years(
+            job.description
+        )
     )
 
     early_career_signal = (
-        _has_early_career_signal(job)
+        _has_early_career_signal(
+            job
+        )
     )
 
     if (
@@ -544,46 +715,62 @@ def evaluate_job(
         and required_years >= 5
     ):
         reject_codes.append(
-            EligibilityReasonCode.EXPERIENCE_TOO_HIGH
+            EligibilityReasonCode
+            .EXPERIENCE_TOO_HIGH
         )
 
         reject_reasons.append(
             (
-                f"Posting requires approximately "
-                f"{required_years}+ years experience."
+                "Posting requires "
+                f"approximately "
+                f"{required_years}+ "
+                "years experience."
             )
         )
 
     elif required_years == 4:
         if early_career_signal:
             stretch_codes.append(
-                EligibilityReasonCode.EXPERIENCE_STRETCH
+                EligibilityReasonCode
+                .EXPERIENCE_STRETCH
             )
 
             stretch_reasons.append(
                 (
-                    "Posting requests approximately "
-                    "4 years experience but contains "
-                    "an explicit early-career signal."
+                    "Posting requests "
+                    "approximately 4 years "
+                    "experience but contains "
+                    "an explicit early-career "
+                    "signal."
                 )
             )
 
         else:
             reject_codes.append(
-                EligibilityReasonCode.EXPERIENCE_TOO_HIGH
+                EligibilityReasonCode
+                .EXPERIENCE_TOO_HIGH
             )
 
             reject_reasons.append(
-                "Posting requires approximately 4 years experience."
+                (
+                    "Posting requires "
+                    "approximately 4 years "
+                    "experience."
+                )
             )
 
     elif required_years == 3:
         stretch_codes.append(
-            EligibilityReasonCode.EXPERIENCE_STRETCH
+            EligibilityReasonCode
+            .EXPERIENCE_STRETCH
         )
 
         stretch_reasons.append(
-            "Posting requests approximately 3 years experience."
+            (
+                "Posting requests "
+                "approximately 3 years "
+                "experience."
+            )
         )
 
     if _contains_any(
@@ -591,11 +778,16 @@ def evaluate_job(
         CITIZENSHIP_BLOCKERS,
     ):
         reject_codes.append(
-            EligibilityReasonCode.CITIZENSHIP_BLOCKER
+            EligibilityReasonCode
+            .CITIZENSHIP_BLOCKER
         )
 
         reject_reasons.append(
-            "Posting contains an explicit US citizenship / US-person requirement."
+            (
+                "Posting contains an "
+                "explicit US citizenship / "
+                "US-person requirement."
+            )
         )
 
     if _contains_any(
@@ -603,11 +795,16 @@ def evaluate_job(
         CLEARANCE_BLOCKERS,
     ):
         reject_codes.append(
-            EligibilityReasonCode.CLEARANCE_BLOCKER
+            EligibilityReasonCode
+            .CLEARANCE_BLOCKER
         )
 
         reject_reasons.append(
-            "Posting contains an explicit security-clearance blocker."
+            (
+                "Posting contains an "
+                "explicit security-clearance "
+                "blocker."
+            )
         )
 
     if _contains_any(
@@ -615,31 +812,59 @@ def evaluate_job(
         SPONSORSHIP_BLOCKERS,
     ):
         reject_codes.append(
-            EligibilityReasonCode.SPONSORSHIP_BLOCKER
+            EligibilityReasonCode
+            .SPONSORSHIP_BLOCKER
         )
 
         reject_reasons.append(
-            "Posting explicitly states sponsorship is unavailable."
+            (
+                "Posting explicitly states "
+                "sponsorship is unavailable."
+            )
         )
 
     if reject_codes:
         return EligibilityDecision(
-            status=EligibilityStatus.REJECT,
-            role_family=role.family,
-            role_priority=role.priority,
-            reason_codes=tuple(reject_codes),
-            reasons=tuple(reject_reasons),
-            required_experience_years=required_years,
+            status=(
+                EligibilityStatus.REJECT
+            ),
+            role_family=(
+                role.family
+            ),
+            role_priority=(
+                role.priority
+            ),
+            reason_codes=tuple(
+                reject_codes
+            ),
+            reasons=tuple(
+                reject_reasons
+            ),
+            required_experience_years=(
+                required_years
+            ),
         )
 
     if stretch_codes:
         return EligibilityDecision(
-            status=EligibilityStatus.STRETCH,
-            role_family=role.family,
-            role_priority=role.priority,
-            reason_codes=tuple(stretch_codes),
-            reasons=tuple(stretch_reasons),
-            required_experience_years=required_years,
+            status=(
+                EligibilityStatus.STRETCH
+            ),
+            role_family=(
+                role.family
+            ),
+            role_priority=(
+                role.priority
+            ),
+            reason_codes=tuple(
+                stretch_codes
+            ),
+            reasons=tuple(
+                stretch_reasons
+            ),
+            required_experience_years=(
+                required_years
+            ),
         )
 
     return EligibilityDecision(
@@ -647,10 +872,16 @@ def evaluate_job(
         role_family=role.family,
         role_priority=role.priority,
         reason_codes=(
-            EligibilityReasonCode.NO_HARD_BLOCKER,
+            EligibilityReasonCode
+            .NO_HARD_BLOCKER,
         ),
         reasons=(
-            "No hard eligibility blocker detected.",
+            (
+                "No hard eligibility "
+                "blocker detected."
+            ),
         ),
-        required_experience_years=required_years,
+        required_experience_years=(
+            required_years
+        ),
     )

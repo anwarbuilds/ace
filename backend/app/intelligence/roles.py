@@ -8,6 +8,10 @@ Role classification is intentionally separate from:
 - resume relevance,
 - ranking,
 - notifications.
+
+The classifier is recall-oriented for early-career and startup hiring.
+A title should only fall outside the target set when ACE does not have
+reasonable evidence that it belongs to a supported engineering family.
 """
 
 import re
@@ -16,7 +20,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict
 
 
-ROLE_RULE_VERSION = "2026-08-28-v1"
+ROLE_RULE_VERSION = "2026-09-02-v2"
 
 
 class RoleFamily(str, Enum):
@@ -24,7 +28,9 @@ class RoleFamily(str, Enum):
 
     SOFTWARE_ENGINEERING = "SOFTWARE_ENGINEERING"
     AI_ML_ENGINEERING = "AI_ML_ENGINEERING"
-    FORWARD_DEPLOYED_ENGINEERING = "FORWARD_DEPLOYED_ENGINEERING"
+    FORWARD_DEPLOYED_ENGINEERING = (
+        "FORWARD_DEPLOYED_ENGINEERING"
+    )
     OTHER = "OTHER"
 
 
@@ -39,11 +45,18 @@ class RolePriority(str, Enum):
 class RoleClassification(BaseModel):
     """Explainable result returned by the role classifier."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(
+        frozen=True
+    )
 
     family: RoleFamily
+
     priority: RolePriority
-    rule_version: str = ROLE_RULE_VERSION
+
+    rule_version: str = (
+        ROLE_RULE_VERSION
+    )
+
     matched_pattern: str | None = None
 
 
@@ -64,6 +77,7 @@ AI_ML_PATTERNS = (
     r"\bai/ml engineer\b",
     r"\bml/ai engineer\b",
     r"\bapplied ai engineer\b",
+    r"\bapplied ml engineer\b",
     r"\bgenerative ai engineer\b",
     r"\bgenai engineer\b",
     r"\bllm engineer\b",
@@ -75,6 +89,11 @@ AI_ML_PATTERNS = (
     r"\bml platform engineer\b",
     r"\bai research engineer\b",
     r"\bmachine learning research engineer\b",
+
+    # Startup-style inverted titles.
+    r"\bengineer[\s,/-]+ai\b",
+    r"\bengineer[\s,/-]+ml\b",
+    r"\bengineer[\s,/-]+machine learning\b",
 )
 
 
@@ -88,11 +107,20 @@ SOFTWARE_ENGINEERING_PATTERNS = (
     r"\bbackend developer\b",
     r"\bfull[- ]?stack software engineer\b",
     r"\bfull[- ]?stack engineer\b",
+    r"\bfull[- ]?stack developer\b",
     r"\bplatform software engineer\b",
     r"\bplatform engineer\b",
     r"\binfrastructure software engineer\b",
     r"\binfrastructure engineer\b",
     r"\bdistributed systems engineer\b",
+
+    # Common startup titles.
+    r"\bfounding engineer\b",
+    r"\bproduct engineer\b",
+    r"\bmember of technical staff\b",
+
+    # Common compact recruiting title.
+    r"\bswe\b",
 )
 
 
@@ -102,16 +130,23 @@ def _first_matching_pattern(
 ) -> str | None:
     """Return the first regex pattern matching a title."""
 
-    normalized_title = title.casefold()
+    normalized_title = (
+        title.casefold()
+    )
 
     for pattern in patterns:
-        if re.search(pattern, normalized_title):
+        if re.search(
+            pattern,
+            normalized_title,
+        ):
             return pattern
 
     return None
 
 
-def classify_role(title: str) -> RoleClassification:
+def classify_role(
+    title: str,
+) -> RoleClassification:
     """Classify a job title into one ACE role family.
 
     Specific families are evaluated before general software engineering.
@@ -125,41 +160,66 @@ def classify_role(title: str) -> RoleClassification:
             -> FORWARD_DEPLOYED_ENGINEERING
 
     rather than both being classified as generic software engineering.
+
+    Startup-oriented titles such as Founding Engineer, Product Engineer,
+    Full Stack Developer, Member of Technical Staff, and SWE are included
+    to protect discovery recall. Eligibility remains responsible for
+    rejecting explicit seniority or experience blockers.
     """
 
-    fde_match = _first_matching_pattern(
-        title,
-        FORWARD_DEPLOYED_PATTERNS,
+    fde_match = (
+        _first_matching_pattern(
+            title,
+            FORWARD_DEPLOYED_PATTERNS,
+        )
     )
 
     if fde_match:
         return RoleClassification(
-            family=RoleFamily.FORWARD_DEPLOYED_ENGINEERING,
-            priority=RolePriority.SECONDARY,
+            family=(
+                RoleFamily
+                .FORWARD_DEPLOYED_ENGINEERING
+            ),
+            priority=(
+                RolePriority.SECONDARY
+            ),
             matched_pattern=fde_match,
         )
 
-    ai_ml_match = _first_matching_pattern(
-        title,
-        AI_ML_PATTERNS,
+    ai_ml_match = (
+        _first_matching_pattern(
+            title,
+            AI_ML_PATTERNS,
+        )
     )
 
     if ai_ml_match:
         return RoleClassification(
-            family=RoleFamily.AI_ML_ENGINEERING,
-            priority=RolePriority.PRIMARY,
+            family=(
+                RoleFamily.AI_ML_ENGINEERING
+            ),
+            priority=(
+                RolePriority.PRIMARY
+            ),
             matched_pattern=ai_ml_match,
         )
 
-    software_match = _first_matching_pattern(
-        title,
-        SOFTWARE_ENGINEERING_PATTERNS,
+    software_match = (
+        _first_matching_pattern(
+            title,
+            SOFTWARE_ENGINEERING_PATTERNS,
+        )
     )
 
     if software_match:
         return RoleClassification(
-            family=RoleFamily.SOFTWARE_ENGINEERING,
-            priority=RolePriority.PRIMARY,
+            family=(
+                RoleFamily
+                .SOFTWARE_ENGINEERING
+            ),
+            priority=(
+                RolePriority.PRIMARY
+            ),
             matched_pattern=software_match,
         )
 
