@@ -1,129 +1,59 @@
 # ACE System Overview
 
-ACE is a personal career-intelligence platform designed to discover relevant US engineering opportunities, normalize employer job data, persist source history, detect newly appearing or changed jobs, evaluate eligibility, produce alert candidates, rank opportunities, and eventually deliver notifications with official employer application links.
+ACE is a personal real-time career-intelligence platform designed to discover relevant engineering opportunities, normalize employer job data, maintain durable source history, detect job lifecycle changes, evaluate deterministic eligibility, produce alert candidates, and deliver failure-resistant notifications with official employer application links.
 
 This document is the high-level architecture and module map for the project.
 
-For detailed implementation notes, debugging history, trade-offs, and lessons learned, see:
+For implementation history, debugging notes, trade-offs, and lessons learned, see:
 
-`docs/learning-log.md`
+```text
+docs/learning-log.md
+```
 
 ---
 
 # 1. Product Goal
 
-ACE is intended to reduce the manual workflow:
+ACE transforms:
 
 ```text
-Search job boards
+manual company/job-board search
     ↓
-Open many irrelevant postings
+repeated filtering
     ↓
-Check location
+manual eligibility inspection
     ↓
-Check experience
+manual freshness checking
     ↓
-Check sponsorship
-    ↓
-Check seniority
-    ↓
-Find official company careers page
-    ↓
-Apply
+manual application-link discovery
 ```
 
 into:
 
 ```text
-ACE discovers jobs
+automated source retrieval
     ↓
-ACE normalizes them
+canonical normalization
     ↓
-ACE persists complete source snapshots
+durable source memory
     ↓
-ACE detects job lifecycle changes
+change detection
     ↓
-ACE evaluates changed jobs
+eligibility intelligence
     ↓
-ACE identifies target roles
-    ↓
-ACE evaluates eligibility
-    ↓
-ACE produces alert candidates
-    ↓
-ACE will evaluate work-authorization evidence
-    ↓
-ACE will evaluate resume relevance
-    ↓
-ACE will rank opportunities
-    ↓
-ACE will send notifications
-    ↓
-User opens the official employer application link
+durable notification delivery
 ```
+
+The long-term product objective is near-real-time awareness of relevant openings across a broad employer set.
 
 ---
 
 # 2. Target Opportunity Profile
 
-## Geography
-
-ACE targets:
-
-- United States
-- Remote-US opportunities
-
-A generic `Remote` location is not automatically assumed to mean Remote-US.
-
 ## Primary Role Families
-
-### Software Engineering
-
-Examples include:
-
-- Software Engineer
-- Software Development Engineer
-- Backend Engineer
-- Platform Engineer
-- Infrastructure Engineer
-- Full-Stack Engineer
-- Systems Software Engineer
-- Distributed Systems Engineer
-
-Role family:
 
 ```text
 SOFTWARE_ENGINEERING
-```
-
-Priority:
-
-```text
-PRIMARY
-```
-
-### AI / Machine Learning Engineering
-
-Examples include:
-
-- AI Engineer
-- Machine Learning Engineer
-- ML Engineer
-- Applied AI Engineer
-- Generative AI Engineer
-- LLM Engineer
-- AI Software Engineer
-- Machine Learning Software Engineer
-- AI Infrastructure Engineer
-- ML Infrastructure Engineer
-- AI Platform Engineer
-- ML Platform Engineer
-- AI Research Engineer
-- Machine Learning Research Engineer
-
-Role family:
-
-```text
 AI_ML_ENGINEERING
 ```
 
@@ -134,16 +64,6 @@ PRIMARY
 ```
 
 ## Secondary Role Family
-
-### Forward Deployed Engineering
-
-Examples include:
-
-- Forward Deployed Engineer
-- Forward Deployed Software Engineer
-- Forward Deployed AI Engineer
-
-Role family:
 
 ```text
 FORWARD_DEPLOYED_ENGINEERING
@@ -157,11 +77,59 @@ SECONDARY
 
 ---
 
-# 3. Core Architectural Invariants
+# 3. Recall-Oriented Discovery Policy
 
-## Canonical Data Before Intelligence
+ACE is deliberately conservative about missing information.
 
-Provider-specific payloads are converted to `CanonicalJob` before downstream logic.
+Core rule:
+
+```text
+missing information
+!=
+negative evidence
+```
+
+Examples:
+
+```text
+missing sponsorship statement
+→ retain
+
+explicit no sponsorship
+→ reject
+```
+
+```text
+generic Remote
+→ retain conservatively
+
+Remote Europe
+→ reject
+```
+
+```text
+PhD preferred
+→ do not reject solely for preference
+
+PhD-targeted / required
+→ reject
+```
+
+This policy protects discovery recall across startups and employers whose job descriptions are less standardized.
+
+---
+
+# 4. Core Architectural Invariants
+
+## 4.1 Canonical Data Before Intelligence
+
+All ATS-specific data becomes:
+
+```text
+CanonicalJob
+```
+
+before persistence or eligibility logic.
 
 ```text
 Greenhouse ─┐
@@ -169,9 +137,13 @@ Lever ──────┼──→ CanonicalJob
 Ashby ──────┘
 ```
 
-## Persistence Before Eligibility
+Only Greenhouse is currently implemented.
 
-ACE persists the complete normalized employer snapshot before eligibility filtering.
+---
+
+## 4.2 Persistence Before Eligibility
+
+Complete normalized source state is persisted before downstream filtering.
 
 ```text
 ATS
@@ -183,9 +155,21 @@ Persistence
 Evaluation
 ```
 
-This keeps source memory independent from current filtering policy.
+This separates:
 
-## Persistence Answers What Changed
+```text
+what exists
+```
+
+from:
+
+```text
+what currently qualifies
+```
+
+---
+
+## 4.3 Persistence Owns Lifecycle Detection
 
 Persistence emits:
 
@@ -197,351 +181,18 @@ UNCHANGED
 CLOSED
 ```
 
-It does not decide whether the user should be notified.
+It does not own eligibility or notification policy.
 
-## Evaluation Answers Whether a Changed Job Continues
+---
 
-Evaluation consumes changed jobs and produces:
+## 4.4 Evaluation Owns Eligibility Decisions
+
+Evaluation consumes changed jobs and emits:
 
 ```text
 ALERT
 SUPPRESS
 ```
-
-Current policy:
-
-```text
-PASS
-→ ALERT
-
-STRETCH
-→ ALERT
-
-REJECT
-→ SUPPRESS
-```
-
-This is intentionally recall-oriented.
-
-## Notification Is a Separate Layer
-
-An `ALERT` disposition means:
-
-```text
-eligible to continue toward notification
-```
-
-It does not yet mean a notification has been delivered.
-
-Notification transport remains separate from evaluation policy.
-
-## Eligibility Controls Candidate Inclusion
-
-Resume relevance will later control prioritization, not hard inclusion.
-
-## Missing Information Is Not Automatically Negative
-
-For example:
-
-```text
-no sponsorship evidence found
-→ UNKNOWN
-```
-
-not:
-
-```text
-REJECT
-```
-
-## Official Application Links Are Preferred
-
-ACE surfaces official employer application URLs whenever the source provides them.
-
-## Baseline Runs Must Not Spam Alerts
-
-The first successful snapshot for a source account is historical baseline data.
-
-```text
-first successful snapshot
-    ↓
-persist jobs
-    ↓
-mark source initialized
-    ↓
-0 evaluation candidates
-    ↓
-0 alert candidates
-```
-
-## Empty Snapshots Are Not Trusted
-
-An unexpectedly empty provider response is not treated as proof that every job closed.
-
-## Exact Time Is Durable; Relative Time Is Presentation
-
-ACE stores exact timestamps.
-
-Relative strings such as:
-
-```text
-15 minutes ago
-```
-
-are computed when presenting the job.
-
-Planned user-facing timing:
-
-```text
-Employer posted
-Employer updated
-ACE detected
-Relative age
-```
-
----
-
-# 4. Current High-Level Architecture
-
-```text
-Greenhouse
-    ↓
-Greenhouse Adapter
-    ↓
-CanonicalJob
-    ↓
-Snapshot Persistence
-    ↓
-NEW / UPDATED / REOPENED / UNCHANGED / CLOSED
-    ↓
-Evaluation Candidates
-    ↓
-Source-Snapshot Workflow
-    ↓
-Role Classification
-    ↓
-Eligibility Gate
-    ↓
-PASS / STRETCH / REJECT
-    ↓
-ALERT / SUPPRESS
-```
-
-Planned architecture:
-
-```text
-Employer Sources
-        ↓
-Source Adapters
-        ↓
-CanonicalJob
-        ↓
-Persistence + Source Lifecycle
-        ↓
-Changed-Job Evaluation
-        ↓
-Work-Authorization Intelligence
-        ↓
-Resume Relevance
-        ↓
-Freshness-Aware Ranking
-        ↓
-Notification Engine
-        ↓
-Web Application
-```
-
----
-
-# 5. Module Map
-
-## Module 0 — Project Foundation
-
-Purpose: establish a reproducible development environment and source-control workflow.
-
-Status: implemented.
-
----
-
-## Module 1 — Greenhouse Job Ingestion
-
-Purpose: retrieve live employer postings directly from Greenhouse and normalize them into `CanonicalJob`.
-
-Flow:
-
-```text
-Greenhouse API
-    ↓
-HTTP GET
-    ↓
-JSON
-    ↓
-Greenhouse Adapter
-    ↓
-CanonicalJob
-```
-
-Status: implemented.
-
----
-
-## Module 2 — Role Classification and Eligibility
-
-Purpose: determine target-role membership and deterministic eligibility blockers.
-
-Role families:
-
-```text
-SOFTWARE_ENGINEERING
-AI_ML_ENGINEERING
-FORWARD_DEPLOYED_ENGINEERING
-OTHER
-```
-
-Eligibility states:
-
-```text
-PASS
-STRETCH
-REJECT
-```
-
-Status: implemented as deterministic MVP v1.
-
----
-
-## Module 3 — PostgreSQL Persistence and Job Lifecycle
-
-Purpose: give ACE durable memory and source lifecycle awareness.
-
-Infrastructure:
-
-```text
-ACE Python
-    ↓
-SQLAlchemy
-    ↓
-psycopg
-    ↓
-localhost:5433
-    ↓
-Docker port mapping
-    ↓
-PostgreSQL container:5432
-```
-
-Technologies:
-
-- PostgreSQL 16
-- Docker Compose
-- SQLAlchemy 2.x
-- psycopg 3
-- Alembic
-- pydantic-settings
-
-Database schema:
-
-- `jobs` stores normalized durable job state
-- `source_states` stores source baseline and successful polling state
-
-Durable job identity:
-
-```text
-source
-+
-source_account
-+
-external_id
-```
-
-Persistence lifecycle:
-
-```text
-NEW
-UPDATED
-REOPENED
-UNCHANGED
-CLOSED
-```
-
-Other responsibilities:
-
-- content hashing
-- baseline protection
-- snapshot deduplication
-- N+1 query avoidance
-- atomic transactions
-- empty-snapshot protection
-
-Status: implemented.
-
----
-
-## Module 4 — Evaluation Pipeline and Source-Snapshot Workflow
-
-Purpose: connect source lifecycle changes to eligibility intelligence and produce clean downstream alert candidates.
-
-Before Module 4:
-
-```text
-Persistence
-→ What changed?
-
-Eligibility
-→ Does this job qualify?
-```
-
-After Module 4:
-
-```text
-Persistence
-    ↓
-Evaluation Candidates
-    ↓
-Evaluation Workflow
-    ↓
-Eligibility
-    ↓
-ALERT / SUPPRESS
-```
-
-### Evaluation Domain Types
-
-Module 4 introduces:
-
-```text
-AlertDisposition
-EvaluatedJob
-EvaluationBatchResult
-```
-
-`AlertDisposition` values:
-
-```text
-ALERT
-SUPPRESS
-```
-
-`EvaluatedJob` carries:
-
-- `CanonicalJob`
-- persistence observation status
-- `EligibilityDecision`
-- alert disposition
-
-`EvaluationBatchResult` contains:
-
-- all evaluated jobs
-- alert candidates
-- suppressed jobs
-- PASS count
-- STRETCH count
-- REJECT count
-- evaluated count
-- alert-candidate count
-- suppressed count
-
-### Alert Policy
 
 Current mapping:
 
@@ -556,9 +207,388 @@ REJECT
 → SUPPRESS
 ```
 
-`STRETCH` remains alertable because ACE is designed for recall-first discovery.
+---
 
-### Evaluation Scope
+## 4.5 Change Detection Is a Computational Gate
+
+Normal evaluation processes:
+
+```text
+NEW
+UPDATED
+REOPENED
+```
+
+Normal evaluation does not repeatedly process:
+
+```text
+UNCHANGED
+```
+
+This allows frequent source polling without re-evaluating the complete employer corpus every time.
+
+---
+
+## 4.6 Baselines Do Not Alert
+
+First successful source snapshot:
+
+```text
+persist current jobs
+    ↓
+establish source baseline
+    ↓
+0 evaluation candidates
+    ↓
+0 alerts
+```
+
+---
+
+## 4.7 Empty Snapshots Are Not Trusted
+
+An empty ATS response may indicate failure.
+
+ACE refuses to automatically interpret an unexpectedly empty complete snapshot as:
+
+```text
+every active job closed
+```
+
+---
+
+## 4.8 Exact Time Is Durable
+
+ACE stores exact timestamps.
+
+Examples:
+
+- employer posting time
+- employer update time
+- ACE observation time
+- outbox creation time
+- delivery attempt time
+- sent time
+
+Relative strings are computed at presentation time.
+
+---
+
+## 4.9 Notification Must Be Durable Before Transport
+
+ACE does not rely on:
+
+```text
+evaluate
+→ send email immediately
+```
+
+because an SMTP failure after database state has changed could permanently lose the notification.
+
+Instead:
+
+```text
+job state
++
+evaluation
++
+notification outbox
+        ↓
+database commit
+        ↓
+external delivery
+```
+
+---
+
+# 5. Current High-Level Architecture
+
+```text
+Greenhouse API
+    ↓
+Greenhouse Adapter
+    ↓
+CanonicalJob
+    ↓
+PostgreSQL Snapshot Persistence
+    ↓
+NEW / UPDATED / REOPENED / UNCHANGED / CLOSED
+    ↓
+Evaluation Candidates
+    ↓
+Evaluation Service
+    ↓
+Role Classification
+    ↓
+Eligibility Gate
+    ↓
+PASS / STRETCH / REJECT
+    ↓
+ALERT / SUPPRESS
+    ↓
+Notification Renderer
+    ↓
+PostgreSQL Notification Outbox
+    ↓
+PENDING
+    ↓
+Notification Delivery Worker
+    ↓
+SMTP / Gmail
+    ↓
+SENT / retry / DEAD
+```
+
+The missing infrastructure layer for continuous operation is scheduling.
+
+---
+
+# 6. Module Map
+
+## Module 0 — Project Foundation
+
+Purpose:
+
+- reproducible Python environment
+- source control
+- dependency isolation
+- documentation
+- local development hygiene
+
+Status:
+
+```text
+IMPLEMENTED
+```
+
+---
+
+## Module 1 — Greenhouse Job Ingestion
+
+Purpose:
+
+Retrieve live Greenhouse employer postings and normalize them.
+
+```text
+Greenhouse
+    ↓
+HTTP
+    ↓
+Greenhouse Adapter
+    ↓
+CanonicalJob
+```
+
+Responsibilities:
+
+- HTTP timeout
+- User-Agent
+- JSON parsing
+- HTML description normalization
+- official job URL extraction
+- provider timestamps
+- canonical job construction
+
+Status:
+
+```text
+IMPLEMENTED
+```
+
+---
+
+## Module 2 — Role Classification and Eligibility
+
+Purpose:
+
+Determine target role membership and deterministic blockers.
+
+Role families:
+
+```text
+SOFTWARE_ENGINEERING
+AI_ML_ENGINEERING
+FORWARD_DEPLOYED_ENGINEERING
+OTHER
+```
+
+Eligibility:
+
+```text
+PASS
+STRETCH
+REJECT
+```
+
+Checks include:
+
+- role family
+- geography
+- seniority
+- experience
+- PhD targeting
+- citizenship restrictions
+- security clearance
+- sponsorship blockers
+
+Status:
+
+```text
+IMPLEMENTED
+```
+
+---
+
+## Module 2.1 — Recall Hardening
+
+Purpose:
+
+Reduce false negatives for startup, early-career, and ambiguous postings.
+
+Validated examples:
+
+```text
+Software Engineer I + Remote
+→ STRETCH
+```
+
+```text
+Founding Engineer + San Francisco
+→ PASS
+```
+
+```text
+Product Engineer + Remote
+→ STRETCH
+```
+
+```text
+Software Engineer - New Grad + New York
+→ PASS
+```
+
+```text
+explicit no sponsorship
+→ REJECT
+```
+
+```text
+Remote Europe
+→ REJECT
+```
+
+Key policy:
+
+```text
+unknown
+→ preserve recall
+
+explicit blocker
+→ reject
+```
+
+Status:
+
+```text
+IMPLEMENTED
+```
+
+---
+
+## Module 3 — PostgreSQL Persistence and Job Lifecycle
+
+Purpose:
+
+Give ACE durable memory and lifecycle awareness.
+
+Infrastructure:
+
+```text
+ACE Python
+    ↓
+SQLAlchemy
+    ↓
+psycopg
+    ↓
+localhost:5433
+    ↓
+Docker
+    ↓
+PostgreSQL:5432
+```
+
+Technologies:
+
+- PostgreSQL 16
+- Docker Compose
+- SQLAlchemy 2.x
+- psycopg 3
+- Alembic
+- pydantic-settings
+
+Durable job identity:
+
+```text
+source
++
+source_account
++
+external_id
+```
+
+Lifecycle:
+
+```text
+NEW
+UPDATED
+REOPENED
+UNCHANGED
+CLOSED
+```
+
+Responsibilities:
+
+- content hashing
+- source baseline state
+- snapshot reconciliation
+- snapshot deduplication
+- N+1 query avoidance
+- transaction-safe persistence
+- empty-snapshot protection
+
+Status:
+
+```text
+IMPLEMENTED
+```
+
+---
+
+## Module 4 — Evaluation Pipeline and Source-Snapshot Workflow
+
+Purpose:
+
+Connect source lifecycle changes to eligibility intelligence.
+
+```text
+Persistence
+    ↓
+Evaluation Candidates
+    ↓
+Evaluation Service
+    ↓
+Eligibility
+    ↓
+ALERT / SUPPRESS
+```
+
+Domain types:
+
+```text
+AlertDisposition
+EvaluatedJob
+EvaluationBatchResult
+```
 
 Normal evaluation accepts:
 
@@ -568,210 +598,555 @@ UPDATED
 REOPENED
 ```
 
-Normal evaluation ignores:
+and ignores normal application evaluation for:
 
 ```text
 UNCHANGED
 CLOSED
 ```
 
-Baseline snapshots also produce no evaluated jobs.
+Source-snapshot orchestration provides an application use case while leaving transaction ownership with the caller.
 
-### Source-Snapshot Workflow
-
-Module 4 introduces:
+Status:
 
 ```text
-run_source_snapshot_workflow(...)
+IMPLEMENTED
 ```
-
-Its orchestration is:
-
-```text
-process_snapshot(...)
-    ↓
-SnapshotResult
-    ↓
-evaluate_snapshot(...)
-    ↓
-EvaluationBatchResult
-```
-
-The workflow deliberately does not:
-
-- fetch from Greenhouse
-- own notification transport
-- own resume ranking
-- own the database transaction boundary
-
-This makes it reusable from:
-
-- scheduled workers
-- API handlers
-- command-line scripts
-- notification workers
-- integration tests
-
-### Transaction Boundary
-
-The caller owns the transaction:
-
-```text
-caller
-    ↓
-transaction
-    ↓
-workflow
-    ├── persistence
-    └── evaluation
-```
-
-### Workflow Result
-
-`SourceSnapshotWorkflowResult` contains:
-
-```text
-snapshot
-evaluation
-```
-
-This provides one application-level result with both source lifecycle state and intelligence output.
-
-### Real PostgreSQL End-to-End Validation
-
-Dedicated synthetic source account:
-
-```text
-ace-module4-smoke
-```
-
-Pass 1 baseline:
-
-```text
-Baseline:               True
-NEW:                    2
-Evaluation candidates:  0
-Evaluated:              0
-Alert candidates:       0
-```
-
-Pass 2 changed state:
-
-```text
-Fetched:                6
-Unique:                 6
-NEW:                    4
-UPDATED:                1
-REOPENED:               0
-UNCHANGED:              1
-CLOSED:                 0
-Evaluation candidates:  5
-```
-
-Evaluation:
-
-```text
-Evaluated:              5
-PASS:                   3
-STRETCH:                1
-REJECT:                 1
-Alert candidates:       4
-Suppressed:             1
-```
-
-Expected mappings:
-
-```text
-UPDATED Software Engineer
-→ SOFTWARE_ENGINEERING
-→ PRIMARY
-→ PASS
-→ ALERT
-
-NEW Software Engineer
-→ SOFTWARE_ENGINEERING
-→ PRIMARY
-→ PASS
-→ ALERT
-
-NEW Senior Software Engineer
-→ REJECT
-→ SUPPRESS
-
-NEW Machine Learning Engineer
-→ AI_ML_ENGINEERING
-→ PRIMARY
-→ STRETCH
-→ ALERT
-
-NEW Forward Deployed Engineer
-→ FORWARD_DEPLOYED_ENGINEERING
-→ SECONDARY
-→ PASS
-→ ALERT
-```
-
-Synthetic records are deleted after execution.
-
-### Posting-Time Presentation
-
-The Module 4 smoke test displays both relative and exact timestamps.
-
-Example:
-
-```text
-Posted:      15 minutes ago
-Posted at:   2026-08-29 14:00:00 UTC
-Updated at:  2026-08-29 14:00:00 UTC
-```
-
-Design rule:
-
-```text
-database/domain
-→ exact timestamps
-
-presentation
-→ relative age + local-time rendering
-```
-
-The smoke test renders UTC for deterministic validation.
-
-Production notification/UI should convert exact timestamps into the user's display timezone.
-
-### Future Freshness Signal
-
-Freshness is expected to become a ranking input, not an eligibility gate.
-
-Potential presentation classes:
-
-```text
-JUST OPENED
-VERY FRESH
-FRESH
-TODAY
-RECENT
-```
-
-The exact thresholds are not yet implemented.
-
-Planned ranking inputs:
-
-```text
-Role priority
-+
-Eligibility
-+
-Resume relevance
-+
-Posting freshness
-```
-
-Status: implemented.
 
 ---
 
-# 6. Current Data Flow
+## Module 5 — Durable Notification Pipeline
+
+Purpose:
+
+Turn alert candidates into real email notifications without losing them when an external transport fails.
+
+Module 5 contains several layers.
+
+### Notification Domain
+
+Responsibilities:
+
+- notification message types
+- transport-neutral representation
+
+### Notification Renderer
+
+Converts an evaluated alert into user-facing content.
+
+Notification details include:
+
+- change type
+- company
+- title
+- location
+- role family
+- priority
+- eligibility
+- posting age
+- exact posting timestamp
+- update timestamp
+- official employer URL
+
+### SMTP Transport
+
+Responsibilities:
+
+- Gmail SMTP
+- STARTTLS
+- App Password authentication
+- configurable timeout
+- configurable sender
+- configurable recipient
+
+### Durable Outbox
+
+PostgreSQL table:
+
+```text
+notification_outbox
+```
+
+Status values:
+
+```text
+PENDING
+SENT
+DEAD
+```
+
+### Delivery Worker
+
+Responsibilities:
+
+- select due PENDING rows
+- row locking
+- SMTP delivery
+- successful SENT transitions
+- failed-attempt persistence
+- retry scheduling
+- DEAD state after max attempts
+
+Status:
+
+```text
+IMPLEMENTED
+```
+
+---
+
+# 7. Database Architecture
+
+Current tables:
+
+```text
+jobs
+source_states
+notification_outbox
+```
+
+---
+
+## `jobs`
+
+Stores canonical durable job state.
+
+Primary responsibilities:
+
+- source identity
+- normalized job fields
+- meaningful content hash
+- first-seen time
+- last-seen time
+- active/closed state
+
+Unique identity:
+
+```text
+source
++
+source_account
++
+external_id
+```
+
+---
+
+## `source_states`
+
+Stores polling state for each ATS source account.
+
+Identity:
+
+```text
+source
++
+source_account
+```
+
+Tracks:
+
+- initialization
+- last successful source processing
+- previous job count
+
+---
+
+## `notification_outbox`
+
+Stores durable external-delivery work.
+
+Important columns include:
+
+```text
+dedupe_key
+source
+source_account
+external_id
+observation_status
+job_content_hash
+source_updated_at
+recipient
+subject
+text_body
+status
+attempt_count
+next_attempt_at
+created_at
+last_attempt_at
+sent_at
+last_error
+```
+
+Unique constraint:
+
+```text
+dedupe_key
+```
+
+Retry index:
+
+```text
+status
++
+next_attempt_at
++
+created_at
+```
+
+Current migration head:
+
+```text
+0002
+```
+
+---
+
+# 8. Transaction Architecture
+
+The live source operation deliberately uses one database transaction for source mutation and notification creation.
+
+```text
+BEGIN
+
+reconcile source snapshot
+
+evaluate NEW / UPDATED / REOPENED jobs
+
+render qualifying alerts
+
+insert PENDING notification_outbox rows
+
+COMMIT
+```
+
+Only after this succeeds does SMTP delivery begin.
+
+This prevents:
+
+```text
+database changed
++
+email generation lost
+```
+
+after an application crash.
+
+---
+
+# 9. Notification Deduplication
+
+ACE constructs a stable SHA-256 identity for a logical notification event.
+
+Inputs include:
+
+```text
+source
+source account
+external job ID
+observation status
+job content hash
+provider update timestamp
+recipient
+```
+
+Not included:
+
+```text
+ACE polling time
+```
+
+Therefore repeated polling does not create duplicate notification rows for the same logical event.
+
+---
+
+# 10. Delivery Concurrency
+
+The PostgreSQL delivery repository uses:
+
+```text
+SELECT ... FOR UPDATE SKIP LOCKED
+```
+
+This prepares ACE for multiple workers.
+
+Conceptually:
+
+```text
+Worker A
+→ locks notification 1
+
+Worker B
+→ skips notification 1
+→ locks notification 2
+```
+
+This avoids concurrent processing of the same due row.
+
+---
+
+# 11. Retry Policy
+
+A failed external delivery remains:
+
+```text
+PENDING
+```
+
+and stores:
+
+- incremented `attempt_count`
+- `last_attempt_at`
+- `last_error`
+- future `next_attempt_at`
+
+Exponential retry behavior begins:
+
+```text
+1st failure
+→ +60 seconds
+
+2nd failure
+→ +120 seconds
+
+3rd failure
+→ +240 seconds
+```
+
+with a configured maximum delay.
+
+After maximum attempts:
+
+```text
+DEAD
+```
+
+The record remains inspectable.
+
+---
+
+# 12. Delivery Guarantee
+
+The notification pipeline provides durable at-least-once processing.
+
+A distributed-system failure window remains possible:
+
+```text
+SMTP provider accepts message
+    ↓
+application crashes
+    ↓
+database never records SENT
+    ↓
+message may be retried
+```
+
+Exactly-once SMTP delivery cannot be guaranteed without cooperation from the external transport.
+
+ACE chooses:
+
+```text
+possible rare duplicate
+```
+
+over:
+
+```text
+possible permanently lost opportunity
+```
+
+---
+
+# 13. Live Source Behavior
+
+A live Databricks Greenhouse run validated the complete source path.
+
+At one checkpoint:
+
+```text
+Fetched:    859
+UNCHANGED:  859
+Evaluated:  0
+Queued:     0
+Sent:       0
+```
+
+This is correct.
+
+ACE does not repeatedly alert on unchanged jobs.
+
+---
+
+# 14. Testing Strategy
+
+Current deterministic suite:
+
+```text
+101 tests passing
+```
+
+Testing layers include:
+
+## Unit Tests
+
+Validate deterministic application behavior without external services.
+
+## PostgreSQL Integration Tests
+
+Validate:
+
+- persistence
+- lifecycle
+- outbox schema
+- uniqueness
+- real inserts
+- duplicate suppression
+- cleanup
+
+## Live ATS Smoke Tests
+
+Validate:
+
+- Greenhouse connectivity
+- normalization
+- full source polling
+
+## SMTP Integration Tests
+
+Validate:
+
+- Gmail configuration
+- STARTTLS
+- authentication
+- real message delivery
+
+## Failure-Recovery Tests
+
+Validate:
+
+```text
+PENDING
+→ forced SMTP failure
+→ PENDING + retry
+→ successful SMTP retry
+→ SENT
+```
+
+---
+
+# 15. Validated Module 5 Failure Recovery
+
+Initial state:
+
+```text
+status = PENDING
+attempt_count = 0
+```
+
+Forced transport failure:
+
+```text
+SMTP_HOST=127.0.0.1
+SMTP_PORT=1
+```
+
+Observed:
+
+```text
+Attempted:       1
+Sent:            0
+Retry scheduled: 1
+Dead:            0
+```
+
+Persisted state:
+
+```text
+status = PENDING
+attempt_count = 1
+last_error = ConnectionRefusedError
+sent_at = NULL
+```
+
+After resetting the retry timestamp and using normal Gmail:
+
+```text
+Attempted:       1
+Sent:            1
+Retry scheduled: 0
+Dead:            0
+```
+
+Final state:
+
+```text
+status = SENT
+attempt_count = 2
+sent_at populated
+last_error cleared
+```
+
+Synthetic rows were then deleted.
+
+---
+
+# 16. Observability Philosophy
+
+ACE should make important decisions inspectable.
+
+Source-level observability:
+
+```text
+jobs fetched
+unique jobs
+duplicates
+NEW
+UPDATED
+REOPENED
+UNCHANGED
+CLOSED
+evaluation candidates
+```
+
+Evaluation observability:
+
+```text
+PASS
+STRETCH
+REJECT
+ALERT
+SUPPRESS
+rejection reasons
+```
+
+Notification observability:
+
+```text
+candidates
+queued
+duplicates
+attempted
+sent
+retry scheduled
+dead
+last error
+```
+
+Future production metrics should include:
+
+- source request latency
+- source failure rate
+- source-to-detection latency
+- notification queue depth
+- oldest pending notification age
+- delivery success rate
+- retry rate
+- DEAD count
+- worker latency
+
+---
+
+# 17. Current Data Flow
 
 ```text
 Employer ATS
@@ -782,7 +1157,7 @@ CanonicalJob
     ↓
 Persistence
     ↓
-Source Lifecycle State
+Lifecycle
     ├── NEW
     ├── UPDATED
     ├── REOPENED
@@ -791,192 +1166,32 @@ Source Lifecycle State
     ↓
 Evaluation Candidates
     ↓
-Source-Snapshot Workflow
-    ↓
 Role Classifier
     ↓
-Eligibility Gate
+Eligibility
     ↓
 PASS / STRETCH / REJECT
     ↓
 Alert Disposition
     ├── ALERT
     └── SUPPRESS
-```
-
-Future:
-
-```text
-ALERT
     ↓
-Work-Authorization Intelligence
+Notification Renderer
     ↓
-Resume Relevance
+Durable Notification Outbox
     ↓
-Freshness-Aware Ranking
+PENDING
     ↓
-Notification Engine
+Delivery Worker
     ↓
-Web Application
+SMTP
     ↓
-Official Employer Application Link
+SENT / retry / DEAD
 ```
 
 ---
 
-# 7. Testing Strategy
-
-ACE uses multiple layers.
-
-## Unit Tests
-
-Current deterministic suite:
-
-```text
-59 tests passing
-```
-
-## Integration Smoke Tests
-
-Used for real external dependencies:
-
-- Greenhouse
-- PostgreSQL
-
-## Regression Tests
-
-Real bugs become permanent tests.
-
-Examples:
-
-- excessive-experience false stretch
-- `PhD preferred` false rejection
-
-## Persistence Lifecycle Smoke Test
-
-Real PostgreSQL validates:
-
-- baseline
-- NEW
-- UPDATED
-- CLOSED
-- REOPENED
-- cleanup
-
-## Evaluation Workflow Smoke Test
-
-Real PostgreSQL validates:
-
-- baseline suppression
-- changed-job detection
-- persistence-to-evaluation handoff
-- role classification
-- eligibility
-- alert disposition
-- suppressed job behavior
-- cleanup
-
----
-
-# 8. Observability Philosophy
-
-ACE should not behave like a black box.
-
-Important states and decisions must be inspectable.
-
-Example:
-
-```text
-source:
-greenhouse
-
-source_account:
-databricks
-
-persistence state:
-UPDATED
-```
-
-Then:
-
-```text
-role family:
-AI_ML_ENGINEERING
-
-priority:
-PRIMARY
-
-eligibility:
-STRETCH
-
-alert disposition:
-ALERT
-```
-
-Future operational metrics may include:
-
-- jobs fetched per source
-- unique source jobs
-- duplicate source records
-- NEW jobs
-- UPDATED jobs
-- REOPENED jobs
-- CLOSED jobs
-- evaluation candidates
-- evaluated jobs
-- alert candidates
-- suppressed jobs
-- target roles detected
-- PASS count
-- STRETCH count
-- rejection reasons
-- notification attempts
-- notification successes/failures
-- source failures
-- request latency
-- source-to-detection latency
-
----
-
-# 9. Documentation Structure
-
-ACE maintains three documentation layers.
-
-## `README.md`
-
-Project-facing summary.
-
-## `docs/overview.md`
-
-Architecture and module map.
-
-## `docs/learning-log.md`
-
-Engineering history, decisions, bugs, and lessons learned.
-
----
-
-# 10. Module Development Workflow
-
-Every ACE module follows:
-
-```text
-1. Explain architecture
-2. Identify exact affected files
-3. Provide complete file contents
-4. Run deterministic tests
-5. Run real integration smoke tests when relevant
-6. Inspect actual behavior
-7. Update documentation
-8. Commit and push
-9. Move to the next module
-```
-
-For modified project files, complete replacement contents are preferred over fragmentary patch instructions.
-
----
-
-# 11. Current Project Status
+# 18. Current Project Status
 
 ```text
 Module 0 — Foundation
@@ -988,49 +1203,145 @@ Module 1 — Greenhouse Ingestion
 Module 2 — Role Classification + Eligibility
 ✅
 
-Module 3 — PostgreSQL Persistence + Job Lifecycle
+Module 2.1 — Recall Hardening
 ✅
 
-Module 4 — Evaluation Pipeline + Source-Snapshot Workflow
+Module 3 — PostgreSQL Persistence + Lifecycle
+✅
+
+Module 4 — Evaluation Pipeline + Workflow
+✅
+
+Module 5 — Durable Notification Pipeline
 ✅
 
 Automated Tests
-59 passing
+101 passing
+✅
+
+Alembic
+0002 (head)
 ✅
 
 Live Greenhouse Validation
 ✅
 
-Live PostgreSQL Validation
+Real PostgreSQL Validation
 ✅
 
-Synthetic Persistence Lifecycle Validation
+Real Gmail SMTP Validation
 ✅
 
-Synthetic PostgreSQL Evaluation Workflow Validation
+Durable Outbox Validation
+✅
+
+Failure + Retry Recovery Validation
 ✅
 ```
 
-Next architecture stage:
+---
+
+# 19. Current Limitation
+
+ACE's source pipeline is now functional and durable, but continuous polling is not yet automatic.
+
+Today:
 
 ```text
-ALERT candidates
+manual/externally triggered run
     ↓
-Notification rendering
+ACE pipeline
     ↓
-Email delivery
-    ↓
-Polling / scheduling
-    ↓
-real-time alerts
+notification
 ```
 
-Later:
+Next:
 
 ```text
-Work-authorization intelligence
-Resume relevance
-Freshness-aware ranking
-Additional ATS sources
-Web application
+scheduler
+    ↓
+automatic repeated source runs
+    ↓
+ACE pipeline
+    ↓
+notification
 ```
+
+---
+
+# 20. Next Architecture Stage
+
+Primary next infrastructure target:
+
+```text
+Scheduler / Polling Runtime
+```
+
+Responsibilities should include:
+
+- repeated execution
+- configurable polling intervals
+- company/source registry
+- per-source isolation
+- failure containment
+- operational logging
+- potentially concurrent source processing
+
+Then source expansion:
+
+```text
+Greenhouse
+Lever
+Ashby
+other startup ATS providers
+```
+
+Later intelligence:
+
+```text
+work-authorization evidence
+resume ingestion
+resume relevance
+freshness-aware ranking
+notification preferences
+web application
+```
+
+---
+
+# 21. Documentation Structure
+
+ACE maintains:
+
+```text
+README.md
+→ public/project-facing summary
+
+docs/overview.md
+→ current architecture
+
+docs/learning-log.md
+→ implementation history and engineering lessons
+```
+
+---
+
+# 22. Module Development Workflow
+
+Every module follows:
+
+```text
+1. Explain architecture
+2. Identify exact affected files
+3. Provide complete file contents
+4. Run deterministic tests
+5. Run real smoke tests when relevant
+6. Inspect actual behavior
+7. Update documentation
+8. Inspect Git diff
+9. Commit
+10. Push
+11. Move to next module
+```
+
+For project-file modifications, complete replacement contents are preferred over fragmented patch instructions.
