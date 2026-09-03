@@ -144,7 +144,7 @@ def make_job(
     )
 
 
-def test_baseline_stores_jobs_but_suppresses_evaluation_candidates() -> None:
+def test_baseline_stores_jobs_and_exposes_evaluation_candidates() -> None:
     repository = FakeRepository(
         initialized=False,
         statuses={
@@ -169,8 +169,16 @@ def test_baseline_stores_jobs_but_suppresses_evaluation_candidates() -> None:
 
     assert (
         result.evaluation_candidate_count
-        == 0
+        == 2
     )
+
+    assert {
+        job.external_id
+        for job in result.evaluation_candidates
+    } == {
+        "1",
+        "2",
+    }
 
     assert (
         repository.recorded_job_count

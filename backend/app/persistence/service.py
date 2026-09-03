@@ -82,9 +82,9 @@ def process_snapshot(
 
     The first successful source snapshot establishes a baseline.
 
-    Baseline jobs are persisted but intentionally excluded from
-    downstream evaluation candidates so historical jobs do not trigger
-    first-deployment alerts.
+    Baseline is lifecycle metadata only. Newly observed jobs from the
+    first successful snapshot remain downstream evaluation candidates,
+    just like NEW jobs observed on later snapshots.
 
     Empty snapshots are rejected because treating an unexpectedly empty
     provider response as authoritative could incorrectly close every
@@ -263,20 +263,16 @@ def process_snapshot(
         job_count=unique_count,
     )
 
-    if is_baseline:
-        evaluation_candidates: tuple[
-            CanonicalJob,
-            ...
-        ] = ()
-
-    else:
-        evaluation_candidates = tuple(
-            [
-                *new_jobs,
-                *updated_jobs,
-                *reopened_jobs,
-            ]
-        )
+    evaluation_candidates: tuple[
+        CanonicalJob,
+        ...
+    ] = tuple(
+        [
+            *new_jobs,
+            *updated_jobs,
+            *reopened_jobs,
+        ]
+    )
 
     return SnapshotResult(
         source=normalized_source,

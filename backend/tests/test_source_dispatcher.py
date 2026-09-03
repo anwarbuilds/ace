@@ -12,6 +12,7 @@ from backend.app.models.job import (
     CanonicalJob,
 )
 from backend.app.scheduling.dispatcher import (
+    AshbySourceFetcher,
     GreenhouseSourceFetcher,
     SourceDispatcher,
     UnsupportedSourceTypeError,
@@ -271,6 +272,80 @@ def test_greenhouse_fetcher_uses_source_configuration() -> None:
     )
 
 
+def test_ashby_fetcher_uses_source_configuration() -> None:
+    source = SourceDefinition(
+        source_type=SourceType.ASHBY,
+        source_account="ExampleAI",
+        company_name="Example AI",
+        source_host="jobs.ashbyhq.com",
+    )
+
+    expected_job = CanonicalJob(
+        source="ashby",
+        company="Example AI",
+        external_id="ashby-1",
+        requisition_id=None,
+        title="Software Engineer",
+        location="New York, NY",
+        description="Build software.",
+        official_url=(
+            "https://jobs.ashbyhq.com/"
+            "ExampleAI/ashby-1"
+        ),
+        posted_at=DETECTED_AT,
+        updated_at=None,
+    )
+
+    observed: dict[
+        str,
+        str,
+    ] = {}
+
+    def fake_fetcher(
+        board_name: str,
+        company_name: str,
+    ) -> list[CanonicalJob]:
+        observed[
+            "board_name"
+        ] = board_name
+
+        observed[
+            "company_name"
+        ] = company_name
+
+        return [
+            expected_job,
+        ]
+
+    fetcher = AshbySourceFetcher(
+        fetcher=fake_fetcher,
+        clock=lambda: DETECTED_AT,
+    )
+
+    snapshot = fetcher(
+        source
+    )
+
+    assert observed == {
+        "board_name": "ExampleAI",
+        "company_name": "Example AI",
+    }
+
+    assert (
+        snapshot.source_definition
+        is source
+    )
+
+    assert (
+        snapshot.detected_at
+        == DETECTED_AT
+    )
+
+    assert snapshot.jobs == (
+        expected_job,
+    )
+
+
 def test_dispatcher_routes_source_to_registered_handler() -> None:
     source = make_source()
 
@@ -370,7 +445,7 @@ def test_dispatcher_rejects_handler_returning_wrong_source() -> None:
         )
 
 
-def test_default_dispatcher_supports_greenhouse_and_lever() -> None:
+def test_default_dispatcher_supports_greenhouse_lever_and_ashby() -> None:
     dispatcher = (
         build_default_source_dispatcher()
     )
@@ -379,6 +454,7 @@ def test_default_dispatcher_supports_greenhouse_and_lever() -> None:
         dispatcher.supported_source_types
         == frozenset(
             {
+                SourceType.ASHBY,
                 SourceType.GREENHOUSE,
                 SourceType.LEVER,
             }

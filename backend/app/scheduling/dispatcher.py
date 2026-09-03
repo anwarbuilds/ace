@@ -10,6 +10,9 @@ work. Those responsibilities belong to later orchestration layers.
 from collections.abc import Mapping
 from typing import Protocol
 
+from backend.app.adapters.ashby import (
+    fetch_ashby_jobs,
+)
 from backend.app.adapters.greenhouse import (
     fetch_greenhouse_jobs,
 )
@@ -40,6 +43,17 @@ class SourceFetchHandler(Protocol):
         source: SourceDefinition,
     ) -> FetchedSourceSnapshot:
         """Fetch and normalize one source snapshot."""
+
+
+class AshbyFetcher(Protocol):
+    """Callable capable of fetching one Ashby source."""
+
+    def __call__(
+        self,
+        board_name: str,
+        company_name: str,
+    ) -> list[CanonicalJob]:
+        """Fetch and normalize one Ashby board."""
 
 
 class LeverFetcher(Protocol):
@@ -112,6 +126,52 @@ class GreenhouseSourceFetcher:
                 live_snapshot.detected_at
             ),
             jobs=live_snapshot.jobs,
+        )
+
+
+class AshbySourceFetcher:
+    """Dispatch adapter for Ashby-backed source definitions."""
+
+    def __init__(
+        self,
+        *,
+        fetcher: AshbyFetcher = (
+            fetch_ashby_jobs
+        ),
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch one configured Ashby source."""
+
+        if (
+            source.source_type
+            != SourceType.ASHBY
+        ):
+            raise ValueError(
+                (
+                    "AshbySourceFetcher "
+                    "requires an ASHBY "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            source.source_account,
+            source.company_name,
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
         )
 
 
@@ -242,6 +302,9 @@ def build_default_source_dispatcher() -> (
 
     return SourceDispatcher(
         {
+            SourceType.ASHBY: (
+                AshbySourceFetcher()
+            ),
             SourceType.GREENHOUSE: (
                 GreenhouseSourceFetcher()
             ),
