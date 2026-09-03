@@ -82,25 +82,12 @@ def evaluate_snapshot(
 
     Only NEW, UPDATED, and REOPENED jobs are evaluated.
 
-    Baseline suppression is already handled by the persistence layer.
-    UNCHANGED and CLOSED jobs therefore do not enter normal job-alert
-    evaluation.
+    Baseline status does not suppress evaluation. A first successful
+    snapshot therefore evaluates its NEW jobs using the same rules as
+    subsequent snapshots.
+
+    UNCHANGED and CLOSED jobs do not enter normal job-alert evaluation.
     """
-
-    if snapshot.is_baseline:
-        if snapshot.evaluation_candidates:
-            raise ValueError(
-                (
-                    "Baseline snapshots must not "
-                    "contain evaluation candidates."
-                )
-            )
-
-        return EvaluationBatchResult(
-            evaluated_jobs=(),
-            alert_candidates=(),
-            suppressed_jobs=(),
-        )
 
     evaluated_jobs: list[
         EvaluatedJob

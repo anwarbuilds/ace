@@ -137,7 +137,7 @@ def make_job(
     )
 
 
-def test_baseline_is_persisted_but_not_evaluated() -> None:
+def test_baseline_new_job_is_persisted_and_evaluated() -> None:
     job = make_job(
         "1",
         title="Software Engineer",
@@ -166,15 +166,15 @@ def test_baseline_is_persisted_but_not_evaluated() -> None:
 
     assert (
         result.snapshot.evaluation_candidate_count
-        == 0
+        == 1
     )
 
     assert (
         result.evaluation.evaluated_count
-        == 0
+        == 1
     )
 
-    assert result.alert_candidate_count == 0
+    assert result.alert_candidate_count == 1
 
     assert (
         repository.recorded_job_count
