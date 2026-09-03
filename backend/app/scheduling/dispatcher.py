@@ -19,6 +19,9 @@ from backend.app.adapters.greenhouse import (
 from backend.app.adapters.lever import (
     fetch_lever_jobs,
 )
+from backend.app.adapters.smartrecruiters import (
+    fetch_smartrecruiters_jobs,
+)
 from backend.app.models.job import (
     CanonicalJob,
 )
@@ -54,6 +57,17 @@ class AshbyFetcher(Protocol):
         company_name: str,
     ) -> list[CanonicalJob]:
         """Fetch and normalize one Ashby board."""
+
+
+class SmartRecruitersFetcher(Protocol):
+    """Callable capable of fetching one SmartRecruiters source."""
+
+    def __call__(
+        self,
+        company_identifier: str,
+        company_name: str,
+    ) -> list[CanonicalJob]:
+        """Fetch and normalize one SmartRecruiters company."""
 
 
 class LeverFetcher(Protocol):
@@ -157,6 +171,52 @@ class AshbySourceFetcher:
                 (
                     "AshbySourceFetcher "
                     "requires an ASHBY "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            source.source_account,
+            source.company_name,
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
+class SmartRecruitersSourceFetcher:
+    """Dispatch adapter for SmartRecruiters-backed sources."""
+
+    def __init__(
+        self,
+        *,
+        fetcher: SmartRecruitersFetcher = (
+            fetch_smartrecruiters_jobs
+        ),
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch one configured SmartRecruiters source."""
+
+        if (
+            source.source_type
+            != SourceType.SMARTRECRUITERS
+        ):
+            raise ValueError(
+                (
+                    "SmartRecruitersSourceFetcher "
+                    "requires a SMARTRECRUITERS "
                     "SourceDefinition."
                 )
             )
@@ -310,6 +370,9 @@ def build_default_source_dispatcher() -> (
             ),
             SourceType.LEVER: (
                 LeverSourceFetcher()
+            ),
+            SourceType.SMARTRECRUITERS: (
+                SmartRecruitersSourceFetcher()
             ),
         }
     )
