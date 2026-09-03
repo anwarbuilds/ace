@@ -445,7 +445,7 @@ def test_dispatcher_rejects_handler_returning_wrong_source() -> None:
         )
 
 
-def test_default_dispatcher_supports_greenhouse_lever_and_ashby() -> None:
+def test_default_dispatcher_supports_all_implemented_sources() -> None:
     dispatcher = (
         build_default_source_dispatcher()
     )
@@ -457,6 +457,7 @@ def test_default_dispatcher_supports_greenhouse_lever_and_ashby() -> None:
                 SourceType.ASHBY,
                 SourceType.GREENHOUSE,
                 SourceType.LEVER,
+                SourceType.SMARTRECRUITERS,
             }
         )
     )
