@@ -5,6 +5,7 @@ ATS payloads.
 
 CanonicalJob is the normalized application-domain representation.
 JobRecord is the durable PostgreSQL representation of a discovered job.
+JobSourceRecord describes an external ATS account ACE should monitor.
 NotificationOutboxRecord stores delivery work until external transports
 successfully complete.
 """
@@ -29,6 +30,18 @@ from sqlalchemy.orm import (
 )
 
 from backend.app.db.base import Base
+
+
+# PostgreSQL should use BIGINT for durable identifiers.
+#
+# SQLite only provides implicit autoincrement semantics for a column whose
+# declared type is exactly INTEGER PRIMARY KEY. The variant therefore keeps
+# production PostgreSQL BIGINT behavior while allowing lightweight SQLite
+# repository tests to exercise normal inserts without supplying fake IDs.
+BIGINT_ID = BigInteger().with_variant(
+    Integer(),
+    "sqlite",
+)
 
 
 class JobRecord(Base):
@@ -58,7 +71,7 @@ class JobRecord(Base):
     )
 
     id: Mapped[int] = mapped_column(
-        BigInteger,
+        BIGINT_ID,
         primary_key=True,
         autoincrement=True,
     )
@@ -181,6 +194,111 @@ class SourceState(Base):
     )
 
 
+class JobSourceRecord(Base):
+    """Persistent external job source monitored by ACE.
+
+    Company name is descriptive provenance metadata.
+
+    Source identity is:
+
+        source_type + source_account
+
+    Company identity must never determine job eligibility.
+    """
+
+    __tablename__ = "job_sources"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "source_type",
+            "source_account",
+            name=(
+                "uq_job_sources_"
+                "source_identity"
+            ),
+        ),
+        CheckConstraint(
+            "poll_interval_seconds > 0",
+            name=(
+                "ck_job_sources_"
+                "poll_interval_positive"
+            ),
+        ),
+        Index(
+            "ix_job_sources_enabled",
+            "enabled",
+            "source_type",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BIGINT_ID,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    source_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    source_account: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    source_host: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    company_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="true",
+    )
+
+    poll_interval_seconds: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="300",
+    )
+
+    discovery_source: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    first_discovered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    last_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class NotificationOutboxRecord(Base):
     """Durable notification awaiting external delivery.
 
@@ -223,7 +341,7 @@ class NotificationOutboxRecord(Base):
     )
 
     id: Mapped[int] = mapped_column(
-        BigInteger,
+        BIGINT_ID,
         primary_key=True,
         autoincrement=True,
     )

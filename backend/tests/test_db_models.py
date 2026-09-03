@@ -1,6 +1,7 @@
 """Structural tests for ACE SQLAlchemy database models."""
 
 from sqlalchemy import (
+    CheckConstraint,
     UniqueConstraint,
 )
 
@@ -24,8 +25,20 @@ def test_database_metadata_contains_expected_tables() -> None:
     )
 
     assert (
+        "job_sources"
+        in Base.metadata.tables
+    )
+
+    assert (
         "notification_outbox"
         in Base.metadata.tables
+    )
+
+    assert (
+        database_models
+        .JobSourceRecord
+        .__tablename__
+        == "job_sources"
     )
 
     assert (
@@ -110,6 +123,93 @@ def test_source_state_uses_source_identity_as_primary_key() -> None:
         "source",
         "source_account",
     )
+
+
+def test_job_source_identity_is_unique() -> None:
+    """Each external ATS account should appear once in the catalog."""
+
+    table = (
+        Base.metadata.tables[
+            "job_sources"
+        ]
+    )
+
+    constraints = [
+        constraint
+        for constraint
+        in table.constraints
+        if isinstance(
+            constraint,
+            UniqueConstraint,
+        )
+    ]
+
+    matches = [
+        constraint
+        for constraint
+        in constraints
+        if (
+            constraint.name
+            == (
+                "uq_job_sources_"
+                "source_identity"
+            )
+        )
+    ]
+
+    assert len(
+        matches
+    ) == 1
+
+    columns = tuple(
+        column.name
+        for column
+        in matches[
+            0
+        ].columns
+    )
+
+    assert columns == (
+        "source_type",
+        "source_account",
+    )
+
+
+def test_job_source_poll_interval_must_be_positive() -> None:
+    """Catalog poll intervals must be strictly positive."""
+
+    table = (
+        Base.metadata.tables[
+            "job_sources"
+        ]
+    )
+
+    constraints = [
+        constraint
+        for constraint
+        in table.constraints
+        if isinstance(
+            constraint,
+            CheckConstraint,
+        )
+    ]
+
+    matches = [
+        constraint
+        for constraint
+        in constraints
+        if (
+            constraint.name
+            == (
+                "ck_job_sources_"
+                "poll_interval_positive"
+            )
+        )
+    ]
+
+    assert len(
+        matches
+    ) == 1
 
 
 def test_notification_outbox_has_unique_dedupe_key() -> None:
