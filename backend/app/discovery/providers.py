@@ -32,6 +32,9 @@ from urllib.parse import (
 
 import httpx
 
+from backend.app.discovery.detector import (
+    detect_source_from_url,
+)
 from backend.app.discovery.types import (
     SourceCandidate,
 )
@@ -500,6 +503,126 @@ def extract_greenhouse_candidates(
     )
 
 
+def extract_source_candidates(
+    document: str,
+    *,
+    discovery_source: str,
+) -> tuple[
+    SourceCandidate,
+    ...,
+]:
+    """Extract ATS-neutral source candidates from one feed document.
+
+    Every hyperlink is passed through ACE's central ATS detector.
+
+    This keeps discovery independent from Greenhouse, Lever, Ashby,
+    SmartRecruiters, and future provider-specific URL formats.
+    """
+
+    parser = (
+        _HtmlTableParser()
+    )
+
+    parser.feed(
+        document
+    )
+
+    parser.close()
+
+    candidates: list[
+        SourceCandidate
+    ] = []
+
+    seen_identities: set[
+        tuple[
+            SourceType,
+            str,
+        ]
+    ] = set()
+
+    last_company_name: (
+        str | None
+    ) = None
+
+    for (
+        cells,
+        hrefs,
+    ) in parser.rows:
+        row_company = ""
+
+        if cells:
+            row_company = (
+                _normalize_company_name(
+                    cells[
+                        0
+                    ]
+                )
+            )
+
+        if row_company:
+            last_company_name = (
+                row_company
+            )
+
+        for href in hrefs:
+            detected = (
+                detect_source_from_url(
+                    href
+                )
+            )
+
+            if detected is None:
+                continue
+
+            identity = (
+                detected.source_type,
+                (
+                    detected
+                    .source_account
+                    .casefold()
+                ),
+            )
+
+            if identity in seen_identities:
+                continue
+
+            seen_identities.add(
+                identity
+            )
+
+            company_name = (
+                last_company_name
+                or _humanize_account(
+                    detected.source_account
+                )
+            )
+
+            candidates.append(
+                SourceCandidate(
+                    source_type=(
+                        detected.source_type
+                    ),
+                    source_account=(
+                        detected.source_account
+                    ),
+                    company_name=(
+                        company_name
+                    ),
+                    discovery_source=(
+                        discovery_source
+                    ),
+                    source_host=(
+                        detected.source_host
+                    ),
+                    evidence_url=href,
+                )
+            )
+
+    return tuple(
+        candidates
+    )
+
+
 def _fetch_public_text(
     url: str,
 ) -> str:
@@ -529,8 +652,8 @@ def _fetch_public_text(
     return response.text
 
 
-class PublicGreenhouseFeedProvider:
-    """Discover Greenhouse boards from public job-list feeds.
+class PublicJobFeedProvider:
+    """Discover ATS source identities from public job-list feeds.
 
     The provider performs discovery only.
 
@@ -603,7 +726,7 @@ class PublicGreenhouseFeedProvider:
         SourceCandidate,
         ...,
     ]:
-        """Fetch configured feeds and return unique Greenhouse candidates."""
+        """Fetch configured feeds and return unique ATS source candidates."""
 
         discovered: list[
             SourceCandidate
@@ -664,7 +787,7 @@ class PublicGreenhouseFeedProvider:
             successful_feed_count += 1
 
             feed_candidates = (
-                extract_greenhouse_candidates(
+                extract_source_candidates(
                     document,
                     discovery_source=(
                         feed.name
@@ -732,3 +855,9 @@ class PublicGreenhouseFeedProvider:
         return tuple(
             discovered
         )
+
+# Backward-compatible alias.
+#
+# Existing callers may still import the old Greenhouse-specific class
+# name while ACE transitions discovery to the provider-neutral name.
+PublicGreenhouseFeedProvider = PublicJobFeedProvider

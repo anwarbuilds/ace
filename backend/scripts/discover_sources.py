@@ -2,7 +2,7 @@
 
 Examples:
 
-Preview discovered Greenhouse boards:
+Preview discovered ATS sources:
 
     python -m backend.scripts.discover_sources
 
@@ -27,7 +27,7 @@ from backend.app.discovery import (
     run_source_discovery,
 )
 from backend.app.discovery.providers import (
-    PublicGreenhouseFeedProvider,
+    PublicJobFeedProvider,
 )
 from backend.app.scheduling import (
     SqlAlchemySourceCatalogRepository,
@@ -38,8 +38,8 @@ from backend.app.scheduling import (
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Discover possible Greenhouse "
-            "job sources from public feeds."
+            "Discover ATS job sources "
+            "from public feeds."
         )
     )
 
@@ -67,7 +67,7 @@ def _parse_args() -> argparse.Namespace:
 
 def _preview(
     provider: (
-        PublicGreenhouseFeedProvider
+        PublicJobFeedProvider
     ),
 ) -> None:
     candidates = (
@@ -93,7 +93,7 @@ def _preview(
 
     if not candidates:
         print(
-            "No Greenhouse candidates "
+            "No supported ATS candidates "
             "were discovered."
         )
 
@@ -137,7 +137,7 @@ def _preview(
 
 def _apply(
     provider: (
-        PublicGreenhouseFeedProvider
+        PublicJobFeedProvider
     ),
 ) -> None:
     dispatcher = (
@@ -213,7 +213,7 @@ def main() -> None:
     args = _parse_args()
 
     provider = (
-        PublicGreenhouseFeedProvider(
+        PublicJobFeedProvider(
             max_candidates=(
                 args.limit
             )

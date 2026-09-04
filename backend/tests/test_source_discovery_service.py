@@ -573,3 +573,34 @@ def test_candidate_conversion_preserves_scheduler_configuration() -> None:
     )
 
     assert source.enabled is True
+
+def test_candidate_conversion_preserves_source_host() -> None:
+    source_candidate = SourceCandidate(
+        source_type=(
+            SourceType.LEVER
+        ),
+        source_account="example-eu",
+        company_name="Example EU",
+        discovery_source="test",
+        source_host=" Jobs.EU.Lever.Co. ",
+    )
+
+    source = (
+        source_candidate
+        .to_source_definition()
+    )
+
+    assert (
+        source.source_type
+        == SourceType.LEVER
+    )
+
+    assert (
+        source.source_account
+        == "example-eu"
+    )
+
+    assert (
+        source.source_host
+        == "jobs.eu.lever.co"
+    )
