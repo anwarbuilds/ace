@@ -6,7 +6,9 @@ import pytest
 from backend.app.discovery.providers import (
     DiscoveryFeed,
     PublicGreenhouseFeedProvider,
+    PublicJobFeedProvider,
     extract_greenhouse_candidates,
+    extract_source_candidates,
     greenhouse_account_from_url,
 )
 from backend.app.scheduling.types import (
@@ -446,3 +448,272 @@ def test_provider_can_limit_candidate_count() -> None:
     assert len(
         candidates
     ) == 1
+
+def test_generic_extractor_discovers_multiple_ats_families() -> None:
+    document = """
+    <table>
+      <tbody>
+        <tr>
+          <td>Greenhouse Company</td>
+          <td>Software Engineer</td>
+          <td>
+            <a href="https://job-boards.greenhouse.io/greenhousecompany/jobs/1">
+              Apply
+            </a>
+          </td>
+        </tr>
+
+        <tr>
+          <td>Lever EU Company</td>
+          <td>Software Engineer</td>
+          <td>
+            <a href="https://jobs.eu.lever.co/example-eu/lever-job-1">
+              Apply
+            </a>
+          </td>
+        </tr>
+
+        <tr>
+          <td>Example AI</td>
+          <td>Software Engineer</td>
+          <td>
+            <a href="https://jobs.ashbyhq.com/ExampleAI/ashby-job-1">
+              Apply
+            </a>
+          </td>
+        </tr>
+
+        <tr>
+          <td>Smart Company</td>
+          <td>Software Engineer</td>
+          <td>
+            <a href="https://jobs.smartrecruiters.com/ExampleCompany/123-software-engineer">
+              Apply
+            </a>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    """
+
+    candidates = (
+        extract_source_candidates(
+            document,
+            discovery_source=(
+                "mixed-test-feed"
+            ),
+        )
+    )
+
+    assert len(candidates) == 4
+
+    by_type = {
+        candidate.source_type: candidate
+        for candidate in candidates
+    }
+
+    assert set(by_type) == {
+        SourceType.GREENHOUSE,
+        SourceType.LEVER,
+        SourceType.ASHBY,
+        SourceType.SMARTRECRUITERS,
+    }
+
+    greenhouse = by_type[
+        SourceType.GREENHOUSE
+    ]
+
+    assert (
+        greenhouse.source_account
+        == "greenhousecompany"
+    )
+
+    assert (
+        greenhouse.company_name
+        == "Greenhouse Company"
+    )
+
+    lever = by_type[
+        SourceType.LEVER
+    ]
+
+    assert (
+        lever.source_account
+        == "example-eu"
+    )
+
+    assert (
+        lever.source_host
+        == "jobs.eu.lever.co"
+    )
+
+    assert (
+        lever.company_name
+        == "Lever EU Company"
+    )
+
+    ashby = by_type[
+        SourceType.ASHBY
+    ]
+
+    assert (
+        ashby.source_account
+        == "ExampleAI"
+    )
+
+    assert (
+        ashby.source_host
+        == "jobs.ashbyhq.com"
+    )
+
+    smartrecruiters = by_type[
+        SourceType.SMARTRECRUITERS
+    ]
+
+    assert (
+        smartrecruiters.source_account
+        == "ExampleCompany"
+    )
+
+    assert (
+        smartrecruiters.source_host
+        == "jobs.smartrecruiters.com"
+    )
+
+    assert (
+        smartrecruiters.discovery_source
+        == "mixed-test-feed"
+    )
+
+
+def test_generic_extractor_deduplicates_same_ats_identity() -> None:
+    document = """
+    <table>
+      <tbody>
+        <tr>
+          <td>Example AI</td>
+          <td>
+            <a href="https://jobs.ashbyhq.com/ExampleAI/job-one">
+              Apply
+            </a>
+          </td>
+        </tr>
+
+        <tr>
+          <td>Example AI</td>
+          <td>
+            <a href="https://jobs.ashbyhq.com/ExampleAI/job-two">
+              Apply
+            </a>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    """
+
+    candidates = (
+        extract_source_candidates(
+            document,
+            discovery_source="test-feed",
+        )
+    )
+
+    assert len(candidates) == 1
+
+    assert (
+        candidates[
+            0
+        ].source_type
+        == SourceType.ASHBY
+    )
+
+    assert (
+        candidates[
+            0
+        ].source_account
+        == "ExampleAI"
+    )
+
+def test_public_job_feed_provider_discovers_multiple_ats_families() -> None:
+    feed = DiscoveryFeed(
+        name="mixed-feed",
+        url="https://example.com/jobs",
+    )
+
+    document = """
+    <table>
+      <tbody>
+        <tr>
+          <td>Greenhouse Company</td>
+          <td>Software Engineer</td>
+          <td>
+            <a href="https://job-boards.greenhouse.io/greenhousecompany/jobs/1">
+              Apply
+            </a>
+          </td>
+        </tr>
+
+        <tr>
+          <td>Lever Company</td>
+          <td>Software Engineer</td>
+          <td>
+            <a href="https://jobs.lever.co/levercompany/job-1">
+              Apply
+            </a>
+          </td>
+        </tr>
+
+        <tr>
+          <td>Ashby Company</td>
+          <td>Software Engineer</td>
+          <td>
+            <a href="https://jobs.ashbyhq.com/AshbyCompany/job-1">
+              Apply
+            </a>
+          </td>
+        </tr>
+
+        <tr>
+          <td>SmartRecruiters Company</td>
+          <td>Software Engineer</td>
+          <td>
+            <a href="https://jobs.smartrecruiters.com/SmartCompany/123-engineer">
+              Apply
+            </a>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    """
+
+    provider = PublicJobFeedProvider(
+        feeds=(
+            feed,
+        ),
+        fetch_text=(
+            lambda url: document
+        ),
+    )
+
+    candidates = (
+        provider.discover()
+    )
+
+    assert len(candidates) == 4
+
+    assert {
+        candidate.source_type
+        for candidate in candidates
+    } == {
+        SourceType.GREENHOUSE,
+        SourceType.LEVER,
+        SourceType.ASHBY,
+        SourceType.SMARTRECRUITERS,
+    }
+
+
+def test_old_greenhouse_provider_name_is_compatibility_alias() -> None:
+    assert (
+        PublicGreenhouseFeedProvider
+        is PublicJobFeedProvider
+    )
