@@ -208,6 +208,63 @@ def _apply(
         result.catalogued_count,
     )
 
+    failed_verifications = tuple(
+        verification
+        for verification
+        in result.verifications
+        if not verification.verified
+    )
+
+    if failed_verifications:
+        print()
+        print(
+            "Verification failures"
+        )
+        print(
+            "-" * 72
+        )
+
+        for verification in (
+            failed_verifications
+        ):
+            candidate = (
+                verification.candidate
+            )
+
+            print()
+            print(
+                (
+                    f"{candidate.source_type.value}:"
+                    f"{candidate.source_account}"
+                )
+            )
+
+            print(
+                "  Company:",
+                candidate.company_name,
+            )
+
+            print(
+                "  Found via:",
+                candidate.discovery_source,
+            )
+
+            print(
+                "  Error type:",
+                (
+                    verification.error_type
+                    or "Unknown"
+                ),
+            )
+
+            print(
+                "  Error:",
+                (
+                    verification.error_message
+                    or "No error message"
+                ),
+            )
+
 
 def main() -> None:
     args = _parse_args()
