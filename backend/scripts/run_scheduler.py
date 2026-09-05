@@ -32,6 +32,8 @@ from backend.app.notifications.runtime import (
 from backend.app.scheduling import (
     SchedulerRuntime,
     SourceDefinition,
+    SourceRegistry,
+    SourceType,
     build_default_source_dispatcher,
     load_source_registry,
     poll_source_once,
@@ -41,6 +43,97 @@ from backend.app.scheduling import (
 LOGGER = logging.getLogger(
     "ace.scheduler.cli"
 )
+
+
+def _positive_integer(
+    value: str,
+) -> int:
+    """Parse one strictly positive command-line integer."""
+
+    try:
+        parsed = int(
+            value
+        )
+
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "value must be an integer"
+        ) from exc
+
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(
+            "value must be greater than zero"
+        )
+
+    return parsed
+
+
+def select_source_registry(
+    registry: SourceRegistry,
+    *,
+    source_type: str | None,
+    source_account: str | None,
+    limit: int | None,
+) -> SourceRegistry:
+    """Select a deterministic scheduler subset for diagnostics."""
+
+    if (
+        source_account is not None
+        and source_type is None
+    ):
+        raise ValueError(
+            "--source-account requires --source-type."
+        )
+
+    selected = (
+        registry.enabled_sources
+    )
+
+    if source_type is not None:
+        normalized_source_type = (
+            SourceType(
+                source_type
+            )
+        )
+
+        selected = tuple(
+            source
+            for source in selected
+            if (
+                source.source_type
+                == normalized_source_type
+            )
+        )
+
+    if source_account is not None:
+        normalized_source_account = (
+            source_account.strip()
+        )
+
+        if not normalized_source_account:
+            raise ValueError(
+                "--source-account must not be blank."
+            )
+
+        selected = tuple(
+            source
+            for source in selected
+            if (
+                source.source_account
+                == normalized_source_account
+            )
+        )
+
+    if limit is not None:
+        selected = (
+            selected[
+                :limit
+            ]
+        )
+
+    return SourceRegistry(
+        selected
+    )
 
 
 def build_parser() -> (
@@ -61,6 +154,38 @@ def build_parser() -> (
         help=(
             "Run currently due sources "
             "once and exit."
+        ),
+    )
+
+    parser.add_argument(
+        "--limit",
+        type=_positive_integer,
+        default=None,
+        help=(
+            "Maximum number of enabled "
+            "sources to run."
+        ),
+    )
+
+    parser.add_argument(
+        "--source-type",
+        choices=tuple(
+            source_type.value
+            for source_type in SourceType
+        ),
+        default=None,
+        help=(
+            "Restrict polling to one ATS "
+            "provider family."
+        ),
+    )
+
+    parser.add_argument(
+        "--source-account",
+        default=None,
+        help=(
+            "Restrict polling to one source "
+            "account. Requires --source-type."
         ),
     )
 
@@ -129,6 +254,27 @@ def main(
         registry = (
             load_source_registry(
                 session
+            )
+        )
+
+    try:
+        registry = (
+            select_source_registry(
+                registry,
+                source_type=(
+                    args.source_type
+                ),
+                source_account=(
+                    args.source_account
+                ),
+                limit=args.limit,
+            )
+        )
+
+    except ValueError as exc:
+        parser.error(
+            str(
+                exc
             )
         )
 
