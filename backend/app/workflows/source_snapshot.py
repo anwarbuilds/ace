@@ -12,6 +12,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
+from backend.app.evaluation.freshness import (
+    FreshnessPolicy,
+)
 from backend.app.evaluation.service import (
     evaluate_snapshot,
 )
@@ -48,6 +51,15 @@ class SourceSnapshotWorkflowResult:
 
         return self.evaluation.suppressed_count
 
+    @property
+    def stale_suppressed_count(self) -> int:
+        """Return eligible jobs held back only by freshness policy."""
+
+        return (
+            self.evaluation
+            .stale_suppressed_count
+        )
+
 
 def run_source_snapshot_workflow(
     repository: SnapshotRepository,
@@ -56,6 +68,7 @@ def run_source_snapshot_workflow(
     source_account: str,
     jobs: Sequence[CanonicalJob],
     observed_at: datetime | None = None,
+    freshness_policy: FreshnessPolicy | None = None,
 ) -> SourceSnapshotWorkflowResult:
     """Persist and evaluate one complete source snapshot.
 
@@ -68,10 +81,15 @@ def run_source_snapshot_workflow(
         detect source lifecycle changes
             ↓
         evaluate only changed jobs
+            ↓
+        apply alert freshness policy
 
     Persistence determines WHAT changed.
 
     Evaluation determines whether changed jobs are relevant and eligible.
+
+    Freshness determines whether an eligible change is worth an
+    interruption. Jobs suppressed by freshness remain fully persisted.
 
     Notification is intentionally not performed here.
     """
@@ -85,7 +103,10 @@ def run_source_snapshot_workflow(
     )
 
     evaluation = evaluate_snapshot(
-        snapshot
+        snapshot,
+        freshness_policy=(
+            freshness_policy
+        ),
     )
 
     return SourceSnapshotWorkflowResult(

@@ -77,6 +77,10 @@ def make_evaluation(
         alert_candidates=(
             alert_candidates
         ),
+        # These service tests cover transaction boundaries and outbox
+        # wiring. Evaluation materialization is covered separately in
+        # test_job_evaluations.py against a real database.
+        evaluated_jobs=(),
         evaluated_count=(
             len(
                 alert_candidates
@@ -87,6 +91,7 @@ def make_evaluation(
                 alert_candidates
             )
         ),
+        stale_suppressed_count=0,
     )
 
 
@@ -99,12 +104,18 @@ def make_workflow_result(
 ) -> SimpleNamespace:
     """Create the minimum workflow result used by service tests."""
 
-    return SimpleNamespace(
-        evaluation=make_evaluation(
-            alert_candidates=(
-                alert_candidates
-            )
+    evaluation = make_evaluation(
+        alert_candidates=(
+            alert_candidates
         )
+    )
+
+    return SimpleNamespace(
+        evaluation=evaluation,
+        stale_suppressed_count=(
+            evaluation
+            .stale_suppressed_count
+        ),
     )
 
 
@@ -230,6 +241,7 @@ def test_fetch_happens_before_database_transaction(
         source_account,
         jobs,
         observed_at,
+        freshness_policy=None,
     ):
         del (
             repository,
@@ -580,6 +592,7 @@ def test_workflow_receives_provider_neutral_snapshot_identity(
         source_account,
         jobs,
         observed_at,
+        freshness_policy=None,
     ):
         observed.update(
             {
@@ -644,10 +657,13 @@ def test_poll_result_exposes_summary_counts(
             evaluation=(
                 SimpleNamespace(
                     alert_candidates=(),
+                    evaluated_jobs=(),
                     evaluated_count=3,
                     alert_candidate_count=2,
+                    stale_suppressed_count=1,
                 )
-            )
+            ),
+            stale_suppressed_count=1,
         )
     )
 

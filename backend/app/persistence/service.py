@@ -120,6 +120,10 @@ def process_snapshot(
             "observed_at must be timezone-aware"
         )
 
+    observed_at = observed_at.astimezone(
+        timezone.utc
+    )
+
     fetched_count = len(
         jobs
     )
@@ -280,6 +284,7 @@ def process_snapshot(
             normalized_source_account
         ),
         is_baseline=is_baseline,
+        observed_at=observed_at,
         fetched_count=fetched_count,
         unique_count=unique_count,
         duplicate_count=duplicate_count,

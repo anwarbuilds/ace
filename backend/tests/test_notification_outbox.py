@@ -142,6 +142,7 @@ class FakeOutboxWriter:
         recipient: str,
         subject: str,
         text_body: str,
+        payload: dict | None = None,
     ) -> bool:
         if dedupe_key in self.keys:
             return False

@@ -5,13 +5,19 @@ from dataclasses import dataclass
 from datetime import datetime
 import hashlib
 import json
-from typing import Protocol
+from typing import (
+    Any,
+    Protocol,
+)
 
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from backend.app.db.models import NotificationOutboxRecord
 from backend.app.evaluation.types import EvaluatedJob
+from backend.app.notifications.payload import (
+    build_alert_payload,
+)
 from backend.app.notifications.renderer import render_alert_notification
 from backend.app.persistence.hashing import compute_job_content_hash
 
@@ -46,6 +52,7 @@ class NotificationOutboxWriter(Protocol):
         recipient: str,
         subject: str,
         text_body: str,
+        payload: dict[str, Any] | None = None,
     ) -> bool:
         """Insert one notification unless its event already exists."""
 
@@ -80,6 +87,7 @@ class SqlAlchemyNotificationOutboxRepository:
         recipient: str,
         subject: str,
         text_body: str,
+        payload: dict[str, Any] | None = None,
     ) -> bool:
         """Insert one PENDING outbox row if it does not already exist.
 
@@ -103,8 +111,10 @@ class SqlAlchemyNotificationOutboxRepository:
                 recipient=recipient,
                 subject=subject,
                 text_body=text_body,
+                payload=payload,
                 status="PENDING",
                 attempt_count=0,
+                digest_id=None,
             )
             .on_conflict_do_nothing(
                 index_elements=[
@@ -228,6 +238,12 @@ def enqueue_alert_candidates(
 ) -> OutboxEnqueueResult:
     """Render and durably enqueue ACE alert candidates.
 
+    Each candidate is stored twice over:
+
+    - as pre-rendered single-job text, preserved for auditability and
+      for any future per-job delivery path, and
+    - as a structured payload, which is what the digest renderer reads.
+
     detected_at is used only for useful user-facing notification
     information. It is intentionally excluded from deduplication.
     """
@@ -262,6 +278,14 @@ def enqueue_alert_candidates(
             recipient=normalized_recipient,
         )
 
+        payload = build_alert_payload(
+            candidate,
+            source_account=(
+                normalized_source_account
+            ),
+            detected_at=detected_at,
+        )
+
         inserted = writer.enqueue_if_absent(
             dedupe_key=dedupe_key,
             source=candidate.job.source,
@@ -275,6 +299,7 @@ def enqueue_alert_candidates(
             recipient=normalized_recipient,
             subject=message.subject,
             text_body=message.text_body,
+            payload=payload,
         )
 
         if inserted:

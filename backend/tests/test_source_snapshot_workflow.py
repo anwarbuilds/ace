@@ -6,6 +6,7 @@ from collections.abc import (
 )
 from datetime import (
     datetime,
+    timedelta,
     timezone,
 )
 
@@ -32,6 +33,16 @@ OBSERVED_AT = datetime(
     12,
     0,
     tzinfo=timezone.utc,
+)
+
+
+# Workflow tests exercise lifecycle and eligibility wiring, so their
+# jobs are deliberately recent. Freshness has its own dedicated tests.
+RECENTLY_POSTED_AT = (
+    OBSERVED_AT
+    - timedelta(
+        days=3
+    )
 )
 
 
@@ -117,6 +128,9 @@ def make_job(
     title: str,
     location: str = "Seattle, Washington",
     description: str = "Build reliable software systems.",
+    posted_at: datetime | None = (
+        RECENTLY_POSTED_AT
+    ),
 ) -> CanonicalJob:
     """Create one normalized synthetic job."""
 
@@ -134,6 +148,7 @@ def make_job(
             "https://example.com/jobs/"
             f"{external_id}"
         ),
+        posted_at=posted_at,
     )
 
 

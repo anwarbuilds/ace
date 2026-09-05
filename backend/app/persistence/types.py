@@ -1,6 +1,7 @@
 """Shared persistence-domain types for ACE."""
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 
 from backend.app.models.job import CanonicalJob
@@ -23,6 +24,13 @@ class SnapshotResult:
     source_account: str
 
     is_baseline: bool
+
+    # Deterministic reference instant for this snapshot.
+    #
+    # Downstream policy (for example alert freshness) must compare
+    # against this value rather than reading the wall clock, so that
+    # evaluating the same snapshot always produces the same decision.
+    observed_at: datetime
 
     fetched_count: int
     unique_count: int
