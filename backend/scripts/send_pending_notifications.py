@@ -1,6 +1,8 @@
 """Deliver due ACE notification-outbox messages."""
 
+import argparse
 import sys
+from collections.abc import Sequence
 
 from backend.app.config import (
     get_settings,
@@ -16,8 +18,62 @@ from backend.app.notifications.runtime import (
 )
 
 
-def main() -> int:
-    """Drain the currently due notification queue."""
+def _positive_integer(
+    value: str,
+) -> int:
+    """Parse one strictly positive command-line integer."""
+
+    try:
+        parsed = int(
+            value
+        )
+
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "value must be an integer"
+        ) from exc
+
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(
+            "value must be greater than zero"
+        )
+
+    return parsed
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build notification-worker CLI arguments."""
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Deliver due ACE notification "
+            "outbox messages."
+        )
+    )
+
+    parser.add_argument(
+        "--max-messages",
+        type=_positive_integer,
+        default=50,
+        help=(
+            "Maximum number of due "
+            "notifications to attempt."
+        ),
+    )
+
+    return parser
+
+
+def main(
+    argv: Sequence[str] | None = None,
+) -> int:
+    """Drain currently due notification messages."""
+
+    parser = build_parser()
+
+    args = parser.parse_args(
+        argv
+    )
 
     settings = get_settings()
 
@@ -42,6 +98,9 @@ def main() -> int:
     result = deliver_due_notifications(
         SessionLocal,
         transport,
+        max_messages=(
+            args.max_messages
+        ),
     )
 
     print(
