@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${ACE_DB_PASSWORD:-ace_local_dev}
 
     ports:
-      - "${ACE_DB_PORT:-5432}:5432"
+      - "${ACE_DB_PORT:-5433}:5432"
 
     volumes:
       - ace_postgres_data:/var/lib/postgresql/data
@@ -24,6 +24,91 @@ services:
       timeout: 5s
       retries: 10
       start_period: 5s
+
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    env_file:
+      - .env
+
+    environment:
+      DATABASE_URL: >-
+        postgresql+psycopg://${ACE_DB_USER:-ace}:${ACE_DB_PASSWORD:-ace_local_dev}@postgres:5432/${ACE_DB_NAME:-ace}
+
+    command:
+      [
+        "alembic",
+        "upgrade",
+        "head",
+      ]
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    restart: "no"
+
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    env_file:
+      - .env
+
+    environment:
+      DATABASE_URL: >-
+        postgresql+psycopg://${ACE_DB_USER:-ace}:${ACE_DB_PASSWORD:-ace_local_dev}@postgres:5432/${ACE_DB_NAME:-ace}
+
+    command:
+      [
+        "python",
+        "-m",
+        "backend.scripts.run_scheduler",
+        "--log-level",
+        "INFO",
+      ]
+
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+    restart: unless-stopped
+
+
+  notification-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    env_file:
+      - .env
+
+    environment:
+      DATABASE_URL: >-
+        postgresql+psycopg://${ACE_DB_USER:-ace}:${ACE_DB_PASSWORD:-ace_local_dev}@postgres:5432/${ACE_DB_NAME:-ace}
+
+    command:
+      [
+        "python",
+        "-m",
+        "backend.scripts.send_pending_notifications",
+        "--loop",
+        "--max-messages",
+        "25",
+        "--idle-sleep-seconds",
+        "30",
+      ]
+
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+    restart: unless-stopped
 
 
 volumes:
