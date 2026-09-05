@@ -13,6 +13,8 @@ Execution order:
         ↓
     evaluate changed jobs
         ↓
+    materialize evaluation for the web read model
+        ↓
     durably enqueue notification candidates
         ↓
     COMMIT
@@ -34,10 +36,16 @@ from sqlalchemy.orm import (
     Session,
 )
 
+from backend.app.evaluation.freshness import (
+    FreshnessPolicy,
+)
 from backend.app.notifications.outbox import (
     OutboxEnqueueResult,
     SqlAlchemyNotificationOutboxRepository,
     enqueue_alert_candidates,
+)
+from backend.app.persistence.evaluations import (
+    record_job_evaluations,
 )
 from backend.app.persistence.repository import (
     JobRepository,
@@ -143,6 +151,17 @@ class SourcePollResult:
             .queued_count
         )
 
+    @property
+    def stale_suppressed_count(
+        self,
+    ) -> int:
+        """Return eligible jobs held back only by freshness policy."""
+
+        return (
+            self.workflow
+            .stale_suppressed_count
+        )
+
 
 def _empty_outbox_result() -> (
     OutboxEnqueueResult
@@ -190,6 +209,7 @@ def poll_source_once(
     fetcher: SourceSnapshotFetcher,
     transaction_factory: TransactionFactory,
     notification_recipient: str | None,
+    freshness_policy: FreshnessPolicy | None = None,
 ) -> SourcePollResult:
     """Fetch and transactionally process one configured source.
 
@@ -205,6 +225,10 @@ def poll_source_once(
     missing, lifecycle persistence also rolls back. This prevents ACE
     from marking a job as already observed while silently losing the
     corresponding alert.
+
+    The snapshot's own detected_at is used as the deterministic
+    freshness reference instant, so a poll's alert decisions do not
+    depend on how long the transaction itself takes.
 
     SMTP delivery is intentionally not performed here.
     """
@@ -244,7 +268,33 @@ def poll_source_once(
                     fetched_snapshot
                     .detected_at
                 ),
+                freshness_policy=(
+                    freshness_policy
+                ),
             )
+        )
+
+        # Materialize eligibility for the web application inside the
+        # same transaction that persisted the lifecycle, so the read
+        # model can never disagree with what ACE actually decided.
+        record_job_evaluations(
+            session,
+            source=(
+                fetched_snapshot.source
+            ),
+            source_account=(
+                fetched_snapshot
+                .source_account
+            ),
+            evaluated_jobs=(
+                workflow_result
+                .evaluation
+                .evaluated_jobs
+            ),
+            evaluated_at=(
+                fetched_snapshot
+                .detected_at
+            ),
         )
 
         alert_candidates = (

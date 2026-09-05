@@ -71,6 +71,7 @@ def make_result():
         fetched_count=10,
         evaluated_count=2,
         alert_candidate_count=1,
+        stale_suppressed_count=1,
         queued_notification_count=1,
     )
 

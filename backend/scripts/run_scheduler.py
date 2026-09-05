@@ -26,6 +26,9 @@ from backend.app.config import (
 from backend.app.db.session import (
     SessionLocal,
 )
+from backend.app.evaluation.freshness import (
+    FreshnessPolicy,
+)
 from backend.app.notifications.runtime import (
     require_notification_recipient,
 )
@@ -282,6 +285,29 @@ def main(
         build_default_source_dispatcher()
     )
 
+    freshness_policy = FreshnessPolicy(
+        max_posting_age_days=(
+            settings
+            .max_alert_posting_age_days
+        ),
+        alert_on_unknown_posting_age=(
+            settings
+            .alert_on_unknown_posting_age
+        ),
+    )
+
+    LOGGER.info(
+        (
+            "ace_freshness_policy "
+            "max_posting_age_days=%d "
+            "alert_on_unknown_posting_age=%s"
+        ),
+        freshness_policy
+        .max_posting_age_days,
+        freshness_policy
+        .alert_on_unknown_posting_age,
+    )
+
     def poll_source(
         source: SourceDefinition,
     ):
@@ -293,6 +319,9 @@ def main(
             ),
             notification_recipient=(
                 recipient
+            ),
+            freshness_policy=(
+                freshness_policy
             ),
         )
 
