@@ -229,7 +229,7 @@ This allows frequent source polling without re-evaluating the complete employer 
 
 ---
 
-## 4.6 Baselines Do Not Alert
+## 4.6 Baselines Are Metadata, Not A Filter
 
 First successful source snapshot:
 
@@ -238,10 +238,19 @@ persist current jobs
     ↓
 establish source baseline
     ↓
-0 evaluation candidates
+NEW jobs are still evaluated
     ↓
-0 alerts
+freshness policy decides which may alert
 ```
+
+Baseline suppression was intentionally removed: a company discovered
+today may have posted an excellent role yesterday.
+
+Instead, a baseline `NEW` job must additionally look recent before it
+may interrupt the user. Non-baseline `NEW` and `REOPENED` jobs carry
+their own present-tense evidence and are not age-gated.
+
+Jobs held back by freshness remain persisted and searchable.
 
 ---
 
@@ -550,6 +559,7 @@ Responsibilities:
 
 - content hashing
 - source baseline state
+- deterministic snapshot reference time
 - snapshot reconciliation
 - snapshot deduplication
 - N+1 query avoidance

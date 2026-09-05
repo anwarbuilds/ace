@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACE — Job Radar</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2129;
+    --border: #2a3038;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #3b82f6;
+    --pass: #2ea043;
+    --stretch: #d29922;
+    --primary-tag: #388bfd;
+    --radius: 8px;
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f8fa;
+    --panel: #ffffff;
+    --panel-2: #f0f3f6;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --muted: #59636e;
+    --accent: #0969da;
+    --pass: #1a7f37;
+    --stretch: #9a6700;
+    --primary-tag: #0969da;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  a { color: var(--accent); }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+  }
+  .header-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .brand { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .brand span { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 8px; }
+  .spacer { flex: 1; }
+  button, select, input {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font: inherit;
+  }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  input[type="search"] { min-width: 240px; }
+  .stats {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    padding: 14px 20px 0;
+  }
+  .stat {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 14px; min-width: 120px;
+  }
+  .stat b { display: block; font-size: 20px; line-height: 1.2; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  .filters {
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    padding: 14px 20px;
+  }
+  .filters label { color: var(--muted); font-size: 12px; margin-right: 4px; }
+  main { padding: 0 20px 40px; }
+  .meta { color: var(--muted); font-size: 13px; margin: 6px 0 12px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px;
+  }
+  .card-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .title { font-size: 15px; font-weight: 650; }
+  .company { color: var(--muted); }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+  .tag {
+    font-size: 11px; font-weight: 600; letter-spacing: .02em;
+    border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px;
+    color: var(--muted);
+  }
+  .tag.PASS { color: var(--pass); border-color: var(--pass); }
+  .tag.STRETCH { color: var(--stretch); border-color: var(--stretch); }
+  .tag.REJECT { color: var(--muted); }
+  .tag.PRIMARY { color: var(--primary-tag); border-color: var(--primary-tag); }
+  .tag.fresh { color: var(--pass); border-color: var(--pass); }
+  .tag.closed { color: #f85149; border-color: #f85149; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+  .why { color: var(--muted); font-size: 12.5px; margin-top: 6px; font-style: italic; }
+  .apply {
+    display: inline-block; margin-top: 10px;
+    background: var(--accent); color: #fff; text-decoration: none;
+    padding: 7px 14px; border-radius: 6px; font-weight: 600; font-size: 13px;
+  }
+  .apply:hover { filter: brightness(1.1); }
+  .pager { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 16px 0; }
+  .empty, .error { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .error { color: #f85149; }
+  @media (max-width: 640px) {
+    .stats, .filters, main, header { padding-left: 12px; padding-right: 12px; }
+    input[type="search"] { min-width: 100%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-row">
+    <div class="brand">ACE <span id="subtitle">career intelligence</span></div>
+    <div class="spacer"></div>
+    <input type="search" id="q" placeholder="Search title, company, location…" autocomplete="off">
+    <button id="theme">Theme</button>
+    <button id="refresh">Refresh</button>
+  </div>
+</header>
+
+<div class="stats" id="stats"></div>
+
+<div class="filters">
+  <span><label for="status">Eligibility</label>
+  <select id="status">
+    <option value="PASS,STRETCH">Qualifying (PASS + STRETCH)</option>
+    <option value="PASS">PASS only</option>
+    <option value="STRETCH">STRETCH only</option>
+    <option value="PASS,STRETCH,REJECT">Everything</option>
+  </select></span>
+
+  <span><label for="priority">Priority</label>
+  <select id="priority"><option value="">Any</option></select></span>
+
+  <span><label for="family">Role family</label>
+  <select id="family"><option value="">Any</option></select></span>
+
+  <span><label for="company">Company</label>
+  <select id="company"><option value="">Any</option></select></span>
+
+  <span><label for="age">Posted within</label>
+  <select id="age">
+    <option value="">Any time</option>
+    <option value="1">24 hours</option>
+    <option value="3">3 days</option>
+    <option value="7" selected>7 days</option>
+    <option value="14">14 days</option>
+    <option value="30">30 days</option>
+    <option value="90">90 days</option>
+  </select></span>
+
+  <span><label for="sort">Sort</label>
+  <select id="sort">
+    <option value="newest">Newest to ACE</option>
+    <option value="recently_posted">Recently posted</option>
+    <option value="company">Company</option>
+    <option value="title">Title</option>
+    <option value="oldest">Oldest to ACE</option>
+  </select></span>
+
+  <span><label for="active">Status</label>
+  <select id="active">
+    <option value="true">Open only</option>
+    <option value="false">Include closed</option>
+  </select></span>
+</div>
+
+<main>
+  <div class="meta" id="meta"></div>
+  <div id="results"></div>
+  <div class="pager" id="pager"></div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var PAGE_SIZE = 50;
+  var offset = 0;
+  var searchTimer = null;
+
+  var el = function (id) { return document.getElementById(id); };
+
+  function esc(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function ageLabel(days) {
+    if (days === null || days === undefined) { return "date unknown"; }
+    if (days === 0) { return "today"; }
+    if (days === 1) { return "yesterday"; }
+    if (days < 30) { return days + " days ago"; }
+    if (days < 60) { return "about a month ago"; }
+    return Math.floor(days / 30) + " months ago";
+  }
+
+  function params() {
+    var p = new URLSearchParams();
+    p.set("status", el("status").value);
+    p.set("sort", el("sort").value);
+    p.set("active_only", el("active").value);
+    p.set("limit", String(PAGE_SIZE));
+    p.set("offset", String(offset));
+    var q = el("q").value.trim();
+    if (q) { p.set("q", q); }
+    ["priority", "family", "company"].forEach(function (name) {
+      var v = el(name).value;
+      if (v) { p.set(name === "company" ? "company" : name, v); }
+    });
+    var age = el("age").value;
+    if (age) { p.set("max_age_days", age); }
+    return p;
+  }
+
+  function renderStats(s) {
+    var cards = [
+      ["Qualifying open", s.qualifying_active_jobs],
+      ["Posted last 7d", s.posted_last_7_days],
+      ["Active jobs", s.active_jobs],
+      ["Jobs tracked", s.total_jobs]
+    ];
+    el("stats").innerHTML = cards.map(function (c) {
+      return '<div class="stat"><b>' + esc(c[1]) + "</b><span>" + esc(c[0]) + "</span></div>";
+    }).join("");
+  }
+
+  function renderFacet(id, list, label) {
+    var select = el(id);
+    var current = select.value;
+    var options = ['<option value="">Any ' + esc(label) + "</option>"];
+    list.forEach(function (item) {
+      options.push('<option value="' + esc(item.value) + '">' +
+        esc(item.value) + " (" + item.count + ")</option>");
+    });
+    select.innerHTML = options.join("");
+    select.value = current;
+  }
+
+  function card(job) {
+    var tags = [
+      '<span class="tag ' + esc(job.eligibility_status) + '">' + esc(job.eligibility_status) + "</span>",
+      '<span class="tag ' + esc(job.role_priority) + '">' + esc(job.role_priority) + "</span>",
+      '<span class="tag">' + esc(job.role_family) + "</span>"
+    ];
+    if (job.posting_age_days !== null && job.posting_age_days <= 3) {
+      tags.push('<span class="tag fresh">FRESH</span>');
+    }
+    if (!job.is_active) {
+      tags.push('<span class="tag closed">CLOSED</span>');
+    }
+
+    var why = (job.reasons && job.reasons.length)
+      ? '<div class="why">' + esc(job.reasons[0]) + "</div>" : "";
+
+    var years = job.required_experience_years !== null
+      ? "<span>" + esc(job.required_experience_years) + "+ yrs stated</span>" : "";
+
+    return '<div class="card">' +
+      '<div class="card-top"><span class="title">' + esc(job.title) + "</span>" +
+      '<span class="company">' + esc(job.company) + "</span></div>" +
+      '<div class="tags">' + tags.join("") + "</div>" +
+      '<div class="row"><span>' + esc(job.location) + "</span>" +
+      "<span>Posted " + esc(ageLabel(job.posting_age_days)) + "</span>" +
+      "<span>via " + esc(job.source) + "</span>" + years + "</div>" +
+      why +
+      '<a class="apply" target="_blank" rel="noopener noreferrer" href="' +
+      esc(job.official_url) + '">Open official posting →</a>' +
+      "</div>";
+  }
+
+  function renderJobs(data) {
+    if (!data.items.length) {
+      el("results").innerHTML =
+        '<div class="empty">No jobs match these filters.<br>Try widening “Posted within” or clearing the search.</div>';
+      el("meta").textContent = "0 results";
+      el("pager").innerHTML = "";
+      return;
+    }
+
+    el("results").innerHTML = data.items.map(card).join("");
+
+    var first = data.offset + 1;
+    var last = data.offset + data.items.length;
+    el("meta").textContent = "Showing " + first + "–" + last + " of " + data.total;
+
+    var buttons = "";
+    if (data.offset > 0) { buttons += '<button id="prev">← Previous</button>'; }
+    if (data.has_more) { buttons += '<button id="next">Next →</button>'; }
+    el("pager").innerHTML = buttons;
+
+    if (el("prev")) {
+      el("prev").onclick = function () {
+        offset = Math.max(0, offset - PAGE_SIZE);
+        load();
+        window.scrollTo(0, 0);
+      };
+    }
+    if (el("next")) {
+      el("next").onclick = function () {
+        offset += PAGE_SIZE;
+        load();
+        window.scrollTo(0, 0);
+      };
+    }
+  }
+
+  function load() {
+    el("meta").textContent = "Loading…";
+    fetch("/api/jobs?" + params().toString())
+      .then(function (r) {
+        if (!r.ok) { throw new Error("Request failed: " + r.status); }
+        return r.json();
+      })
+      .then(renderJobs)
+      .catch(function (err) {
+        el("results").innerHTML = '<div class="error">' + esc(err.message) + "</div>";
+        el("meta").textContent = "";
+      });
+  }
+
+  function loadStats() {
+    fetch("/api/stats").then(function (r) { return r.json(); })
+      .then(renderStats).catch(function () {});
+  }
+
+  function loadFacets() {
+    fetch("/api/facets").then(function (r) { return r.json(); })
+      .then(function (f) {
+        renderFacet("priority", f.priorities, "priority");
+        renderFacet("family", f.families, "family");
+        renderFacet("company", f.companies, "company");
+      })
+      .catch(function () {});
+  }
+
+  ["status", "priority", "family", "company", "age", "sort", "active"].forEach(function (id) {
+    el(id).addEventListener("change", function () { offset = 0; load(); });
+  });
+
+  el("q").addEventListener("input", function () {
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(function () { offset = 0; load(); }, 250);
+  });
+
+  el("refresh").addEventListener("click", function () {
+    loadStats(); loadFacets(); load();
+  });
+
+  el("theme").addEventListener("click", function () {
+    var root = document.documentElement;
+    var next = root.getAttribute("data-theme") === "light" ? "dark" : "light";
+    root.setAttribute("data-theme", next);
+    try { window.localStorage.setItem("ace-theme", next); } catch (e) {}
+  });
+
+  try {
+    var saved = window.localStorage.getItem("ace-theme");
+    if (saved) { document.documentElement.setAttribute("data-theme", saved); }
+  } catch (e) {}
+
+  loadStats();
+  loadFacets();
+  load();
+}());
+</script>
+</body>
+</html>
