@@ -1,6 +1,9 @@
 """Tests for ACE's deterministic eligibility gate."""
 
+import pytest
+
 from backend.app.intelligence.eligibility import (
+    ELIGIBILITY_RULE_VERSION,
     EligibilityReasonCode,
     EligibilityStatus,
     evaluate_job,
@@ -556,4 +559,421 @@ def test_clearance_requirement_rejected() -> None:
     assert (
         decision.status
         == EligibilityStatus.REJECT
+    )
+
+# ----------------------------------------------------------------------
+# Hardware-oriented embedded roles are out of scope
+# ----------------------------------------------------------------------
+
+
+def _job(
+    *,
+    title: str = "Software Engineer",
+    description: str = (
+        "Build reliable software systems."
+    ),
+    location: str = "Seattle, Washington",
+) -> CanonicalJob:
+    """Create one normalized job for gate tests."""
+
+    return CanonicalJob(
+        source="greenhouse",
+        company="Example Co",
+        external_id="1",
+        title=title,
+        location=location,
+        description=description,
+        official_url=(
+            "https://example.com/jobs/1"
+        ),
+    )
+
+
+def _codes(
+    decision,
+) -> set[str]:
+    """Return reason codes as plain strings."""
+
+    return {
+        code.value
+        for code in decision.reason_codes
+    }
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Embedded Software Engineer",
+        "Embedded Software Engineer, Anti-Tamper",
+        "Firmware Engineer",
+        "Hardware Engineer",
+        "FPGA Engineer",
+        "Silicon Design Engineer",
+        "Board Bring-Up Engineer",
+    ],
+)
+def test_hardware_titles_are_rejected(
+    title: str,
+) -> None:
+    """A hardware-oriented title is a decisive signal."""
+
+    decision = evaluate_job(
+        _job(
+            title=title
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.REJECT
+    )
+
+    assert (
+        "HARDWARE_EMBEDDED_ROLE"
+        in _codes(
+            decision
+        )
+    )
+
+
+def test_hardware_description_needs_multiple_signals() -> None:
+    """Several distinct hardware signals reject a generic title."""
+
+    decision = evaluate_job(
+        _job(
+            description=(
+                "Develop mission software "
+                "for microcontrollers using "
+                "bare metal targets and an "
+                "RTOS. Python tooling "
+                "included."
+            ),
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.REJECT
+    )
+
+    assert (
+        "HARDWARE_EMBEDDED_ROLE"
+        in _codes(
+            decision
+        )
+    )
+
+
+def test_two_hardware_mentions_are_not_enough() -> None:
+    """An ML role that merely touches embedded targets stays in scope."""
+
+    decision = evaluate_job(
+        _job(
+            title=(
+                "Machine Learning Engineer"
+            ),
+            description=(
+                "Build perception models in "
+                "Python. Some exposure to "
+                "embedded systems and UART "
+                "interfaces is useful."
+            ),
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.PASS
+    )
+
+    assert (
+        "HARDWARE_EMBEDDED_ROLE"
+        not in _codes(
+            decision
+        )
+    )
+
+
+def test_hardware_markers_use_word_boundaries() -> None:
+    """Short markers must not match ordinary words."""
+
+    decision = evaluate_job(
+        _job(
+            description=(
+                "You will report to Stuart "
+                "and join quarterly planning "
+                "in an inspired team writing "
+                "Python."
+            ),
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.PASS
+    )
+
+    assert (
+        "HARDWARE_EMBEDDED_ROLE"
+        not in _codes(
+            decision
+        )
+    )
+
+
+def test_plural_hardware_markers_are_detected() -> None:
+    """Plural forms are the same signal as their singular."""
+
+    decision = evaluate_job(
+        _job(
+            description=(
+                "Write device drivers for "
+                "microcontrollers and read "
+                "schematics."
+            ),
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.REJECT
+    )
+
+    assert (
+        "HARDWARE_EMBEDDED_ROLE"
+        in _codes(
+            decision
+        )
+    )
+
+
+def test_single_passing_hardware_mention_still_passes() -> None:
+    """A generic role that merely mentions firmware is not rejected."""
+
+    decision = evaluate_job(
+        _job(
+            description=(
+                "Experience with firmware is "
+                "a plus, but we mostly write "
+                "Python and Go services."
+            ),
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.PASS
+    )
+
+    assert (
+        "HARDWARE_EMBEDDED_ROLE"
+        not in _codes(
+            decision
+        )
+    )
+
+
+# ----------------------------------------------------------------------
+# C / C++ only roles are out of scope
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "description",
+    [
+        "Strong C++ skills required.",
+        "You will write C/C++ for our engine.",
+        "Deep expertise in C and C++ required.",
+        "We build everything in C++.",
+    ],
+)
+def test_c_or_cpp_only_roles_are_rejected(
+    description: str,
+) -> None:
+    """A role stating only C/C++ is excluded."""
+
+    decision = evaluate_job(
+        _job(
+            description=description
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.REJECT
+    )
+
+    assert (
+        "SYSTEMS_LANGUAGE_ONLY"
+        in _codes(
+            decision
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "description",
+    [
+        "You will write C++ and Python services.",
+        "Strong C++ and Go experience required.",
+        "C/C++ plus Java on the platform team.",
+        "CUDA C++ kernels alongside Python and PyTorch.",
+        "C++ for the engine, TypeScript for tooling.",
+        "Our stack is Go, Postgres and some C for hot paths.",
+    ],
+)
+def test_c_or_cpp_with_another_language_passes(
+    description: str,
+) -> None:
+    """Mixing C/C++ with any other language stays in scope."""
+
+    decision = evaluate_job(
+        _job(
+            description=description
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.PASS
+    )
+
+    assert (
+        "SYSTEMS_LANGUAGE_ONLY"
+        not in _codes(
+            decision
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "description",
+    [
+        "Build reliable distributed systems.",
+        "Work across our backend services.",
+    ],
+)
+def test_unstated_languages_are_not_rejection(
+    description: str,
+) -> None:
+    """Silence about languages is unknown, not exclusion."""
+
+    decision = evaluate_job(
+        _job(
+            description=description
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.PASS
+    )
+
+    assert (
+        "SYSTEMS_LANGUAGE_ONLY"
+        not in _codes(
+            decision
+        )
+    )
+
+
+def test_ordinary_prose_capital_c_is_not_the_c_language() -> None:
+    """A stray capital letter must not read as a C requirement."""
+
+    decision = evaluate_job(
+        _job(
+            description=(
+                "You will work with Company C "
+                "on Python services. "
+                "Grade C candidates welcome."
+            ),
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.PASS
+    )
+
+
+def test_rule_version_records_the_new_gate() -> None:
+    """Stored evaluations can detect that the rules changed."""
+
+    decision = evaluate_job(
+        _job()
+    )
+
+    assert (
+        decision.rule_version
+        == ELIGIBILITY_RULE_VERSION
+    )
+
+
+# ----------------------------------------------------------------------
+# Ambiguous country codes must not read as US states
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "location",
+    [
+        "Ottawa, ON, CA",
+        "Vancouver, BC, CA",
+        "Toronto, ON, Canada",
+        "London, United Kingdom",
+        "Bengaluru, India",
+        "Berlin, Germany",
+    ],
+)
+def test_explicit_non_us_locations_are_rejected(
+    location: str,
+) -> None:
+    """A trailing 'CA' after a province code is Canada, not California."""
+
+    decision = evaluate_job(
+        _job(
+            location=location
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.REJECT
+    )
+
+    assert (
+        "OUTSIDE_US"
+        in _codes(
+            decision
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "location",
+    [
+        "San Francisco, CA",
+        "Ontario, California",
+        "New York, NY",
+        "Seattle, Washington",
+        "Costa Mesa, California, United States",
+        "Remote - US",
+    ],
+)
+def test_us_locations_still_pass(
+    location: str,
+) -> None:
+    """Disambiguation must not cost genuine US recall."""
+
+    decision = evaluate_job(
+        _job(
+            location=location
+        )
+    )
+
+    assert (
+        "OUTSIDE_US"
+        not in _codes(
+            decision
+        )
     )
