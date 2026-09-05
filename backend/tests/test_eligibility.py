@@ -977,3 +977,114 @@ def test_us_locations_still_pass(
             decision
         )
     )
+
+
+# ----------------------------------------------------------------------
+# Citizenship / export-control blockers
+#
+# Each string below is real posting text that previously passed the gate.
+# Exact-phrase matching missed them because the standard ITAR clause
+# reads "must be a (i) U.S. citizen" -- the enumerator between "a" and
+# "U.S." defeats a literal match.
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "description",
+    [
+        (
+            "ITAR REQUIREMENTS: To conform to U.S. "
+            "Government export regulations, applicant "
+            "must be a (i) U.S. citizen or national, "
+            "(ii) U.S. lawful, permanent resident."
+        ),
+        (
+            "Due to federal contract requirements, "
+            "United States Citizenship and position "
+            "appropriate security clearance is required."
+        ),
+        (
+            "U.S. Person status is required as this "
+            "position needs to access export controlled "
+            "data."
+        ),
+        (
+            "Are a U.S. Person because of required "
+            "access to U.S. export controlled "
+            "information."
+        ),
+        (
+            "Eligibility - US citizen or permanent "
+            "resident, and based in the US."
+        ),
+        (
+            "This role is ITAR controlled and requires "
+            "US citizenship."
+        ),
+        (
+            "Applicants must be a U.S. citizen to be "
+            "considered."
+        ),
+    ],
+)
+def test_citizenship_and_export_control_are_rejected(
+    description: str,
+) -> None:
+    """Export-controlled roles are closed to a non-US-person candidate."""
+
+    decision = evaluate_job(
+        _job(
+            description=description
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.REJECT
+    )
+
+    assert (
+        "CITIZENSHIP_BLOCKER"
+        in _codes(
+            decision
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "description",
+    [
+        # "military" contains the substring "itar" -- word boundaries
+        # must prevent this from reading as ITAR.
+        (
+            "We bring advanced technology to allied "
+            "military capabilities. We write Python."
+        ),
+        (
+            "Supportive leave of absence program "
+            "including time off for military service."
+        ),
+        # Sponsorship-friendly language must not trip a citizenship rule.
+        (
+            "We welcome applicants of any citizenship "
+            "status and provide visa sponsorship."
+        ),
+    ],
+)
+def test_incidental_mentions_do_not_block(
+    description: str,
+) -> None:
+    """A passing mention of the military is not an ITAR requirement."""
+
+    decision = evaluate_job(
+        _job(
+            description=description
+        )
+    )
+
+    assert (
+        "CITIZENSHIP_BLOCKER"
+        not in _codes(
+            decision
+        )
+    )

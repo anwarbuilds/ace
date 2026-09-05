@@ -39,7 +39,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-05-v7"
+    "2026-09-05-v8"
 )
 
 
@@ -425,6 +425,63 @@ CITIZENSHIP_BLOCKERS = (
     "must be a us person",
     "u.s. person required",
     "us person required",
+)
+
+
+# Regex citizenship/export-control blockers.
+#
+# Exact-phrase matching was not enough. The standard ITAR clause reads:
+#
+#     "applicant must be a (i) U.S. citizen or national"
+#
+# The enumerator between "a" and "U.S." defeats a literal phrase match,
+# which let 316 defense and aerospace postings through the gate.
+#
+# ITAR and EAR require "US person" status. A candidate needing visa
+# sponsorship is not a
+# US person, so these roles are closed regardless of sponsorship policy.
+CITIZENSHIP_BLOCKER_PATTERNS = (
+    r"\bitar\s+requirements?\b",
+    r"\bitar[-\s]controlled\b",
+    r"subject\s+to\s+(?:the\s+)?itar\b",
+    r"conform\s+to\s+u\.?\s?s\.?\s+government\s+export",
+    r"\bexport\s+control(?:led)?\s+"
+    r"(?:laws|regulations|requirements|restrictions)\b",
+    r"\bexport\s+administration\s+regulations\b",
+
+    # "must be a (i) U.S. citizen or national"
+    r"must\s+be\s+(?:an?\s+)?"
+    r"(?:\(\s*[ivx\d]{1,4}\s*\)\s*)?"
+    r"(?:an?\s+)?"
+    r"(?:u\.?\s?s\.?|united\s+states)\s*"
+    r"(?:citizen|national|person)\b",
+
+    r"(?:u\.?\s?s\.?|united\s+states)\s+citizenship"
+    r"[^.]{0,80}?required\b",
+
+    r"requires?\s+(?:u\.?\s?s\.?|united\s+states)\s+citizenship\b",
+    r"only\s+(?:u\.?\s?s\.?|united\s+states)\s+citizens\b",
+    r"restricted\s+to\s+(?:u\.?\s?s\.?|united\s+states)\s+citizens\b",
+    r"(?:u\.?\s?s\.?|united\s+states)\s+persons?\s+"
+    r"(?:only|required|as\s+defined)\b",
+    r"due\s+to\s+federal\s+contract\s+requirements"
+    r"[^.]{0,90}citizenship",
+    r"citizenship[^.]{0,40}(?:is\s+)?(?:a\s+)?requirement\b",
+
+    # "U.S. Person status is required"
+    r"(?:u\.?\s?s\.?|united\s+states)\s+person\s+status"
+    r"[^.]{0,30}required\b",
+
+    # "are a U.S. Person because of required access to..."
+    r"\bare\s+a\s+(?:u\.?\s?s\.?|united\s+states)\s+person\b",
+
+    # "access to export controlled data / information / technology"
+    r"export\s+control(?:led)?\s+"
+    r"(?:data|information|technology|technical\s+data)\b",
+
+    # Bulleted eligibility: "US citizen or permanent resident"
+    r"\b(?:u\.?\s?s\.?|united\s+states)\s+citizen\s+or\s+"
+    r"(?:lawful\s+)?permanent\s+resident\b",
 )
 
 
@@ -1146,6 +1203,9 @@ def evaluate_job(
     if _contains_any(
         job.description,
         CITIZENSHIP_BLOCKERS,
+    ) or _matches_any_regex(
+        job.description,
+        CITIZENSHIP_BLOCKER_PATTERNS,
     ):
         reject_codes.append(
             EligibilityReasonCode
