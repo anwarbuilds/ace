@@ -13,6 +13,11 @@ Core invariants:
 6. Explicitly PhD-targeted roles are excluded.
 7. Ambiguous remote geography is retained as STRETCH to protect recall.
 8. Explicit non-US geography remains excluded.
+9. Explicit non-US country names override ambiguous state codes.
+10. Hardware-oriented embedded/firmware roles are excluded.
+11. Roles whose only stated languages are C and/or C++ are excluded.
+    A C/C++ role that also uses Python, Java, Go, or any other language
+    remains in scope.
 """
 
 import re
@@ -34,7 +39,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-02-v5"
+    "2026-09-05-v7"
 )
 
 
@@ -89,6 +94,14 @@ class EligibilityReasonCode(
 
     SPONSORSHIP_BLOCKER = (
         "SPONSORSHIP_BLOCKER"
+    )
+
+    HARDWARE_EMBEDDED_ROLE = (
+        "HARDWARE_EMBEDDED_ROLE"
+    )
+
+    SYSTEMS_LANGUAGE_ONLY = (
+        "SYSTEMS_LANGUAGE_ONLY"
     )
 
     NO_HARD_BLOCKER = (
@@ -255,6 +268,64 @@ US_LOCATION_MARKERS = (
 )
 
 
+# Explicit non-US signals, checked before the US-state match.
+#
+# Two-letter codes are genuinely ambiguous: "CA" is California in a US
+# address and Canada in an international one. A preceding Canadian
+# province code disambiguates it, which is why these run first.
+NON_US_LOCATION_PATTERNS = (
+    r",\s*(?:ON|QC|BC|AB|MB|SK|NS|NB|NL|PE|YT|NT|NU)\s*,\s*CA\b",
+    r"\bcanada\b",
+    r"\bunited\s+kingdom\b",
+    r"\bengland\b",
+    r"\bscotland\b",
+    r"\bwales\b",
+    r"\bireland\b",
+    r"\bindia\b",
+    r"\bgermany\b",
+    r"\bfrance\b",
+    r"\bspain\b",
+    r"\bportugal\b",
+    r"\bnetherlands\b",
+    r"\bpoland\b",
+    r"\bromania\b",
+    r"\bisrael\b",
+    r"\bsingapore\b",
+    r"\baustralia\b",
+    r"\bnew\s+zealand\b",
+    r"\bjapan\b",
+    r"\bchina\b",
+    r"\bbrazil\b",
+    r"\bmexico\b",
+    r"\bargentina\b",
+    r"\bcolombia\b",
+    r"\bswitzerland\b",
+    r"\bsweden\b",
+    r"\bnorway\b",
+    r"\bdenmark\b",
+    r"\bfinland\b",
+    r"\bitaly\b",
+    r"\bcroatia\b",
+    r"\bserbia\b",
+    r"\bukraine\b",
+    r"\bturkey\b",
+    r"\bkorea\b",
+    r"\btaiwan\b",
+    r"\bhong\s+kong\b",
+    r"\bvietnam\b",
+    r"\bphilippines\b",
+    r"\bindonesia\b",
+    r"\bthailand\b",
+    r"\bmalaysia\b",
+    r"\bnigeria\b",
+    r"\bkenya\b",
+    r"\begypt\b",
+    r"\bsouth\s+africa\b",
+    r"\buae\b",
+    r"\bdubai\b",
+)
+
+
 AMBIGUOUS_REMOTE_PATTERNS = (
     r"^\s*remote\s*$",
     r"^\s*remote\s*[-,/()]?\s*anywhere\s*\)?\s*$",
@@ -366,6 +437,133 @@ CLEARANCE_BLOCKERS = (
 )
 
 
+# ----------------------------------------------------------------------
+# Hardware-oriented embedded roles
+# ----------------------------------------------------------------------
+#
+# These are excluded by explicit user preference. The target is roles
+# whose work is fundamentally about hardware: firmware, boards, silicon,
+# and bare-metal targets.
+#
+# Title signals are treated as decisive because a hardware title is a
+# reliable statement of what the job is.
+
+HARDWARE_TITLE_PATTERNS = (
+    r"\bembedded\b",
+    r"\bfirmware\b",
+    r"\bhardware\b",
+    r"\bfpga\b",
+    r"\basic\b",
+    r"\brtos\b",
+    r"\bverilog\b",
+    r"\bvhdl\b",
+    r"\bsilicon\b",
+    r"\bpcb\b",
+    r"\bbring-?up\b",
+    r"\bdevice\s+driver",
+    r"\belectrical\s+engineer",
+    r"\bmechatronics\b",
+    r"\bboard\s+support\b",
+)
+
+
+# Description signals are individually weaker: a general software role
+# may mention firmware once in passing. Several distinct signals are
+# therefore required before the description alone rejects a posting.
+HARDWARE_DESCRIPTION_MARKERS = (
+    "bare metal",
+    "bare-metal",
+    "microcontroller",
+    "device driver",
+    "board support package",
+    "board bring-up",
+    "real-time operating system",
+    "rtos",
+    "firmware",
+    "fpga",
+    "verilog",
+    "vhdl",
+    "embedded linux",
+    "embedded systems",
+    "oscilloscope",
+    "logic analyzer",
+    "soldering",
+    "schematic",
+    "i2c",
+    "spi bus",
+    "uart",
+    "can bus",
+)
+
+
+# The title carries the decisive signal, so the description-only path is
+# deliberately conservative. Three distinct markers keeps genuinely
+# embedded work out while letting an ML or platform role that merely
+# mentions embedded targets remain in scope.
+MINIMUM_HARDWARE_DESCRIPTION_MARKERS = 3
+
+
+# ----------------------------------------------------------------------
+# Programming-language scope
+# ----------------------------------------------------------------------
+#
+# A role that states C and/or C++ and nothing else is excluded.
+# A role that pairs C/C++ with any other language stays in scope.
+#
+# Detecting "other" languages generously is the safe direction: a false
+# positive here keeps a job, which matches ACE's recall-first stance.
+
+SYSTEMS_LANGUAGE_PATTERNS = (
+    r"c\+\+",
+    r"\bcpp\b",
+    r"\bc/c\+\+",
+    r"(?<![A-Za-z0-9+#])C(?![A-Za-z0-9+#])",
+)
+
+
+# Case-insensitive, unambiguous language names.
+OTHER_LANGUAGE_PATTERNS = (
+    r"\bpython\b",
+    r"\bjava\b",
+    r"\bjavascript\b",
+    r"\btypescript\b",
+    r"\bgolang\b",
+    r"\brust\b",
+    r"\bscala\b",
+    r"\bkotlin\b",
+    r"\bswift\b",
+    r"\bruby\b",
+    r"\bc#",
+    r"\bc\s?sharp\b",
+    r"\bphp\b",
+    r"\bmatlab\b",
+    r"\bjulia\b",
+    r"\bperl\b",
+    r"\bhaskell\b",
+    r"\belixir\b",
+    r"\berlang\b",
+    r"\bclojure\b",
+    r"\bdart\b",
+    r"\blua\b",
+    r"\bobjective-?c\b",
+    r"\bsql\b",
+    r"\bshell\s+script",
+    r"\bbash\b",
+    r"\bterraform\b",
+    r"\bgroovy\b",
+    r"\bf#",
+    r"\bocaml\b",
+    r"\bzig\b",
+)
+
+
+# Case-sensitive, because the lowercase forms are ordinary English.
+CASE_SENSITIVE_OTHER_LANGUAGE_PATTERNS = (
+    r"\bGo\b",
+    r"\bR\b",
+)
+
+
 EXPERIENCE_PATTERN = re.compile(
     (
         r"(?P<years>\d{1,2})"
@@ -410,6 +608,24 @@ def _matches_any_regex(
     )
 
 
+def _is_explicitly_non_us_location(
+    location: str,
+) -> bool:
+    """Identify locations that explicitly name a non-US country.
+
+    This runs before the US-state match because a bare two-letter code
+    is ambiguous: "Ottawa, ON, CA" is Canada, not California.
+    """
+
+    if not location.strip():
+        return False
+
+    return _matches_any_regex(
+        location,
+        NON_US_LOCATION_PATTERNS,
+    )
+
+
 def _is_us_location(
     location: str,
 ) -> bool:
@@ -420,6 +636,11 @@ def _is_us_location(
     )
 
     if not normalized:
+        return False
+
+    if _is_explicitly_non_us_location(
+        location
+    ):
         return False
 
     if any(
@@ -586,6 +807,124 @@ def _required_experience_years(
 
     return max(
         required_years
+    )
+
+
+def _is_hardware_embedded_role(
+    job: CanonicalJob,
+) -> bool:
+    """Detect roles whose work is fundamentally about hardware.
+
+    A hardware-oriented title is treated as decisive. A description
+    alone must show several distinct hardware signals, so a general
+    software role that merely mentions firmware once is not rejected.
+    """
+
+    if _matches_any_regex(
+        job.title,
+        HARDWARE_TITLE_PATTERNS,
+    ):
+        return True
+
+    if not job.description:
+        return False
+
+    # Word-boundary matching, not substring. Short markers such as
+    # "uart" and "spi" otherwise match ordinary words like "Stuart"
+    # and "inspired". A trailing plural is still the same marker.
+    distinct_markers = sum(
+        1
+        for marker
+        in HARDWARE_DESCRIPTION_MARKERS
+        if re.search(
+            (
+                r"\b"
+                + re.escape(
+                    marker
+                )
+                + r"s?\b"
+            ),
+            job.description,
+            re.IGNORECASE,
+        )
+    )
+
+    return (
+        distinct_markers
+        >= MINIMUM_HARDWARE_DESCRIPTION_MARKERS
+    )
+
+
+def _mentions_systems_language(
+    text: str,
+) -> bool:
+    """Detect a stated C or C++ requirement."""
+
+    for pattern in (
+        SYSTEMS_LANGUAGE_PATTERNS
+    ):
+        # The bare-C pattern is case-sensitive so ordinary prose does
+        # not register as the C language.
+        flags = (
+            0
+            if pattern.startswith(
+                "(?<!"
+            )
+            else re.IGNORECASE
+        )
+
+        if re.search(
+            pattern,
+            text,
+            flags,
+        ):
+            return True
+
+    return False
+
+
+def _mentions_other_language(
+    text: str,
+) -> bool:
+    """Detect any stated language other than C or C++."""
+
+    if _matches_any_regex(
+        text,
+        OTHER_LANGUAGE_PATTERNS,
+    ):
+        return True
+
+    return any(
+        re.search(
+            pattern,
+            text,
+        )
+        is not None
+        for pattern
+        in CASE_SENSITIVE_OTHER_LANGUAGE_PATTERNS
+    )
+
+
+def _is_systems_language_only_role(
+    job: CanonicalJob,
+) -> bool:
+    """Detect roles stating only C and/or C++ as their languages.
+
+    Silence is not rejection. A posting that names no language at all is
+    unknown, not excluded, consistent with ACE's recall-first stance.
+    """
+
+    combined_text = (
+        f"{job.title}\n{job.description}"
+    )
+
+    if not _mentions_systems_language(
+        combined_text
+    ):
+        return False
+
+    return not _mentions_other_language(
+        combined_text
     )
 
 
@@ -770,6 +1109,37 @@ def evaluate_job(
                 "Posting requests "
                 "approximately 3 years "
                 "experience."
+            )
+        )
+
+    if _is_hardware_embedded_role(
+        job
+    ):
+        reject_codes.append(
+            EligibilityReasonCode
+            .HARDWARE_EMBEDDED_ROLE
+        )
+
+        reject_reasons.append(
+            (
+                "Posting is a hardware-"
+                "oriented embedded/firmware "
+                "role."
+            )
+        )
+
+    if _is_systems_language_only_role(
+        job
+    ):
+        reject_codes.append(
+            EligibilityReasonCode
+            .SYSTEMS_LANGUAGE_ONLY
+        )
+
+        reject_reasons.append(
+            (
+                "Posting states C/C++ as its "
+                "only programming languages."
             )
         )
 
