@@ -10,6 +10,8 @@ are exposed by the posting-detail endpoint.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import html
 import re
@@ -32,6 +34,16 @@ SMARTRECRUITERS_JOB_HOST = (
 REQUEST_TIMEOUT_SECONDS = 20.0
 
 DEFAULT_PAGE_SIZE = 100
+
+# Descriptions live behind a separate request per posting, which on a
+# large employer dominates the poll. Bounded concurrency plus a
+# title-level prefilter turn that from minutes into seconds.
+#
+# Kept small deliberately: this is a courtesy limit on someone else's
+# API, not a throughput target.
+DEFAULT_DETAIL_CONCURRENCY = 5
+
+DEFAULT_MAX_DETAIL_FETCHES = 400
 
 USER_AGENT = (
     "ACE/0.1 "
@@ -491,8 +503,27 @@ def fetch_smartrecruiters_jobs(
     company_name: str,
     *,
     client: httpx.Client | None = None,
+    should_fetch_detail: (
+        Callable[[str], bool] | None
+    ) = None,
+    concurrency: int = (
+        DEFAULT_DETAIL_CONCURRENCY
+    ),
+    max_detail_fetches: int = (
+        DEFAULT_MAX_DETAIL_FETCHES
+    ),
 ) -> list[CanonicalJob]:
-    """Fetch all active postings for one SmartRecruiters company."""
+    """Fetch all active postings for one SmartRecruiters company.
+
+    ``should_fetch_detail`` receives a posting title and decides whether
+    its description is worth a separate request. Composition wires this
+    to ACE's eligibility gate, so the adapter itself stays free of
+    eligibility knowledge.
+
+    Every listed posting is still returned, including those whose detail
+    was skipped: the snapshot is authoritative for lifecycle, so
+    omitting them would mark live jobs closed on the next poll.
+    """
 
     normalized_company_identifier = (
         company_identifier.strip()
@@ -650,31 +681,88 @@ def fetch_smartrecruiters_jobs(
             str
         ] = set()
 
-        for summary in summaries:
-            posting_id = (
+        def _posting_id(
+            summary: dict[str, Any],
+        ) -> str:
+            return _require_non_empty_string(
                 summary.get(
                     "id"
                 )
                 or summary.get(
                     "uuid"
-                )
+                ),
+                field_name="id",
             )
 
-            normalized_posting_id = (
-                _require_non_empty_string(
-                    posting_id,
-                    field_name="id",
-                )
-            )
-
-            detail_url = (
-                f"{postings_url}/"
-                f"{quote(normalized_posting_id, safe='')}"
-            )
-
-            detail = _get_json_object(
+        def _fetch_detail(
+            posting_id: str,
+        ) -> dict[str, Any]:
+            return _get_json_object(
                 client,
-                detail_url,
+                (
+                    f"{postings_url}/"
+                    f"{quote(posting_id, safe='')}"
+                ),
+            )
+
+        # Decide what deserves a detail request before making any.
+        wanted: list[str] = []
+
+        for summary in summaries:
+            title = str(
+                summary.get(
+                    "name"
+                )
+                or ""
+            ).strip()
+
+            if (
+                should_fetch_detail is None
+                or should_fetch_detail(
+                    title
+                )
+            ):
+                wanted.append(
+                    _posting_id(
+                        summary
+                    )
+                )
+
+        wanted = wanted[
+            :max_detail_fetches
+        ]
+
+        details: dict[
+            str,
+            dict[str, Any],
+        ] = {}
+
+        if wanted:
+            with ThreadPoolExecutor(
+                max_workers=max(
+                    1,
+                    concurrency,
+                )
+            ) as pool:
+                for posting_id, detail in zip(
+                    wanted,
+                    pool.map(
+                        _fetch_detail,
+                        wanted,
+                    ),
+                ):
+                    details[posting_id] = detail
+
+        for summary in summaries:
+            normalized_posting_id = (
+                _posting_id(
+                    summary
+                )
+            )
+
+            detail = details.get(
+                normalized_posting_id,
+                {},
             )
 
             if (

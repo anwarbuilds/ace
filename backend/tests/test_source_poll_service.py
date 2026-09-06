@@ -23,6 +23,26 @@ from backend.app.scheduling.types import (
 )
 
 
+class _StubRepository:
+    """Minimal repository stand-in for transaction-boundary tests.
+
+    These tests care about ordering and rollback, not persistence, so
+    the repository only has to absorb the calls the service makes.
+    """
+
+    def record_http_validators(
+        self,
+        **_kwargs,
+    ) -> None:
+        return None
+
+    def record_source_unchanged(
+        self,
+        **_kwargs,
+    ) -> None:
+        return None
+
+
 DETECTED_AT = datetime(
     2026,
     9,
@@ -228,7 +248,7 @@ def test_fetch_happens_before_database_transaction(
         lambda _session: events.append(
             "repository"
         )
-        or object(),
+        or _StubRepository(),
     )
 
     def fake_workflow(
@@ -298,7 +318,7 @@ def test_workflow_receives_provider_neutral_snapshot_identity(
         source
     )
 
-    repository = object()
+    repository = _StubRepository()
 
     monkeypatch.setattr(
         service_module,
@@ -395,7 +415,7 @@ def test_poll_result_exposes_summary_counts(
     monkeypatch.setattr(
         service_module,
         "JobRepository",
-        lambda _session: object(),
+        lambda _session: _StubRepository(),
     )
 
     monkeypatch.setattr(

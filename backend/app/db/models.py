@@ -116,8 +116,11 @@ class JobRecord(Base):
         nullable=False,
     )
 
+    # Workday uses the posting URL path as its identity, and those embed
+    # the location and full title. One Target path reached 256
+    # characters and failed a whole poll at the old 255 limit.
     external_id: Mapped[str] = mapped_column(
-        String(255),
+        String(512),
         nullable=False,
     )
 
@@ -127,7 +130,7 @@ class JobRecord(Base):
     )
 
     requisition_id: Mapped[str | None] = mapped_column(
-        String(255),
+        String(512),
         nullable=True,
     )
 
@@ -221,6 +224,24 @@ class SourceState(Base):
         Integer,
         nullable=False,
         server_default="0",
+    )
+
+    # HTTP validators from the last successful fetch. Sending these back
+    # lets an unchanged board answer 304 with no body, skipping the
+    # download, the parse and the diff entirely.
+    http_etag: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    http_last_modified: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    last_unchanged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
     )
 
 

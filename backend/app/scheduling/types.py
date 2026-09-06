@@ -229,6 +229,16 @@ class FetchedSourceSnapshot:
         ...,
     ]
 
+    # True when the provider answered "not modified", so the job list is
+    # byte-identical to the previous poll. Nothing was added, edited or
+    # closed, so the whole diff can be skipped.
+    unchanged: bool = False
+
+    # HTTP validators to send on the next poll of this source.
+    etag: str | None = None
+
+    last_modified: str | None = None
+
     def __post_init__(self) -> None:
         """Validate cross-provider snapshot invariants."""
 

@@ -65,10 +65,14 @@ def fetch(
     with httpx.Client(
         transport=transport
     ) as client:
-        return fetch_simplify_jobs(
-            source_account="new-grad",
-            client=client,
+        jobs, _unchanged, _validators = (
+            fetch_simplify_jobs(
+                source_account="new-grad",
+                client=client,
+            )
         )
+
+        return jobs
 
 
 def test_unknown_feed_is_rejected() -> None:
@@ -304,3 +308,137 @@ def test_entries_without_a_url_are_skipped() -> None:
             ),
         ]
     ) == []
+
+
+# ----------------------------------------------------------------------
+# Conditional fetching
+#
+# These feeds are the catalog's largest download and are usually
+# unchanged between polls, so an unchanged feed must cost one 304 with
+# no body rather than several megabytes of JSON.
+# ----------------------------------------------------------------------
+
+
+def test_unchanged_feed_returns_no_jobs_and_says_so() -> None:
+    """A 304 means nothing was added, edited or closed."""
+
+    from backend.app.adapters.http_cache import (
+        CacheValidators,
+    )
+
+    calls: list[dict] = []
+
+    def handler(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        calls.append(
+            dict(
+                request.headers
+            )
+        )
+
+        return httpx.Response(
+            304
+        )
+
+    with httpx.Client(
+        transport=httpx.MockTransport(
+            handler
+        )
+    ) as client:
+        jobs, unchanged, validators = (
+            fetch_simplify_jobs(
+                source_account="new-grad",
+                client=client,
+                validators=CacheValidators(
+                    etag='W/"abc"',
+                ),
+            )
+        )
+
+    assert unchanged is True
+
+    assert jobs == []
+
+    # The validator was actually sent.
+    assert (
+        calls[0]["if-none-match"]
+        == 'W/"abc"'
+    )
+
+    # And is preserved for the next poll.
+    assert validators.etag == 'W/"abc"'
+
+
+def test_changed_feed_returns_new_validators() -> None:
+    """A 200 supplies the validator to send next time."""
+
+    def handler(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=[
+                entry(
+                    url=(
+                        "https://lifeattiktok.com/1"
+                    ),
+                ),
+            ],
+            headers={
+                "ETag": 'W/"fresh"',
+            },
+        )
+
+    with httpx.Client(
+        transport=httpx.MockTransport(
+            handler
+        )
+    ) as client:
+        jobs, unchanged, validators = (
+            fetch_simplify_jobs(
+                source_account="new-grad",
+                client=client,
+            )
+        )
+
+    assert unchanged is False
+
+    assert len(jobs) == 1
+
+    assert validators.etag == 'W/"fresh"'
+
+
+def test_first_poll_sends_no_validators() -> None:
+    """With nothing remembered, the request is unconditional."""
+
+    calls: list[dict] = []
+
+    def handler(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        calls.append(
+            dict(
+                request.headers
+            )
+        )
+
+        return httpx.Response(
+            200,
+            json=[],
+        )
+
+    with httpx.Client(
+        transport=httpx.MockTransport(
+            handler
+        )
+    ) as client:
+        fetch_simplify_jobs(
+            source_account="new-grad",
+            client=client,
+        )
+
+    assert (
+        "if-none-match"
+        not in calls[0]
+    )

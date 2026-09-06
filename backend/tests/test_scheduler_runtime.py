@@ -532,3 +532,163 @@ def test_run_forever_sleeps_and_repeats() -> None:
     assert sleep_calls == [
         10,
     ]
+
+# ----------------------------------------------------------------------
+# Concurrency
+#
+# Sources are independent: different hosts, different rows, one
+# transaction each. Sequential polling let one slow employer block every
+# other source behind it.
+# ----------------------------------------------------------------------
+
+
+def test_due_sources_are_polled_concurrently() -> None:
+    """A slow source must not block the sources behind it."""
+
+    import threading
+    import time as real_time
+
+    sources = tuple(
+        SourceDefinition(
+            source_type=(
+                SourceType.GREENHOUSE
+            ),
+            source_account=f"board-{index}",
+            company_name=f"Company {index}",
+        )
+        for index in range(6)
+    )
+
+    in_flight = 0
+
+    peak = 0
+
+    lock = threading.Lock()
+
+    def poller(
+        source: SourceDefinition,
+    ):
+        nonlocal in_flight, peak
+
+        with lock:
+            in_flight += 1
+            peak = max(peak, in_flight)
+
+        real_time.sleep(0.05)
+
+        with lock:
+            in_flight -= 1
+
+        return make_result()
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            sources
+        ),
+        poller=poller,
+        clock=real_time.monotonic,
+        sleeper=lambda _seconds: None,
+        concurrency=4,
+    )
+
+    result = runtime.run_due_sources()
+
+    assert result.succeeded_count == 6
+
+    # More than one source was genuinely in flight at the same time.
+    assert peak > 1
+
+    assert peak <= 4
+
+
+def test_one_source_failure_does_not_affect_others_concurrently() -> None:
+    """Failure isolation must survive the move to threads."""
+
+    import time as real_time
+
+    sources = tuple(
+        SourceDefinition(
+            source_type=(
+                SourceType.GREENHOUSE
+            ),
+            source_account=f"board-{index}",
+            company_name=f"Company {index}",
+        )
+        for index in range(4)
+    )
+
+    def poller(
+        source: SourceDefinition,
+    ):
+        if source.source_account == "board-2":
+            raise RuntimeError(
+                "provider exploded"
+            )
+
+        return make_result()
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            sources
+        ),
+        poller=poller,
+        clock=real_time.monotonic,
+        sleeper=lambda _seconds: None,
+        concurrency=3,
+    )
+
+    result = runtime.run_due_sources()
+
+    assert result.succeeded_count == 3
+
+    assert result.failed_count == 1
+
+    assert (
+        result.failed[0].source.source_account
+        == "board-2"
+    )
+
+
+def test_every_source_is_rescheduled_after_a_concurrent_cycle() -> None:
+    """Both successes and failures get a next-due time."""
+
+    import time as real_time
+
+    sources = tuple(
+        SourceDefinition(
+            source_type=(
+                SourceType.GREENHOUSE
+            ),
+            source_account=f"board-{index}",
+            company_name=f"Company {index}",
+        )
+        for index in range(3)
+    )
+
+    def poller(
+        source: SourceDefinition,
+    ):
+        if source.source_account == "board-1":
+            raise RuntimeError(
+                "boom"
+            )
+
+        return make_result()
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            sources
+        ),
+        poller=poller,
+        clock=real_time.monotonic,
+        sleeper=lambda _seconds: None,
+        concurrency=3,
+    )
+
+    runtime.run_due_sources()
+
+    # Nothing is due again immediately; every source was rescheduled.
+    assert (
+        runtime.seconds_until_next_poll()
+        > 0
+    )

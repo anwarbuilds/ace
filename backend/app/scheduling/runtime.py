@@ -8,18 +8,31 @@ persisted, how eligibility is evaluated, or how email is delivered.
 Its responsibilities are:
 
     - determine which configured sources are due
-    - execute due sources
+    - execute due sources, several at a time
     - isolate one source failure from other sources
     - reschedule every attempted source
     - sleep efficiently between due times
     - emit useful structured log messages
+
+Sources are polled concurrently because they are independent: different
+hosts, different database rows, one transaction each. Sequential polling
+meant a single slow employer blocked every other source behind it -- one
+measured poll took 949 seconds while the median was 0.23.
+
+Concurrency is bounded well below the database pool size, and each
+worker holds a connection only for its own short transaction. The limit
+is deliberately modest: these are other people's careers sites, and the
+goal is to stop one of them blocking the rest, not to hammer all of
+them at once.
 
 Provider fetching and transactional source processing remain delegated
 to the existing scheduling service.
 """
 
 import logging
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import (
     Callable,
@@ -40,6 +53,11 @@ from backend.app.scheduling.types import (
 LOGGER = logging.getLogger(
     "ace.scheduler"
 )
+
+
+# Bounded well below the SQLAlchemy pool so a full cycle cannot exhaust
+# database connections.
+DEFAULT_CONCURRENCY = 6
 
 
 class MonotonicClock(Protocol):
@@ -170,6 +188,9 @@ class SchedulerRuntime:
             time.sleep
         ),
         logger: logging.Logger = LOGGER,
+        concurrency: int = (
+            DEFAULT_CONCURRENCY
+        ),
     ) -> None:
         self._sources = (
             registry.enabled_sources
@@ -179,6 +200,14 @@ class SchedulerRuntime:
         self._clock = clock
         self._sleeper = sleeper
         self._logger = logger
+
+        self._concurrency = max(
+            1,
+            concurrency,
+        )
+
+        # next-due times are read and written from worker threads.
+        self._due_lock = threading.Lock()
 
         self._next_due_at: dict[
             tuple[
@@ -226,19 +255,30 @@ class SchedulerRuntime:
             SourcePollFailure
         ] = []
 
-        for source in self._sources:
-            next_due_at = (
-                self._next_due_at[
+        with self._due_lock:
+            due_sources = [
+                source
+                for source in self._sources
+                if self._next_due_at[
                     source.identity
                 ]
+                <= cycle_time
+            ]
+
+        if not due_sources:
+            return SchedulerCycleResult(
+                succeeded=(),
+                failed=(),
             )
 
-            if next_due_at > cycle_time:
-                continue
+        results_lock = threading.Lock()
 
-            started_at = (
-                self._clock()
-            )
+        def run_one(
+            source: SourceDefinition,
+        ) -> None:
+            """Poll one source, isolated from every other source."""
+
+            started_at = self._clock()
 
             self._logger.info(
                 (
@@ -253,48 +293,41 @@ class SchedulerRuntime:
             )
 
             try:
-                result = (
-                    self._poller(
-                        source
-                    )
+                result = self._poller(
+                    source
                 )
 
             except Exception as exc:
-                finished_at = (
-                    self._clock()
-                )
+                finished_at = self._clock()
 
                 duration_seconds = max(
                     0.0,
-                    finished_at
-                    - started_at,
+                    finished_at - started_at,
                 )
 
-                self._next_due_at[
-                    source.identity
-                ] = (
-                    finished_at
-                    + source.poll_interval_seconds
-                )
-
-                failure = (
-                    SourcePollFailure(
-                        source=source,
-                        error_type=(
-                            type(exc).__name__
-                        ),
-                        error_message=str(
-                            exc
-                        ),
-                        duration_seconds=(
-                            duration_seconds
-                        ),
+                with self._due_lock:
+                    self._next_due_at[
+                        source.identity
+                    ] = (
+                        finished_at
+                        + source.poll_interval_seconds
                     )
-                )
 
-                failures.append(
-                    failure
-                )
+                with results_lock:
+                    failures.append(
+                        SourcePollFailure(
+                            source=source,
+                            error_type=(
+                                type(exc).__name__
+                            ),
+                            error_message=str(
+                                exc
+                            ),
+                            duration_seconds=(
+                                duration_seconds
+                            ),
+                        )
+                    )
 
                 self._logger.exception(
                     (
@@ -312,36 +345,33 @@ class SchedulerRuntime:
                     source.poll_interval_seconds,
                 )
 
-                continue
+                return
 
-            finished_at = (
-                self._clock()
-            )
+            finished_at = self._clock()
 
             duration_seconds = max(
                 0.0,
-                finished_at
-                - started_at,
+                finished_at - started_at,
             )
 
-            self._next_due_at[
-                source.identity
-            ] = (
-                finished_at
-                + source.poll_interval_seconds
-            )
+            with self._due_lock:
+                self._next_due_at[
+                    source.identity
+                ] = (
+                    finished_at
+                    + source.poll_interval_seconds
+                )
 
-            success = SourcePollSuccess(
-                source=source,
-                result=result,
-                duration_seconds=(
-                    duration_seconds
-                ),
-            )
-
-            successes.append(
-                success
-            )
+            with results_lock:
+                successes.append(
+                    SourcePollSuccess(
+                        source=source,
+                        result=result,
+                        duration_seconds=(
+                            duration_seconds
+                        ),
+                    )
+                )
 
             self._logger.info(
                 (
@@ -366,6 +396,23 @@ class SchedulerRuntime:
                 duration_seconds,
                 source.poll_interval_seconds,
             )
+
+        if self._concurrency == 1:
+            for source in due_sources:
+                run_one(
+                    source
+                )
+
+        else:
+            with ThreadPoolExecutor(
+                max_workers=self._concurrency
+            ) as pool:
+                list(
+                    pool.map(
+                        run_one,
+                        due_sources,
+                    )
+                )
 
         return SchedulerCycleResult(
             succeeded=tuple(
@@ -392,9 +439,10 @@ class SchedulerRuntime:
             else now
         )
 
-        next_due_at = min(
-            self._next_due_at.values()
-        )
+        with self._due_lock:
+            next_due_at = min(
+                self._next_due_at.values()
+            )
 
         return max(
             0.0,

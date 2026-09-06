@@ -51,6 +51,11 @@ from typing import Any
 import httpx
 
 from backend.app.models.job import CanonicalJob
+from backend.app.adapters.http_cache import (
+    CacheValidators,
+    is_unchanged,
+    validators_from_response,
+)
 
 
 SIMPLIFY_SOURCE = "simplify"
@@ -358,11 +363,26 @@ def fetch_simplify_jobs(
     source_account: str,
     company_name: str = "",
     client: httpx.Client | None = None,
-) -> list[CanonicalJob]:
+    validators: CacheValidators | None = None,
+) -> tuple[
+    list[CanonicalJob],
+    bool,
+    CacheValidators,
+]:
     """Fetch one curated listing feed.
 
     ``company_name`` is ignored: unlike an employer board this feed spans
     many employers, and each entry carries its own company.
+
+    These feeds are the largest single download in the catalog -- tens of
+    thousands of entries, several megabytes, most of it unchanged between
+    polls. They are served by a host with strong ETag support, so the
+    validators from the previous poll are sent back and an unchanged feed
+    costs a single 304 with no body.
+
+    Returns:
+        The jobs, whether the feed was unchanged, and the validators to
+        send next time.
     """
 
     feed = parse_feed_name(
@@ -394,10 +414,31 @@ def fetch_simplify_jobs(
 
     try:
         response = http.get(
-            FEED_URLS[feed]
+            FEED_URLS[feed],
+            headers=(
+                validators.request_headers()
+                if validators is not None
+                else {}
+            ),
         )
 
+        if is_unchanged(
+            response
+        ):
+            return (
+                [],
+                True,
+                validators
+                or CacheValidators(),
+            )
+
         response.raise_for_status()
+
+        next_validators = (
+            validators_from_response(
+                response
+            )
+        )
 
         entries = response.json()
 
@@ -405,7 +446,11 @@ def fetch_simplify_jobs(
             entries,
             list,
         ):
-            return []
+            return (
+                [],
+                False,
+                next_validators,
+            )
 
         for entry in entries:
             if not isinstance(
@@ -497,4 +542,8 @@ def fetch_simplify_jobs(
         if owns_client:
             http.close()
 
-    return jobs
+    return (
+        jobs,
+        False,
+        next_validators,
+    )

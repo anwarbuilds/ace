@@ -34,7 +34,7 @@ from backend.app.adapters.workday import (
 from backend.app.models.job import (
     CanonicalJob,
 )
-from backend.app.runners.workday import (
+from backend.app.runners.prefilter import (
     build_detail_predicate,
 )
 from backend.app.runners.greenhouse import (
@@ -78,6 +78,7 @@ class SmartRecruitersFetcher(Protocol):
         self,
         company_identifier: str,
         company_name: str,
+        should_fetch_detail=None,
     ) -> list[CanonicalJob]:
         """Fetch and normalize one SmartRecruiters company."""
 
@@ -128,8 +129,9 @@ class SimplifyFetcher(Protocol):
         *,
         source_account: str,
         company_name: str,
-    ) -> list[CanonicalJob]:
-        """Fetch and normalize one curated feed."""
+        validators=None,
+    ):
+        """Fetch a feed, reporting whether it changed."""
 
 
 class UnsupportedSourceTypeError(
@@ -273,6 +275,14 @@ class SmartRecruitersSourceFetcher:
         jobs = self._fetcher(
             source.source_account,
             source.company_name,
+            should_fetch_detail=(
+                build_detail_predicate(
+                    source="smartrecruiters",
+                    company_name=(
+                        source.company_name
+                    ),
+                )
+            ),
         )
 
         return FetchedSourceSnapshot(
@@ -387,9 +397,10 @@ class WorkdaySourceFetcher:
             ),
             should_fetch_detail=(
                 build_detail_predicate(
+                    source="workday",
                     company_name=(
                         source.company_name
-                    )
+                    ),
                 )
             ),
         )
@@ -460,6 +471,10 @@ class SimplifySourceFetcher:
 
     This lane spans many employers rather than one, so company identity
     comes from each entry rather than from the source definition.
+
+    These feeds are the catalog's largest download, so the HTTP
+    validators from the previous poll are replayed and an unchanged feed
+    costs one 304 with no body.
     """
 
     def __init__(
@@ -469,9 +484,30 @@ class SimplifySourceFetcher:
             fetch_simplify_jobs
         ),
         clock: Clock = utc_now,
+        validator_lookup=None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
+        self._validator_lookup = (
+            validator_lookup
+        )
+
+    def _validators(
+        self,
+        source: SourceDefinition,
+    ):
+        """Return the validators remembered for this source."""
+
+        from backend.app.adapters.http_cache import (
+            CacheValidators,
+        )
+
+        if self._validator_lookup is None:
+            return CacheValidators()
+
+        return self._validator_lookup(
+            source
+        )
 
     def __call__(
         self,
@@ -491,13 +527,20 @@ class SimplifySourceFetcher:
                 )
             )
 
-        jobs = self._fetcher(
-            source_account=(
-                source.source_account
-            ),
-            company_name=(
-                source.company_name
-            ),
+        jobs, unchanged, validators = (
+            self._fetcher(
+                source_account=(
+                    source.source_account
+                ),
+                company_name=(
+                    source.company_name
+                ),
+                validators=(
+                    self._validators(
+                        source
+                    )
+                ),
+            )
         )
 
         return FetchedSourceSnapshot(
@@ -505,6 +548,11 @@ class SimplifySourceFetcher:
             detected_at=self._clock(),
             jobs=tuple(
                 jobs
+            ),
+            unchanged=unchanged,
+            etag=validators.etag,
+            last_modified=(
+                validators.last_modified
             ),
         )
 
@@ -574,6 +622,45 @@ class SourceDispatcher:
         return result
 
 
+def _stored_validators(
+    source: SourceDefinition,
+):
+    """Load the HTTP validators remembered for one source.
+
+    Read in its own short session, outside any poll transaction, so a
+    lookup can never hold a connection while the network is slow.
+    """
+
+    from backend.app.adapters.http_cache import (
+        CacheValidators,
+    )
+    from backend.app.db.session import (
+        SessionLocal,
+    )
+    from backend.app.persistence.repository import (
+        JobRepository,
+    )
+
+    with SessionLocal() as session:
+        etag, last_modified = (
+            JobRepository(
+                session
+            ).get_http_validators(
+                source=(
+                    source.source_type.value
+                ),
+                source_account=(
+                    source.source_account
+                ),
+            )
+        )
+
+    return CacheValidators(
+        etag=etag,
+        last_modified=last_modified,
+    )
+
+
 def build_default_source_dispatcher() -> (
     SourceDispatcher
 ):
@@ -600,7 +687,11 @@ def build_default_source_dispatcher() -> (
                 AmazonSourceFetcher()
             ),
             SourceType.SIMPLIFY: (
-                SimplifySourceFetcher()
+                SimplifySourceFetcher(
+                    validator_lookup=(
+                        _stored_validators
+                    )
+                )
             ),
         }
     )

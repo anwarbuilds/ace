@@ -83,7 +83,7 @@ class SourcePollResult:
 
     fetched_snapshot: FetchedSourceSnapshot
 
-    workflow: SourceSnapshotWorkflowResult
+    workflow: SourceSnapshotWorkflowResult | None
 
     @property
     def source_definition(
@@ -138,6 +138,9 @@ class SourcePollResult:
     ) -> int:
         """Return eligible jobs held back only by freshness policy."""
 
+        if self.workflow is None:
+            return 0
+
         return (
             self.workflow
             .stale_suppressed_count
@@ -184,6 +187,31 @@ def poll_source_once(
             )
         )
 
+        # A provider that answered "not modified" is byte-identical to
+        # last time, so there is nothing to diff. Only the success
+        # markers move.
+        if fetched_snapshot.unchanged:
+            job_repository.record_source_unchanged(
+                source=(
+                    fetched_snapshot.source
+                ),
+                source_account=(
+                    fetched_snapshot
+                    .source_account
+                ),
+                observed_at=(
+                    fetched_snapshot
+                    .detected_at
+                ),
+            )
+
+            return SourcePollResult(
+                fetched_snapshot=(
+                    fetched_snapshot
+                ),
+                workflow=None,
+            )
+
         workflow_result = (
             run_source_snapshot_workflow(
                 job_repository,
@@ -229,6 +257,21 @@ def poll_source_once(
             evaluated_at=(
                 fetched_snapshot
                 .detected_at
+            ),
+        )
+
+        job_repository.record_http_validators(
+            source=(
+                fetched_snapshot.source
+            ),
+            source_account=(
+                fetched_snapshot
+                .source_account
+            ),
+            etag=fetched_snapshot.etag,
+            last_modified=(
+                fetched_snapshot
+                .last_modified
             ),
         )
 

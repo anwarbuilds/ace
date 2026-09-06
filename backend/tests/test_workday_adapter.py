@@ -17,7 +17,7 @@ from backend.app.adapters.workday import (
     parse_source_account,
     parse_start_date,
 )
-from backend.app.runners.workday import (
+from backend.app.runners.prefilter import (
     build_detail_predicate,
 )
 
@@ -395,7 +395,8 @@ def test_predicate_skips_detail_for_rejected_titles() -> None:
         detail_calls=calls,
         should_fetch_detail=(
             build_detail_predicate(
-                company_name="Acme"
+                source="workday",
+                company_name="Acme",
             )
         ),
     )
@@ -443,7 +444,8 @@ def test_skipped_postings_are_still_rejected_downstream() -> None:
         ],
         should_fetch_detail=(
             build_detail_predicate(
-                company_name="Acme"
+                source="workday",
+                company_name="Acme",
             )
         ),
     )

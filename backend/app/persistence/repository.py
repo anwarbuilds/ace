@@ -309,6 +309,93 @@ class JobRepository:
 
         self._session.flush()
 
+    def get_http_validators(
+        self,
+        *,
+        source: str,
+        source_account: str,
+    ) -> tuple[str | None, str | None]:
+        """Return the HTTP validators remembered for one source."""
+
+        state = self._session.get(
+            SourceState,
+            (
+                source,
+                source_account,
+            ),
+        )
+
+        if state is None:
+            return (
+                None,
+                None,
+            )
+
+        return (
+            state.http_etag,
+            state.http_last_modified,
+        )
+
+    def record_source_unchanged(
+        self,
+        *,
+        source: str,
+        source_account: str,
+        observed_at: datetime,
+    ) -> None:
+        """Record a poll where the provider reported no change.
+
+        Only the success markers move. Job state is untouched, because a
+        304 means the list is byte-identical: nothing was added, edited
+        or closed.
+        """
+
+        state = self._session.get(
+            SourceState,
+            (
+                source,
+                source_account,
+            ),
+        )
+
+        if state is None:
+            return
+
+        state.last_success_at = observed_at
+
+        state.last_unchanged_at = observed_at
+
+        self._session.flush()
+
+    def record_http_validators(
+        self,
+        *,
+        source: str,
+        source_account: str,
+        etag: str | None,
+        last_modified: str | None,
+    ) -> None:
+        """Persist the validators to replay on the next poll."""
+
+        state = self._session.get(
+            SourceState,
+            (
+                source,
+                source_account,
+            ),
+        )
+
+        if state is None:
+            return
+
+        state.http_etag = etag
+
+        state.http_last_modified = (
+            last_modified
+        )
+
+        self._session.flush()
+
     def count_jobs_for_source(
         self,
         *,
