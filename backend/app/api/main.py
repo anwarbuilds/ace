@@ -19,7 +19,10 @@ from pathlib import Path
 from fastapi import (
     Depends,
     FastAPI,
+    File,
+    HTTPException,
     Query,
+    UploadFile,
 )
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -36,6 +39,16 @@ from backend.app.api.queries import (
     list_jobs,
 )
 from backend.app.db.session import SessionLocal
+from backend.app.matching.parsing import (
+    ResumeParseError,
+    extract_resume_text,
+)
+from backend.app.matching.service import (
+    get_active_resume,
+    rescore_corpus,
+    skills_gap,
+    store_resume,
+)
 
 
 STATIC_DIRECTORY = (
@@ -133,6 +146,13 @@ def _serialize_job(
         ),
         "requirements_verified": (
             job.requirements_verified
+        ),
+        "match_score": job.match_score,
+        "matched_skills": list(
+            job.matched_skills
+        ),
+        "missing_skills": list(
+            job.missing_skills
         ),
     }
 
@@ -249,6 +269,16 @@ def create_app() -> FastAPI:
                 "actually read."
             ),
         ),
+        min_match: int | None = Query(
+            default=None,
+            ge=0,
+            le=100,
+            description=(
+                "Hide postings scoring "
+                "below this against the "
+                "active resume."
+            ),
+        ),
         sort: str = Query(
             default="new_grad_first",
         ),
@@ -268,6 +298,16 @@ def create_app() -> FastAPI:
             sort
             if sort in SORT_OPTIONS
             else "new_grad_first"
+        )
+
+        resume = get_active_resume(
+            session
+        )
+
+        resume_id = (
+            None
+            if resume is None
+            else resume.id
         )
 
         page = list_jobs(
@@ -297,6 +337,8 @@ def create_app() -> FastAPI:
                     early_career_only
                 ),
                 verified_only=verified_only,
+                resume_id=resume_id,
+                min_match=min_match,
                 sort=normalized_sort,
                 limit=limit,
                 offset=offset,
@@ -315,6 +357,7 @@ def create_app() -> FastAPI:
             "offset": page.offset,
             "has_more": page.has_more,
             "sort": normalized_sort,
+            "resume_id": resume_id,
         }
 
     @app.get(
@@ -380,6 +423,112 @@ def create_app() -> FastAPI:
                 verified_only=verified_only,
             ),
         )
+
+    @app.get(
+        "/api/resume"
+    )
+    def get_resume(
+        session: Session = Depends(
+            get_session
+        ),
+    ) -> dict:
+        """Return the active resume and its skills gap."""
+
+        resume = get_active_resume(
+            session
+        )
+
+        if resume is None:
+            return {
+                "resume": None,
+                "skills_gap": [],
+            }
+
+        return {
+            "resume": {
+                "id": resume.id,
+                "label": resume.label,
+                "filename": (
+                    resume.filename
+                ),
+                "skills": list(
+                    resume.extracted_skills
+                    or []
+                ),
+                "uploaded_at": (
+                    resume.uploaded_at
+                    .isoformat()
+                ),
+            },
+            "skills_gap": skills_gap(
+                session,
+                resume=resume,
+            ),
+        }
+
+    @app.post(
+        "/api/resume"
+    )
+    def upload_resume(
+        file: UploadFile = File(
+            ...
+        ),
+        session: Session = Depends(
+            get_session
+        ),
+    ) -> dict:
+        """Upload a resume and re-score the whole corpus.
+
+        Scoring is keyword overlap over already-stored text rather than
+        a model call, so the corpus is re-ranked in this request instead
+        of in a background job the user waits on.
+        """
+
+        payload = file.file.read()
+
+        try:
+            text = extract_resume_text(
+                payload=payload,
+                filename=(
+                    file.filename or ""
+                ),
+            )
+
+        except ResumeParseError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=str(
+                    exc
+                ),
+            ) from exc
+
+        resume = store_resume(
+            session,
+            label=(
+                file.filename or "resume"
+            ),
+            filename=(
+                file.filename or "resume"
+            ),
+            raw_text=text,
+        )
+
+        scored = rescore_corpus(
+            session,
+            resume=resume,
+        )
+
+        session.commit()
+
+        return {
+            "resume_id": resume.id,
+            "filename": resume.filename,
+            "skills": list(
+                resume.extracted_skills
+                or []
+            ),
+            "jobs_scored": scored,
+        }
 
     @app.get(
         "/api/facets"

@@ -353,7 +353,6 @@ class SchedulerRuntime:
                     "evaluated=%d "
                     "alert_candidates=%d "
                     "stale_suppressed=%d "
-                    "queued_notifications=%d "
                     "duration_seconds=%.3f "
                     "next_poll_seconds=%d"
                 ),
@@ -364,7 +363,6 @@ class SchedulerRuntime:
                 result.evaluated_count,
                 result.alert_candidate_count,
                 result.stale_suppressed_count,
-                result.queued_notification_count,
                 duration_seconds,
                 source.poll_interval_seconds,
             )

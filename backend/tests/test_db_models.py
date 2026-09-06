@@ -30,11 +30,6 @@ def test_database_metadata_contains_expected_tables() -> None:
     )
 
     assert (
-        "notification_outbox"
-        in Base.metadata.tables
-    )
-
-    assert (
         database_models
         .JobSourceRecord
         .__tablename__
@@ -42,10 +37,20 @@ def test_database_metadata_contains_expected_tables() -> None:
     )
 
     assert (
+        "job_evaluations"
+        in Base.metadata.tables
+    )
+
+    assert (
+        "resumes"
+        in Base.metadata.tables
+    )
+
+    assert (
         database_models
-        .NotificationOutboxRecord
+        .JobResumeScoreRecord
         .__tablename__
-        == "notification_outbox"
+        == "job_resume_scores"
     )
 
 
@@ -212,50 +217,3 @@ def test_job_source_poll_interval_must_be_positive() -> None:
     ) == 1
 
 
-def test_notification_outbox_has_unique_dedupe_key() -> None:
-    """PostgreSQL must reject duplicate logical notification events."""
-
-    table = (
-        Base.metadata.tables[
-            "notification_outbox"
-        ]
-    )
-
-    constraints = [
-        constraint
-        for constraint
-        in table.constraints
-        if isinstance(
-            constraint,
-            UniqueConstraint,
-        )
-    ]
-
-    matches = [
-        constraint
-        for constraint
-        in constraints
-        if (
-            constraint.name
-            == (
-                "uq_notification_outbox_"
-                "dedupe_key"
-            )
-        )
-    ]
-
-    assert len(
-        matches
-    ) == 1
-
-    columns = tuple(
-        column.name
-        for column
-        in matches[
-            0
-        ].columns
-    )
-
-    assert columns == (
-        "dedupe_key",
-    )

@@ -429,248 +429,11 @@ are computed when rendering.
 
 ---
 
-# Durable Notification Invariant
 
-ACE never relies on sending an email directly from volatile application memory.
 
-The current design is:
 
-```text
-source reconciliation
-        +
-eligibility evaluation
-        +
-notification rendering
-        +
-PENDING outbox insert
-        ↓
-ONE DATABASE TRANSACTION
-        ↓
-COMMIT
-        ↓
-external delivery begins
-```
 
-This means an SMTP failure does not destroy the alert.
 
----
-
-# Notification Outbox
-
-PostgreSQL table:
-
-```text
-notification_outbox
-```
-
-Important states:
-
-```text
-PENDING
-SENT
-DEAD
-```
-
-A qualifying alert is first persisted as:
-
-```text
-PENDING
-```
-
-Only after the external SMTP transport succeeds does ACE store:
-
-```text
-SENT
-```
-
-Failures remain retryable.
-
----
-
-# Notification Deduplication
-
-Each logical notification has a deterministic SHA-256 deduplication identity.
-
-The identity includes meaningful event information such as:
-
-```text
-source
-+
-source account
-+
-external job identity
-+
-lifecycle event
-+
-job content version
-+
-provider update version
-+
-recipient
-```
-
-ACE poll time is deliberately excluded.
-
-Therefore:
-
-```text
-same event detected again later
-→ same dedupe key
-→ no duplicate outbox row
-```
-
-Meaningful job changes can generate new notification events.
-
----
-
-# Retry Policy
-
-Delivery failures use exponential backoff.
-
-Default behavior begins approximately:
-
-```text
-attempt 1 failure
-→ retry after 60 seconds
-
-attempt 2 failure
-→ retry after 120 seconds
-
-attempt 3 failure
-→ retry after 240 seconds
-```
-
-The delay is capped.
-
-After the maximum configured attempts, the row becomes:
-
-```text
-DEAD
-```
-
-for operational inspection rather than disappearing silently.
-
----
-
-# Delivery Semantics
-
-SMTP cannot guarantee mathematically perfect exactly-once delivery.
-
-There is an unavoidable distributed-systems edge case:
-
-```text
-Gmail accepts message
-    ↓
-process crashes before PostgreSQL records SENT
-    ↓
-worker may retry
-```
-
-ACE therefore deliberately prefers:
-
-```text
-at-least-once delivery
-```
-
-over risking permanent alert loss.
-
-For a job-alert system, a rare duplicate is safer than silently missing an important opening.
-
-The same guarantee applies to digests. A digest is rendered and sent
-inside the transaction that records its result, so a crash between
-"Gmail accepted" and "PostgreSQL committed" can resend one digest. It
-can never lose one.
-
----
-
-# Digest Delivery
-
-ACE is a digest, not a firehose.
-
-```text
-job 1 ┐
-job 2 ├── one delivery window ──> ONE EMAIL
-job 3 ┘
-```
-
-```text
-zero qualifying jobs  ->  zero emails
-many qualifying jobs  ->  one email
-```
-
-## Windows
-
-Delivery windows are local wall-clock times in
-`NOTIFICATION_DIGEST_TIMEZONE`. One or two windows per day are allowed;
-more is a configuration error.
-
-A window opens at its configured time and stays open until the next
-window, or until local midnight for the last window of the day. Nothing
-is deliverable between midnight and the first window, which is what
-bounds ACE to at most one or two emails per local calendar day.
-
-A window fires **once**, and only when it has something to report. An
-empty window is released rather than consumed, so a strong afternoon
-posting can still be delivered inside the morning window if the morning
-had nothing.
-
-## Durability
-
-Two database facts cooperate:
-
-| Fact | Guarantees |
-| --- | --- |
-| `notification_digests.digest_key` UNIQUE | one delivery per window per recipient |
-| `notification_outbox.digest_id` | one candidate is delivered in exactly one digest |
-
-Because window identity lives in a UNIQUE constraint rather than in
-process memory, a worker restart cannot resend a window that has already
-been delivered. Restarting the container three times does not produce
-three digests.
-
-## Candidate freezing
-
-Candidates are assigned to a digest once, on its first delivery attempt.
-Retries resend that same frozen set rather than absorbing rows that
-arrived meanwhile.
-
-This keeps an SMTP outage from producing an ever-growing digest, and
-keeps *the digest that was sent* equal to *the candidates that were
-marked delivered*. Rows arriving after assignment go to the next window.
-
-## Failure handling
-
-```text
-send fails      -> digest stays PENDING, exponential backoff, rows stay PENDING
-attempts spent  -> digest DEAD, its rows DEAD (visible, never deleted)
-another worker  -> SKIP LOCKED, no double send
-```
-
-DEAD candidates can be returned to the queue once the transport is
-healthy:
-
-```bash
-python -m backend.scripts.manage_pending_notifications --requeue-dead --apply
-```
-
-## Ordering
-
-Digest entries are ordered most-actionable first, deterministically:
-
-1. role priority — primary families before secondary
-2. eligibility — `PASS` before `STRETCH`
-3. posting age — freshest first, unknown age last
-4. company and title — stable alphabetical tie-break
-
-A retry therefore renders an identical email to the first attempt.
-
-## Size
-
-`NOTIFICATION_DIGEST_MAX_JOBS` caps one digest. The remainder is
-reported in the digest itself and delivered in the next window, rather
-than producing an email long enough for Gmail to clip.
-
----
 
 # Workday
 
@@ -1278,9 +1041,13 @@ jobs
 source_states
 job_sources
 job_evaluations
-notification_outbox
-notification_digests
+resumes
+job_resume_scores
 ```
+
+Email delivery was removed on 2026-09-06; the web application is the
+only surface. The `notification_outbox` and `notification_digests`
+tables remain in the database as history but have no code behind them.
 
 `notification_outbox` additionally carries:
 
@@ -1302,7 +1069,7 @@ instead of deleted.
 Current Alembic revision:
 
 ```text
-0006
+0009
 ```
 
 ---
@@ -1312,7 +1079,7 @@ Current Alembic revision:
 Current backend regression suite:
 
 ```text
-472 tests passing
+332 tests passing
 ```
 
 The suite covers:

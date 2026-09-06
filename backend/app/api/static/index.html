@@ -98,6 +98,23 @@
   .tag.UNVERIFIED { color: var(--stretch); border-color: var(--stretch); }
   .card.unverified { border-left: 3px solid var(--stretch); }
   .caveat { color: var(--stretch); font-size: 12.5px; margin-top: 6px; }
+  .match {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    border-radius: 999px; padding: 2px 9px; margin-right: 6px;
+    border: 1px solid var(--border); color: var(--muted);
+  }
+  .match.high { color: var(--pass); border-color: var(--pass); }
+  .match.mid  { color: var(--stretch); border-color: var(--stretch); }
+  .skills { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .skills b { color: var(--text); font-weight: 600; }
+  .miss { color: var(--stretch); }
+  #resumebar {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    padding: 10px 20px; border-bottom: 1px solid var(--border);
+    background: var(--panel); font-size: 13px;
+  }
+  #gap { color: var(--muted); }
+  #gap span { margin-right: 10px; }
   .tag.closed { color: #f85149; border-color: #f85149; }
   .row { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
   .why { color: var(--muted); font-size: 12.5px; margin-top: 6px; font-style: italic; }
@@ -127,6 +144,14 @@
   </div>
 </header>
 
+<div id="resumebar">
+  <b>Resume</b>
+  <span id="resumestate">none uploaded</span>
+  <input type="file" id="resumefile" accept=".pdf,.docx,.txt,.md">
+  <button id="resumeupload">Upload &amp; rescore</button>
+  <span id="gap"></span>
+</div>
+
 <div class="stats" id="stats"></div>
 
 <div class="filters">
@@ -135,6 +160,14 @@
 
   <span><label for="company">Company</label>
   <select id="company"><option value="">Any</option></select></span>
+
+  <span><label for="match">Min match</label>
+  <select id="match">
+    <option value="">Any</option>
+    <option value="30">30%+</option>
+    <option value="50">50%+</option>
+    <option value="70">70%+</option>
+  </select></span>
 
   <span><label for="verified">Requirements</label>
   <select id="verified">
@@ -160,6 +193,7 @@
   <span><label for="sort">Sort</label>
   <select id="sort">
     <option value="new_grad_first">New-grad first</option>
+    <option value="best_match">Best resume match</option>
     <option value="newest">Newest to ACE</option>
     <option value="recently_posted">Recently posted</option>
     <option value="company">Company</option>
@@ -214,6 +248,8 @@
     p.set("active_only", el("active").value);
     p.set("early_career_only", el("grad").value);
     p.set("verified_only", el("verified").value);
+    var mm = el("match").value;
+    if (mm) { p.set("min_match", mm); }
     p.set("limit", String(PAGE_SIZE));
     p.set("offset", String(offset));
     var q = el("q").value.trim();
@@ -251,8 +287,23 @@
     select.value = current;
   }
 
+  function skillsLine(job) {
+    var m = job.matched_skills || [];
+    var x = job.missing_skills || [];
+    if (!m.length && !x.length) { return ""; }
+    var out = '<div class="skills">';
+    if (m.length) { out += "<b>Have:</b> " + esc(m.join(", ")) + " "; }
+    if (x.length) { out += '<span class="miss"><b>Missing:</b> ' + esc(x.join(", ")) + "</span>"; }
+    return out + "</div>";
+  }
+
   function card(job) {
     var tags = [];
+    if (job.match_score !== null && job.match_score !== undefined) {
+      var cls = job.match_score >= 70 ? "match high"
+              : job.match_score >= 40 ? "match mid" : "match";
+      tags.push('<span class="' + cls + '">' + job.match_score + '% match</span>');
+    }
     if (!job.requirements_verified) {
       tags.push('<span class="tag UNVERIFIED">UNVERIFIED</span>');
     }
@@ -285,7 +336,7 @@
       '<div class="row"><span>' + esc(job.location) + "</span>" +
       "<span>Posted " + esc(ageLabel(job.posting_age_days)) + "</span>" +
       "<span>via " + esc(job.source) + "</span>" + years + "</div>" +
-      why + caveat +
+      why + skillsLine(job) + caveat +
       '<a class="apply" target="_blank" rel="noopener noreferrer" href="' +
       esc(job.official_url) + '">Open official posting →</a>' +
       "</div>";
@@ -364,7 +415,7 @@
       .catch(function () {});
   }
 
-  ["family", "company", "age", "sort", "active", "grad", "verified"].forEach(function (id) {
+  ["family", "company", "age", "sort", "active", "grad", "verified", "match"].forEach(function (id) {
     el(id).addEventListener("change", function () {
       offset = 0; load(); loadStats();
     });
@@ -393,6 +444,50 @@
     if (saved) { document.documentElement.setAttribute("data-theme", saved); }
   } catch (e) {}
 
+  function loadResume() {
+    fetch("/api/resume").then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.resume) {
+          el("resumestate").textContent =
+            "none uploaded - jobs are unranked";
+          el("gap").innerHTML = "";
+          return;
+        }
+        el("resumestate").textContent =
+          d.resume.filename + " (" + d.resume.skills.length + " skills)";
+        if (d.skills_gap && d.skills_gap.length) {
+          el("gap").innerHTML = "<b>Most-wanted skills you lack:</b> " +
+            d.skills_gap.slice(0, 6).map(function (g) {
+              return "<span>" + esc(g.skill) + " " + g.share + "%</span>";
+            }).join("");
+        }
+      }).catch(function () {});
+  }
+
+  el("resumeupload").addEventListener("click", function () {
+    var f = el("resumefile").files[0];
+    if (!f) { el("resumestate").textContent = "choose a file first"; return; }
+    var fd = new FormData();
+    fd.append("file", f);
+    el("resumestate").textContent = "parsing and scoring...";
+    fetch("/api/resume", { method: "POST", body: fd })
+      .then(function (r) {
+        return r.json().then(function (b) {
+          if (!r.ok) { throw new Error(b.detail || "Upload failed"); }
+          return b;
+        });
+      })
+      .then(function (b) {
+        el("resumestate").textContent =
+          b.filename + " - " + b.skills.length + " skills, " +
+          b.jobs_scored + " jobs scored";
+        el("sort").value = "best_match";
+        loadResume(); loadStats(); offset = 0; load();
+      })
+      .catch(function (e) { el("resumestate").textContent = e.message; });
+  });
+
+  loadResume();
   loadStats();
   loadFacets();
   load();

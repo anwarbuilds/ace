@@ -15,15 +15,13 @@ Execution order:
         ↓
     materialize evaluation for the web read model
         ↓
-    durably enqueue notification candidates
-        ↓
     COMMIT
 
 External network fetching deliberately happens before the database
 transaction.
 
-SMTP delivery deliberately happens after this service returns and is
-owned by the notification-delivery worker.
+ACE has no delivery step. The web application is the only surface, so a
+poll's job ends once the database reflects what the source published.
 """
 
 from contextlib import (
@@ -38,11 +36,6 @@ from sqlalchemy.orm import (
 
 from backend.app.evaluation.freshness import (
     FreshnessPolicy,
-)
-from backend.app.notifications.outbox import (
-    OutboxEnqueueResult,
-    SqlAlchemyNotificationOutboxRepository,
-    enqueue_alert_candidates,
 )
 from backend.app.persistence.evaluations import (
     record_job_evaluations,
@@ -92,8 +85,6 @@ class SourcePollResult:
 
     workflow: SourceSnapshotWorkflowResult
 
-    outbox: OutboxEnqueueResult
-
     @property
     def source_definition(
         self,
@@ -140,16 +131,6 @@ class SourcePollResult:
             .alert_candidate_count
         )
 
-    @property
-    def queued_notification_count(
-        self,
-    ) -> int:
-        """Return newly persisted notification count."""
-
-        return (
-            self.outbox
-            .queued_count
-        )
 
     @property
     def stale_suppressed_count(
@@ -163,44 +144,6 @@ class SourcePollResult:
         )
 
 
-def _empty_outbox_result() -> (
-    OutboxEnqueueResult
-):
-    """Return the canonical result when no alerts require enqueueing."""
-
-    return OutboxEnqueueResult(
-        candidate_count=0,
-        queued_count=0,
-        duplicate_count=0,
-    )
-
-
-def _require_notification_recipient(
-    recipient: str | None,
-) -> str:
-    """Require a recipient only when a poll produces alert candidates."""
-
-    if recipient is None:
-        raise ValueError(
-            (
-                "notification_recipient must "
-                "be configured when alert "
-                "candidates exist."
-            )
-        )
-
-    normalized = recipient.strip()
-
-    if not normalized:
-        raise ValueError(
-            (
-                "notification_recipient must "
-                "be configured when alert "
-                "candidates exist."
-            )
-        )
-
-    return normalized
 
 
 def poll_source_once(
@@ -208,7 +151,6 @@ def poll_source_once(
     source: SourceDefinition,
     fetcher: SourceSnapshotFetcher,
     transaction_factory: TransactionFactory,
-    notification_recipient: str | None,
     freshness_policy: FreshnessPolicy | None = None,
 ) -> SourcePollResult:
     """Fetch and transactionally process one configured source.
@@ -216,15 +158,8 @@ def poll_source_once(
     Network fetching happens before opening the database transaction.
 
     Once the transaction begins, source reconciliation, deterministic
-    evaluation, and durable notification enqueueing are treated as one
+    evaluation, and the materialized read model are treated as one
     atomic unit.
-
-    If notification enqueueing fails, lifecycle persistence rolls back.
-
-    If an alert candidate exists but notification configuration is
-    missing, lifecycle persistence also rolls back. This prevents ACE
-    from marking a job as already observed while silently losing the
-    corresponding alert.
 
     The snapshot's own detected_at is used as the deterministic
     freshness reference instant, so a poll's alert decisions do not
@@ -297,52 +232,9 @@ def poll_source_once(
             ),
         )
 
-        alert_candidates = (
-            workflow_result
-            .evaluation
-            .alert_candidates
-        )
-
-        if not alert_candidates:
-            outbox_result = (
-                _empty_outbox_result()
-            )
-
-        else:
-            recipient = (
-                _require_notification_recipient(
-                    notification_recipient
-                )
-            )
-
-            outbox_repository = (
-                SqlAlchemyNotificationOutboxRepository(
-                    session
-                )
-            )
-
-            outbox_result = (
-                enqueue_alert_candidates(
-                    outbox_repository,
-                    candidates=(
-                        alert_candidates
-                    ),
-                    source_account=(
-                        fetched_snapshot
-                        .source_account
-                    ),
-                    recipient=recipient,
-                    detected_at=(
-                        fetched_snapshot
-                        .detected_at
-                    ),
-                )
-            )
-
     return SourcePollResult(
         fetched_snapshot=(
             fetched_snapshot
         ),
         workflow=workflow_result,
-        outbox=outbox_result,
     )

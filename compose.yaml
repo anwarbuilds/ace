@@ -80,34 +80,6 @@ services:
     restart: unless-stopped
 
 
-  notification-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-
-    env_file:
-      - .env
-
-    environment:
-      DATABASE_URL: >-
-        postgresql+psycopg://${ACE_DB_USER:-ace}:${ACE_DB_PASSWORD:-ace_local_dev}@postgres:5432/${ACE_DB_NAME:-ace}
-
-    command:
-      [
-        "python",
-        "-m",
-        "backend.scripts.send_pending_notifications",
-        "--loop",
-        "--idle-sleep-seconds",
-        "60",
-      ]
-
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-
-    restart: unless-stopped
-
 
   web:
     build:

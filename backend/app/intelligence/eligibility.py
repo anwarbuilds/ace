@@ -10,6 +10,7 @@ Core invariants:
 3. A surfaced job means "apply to this". There is no partial tier.
    An unlabelled role is included; only seniority and a high experience
    bar exclude.
+12. Internships and placements are out of scope; full-time only.
 4. Missing sponsorship information is unknown, not rejection.
 5. Missing experience information is unknown, not rejection.
 6. Explicitly PhD-targeted roles are excluded.
@@ -41,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-06-v13"
+    "2026-09-06-v14"
 )
 
 
@@ -118,6 +119,10 @@ class EligibilityReasonCode(
 
     REQUIREMENTS_NOT_VERIFIED = (
         "REQUIREMENTS_NOT_VERIFIED"
+    )
+
+    INTERNSHIP_ROLE = (
+        "INTERNSHIP_ROLE"
     )
 
     NO_HARD_BLOCKER = (
@@ -541,9 +546,6 @@ EARLY_CAREER_TITLE_PATTERNS = (
     r"\bearly\s+career\b",
     r"\bearly[-\s]in[-\s]career\b",
     r"\bcampus\b",
-    r"\bintern(?:ship)?\b",
-    r"\bco-?op\b",
-    r"\bapprentice(?:ship)?\b",
     r"\brotational\b",
     r"\bgraduate\s+(?:software|engineer|program|scheme)\b",
     r"\bjunior\b",
@@ -558,6 +560,42 @@ EARLY_CAREER_TITLE_PATTERNS = (
 # A role stating two years or less is an early-career role even when it
 # never uses the words.
 EARLY_CAREER_MAX_YEARS = 2
+
+
+# Internships are excluded: the user is targeting full-time early-career
+# roles only. Kept as a flag rather than deleted rules, because a search
+# strategy changes more often than code should.
+INCLUDE_INTERNSHIPS = False
+
+
+INTERNSHIP_TITLE_PATTERNS = (
+    r"\bintern\b",
+    r"\binterns\b",
+    r"\binternship\b",
+    r"\bco-?op\b",
+    r"\bsummer\s+analyst\b",
+    r"\bindustrial\s+placement\b",
+    r"\bplacement\s+year\b",
+    r"\bworking\s+student\b",
+    r"\bwerkstudent\b",
+    r"\bapprentice(?:ship)?\b",
+    r"\bpraktikum\b",
+)
+
+
+def is_internship(
+    job: CanonicalJob,
+) -> bool:
+    """Detect internship and placement roles.
+
+    Title only. A full-time posting that merely mentions an internship
+    programme elsewhere in its text is still a full-time posting.
+    """
+
+    return _matches_any_regex(
+        job.title,
+        INTERNSHIP_TITLE_PATTERNS,
+    )
 
 
 # A posting shorter than this cannot state its own requirements, so the
@@ -1490,6 +1528,25 @@ def evaluate_job(
                 "Posting is explicitly a "
                 "new-grad or early-career "
                 "role."
+            )
+        )
+
+    if (
+        not INCLUDE_INTERNSHIPS
+        and is_internship(
+            job
+        )
+    ):
+        reject_codes.append(
+            EligibilityReasonCode
+            .INTERNSHIP_ROLE
+        )
+
+        reject_reasons.append(
+            (
+                "Posting is an internship or "
+                "placement; ACE is scoped to "
+                "full-time early-career roles."
             )
         )
 

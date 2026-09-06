@@ -13,9 +13,6 @@ from typing import Any
 import pytest
 
 import backend.app.scheduling.service as service_module
-from backend.app.notifications.outbox import (
-    OutboxEnqueueResult,
-)
 from backend.app.scheduling.service import (
     poll_source_once,
 )
@@ -271,7 +268,6 @@ def test_fetch_happens_before_database_transaction(
                 events=events
             )
         ),
-        notification_recipient=None,
     )
 
     assert events == [
@@ -288,277 +284,7 @@ def test_fetch_happens_before_database_transaction(
     )
 
 
-def test_no_alert_candidates_do_not_require_recipient(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    events: list[str] = []
 
-    source = make_source()
-
-    snapshot = make_snapshot(
-        source
-    )
-
-    monkeypatch.setattr(
-        service_module,
-        "JobRepository",
-        lambda _session: object(),
-    )
-
-    workflow_result = (
-        make_workflow_result()
-    )
-
-    monkeypatch.setattr(
-        service_module,
-        "run_source_snapshot_workflow",
-        lambda *args, **kwargs: (
-            workflow_result
-        ),
-    )
-
-    def fail_if_outbox_created(
-        _session,
-    ):
-        raise AssertionError(
-            (
-                "Outbox repository should "
-                "not be created."
-            )
-        )
-
-    monkeypatch.setattr(
-        service_module,
-        "SqlAlchemyNotificationOutboxRepository",
-        fail_if_outbox_created,
-    )
-
-    result = poll_source_once(
-        source=source,
-        fetcher=FakeFetcher(
-            snapshot=snapshot,
-            events=events,
-        ),
-        transaction_factory=(
-            FakeTransactionFactory(
-                events=events
-            )
-        ),
-        notification_recipient=None,
-    )
-
-    assert (
-        result.outbox
-        == OutboxEnqueueResult(
-            candidate_count=0,
-            queued_count=0,
-            duplicate_count=0,
-        )
-    )
-
-
-def test_alert_candidates_are_enqueued_inside_transaction(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    events: list[str] = []
-
-    source = make_source()
-
-    snapshot = make_snapshot(
-        source
-    )
-
-    candidate = object()
-
-    workflow_result = (
-        make_workflow_result(
-            alert_candidates=(
-                candidate,
-            )
-        )
-    )
-
-    monkeypatch.setattr(
-        service_module,
-        "JobRepository",
-        lambda _session: object(),
-    )
-
-    monkeypatch.setattr(
-        service_module,
-        "run_source_snapshot_workflow",
-        lambda *args, **kwargs: (
-            workflow_result
-        ),
-    )
-
-    outbox_repository = object()
-
-    monkeypatch.setattr(
-        service_module,
-        "SqlAlchemyNotificationOutboxRepository",
-        lambda _session: (
-            events.append(
-                "outbox_repository"
-            )
-            or outbox_repository
-        ),
-    )
-
-    observed: dict[
-        str,
-        Any,
-    ] = {}
-
-    def fake_enqueue(
-        writer,
-        *,
-        candidates,
-        source_account,
-        recipient,
-        detected_at,
-    ) -> OutboxEnqueueResult:
-        events.append(
-            "enqueue"
-        )
-
-        observed.update(
-            {
-                "writer": writer,
-                "candidates": candidates,
-                "source_account": (
-                    source_account
-                ),
-                "recipient": recipient,
-                "detected_at": (
-                    detected_at
-                ),
-            }
-        )
-
-        return OutboxEnqueueResult(
-            candidate_count=1,
-            queued_count=1,
-            duplicate_count=0,
-        )
-
-    monkeypatch.setattr(
-        service_module,
-        "enqueue_alert_candidates",
-        fake_enqueue,
-    )
-
-    result = poll_source_once(
-        source=source,
-        fetcher=FakeFetcher(
-            snapshot=snapshot,
-            events=events,
-        ),
-        transaction_factory=(
-            FakeTransactionFactory(
-                events=events
-            )
-        ),
-        notification_recipient=(
-            " alerts@example.com "
-        ),
-    )
-
-    assert events == [
-        "fetch",
-        "transaction_begin",
-        "outbox_repository",
-        "enqueue",
-        "transaction_commit",
-    ]
-
-    assert observed == {
-        "writer": outbox_repository,
-        "candidates": (
-            candidate,
-        ),
-        "source_account": (
-            "databricks"
-        ),
-        "recipient": (
-            "alerts@example.com"
-        ),
-        "detected_at": DETECTED_AT,
-    }
-
-    assert (
-        result.outbox.queued_count
-        == 1
-    )
-
-
-@pytest.mark.parametrize(
-    "recipient",
-    [
-        None,
-        "",
-        "   ",
-    ],
-)
-def test_missing_recipient_rolls_back_when_alert_exists(
-    monkeypatch: pytest.MonkeyPatch,
-    recipient: str | None,
-) -> None:
-    events: list[str] = []
-
-    source = make_source()
-
-    snapshot = make_snapshot(
-        source
-    )
-
-    workflow_result = (
-        make_workflow_result(
-            alert_candidates=(
-                object(),
-            )
-        )
-    )
-
-    monkeypatch.setattr(
-        service_module,
-        "JobRepository",
-        lambda _session: object(),
-    )
-
-    monkeypatch.setattr(
-        service_module,
-        "run_source_snapshot_workflow",
-        lambda *args, **kwargs: (
-            workflow_result
-        ),
-    )
-
-    with pytest.raises(
-        ValueError,
-        match="notification_recipient",
-    ):
-        poll_source_once(
-            source=source,
-            fetcher=FakeFetcher(
-                snapshot=snapshot,
-                events=events,
-            ),
-            transaction_factory=(
-                FakeTransactionFactory(
-                    events=events
-                )
-            ),
-            notification_recipient=(
-                recipient
-            ),
-        )
-
-    assert events == [
-        "fetch",
-        "transaction_begin",
-        "transaction_rollback",
-    ]
 
 
 def test_workflow_receives_provider_neutral_snapshot_identity(
@@ -629,7 +355,6 @@ def test_workflow_receives_provider_neutral_snapshot_identity(
                 events=events
             )
         ),
-        notification_recipient=None,
     )
 
     assert observed == {
@@ -692,7 +417,6 @@ def test_poll_result_exposes_summary_counts(
                 events=events
             )
         ),
-        notification_recipient=None,
     )
 
     assert (
@@ -707,9 +431,4 @@ def test_poll_result_exposes_summary_counts(
     assert (
         result.alert_candidate_count
         == 2
-    )
-
-    assert (
-        result.queued_notification_count
-        == 0
     )

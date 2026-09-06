@@ -29,9 +29,6 @@ from backend.app.db.session import (
 from backend.app.evaluation.freshness import (
     FreshnessPolicy,
 )
-from backend.app.notifications.runtime import (
-    require_notification_recipient,
-)
 from backend.app.scheduling import (
     SchedulerRuntime,
     SourceDefinition,
@@ -247,11 +244,6 @@ def main(
 
     settings = get_settings()
 
-    recipient = (
-        require_notification_recipient(
-            settings
-        )
-    )
 
     with SessionLocal() as session:
         registry = (
@@ -316,9 +308,6 @@ def main(
             fetcher=dispatcher,
             transaction_factory=(
                 SessionLocal
-            ),
-            notification_recipient=(
-                recipient
             ),
             freshness_policy=(
                 freshness_policy

@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 from backend.app.db.models import (
     JobEvaluationRecord,
     JobRecord,
+    JobResumeScoreRecord,
 )
 
 
@@ -53,6 +54,7 @@ QUALIFYING_STATUSES = (
 
 
 SORT_OPTIONS = (
+    "best_match",
     "new_grad_first",
     "newest",
     "oldest",
@@ -90,6 +92,10 @@ class JobFilters:
     early_career_only: bool = False
 
     verified_only: bool = False
+
+    resume_id: int | None = None
+
+    min_match: int | None = None
 
     sort: str = "new_grad_first"
 
@@ -148,6 +154,12 @@ class JobListing:
     is_early_career: bool = False
 
     requirements_verified: bool = True
+
+    match_score: int | None = None
+
+    matched_skills: tuple[str, ...] = ()
+
+    missing_skills: tuple[str, ...] = ()
 
 
 @dataclass(
@@ -289,6 +301,12 @@ def _apply_filters(
             )
         )
 
+    if filters.min_match is not None:
+        statement = statement.where(
+            JobResumeScoreRecord.score
+            >= filters.min_match
+        )
+
     if filters.verified_only:
         statement = statement.where(
             JobEvaluationRecord
@@ -345,6 +363,18 @@ def _apply_sort(
     sort: str,
 ) -> Select:
     """Apply a deterministic ordering to a job query."""
+
+    if sort == "best_match":
+        # Highest match first. Unscored postings sort last rather than
+        # as zero: ACE could not read them, which is not the same as a
+        # poor fit.
+        return statement.order_by(
+            JobResumeScoreRecord.score.desc()
+            .nullslast(),
+            JobRecord.posted_at.desc()
+            .nullslast(),
+            JobRecord.id.desc(),
+        )
 
     if sort == "new_grad_first":
         # Verified postings lead, then labelled new-grad, then freshest.
@@ -422,13 +452,29 @@ def list_jobs(
         filters.offset,
     )
 
-    base = select(
-        JobRecord,
-        JobEvaluationRecord,
-    ).join(
-        JobEvaluationRecord,
-        JobEvaluationRecord.job_id
-        == JobRecord.id,
+    base = (
+        select(
+            JobRecord,
+            JobEvaluationRecord,
+            JobResumeScoreRecord,
+        )
+        .join(
+            JobEvaluationRecord,
+            JobEvaluationRecord.job_id
+            == JobRecord.id,
+        )
+        .outerjoin(
+            JobResumeScoreRecord,
+            (
+                JobResumeScoreRecord.job_id
+                == JobRecord.id
+            )
+            & (
+                JobResumeScoreRecord
+                .resume_id
+                == filters.resume_id
+            ),
+        )
     )
 
     filtered = _apply_filters(
@@ -530,8 +576,29 @@ def list_jobs(
                 evaluation
                 .requirements_verified
             ),
+            match_score=(
+                None
+                if match is None
+                else match.score
+            ),
+            matched_skills=(
+                ()
+                if match is None
+                else tuple(
+                    match.matched_skills
+                    or ()
+                )
+            ),
+            missing_skills=(
+                ()
+                if match is None
+                else tuple(
+                    match.missing_skills
+                    or ()
+                )
+            ),
         )
-        for job, evaluation in rows
+        for job, evaluation, match in rows
     )
 
     return JobPage(

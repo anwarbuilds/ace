@@ -1,0 +1,55 @@
+Hey i have read teh document and understtod it here is some questiosn i have followed by the new requirements and changes understnd them and chalk them in a sequence order firts answer my questiosna  then prepare the todo list of all the changes and the implementatins that ahs to be done we can go one by one and finish in making this website to the next level and user friednfly and safe 
+
+1) Every few minutes, ACE visits each of its 128 sources and downloads the full list of jobs currently open there. Not just the new ones — all of them. That matters for the next step.
+
+- Will it read all the postings every time for example if there are 10,00 postings in 128 sources if it read everything during the initial run , then again will it read everything which includes the newer ones too again?? 
+in that case its doing full refresh everytime right is that a good approach cant we optimize that if thats the approach as if that is the approach eventually system may become slow 
+
+2) and this part is there right while searching those 128 jobs everytime this is what it does?? 
+What it does instead
+First time seeing a company? Only tell me about jobs posted in the last 10 days.
+Already know this company, and a job appeared that wasn't there before? Always tell me. It genuinely just appeared, so its age doesn't matter.
+A closed job reopened? Always tell me. Reopening is proof it's live right now.
+The neat part: a company is only "new" to ACE once, ever. So being cautious that one time costs almost nothing — every genuinely new job from that company afterwards gets through without question.
+
+clarify this part 
+
+
+3) TikTok, Apple, Tesla, Oracle and a few others build their own careers pages with no public interface. ACE genuinely cannot read those job descriptions. I tried — Tesla blocks automated visits outright, and Apple and TikTok build their pages inside your browser, so there's nothing to read from outside.
+
+here inside the browser mean what 
+
+4) The resume matching should only be displayed beside the job so that it is easy for me to see and apply and also add a filter stating highly matched jobs so that i know what are highly relevant and can prioritize them while applying and what is jobs scored i didnt get is it tells for how many jobs u verified the score ? and also just give the description of whats missed and whats there while evaluating too since all this wont fit in a  single page in the initial page just then job and the score wheand the link when  i click on the job you can provide me these details 
+
+
+Other Requirements/Changes: 
+
+1) No internships needed for me focus on early carrers and the jobs which needs 2-3 years of experience tahts it 
+2) Remove the run book feature compeletly as it doesnt amke sense and i will be checking and monitoring the website 
+3) Make the website more user friendly and creative with great unique UI design and also add this functioanlity as last pulled time so that i knwo when was teh last upadted job pull happened or you can do like this all jobs pulled in a session can go under one section with date and time in that way it will be clear and easy for me too to see like if the25 jobs are pulled on septembe 5 mornin g section all ate under it next job pull session will ahve next pull jobs 
+4) Phhiolsphy store eveything is and show based on teh website loks good and will be helpful when i want to expand this but whar are teh tradeoffs with lots of data evetually as asked above 
+5) Lets craete a memory tarck for you in this project so that that file has teh compelte memory and the major requirements and future requirtemenst too so that i can work across all the new chats too yet them having all the knwledhe keep that file as the knowledge base 
+
+On the tradeoffs lets do this 
+
+
+1) It doesn't see all of Google, Meta, Microsoft or Netflix. They publish on their own sites with no way in. They're partly covered through the volunteer list — partly. A job they post outside that list is invisible.
+Answer: Yes thats an honest gap and as i am the person whose main focus on them so obviosly i will bechecking on them manually frequenlt too but think if there is any other way of covering them if possible 
+2) About 559 jobs aren't fully checked. The ones with no readable description. They're on the website with a warning label and kept out of your email, but this is a genuine gap and not a fixable one.
+Answer: Email feature is not needed anymore as i said  i will be checking the website so its handled 
+3) It checks sources one at a time. With 128 sources and some big ones taking half a minute, a full lap is slow and getting slower. This is the next thing that will need work.
+Answer: yes lets thinkan d give me teh optimizxed solution to deal this 
+4)Matching only understands exact skill names. If a job says "large-scale backend" and your CV says "distributed systems", it won't notice those are related.
+Answer: Yes, honest gap while checkscoring the role match work on this too  
+5)It doesn't track deadlines. Job sites almost never publish them, so ACE doesn't pretend to know.
+Answer: Its ok deadlines is very minor requirement as while applyimng i will be checking 
+6)It doesn't know what you've applied to. That stays in your spreadsheet, on purpose.
+Answer: Yes for this i have teh new idea after implementing the resuem scoring lets add this feature too where i will be uplaoding the updated applied list then you should update the postings accordingly like if any posting is there if ia pplied and its on the list just inform me applied on and date 
+7) It's built for exactly one person. No logins, no accounts. Turning it into something other people could use would be a different project.
+Yes i raelly want to scale this website as an personal project eventyally buiklding teh website and then building the mobile app too and bring it in my portfolio to strtegren my skills and the portfolio lets deploy iut and lets mainatin teh production build and then dev build where just like how it ahppens in a real software orghanization 
+
+
+
+
+
+

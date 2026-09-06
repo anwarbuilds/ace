@@ -6,12 +6,6 @@ ATS payloads.
 CanonicalJob is the normalized application-domain representation.
 JobRecord is the durable PostgreSQL representation of a discovered job.
 JobSourceRecord describes an external ATS account ACE should monitor.
-NotificationOutboxRecord stores delivery work until external transports
-successfully complete.
-
-NotificationDigestRecord groups many outbox rows into one delivered
-email so ACE reports opportunities as a digest rather than a firehose.
-
 JobEvaluationRecord materializes the deterministic eligibility decision
 for one job so the web application can filter and sort in SQL instead of
 re-running the gate over every stored job on every request.
@@ -335,326 +329,6 @@ class JobSourceRecord(Base):
     )
 
 
-class NotificationOutboxRecord(Base):
-    """Durable notification awaiting external delivery.
-
-    The outbox separates committed ACE state from unreliable external
-    systems such as SMTP.
-
-    Delivery failures therefore cannot cause ACE to permanently lose a
-    qualifying job alert.
-    """
-
-    __tablename__ = "notification_outbox"
-
-    __table_args__ = (
-        UniqueConstraint(
-            "dedupe_key",
-            name=(
-                "uq_notification_outbox_"
-                "dedupe_key"
-            ),
-        ),
-        CheckConstraint(
-            (
-                "status IN "
-                "('PENDING', 'SENT', "
-                "'DEAD', 'SUPPRESSED')"
-            ),
-            name=(
-                "ck_notification_outbox_"
-                "status"
-            ),
-        ),
-        Index(
-            (
-                "ix_notification_outbox_"
-                "status_next_attempt"
-            ),
-            "status",
-            "next_attempt_at",
-            "created_at",
-        ),
-        Index(
-            (
-                "ix_notification_outbox_"
-                "digest"
-            ),
-            "digest_id",
-        ),
-        Index(
-            (
-                "ix_notification_outbox_"
-                "claimable"
-            ),
-            "recipient",
-            "status",
-            "digest_id",
-            "next_attempt_at",
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(
-        BIGINT_ID,
-        primary_key=True,
-        autoincrement=True,
-    )
-
-    dedupe_key: Mapped[str] = mapped_column(
-        String(64),
-        nullable=False,
-    )
-
-    source: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
-    )
-
-    source_account: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-    )
-
-    external_id: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-    )
-
-    observation_status: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-    )
-
-    job_content_hash: Mapped[str] = mapped_column(
-        String(64),
-        nullable=False,
-    )
-
-    source_updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-
-    recipient: Mapped[str] = mapped_column(
-        String(320),
-        nullable=False,
-    )
-
-    subject: Mapped[str] = mapped_column(
-        Text,
-        nullable=False,
-    )
-
-    text_body: Mapped[str] = mapped_column(
-        Text,
-        nullable=False,
-    )
-
-    status: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        server_default="PENDING",
-    )
-
-    attempt_count: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        server_default="0",
-    )
-
-    next_attempt_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-
-    last_attempt_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-
-    sent_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-
-    last_error: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
-    # Structured alert content captured at enqueue time.
-    #
-    # The digest renderer reads this instead of re-reading the jobs
-    # table, so a delivered digest always reflects exactly what ACE
-    # evaluated, even if the posting is edited afterwards.
-    #
-    # Rows created before digest delivery existed have no payload and
-    # are rendered from their legacy columns instead.
-    payload: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON_PAYLOAD,
-        nullable=True,
-    )
-
-    # Set when this candidate has been assigned to a digest.
-    #
-    # Assignment is what prevents the same opportunity appearing in two
-    # successfully delivered digests.
-    digest_id: Mapped[int | None] = mapped_column(
-        BIGINT_ID,
-        ForeignKey(
-            "notification_digests.id",
-            ondelete="SET NULL",
-        ),
-        nullable=True,
-    )
-
-
-class NotificationDigestRecord(Base):
-    """One digest email grouping many alert candidates.
-
-    A digest is uniquely identified by its window:
-
-        local date + window index + recipient
-
-    That UNIQUE constraint is what makes digest delivery restart-safe.
-    A worker that restarts mid-day cannot resend a digest whose window
-    has already been delivered, because inserting the same digest_key a
-    second time is rejected by PostgreSQL.
-    """
-
-    __tablename__ = "notification_digests"
-
-    __table_args__ = (
-        UniqueConstraint(
-            "digest_key",
-            name=(
-                "uq_notification_digests_"
-                "digest_key"
-            ),
-        ),
-        CheckConstraint(
-            (
-                "status IN "
-                "('PENDING', 'SENT', 'DEAD')"
-            ),
-            name=(
-                "ck_notification_digests_"
-                "status"
-            ),
-        ),
-        CheckConstraint(
-            "item_count >= 0",
-            name=(
-                "ck_notification_digests_"
-                "item_count_non_negative"
-            ),
-        ),
-        Index(
-            (
-                "ix_notification_digests_"
-                "status_next_attempt"
-            ),
-            "status",
-            "next_attempt_at",
-        ),
-        Index(
-            (
-                "ix_notification_digests_"
-                "recipient_window"
-            ),
-            "recipient",
-            "window_date",
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(
-        BIGINT_ID,
-        primary_key=True,
-        autoincrement=True,
-    )
-
-    digest_key: Mapped[str] = mapped_column(
-        String(400),
-        nullable=False,
-    )
-
-    recipient: Mapped[str] = mapped_column(
-        String(320),
-        nullable=False,
-    )
-
-    window_date: Mapped[date] = mapped_column(
-        Date,
-        nullable=False,
-    )
-
-    window_label: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-    )
-
-    window_opens_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-    )
-
-    status: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        server_default="PENDING",
-    )
-
-    item_count: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        server_default="0",
-    )
-
-    subject: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
-    attempt_count: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        server_default="0",
-    )
-
-    next_attempt_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-
-    last_attempt_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-
-    sent_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-
-    last_error: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
 class JobEvaluationRecord(Base):
     """Materialized eligibility decision for one persisted job.
 
@@ -774,6 +448,128 @@ class JobEvaluationRecord(Base):
     )
 
     evaluated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class ResumeRecord(Base):
+    """One uploaded resume.
+
+    Only one resume is active at a time. History is retained so a score
+    change can be attributed to a resume edit rather than to a change in
+    the job market.
+    """
+
+    __tablename__ = "resumes"
+
+    __table_args__ = (
+        Index(
+            "ix_resumes_active",
+            "is_active",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BIGINT_ID,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    label: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    filename: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    content_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    raw_text: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    extracted_skills: Mapped[dict | None] = mapped_column(
+        JSON_PAYLOAD,
+        nullable=True,
+    )
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="true",
+    )
+
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class JobResumeScoreRecord(Base):
+    """One posting scored against one resume.
+
+    Derived data: it can be rebuilt from the resume and the job corpus,
+    which is what makes re-scoring after a resume edit cheap.
+    """
+
+    __tablename__ = "job_resume_scores"
+
+    __table_args__ = (
+        Index(
+            "ix_job_resume_scores_resume",
+            "resume_id",
+            "score",
+        ),
+    )
+
+    job_id: Mapped[int] = mapped_column(
+        BIGINT_ID,
+        ForeignKey(
+            "jobs.id",
+            ondelete="CASCADE",
+        ),
+        primary_key=True,
+        autoincrement=False,
+    )
+
+    resume_id: Mapped[int] = mapped_column(
+        BIGINT_ID,
+        ForeignKey(
+            "resumes.id",
+            ondelete="CASCADE",
+        ),
+        primary_key=True,
+        autoincrement=False,
+    )
+
+    # Null when the posting carried too little signal to rank. An
+    # unscored posting is not a badly-matching one.
+    score: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    matched_skills: Mapped[dict | None] = mapped_column(
+        JSON_PAYLOAD,
+        nullable=True,
+    )
+
+    missing_skills: Mapped[dict | None] = mapped_column(
+        JSON_PAYLOAD,
+        nullable=True,
+    )
+
+    scored_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
