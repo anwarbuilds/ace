@@ -34,10 +34,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import (
-    Callable,
-    Protocol,
-)
+from typing import Protocol
 
 from backend.app.scheduling.registry import (
     SourceRegistry,

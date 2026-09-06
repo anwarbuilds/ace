@@ -7,7 +7,10 @@ It intentionally performs no database, evaluation, outbox, or email
 work. Those responsibilities belong to later orchestration layers.
 """
 
-from collections.abc import Mapping
+from collections.abc import (
+    Callable,
+    Mapping,
+)
 from datetime import timedelta
 from typing import Protocol
 
@@ -32,16 +35,17 @@ from backend.app.adapters.simplify import (
 from backend.app.adapters.workday import (
     fetch_workday_jobs,
 )
+from backend.app.adapters.http_cache import (
+    CacheValidators,
+)
 from backend.app.models.job import (
     CanonicalJob,
 )
 from backend.app.runners.prefilter import (
     build_detail_predicate,
 )
-from backend.app.runners.greenhouse import (
+from backend.app.runners.clock import (
     Clock,
-    GreenhouseFetcher,
-    fetch_live_greenhouse_snapshot,
     utc_now,
 )
 from backend.app.scheduling.types import (
@@ -49,6 +53,14 @@ from backend.app.scheduling.types import (
     SourceDefinition,
     SourceType,
 )
+
+
+ValidatorLookup = Callable[
+    [
+        "SourceDefinition",
+    ],
+    CacheValidators,
+]
 
 
 class SourceFetchHandler(Protocol):
@@ -61,6 +73,31 @@ class SourceFetchHandler(Protocol):
         """Fetch and normalize one source snapshot."""
 
 
+class ConditionalFetchResult(Protocol):
+    """What a conditional adapter returns.
+
+    Three values rather than one: the jobs, whether the provider said
+    nothing had changed, and the validators to replay next poll.
+    """
+
+
+class GreenhouseFetcher(Protocol):
+    """Callable capable of fetching one Greenhouse board."""
+
+    def __call__(
+        self,
+        board_token: str,
+        company_name: str,
+        *,
+        validators: CacheValidators | None = None,
+    ) -> tuple[
+        list[CanonicalJob],
+        bool,
+        CacheValidators,
+    ]:
+        """Fetch and normalize one Greenhouse board."""
+
+
 class AshbyFetcher(Protocol):
     """Callable capable of fetching one Ashby source."""
 
@@ -68,7 +105,13 @@ class AshbyFetcher(Protocol):
         self,
         board_name: str,
         company_name: str,
-    ) -> list[CanonicalJob]:
+        *,
+        validators: CacheValidators | None = None,
+    ) -> tuple[
+        list[CanonicalJob],
+        bool,
+        CacheValidators,
+    ]:
         """Fetch and normalize one Ashby board."""
 
 
@@ -80,7 +123,13 @@ class SmartRecruitersFetcher(Protocol):
         company_identifier: str,
         company_name: str,
         should_fetch_detail=None,
-    ) -> list[CanonicalJob]:
+        *,
+        validators: CacheValidators | None = None,
+    ) -> tuple[
+        list[CanonicalJob],
+        bool,
+        CacheValidators,
+    ]:
         """Fetch and normalize one SmartRecruiters company."""
 
 
@@ -93,7 +142,12 @@ class LeverFetcher(Protocol):
         source_account: str,
         company_name: str,
         source_host: str | None,
-    ) -> list[CanonicalJob]:
+        validators: CacheValidators | None = None,
+    ) -> tuple[
+        list[CanonicalJob],
+        bool,
+        CacheValidators,
+    ]:
         """Fetch and normalize one Lever board."""
 
 
@@ -130,8 +184,12 @@ class SimplifyFetcher(Protocol):
         *,
         source_account: str,
         company_name: str,
-        validators=None,
-    ):
+        validators: CacheValidators | None = None,
+    ) -> tuple[
+        list[CanonicalJob],
+        bool,
+        CacheValidators,
+    ]:
         """Fetch a feed, reporting whether it changed."""
 
 
@@ -147,9 +205,13 @@ class GreenhouseSourceFetcher:
     def __init__(
         self,
         *,
-        fetcher=fetch_greenhouse_jobs,
+        fetcher: GreenhouseFetcher = (
+            fetch_greenhouse_jobs
+        ),
         clock: Clock = utc_now,
-        validator_lookup=None,
+        validator_lookup: (
+            ValidatorLookup | None
+        ) = None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
@@ -222,9 +284,13 @@ class AshbySourceFetcher:
     def __init__(
         self,
         *,
-        fetcher=fetch_ashby_jobs,
+        fetcher: AshbyFetcher = (
+            fetch_ashby_jobs
+        ),
         clock: Clock = utc_now,
-        validator_lookup=None,
+        validator_lookup: (
+            ValidatorLookup | None
+        ) = None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
@@ -297,9 +363,13 @@ class SmartRecruitersSourceFetcher:
     def __init__(
         self,
         *,
-        fetcher=fetch_smartrecruiters_jobs,
+        fetcher: SmartRecruitersFetcher = (
+            fetch_smartrecruiters_jobs
+        ),
         clock: Clock = utc_now,
-        validator_lookup=None,
+        validator_lookup: (
+            ValidatorLookup | None
+        ) = None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
@@ -382,9 +452,13 @@ class LeverSourceFetcher:
     def __init__(
         self,
         *,
-        fetcher=fetch_lever_jobs,
+        fetcher: LeverFetcher = (
+            fetch_lever_jobs
+        ),
         clock: Clock = utc_now,
-        validator_lookup=None,
+        validator_lookup: (
+            ValidatorLookup | None
+        ) = None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
@@ -595,7 +669,9 @@ class SimplifySourceFetcher:
             fetch_simplify_jobs
         ),
         clock: Clock = utc_now,
-        validator_lookup=None,
+        validator_lookup: (
+            ValidatorLookup | None
+        ) = None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock

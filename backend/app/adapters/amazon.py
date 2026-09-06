@@ -42,6 +42,9 @@ from typing import Any
 
 import httpx
 
+from backend.app.adapters.retry import (
+    request_with_retry,
+)
 from backend.app.models.job import CanonicalJob
 
 
@@ -300,14 +303,14 @@ def fetch_amazon_jobs(
         for page in range(
             max_pages
         ):
-            response = http.get(
+            response = request_with_retry(
+                lambda offset=(
+                    page * AMAZON_PAGE_SIZE
+                ): http.get(
                 AMAZON_SEARCH_URL,
                 params={
                     "base_query": "",
-                    "offset": (
-                        page
-                        * AMAZON_PAGE_SIZE
-                    ),
+                    "offset": offset,
                     "result_limit": (
                         AMAZON_PAGE_SIZE
                     ),
@@ -316,6 +319,7 @@ def fetch_amazon_jobs(
                         country_code
                     ),
                 },
+                )
             )
 
             response.raise_for_status()

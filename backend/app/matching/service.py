@@ -11,7 +11,6 @@ live in their own table rather than on the job.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from datetime import (
     datetime,
     timezone,

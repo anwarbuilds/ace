@@ -7,10 +7,7 @@ Secrets must never be hard-coded into application source code.
 """
 
 from functools import lru_cache
-from pydantic import (
-    SecretStr,
-    field_validator,
-)
+from pydantic import field_validator
 from pydantic_settings import (
     BaseSettings,
     SettingsConfigDict,

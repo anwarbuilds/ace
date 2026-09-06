@@ -57,6 +57,9 @@ from typing import Any
 
 import httpx
 
+from backend.app.adapters.retry import (
+    request_with_retry,
+)
 from backend.app.models.job import CanonicalJob
 
 
@@ -477,14 +480,18 @@ def fetch_workday_jobs(
     ) -> list[dict[str, Any]]:
         """Fetch one page of listings."""
 
-        response = http.post(
-            list_url,
-            json={
-                "appliedFacets": {},
-                "limit": WORKDAY_PAGE_SIZE,
-                "offset": offset,
-                "searchText": "",
-            },
+        response = request_with_retry(
+            lambda: http.post(
+                list_url,
+                json={
+                    "appliedFacets": {},
+                    "limit": (
+                        WORKDAY_PAGE_SIZE
+                    ),
+                    "offset": offset,
+                    "searchText": "",
+                },
+            )
         )
 
         response.raise_for_status()

@@ -24,6 +24,9 @@ from backend.app.adapters.http_cache import (
     unchanged_result,
     validators_from_response,
 )
+from backend.app.adapters.retry import (
+    request_with_retry,
+)
 from backend.app.models.job import CanonicalJob
 
 
@@ -517,7 +520,8 @@ def fetch_lever_jobs(
             ),
         }
 
-        response = httpx.get(
+        response = request_with_retry(
+            lambda: httpx.get(
             url,
             params={
                 "mode": "json",
@@ -536,6 +540,7 @@ def fetch_lever_jobs(
                 REQUEST_TIMEOUT_SECONDS
             ),
             follow_redirects=True,
+            )
         )
 
         if skip == 0 and is_unchanged(

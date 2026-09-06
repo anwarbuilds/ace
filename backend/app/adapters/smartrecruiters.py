@@ -27,6 +27,9 @@ from backend.app.adapters.http_cache import (
     unchanged_result,
     validators_from_response,
 )
+from backend.app.adapters.retry import (
+    request_with_retry,
+)
 from backend.app.models.job import CanonicalJob
 
 
@@ -327,9 +330,11 @@ def _get_json_object(
 ) -> dict[str, Any]:
     """GET one SmartRecruiters endpoint and require a JSON object."""
 
-    response = client.get(
-        url,
-        params=params,
+    response = request_with_retry(
+        lambda: client.get(
+            url,
+            params=params,
+        )
     )
 
     response.raise_for_status()
