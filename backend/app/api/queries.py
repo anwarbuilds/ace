@@ -10,7 +10,10 @@ corpus into Python.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import (
+    dataclass,
+    replace,
+)
 from datetime import (
     datetime,
     timedelta,
@@ -591,9 +594,16 @@ def count_by(
 def build_stats(
     session: Session,
     *,
+    filters: JobFilters | None = None,
     now: datetime | None = None,
 ) -> dict:
-    """Return headline counts for the dashboard."""
+    """Return headline counts for the dashboard.
+
+    Every figure honours the caller's filters, so the headline total
+    always equals the number of rows on screen. Tiles that answer a
+    different question than the list are worse than no tiles: they read
+    as a promise that jobs are being withheld.
+    """
 
     reference_time = (
         _as_utc(
@@ -604,59 +614,57 @@ def build_stats(
         )
     )
 
+    active_filters = (
+        filters
+        if filters is not None
+        else JobFilters()
+    )
+
     def _qualifying_count(
         *,
         max_age_days: int | None = None,
         early_career_only: bool = False,
     ) -> int:
-        """Count open, gate-passing jobs under optional constraints."""
+        """Count gate-passing jobs under the caller's filters."""
 
-        statement = (
+        # Start from the user's own selection, then narrow further for
+        # the specific tile being computed.
+        tile_filters = replace(
+            active_filters,
+            max_age_days=(
+                max_age_days
+                if max_age_days is not None
+                else (
+                    active_filters
+                    .max_age_days
+                )
+            ),
+            early_career_only=(
+                early_career_only
+                or active_filters
+                .early_career_only
+            ),
+        )
+
+        statement = _apply_filters(
             select(
-                func.count()
-            )
-            .select_from(
-                JobRecord
-            )
-            .join(
+                JobRecord.id
+            ).join(
                 JobEvaluationRecord,
                 JobEvaluationRecord.job_id
                 == JobRecord.id,
-            )
-            .where(
-                JobRecord.is_active.is_(
-                    True
-                ),
-                JobEvaluationRecord
-                .eligibility_status.in_(
-                    QUALIFYING_STATUSES
-                ),
-            )
+            ),
+            tile_filters,
+            now=reference_time,
         )
-
-        if max_age_days is not None:
-            statement = statement.where(
-                JobRecord.posted_at.is_not(
-                    None
-                ),
-                JobRecord.posted_at
-                >= reference_time
-                - timedelta(
-                    days=max_age_days
-                ),
-            )
-
-        if early_career_only:
-            statement = statement.where(
-                JobEvaluationRecord
-                .is_early_career.is_(
-                    True
-                )
-            )
 
         return int(
             session.scalar(
-                statement
+                select(
+                    func.count()
+                ).select_from(
+                    statement.subquery()
+                )
             )
             or 0
         )

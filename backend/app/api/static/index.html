@@ -222,7 +222,7 @@
       ["New today", s.posted_today],
       ["New this week", s.posted_last_7_days],
       ["New-grad labelled", s.labelled_new_grad],
-      ["Total apply-ready", s.qualifying_active_jobs]
+      ["Matching filters", s.qualifying_active_jobs]
     ];
     el("stats").innerHTML = cards.map(function (c) {
       return '<div class="stat"><b>' + esc(c[1]) + "</b><span>" + esc(c[0]) + "</span></div>";
@@ -325,7 +325,15 @@
   }
 
   function loadStats() {
-    fetch("/api/stats").then(function (r) { return r.json(); })
+    // Tiles use the same filters as the list, so the headline total
+    // always equals what is on screen.
+    var p = params();
+    p.delete("limit");
+    p.delete("offset");
+    p.delete("sort");
+    p.delete("status");
+    fetch("/api/stats?" + p.toString())
+      .then(function (r) { return r.json(); })
       .then(renderStats).catch(function () {});
   }
 
@@ -339,12 +347,16 @@
   }
 
   ["family", "company", "age", "sort", "active", "grad"].forEach(function (id) {
-    el(id).addEventListener("change", function () { offset = 0; load(); });
+    el(id).addEventListener("change", function () {
+      offset = 0; load(); loadStats();
+    });
   });
 
   el("q").addEventListener("input", function () {
     window.clearTimeout(searchTimer);
-    searchTimer = window.setTimeout(function () { offset = 0; load(); }, 250);
+    searchTimer = window.setTimeout(function () {
+      offset = 0; load(); loadStats();
+    }, 250);
   });
 
   el("refresh").addEventListener("click", function () {

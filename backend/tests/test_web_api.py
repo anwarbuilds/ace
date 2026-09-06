@@ -719,3 +719,125 @@ def test_empty_database_is_handled(
     )
 
     assert stats["posted_today"] == 0
+
+
+def test_stats_honour_the_same_filters_as_the_listing(
+    session_factory,
+) -> None:
+    """The headline total must equal the rows on screen.
+
+    A tile answering a different question than the list reads as a
+    promise that jobs are being withheld.
+    """
+
+    with session_factory.begin() as session:
+        add_job(
+            session,
+            external_id="1",
+            age_days=2,
+        )
+
+        add_job(
+            session,
+            external_id="2",
+            age_days=200,
+        )
+
+        add_job(
+            session,
+            external_id="3",
+            age_days=200,
+        )
+
+    filters = JobFilters(
+        max_age_days=14
+    )
+
+    with session_factory() as session:
+        page = list_jobs(
+            session,
+            filters=filters,
+            now=NOW,
+        )
+
+        stats = build_stats(
+            session,
+            filters=filters,
+            now=NOW,
+        )
+
+    assert page.total == 1
+
+    assert (
+        stats["qualifying_active_jobs"]
+        == page.total
+    )
+
+
+def test_stats_honour_company_filter(
+    session_factory,
+) -> None:
+    """Narrowing to one company narrows the headline figure too."""
+
+    with session_factory.begin() as session:
+        add_job(
+            session,
+            external_id="1",
+            company="Alpha",
+            age_days=1,
+        )
+
+        add_job(
+            session,
+            external_id="2",
+            company="Beta",
+            age_days=1,
+        )
+
+    filters = JobFilters(
+        companies=(
+            "Alpha",
+        )
+    )
+
+    with session_factory() as session:
+        stats = build_stats(
+            session,
+            filters=filters,
+            now=NOW,
+        )
+
+    assert (
+        stats["qualifying_active_jobs"]
+        == 1
+    )
+
+
+def test_unfiltered_stats_count_everything_qualifying(
+    session_factory,
+) -> None:
+    """With no filters the total is the whole apply-ready queue."""
+
+    with session_factory.begin() as session:
+        add_job(
+            session,
+            external_id="1",
+            age_days=2,
+        )
+
+        add_job(
+            session,
+            external_id="2",
+            age_days=200,
+        )
+
+    with session_factory() as session:
+        stats = build_stats(
+            session,
+            now=NOW,
+        )
+
+    assert (
+        stats["qualifying_active_jobs"]
+        == 2
+    )

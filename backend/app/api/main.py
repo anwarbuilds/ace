@@ -312,11 +312,57 @@ def create_app() -> FastAPI:
         session: Session = Depends(
             get_session
         ),
+        family: str | None = Query(
+            default=None,
+        ),
+        company: str | None = Query(
+            default=None,
+        ),
+        source: str | None = Query(
+            default=None,
+        ),
+        q: str | None = Query(
+            default=None,
+        ),
+        max_age_days: int | None = Query(
+            default=None,
+            ge=1,
+            le=3650,
+        ),
+        active_only: bool = Query(
+            default=True,
+        ),
+        early_career_only: bool = Query(
+            default=False,
+        ),
     ) -> dict:
-        """Return headline dashboard counts."""
+        """Return headline counts for the current filter selection.
+
+        The same filters as /api/jobs are accepted so the headline total
+        always equals the number of rows the user is looking at.
+        """
 
         return build_stats(
-            session
+            session,
+            filters=JobFilters(
+                families=_split_csv(
+                    family
+                ),
+                companies=_split_csv(
+                    company
+                ),
+                sources=_split_csv(
+                    source
+                ),
+                search=q,
+                max_age_days=(
+                    max_age_days
+                ),
+                active_only=active_only,
+                early_career_only=(
+                    early_career_only
+                ),
+            ),
         )
 
     @app.get(
