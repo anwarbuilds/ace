@@ -28,3 +28,5 @@ node_modules/
 # Operating system files
 .DS_Store
 Thumbs.db
+# Local scratch notes
+requiremnts1.txt
