@@ -6,6 +6,8 @@ from datetime import (
     timezone,
 )
 
+import logging
+
 import pytest
 from sqlalchemy import (
     create_engine,
@@ -18,6 +20,7 @@ from backend.app.db.models import (
     JobSourceRecord,
 )
 from backend.app.scheduling.catalog import (
+    _record_to_definition,
     SqlAlchemySourceCatalogRepository,
     load_source_registry,
 )
@@ -155,9 +158,18 @@ def test_catalog_preserves_poll_interval(
     )
 
 
-def test_catalog_rejects_unsupported_source_type(
+def test_unsupported_source_type_is_skipped_not_fatal(
     session: Session,
+    caplog,
 ) -> None:
+    """One unparseable row must not stop polling every other source.
+
+    This is not hypothetical. Adding an "eightfold" catalog row while
+    the scheduler still ran an image that predated that source type
+    crashed it on every restart, and discovery stopped completely for
+    an hour. A source ACE cannot parse is one source it cannot poll.
+    """
+
     add_record(
         session,
         record_id=1,
@@ -166,17 +178,65 @@ def test_catalog_rejects_unsupported_source_type(
         company_name="Example",
     )
 
+    add_record(
+        session,
+        record_id=2,
+        source_type="greenhouse",
+        source_account="working",
+        company_name="Working Company",
+    )
+
     repository = (
         SqlAlchemySourceCatalogRepository(
             session
         )
     )
 
+    with caplog.at_level(
+        logging.WARNING
+    ):
+        definitions = (
+            repository
+            .list_enabled_definitions()
+        )
+
+    assert len(
+        definitions
+    ) == 1
+
+    assert (
+        definitions[0].source_account
+        == "working"
+    )
+
+    # Skipping quietly would be worse than crashing: the source would
+    # simply never be polled and nothing would say so.
+    assert (
+        "unsupported-ats"
+        in caplog.text
+    )
+
+
+def test_unsupported_source_type_still_raises_when_converted_alone(
+    session: Session,
+) -> None:
+    """The strict conversion is kept for callers that want it."""
+
+    record = add_record(
+        session,
+        record_id=1,
+        source_type="unsupported-ats",
+        source_account="example",
+        company_name="Example",
+    )
+
     with pytest.raises(
         ValueError,
         match="Unsupported source_type",
     ):
-        repository.list_enabled_definitions()
+        _record_to_definition(
+            record
+        )
 
 
 def test_catalog_upsert_inserts_new_source(

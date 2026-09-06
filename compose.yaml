@@ -79,6 +79,23 @@ services:
 
     restart: unless-stopped
 
+    # The scheduler is a loop, not a server, so process liveness proves
+    # very little: a crash loop reads as "restarting" and a wedged loop
+    # reads as "up". This asks the question that matters, which is
+    # whether anything has actually been polled lately.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-m",
+          "backend.scripts.scheduler_health",
+        ]
+      interval: 5m
+      timeout: 30s
+      start_period: 3m
+      retries: 2
+
 
 
   web:

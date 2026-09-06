@@ -121,7 +121,8 @@ a{color:inherit;text-decoration:none}
 .live{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11.5px;letter-spacing:.01em;color:var(--text-secondary);border-radius:var(--r-md);padding:2px 4px;margin-left:-4px;transition:background var(--fast)}
 button.live:hover{background:var(--hover)}
 .dot{width:6px;height:6px;border-radius:999px;background:var(--gold-rail);flex:none}
-.dot.stale{background:var(--text-muted)}
+.dot.stale{background:var(--warning)}
+.live-stale{color:var(--warning)}
 .since{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--text-secondary)}
 .since-btn{border-radius:var(--r-sm);padding:2px 6px;margin-right:-6px;transition:background var(--fast),color var(--fast)}
 .since-btn:hover{background:var(--hover);color:var(--text)}
@@ -690,7 +691,8 @@ function sidebar(){
     '</div>'+
     '<div class="side-foot">'+
       '<button class="nav-item" data-act="live"><span class="dot'+(isStale()?' stale':'')+'"></span>'+
-        '<span class="nav-label">'+(isStale()?"Delayed":"Live")+'</span></button>'+
+        '<span class="nav-label"'+(isStale()?' style="color:var(--warning)"':'')+'>'+
+        (isStale()?"Not updating":"Live")+'</span></button>'+
       '<button class="nav-item" data-act="theme">'+icon(I.sun)+'<span class="nav-label">Theme</span></button>'+
       '<button class="nav-item" data-act="settings"'+(state.page==="settings"?' aria-current="page"':'')+'>'+
         icon(I.gear)+'<span class="nav-label">Settings</span></button>'+
@@ -702,9 +704,15 @@ function isStale(){
 }
 function liveStrip(){
   var stale=isStale();
-  return '<button class="live" data-act="live" title="Discovery status">'+
-    '<span class="dot'+(stale?' stale':'')+'"></span>ACE Live · '+
-    (state.lastPoll?("Updated "+ago(state.lastPoll)):"No pull recorded")+'</button>';
+  // Saying "ACE Live" while nothing is polling is the wrong word in
+  // the one moment it matters. A stopped scheduler once went unnoticed
+  // for an hour because the only clue was a timestamp quietly ageing
+  // next to the word "Live".
+  var label = !state.lastPoll ? "No pull recorded"
+    : stale ? ("Not updating · Last pull "+ago(state.lastPoll))
+    : ("ACE Live · Updated "+ago(state.lastPoll));
+  return '<button class="live'+(stale?" live-stale":"")+'" data-act="live" title="Discovery status">'+
+    '<span class="dot'+(stale?' stale':'')+'"></span>'+label+'</button>';
 }
 
 /* ---------------- render: queue ---------------- */
@@ -1241,11 +1249,17 @@ function sortPop(anchor){
   }).join("")+'</div>');
 }
 function livePop(anchor){
-  var l=state.sessions[0];
-  openPop(anchor,'<h4>Discovery status</h4>'+
+  var l=state.sessions[0], stale=isStale();
+  openPop(anchor,'<h4>'+(stale?"ACE is not updating":"Discovery status")+'</h4>'+
     '<p>Last pull '+(state.lastPoll?clock(state.lastPoll)+", "+ago(state.lastPoll):"not recorded")+'.</p>'+
-    (l?'<p>'+l.jobs_discovered+' opportunities found, '+l.qualifying_discovered+' passed your filters.</p>':'')+
-    '<p>'+state.sessions.length+' runs recorded.</p>');
+    (stale
+      ? '<p>ACE polls every few minutes, so a gap this long means the '+
+        'scheduler has stopped. Everything already found is still here '+
+        'and nothing has been lost.</p>'+
+        '<p>On the machine running ACE: <b>docker compose ps</b> to see '+
+        'its state, then <b>docker compose up -d scheduler</b>.</p>'
+      : (l?'<p>'+l.jobs_discovered+' opportunities found, '+l.qualifying_discovered+' passed your filters.</p>':'')+
+        '<p>'+state.sessions.length+' runs recorded.</p>'));
 }
 function scorePop(anchor){
   openPop(anchor,'<h4>Match score</h4>'+

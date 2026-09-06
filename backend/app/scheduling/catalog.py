@@ -8,6 +8,7 @@ than a scheduler code change.
 """
 
 from datetime import datetime
+import logging
 from typing import Iterable
 
 from sqlalchemy import (
@@ -26,6 +27,11 @@ from backend.app.scheduling.registry import (
 from backend.app.scheduling.types import (
     SourceDefinition,
     SourceType,
+)
+
+
+logger = logging.getLogger(
+    __name__
 )
 
 
@@ -106,12 +112,39 @@ class SqlAlchemySourceCatalogRepository:
             .all()
         )
 
+        definitions: list[
+            SourceDefinition
+        ] = []
+
+        for record in records:
+            try:
+                definitions.append(
+                    _record_to_definition(
+                        record
+                    )
+                )
+
+            except ValueError:
+                # One row ACE cannot parse is one source it cannot
+                # poll. It is not a reason to stop polling the other
+                # hundred and twenty-eight.
+                #
+                # This is not hypothetical: adding an "eightfold" row
+                # while the scheduler still ran an image that predated
+                # that source type crashed it on every restart, and
+                # discovery stopped completely for an hour.
+                logger.warning(
+                    "Skipping source %s/%s: "
+                    "unsupported source_type "
+                    "%r. Polling continues "
+                    "for every other source.",
+                    record.source_type,
+                    record.source_account,
+                    record.source_type,
+                )
+
         return tuple(
-            _record_to_definition(
-                record
-            )
-            for record
-            in records
+            definitions
         )
 
     def upsert(
