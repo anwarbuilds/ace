@@ -155,6 +155,8 @@ button.live:hover{background:var(--hover)}
 }
 .chip:hover{background:var(--hover);border-color:var(--border);color:var(--text)}
 .chip.on{background:var(--surface-2);border-color:var(--border-strong);color:var(--text);font-weight:500}
+.chip-n{font-family:var(--mono);font-size:11px;color:var(--text-muted);margin-left:-2px}
+.chip.on .chip-n{color:var(--text-secondary)}
 .chip-x{color:var(--text-muted);font-size:13px;line-height:1;margin-right:-2px}
 .chip-x:hover{color:var(--text)}
 .link-btn{font-size:12.5px;color:var(--text-muted);padding:0 4px;border-radius:var(--r-sm);transition:color var(--fast)}
@@ -189,6 +191,9 @@ button.live:hover{background:var(--hover)}
 .tier-unscored .r-score{color:var(--text-muted);font-weight:400;font-style:italic;letter-spacing:0;text-transform:none;font-size:12px}
 .r-meta{grid-column:1;font-size:12.5px;color:var(--text-secondary);line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .r-meta b{font-weight:600;color:var(--text-secondary)}
+.exp-early{color:var(--text);font-weight:600}
+.exp-known{color:var(--text-secondary)}
+.exp-unknown{color:var(--text-muted);font-style:italic}
 .r-side{grid-column:2;grid-row:2;display:flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap}
 .badge{
   display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 6px;border-radius:var(--r-sm);
@@ -209,6 +214,10 @@ button.live:hover{background:var(--hover)}
 .iconbtn:hover{background:var(--border-subtle);color:var(--text)}
 .iconbtn.on{color:var(--gold-text)}
 .iconbtn.saved svg{fill:currentColor}
+.list-end{
+  padding:18px 20px 26px;text-align:center;font-family:var(--mono);
+  font-size:11.5px;letter-spacing:.01em;color:var(--text-muted);
+}
 .readline{display:flex;align-items:center;gap:10px;padding:20px 20px 16px;user-select:none}
 .readline::before,.readline::after{content:"";height:1px;background:var(--border-subtle);flex:1}
 .readline span{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap}
@@ -395,12 +404,15 @@ button.live:hover{background:var(--hover)}
    ============================================================ */
 var API = "";
 var HIGH = 70, MED = 45;
+// One page of rows. Fetched on demand as the list is scrolled, so the
+// queue is never silently truncated at the first page.
+var PAGE = 60;
 
 var state = {
   page: "queue", view: "all",
   q: "", sort: "best_match",
   filters: {},          // key -> {type,value,label}
-  items: [], total: 0, loading: true,
+  items: [], total: 0, loading: true, loadingMore: false, hasMore: false, offset: 0,
   selectedId: null,
   stats: {}, sessions: [], lastPoll: null,
   resume: null, gap: [],
@@ -451,11 +463,22 @@ function dayName(d){
   if(x.toDateString()===y.toDateString()) return "Yesterday";
   return x.toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"});
 }
-function yoe(j){
-  if(j.required_experience_years!=null) return j.required_experience_years+" yrs max";
-  if(j.is_early_career) return "Early career";
-  return null;
+/* Experience fit is the user's standing constraint, so every row states
+   it rather than leaving a gap. Three honest states: labelled early
+   career, an extracted ceiling, or nothing stated. Unlabelled roles are
+   kept (ACE does not drop them), so "not stated" must read as neutral
+   and not as a rejection. */
+function expFit(j){
+  if(j.is_early_career) return {text:"Early career", cls:"exp-early"};
+  if(j.required_experience_years!=null)
+    return {text:j.required_experience_years+" yrs max", cls:"exp-known"};
+  return {text:"Experience not stated", cls:"exp-unknown"};
 }
+function yoe(j){ return expFit(j).text; }
+/* The split pane exists at exactly the width the CSS says it does.
+   Reading the same media query keeps JS and CSS from drifting, and
+   avoids window.innerWidth, which some environments report as 0. */
+function isWide(){ return window.matchMedia("(min-width: 1024px)").matches; }
 function markOf(id){ return state.marks[id] || {}; }
 function isDone(id){ var m=markOf(id); return !!(m.reviewed||m.dismissed); }
 function icon(p, extra){
@@ -490,7 +513,7 @@ function params(extra){
   return p;
 }
 function viewParams(){
-  var e = {sort:state.sort, limit:100};
+  var e = {sort:state.sort, limit:PAGE, offset:state.offset};
   if(state.page==="saved" || state.page==="archive") return e;
   if(state.view==="matched"){ e.min_match=HIGH; e.sort="best_match"; }
   if(state.view==="new" && state.prevVisit){ e.since=state.prevVisit.toISOString(); e.sort="newest"; }
@@ -501,21 +524,27 @@ function get(path, p){
   return fetch(API+path+(p&&p.toString()?"?"+p.toString():"")).then(function(r){
     if(!r.ok) throw new Error(r.status); return r.json(); });
 }
-function loadJobs(){
-  state.loading = true; render();
+function loadJobs(append){
+  if(append){ if(state.loadingMore || !state.hasMore) return Promise.resolve(); state.loadingMore = true; }
+  else { state.offset = 0; state.loading = true; state.items = []; render(); }
   var local = state.page==="saved" || state.page==="archive";
   return get("/api/jobs", params(viewParams())).then(function(d){
     var items = d.items;
+    // Saved and Archive are browser-local marks, so they are filtered
+    // after the fetch rather than in SQL.
     if(state.page==="saved") items = items.filter(function(j){ return markOf(j.id).saved; });
     if(state.page==="archive") items = items.filter(function(j){ return isDone(j.id); });
-    else items = items;
-    state.items = items;
-    state.total = local ? items.length : d.total;
-    state.loading = false;
-    if(state.selectedId && !items.some(function(j){return j.id===state.selectedId;})) state.selectedId = null;
-    if(!state.selectedId && items.length && window.innerWidth>1023) state.selectedId = items[0].id;
-    render();
-  }).catch(function(){ state.loading=false; state.items=[]; render(); });
+
+    state.items = append ? state.items.concat(items) : items;
+    state.offset = state.offset + d.items.length;
+    state.hasMore = d.has_more;
+    state.total = local ? state.items.length : d.total;
+    state.loading = false; state.loadingMore = false;
+
+    if(state.selectedId && !state.items.some(function(j){return j.id===state.selectedId;})) state.selectedId = null;
+    if(!state.selectedId && state.items.length && isWide()) state.selectedId = state.items[0].id;
+    render(append);
+  }).catch(function(){ state.loading=false; state.loadingMore=false; render(); });
 }
 function loadShell(){
   return Promise.all([
@@ -591,16 +620,22 @@ function viewsBar(){
   }).join("")+'</div>';
 }
 function railBar(){
-  var chips = Object.keys(state.filters).map(function(k){
+  var chips = Object.keys(state.filters).filter(function(k){
+    return !state.filters[k].pinned;
+  }).map(function(k){
     var f=state.filters[k];
     return '<span class="chip on">'+esc(f.label)+
       '<button class="chip-x" data-unfilter="'+esc(k)+'" aria-label="Remove filter '+esc(f.label)+'">&times;</button></span>';
   }).join("");
-  var many = Object.keys(state.filters).length>1;
+  var many = Object.keys(state.filters).filter(function(k){return !state.filters[k].pinned;}).length>1;
   return '<div class="rail">'+
     '<label class="search">'+icon(I.search)+
       '<input id="q" type="search" placeholder="Search company, title, skill" value="'+esc(state.q)+'" aria-label="Search opportunities">'+
       '<span class="kbd">/</span></label>'+
+    '<button class="chip'+(state.filters.early_career_only?" on":"")+'" data-act="toggleearly"'+
+      ' aria-pressed="'+(!!state.filters.early_career_only)+'">Early career'+
+      (state.stats.labelled_new_grad!=null?'<span class="chip-n">'+state.stats.labelled_new_grad+'</span>':'')+
+    '</button>'+
     chips+
     '<button class="chip" data-act="filters">'+icon(I.plus)+'Filter</button>'+
     (many?'<button class="link-btn" data-act="clearfilters">Clear all</button>':'')+
@@ -613,9 +648,9 @@ function sortLabel(){
 function jobRow(j, showRead){
   var t=tierOf(j.match_score), m=markOf(j.id);
   var isNew = state.prevVisit && new Date(j.first_seen_at)>state.prevVisit;
-  var y=yoe(j);
-  var meta=['<b>'+esc(j.company)+'</b>', esc(j.location)];
-  if(y) meta.push(esc(y));
+  var fit=expFit(j);
+  var meta=['<b>'+esc(j.company)+'</b>', esc(j.location),
+            '<span class="'+fit.cls+'">'+esc(fit.text)+'</span>'];
   var badge = m.applied?'<span class="badge">'+icon(I.check)+' Applied</span>'
     : isNew?'<span class="badge new">NEW</span>'
     : m.saved?'<span class="badge">Saved</span>'
@@ -688,8 +723,13 @@ function queueList(){
       if(new Date(state.items[i].first_seen_at) <= state.prevVisit){ showReadAt=i; break; }
     }
   }
+  var tail = state.loadingMore
+    ? '<li class="list-end">Loading more</li>'
+    : state.hasMore
+      ? '<li class="list-end">Showing '+state.items.length+' of '+state.total+'</li>'
+      : '<li class="list-end">End of queue · '+state.items.length+' opportunit'+(state.items.length===1?'y':'ies')+'</li>';
   return '<ul class="list" id="list" role="listbox" aria-label="Opportunities" tabindex="0">'+
-    state.items.map(function(j,i){ return jobRow(j, i===showReadAt); }).join("")+'</ul>';
+    state.items.map(function(j,i){ return jobRow(j, i===showReadAt); }).join("")+tail+'</ul>';
 }
 function queueHead(){
   var titles={queue:"Queue",saved:"Saved",archive:"Archive"};
@@ -847,8 +887,9 @@ function skillsPage(){
 }
 
 /* ---------------- render root ---------------- */
-function render(){
+function render(keepScroll){
   var app=document.getElementById("app");
+  var prior = keepScroll ? (document.querySelector(".list-scroll")||{}).scrollTop : null;
   var main;
   if(state.page==="feed") main=feedPage();
   else if(state.page==="resumes") main=resumesPage();
@@ -860,8 +901,19 @@ function render(){
       queueHead()+'<div class="list-scroll">'+queueList()+'</div></div>'+detailPane();
   app.innerHTML = sidebar()+main;
   if(state.toast) app.insertAdjacentHTML("beforeend", state.toast);
+
+  var scroller = document.querySelector(".list-scroll");
+  if(scroller){
+    if(prior!=null) scroller.scrollTop = prior;
+    scroller.addEventListener("scroll", onListScroll, {passive:true});
+  }
   var sel=document.querySelector('.row[aria-selected="true"]');
   if(sel && state.scrollTo){ sel.scrollIntoView({block:"nearest"}); state.scrollTo=false; }
+}
+
+function onListScroll(e){
+  var el=e.currentTarget;
+  if(el.scrollHeight - el.scrollTop - el.clientHeight < 600) loadJobs(true);
 }
 
 /* ---------------- interaction ---------------- */
@@ -871,7 +923,7 @@ function setView(v){ state.view=v; state.selectedId=null;
   if(v==="new"||v==="latest") state.sort="newest"; else if(v==="matched") state.sort="best_match";
   loadJobs(); }
 function select(id, scroll){ state.selectedId=id; state.scrollTo=!!scroll;
-  if(window.innerWidth<=1023) state.detailOpen=true; render(); }
+  if(!isWide()) state.detailOpen=true; render(); }
 function step(d){
   var ids=state.items.map(function(j){return j.id;});
   var i=ids.indexOf(state.selectedId);
@@ -903,8 +955,10 @@ function openPop(anchor, html){
   var d=document.createElement("div"); d.className="pop"; d.innerHTML=html;
   document.body.appendChild(d);
   var r=anchor.getBoundingClientRect(), w=d.offsetWidth, h=d.offsetHeight;
-  d.style.left=Math.max(8,Math.min(window.innerWidth-w-8, r.left))+"px";
-  d.style.top=(r.bottom+6+h>window.innerHeight? Math.max(8,r.top-h-6): r.bottom+6)+"px";
+  var vw=window.innerWidth||document.documentElement.clientWidth;
+  var vh=window.innerHeight||document.documentElement.clientHeight;
+  d.style.left=Math.max(8,Math.min(vw-w-8, r.left))+"px";
+  d.style.top=(r.bottom+6+h>vh? Math.max(8,r.top-h-6): r.bottom+6)+"px";
   return d;
 }
 function filterPop(anchor){
@@ -918,7 +972,6 @@ function filterPop(anchor){
   }
   openPop(anchor,'<h4>Add a filter</h4><div class="pop-list">'+
     '<div class="pop-group">Quick</div>'+
-    '<button class="pop-opt" data-addflag="early_career_only">Early career only</button>'+
     '<button class="pop-opt" data-addflag="verified_only">Description available</button>'+
     grp("Company",f.companies,"company")+grp("Source",f.sources,"source")+grp("Role family",f.families,"family")+
   '</div>');
@@ -952,11 +1005,11 @@ document.addEventListener("click", function(e){
   if(d.view){ setView(d.view); return; }
   if(d.step){ e.stopPropagation(); step(parseInt(d.step,10)); return; }
   if(d.mark){ e.stopPropagation(); mark(parseInt(d.id,10), d.mark, false); return; }
-  if(d.unfilter){ delete state.filters[d.unfilter]; loadShell().then(loadJobs); return; }
+  if(d.unfilter){ delete state.filters[d.unfilter]; loadShell().then(function(){ loadJobs(); }); return; }
   if(d.addfilter){ state.filters[d.addfilter+":"+d.value]={param:d.addfilter,value:d.value,type:"value",
-      label:String(d.value).replace(/_/g," ").toLowerCase()}; closePop(); loadShell().then(loadJobs); return; }
+      label:String(d.value).replace(/_/g," ").toLowerCase()}; closePop(); loadShell().then(function(){ loadJobs(); }); return; }
   if(d.addflag){ state.filters[d.addflag]={param:d.addflag,type:"flag",
-      label:d.addflag==="early_career_only"?"Early career":"Description available"}; closePop(); loadShell().then(loadJobs); return; }
+      label:d.addflag==="early_career_only"?"Early career":"Description available"}; closePop(); loadShell().then(function(){ loadJobs(); }); return; }
   if(d.sort){ state.sort=d.sort; closePop(); loadJobs(); return; }
   if(d.session){ state.page="queue"; state.view="latest"; state.sort="newest";
     var sid=parseInt(d.session,10);
@@ -966,12 +1019,16 @@ document.addEventListener("click", function(e){
   if(d.skillq){ state.page="queue"; state.view="all"; state.q=d.skillq; loadJobs(); return; }
 
   if(d.act){
+    if(d.act==="toggleearly"){
+      if(state.filters.early_career_only) delete state.filters.early_career_only;
+      else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Early career",pinned:true};
+      loadShell().then(function(){ loadJobs(); }); return; }
     if(d.act==="theme"){ cycleTheme(); return; }
     if(d.act==="filters"){ filterPop(t); return; }
     if(d.act==="sort"){ sortPop(t); return; }
     if(d.act==="live"){ livePop(t); return; }
     if(d.act==="scoreinfo"){ scorePop(t); return; }
-    if(d.act==="clearfilters"){ state.filters={}; loadShell().then(loadJobs); return; }
+    if(d.act==="clearfilters"){ state.filters={}; loadShell().then(function(){ loadJobs(); }); return; }
     if(d.act==="clearq"){ state.q=""; loadJobs(); return; }
     if(d.act==="closedetail"){ state.detailOpen=false; render(); return; }
     if(d.act==="undo"){ if(state.undoFn) state.undoFn(); state.toast=null; render(); return; }
@@ -1034,7 +1091,7 @@ applyTheme(validTheme ? urlTheme : load("ace.theme","dark"));
 state.marks = load("ace.marks",{});
 initVisit();
 render();
-loadShell().then(loadJobs);
+loadShell().then(function(){ loadJobs(); });
 setInterval(function(){ loadShell().then(function(){ if(state.page==="queue") render(); }); }, 120000);
 </script>
 </body>
