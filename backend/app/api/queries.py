@@ -202,6 +202,10 @@ class JobListing:
         ...,
     ] = ()
 
+    previous_match_score: int | None = None
+
+    score_changed_at: datetime | None = None
+
     is_saved: bool = False
 
     review_state: str | None = None
@@ -792,6 +796,16 @@ def list_jobs(
                     match,
                     resume_skills,
                 )
+            ),
+            previous_match_score=(
+                None
+                if match is None
+                else match.previous_score
+            ),
+            score_changed_at=(
+                None
+                if match is None
+                else match.scored_at
             ),
             is_saved=bool(
                 mark is not None

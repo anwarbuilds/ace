@@ -746,3 +746,157 @@ def test_stale_scores_are_detectable(
             session,
             resume=resume,
         ) == 1
+
+
+def test_rescore_remembers_the_previous_score(
+    session_factory,
+) -> None:
+    """A re-score reshuffles the ranking; the move must be recoverable.
+
+    Without this the list quietly reorders and the user cannot tell
+    whether ACE improved or drifted.
+    """
+
+    with session_factory() as session:
+        job = add_job(
+            session,
+            external_id="1",
+            description=(
+                "Python, Kafka, Airflow and "
+                "Terraform required."
+            ),
+        )
+
+        resume = store_resume(
+            session,
+            label="CV",
+            filename="cv.pdf",
+            raw_text="Python only.",
+            now=NOW,
+        )
+
+        rescore_corpus(
+            session,
+            resume=resume,
+        )
+
+        first = session.scalars(
+            select(
+                JobResumeScoreRecord
+            ).where(
+                JobResumeScoreRecord.job_id
+                == job.id
+            )
+        ).one()
+
+        # No predecessor on the first ever score. That is not the same
+        # as "did not move".
+        assert (
+            first.previous_score is None
+        )
+
+        original = first.score
+
+        resume.raw_text = (
+            "Python, Kafka and Airflow."
+        )
+
+        session.flush()
+
+        rescore_corpus(
+            session,
+            resume=resume,
+        )
+
+        second = session.scalars(
+            select(
+                JobResumeScoreRecord
+            ).where(
+                JobResumeScoreRecord.job_id
+                == job.id
+            )
+        ).one()
+
+        assert (
+            second.previous_score
+            == original
+        )
+
+        assert (
+            second.score
+            > second.previous_score
+        )
+
+
+def test_skills_gap_can_be_narrowed_to_one_role_family(
+    session_factory,
+) -> None:
+    """"What am I missing for ML roles" is a different question."""
+
+    from backend.app.matching.service import (
+        skills_gap,
+    )
+
+    with session_factory() as session:
+        backend_job = add_job(
+            session,
+            external_id="1",
+            description=(
+                "Python, Kafka and Terraform."
+            ),
+        )
+
+        ml_job = add_job(
+            session,
+            external_id="2",
+            description=(
+                "Python, pytorch and "
+                "computer vision."
+            ),
+        )
+
+        session.get(
+            JobEvaluationRecord,
+            ml_job.id,
+        ).role_family = "AI_ML_ENGINEERING"
+
+        session.flush()
+
+        resume = store_resume(
+            session,
+            label="CV",
+            filename="cv.pdf",
+            raw_text="Python.",
+            now=NOW,
+        )
+
+        rescore_corpus(
+            session,
+            resume=resume,
+        )
+
+        everything = {
+            row["skill"]
+            for row in skills_gap(
+                session,
+                resume=resume,
+            )
+        }
+
+        assert "terraform" in everything
+
+        ml_only = {
+            row["skill"]
+            for row in skills_gap(
+                session,
+                resume=resume,
+                role_family=(
+                    "AI_ML_ENGINEERING"
+                ),
+            )
+        }
+
+        assert "pytorch" in ml_only
+
+        # The backend posting's gap must not leak into the ML report.
+        assert "terraform" not in ml_only

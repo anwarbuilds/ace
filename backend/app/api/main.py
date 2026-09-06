@@ -144,6 +144,70 @@ class MarkUpdate(BaseModel):
     applied: bool | None = None
 
 
+def _with_session_jobs(
+    session: Session,
+    *,
+    runs: list[dict],
+    per_session: int,
+) -> list[dict]:
+    """Attach each run's best few arrivals, for the feed.
+
+    Done in one pass rather than a request per run: a feed showing
+    twenty-five runs would otherwise cost twenty-five round trips to
+    render three rows each.
+
+    A run that found nothing keeps an empty list. That is deliberate:
+    "21 found, none passed your filters" is the proof the system is
+    working, and hiding those runs would make ACE look asleep during
+    the many hours when it is running correctly and finding nothing.
+    """
+
+    if per_session <= 0:
+        return runs
+
+    resume = get_active_resume(
+        session
+    )
+
+    enriched: list[dict] = []
+
+    for run in runs:
+        jobs: list[dict] = []
+
+        if run.get(
+            "qualifying_discovered"
+        ):
+            page = list_jobs(
+                session,
+                filters=JobFilters(
+                    session_id=run["id"],
+                    resume_id=(
+                        None
+                        if resume is None
+                        else resume.id
+                    ),
+                    sort="best_match",
+                    limit=per_session,
+                ),
+            )
+
+            jobs = [
+                _serialize_job(
+                    job
+                )
+                for job in page.items
+            ]
+
+        enriched.append(
+            {
+                **run,
+                "jobs": jobs,
+            }
+        )
+
+    return enriched
+
+
 def _serialize_job(
     job,
 ) -> dict:
@@ -230,6 +294,14 @@ def _serialize_job(
                 job.related_evidence
             )
         ],
+        "previous_match_score": (
+            job.previous_match_score
+        ),
+        "score_changed_at": (
+            None
+            if job.score_changed_at is None
+            else job.score_changed_at.isoformat()
+        ),
         "is_saved": job.is_saved,
         "review_state": (
             job.review_state
@@ -574,6 +646,15 @@ def create_app() -> FastAPI:
             ge=1,
             le=100,
         ),
+        jobs_per_session: int = Query(
+            default=0,
+            ge=0,
+            le=10,
+            description=(
+                "Include this many top matches "
+                "per run, for the feed."
+            ),
+        ),
     ) -> dict:
         """Return recent discovery runs and when ACE last checked.
 
@@ -595,11 +676,13 @@ def create_app() -> FastAPI:
                 if last_poll is None
                 else last_poll.isoformat()
             ),
-            "sessions": (
-                list_discovery_runs(
+            "sessions": _with_session_jobs(
+                session,
+                runs=list_discovery_runs(
                     session,
                     limit=limit,
-                )
+                ),
+                per_session=jobs_per_session,
             ),
         }
 
@@ -609,6 +692,14 @@ def create_app() -> FastAPI:
     def get_resume(
         session: Session = Depends(
             get_session
+        ),
+        family: str | None = Query(
+            default=None,
+        ),
+        min_match: int | None = Query(
+            default=None,
+            ge=0,
+            le=100,
         ),
     ) -> dict:
         """Return the active resume and its skills gap."""
@@ -642,6 +733,8 @@ def create_app() -> FastAPI:
             "skills_gap": skills_gap(
                 session,
                 resume=resume,
+                role_family=family,
+                min_match=min_match,
             ),
         }
 

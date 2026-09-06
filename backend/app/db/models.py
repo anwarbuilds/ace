@@ -620,6 +620,13 @@ class JobResumeScoreRecord(Base):
         nullable=True,
     )
 
+    # What this posting scored before the last re-score. Null means it
+    # has never been scored before, which is not the same as unchanged.
+    previous_score: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
     # Which scoring algorithm produced this row. Scores are derived data
     # with no other staleness signal, so without this a stored number
     # could reflect rules that no longer exist.

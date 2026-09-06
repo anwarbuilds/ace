@@ -1097,3 +1097,89 @@ def test_since_filter_is_minute_accurate(
             page.items[0].external_id
             == "1"
         )
+
+
+def test_session_jobs_are_attached_in_one_pass(
+    session_factory,
+) -> None:
+    """The feed shows a few arrivals per run without a request each.
+
+    Twenty-five runs rendering three rows apiece would otherwise be
+    twenty-five round trips.
+    """
+
+    from backend.app.api.main import (
+        _with_session_jobs,
+    )
+    from backend.app.db.models import (
+        PollSessionRecord,
+    )
+
+    with session_factory() as session:
+        run = PollSessionRecord(
+            started_at=NOW,
+            last_activity_at=NOW,
+            jobs_discovered=40,
+            qualifying_discovered=5,
+        )
+
+        session.add(
+            run
+        )
+
+        session.flush()
+
+        for index in range(
+            5
+        ):
+            job = add_job(
+                session,
+                external_id=str(
+                    index
+                ),
+            )
+
+            job.first_seen_session_id = (
+                run.id
+            )
+
+        session.flush()
+
+        enriched = _with_session_jobs(
+            session,
+            runs=[
+                {
+                    "id": run.id,
+                    "qualifying_discovered": 5,
+                },
+            ],
+            per_session=3,
+        )
+
+        assert len(
+            enriched[0]["jobs"]
+        ) == 3
+
+
+def test_a_run_that_found_nothing_keeps_an_empty_list(
+    session_factory,
+) -> None:
+    """Empty runs stay in the feed: they are the proof of work."""
+
+    from backend.app.api.main import (
+        _with_session_jobs,
+    )
+
+    with session_factory() as session:
+        enriched = _with_session_jobs(
+            session,
+            runs=[
+                {
+                    "id": 1,
+                    "qualifying_discovered": 0,
+                },
+            ],
+            per_session=3,
+        )
+
+        assert enriched[0]["jobs"] == []

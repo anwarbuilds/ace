@@ -175,6 +175,22 @@ def rescore_corpus(
 
         session.flush()
 
+    # Captured before the delete below, so a re-score can say what each
+    # posting moved from. Without this the ranking reshuffles silently
+    # and the user cannot tell improvement from drift.
+    prior_scores = {
+        job_id: score
+        for job_id, score in session.execute(
+            select(
+                JobResumeScoreRecord.job_id,
+                JobResumeScoreRecord.score,
+            ).where(
+                JobResumeScoreRecord.resume_id
+                == resume.id
+            )
+        ).all()
+    }
+
     session.execute(
         delete(
             JobResumeScoreRecord
@@ -233,6 +249,11 @@ def rescore_corpus(
                 ),
                 related_skills=list(
                     result.related_skills
+                ),
+                previous_score=(
+                    prior_scores.get(
+                        job_id
+                    )
                 ),
                 algorithm_version=(
                     MATCHING_ALGORITHM_VERSION
@@ -307,14 +328,21 @@ def skills_gap(
     *,
     resume: ResumeRecord,
     limit: int = 15,
+    role_family: str | None = None,
+    min_match: int | None = None,
 ) -> list[dict]:
     """Return the skills most often missing from qualifying postings.
+
+    ``role_family`` and ``min_match`` narrow the market the report
+    describes. "What am I missing for backend roles" and "what am I
+    missing for the roles I already fit well" are different questions,
+    and one unfiltered list answers neither.
 
     Restricted to postings that passed the gate, so the report describes
     the user's actual target market rather than the whole corpus.
     """
 
-    rows = session.execute(
+    rows = (
         select(
             JobResumeScoreRecord
             .missing_skills
@@ -339,6 +367,22 @@ def skills_gap(
             .eligibility_status
             == "PASS",
         )
+    )
+
+    if role_family:
+        rows = rows.where(
+            JobEvaluationRecord.role_family
+            == role_family
+        )
+
+    if min_match is not None:
+        rows = rows.where(
+            JobResumeScoreRecord.score
+            >= min_match
+        )
+
+    rows = session.execute(
+        rows
     ).all()
 
     missing_lists: list[

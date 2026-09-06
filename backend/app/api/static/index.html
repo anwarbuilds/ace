@@ -123,6 +123,8 @@ button.live:hover{background:var(--hover)}
 .dot{width:6px;height:6px;border-radius:999px;background:var(--gold-rail);flex:none}
 .dot.stale{background:var(--text-muted)}
 .since{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--text-secondary)}
+.since-btn{border-radius:var(--r-sm);padding:2px 6px;margin-right:-6px;transition:background var(--fast),color var(--fast)}
+.since-btn:hover{background:var(--hover);color:var(--text)}
 
 /* segmented view control */
 .views{display:flex;gap:2px;margin-top:14px;background:var(--surface-2);padding:3px;border-radius:var(--r-md);border:1px solid var(--border-subtle)}
@@ -201,6 +203,7 @@ button.live:hover{background:var(--hover)}
   font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
 }
 .badge.new{background:transparent;color:var(--text);padding:0}
+.badge.move{background:var(--gold-surface);color:var(--gold-text);text-transform:none;letter-spacing:0;font-weight:500}
 .badge.warn{background:transparent;color:var(--warning);border:1px solid var(--warning);text-transform:none;letter-spacing:0;font-weight:500}
 .r-note{font-size:11.5px;color:var(--text-muted);font-style:italic}
 .r-acts{display:none;gap:2px;align-items:center}
@@ -292,6 +295,20 @@ button.live:hover{background:var(--hover)}
 .sess-t{font-family:var(--mono);font-size:11.5px;color:var(--text-muted);padding-top:2px;letter-spacing:.01em}
 .sess-h{font-size:13px;color:var(--text);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .sess-none{font-size:12.5px;color:var(--text-muted);margin-top:3px}
+.sess-jobs{display:flex;flex-direction:column;gap:1px;margin-top:8px}
+.sess-job{
+  display:grid;grid-template-columns:1fr auto;gap:0 12px;padding:7px 10px;
+  border-left:2px solid transparent;background:var(--surface-2);border-radius:var(--r-sm);
+}
+.sess-job.tier-high{border-left-color:var(--gold-rail)}
+.sess-job.tier-medium{border-left-color:var(--border-strong)}
+.sess-job.tier-minimal{border-left-color:var(--border)}
+.sess-job.tier-unscored{border-left-style:dotted;border-left-color:var(--border-strong)}
+.sess-job-t{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sess-job-m{grid-row:2;font-size:12px;color:var(--text-muted)}
+.sess-job-s{grid-row:1;grid-column:2;font-family:var(--mono);font-size:11.5px;color:var(--text-secondary);white-space:nowrap}
+.tier-high .sess-job-s{color:var(--gold-text)}
+.sess-more{margin-top:8px;display:inline-block}
 .daybar{padding:22px 28px 8px;font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted)}
 .bars{display:flex;flex-direction:column;gap:9px;margin:14px 0 4px}
 .bar-row{display:grid;grid-template-columns:96px 1fr 52px;gap:12px;align-items:center;font-size:13px}
@@ -467,7 +484,8 @@ var state = {
   facets: {companies:[],sources:[],families:[]},
   markCounts: {saved:0,archived:0,applied:0}, prevVisit: null,
   detailOpen: false, menuOpen: false, toast: null,
-  importData: null, importChoice: {}
+  importData: null, importChoice: {}, openSessions: {},
+  gapFamily: "", gapMin: null
 };
 
 /* ---------------- storage ---------------- */
@@ -488,6 +506,17 @@ function initVisit(){
 
 /* ---------------- helpers ---------------- */
 function tierOf(s){ if(s==null) return "unscored"; if(s>=HIGH) return "high"; if(s>=MED) return "medium"; return "minimal"; }
+/* A re-score reshuffles the ranking silently. Showing the move makes
+   ACE's own learning visible, but only while it is news: the annotation
+   is shown for scores written since the last visit, then stops. */
+function tierMove(j){
+  if(j.previous_match_score==null || j.match_score==null) return null;
+  var from=tierOf(j.previous_match_score), to=tierOf(j.match_score);
+  if(from===to) return null;
+  if(!state.prevVisit || !j.score_changed_at) return null;
+  if(new Date(j.score_changed_at) <= state.prevVisit) return null;
+  return tierLabel(from)+" \u2192 "+tierLabel(to);
+}
 function tierLabel(t){ return t==="high"?"HIGH":t==="medium"?"MEDIUM":t==="minimal"?"MINIMAL":"Not scored"; }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){
   return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
@@ -531,6 +560,16 @@ function yoe(j){ return expFit(j).text; }
 function isWide(){ return window.matchMedia("(min-width: 1024px)").matches; }
 /* Marks ride on the listing row rather than a separate client store,
    so what is drawn is always what the server holds. */
+/* Role families arrive as SCREAMING_SNAKE. Title-casing alone renders
+   "AI_ML_ENGINEERING" as "Ai ml engineering", so initialisms are kept. */
+var FAMILY_INITIALISMS = {AI:1, ML:1, UI:1, UX:1, QA:1, IT:1, SRE:1};
+function familyLabel(value){
+  return String(value||"").split("_").map(function(word, index){
+    if(FAMILY_INITIALISMS[word]) return word;
+    var lower = word.toLowerCase();
+    return index===0 ? lower.charAt(0).toUpperCase()+lower.slice(1) : lower;
+  }).join(" ");
+}
 function markOf(j){
   return {
     saved: !!j.is_saved,
@@ -614,10 +653,11 @@ function loadJobs(append){
 function loadShell(){
   return Promise.all([
     get("/api/stats", params()).then(function(d){ state.stats=d; state.lastPoll=d.last_poll_at; }),
-    get("/api/sessions", new URLSearchParams({limit:"25"})).then(function(d){ state.sessions=d.sessions||[]; if(d.last_poll_at) state.lastPoll=d.last_poll_at; }),
+    get("/api/sessions", new URLSearchParams({limit:"25", jobs_per_session:"3"})).then(function(d){ state.sessions=d.sessions||[]; if(d.last_poll_at) state.lastPoll=d.last_poll_at; }),
     get("/api/facets").then(function(d){ state.facets=d; }),
     get("/api/resume").then(function(d){ state.resume=d.resume; state.gap=d.skills_gap||[]; }),
-    get("/api/marks").then(function(d){ state.markCounts=d; })
+    get("/api/marks").then(function(d){ state.markCounts=d; }),
+    refreshNewCount()
   ]).catch(function(){});
 }
 
@@ -668,10 +708,17 @@ function liveStrip(){
 }
 
 /* ---------------- render: queue ---------------- */
-function newCount(){
-  if(!state.prevVisit) return 0;
-  var t=state.prevVisit.getTime();
-  return state.items.filter(function(j){ return new Date(j.first_seen_at).getTime()>t; }).length;
+/* Counted by the server over the whole queue, not over the rows that
+   happen to be loaded. Counting locally made the header disagree with
+   itself: the same visit read "19 new" under one sort and "60 new"
+   under another, because it was really counting the page. */
+function newCount(){ return state.newSinceVisit || 0; }
+function refreshNewCount(){
+  if(!state.prevVisit){ state.newSinceVisit = 0; return Promise.resolve(); }
+  var p = params({since: state.prevVisit.toISOString(), limit: 1});
+  return get("/api/jobs", p).then(function(d){
+    state.newSinceVisit = d.total;
+  }).catch(function(){});
 }
 function viewsBar(){
   var s=state.stats, latest=state.sessions[0];
@@ -719,7 +766,8 @@ function jobRow(j, showRead){
   var fit=expFit(j);
   var meta=['<b>'+esc(j.company)+'</b>', esc(j.location),
             '<span class="'+fit.cls+'">'+esc(fit.text)+'</span>'];
-  var badge = m.applied?'<span class="badge">'+icon(I.check)+' Applied '+shortDate(j.applied_at)+'</span>'
+  var move = tierMove(j);
+  var badge = move?'<span class="badge move">'+esc(move)+'</span>' : m.applied?'<span class="badge">'+icon(I.check)+' Applied '+shortDate(j.applied_at)+'</span>'
     : isNew?'<span class="badge new">NEW</span>'
     : m.saved?'<span class="badge">Saved</span>'
     : m.reviewed?'<span class="badge">Reviewed</span>' : "";
@@ -806,7 +854,10 @@ function queueHead(){
     '<div class="head-top"><h1 class="page-title">'+titles[state.page]+'</h1>'+
       '<span class="head-total num">'+(state.loading?"":state.total)+'</span></div>'+
     '<div class="head-live">'+liveStrip()+
-      (n&&state.page==="queue"?'<span class="since">'+n+' new since '+clock(state.prevVisit)+'</span>':'')+
+      (n&&state.page==="queue"
+        ? '<button class="since since-btn" data-act="shownew" title="Show them in arrival order">'+
+            n+' new since '+clock(state.prevVisit)+'</button>'
+        : '')+
     '</div>'+
     (state.page==="queue"?viewsBar():"")+railBar()+'</div>';
 }
@@ -888,10 +939,25 @@ function feedPage(){
   var body = state.sessions.length ? groups.map(function(g){
     return '<div class="daybar">'+esc(g.day)+'</div>'+g.rows.map(function(s){
       var qual=s.qualifying_discovered;
+      var jobs=s.jobs||[];
+      var hidden=Math.max(0, qual-jobs.length);
+      var open=state.openSessions[s.id];
+      var shown=open?jobs:jobs.slice(0,3);
       return '<div class="sess"><div class="sess-t">'+clock(s.started_at)+'</div><div>'+
         '<div class="sess-h"><span>'+s.jobs_discovered+' found, '+qual+' qualifying</span>'+
         (qual>0?'<button class="link-btn" data-session="'+s.id+'">Open in Queue &rarr;</button>':'')+'</div>'+
         (qual===0?'<div class="sess-none">Nothing new passed your filters.</div>':'')+
+        (shown.length?'<div class="sess-jobs">'+shown.map(function(j){
+          var t=tierOf(j.match_score);
+          return '<div class="sess-job tier-'+t+'">'+
+            '<span class="sess-job-t">'+esc(clean(j.title))+'</span>'+
+            '<span class="sess-job-m">'+esc(j.company)+'</span>'+
+            '<span class="sess-job-s">'+(t==="unscored"?"Not scored":tierLabel(t)+" \u00b7 "+j.match_score)+'</span>'+
+          '</div>';
+        }).join("")+'</div>':'')+
+        // Runs vary from 4 to nearly 900 jobs. Without this one big run
+        // buries a week of feed.
+        (hidden>0?'<button class="link-btn sess-more" data-session="'+s.id+'">Show '+hidden+' more in Queue &rarr;</button>':'')+
       '</div></div>';
     }).join("");
   }).join("") : box("No pulls recorded yet","ACE records a run once it has checked its sources.");
@@ -937,13 +1003,25 @@ function resumesPage(){
 function skillsPage(){
   var s=state.stats, have=state.resume?state.resume.skills:[];
   var gap=state.gap;
+  var fams=[["","All roles"]].concat((state.facets.families||[]).map(function(f){
+    return [f.value, familyLabel(f.value)];
+  }));
+  var filters='<div class="rail" style="margin:0 0 18px">'+
+    fams.map(function(f){
+      return '<button class="chip'+(state.gapFamily===f[0]?" on":"")+'" data-gapfam="'+esc(f[0])+'">'+esc(f[1])+'</button>';
+    }).join("")+
+    '<span style="width:12px"></span>'+
+    [["","All matches"],[String(HIGH),"Roles I already fit"]].map(function(t){
+      return '<button class="chip'+(String(state.gapMin||"")===t[0]?" on":"")+'" data-gapmin="'+t[0]+'">'+t[1]+'</button>';
+    }).join("")+
+  '</div>';
   var max = gap.length? gap[0].count : 1;
-  var body='<div class="pad">'+
-    '<div class="sect" style="margin-top:8px"><p class="eyebrow">On your resume</p><div class="skills">'+
+  var body='<div class="pad">'+filters+
+    '<div class="sect"><p class="eyebrow">On your resume</p><div class="skills">'+
       (have.length? have.map(function(k){return '<span class="skill">'+esc(k)+'</span>';}).join("")
         : '<span class="rel-via">No resume uploaded.</span>')+'</div></div>'+
     '<div class="sect"><p class="eyebrow">Gaps, ranked by demand</p><div class="bars">'+
-      (gap.length? gap.slice(0,12).map(function(g){
+      (gap.length? gap.slice(0,12).map(function(g){ // eslint-disable-line
         return '<div class="bar-row"><span>'+esc(g.skill)+'</span>'+
           '<span class="bar-track"><span class="bar-fill" style="width:'+Math.round(g.count/max*100)+'%"></span></span>'+
           '<span class="bar-n">'+g.count+'</span></div>';
@@ -1108,6 +1186,14 @@ function mark(id, key, advance){
     if(advance && key!=="saved" && key!=="applied" && !was) step(1); else render();
   }).catch(function(){ showToast("Could not save that change"); render(); });
 }
+function reloadGap(){
+  var p=new URLSearchParams();
+  if(state.gapFamily) p.set("family", state.gapFamily);
+  if(state.gapMin!=null) p.set("min_match", state.gapMin);
+  return get("/api/resume", p).then(function(d){
+    state.resume=d.resume; state.gap=d.skills_gap||[]; render();
+  }).catch(function(){ render(); });
+}
 function refreshMarkCounts(){
   return get("/api/marks").then(function(d){ state.markCounts=d; }).catch(function(){});
 }
@@ -1170,7 +1256,7 @@ function scorePop(anchor){
 document.addEventListener("click", function(e){
   var pal=e.target.closest("[data-pal]");
   if(pal){ runPalette(parseInt(pal.dataset.pal,10)); return; }
-  var t=e.target.closest("[data-nav],[data-view],[data-act],[data-mark],[data-step],[data-unfilter],[data-addfilter],[data-addflag],[data-sort],[data-session],[data-skillq],[data-settheme],[data-pal],.row");
+  var t=e.target.closest("[data-nav],[data-view],[data-act],[data-mark],[data-step],[data-unfilter],[data-addfilter],[data-addflag],[data-sort],[data-session],[data-skillq],[data-settheme],[data-pal],[data-gapfam],[data-gapmin],.row");
   if(!t){ if(!e.target.closest(".pop")) closePop(); return; }
   if(e.target.closest("[data-stop]")) { e.stopPropagation(); return; }
   var d=t.dataset;
@@ -1191,6 +1277,8 @@ document.addEventListener("click", function(e){
     if(i>0){ var picked=state.sessions[i]; state.sessions=[picked].concat(state.sessions.filter(function(s){return s.id!==sid;})); }
     loadJobs(); return; }
   if(d.skillq){ state.page="queue"; state.view="all"; state.q=d.skillq; loadJobs(); return; }
+  if(d.gapfam!==undefined){ state.gapFamily=d.gapfam; reloadGap(); return; }
+  if(d.gapmin!==undefined){ state.gapMin=d.gapmin?parseInt(d.gapmin,10):null; reloadGap(); return; }
   if(d.settheme){ save("ace.theme",d.settheme); applyTheme(d.settheme); render(); return; }
 
   if(d.act){
@@ -1198,6 +1286,10 @@ document.addEventListener("click", function(e){
       if(state.filters.early_career_only) delete state.filters.early_career_only;
       else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Early career",pinned:true};
       loadShell().then(function(){ loadJobs(); }); return; }
+    // The read line only means anything in arrival order, so this
+    // switches to it rather than drawing a boundary through a
+    // best-match list where new arrivals are scattered.
+    if(d.act==="shownew"){ state.sort="newest"; goTo("queue","all"); return; }
     if(d.act==="theme"){ cycleTheme(); return; }
     if(d.act==="filters"){ filterPop(t); return; }
     if(d.act==="sort"){ sortPop(t); return; }
