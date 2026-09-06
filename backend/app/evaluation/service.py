@@ -11,6 +11,7 @@ from backend.app.intelligence.eligibility import (
     EligibilityDecision,
     EligibilityStatus,
     evaluate_job,
+    has_verifiable_requirements,
 )
 from backend.app.models.job import CanonicalJob
 from backend.app.persistence.types import (
@@ -105,6 +106,33 @@ def _evaluate_jobs(
             observed_at=observed_at,
             policy=policy,
         )
+
+        # A posting whose text was unavailable stays eligible and stays
+        # in the web application, but is not emailed as ready to apply:
+        # the experience, clearance and language rules never ran on it.
+        if not has_verifiable_requirements(
+            job
+        ):
+            evaluated_jobs.append(
+                EvaluatedJob(
+                    job=job,
+                    observation_status=(
+                        observation_status
+                    ),
+                    eligibility=decision,
+                    alert_disposition=(
+                        AlertDisposition
+                        .SUPPRESS
+                    ),
+                    freshness=freshness,
+                    suppression_cause=(
+                        SuppressionCause
+                        .REQUIREMENTS_NOT_VERIFIED
+                    ),
+                )
+            )
+
+            continue
 
         if freshness.is_fresh:
             evaluated_jobs.append(

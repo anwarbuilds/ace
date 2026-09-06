@@ -95,6 +95,9 @@
   .tag.PRIMARY { color: var(--primary-tag); border-color: var(--primary-tag); }
   .tag.fresh { color: var(--pass); border-color: var(--pass); }
   .tag.NEWGRAD { color: var(--primary-tag); border-color: var(--primary-tag); font-weight: 700; }
+  .tag.UNVERIFIED { color: var(--stretch); border-color: var(--stretch); }
+  .card.unverified { border-left: 3px solid var(--stretch); }
+  .caveat { color: var(--stretch); font-size: 12.5px; margin-top: 6px; }
   .tag.closed { color: #f85149; border-color: #f85149; }
   .row { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
   .why { color: var(--muted); font-size: 12.5px; margin-top: 6px; font-style: italic; }
@@ -132,6 +135,12 @@
 
   <span><label for="company">Company</label>
   <select id="company"><option value="">Any</option></select></span>
+
+  <span><label for="verified">Requirements</label>
+  <select id="verified">
+    <option value="false">All roles</option>
+    <option value="true">Verified only</option>
+  </select></span>
 
   <span><label for="grad">Labelled</label>
   <select id="grad">
@@ -204,6 +213,7 @@
     p.set("sort", el("sort").value);
     p.set("active_only", el("active").value);
     p.set("early_career_only", el("grad").value);
+    p.set("verified_only", el("verified").value);
     p.set("limit", String(PAGE_SIZE));
     p.set("offset", String(offset));
     var q = el("q").value.trim();
@@ -221,7 +231,7 @@
     var cards = [
       ["New today", s.posted_today],
       ["New this week", s.posted_last_7_days],
-      ["New-grad labelled", s.labelled_new_grad],
+      ["Verified", s.verified_jobs],
       ["Matching filters", s.qualifying_active_jobs]
     ];
     el("stats").innerHTML = cards.map(function (c) {
@@ -243,6 +253,9 @@
 
   function card(job) {
     var tags = [];
+    if (!job.requirements_verified) {
+      tags.push('<span class="tag UNVERIFIED">UNVERIFIED</span>');
+    }
     if (job.is_early_career) {
       tags.push('<span class="tag NEWGRAD">NEW GRAD</span>');
     }
@@ -257,17 +270,22 @@
     var why = (job.reasons && job.reasons.length)
       ? '<div class="why">' + esc(job.reasons[0]) + "</div>" : "";
 
+    var caveat = job.requirements_verified ? "" :
+      '<div class="caveat">Posting text unavailable &mdash; experience, clearance and ' +
+      'language requirements were not checked. Confirm on the employer&rsquo;s page.</div>';
+
     var years = job.required_experience_years !== null
       ? "<span>" + esc(job.required_experience_years) + "+ yrs stated</span>" : "";
 
-    return '<div class="card">' +
+    var cls = job.requirements_verified ? "card" : "card unverified";
+    return '<div class="' + cls + '">' +
       '<div class="card-top"><span class="title">' + esc(job.title) + "</span>" +
       '<span class="company">' + esc(job.company) + "</span></div>" +
       '<div class="tags">' + tags.join("") + "</div>" +
       '<div class="row"><span>' + esc(job.location) + "</span>" +
       "<span>Posted " + esc(ageLabel(job.posting_age_days)) + "</span>" +
       "<span>via " + esc(job.source) + "</span>" + years + "</div>" +
-      why +
+      why + caveat +
       '<a class="apply" target="_blank" rel="noopener noreferrer" href="' +
       esc(job.official_url) + '">Open official posting →</a>' +
       "</div>";
@@ -346,7 +364,7 @@
       .catch(function () {});
   }
 
-  ["family", "company", "age", "sort", "active", "grad"].forEach(function (id) {
+  ["family", "company", "age", "sort", "active", "grad", "verified"].forEach(function (id) {
     el(id).addEventListener("change", function () {
       offset = 0; load(); loadStats();
     });

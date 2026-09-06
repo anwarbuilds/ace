@@ -23,8 +23,18 @@ from backend.app.persistence.types import (
     JobObservationStatus,
 )
 from backend.app.runners.greenhouse import (
+
+
     fetch_live_greenhouse_snapshot,
     process_live_greenhouse_snapshot,
+)
+
+
+# Gate tests exercise postings whose text ACE could actually
+# read; a description too short to state requirements is treated
+# as unverified and never becomes an alert candidate.
+VERIFIABLE_PAD = (
+    "We are a team building reliable distributed systems at scale. You will collaborate across product and platform groups, write and review code, and help operate what you ship. We value clear written communication and steady engineering judgement over heroics. Benefits include health cover, paid leave and a learning budget. We are a team building reliable distributed systems at scale. You will collaborate across product and platform groups, write and review code, and help operate what you ship. We value clear written communication and steady engineering judgement over heroics. Benefits include health cover, paid leave and a learning budget."
 )
 
 
@@ -57,7 +67,8 @@ def make_job(
             "Seattle, Washington"
         ),
         description=(
-            "New grad role. Build reliable software systems."
+            VERIFIABLE_PAD
+            + "New grad role. Build reliable software systems."
         ),
         official_url=(
             "https://example.com/jobs/"

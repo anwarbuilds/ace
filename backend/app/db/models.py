@@ -696,6 +696,13 @@ class JobEvaluationRecord(Base):
             ),
             "is_early_career",
         ),
+        Index(
+            (
+                "ix_job_evaluations_"
+                "verified"
+            ),
+            "requirements_verified",
+        ),
     )
 
     job_id: Mapped[int] = mapped_column(
@@ -755,6 +762,15 @@ class JobEvaluationRecord(Base):
         Boolean,
         nullable=False,
         server_default="false",
+    )
+
+    # False when the posting text was unavailable, so the rules reading
+    # requirement text never ran. Such jobs stay in the web application
+    # but are not emailed as ready to apply.
+    requirements_verified: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="true",
     )
 
     evaluated_at: Mapped[datetime] = mapped_column(

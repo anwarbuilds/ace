@@ -41,7 +41,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-06-v12"
+    "2026-09-06-v13"
 )
 
 
@@ -114,6 +114,10 @@ class EligibilityReasonCode(
 
     EARLY_CAREER_SIGNAL = (
         "EARLY_CAREER_SIGNAL"
+    )
+
+    REQUIREMENTS_NOT_VERIFIED = (
+        "REQUIREMENTS_NOT_VERIFIED"
     )
 
     NO_HARD_BLOCKER = (
@@ -554,6 +558,38 @@ EARLY_CAREER_TITLE_PATTERNS = (
 # A role stating two years or less is an early-career role even when it
 # never uses the words.
 EARLY_CAREER_MAX_YEARS = 2
+
+
+# A posting shorter than this cannot state its own requirements, so the
+# rules that read requirement text never had anything to read.
+#
+# Measured against the live corpus this separates cleanly: curated-feed
+# entries run 93 to 172 characters, real postings 2000 and up. The few
+# genuine postings it catches are threadbare ones where requirements
+# were equally unverifiable, so the label is accurate there too.
+MIN_VERIFIABLE_DESCRIPTION_CHARS = 400
+
+
+def has_verifiable_requirements(
+    job: CanonicalJob,
+) -> bool:
+    """Return whether the posting stated enough to be checked.
+
+    This is not an eligibility question. A job with unverifiable
+    requirements still belongs in ACE and still appears in the web
+    application; it is simply not something to put in an email as
+    "ready to apply", because the experience, clearance and language
+    rules could not run on it.
+    """
+
+    return (
+        len(
+            (
+                job.description or ""
+            ).strip()
+        )
+        >= MIN_VERIFIABLE_DESCRIPTION_CHARS
+    )
 
 
 # ----------------------------------------------------------------------
@@ -1423,6 +1459,25 @@ def evaluate_job(
             required_years=required_years,
         )
     )
+
+    if not has_verifiable_requirements(
+        job
+    ):
+        note_codes.append(
+            EligibilityReasonCode
+            .REQUIREMENTS_NOT_VERIFIED
+        )
+
+        note_reasons.append(
+            (
+                "Posting text was not "
+                "available, so experience, "
+                "clearance and language "
+                "requirements could not be "
+                "checked. Confirm them on the "
+                "employer's posting."
+            )
+        )
 
     if is_early_career:
         note_codes.append(

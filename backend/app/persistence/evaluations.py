@@ -76,6 +76,11 @@ def _evaluation_values(
             .EARLY_CAREER_SIGNAL
             in decision.reason_codes
         ),
+        "requirements_verified": (
+            EligibilityReasonCode
+            .REQUIREMENTS_NOT_VERIFIED
+            not in decision.reason_codes
+        ),
         "evaluated_at": evaluated_at,
     }
 

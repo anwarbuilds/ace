@@ -131,6 +131,9 @@ def _serialize_job(
         "is_early_career": (
             job.is_early_career
         ),
+        "requirements_verified": (
+            job.requirements_verified
+        ),
     }
 
 
@@ -238,6 +241,14 @@ def create_app() -> FastAPI:
                 "new-grad roles."
             ),
         ),
+        verified_only: bool = Query(
+            default=False,
+            description=(
+                "Only postings whose "
+                "requirements ACE could "
+                "actually read."
+            ),
+        ),
         sort: str = Query(
             default="new_grad_first",
         ),
@@ -285,6 +296,7 @@ def create_app() -> FastAPI:
                 early_career_only=(
                     early_career_only
                 ),
+                verified_only=verified_only,
                 sort=normalized_sort,
                 limit=limit,
                 offset=offset,
@@ -335,6 +347,9 @@ def create_app() -> FastAPI:
         early_career_only: bool = Query(
             default=False,
         ),
+        verified_only: bool = Query(
+            default=False,
+        ),
     ) -> dict:
         """Return headline counts for the current filter selection.
 
@@ -362,6 +377,7 @@ def create_app() -> FastAPI:
                 early_career_only=(
                     early_career_only
                 ),
+                verified_only=verified_only,
             ),
         )
 

@@ -20,6 +20,14 @@ from backend.app.models.job import (
 # Every gate test job is early-career unless the test is specifically
 # about the early-career rule. Appending the marker keeps each test
 # focused on the single rule it is exercising.
+# Gate tests exercise postings whose text ACE could actually
+# read; a description too short to state requirements is treated
+# as unverified and never becomes an alert candidate.
+VERIFIABLE_PAD = (
+    "We are a team building reliable distributed systems at scale. You will collaborate across product and platform groups, write and review code, and help operate what you ship. We value clear written communication and steady engineering judgement over heroics. Benefits include health cover, paid leave and a learning budget. We are a team building reliable distributed systems at scale. You will collaborate across product and platform groups, write and review code, and help operate what you ship. We value clear written communication and steady engineering judgement over heroics. Benefits include health cover, paid leave and a learning budget."
+)
+
+
 EARLY_CAREER_NOTE = "This is a new grad role. "
 
 
@@ -36,6 +44,7 @@ def make_job(
         description = (
             EARLY_CAREER_NOTE
             + description
+            + VERIFIABLE_PAD
         )
 
     return CanonicalJob(
@@ -626,6 +635,7 @@ def _job(
         description = (
             EARLY_CAREER_NOTE
             + description
+            + VERIFIABLE_PAD
         )
 
     return CanonicalJob(

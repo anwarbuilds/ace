@@ -89,6 +89,8 @@ class JobFilters:
 
     early_career_only: bool = False
 
+    verified_only: bool = False
+
     sort: str = "new_grad_first"
 
     limit: int = DEFAULT_PAGE_SIZE
@@ -144,6 +146,8 @@ class JobListing:
     posting_age_days: int | None
 
     is_early_career: bool = False
+
+    requirements_verified: bool = True
 
 
 @dataclass(
@@ -285,6 +289,14 @@ def _apply_filters(
             )
         )
 
+    if filters.verified_only:
+        statement = statement.where(
+            JobEvaluationRecord
+            .requirements_verified.is_(
+                True
+            )
+        )
+
     if filters.early_career_only:
         statement = statement.where(
             JobEvaluationRecord
@@ -335,8 +347,11 @@ def _apply_sort(
     """Apply a deterministic ordering to a job query."""
 
     if sort == "new_grad_first":
-        # Explicitly labelled new-grad roles lead, then freshest first.
+        # Verified postings lead, then labelled new-grad, then freshest.
+        # An unverified posting is a lead to check, not a result.
         return statement.order_by(
+            JobEvaluationRecord
+            .requirements_verified.desc(),
             JobEvaluationRecord
             .is_early_career.desc(),
             JobRecord.posted_at.desc()
@@ -511,6 +526,10 @@ def list_jobs(
             is_early_career=bool(
                 evaluation.is_early_career
             ),
+            requirements_verified=bool(
+                evaluation
+                .requirements_verified
+            ),
         )
         for job, evaluation in rows
     )
@@ -624,6 +643,7 @@ def build_stats(
         *,
         max_age_days: int | None = None,
         early_career_only: bool = False,
+        verified_only: bool = False,
     ) -> int:
         """Count gate-passing jobs under the caller's filters."""
 
@@ -643,6 +663,11 @@ def build_stats(
                 early_career_only
                 or active_filters
                 .early_career_only
+            ),
+            verified_only=(
+                verified_only
+                or active_filters
+                .verified_only
             ),
         )
 
@@ -685,6 +710,10 @@ def build_stats(
         )
     )
 
+    verified = _qualifying_count(
+        verified_only=True
+    )
+
     return {
         # Every figure here describes the apply-ready queue. Corpus
         # size is deliberately absent: this page exists to show what to
@@ -695,6 +724,7 @@ def build_stats(
         "labelled_new_grad": (
             labelled_new_grad
         ),
+        "verified_jobs": verified,
         "qualifying_active_jobs": (
             qualifying
         ),

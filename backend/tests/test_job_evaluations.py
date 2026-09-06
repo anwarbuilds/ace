@@ -45,6 +45,14 @@ from backend.app.persistence.types import (
 )
 
 
+# Gate tests exercise postings whose text ACE could actually
+# read; a description too short to state requirements is treated
+# as unverified and never becomes an alert candidate.
+VERIFIABLE_PAD = (
+    "We are a team building reliable distributed systems at scale. You will collaborate across product and platform groups, write and review code, and help operate what you ship. We value clear written communication and steady engineering judgement over heroics. Benefits include health cover, paid leave and a learning budget. We are a team building reliable distributed systems at scale. You will collaborate across product and platform groups, write and review code, and help operate what you ship. We value clear written communication and steady engineering judgement over heroics. Benefits include health cover, paid leave and a learning budget."
+)
+
+
 NOW = datetime(
     2026,
     9,
@@ -94,7 +102,7 @@ def make_canonical(
         external_id=external_id,
         title=title,
         location="Seattle, WA",
-        description=description,
+        description=description + VERIFIABLE_PAD,
         official_url=(
             "https://example.com/jobs/"
             f"{external_id}"

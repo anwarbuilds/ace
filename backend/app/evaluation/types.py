@@ -34,6 +34,10 @@ class SuppressionCause(str, Enum):
 
     NOT_FRESH = "NOT_FRESH"
 
+    REQUIREMENTS_NOT_VERIFIED = (
+        "REQUIREMENTS_NOT_VERIFIED"
+    )
+
 
 @dataclass(frozen=True, slots=True)
 class EvaluatedJob:
@@ -61,6 +65,16 @@ class EvaluatedJob:
         return (
             self.alert_disposition
             == AlertDisposition.ALERT
+        )
+
+    @property
+    def is_unverified(self) -> bool:
+        """Return whether requirements could not be checked."""
+
+        return (
+            self.suppression_cause
+            == SuppressionCause
+            .REQUIREMENTS_NOT_VERIFIED
         )
 
     @property
