@@ -126,12 +126,11 @@
 <div class="stats" id="stats"></div>
 
 <div class="filters">
-  <span><label for="status">Eligibility</label>
+  <span><label for="status">Show</label>
   <select id="status">
-    <option value="PASS,STRETCH">Qualifying (PASS + STRETCH)</option>
-    <option value="PASS">PASS only</option>
-    <option value="STRETCH">STRETCH only</option>
-    <option value="PASS,STRETCH,REJECT">Everything</option>
+    <option value="PASS">Apply to these</option>
+    <option value="REJECT">Excluded (audit)</option>
+    <option value="PASS,REJECT">Everything</option>
   </select></span>
 
   <span><label for="priority">Priority</label>
@@ -221,7 +220,7 @@
 
   function renderStats(s) {
     var cards = [
-      ["Qualifying open", s.qualifying_active_jobs],
+      ["Apply-ready", s.qualifying_active_jobs],
       ["Posted last 7d", s.posted_last_7_days],
       ["Active jobs", s.active_jobs],
       ["Jobs tracked", s.total_jobs]
@@ -245,7 +244,6 @@
 
   function card(job) {
     var tags = [
-      '<span class="tag ' + esc(job.eligibility_status) + '">' + esc(job.eligibility_status) + "</span>",
       '<span class="tag ' + esc(job.role_priority) + '">' + esc(job.role_priority) + "</span>",
       '<span class="tag">' + esc(job.role_family) + "</span>"
     ];

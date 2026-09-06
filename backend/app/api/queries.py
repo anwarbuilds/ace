@@ -36,9 +36,16 @@ DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 200
 
 
+# A surfaced job means "apply to this". The gate is binary, so the
+# qualifying set is exactly PASS. STRETCH remains readable for rows
+# evaluated under an older rule version.
 ALERTABLE_STATUSES = (
     "PASS",
     "STRETCH",
+)
+
+QUALIFYING_STATUSES = (
+    "PASS",
 )
 
 
@@ -59,7 +66,7 @@ class JobFilters:
     """User-selected constraints for a job listing."""
 
     statuses: tuple[str, ...] = (
-        ALERTABLE_STATUSES
+        QUALIFYING_STATUSES
     )
 
     families: tuple[str, ...] = ()
@@ -497,7 +504,7 @@ def count_by(
     *,
     active_only: bool = True,
     statuses: Sequence[str] = (
-        ALERTABLE_STATUSES
+        QUALIFYING_STATUSES
     ),
 ) -> list[tuple[str, int]]:
     """Return counts grouped by one column, largest first."""
@@ -630,7 +637,7 @@ def build_stats(
             ),
             JobEvaluationRecord
             .eligibility_status.in_(
-                ALERTABLE_STATUSES
+                QUALIFYING_STATUSES
             ),
         )
     )
@@ -660,7 +667,7 @@ def build_stats(
             ),
             JobEvaluationRecord
             .eligibility_status.in_(
-                ALERTABLE_STATUSES
+                QUALIFYING_STATUSES
             ),
             JobRecord.posted_at.is_not(
                 None
@@ -741,10 +748,8 @@ def build_facets(
                 JobRecord.source,
             )
         ],
-        "statuses": list(
-            ALERTABLE_STATUSES
-        )
-        + [
+        "statuses": [
+            "PASS",
             "REJECT",
         ],
         "sorts": list(

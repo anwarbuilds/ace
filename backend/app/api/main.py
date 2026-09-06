@@ -174,7 +174,7 @@ def create_app() -> FastAPI:
             get_session
         ),
         status: str | None = Query(
-            default="PASS,STRETCH",
+            default="PASS",
             description=(
                 "Comma-separated "
                 "eligibility statuses."

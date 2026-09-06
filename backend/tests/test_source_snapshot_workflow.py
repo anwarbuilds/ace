@@ -380,14 +380,17 @@ def test_mixed_lifecycle_changes_preserve_observation_status() -> None:
     assert result.alert_candidate_count == 3
     assert result.suppressed_count == 0
 
+    # All three lifecycle changes now yield a plain PASS: the gate is
+    # binary, so a 3-year requirement is no longer a separate tier.
     assert (
         result.evaluation.pass_count
-        == 2
+        == 3
     )
 
+    # STRETCH is no longer produced by the gate.
     assert (
         result.evaluation.stretch_count
-        == 1
+        == 0
     )
 
     assert (

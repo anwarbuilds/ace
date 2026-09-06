@@ -165,7 +165,7 @@ def test_defaults_return_only_qualifying_active_jobs(
         add_job(
             session,
             external_id="2",
-            status="STRETCH",
+            status="PASS",
         )
 
         add_job(

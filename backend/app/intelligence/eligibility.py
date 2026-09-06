@@ -7,11 +7,11 @@ Core invariants:
 
 1. Role classification determines the target role family.
 2. Eligibility determines inclusion.
-3. Ranking and resume relevance only control ordering.
+3. A surfaced job means "apply to this". There is no partial tier.
 4. Missing sponsorship information is unknown, not rejection.
 5. Missing experience information is unknown, not rejection.
 6. Explicitly PhD-targeted roles are excluded.
-7. Ambiguous remote geography is retained as STRETCH to protect recall.
+7. Ambiguous remote geography qualifies rather than forming a tier.
 8. Explicit non-US geography remains excluded.
 9. Explicit non-US country names override ambiguous state codes.
 10. Hardware-oriented embedded/firmware roles are excluded.
@@ -39,8 +39,14 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-05-v8"
+    "2026-09-05-v9"
 )
+
+
+# The user has roughly 3.5 years of experience. A posting demanding four
+# or more years is excluded outright rather than softened, because ACE
+# now surfaces a single list meaning "apply to this".
+MAX_REQUIRED_EXPERIENCE_YEARS = 4
 
 
 class EligibilityStatus(
@@ -621,14 +627,71 @@ CASE_SENSITIVE_OTHER_LANGUAGE_PATTERNS = (
 )
 
 
-EXPERIENCE_PATTERN = re.compile(
-    (
-        r"(?P<years>\d{1,2})"
-        r"\s*\+?\s*"
-        r"(?:years|yrs)\b"
-    ),
+# ----------------------------------------------------------------------
+# Experience extraction
+# ----------------------------------------------------------------------
+#
+# A number is only an experience requirement when it is actually
+# attached to experience language. Matching bare digits picked up
+# unrelated figures such as salary bands and founding years.
+EXPERIENCE_CONTEXT = (
+    r"(?:of\s+)?"
+    r"(?:relevant\s+|professional\s+|industry\s+|"
+    r"hands-?on\s+|work\s+|software\s+|engineering\s+|"
+    r"full-?time\s+)*"
+    r"(?:experience|building|shipping|working|developing|"
+    r"designing|writing|programming)"
+)
+
+
+# "2-5+ years of experience" states a minimum of two, not five.
+EXPERIENCE_RANGE_PATTERN = re.compile(
+    rf"(?P<low>\d{{1,2}})\s*(?:-|\u2013|\u2014|\s+to\s+)\s*"
+    rf"(?P<high>\d{{1,2}})\s*\+?\s*(?:years?|yrs?)\s+"
+    rf"{EXPERIENCE_CONTEXT}",
     re.IGNORECASE,
 )
+
+
+EXPERIENCE_PATTERN = re.compile(
+    rf"(?P<years>\d{{1,2}})\s*\+?\s*(?:years?|yrs?)\s+"
+    rf"{EXPERIENCE_CONTEXT}",
+    re.IGNORECASE,
+)
+
+
+# Section headers decide whether a figure is required or merely wanted.
+#
+# The previous implementation scanned a fixed 100-character window for
+# words like "preferred" or "ideally". Real postings almost always have
+# such a word near any number -- "ideally in fields such as Computer
+# Science ... 4+ years building backend" -- so genuine requirements were
+# being discarded and senior roles reached the queue.
+PREFERRED_SECTION_PATTERNS = (
+    r"preferred\s+qualifications",
+    r"nice[-\s]to[-\s]have",
+    r"bonus\s+points",
+    r"desired\s+qualifications",
+    r"good\s+to\s+have",
+    r"pluses",
+    r"it'?s\s+a\s+plus",
+)
+
+
+REQUIRED_SECTION_PATTERNS = (
+    r"minimum\s+qualifications",
+    r"basic\s+qualifications",
+    r"required\s+qualifications",
+    r"requirements",
+    r"what\s+you'?ll\s+need",
+    r"what\s+we'?re\s+looking\s+for",
+    r"who\s+you\s+are",
+    r"about\s+you",
+    r"qualifications",
+)
+
+
+SECTION_LOOKBACK_CHARS = 1200
 
 
 def _contains_any(
@@ -808,63 +871,178 @@ def _has_early_career_signal(
     )
 
 
-def _required_experience_years(
+def _nearest_section_is_preferred(
     description: str,
-) -> int | None:
-    """Extract the largest non-preferred experience requirement.
+    position: int,
+) -> bool:
+    """Classify a match by its nearest preceding section header.
 
-    Experience numbers in clearly optional or preferred context are
-    ignored by the hard eligibility gate to protect recall.
-
-    No detected experience requirement means unknown, not rejection.
+    Returns True when the closest header before ``position`` marks an
+    optional section, meaning the figure is wanted rather than required.
     """
 
-    if not description:
-        return None
+    window_start = max(
+        0,
+        position - SECTION_LOOKBACK_CHARS,
+    )
 
-    required_years: list[int] = []
+    window = description[
+        window_start:position
+    ]
+
+    nearest_preferred = -1
+
+    nearest_required = -1
+
+    for pattern in (
+        PREFERRED_SECTION_PATTERNS
+    ):
+        for match in re.finditer(
+            pattern,
+            window,
+            re.IGNORECASE,
+        ):
+            nearest_preferred = max(
+                nearest_preferred,
+                match.start(),
+            )
+
+    for pattern in (
+        REQUIRED_SECTION_PATTERNS
+    ):
+        for match in re.finditer(
+            pattern,
+            window,
+            re.IGNORECASE,
+        ):
+            nearest_required = max(
+                nearest_required,
+                match.start(),
+            )
+
+    return (
+        nearest_preferred
+        > nearest_required
+    )
+
+
+def _experience_figures(
+    description: str,
+) -> tuple[
+    list[int],
+    list[int],
+]:
+    """Return (required, optional) stated experience figures."""
+
+    required: list[int] = []
+
+    optional: list[int] = []
+
+    consumed: set[int] = set()
+
+    # Ranges first, so "2-5 years" is read as a minimum of two rather
+    # than as two separate figures.
+    for match in (
+        EXPERIENCE_RANGE_PATTERN.finditer(
+            description
+        )
+    ):
+        for offset in range(
+            match.start(),
+            match.end(),
+        ):
+            consumed.add(
+                offset
+            )
+
+        years = int(
+            match.group(
+                "low"
+            )
+        )
+
+        if _nearest_section_is_preferred(
+            description,
+            match.start(),
+        ):
+            optional.append(
+                years
+            )
+
+        else:
+            required.append(
+                years
+            )
 
     for match in (
         EXPERIENCE_PATTERN.finditer(
             description
         )
     ):
-        context_start = max(
-            0,
-            match.start() - 100,
-        )
-
-        context_end = min(
-            len(description),
-            match.end() + 100,
-        )
-
-        context = description[
-            context_start:
-            context_end
-        ].casefold()
-
-        if any(
-            marker in context
-            for marker
-            in PREFERRED_CONTEXT_MARKERS
-        ):
+        if match.start() in consumed:
             continue
 
-        required_years.append(
-            int(
-                match.group(
-                    "years"
-                )
+        years = int(
+            match.group(
+                "years"
             )
         )
 
-    if not required_years:
+        if _nearest_section_is_preferred(
+            description,
+            match.start(),
+        ):
+            optional.append(
+                years
+            )
+
+        else:
+            required.append(
+                years
+            )
+
+    return (
+        required,
+        optional,
+    )
+
+
+def _required_experience_years(
+    description: str,
+) -> int | None:
+    """Extract the lowest experience bar the posting actually sets.
+
+    The minimum is used rather than the maximum: a posting listing both
+    "3+ years" and "7+ years" will consider a candidate with three.
+
+    When a posting states experience only in an optional section, that
+    figure is still used. A role whose sole stated experience bar is
+    "8+ years preferred" is not an early-career role, and surfacing it
+    would waste the user's application time.
+
+    No detected requirement means unknown, not rejection.
+    """
+
+    if not description:
         return None
 
-    return max(
-        required_years
+    required, optional = (
+        _experience_figures(
+            description
+        )
     )
+
+    if required:
+        return min(
+            required
+        )
+
+    if optional:
+        return min(
+            optional
+        )
+
+    return None
 
 
 def _is_hardware_embedded_role(
@@ -1002,11 +1180,13 @@ def evaluate_job(
         str
     ] = []
 
-    stretch_codes: list[
+    # Informational only. These never change the outcome; they travel
+    # with a qualifying decision so the UI can show a caveat.
+    note_codes: list[
         EligibilityReasonCode
     ] = []
 
-    stretch_reasons: list[
+    note_reasons: list[
         str
     ] = []
 
@@ -1036,17 +1216,22 @@ def evaluate_job(
             job.location
         )
     ):
-        stretch_codes.append(
+        # Remote without stated geography qualifies. ACE surfaces one
+        # actionable list, so an ambiguous-but-plausible US remote role
+        # belongs in it rather than in a separate tier the user has to
+        # reason about. The caveat is still recorded so the card can say
+        # the posting never stated its geography.
+        note_codes.append(
             EligibilityReasonCode
             .LOCATION_UNCERTAIN
         )
 
-        stretch_reasons.append(
+        note_reasons.append(
             (
                 "Posting is remote but does "
-                "not specify geographic scope; "
-                "retained to protect discovery "
-                "recall."
+                "not state geographic scope; "
+                "confirm US eligibility "
+                "before applying."
             )
         )
 
@@ -1106,40 +1291,17 @@ def evaluate_job(
         )
     )
 
+    # The user has ~3.5 years of experience and wants only roles they
+    # can credibly apply to. Four or more years is therefore a hard
+    # exclusion rather than a soft penalty, unless the posting also
+    # carries an explicit early-career signal.
     if (
         required_years is not None
-        and required_years >= 5
+        and required_years
+        >= MAX_REQUIRED_EXPERIENCE_YEARS
     ):
-        reject_codes.append(
-            EligibilityReasonCode
-            .EXPERIENCE_TOO_HIGH
-        )
-
-        reject_reasons.append(
-            (
-                "Posting requires "
-                f"approximately "
-                f"{required_years}+ "
-                "years experience."
-            )
-        )
-
-    elif required_years == 4:
         if early_career_signal:
-            stretch_codes.append(
-                EligibilityReasonCode
-                .EXPERIENCE_STRETCH
-            )
-
-            stretch_reasons.append(
-                (
-                    "Posting requests "
-                    "approximately 4 years "
-                    "experience but contains "
-                    "an explicit early-career "
-                    "signal."
-                )
-            )
+            pass
 
         else:
             reject_codes.append(
@@ -1150,24 +1312,11 @@ def evaluate_job(
             reject_reasons.append(
                 (
                     "Posting requires "
-                    "approximately 4 years "
-                    "experience."
+                    f"approximately "
+                    f"{required_years}+ "
+                    "years experience."
                 )
             )
-
-    elif required_years == 3:
-        stretch_codes.append(
-            EligibilityReasonCode
-            .EXPERIENCE_STRETCH
-        )
-
-        stretch_reasons.append(
-            (
-                "Posting requests "
-                "approximately 3 years "
-                "experience."
-            )
-        )
 
     if _is_hardware_embedded_role(
         job
@@ -1275,41 +1424,25 @@ def evaluate_job(
             ),
         )
 
-    if stretch_codes:
-        return EligibilityDecision(
-            status=(
-                EligibilityStatus.STRETCH
-            ),
-            role_family=(
-                role.family
-            ),
-            role_priority=(
-                role.priority
-            ),
-            reason_codes=tuple(
-                stretch_codes
-            ),
-            reasons=tuple(
-                stretch_reasons
-            ),
-            required_experience_years=(
-                required_years
-            ),
-        )
-
     return EligibilityDecision(
         status=EligibilityStatus.PASS,
         role_family=role.family,
         role_priority=role.priority,
-        reason_codes=(
-            EligibilityReasonCode
-            .NO_HARD_BLOCKER,
+        reason_codes=tuple(
+            [
+                EligibilityReasonCode
+                .NO_HARD_BLOCKER,
+                *note_codes,
+            ]
         ),
-        reasons=(
-            (
-                "No hard eligibility "
-                "blocker detected."
-            ),
+        reasons=tuple(
+            [
+                (
+                    "No hard eligibility "
+                    "blocker detected."
+                ),
+                *note_reasons,
+            ]
         ),
         required_experience_years=(
             required_years

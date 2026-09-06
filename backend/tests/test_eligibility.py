@@ -163,7 +163,7 @@ def test_remote_us_passes() -> None:
     )
 
 
-def test_unknown_remote_is_stretch() -> None:
+def test_unknown_remote_qualifies() -> None:
     decision = evaluate_job(
         make_job(
             location="Remote",
@@ -172,7 +172,7 @@ def test_unknown_remote_is_stretch() -> None:
 
     assert (
         decision.status
-        == EligibilityStatus.STRETCH
+        == EligibilityStatus.PASS
     )
 
     assert (
@@ -182,7 +182,7 @@ def test_unknown_remote_is_stretch() -> None:
     )
 
 
-def test_worldwide_remote_is_stretch() -> None:
+def test_worldwide_remote_qualifies() -> None:
     decision = evaluate_job(
         make_job(
             location="Remote - Worldwide",
@@ -191,7 +191,7 @@ def test_worldwide_remote_is_stretch() -> None:
 
     assert (
         decision.status
-        == EligibilityStatus.STRETCH
+        == EligibilityStatus.PASS
     )
 
     assert (
@@ -266,7 +266,7 @@ def test_senior_role_rejected() -> None:
     )
 
 
-def test_three_year_requirement_is_stretch() -> None:
+def test_three_year_requirement_qualifies() -> None:
     decision = evaluate_job(
         make_job(
             description=(
@@ -279,7 +279,7 @@ def test_three_year_requirement_is_stretch() -> None:
 
     assert (
         decision.status
-        == EligibilityStatus.STRETCH
+        == EligibilityStatus.PASS
     )
 
     assert (
@@ -305,7 +305,7 @@ def test_four_year_requirement_rejected() -> None:
     )
 
 
-def test_four_year_new_grad_role_is_stretch() -> None:
+def test_four_year_new_grad_role_qualifies() -> None:
     decision = evaluate_job(
         make_job(
             title=(
@@ -321,7 +321,7 @@ def test_four_year_new_grad_role_is_stretch() -> None:
 
     assert (
         decision.status
-        == EligibilityStatus.STRETCH
+        == EligibilityStatus.PASS
     )
 
 
@@ -350,7 +350,14 @@ def test_seven_year_requirement_always_rejected() -> None:
     )
 
 
-def test_preferred_experience_does_not_reject() -> None:
+def test_four_years_even_when_only_preferred_is_excluded() -> None:
+    """A role whose sole stated bar is 4+ years is not early-career.
+
+    The user has ~3.5 years and asked for a single actionable list, so
+    an optional-section figure is still used when it is the only
+    experience signal the posting gives.
+    """
+
     decision = evaluate_job(
         make_job(
             description=(
@@ -363,7 +370,32 @@ def test_preferred_experience_does_not_reject() -> None:
 
     assert (
         decision.status
+        == EligibilityStatus.REJECT
+    )
+
+
+def test_low_requirement_wins_over_high_preference() -> None:
+    """A stated minimum outranks a higher preferred figure."""
+
+    decision = evaluate_job(
+        make_job(
+            description=(
+                "MINIMUM QUALIFICATIONS 2+ "
+                "years of experience. "
+                "PREFERRED QUALIFICATIONS 8+ "
+                "years of experience."
+            ),
+        )
+    )
+
+    assert (
+        decision.status
         == EligibilityStatus.PASS
+    )
+
+    assert (
+        decision.required_experience_years
+        == 2
     )
 
 

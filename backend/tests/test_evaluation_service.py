@@ -180,7 +180,7 @@ def test_primary_pass_job_becomes_alert_candidate() -> None:
     )
 
 
-def test_primary_stretch_job_remains_alert_candidate() -> None:
+def test_three_year_job_remains_alert_candidate() -> None:
     job = make_job(
         "2",
         title="Machine Learning Engineer",
@@ -199,7 +199,7 @@ def test_primary_stretch_job_remains_alert_candidate() -> None:
     )
 
     assert result.alert_candidate_count == 1
-    assert result.stretch_count == 1
+    assert result.pass_count == 1
 
     evaluated = result.alert_candidates[
         0
@@ -207,7 +207,7 @@ def test_primary_stretch_job_remains_alert_candidate() -> None:
 
     assert (
         evaluated.eligibility.status
-        == EligibilityStatus.STRETCH
+        == EligibilityStatus.PASS
     )
 
     assert (
@@ -378,8 +378,9 @@ def test_mixed_batch_reports_correct_counts() -> None:
 
     assert result.evaluated_count == 3
 
-    assert result.pass_count == 1
-    assert result.stretch_count == 1
+    # The 3-year role is now a plain PASS: the gate is binary and the
+    # user has ~3.5 years, so it is genuinely applicable.
+    assert result.pass_count == 2
     assert result.reject_count == 1
 
     assert result.alert_candidate_count == 2
