@@ -681,3 +681,68 @@ class PollSessionRecord(Base):
         nullable=False,
         server_default="0",
     )
+
+
+class JobMarkRecord(Base):
+    """One person's standing judgement about one job.
+
+    Unlike evaluations and scores, these cannot be recomputed. They are
+    entered by hand, so they are authoritative rather than derived and
+    must never be rebuilt or discarded by a re-score.
+    """
+
+    __tablename__ = "job_marks"
+
+    __table_args__ = (
+        CheckConstraint(
+            "review_state IS NULL OR "
+            "review_state IN "
+            "('reviewed', 'dismissed')",
+            name=(
+                "ck_job_marks_"
+                "review_state_valid"
+            ),
+        ),
+        Index(
+            "ix_job_marks_saved",
+            "is_saved",
+        ),
+        Index(
+            "ix_job_marks_review_state",
+            "review_state",
+        ),
+    )
+
+    job_id: Mapped[int] = mapped_column(
+        BIGINT_ID,
+        ForeignKey(
+            "jobs.id",
+            ondelete="CASCADE",
+        ),
+        primary_key=True,
+        autoincrement=False,
+    )
+
+    is_saved: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
+
+    # "reviewed" or "dismissed". One column rather than two booleans
+    # because both mean "handled" and a job cannot be each at once.
+    review_state: Mapped[str | None] = mapped_column(
+        String(16),
+        nullable=True,
+    )
+
+    applied_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )

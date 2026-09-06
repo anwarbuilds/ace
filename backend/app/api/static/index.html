@@ -318,6 +318,21 @@ button.live:hover{background:var(--hover)}
   animation:rise var(--base) var(--ease-out);
 }
 @keyframes rise{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+.palette-wrap{position:fixed;inset:0;z-index:80;background:var(--backdrop);display:flex;justify-content:center;padding-top:14vh}
+.palette{
+  width:min(560px,92vw);height:max-content;max-height:60vh;display:flex;flex-direction:column;
+  background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-lg);overflow:hidden;animation:pop var(--base) var(--ease-out);
+}
+.palette input{
+  border:none;border-bottom:1px solid var(--border-subtle);background:none;
+  padding:14px 16px;font-size:14px;width:100%;
+}
+.palette input::placeholder{color:var(--text-muted)}
+.palette-list{overflow-y:auto;padding:6px}
+.pal-opt{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:var(--r-md);font-size:13px;color:var(--text-secondary)}
+.pal-opt:hover,.pal-opt.on{background:var(--hover);color:var(--text)}
+.pal-none{padding:16px;font-size:13px;color:var(--text-muted)}
 .pop{
   position:fixed;z-index:70;background:var(--surface-1);border:1px solid var(--border);
   border-radius:var(--r-lg);box-shadow:var(--shadow-lg);padding:16px;max-width:320px;
@@ -346,9 +361,16 @@ button.live:hover{background:var(--hover)}
   .side{padding:20px 8px 12px;align-items:center}
   .brand{padding:0 0 24px}
 }
+.scrim{position:fixed;inset:0;z-index:45;background:var(--backdrop)}
+@media (min-width:1024px){.scrim{display:none}}
 @media (max-width:1023px){
   .app{grid-template-columns:1fr}
-  .side{display:none}
+  .side{
+    display:flex;position:fixed;left:0;top:0;bottom:0;width:248px;z-index:50;
+    background:var(--canvas);border-right:1px solid var(--border);
+    transform:translateX(-100%);transition:transform var(--slow) var(--ease-emph);
+  }
+  .side.open{transform:translateX(0)}
   .list-col{border-right:none}
   .detail{position:fixed;inset:0;z-index:40;transform:translateX(100%);transition:transform var(--slow) var(--ease-emph);border-left:none}
   .detail.open{transform:translateX(0)}
@@ -412,13 +434,13 @@ var state = {
   page: "queue", view: "all",
   q: "", sort: "best_match",
   filters: {},          // key -> {type,value,label}
-  items: [], total: 0, loading: true, loadingMore: false, hasMore: false, offset: 0,
+  items: [], total: 0, loading: true, loadingMore: false, hasMore: false, offset: 0, reqToken: 0,
   selectedId: null,
   stats: {}, sessions: [], lastPoll: null,
   resume: null, gap: [],
   facets: {companies:[],sources:[],families:[]},
-  marks: {}, prevVisit: null, seenIds: {},
-  detailOpen: false, toast: null
+  markCounts: {saved:0,archived:0,applied:0}, prevVisit: null,
+  detailOpen: false, menuOpen: false, toast: null
 };
 
 /* ---------------- storage ---------------- */
@@ -456,6 +478,7 @@ function ago(iso){
   if(d<86400*7) return Math.floor(d/86400)+"d ago";
   return new Date(iso).toLocaleDateString(undefined,{month:"short",day:"numeric"});
 }
+function shortDate(d){ return d? new Date(d).toLocaleDateString(undefined,{month:"short",day:"numeric"}) : ""; }
 function clock(d){ return new Date(d).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}); }
 function dayName(d){
   var t=new Date(), y=new Date(Date.now()-86400000), x=new Date(d);
@@ -479,8 +502,21 @@ function yoe(j){ return expFit(j).text; }
    Reading the same media query keeps JS and CSS from drifting, and
    avoids window.innerWidth, which some environments report as 0. */
 function isWide(){ return window.matchMedia("(min-width: 1024px)").matches; }
-function markOf(id){ return state.marks[id] || {}; }
-function isDone(id){ var m=markOf(id); return !!(m.reviewed||m.dismissed); }
+/* Marks ride on the listing row rather than a separate client store,
+   so what is drawn is always what the server holds. */
+function markOf(j){
+  return {
+    saved: !!j.is_saved,
+    reviewed: j.review_state==="reviewed",
+    dismissed: j.review_state==="dismissed",
+    applied: !!j.applied_at
+  };
+}
+function isDone(j){ return j.review_state==="reviewed" || j.review_state==="dismissed"; }
+function jobById(id){
+  for(var i=0;i<state.items.length;i++) if(state.items[i].id===id) return state.items[i];
+  return null;
+}
 function icon(p, extra){
   return '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"'+(extra||"")+'>'+p+'</svg>';
 }
@@ -514,7 +550,8 @@ function params(extra){
 }
 function viewParams(){
   var e = {sort:state.sort, limit:PAGE, offset:state.offset};
-  if(state.page==="saved" || state.page==="archive") return e;
+  if(state.page==="saved"){ e.mark="saved"; return e; }
+  if(state.page==="archive"){ e.mark="archived"; return e; }
   if(state.view==="matched"){ e.min_match=HIGH; e.sort="best_match"; }
   if(state.view==="new" && state.prevVisit){ e.since=state.prevVisit.toISOString(); e.sort="newest"; }
   if(state.view==="latest"){ var s=state.sessions[0]; if(s) e.session_id=s.id; e.sort="newest"; }
@@ -526,32 +563,34 @@ function get(path, p){
 }
 function loadJobs(append){
   if(append){ if(state.loadingMore || !state.hasMore) return Promise.resolve(); state.loadingMore = true; }
-  else { state.offset = 0; state.loading = true; state.items = []; render(); }
-  var local = state.page==="saved" || state.page==="archive";
+  else { state.offset = 0; state.loading = true; state.items = []; state.reqToken++; render(); }
+  // Two loads can be in flight at once (navigating and switching view,
+  // or typing quickly). Without a token the slower, older response wins
+  // and the list disagrees with the controls above it.
+  var token = state.reqToken;
   return get("/api/jobs", params(viewParams())).then(function(d){
-    var items = d.items;
-    // Saved and Archive are browser-local marks, so they are filtered
-    // after the fetch rather than in SQL.
-    if(state.page==="saved") items = items.filter(function(j){ return markOf(j.id).saved; });
-    if(state.page==="archive") items = items.filter(function(j){ return isDone(j.id); });
-
-    state.items = append ? state.items.concat(items) : items;
+    if(token !== state.reqToken) return;
+    state.items = append ? state.items.concat(d.items) : d.items;
     state.offset = state.offset + d.items.length;
     state.hasMore = d.has_more;
-    state.total = local ? state.items.length : d.total;
+    state.total = d.total;
     state.loading = false; state.loadingMore = false;
 
     if(state.selectedId && !state.items.some(function(j){return j.id===state.selectedId;})) state.selectedId = null;
     if(!state.selectedId && state.items.length && isWide()) state.selectedId = state.items[0].id;
     render(append);
-  }).catch(function(){ state.loading=false; state.loadingMore=false; render(); });
+  }).catch(function(){
+    if(token !== state.reqToken) return;
+    state.loading=false; state.loadingMore=false; render();
+  });
 }
 function loadShell(){
   return Promise.all([
     get("/api/stats", params()).then(function(d){ state.stats=d; state.lastPoll=d.last_poll_at; }),
     get("/api/sessions", new URLSearchParams({limit:"25"})).then(function(d){ state.sessions=d.sessions||[]; if(d.last_poll_at) state.lastPoll=d.last_poll_at; }),
     get("/api/facets").then(function(d){ state.facets=d; }),
-    get("/api/resume").then(function(d){ state.resume=d.resume; state.gap=d.skills_gap||[]; })
+    get("/api/resume").then(function(d){ state.resume=d.resume; state.gap=d.skills_gap||[]; }),
+    get("/api/marks").then(function(d){ state.markCounts=d; })
   ]).catch(function(){});
 }
 
@@ -564,9 +603,10 @@ function navItem(id,label,count,ic){
 }
 function sidebar(){
   var s=state.stats;
-  var savedN = Object.keys(state.marks).filter(function(k){return state.marks[k].saved;}).length;
-  var archN  = Object.keys(state.marks).filter(function(k){return isDone(k);}).length;
-  return '<nav class="side" aria-label="Main">'+
+  var open=state.menuOpen?" open":"";
+  var savedN = state.markCounts.saved;
+  var archN  = state.markCounts.archived;
+  return '<nav class="side'+open+'" aria-label="Main">'+
     '<div class="brand">'+
       '<svg width="20" height="20" viewBox="0 0 32 32" aria-hidden="true">'+
       '<path d="M6 26 L17 9 L26 26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+
@@ -585,7 +625,8 @@ function sidebar(){
       '<button class="nav-item" data-act="live"><span class="dot'+(isStale()?' stale':'')+'"></span>'+
         '<span class="nav-label">'+(isStale()?"Delayed":"Live")+'</span></button>'+
       '<button class="nav-item" data-act="theme">'+icon(I.sun)+'<span class="nav-label">Theme</span></button>'+
-      '<button class="nav-item" data-act="settings">'+icon(I.gear)+'<span class="nav-label">Settings</span></button>'+
+      '<button class="nav-item" data-act="settings"'+(state.page==="settings"?' aria-current="page"':'')+'>'+
+        icon(I.gear)+'<span class="nav-label">Settings</span></button>'+
     '</div></nav>';
 }
 function isStale(){
@@ -646,12 +687,12 @@ function sortLabel(){
   return {best_match:"Best match",newest:"Newest",oldest:"Oldest",new_grad_first:"New grad first"}[state.sort]||"Sort";
 }
 function jobRow(j, showRead){
-  var t=tierOf(j.match_score), m=markOf(j.id);
+  var t=tierOf(j.match_score), m=markOf(j);
   var isNew = state.prevVisit && new Date(j.first_seen_at)>state.prevVisit;
   var fit=expFit(j);
   var meta=['<b>'+esc(j.company)+'</b>', esc(j.location),
             '<span class="'+fit.cls+'">'+esc(fit.text)+'</span>'];
-  var badge = m.applied?'<span class="badge">'+icon(I.check)+' Applied</span>'
+  var badge = m.applied?'<span class="badge">'+icon(I.check)+' Applied '+shortDate(j.applied_at)+'</span>'
     : isNew?'<span class="badge new">NEW</span>'
     : m.saved?'<span class="badge">Saved</span>'
     : m.reviewed?'<span class="badge">Reviewed</span>' : "";
@@ -659,7 +700,7 @@ function jobRow(j, showRead){
     ? 'Not scored'
     : tierLabel(t)+' ·<span class="n">'+j.match_score+'</span>';
   return (showRead?readLine():"")+
-  '<li class="row tier-'+t+(isDone(j.id)?' done':'')+'" role="option" data-id="'+j.id+'" tabindex="-1"'+
+  '<li class="row tier-'+t+(isDone(j)?' done':'')+'" role="option" data-id="'+j.id+'" tabindex="-1"'+
       ' aria-selected="'+(state.selectedId===j.id)+'"'+
       ' aria-label="'+esc(clean(j.title))+'. '+esc(j.company)+', '+esc(j.location)+'. '+
       (t==="unscored"?"Not scored":("Match "+t+", "+j.match_score+" out of 100"))+'. Detected '+ago(j.first_seen_at)+'.">'+
@@ -748,7 +789,7 @@ function detailPane(){
   var j = state.items.filter(function(x){return x.id===state.selectedId;})[0];
   if(!j) return '<section class="detail" aria-label="Opportunity detail"><div class="d-scroll">'+
     '<div class="empty"><h3>No opportunity selected</h3><p>Choose one from the list, or use the arrow keys to move through it.</p></div></div></section>';
-  var t=tierOf(j.match_score), m=markOf(j.id);
+  var t=tierOf(j.match_score), m=markOf(j);
   var why=[];
   if(j.role_family) why.push(j.role_family.replace(/_/g," ").toLowerCase().replace(/^\w/,function(c){return c.toUpperCase();}));
   if(j.is_early_career) why.push("Early career");
@@ -781,7 +822,9 @@ function detailPane(){
 
     (j.related_skills.length?'<div class="sect"><p class="eyebrow">Related</p><div class="rel">'+
       j.related_skills.map(function(s){
-        return '<div class="rel-row"><span class="skill">'+esc(s)+'</span><span class="rel-via">counted as partial credit</span></div>';
+        var ev=(j.related_evidence||[]).filter(function(e){return e.skill===s;})[0];
+        return '<div class="rel-row"><span class="skill">'+esc(s)+'</span>'+
+          '<span class="rel-via">'+(ev?'via '+esc(ev.via):'counted as partial credit')+'</span></div>';
       }).join("")+'</div></div>':"")+
 
     (j.missing_skills.length?'<div class="sect"><p class="eyebrow">Missing</p><div class="skills">'+
@@ -802,6 +845,8 @@ function detailPane(){
      '<button class="btn btn-ghost'+(m.saved?' on':'')+'" data-mark="saved" data-id="'+j.id+'">'+icon(I.star)+(m.saved?"Saved":"Save")+'</button>'+
      '<button class="btn btn-ghost'+(m.reviewed?' on':'')+'" data-mark="reviewed" data-id="'+j.id+'">'+icon(I.check)+'Reviewed</button>'+
      '<button class="btn btn-ghost'+(m.dismissed?' on':'')+'" data-mark="dismissed" data-id="'+j.id+'">'+icon(I.x)+'Not relevant</button>'+
+     '<button class="btn btn-ghost'+(m.applied?' on':'')+'" data-mark="applied" data-id="'+j.id+'" title="Mark applied (a)">'+
+       icon(I.check)+(m.applied?'Applied '+shortDate(j.applied_at):'Applied')+'</button>'+
    '</div></section>';
 }
 
@@ -886,6 +931,52 @@ function skillsPage(){
     '<div class="page-scroll" style="margin-top:12px">'+body+'</div></div>';
 }
 
+function settingsPage(){
+  var f=state.facets, r=state.resume, s=state.stats;
+  var theme=load("ace.theme","dark");
+  var sources=(f.sources||[]);
+  return '<div class="wide"><div class="list-head"><div class="head-top"><h1 class="page-title">Settings</h1></div></div>'+
+   '<div class="page-scroll" style="margin-top:12px"><div class="pad">'+
+
+   '<div class="sect"><p class="eyebrow">Appearance</p>'+
+     '<div class="rail" style="margin:0">'+
+       ["dark","light","system"].map(function(t){
+         return '<button class="chip'+(theme===t?" on":"")+'" data-settheme="'+t+'">'+t+'</button>';
+       }).join("")+
+     '</div>'+
+     '<p class="sess-none">Dark is ACE\'s default. System follows your operating system.</p></div>'+
+
+   '<div class="sect"><p class="eyebrow">Active resume</p>'+
+     (r? '<div class="gap-row"><span>'+esc(r.label)+'</span>'+
+           '<span class="gap-n">'+r.skills.length+' skills</span>'+
+           '<button class="link-btn" data-act="upload">Replace</button></div>'
+       : '<p class="why">No resume stored. Matching is unavailable until one is uploaded.</p>'+
+         '<button class="btn btn-secondary" data-act="upload" style="margin-top:10px">Upload resume</button>')+
+   '</div>'+
+
+   '<div class="sect"><p class="eyebrow">Your marks</p><dl class="kv">'+
+     '<dt>Saved</dt><dd>'+state.markCounts.saved+'</dd>'+
+     '<dt>Archived</dt><dd>'+state.markCounts.archived+'</dd>'+
+     '<dt>Applied</dt><dd>'+state.markCounts.applied+'</dd>'+
+   '</dl><p class="sess-none">Stored on the server, so they follow you between browsers.</p></div>'+
+
+   '<div class="sect"><p class="eyebrow">Sources, '+sources.length+' reporting</p>'+
+     (sources.length? '<dl class="kv">'+sources.map(function(o){
+        return '<dt>'+esc(o.value)+'</dt><dd>'+o.count+'</dd>';
+      }).join("")+'</dl>' : '<p class="why">No sources have reported yet.</p>')+
+     '<p class="sess-none">Counts are qualifying opportunities currently open, not everything stored.</p></div>'+
+
+   '<div class="sect"><p class="eyebrow">Queue</p><dl class="kv">'+
+     '<dt>Actionable</dt><dd>'+(s.qualifying_active_jobs||0)+'</dd>'+
+     '<dt>Description read</dt><dd>'+(s.verified_jobs||0)+'</dd>'+
+     '<dt>Not scored</dt><dd>'+(s.match_unscored||0)+'</dd>'+
+     '<dt>Last pull</dt><dd>'+(state.lastPoll?clock(state.lastPoll):"none")+'</dd>'+
+   '</dl></div>'+
+
+   '<div class="foot-note">Press Ctrl or Command plus K for the command palette.</div>'+
+   '</div></div></div>';
+}
+
 /* ---------------- render root ---------------- */
 function render(keepScroll){
   var app=document.getElementById("app");
@@ -894,12 +985,14 @@ function render(keepScroll){
   if(state.page==="feed") main=feedPage();
   else if(state.page==="resumes") main=resumesPage();
   else if(state.page==="skills") main=skillsPage();
+  else if(state.page==="settings") main=settingsPage();
   else main='<div class="list-col">'+
       '<div class="topbar">'+
         '<button class="iconbtn" data-act="menu" aria-label="Menu">'+icon(I.menu)+'</button>'+
         '<span class="brand-name" style="font-size:13px">ACE</span></div>'+
       queueHead()+'<div class="list-scroll">'+queueList()+'</div></div>'+detailPane();
-  app.innerHTML = sidebar()+main;
+  app.innerHTML = sidebar()+main+
+    (state.menuOpen?'<div class="scrim" data-act="closemenu"></div>':"");
   if(state.toast) app.insertAdjacentHTML("beforeend", state.toast);
 
   var scroller = document.querySelector(".list-scroll");
@@ -917,11 +1010,22 @@ function onListScroll(e){
 }
 
 /* ---------------- interaction ---------------- */
-function setPage(p){ state.page=p; state.selectedId=null; closePop();
+function setPage(p){ state.page=p; state.selectedId=null; state.menuOpen=false; closePop();
   if(p==="queue"||p==="saved"||p==="archive") loadJobs(); else render(); }
-function setView(v){ state.view=v; state.selectedId=null;
-  if(v==="new"||v==="latest") state.sort="newest"; else if(v==="matched") state.sort="best_match";
-  loadJobs(); }
+function isJobPage(){ return ["queue","saved","archive"].indexOf(state.page)>=0; }
+function setView(v){ goTo("queue", v); }
+/* Changes page and view together and loads exactly once. Calling
+   setPage then setView fired two overlapping requests, and the older
+   one could land last, leaving the list disagreeing with the control. */
+function goTo(page, view){
+  state.page=page; state.menuOpen=false; state.selectedId=null; closePop();
+  if(view){
+    state.view=view;
+    if(view==="new"||view==="latest") state.sort="newest";
+    else if(view==="matched") state.sort="best_match";
+  }
+  if(isJobPage()) loadJobs(); else render();
+}
 function select(id, scroll){ state.selectedId=id; state.scrollTo=!!scroll;
   if(!isWide()) state.detailOpen=true; render(); }
 function step(d){
@@ -930,16 +1034,49 @@ function step(d){
   var n=Math.max(0,Math.min(ids.length-1,(i<0?0:i+d)));
   if(ids[n]!=null) select(ids[n], true);
 }
-function mark(id,key,advance){
-  var m=state.marks[id]||{};
-  var was=!!m[key];
-  if(key==="saved") m.saved=!was;
-  else { m.reviewed=false; m.dismissed=false; m[key]=!was; }
-  state.marks[id]=m; save("ace.marks",state.marks);
-  var label={saved:was?"Removed from saved":"Saved",reviewed:"Marked reviewed",dismissed:"Marked not relevant"}[key];
-  showToast(label,function(){ state.marks[id]= was?Object.assign(m,{saved:true}):{}; if(key!=="saved") state.marks[id]={};
-    save("ace.marks",state.marks); render(); });
-  if(advance && key!=="saved" && !was) step(1); else render();
+function putMark(id, body){
+  return fetch(API+"/api/marks/"+id, {
+    method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)
+  }).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); });
+}
+function applyMark(j, res){
+  j.is_saved=res.is_saved; j.review_state=res.review_state; j.applied_at=res.applied_at;
+}
+function mark(id, key, advance){
+  var j=jobById(id);
+  if(!j){ showToast("That opportunity is no longer on screen"); render(); return; }
+  var was=markOf(j)[key];
+  var body = key==="saved" ? {saved:!was}
+           : key==="applied" ? {applied:!was}
+           : was ? {clear_review:true} : {review_state:key};
+  var undoBody = key==="saved" ? {saved:was}
+           : key==="applied" ? {applied:was}
+           : was ? {review_state:key} : {clear_review:true};
+  var label={saved:was?"Removed from saved":"Saved",
+             reviewed:was?"Review cleared":"Marked reviewed",
+             dismissed:was?"Restored":"Marked not relevant",
+             applied:was?"Applied cleared":"Marked applied"}[key];
+
+  putMark(id, body).then(function(res){
+    applyMark(j, res);
+    refreshMarkCounts();
+    showToast(label, function(){
+      putMark(id, undoBody).then(function(back){
+        applyMark(j, back); refreshMarkCounts(); render();
+      });
+    });
+    // On a page defined by a mark, undoing it should remove the row.
+    if((state.page==="saved" && key==="saved" && was) ||
+       (state.page==="archive" && (key==="reviewed"||key==="dismissed") && was)){
+      state.items = state.items.filter(function(x){ return x.id!==id; });
+      state.total = Math.max(0, state.total-1);
+      if(state.selectedId===id) state.selectedId = state.items.length?state.items[0].id:null;
+    }
+    if(advance && key!=="saved" && key!=="applied" && !was) step(1); else render();
+  }).catch(function(){ showToast("Could not save that change"); render(); });
+}
+function refreshMarkCounts(){
+  return get("/api/marks").then(function(d){ state.markCounts=d; }).catch(function(){});
 }
 var toastTimer=null;
 function showToast(msg, undo){
@@ -996,7 +1133,9 @@ function scorePop(anchor){
 }
 
 document.addEventListener("click", function(e){
-  var t=e.target.closest("[data-nav],[data-view],[data-act],[data-mark],[data-step],[data-unfilter],[data-addfilter],[data-addflag],[data-sort],[data-session],[data-skillq],.row");
+  var pal=e.target.closest("[data-pal]");
+  if(pal){ runPalette(parseInt(pal.dataset.pal,10)); return; }
+  var t=e.target.closest("[data-nav],[data-view],[data-act],[data-mark],[data-step],[data-unfilter],[data-addfilter],[data-addflag],[data-sort],[data-session],[data-skillq],[data-settheme],[data-pal],.row");
   if(!t){ if(!e.target.closest(".pop")) closePop(); return; }
   if(e.target.closest("[data-stop]")) { e.stopPropagation(); return; }
   var d=t.dataset;
@@ -1017,6 +1156,7 @@ document.addEventListener("click", function(e){
     if(i>0){ var picked=state.sessions[i]; state.sessions=[picked].concat(state.sessions.filter(function(s){return s.id!==sid;})); }
     loadJobs(); return; }
   if(d.skillq){ state.page="queue"; state.view="all"; state.q=d.skillq; loadJobs(); return; }
+  if(d.settheme){ save("ace.theme",d.settheme); applyTheme(d.settheme); render(); return; }
 
   if(d.act){
     if(d.act==="toggleearly"){
@@ -1032,8 +1172,11 @@ document.addEventListener("click", function(e){
     if(d.act==="clearq"){ state.q=""; loadJobs(); return; }
     if(d.act==="closedetail"){ state.detailOpen=false; render(); return; }
     if(d.act==="undo"){ if(state.undoFn) state.undoFn(); state.toast=null; render(); return; }
-    if(d.act==="menu"){ document.querySelector(".side").style.display="flex"; return; }
-    if(d.act==="upload"||d.act==="settings"){ showToast("Not built yet"); render(); return; }
+    if(d.act==="menu"){ state.menuOpen=true; render(); return; }
+    if(d.act==="closemenu"){ state.menuOpen=false; render(); return; }
+    if(d.act==="upload"){ pickResume(); return; }
+    if(d.act==="settings"){ setPage("settings"); return; }
+    if(d.act==="palette"){ openPalette(); return; }
   }
   var row=e.target.closest(".row");
   if(row) select(parseInt(row.dataset.id,10), false);
@@ -1051,11 +1194,18 @@ document.addEventListener("input", function(e){
 document.addEventListener("keydown", function(e){
   var typing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
   if(e.key==="/" && !typing){ e.preventDefault(); var q=document.getElementById("q"); if(q) q.focus(); return; }
-  if((e.metaKey||e.ctrlKey) && e.key==="k"){ e.preventDefault(); var q2=document.getElementById("q"); if(q2) q2.focus(); return; }
+  if((e.metaKey||e.ctrlKey) && (e.key==="k"||e.key==="K")){ e.preventDefault(); openPalette(); return; }
+  if(state.palHits){
+    if(e.key==="ArrowDown"){ e.preventDefault(); state.palIndex=Math.min(state.palHits.length-1,state.palIndex+1); drawPalette(document.getElementById("pal-q").value); return; }
+    if(e.key==="ArrowUp"){ e.preventDefault(); state.palIndex=Math.max(0,state.palIndex-1); drawPalette(document.getElementById("pal-q").value); return; }
+    if(e.key==="Enter"){ e.preventDefault(); runPalette(state.palIndex); return; }
+    if(e.key==="Escape"){ e.preventDefault(); closePalette(); return; }
+  }
   if(typing){ if(e.key==="Escape"){ e.target.blur(); } return; }
-  if(e.key==="Escape"){ if(document.querySelector(".pop")) closePop();
+  if(e.key==="Escape"){ if(state.menuOpen){ state.menuOpen=false; render(); return; }
+    if(document.querySelector(".pop")) closePop();
     else if(state.detailOpen){ state.detailOpen=false; render(); } return; }
-  if(state.page!=="queue" && state.page!=="saved" && state.page!=="archive") return;
+  if(!isJobPage()) return;
   var k=e.key;
   if(k==="ArrowDown"||k==="j"){ e.preventDefault(); step(1); }
   else if(k==="ArrowUp"||k==="k"){ e.preventDefault(); step(-1); }
@@ -1064,8 +1214,101 @@ document.addEventListener("keydown", function(e){
   else if(k==="s"&&state.selectedId){ mark(state.selectedId,"saved",false); }
   else if(k==="e"&&state.selectedId){ mark(state.selectedId,"reviewed",true); }
   else if(k==="x"&&state.selectedId){ mark(state.selectedId,"dismissed",true); }
+  else if(k==="a"&&state.selectedId){ mark(state.selectedId,"applied",false); }
   else if(k>="1"&&k<="4"&&state.page==="queue"){ setView(["all","matched","new","latest"][parseInt(k,10)-1]); }
 });
+
+/* ---------------- resume upload ---------------- */
+function pickResume(){
+  var input=document.createElement("input");
+  input.type="file";
+  input.accept=".pdf,.docx,.txt";
+  input.addEventListener("change", function(){
+    var file=input.files && input.files[0];
+    if(!file) return;
+    state.uploading=true; render();
+    var body=new FormData(); body.append("file", file);
+    fetch(API+"/api/resume", {method:"POST", body:body}).then(function(r){
+      return r.json().then(function(d){ if(!r.ok) throw new Error(d.detail||"upload failed"); return d; });
+    }).then(function(d){
+      state.uploading=false;
+      showToast("Resume stored, "+d.jobs_scored+" jobs rescored, "+d.skills.length+" skills found");
+      state.selectedId=null;
+      loadShell().then(function(){ loadJobs(); });
+    }).catch(function(err){
+      state.uploading=false;
+      showToast(String(err.message||"Could not read that file"));
+      render();
+    });
+  });
+  input.click();
+}
+
+/* ---------------- command palette ---------------- */
+var PALETTE=[
+  {label:"Go to Queue", run:function(){ setPage("queue"); }},
+  {label:"Go to Feed", run:function(){ setPage("feed"); }},
+  {label:"Go to Resumes", run:function(){ setPage("resumes"); }},
+  {label:"Go to Skills", run:function(){ setPage("skills"); }},
+  {label:"Go to Saved", run:function(){ setPage("saved"); }},
+  {label:"Go to Archive", run:function(){ setPage("archive"); }},
+  {label:"Show all opportunities", run:function(){ goTo("queue","all"); }},
+  {label:"Show highly matched", run:function(){ goTo("queue","matched"); }},
+  {label:"Show new since last visit", run:function(){ goTo("queue","new"); }},
+  {label:"Show latest pull", run:function(){ goTo("queue","latest"); }},
+  {label:"Toggle early career only", run:function(){
+      if(state.filters.early_career_only) delete state.filters.early_career_only;
+      else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Early career",pinned:true};
+      goTo("queue"); }},
+  {label:"Sort by best match", run:function(){ state.sort="best_match"; loadJobs(); }},
+  {label:"Sort by newest", run:function(){ state.sort="newest"; loadJobs(); }},
+  {label:"Clear all filters", run:function(){ state.filters={}; state.q=""; loadShell().then(function(){ loadJobs(); }); }},
+  {label:"Upload resume", run:function(){ pickResume(); }},
+  {label:"Switch theme", run:function(){ cycleTheme(); }},
+  {label:"Open settings", run:function(){ setPage("settings"); }}
+];
+function openPalette(){
+  closePalette();
+  var el=document.createElement("div");
+  el.className="palette-wrap";
+  el.innerHTML='<div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">'+
+    '<input id="pal-q" type="text" placeholder="Type a command" autocomplete="off" aria-label="Command">'+
+    '<div class="palette-list" id="pal-list"></div></div>';
+  document.body.appendChild(el);
+  state.palIndex=0;
+  drawPalette("");
+  var q=document.getElementById("pal-q");
+  q.focus();
+  q.addEventListener("input", function(){ state.palIndex=0; drawPalette(q.value); });
+  el.addEventListener("mousedown", function(e){ if(e.target===el) closePalette(); });
+}
+function paletteMatches(term){
+  var t=(term||"").toLowerCase();
+  return PALETTE.filter(function(c){ return c.label.toLowerCase().indexOf(t)>=0; });
+}
+function drawPalette(term){
+  var list=document.getElementById("pal-list");
+  if(!list) return;
+  var hits=paletteMatches(term);
+  state.palHits=hits;
+  if(state.palIndex>=hits.length) state.palIndex=Math.max(0,hits.length-1);
+  list.innerHTML = hits.length
+    ? hits.map(function(c,i){
+        return '<button class="pal-opt'+(i===state.palIndex?" on":"")+'" data-pal="'+i+'">'+esc(c.label)+'</button>';
+      }).join("")
+    : '<div class="pal-none">No matching command</div>';
+}
+function closePalette(){
+  var el=document.querySelector(".palette-wrap");
+  if(el) el.remove();
+  state.palHits=null;
+}
+function runPalette(i){
+  var hits=state.palHits||[];
+  var c=hits[i];
+  closePalette();
+  if(c) c.run();
+}
 
 /* ---------------- theme ---------------- */
 function cycleTheme(){
@@ -1079,6 +1322,26 @@ function applyTheme(t){
   else document.documentElement.setAttribute("data-theme",t);
 }
 
+/* One-time lift of marks written before they were durable. Without
+   this, moving them server-side would quietly discard whatever the user
+   had already saved or archived in this browser. */
+function migrateLocalMarks(){
+  var old = load("ace.marks", null);
+  if(!old || load("ace.marks.migrated", false)) return;
+  var ids = Object.keys(old);
+  if(!ids.length){ save("ace.marks.migrated", true); return; }
+  Promise.all(ids.map(function(id){
+    var m = old[id] || {};
+    var body = {saved: !!m.saved};
+    if(m.reviewed) body.review_state = "reviewed";
+    else if(m.dismissed) body.review_state = "dismissed";
+    return putMark(id, body).catch(function(){});
+  })).then(function(){
+    save("ace.marks.migrated", true);
+    refreshMarkCounts().then(function(){ render(); });
+  });
+}
+
 /* ---------------- boot ---------------- */
 // ?theme=light|dark|system overrides the stored choice, so either theme
 // can be opened directly without clearing storage.
@@ -1088,7 +1351,7 @@ if(validTheme) save("ace.theme", urlTheme);
 // Applied directly rather than read back, so the override still works
 // where localStorage is unavailable.
 applyTheme(validTheme ? urlTheme : load("ace.theme","dark"));
-state.marks = load("ace.marks",{});
+migrateLocalMarks();
 initVisit();
 render();
 loadShell().then(function(){ loadJobs(); });

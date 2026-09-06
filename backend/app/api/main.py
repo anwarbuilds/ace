@@ -29,6 +29,13 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from pydantic import BaseModel
+
+from backend.app.api.marks import (
+    REVIEW_STATES,
+    mark_counts,
+    set_mark,
+)
 from backend.app.api.queries import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
@@ -40,6 +47,7 @@ from backend.app.api.queries import (
     list_discovery_runs,
     list_jobs,
 )
+from backend.app.db.models import JobRecord
 from backend.app.db.session import SessionLocal
 from backend.app.matching.parsing import (
     ResumeParseError,
@@ -83,6 +91,33 @@ def _split_csv(
         )
         if item.strip()
     )
+
+
+# Accepted values for the mark filter on /api/jobs.
+MARK_FILTERS = frozenset(
+    {
+        "saved",
+        "archived",
+        "applied",
+    }
+)
+
+
+class MarkUpdate(BaseModel):
+    """A partial update to one job's marks.
+
+    Every field is optional so a caller can toggle one mark without
+    restating the others, which is what stops a save from wiping a
+    review state.
+    """
+
+    saved: bool | None = None
+
+    review_state: str | None = None
+
+    clear_review: bool = False
+
+    applied: bool | None = None
 
 
 def _serialize_job(
@@ -161,6 +196,24 @@ def _serialize_job(
         ),
         "related_skills": list(
             job.related_skills
+        ),
+        "related_evidence": [
+            {
+                "skill": skill,
+                "via": via,
+            }
+            for skill, via in (
+                job.related_evidence
+            )
+        ],
+        "is_saved": job.is_saved,
+        "review_state": (
+            job.review_state
+        ),
+        "applied_at": (
+            None
+            if job.applied_at is None
+            else job.applied_at.isoformat()
         ),
     }
 
@@ -277,6 +330,12 @@ def create_app() -> FastAPI:
                 "actually read."
             ),
         ),
+        mark: str | None = Query(
+            default=None,
+            description=(
+                "saved, archived or applied"
+            ),
+        ),
         session_id: int | None = Query(
             default=None,
             description=(
@@ -363,6 +422,12 @@ def create_app() -> FastAPI:
                 session_id=session_id,
                 min_match=min_match,
                 since=since,
+                mark=(
+                    mark
+                    if mark
+                    in MARK_FILTERS
+                    else None
+                ),
                 sort=normalized_sort,
                 limit=limit,
                 offset=offset,
@@ -618,6 +683,89 @@ def create_app() -> FastAPI:
                 or []
             ),
             "jobs_scored": scored,
+        }
+
+    @app.get(
+        "/api/marks"
+    )
+    def get_marks(
+        session: Session = Depends(
+            get_session
+        ),
+    ) -> dict:
+        """Return how many jobs carry each mark."""
+
+        return mark_counts(
+            session
+        )
+
+    @app.put(
+        "/api/marks/{job_id}"
+    )
+    def put_mark(
+        job_id: int,
+        payload: MarkUpdate,
+        session: Session = Depends(
+            get_session
+        ),
+    ) -> dict:
+        """Set one job's marks.
+
+        Absent fields are left alone, so saving a job never clears a
+        review state recorded earlier.
+        """
+
+        if session.get(
+            JobRecord,
+            job_id,
+        ) is None:
+            raise HTTPException(
+                status_code=404,
+                detail="unknown job",
+            )
+
+        if (
+            payload.review_state
+            is not None
+            and payload.review_state
+            not in REVIEW_STATES
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "review_state must be "
+                    "reviewed or dismissed"
+                ),
+            )
+
+        record = set_mark(
+            session,
+            job_id=job_id,
+            saved=payload.saved,
+            review_state=(
+                payload.review_state
+            ),
+            clear_review=(
+                payload.clear_review
+            ),
+            applied=payload.applied,
+        )
+
+        session.commit()
+
+        return {
+            "job_id": record.job_id,
+            "is_saved": record.is_saved,
+            "review_state": (
+                record.review_state
+            ),
+            "applied_at": (
+                None
+                if record.applied_at
+                is None
+                else record.applied_at
+                .isoformat()
+            ),
         }
 
     @app.get(

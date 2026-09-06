@@ -28,11 +28,16 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
+from backend.app.matching.skills import (
+    related_skills,
+)
 from backend.app.db.models import (
     JobEvaluationRecord,
+    JobMarkRecord,
     JobRecord,
     JobResumeScoreRecord,
     PollSessionRecord,
+    ResumeRecord,
     SourceState,
 )
 
@@ -114,6 +119,11 @@ class JobFilters:
     # needs to resolve to the minute or the marker is wrong all day.
     since: datetime | None = None
 
+    # "saved", "archived" or "applied". Filtered in SQL rather than in
+    # the client, so these pages search all 777 jobs instead of whichever
+    # page happened to be loaded.
+    mark: str | None = None
+
     sort: str = "new_grad_first"
 
     limit: int = DEFAULT_PAGE_SIZE
@@ -184,6 +194,19 @@ class JobListing:
     # name. Kept apart from matched so the UI can show partial credit
     # as partial rather than overstating the fit.
     related_skills: tuple[str, ...] = ()
+
+    # (posting skill, the resume skill that earned it), so the interface
+    # can say why a partial match counted instead of asserting it.
+    related_evidence: tuple[
+        tuple[str, str],
+        ...,
+    ] = ()
+
+    is_saved: bool = False
+
+    review_state: str | None = None
+
+    applied_at: datetime | None = None
 
 
 @dataclass(
@@ -272,6 +295,54 @@ def _string_list(
     )
 
 
+def _evidence_for(
+    match: JobResumeScoreRecord,
+    resume_skills: frozenset[str],
+) -> tuple[
+    tuple[str, str],
+    ...,
+]:
+    """Name the resume skill that earned each partial match.
+
+    Derived at read time from the same graph the scorer used, rather
+    than stored beside the score. A stored explanation could disagree
+    with the graph after the vocabulary changes; a derived one cannot.
+    """
+
+    if not match.related_skills:
+        return ()
+
+    pairs: list[
+        tuple[str, str]
+    ] = []
+
+    for skill in match.related_skills:
+        neighbours = (
+            related_skills(
+                str(
+                    skill
+                )
+            )
+            & resume_skills
+        )
+
+        if neighbours:
+            pairs.append(
+                (
+                    str(
+                        skill
+                    ),
+                    min(
+                        neighbours
+                    ),
+                )
+            )
+
+    return tuple(
+        pairs
+    )
+
+
 def _join_scores(
     statement: Select,
     filters: JobFilters,
@@ -302,6 +373,11 @@ def _join_scores(
                 .resume_id
                 == filters.resume_id
             ),
+        )
+        .outerjoin(
+            JobMarkRecord,
+            JobMarkRecord.job_id
+            == JobRecord.id,
         )
     )
 
@@ -369,6 +445,32 @@ def _apply_filters(
         statement = statement.where(
             JobResumeScoreRecord.score
             >= filters.min_match
+        )
+
+    if filters.mark == "saved":
+        statement = statement.where(
+            JobMarkRecord.is_saved.is_(
+                True
+            )
+        )
+
+    elif filters.mark == "archived":
+        statement = statement.where(
+            JobMarkRecord.review_state
+            .in_(
+                (
+                    "reviewed",
+                    "dismissed",
+                )
+            )
+        )
+
+    elif filters.mark == "applied":
+        statement = statement.where(
+            JobMarkRecord.applied_at
+            .is_not(
+                None
+            )
         )
 
     if filters.since is not None:
@@ -524,11 +626,31 @@ def list_jobs(
         filters.offset,
     )
 
+    # Loaded once per query rather than per row: every partial match on
+    # the page is explained against the same resume.
+    resume_skills: frozenset[str] = frozenset()
+
+    if filters.resume_id is not None:
+        stored = session.scalar(
+            select(
+                ResumeRecord
+                .extracted_skills
+            ).where(
+                ResumeRecord.id
+                == filters.resume_id
+            )
+        )
+
+        resume_skills = frozenset(
+            stored or ()
+        )
+
     base = _join_scores(
         select(
             JobRecord,
             JobEvaluationRecord,
             JobResumeScoreRecord,
+            JobMarkRecord,
         ),
         filters,
     )
@@ -663,8 +785,30 @@ def list_jobs(
                     or ()
                 )
             ),
+            related_evidence=(
+                ()
+                if match is None
+                else _evidence_for(
+                    match,
+                    resume_skills,
+                )
+            ),
+            is_saved=bool(
+                mark is not None
+                and mark.is_saved
+            ),
+            review_state=(
+                None
+                if mark is None
+                else mark.review_state
+            ),
+            applied_at=(
+                None
+                if mark is None
+                else mark.applied_at
+            ),
         )
-        for job, evaluation, match in rows
+        for job, evaluation, match, mark in rows
     )
 
     return JobPage(
