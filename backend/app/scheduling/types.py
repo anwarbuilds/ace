@@ -22,6 +22,13 @@ from backend.app.models.job import (
 DEFAULT_POLL_INTERVAL_SECONDS = 300
 
 
+# Workday caps a page at twenty postings, so a large tenant costs about
+# a hundred list requests before any description is read. A thirty
+# minute cadence keeps a scheduler cycle sane; enterprise employers do
+# not post often enough to need more.
+WORKDAY_POLL_INTERVAL_SECONDS = 1800
+
+
 class SourceType(StrEnum):
     """External job-source families supported by ACE."""
 
@@ -29,6 +36,7 @@ class SourceType(StrEnum):
     LEVER = "lever"
     ASHBY = "ashby"
     SMARTRECRUITERS = "smartrecruiters"
+    WORKDAY = "workday"
 
 
 def _require_non_empty(

@@ -672,6 +672,72 @@ than producing an email long enough for Gmail to clip.
 
 ---
 
+# Workday
+
+Workday hosts each employer on its own tenant, which is why a single
+adapter unlocks a large share of the enterprise market rather than one
+company at a time.
+
+```text
+https://{tenant}.{wd}.myworkdayjobs.com/{site}
+
+POST /wday/cxs/{tenant}/{site}/jobs      list, 20 per page
+GET  /wday/cxs/{tenant}/{site}{path}     one posting, with description
+```
+
+Configuration needs both halves of the identity and the host, because
+the data-centre number differs per tenant and cannot be derived:
+
+```text
+source_account   nvidia/NVIDIAExternalCareerSite
+source_host      nvidia.wd5.myworkdayjobs.com
+```
+
+## Listing is expensive, detail is not
+
+Workday caps a page at twenty postings regardless of the requested
+limit, so a 2,000-posting tenant costs 100 list requests before any
+description is read.
+
+Server-side `searchText` cannot narrow this. It behaves as a fuzzy OR:
+searching "software engineer" against a 2,000-posting tenant still
+returns 1,719 results, so filtering there would be both ineffective and
+lossy.
+
+Two measures make it viable:
+
+| Measure | Effect |
+| --- | --- |
+| Concurrent page fetching | Intel: 173s to 11s |
+| Detail fetched only for titles the gate would keep | NVIDIA: 72 detail requests instead of 2,000 |
+
+Offsets are known once the first response reports the total, so every
+remaining page is independent. Concurrency is capped at 4 — a courtesy
+limit on someone else's careers site, not a throughput target.
+
+Workday sources poll every 30 minutes rather than 5. Enterprise
+employers do not post often enough to need more, and it keeps a
+scheduler cycle sane.
+
+## Shallow postings
+
+Every listed posting is emitted, including those whose detail was
+skipped, because the snapshot is authoritative for lifecycle: omitting
+them would mark hundreds of live jobs closed on every poll.
+
+Skipped postings carry an empty description. That is safe because the
+predicate only skips what the gate already rejects on title alone, and
+it self-heals: if the rules later change so the title qualifies, the
+next poll fetches the detail, the content hash changes, and the job is
+re-evaluated in full.
+
+The predicate asks the real eligibility gate rather than reimplementing
+a second heuristic that could drift from it. Only title rules apply at
+list time, since Workday reports list-level location as prose such as
+"2 Locations".
+
+---
+
 # Role Scope Rules
 
 Two exclusions reflect explicit user preference rather than a hard

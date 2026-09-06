@@ -458,6 +458,7 @@ def test_default_dispatcher_supports_all_implemented_sources() -> None:
                 SourceType.GREENHOUSE,
                 SourceType.LEVER,
                 SourceType.SMARTRECRUITERS,
+                SourceType.WORKDAY,
             }
         )
     )

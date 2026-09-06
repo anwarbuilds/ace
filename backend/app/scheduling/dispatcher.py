@@ -22,8 +22,14 @@ from backend.app.adapters.lever import (
 from backend.app.adapters.smartrecruiters import (
     fetch_smartrecruiters_jobs,
 )
+from backend.app.adapters.workday import (
+    fetch_workday_jobs,
+)
 from backend.app.models.job import (
     CanonicalJob,
+)
+from backend.app.runners.workday import (
+    build_detail_predicate,
 )
 from backend.app.runners.greenhouse import (
     Clock,
@@ -81,6 +87,20 @@ class LeverFetcher(Protocol):
         source_host: str | None,
     ) -> list[CanonicalJob]:
         """Fetch and normalize one Lever board."""
+
+
+class WorkdayFetcher(Protocol):
+    """Callable capable of fetching one Workday tenant."""
+
+    def __call__(
+        self,
+        *,
+        source_account: str,
+        company_name: str,
+        source_host: str | None,
+        should_fetch_detail,
+    ) -> list[CanonicalJob]:
+        """Fetch and normalize one Workday tenant."""
 
 
 class UnsupportedSourceTypeError(
@@ -290,6 +310,70 @@ class LeverSourceFetcher:
         )
 
 
+class WorkdaySourceFetcher:
+    """Dispatch adapter for Workday-backed source definitions."""
+
+    def __init__(
+        self,
+        *,
+        fetcher: WorkdayFetcher = (
+            fetch_workday_jobs
+        ),
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch one Workday tenant.
+
+        The detail predicate is supplied here rather than inside the
+        adapter, keeping provider code free of eligibility knowledge.
+        """
+
+        if (
+            source.source_type
+            != SourceType.WORKDAY
+        ):
+            raise ValueError(
+                (
+                    "WorkdaySourceFetcher "
+                    "requires a WORKDAY "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            source_account=(
+                source.source_account
+            ),
+            company_name=(
+                source.company_name
+            ),
+            source_host=(
+                source.source_host
+            ),
+            should_fetch_detail=(
+                build_detail_predicate(
+                    company_name=(
+                        source.company_name
+                    )
+                )
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
 class SourceDispatcher:
     """Dispatch configured sources to provider-specific fetch handlers."""
 
@@ -373,6 +457,9 @@ def build_default_source_dispatcher() -> (
             ),
             SourceType.SMARTRECRUITERS: (
                 SmartRecruitersSourceFetcher()
+            ),
+            SourceType.WORKDAY: (
+                WorkdaySourceFetcher()
             ),
         }
     )
