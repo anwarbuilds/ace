@@ -167,6 +167,11 @@ class JobListing:
 
     missing_skills: tuple[str, ...] = ()
 
+    # Requirements the resume covers by a related skill rather than by
+    # name. Kept apart from matched so the UI can show partial credit
+    # as partial rather than overstating the fit.
+    related_skills: tuple[str, ...] = ()
+
 
 @dataclass(
     frozen=True,
@@ -609,6 +614,14 @@ def list_jobs(
                 if match is None
                 else tuple(
                     match.missing_skills
+                    or ()
+                )
+            ),
+            related_skills=(
+                ()
+                if match is None
+                else tuple(
+                    match.related_skills
                     or ()
                 )
             ),

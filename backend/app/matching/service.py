@@ -19,6 +19,7 @@ import hashlib
 
 from sqlalchemy import (
     delete,
+    func,
     select,
     update,
 )
@@ -31,6 +32,7 @@ from backend.app.db.models import (
     ResumeRecord,
 )
 from backend.app.matching.scoring import (
+    MATCHING_ALGORITHM_VERSION,
     build_skills_gap,
     score_job,
 )
@@ -151,9 +153,27 @@ def rescore_corpus(
         The number of jobs scored.
     """
 
-    resume_skills = frozenset(
-        resume.extracted_skills or []
+    # Re-extract rather than trusting the stored list. The skills on the
+    # record were extracted by whatever vocabulary existed at upload
+    # time, so after the vocabulary grows they under-report what the
+    # resume actually evidences -- and every score built on them would
+    # inherit that gap silently.
+    resume_skills = extract_skills(
+        resume.raw_text or ""
     )
+
+    refreshed = sorted(
+        resume_skills
+    )
+
+    if refreshed != list(
+        resume.extracted_skills or []
+    ):
+        resume.extracted_skills = (
+            refreshed
+        )
+
+        session.flush()
 
     session.execute(
         delete(
@@ -211,6 +231,12 @@ def rescore_corpus(
                 missing_skills=list(
                     result.missing_skills
                 ),
+                related_skills=list(
+                    result.related_skills
+                ),
+                algorithm_version=(
+                    MATCHING_ALGORITHM_VERSION
+                ),
             )
         )
 
@@ -236,6 +262,44 @@ def rescore_corpus(
         session.flush()
 
     return scored
+
+
+def stale_score_count(
+    session: Session,
+    *,
+    resume: ResumeRecord,
+) -> int:
+    """Return how many of a resume's scores predate the current rules.
+
+    Scores are derived data that nothing invalidates on its own: a
+    scoring change leaves every stored row in place, still looking
+    authoritative. This is what lets the application notice and offer a
+    re-score instead of ranking on rules that no longer exist.
+    """
+
+    return int(
+        session.scalar(
+            select(
+                func.count()
+            )
+            .select_from(
+                JobResumeScoreRecord
+            )
+            .where(
+                JobResumeScoreRecord
+                .resume_id
+                == resume.id,
+                (
+                    JobResumeScoreRecord
+                    .algorithm_version
+                    .is_distinct_from(
+                        MATCHING_ALGORITHM_VERSION
+                    )
+                ),
+            )
+        )
+        or 0
+    )
 
 
 def skills_gap(

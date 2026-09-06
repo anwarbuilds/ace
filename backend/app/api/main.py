@@ -159,6 +159,9 @@ def _serialize_job(
         "missing_skills": list(
             job.missing_skills
         ),
+        "related_skills": list(
+            job.related_skills
+        ),
     }
 
 

@@ -613,6 +613,21 @@ class JobResumeScoreRecord(Base):
         nullable=True,
     )
 
+    # Requirements earned at the partial rate, by way of a related skill
+    # on the resume rather than the skill itself.
+    related_skills: Mapped[dict | None] = mapped_column(
+        JSON_PAYLOAD,
+        nullable=True,
+    )
+
+    # Which scoring algorithm produced this row. Scores are derived data
+    # with no other staleness signal, so without this a stored number
+    # could reflect rules that no longer exist.
+    algorithm_version: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+    )
+
     scored_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

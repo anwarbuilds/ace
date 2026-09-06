@@ -12,11 +12,21 @@ market rather than by a listicle.
 Scoring shape
 -------------
 
-    score = matched skills / skills the posting asks for
+    score = earned credit / skills the posting asks for
 
 Coverage of the posting's requirements is the right denominator, not
 overlap with the whole resume. A resume listing thirty skills should not
 score badly against a focused posting that names four of them.
+
+Credit is earned at two rates. Naming the skill outright earns full
+credit. Naming a related skill -- "distributed systems" against a
+posting asking for "scalability" -- earns partial credit, because
+adjacent experience is real evidence but weaker than the thing itself.
+
+Partial credit is reported as its own list rather than folded into the
+matched list. Telling the user a skill counted only partially, and which
+of their own skills earned it, is the difference between a score they
+can act on and a number they have to trust.
 
 Confidence
 ----------
@@ -31,7 +41,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.app.matching.skills import extract_skills
+from backend.app.matching.skills import (
+    extract_skills,
+    related_skills,
+)
+
+
+# Identifies the scoring rules that produced a stored score. Bump this
+# whenever a change would give the same resume and posting a different
+# number, so rows written by the old rules are detectable as stale
+# rather than silently mixed in with new ones.
+MATCHING_ALGORITHM_VERSION = "2026-09-05-v2"
+
+
+# What adjacent experience is worth against naming the skill outright.
+# Half is a deliberate midpoint: high enough that a strong adjacent
+# resume outranks an unrelated one, low enough that it never outranks a
+# resume that actually names the requirement.
+RELATED_SKILL_CREDIT = 0.5
 
 
 # Below this many recognised skills a posting cannot be ranked
@@ -52,6 +79,17 @@ class MatchResult:
 
     missing_skills: tuple[str, ...]
 
+    # Posting skills earned at the partial rate.
+    related_skills: tuple[str, ...] = ()
+
+    # (posting skill, the resume skill that earned it). Computed rather
+    # than stored, so the explanation can never drift from the graph
+    # that produced it.
+    related_evidence: tuple[
+        tuple[str, str],
+        ...,
+    ] = ()
+
     @property
     def is_scored(self) -> bool:
         """Return whether the posting carried enough signal to rank."""
@@ -60,7 +98,7 @@ class MatchResult:
 
     @property
     def matched_count(self) -> int:
-        """Return how many required skills the resume evidences."""
+        """Return how many required skills the resume names outright."""
 
         return len(
             self.matched_skills
@@ -91,47 +129,117 @@ def score_job(
         job_text
     )
 
-    if len(
-        job_skills
-    ) < MIN_JOB_SKILLS_FOR_SCORE:
-        return MatchResult(
-            score=None,
-            matched_skills=tuple(
-                sorted(
-                    job_skills
-                    & resume_skills
-                )
-            ),
-            missing_skills=tuple(
-                sorted(
-                    job_skills
-                    - resume_skills
-                )
-            ),
-        )
-
-    matched = (
-        job_skills & resume_skills
+    (
+        matched,
+        related,
+        evidence,
+        missing,
+    ) = _classify_requirements(
+        job_skills=job_skills,
+        resume_skills=resume_skills,
     )
 
-    missing = job_skills - resume_skills
+    scorable = (
+        len(job_skills)
+        >= MIN_JOB_SKILLS_FOR_SCORE
+    )
+
+    if scorable:
+        credit = len(
+            matched
+        ) + (
+            RELATED_SKILL_CREDIT
+            * len(related)
+        )
+
+        score = round(
+            100
+            * credit
+            / len(job_skills)
+        )
+    else:
+        score = None
 
     return MatchResult(
-        score=round(
-            100
-            * len(matched)
-            / len(job_skills)
-        ),
-        matched_skills=tuple(
-            sorted(
-                matched
+        score=score,
+        matched_skills=matched,
+        missing_skills=missing,
+        related_skills=related,
+        related_evidence=evidence,
+    )
+
+
+def _classify_requirements(
+    *,
+    job_skills: frozenset[str],
+    resume_skills: frozenset[str],
+) -> tuple[
+    tuple[str, ...],
+    tuple[str, ...],
+    tuple[tuple[str, str], ...],
+    tuple[str, ...],
+]:
+    """Sort a posting's skills into matched, related, and missing.
+
+    A skill the resume names outright never falls through to the related
+    check, so the two lists cannot overlap and credit is never counted
+    twice for one requirement.
+    """
+
+    matched: list[str] = []
+
+    related: list[str] = []
+
+    evidence: list[
+        tuple[str, str]
+    ] = []
+
+    missing: list[str] = []
+
+    for skill in sorted(
+        job_skills
+    ):
+        if skill in resume_skills:
+            matched.append(
+                skill
             )
-        ),
-        missing_skills=tuple(
-            sorted(
-                missing
+
+            continue
+
+        neighbours = (
+            related_skills(
+                skill
             )
-        ),
+            & resume_skills
+        )
+
+        if neighbours:
+            related.append(
+                skill
+            )
+
+            # Deterministic pick: the graph may offer several, and the
+            # explanation must not change between identical runs.
+            evidence.append(
+                (
+                    skill,
+                    min(
+                        neighbours
+                    ),
+                )
+            )
+
+            continue
+
+        missing.append(
+            skill
+        )
+
+    return (
+        tuple(matched),
+        tuple(related),
+        tuple(evidence),
+        tuple(missing),
     )
 
 
@@ -149,6 +257,10 @@ def build_skills_gap(
 
     This answers "what should I learn or add to my resume next", ranked
     by how often ACE's own qualifying postings ask for it.
+
+    Only true misses are counted. A skill the resume covers by adjacency
+    is weaker evidence but it is not a gap, and listing it here would
+    send the user to learn something they can already speak to.
     """
 
     counts: dict[str, int] = {}
