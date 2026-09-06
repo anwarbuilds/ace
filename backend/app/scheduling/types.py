@@ -37,6 +37,8 @@ class SourceType(StrEnum):
     ASHBY = "ashby"
     SMARTRECRUITERS = "smartrecruiters"
     WORKDAY = "workday"
+    AMAZON = "amazon"
+    SIMPLIFY = "simplify"
 
 
 def _require_non_empty(

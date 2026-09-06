@@ -738,6 +738,69 @@ list time, since Workday reports list-level location as prose such as
 
 ---
 
+# Reaching Employers Without a Supported ATS
+
+Direct polling reaches an employer only if ACE has an adapter for their
+board. Some of the most wanted employers publish nowhere ACE can poll.
+
+Three lanes close that gap, in decreasing order of confidence.
+
+## Lane A: direct adapters
+
+Greenhouse, Lever, Ashby, SmartRecruiters, Workday, Amazon. Full
+description, whole gate applies.
+
+Amazon is a search index rather than a board, so the adapter walks
+`sort=recent` newest-first and stops once a page predates the horizon: a
+routine poll costs a handful of requests instead of the full ten
+thousand. Its requirements live in `basic_qualifications` and
+`preferred_qualifications` rather than the description, so all three
+fields are joined before evaluation.
+
+## Lane B: curated feed
+
+SimplifyJobs publishes two openly-licensed GitHub lists of new-graduate
+and internship postings. They cover exactly what Lane A cannot reach:
+
+```text
+lifeattiktok.com   jobs.bytedance.com   www.tesla.com
+jobs.apple.com     oraclecloud.com      careers.amd.com
+```
+
+**Apple is deliberately not adapted.** Its own API answers automated
+requests with bot-protection responses, so the curated public list is
+the appropriate route rather than a workaround.
+
+The feed carries no description, so rules that read requirement text
+cannot fire. Two things keep that honest rather than merely lax:
+
+1. The feed is already curated to new-grad and internship roles, so the
+   population is pre-narrowed to ACE's target.
+2. Structured fields the feed *does* carry are rendered into the
+   description as plain sentences, so the existing deterministic gate
+   evaluates them through its normal rules rather than through a second
+   code path that could drift. A posting marked "Does Not Offer
+   Sponsorship" becomes a sentence the sponsorship rule already
+   recognises.
+
+The lane is scoped to postings ACE cannot reach directly: an entry whose
+URL resolves to a supported ATS is skipped, because that employer
+belongs in the source catalog where the full description is available.
+This prevents both duplication and under-vetting.
+
+## Lane C: catalog discovery
+
+The same feed is a map of the ATS landscape. Resolving its URLs through
+the source detector finds **1,167 distinct ATS accounts**, of which 481
+are Workday tenants.
+
+Discovery expands the catalog so those employers move from Lane B to
+Lane A, gaining full descriptions. Growth is deliberately incremental:
+the scheduler polls sequentially, so adding a thousand sources at once
+would starve the cycle.
+
+---
+
 # Role Scope Rules
 
 Two exclusions reflect explicit user preference rather than a hard
@@ -1249,7 +1312,7 @@ Current Alembic revision:
 Current backend regression suite:
 
 ```text
-400 tests passing
+472 tests passing
 ```
 
 The suite covers:

@@ -60,6 +60,39 @@ class RoleClassification(BaseModel):
     matched_pattern: str | None = None
 
 
+# Domain qualifiers that make an otherwise-software title a different
+# job. "Infrastructure Engineer" is a software role; "Factory
+# Infrastructure Engineer" maintains a building.
+#
+# Checked before family matching, because the qualifier is what the role
+# actually is and the software-sounding noun is incidental.
+NON_SOFTWARE_DOMAIN_PATTERNS = (
+    r"\bfactory\b",
+    r"\bmanufacturing\b",
+    r"\bfacilities\b",
+    r"\bfacility\b",
+    r"\bdata\s?cent(?:er|re)\b",
+    r"\bmechanical\b",
+    r"\belectrical\b",
+    r"\bcivil\b",
+    r"\bchemical\b",
+    r"\bindustrial\b",
+    r"\bprocess\s+engineer\b",
+    r"\bfield\s+engineer\b",
+    r"\bsales\s+engineer\b",
+    r"\bsolutions?\s+architect\b",
+    r"\bcustomer\s+engineer\b",
+    r"\bsupport\s+engineer\b",
+    r"\bnetwork\s+operations\b",
+    r"\bhelp\s?desk\b",
+    r"\bdesktop\b",
+    r"\bhardware\s+engineer\b",
+    r"\bpackaging\b",
+    r"\bsupply\s+chain\s+engineer\b",
+    r"\bhvac\b",
+)
+
+
 FORWARD_DEPLOYED_PATTERNS = (
     r"\bforward deployed engineer\b",
     r"\bforward-deployed engineer\b",
@@ -144,6 +177,27 @@ def _first_matching_pattern(
     return None
 
 
+def _is_non_software_domain(
+    title: str,
+) -> bool:
+    """Detect a domain qualifier that overrides a software-sounding noun.
+
+    Infrastructure Engineer is a software role. Factory Infrastructure
+    Engineer is not, and the qualifier is what decides.
+    """
+
+    return any(
+        re.search(
+            pattern,
+            title,
+            re.IGNORECASE,
+        )
+        is not None
+        for pattern
+        in NON_SOFTWARE_DOMAIN_PATTERNS
+    )
+
+
 def classify_role(
     title: str,
 ) -> RoleClassification:
@@ -166,6 +220,15 @@ def classify_role(
     to protect discovery recall. Eligibility remains responsible for
     rejecting explicit seniority or experience blockers.
     """
+
+    if _is_non_software_domain(
+        title
+    ):
+        return RoleClassification(
+            family=RoleFamily.OTHER,
+            priority=RolePriority.NONE,
+            matched_pattern=None,
+        )
 
     fde_match = (
         _first_matching_pattern(

@@ -41,7 +41,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-06-v11"
+    "2026-09-06-v12"
 )
 
 
@@ -1469,11 +1469,18 @@ def evaluate_job(
             )
         )
 
+    # Title and description are searched together. Curated feeds and
+    # some employers put clearance or citizenship requirements in the
+    # title, where a description-only scan would miss them.
+    blocker_text = (
+        f"{job.title}\n{job.description}"
+    )
+
     if _contains_any(
-        job.description,
+        blocker_text,
         CITIZENSHIP_BLOCKERS,
     ) or _matches_any_regex(
-        job.description,
+        blocker_text,
         CITIZENSHIP_BLOCKER_PATTERNS,
     ):
         reject_codes.append(
@@ -1490,10 +1497,10 @@ def evaluate_job(
         )
 
     if _contains_any(
-        job.description,
+        blocker_text,
         CLEARANCE_BLOCKERS,
     ) or _matches_any_regex(
-        job.description,
+        blocker_text,
         CLEARANCE_BLOCKER_PATTERNS,
     ):
         reject_codes.append(
@@ -1510,7 +1517,7 @@ def evaluate_job(
         )
 
     if _contains_any(
-        job.description,
+        blocker_text,
         SPONSORSHIP_BLOCKERS,
     ):
         reject_codes.append(

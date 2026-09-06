@@ -24,6 +24,7 @@ Examples:
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from urllib.parse import (
     unquote,
     urlparse,
@@ -339,6 +340,64 @@ def _detect_smartrecruiters(
     )
 
 
+WORKDAY_HOST_PATTERN = re.compile(
+    r"^(?P<tenant>[a-z0-9][a-z0-9-]*)"
+    r"\.wd\d+"
+    r"\.myworkdayjobs\.com$"
+)
+
+
+def _detect_workday(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect Workday tenant URLs.
+
+    Workday identity needs both the tenant and the career-site name:
+
+        https://gdit.wd5.myworkdayjobs.com/external_career_site/job/...
+                ^tenant                    ^site
+
+    The site is the first path segment, except on localised boards where
+    a locale precedes it (``/en-US/site/job/...``).
+    """
+
+    match = WORKDAY_HOST_PATTERN.match(
+        host
+    )
+
+    if match is None:
+        return None
+
+    if not segments:
+        return None
+
+    site = segments[0]
+
+    # Skip a leading locale such as en-US or fr-CA.
+    if re.fullmatch(
+        r"[a-z]{2}(?:-[A-Za-z]{2})?",
+        site,
+    ) and len(segments) > 1:
+        site = segments[1]
+
+    if not site or site.lower() == "job":
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.WORKDAY,
+        source_account=(
+            f"{match.group('tenant')}"
+            f"/{site}"
+        ),
+        source_host=host,
+    )
+
+
 def detect_source_from_url(
     url: str,
 ) -> DetectedSourceIdentity | None:
@@ -384,6 +443,7 @@ def detect_source_from_url(
         _detect_lever,
         _detect_ashby,
         _detect_smartrecruiters,
+        _detect_workday,
     )
 
     for detector in detectors:

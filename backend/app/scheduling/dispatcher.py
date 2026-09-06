@@ -22,6 +22,12 @@ from backend.app.adapters.lever import (
 from backend.app.adapters.smartrecruiters import (
     fetch_smartrecruiters_jobs,
 )
+from backend.app.adapters.amazon import (
+    fetch_amazon_jobs,
+)
+from backend.app.adapters.simplify import (
+    fetch_simplify_jobs,
+)
 from backend.app.adapters.workday import (
     fetch_workday_jobs,
 )
@@ -101,6 +107,29 @@ class WorkdayFetcher(Protocol):
         should_fetch_detail,
     ) -> list[CanonicalJob]:
         """Fetch and normalize one Workday tenant."""
+
+
+class AmazonFetcher(Protocol):
+    """Callable capable of fetching Amazon postings."""
+
+    def __call__(
+        self,
+        *,
+        company_name: str,
+    ) -> list[CanonicalJob]:
+        """Fetch and normalize recent Amazon postings."""
+
+
+class SimplifyFetcher(Protocol):
+    """Callable capable of fetching one curated listing feed."""
+
+    def __call__(
+        self,
+        *,
+        source_account: str,
+        company_name: str,
+    ) -> list[CanonicalJob]:
+        """Fetch and normalize one curated feed."""
 
 
 class UnsupportedSourceTypeError(
@@ -374,6 +403,112 @@ class WorkdaySourceFetcher:
         )
 
 
+class AmazonSourceFetcher:
+    """Dispatch adapter for Amazon's public search endpoint.
+
+    Amazon is a search index rather than an employer board, so the
+    source_account carries no provider identity; it exists only to give
+    the catalog a stable key.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher: AmazonFetcher = (
+            fetch_amazon_jobs
+        ),
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch recent Amazon postings."""
+
+        if (
+            source.source_type
+            != SourceType.AMAZON
+        ):
+            raise ValueError(
+                (
+                    "AmazonSourceFetcher "
+                    "requires an AMAZON "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            company_name=(
+                source.company_name
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
+class SimplifySourceFetcher:
+    """Dispatch adapter for the curated new-grad feed.
+
+    This lane spans many employers rather than one, so company identity
+    comes from each entry rather than from the source definition.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher: SimplifyFetcher = (
+            fetch_simplify_jobs
+        ),
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch one curated listing feed."""
+
+        if (
+            source.source_type
+            != SourceType.SIMPLIFY
+        ):
+            raise ValueError(
+                (
+                    "SimplifySourceFetcher "
+                    "requires a SIMPLIFY "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            source_account=(
+                source.source_account
+            ),
+            company_name=(
+                source.company_name
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
 class SourceDispatcher:
     """Dispatch configured sources to provider-specific fetch handlers."""
 
@@ -460,6 +595,12 @@ def build_default_source_dispatcher() -> (
             ),
             SourceType.WORKDAY: (
                 WorkdaySourceFetcher()
+            ),
+            SourceType.AMAZON: (
+                AmazonSourceFetcher()
+            ),
+            SourceType.SIMPLIFY: (
+                SimplifySourceFetcher()
             ),
         }
     )
