@@ -127,7 +127,7 @@ def make_job(
     *,
     title: str,
     location: str = "Seattle, Washington",
-    description: str = "Build reliable software systems.",
+    description: str = ("New grad role. Build reliable software systems."),
     posted_at: datetime | None = (
         RECENTLY_POSTED_AT
     ),
@@ -311,7 +311,7 @@ def test_mixed_lifecycle_changes_preserve_observation_status() -> None:
         "5",
         title="Machine Learning Engineer",
         description=(
-            "Build production machine learning "
+            "New grad role. Build production machine learning "
             "systems. Requires 3 years experience."
         ),
     )

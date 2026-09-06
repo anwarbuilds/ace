@@ -17,13 +17,26 @@ from backend.app.models.job import (
 )
 
 
+# Every gate test job is early-career unless the test is specifically
+# about the early-career rule. Appending the marker keeps each test
+# focused on the single rule it is exercising.
+EARLY_CAREER_NOTE = "This is a new grad role. "
+
+
 def make_job(
     *,
     title: str = "Software Engineer",
     location: str = "Seattle, Washington",
     description: str = "",
+    early_career: bool = True,
 ) -> CanonicalJob:
     """Create a normalized test job."""
+
+    if early_career:
+        description = (
+            EARLY_CAREER_NOTE
+            + description
+        )
 
     return CanonicalJob(
         source="test",
@@ -605,8 +618,15 @@ def _job(
         "Build reliable software systems."
     ),
     location: str = "Seattle, Washington",
+    early_career: bool = True,
 ) -> CanonicalJob:
     """Create one normalized job for gate tests."""
+
+    if early_career:
+        description = (
+            EARLY_CAREER_NOTE
+            + description
+        )
 
     return CanonicalJob(
         source="greenhouse",

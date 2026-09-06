@@ -207,17 +207,10 @@ def _render_item(
     ]
 
     lines.append(
-        f"   Eligibility: "
-        f"{item.eligibility_status}"
-        f"   Priority: "
-        f"{item.role_priority}"
-        f"   Change: "
-        f"{item.observation_status}"
-    )
-
-    lines.append(
         f"   Role family: "
         f"{item.role_family}"
+        f"   Change: "
+        f"{item.observation_status}"
     )
 
     lines.append(

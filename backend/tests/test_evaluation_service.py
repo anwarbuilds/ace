@@ -54,7 +54,7 @@ def make_job(
     *,
     title: str,
     location: str = "Seattle, Washington",
-    description: str = "Build reliable software systems.",
+    description: str = ("New grad role. Build reliable software systems."),
     posted_at: datetime | None = (
         RECENTLY_POSTED_AT
     ),
@@ -185,7 +185,7 @@ def test_three_year_job_remains_alert_candidate() -> None:
         "2",
         title="Machine Learning Engineer",
         description=(
-            "Build machine learning systems. "
+            "New grad role. Build machine learning systems. "
             "Requires 3 years experience."
         ),
     )
@@ -357,7 +357,8 @@ def test_mixed_batch_reports_correct_counts() -> None:
         "8",
         title="Machine Learning Engineer",
         description=(
-            "Requires 3 years experience."
+            "New grad role. Requires 3 "
+            "years experience."
         ),
     )
 
@@ -575,7 +576,7 @@ def test_evaluation_uses_snapshot_observed_at_not_wall_clock() -> None:
         posted_at=datetime(
             2020,
             1,
-            1,
+            8,
             tzinfo=timezone.utc,
         ),
     )
@@ -593,7 +594,7 @@ def test_evaluation_uses_snapshot_observed_at_not_wall_clock() -> None:
         ),
     )
 
-    # Nine days old relative to the snapshot, ancient relative to now.
+    # Two days old relative to the snapshot, ancient relative to now.
     assert (
         evaluate_snapshot(
             snapshot

@@ -8,6 +8,7 @@ Core invariants:
 1. Role classification determines the target role family.
 2. Eligibility determines inclusion.
 3. A surfaced job means "apply to this". There is no partial tier.
+   Only new-grad / early-career roles are surfaced.
 4. Missing sponsorship information is unknown, not rejection.
 5. Missing experience information is unknown, not rejection.
 6. Explicitly PhD-targeted roles are excluded.
@@ -39,7 +40,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-05-v9"
+    "2026-09-06-v10"
 )
 
 
@@ -108,6 +109,10 @@ class EligibilityReasonCode(
 
     SYSTEMS_LANGUAGE_ONLY = (
         "SYSTEMS_LANGUAGE_ONLY"
+    )
+
+    NOT_EARLY_CAREER = (
+        "NOT_EARLY_CAREER"
     )
 
     NO_HARD_BLOCKER = (
@@ -498,6 +503,56 @@ CLEARANCE_BLOCKERS = (
     "active secret clearance",
     "active top secret clearance",
 )
+
+
+# Any clearance requirement is a blocker. A US security clearance
+# requires US citizenship, so "eligibility and willingness to obtain"
+# excludes an international candidate just as firmly as holding one.
+CLEARANCE_BLOCKER_PATTERNS = (
+    r"\bsecurity\s+clearance\b",
+    r"\bsecret\s+clearance\b",
+    r"\bts\s*/\s*sci\b",
+    r"\btop\s+secret\b",
+    r"\bpolygraph\b",
+    r"\bdod\s+clearance\b",
+    r"\bclearable\b",
+    r"\bq\s+clearance\b",
+)
+
+
+# ----------------------------------------------------------------------
+# Early-career scope
+# ----------------------------------------------------------------------
+#
+# ACE surfaces new-grad and early-career roles only. Anything else is
+# noise for this user, who is finishing a Master's and needs roles that
+# realistically sponsor international candidates.
+EARLY_CAREER_TITLE_PATTERNS = (
+    r"\bnew\s?grad(?:uate)?\b",
+    r"\brecent\s+graduate\b",
+    r"\buniversity\s+(?:graduate|hire|program|recruiting)\b",
+    r"\bcollege\s+(?:grad|graduate|hire)\b",
+    r"\bentry[-\s]level\b",
+    r"\bearly\s+career\b",
+    r"\bearly[-\s]in[-\s]career\b",
+    r"\bcampus\b",
+    r"\bintern(?:ship)?\b",
+    r"\bco-?op\b",
+    r"\bapprentice(?:ship)?\b",
+    r"\brotational\b",
+    r"\bgraduate\s+(?:software|engineer|program|scheme)\b",
+    r"\bjunior\b",
+    r"\bassociate\s+(?:software\s+)?engineer\b",
+    r"\b20\d\d\s+(?:grad|start|graduate)\b",
+    # "Software Engineer I" / "SDE 1" but not "Engineer II"
+    r"\b(?:software\s+engineer|sde|swe|engineer|developer)\s*"
+    r"(?:i|1)\b(?![iv\d])",
+)
+
+
+# A role stating two years or less is an early-career role even when it
+# never uses the words.
+EARLY_CAREER_MAX_YEARS = 2
 
 
 # ----------------------------------------------------------------------
@@ -1045,6 +1100,41 @@ def _required_experience_years(
     return None
 
 
+def _is_early_career_role(
+    job: CanonicalJob,
+    *,
+    required_years: int | None,
+) -> bool:
+    """Detect roles open to a new graduate.
+
+    Either an explicit early-career signal, or an experience bar low
+    enough that a graduating candidate clearly qualifies.
+
+    A posting that states no experience requirement and carries no
+    early-career language is treated as NOT early-career. ACE surfaces a
+    single list meaning "apply to this", so an unlabelled senior-leaning
+    role is noise rather than opportunity.
+    """
+
+    if _matches_any_regex(
+        job.title,
+        EARLY_CAREER_TITLE_PATTERNS,
+    ):
+        return True
+
+    if _matches_any_regex(
+        job.description,
+        EARLY_CAREER_TITLE_PATTERNS,
+    ):
+        return True
+
+    return (
+        required_years is not None
+        and required_years
+        <= EARLY_CAREER_MAX_YEARS
+    )
+
+
 def _is_hardware_embedded_role(
     job: CanonicalJob,
 ) -> bool:
@@ -1295,28 +1385,44 @@ def evaluate_job(
     # can credibly apply to. Four or more years is therefore a hard
     # exclusion rather than a soft penalty, unless the posting also
     # carries an explicit early-career signal.
+    # An explicit early-career label does not override a high experience
+    # bar. A posting that calls itself a new-grad role while demanding
+    # seven years is contradicting itself, and the years are the part
+    # that survives contact with a recruiter.
     if (
         required_years is not None
         and required_years
         >= MAX_REQUIRED_EXPERIENCE_YEARS
     ):
-        if early_career_signal:
-            pass
+        reject_codes.append(
+            EligibilityReasonCode
+            .EXPERIENCE_TOO_HIGH
+        )
 
-        else:
-            reject_codes.append(
-                EligibilityReasonCode
-                .EXPERIENCE_TOO_HIGH
+        reject_reasons.append(
+            (
+                "Posting requires "
+                f"approximately "
+                f"{required_years}+ "
+                "years experience."
             )
+        )
 
-            reject_reasons.append(
-                (
-                    "Posting requires "
-                    f"approximately "
-                    f"{required_years}+ "
-                    "years experience."
-                )
+    if not _is_early_career_role(
+        job,
+        required_years=required_years,
+    ):
+        reject_codes.append(
+            EligibilityReasonCode
+            .NOT_EARLY_CAREER
+        )
+
+        reject_reasons.append(
+            (
+                "Posting is not a new-grad or "
+                "early-career role."
             )
+        )
 
     if _is_hardware_embedded_role(
         job
@@ -1372,6 +1478,9 @@ def evaluate_job(
     if _contains_any(
         job.description,
         CLEARANCE_BLOCKERS,
+    ) or _matches_any_regex(
+        job.description,
+        CLEARANCE_BLOCKER_PATTERNS,
     ):
         reject_codes.append(
             EligibilityReasonCode

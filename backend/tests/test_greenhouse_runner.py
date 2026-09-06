@@ -57,7 +57,7 @@ def make_job(
             "Seattle, Washington"
         ),
         description=(
-            "Build reliable software systems."
+            "New grad role. Build reliable software systems."
         ),
         official_url=(
             "https://example.com/jobs/"

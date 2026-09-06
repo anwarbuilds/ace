@@ -82,8 +82,8 @@ def make_canonical(
     external_id: str = "1",
     title: str = "Software Engineer",
     description: str = (
-        "Build reliable software systems "
-        "in Python."
+        "New grad role. Build reliable "
+        "software systems in Python."
     ),
 ) -> CanonicalJob:
     """Create one normalized job."""

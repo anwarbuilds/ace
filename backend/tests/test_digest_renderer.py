@@ -307,12 +307,6 @@ def test_body_includes_useful_metadata() -> None:
 
     body = message.text_body
 
-    assert (
-        "Eligibility: STRETCH" in body
-    )
-
-    assert "Priority: PRIMARY" in body
-
     assert "Change: NEW" in body
 
     assert "Remote (US)" in body
@@ -504,11 +498,6 @@ def test_payload_round_trip_preserves_fields() -> None:
     assert (
         restored.official_url
         == "https://acme.com/jobs/42"
-    )
-
-    assert (
-        restored.eligibility_status
-        == "PASS"
     )
 
     assert (
