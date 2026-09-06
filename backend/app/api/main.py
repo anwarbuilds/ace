@@ -446,6 +446,16 @@ def create_app() -> FastAPI:
                 "instant, for new since last visit."
             ),
         ),
+        max_detected_age_days: int | None = Query(
+            default=None,
+            ge=1,
+            le=3650,
+            description=(
+                "Hide postings ACE detected more "
+                "than this many days ago. Nothing "
+                "is deleted; the row still exists."
+            ),
+        ),
         min_match: int | None = Query(
             default=None,
             ge=0,
@@ -518,6 +528,9 @@ def create_app() -> FastAPI:
                 session_id=session_id,
                 min_match=min_match,
                 since=since,
+                max_detected_age_days=(
+                    max_detected_age_days
+                ),
                 mark=(
                     mark
                     if mark
@@ -569,6 +582,11 @@ def create_app() -> FastAPI:
             ge=1,
             le=3650,
         ),
+        max_detected_age_days: int | None = Query(
+            default=None,
+            ge=1,
+            le=3650,
+        ),
         active_only: bool = Query(
             default=True,
         ),
@@ -611,6 +629,9 @@ def create_app() -> FastAPI:
                 search=q,
                 max_age_days=(
                     max_age_days
+                ),
+                max_detected_age_days=(
+                    max_detected_age_days
                 ),
                 active_only=active_only,
                 early_career_only=(

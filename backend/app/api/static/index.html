@@ -473,6 +473,13 @@ var HIGH = 70, MED = 45;
 // One page of rows. Fetched on demand as the list is scrolled, so the
 // queue is never silently truncated at the first page.
 var PAGE = 60;
+// Default Queue housekeeping: hide postings detected more than this
+// many days ago. Nothing is deleted. Saved, Archive, Skills and Resume
+// statistics all still see the full history; this only shapes the
+// default Queue view, and is a per-session toggle, not a standing
+// preference, so it never silently hides something without a visible,
+// one-click way back.
+var RECENT_DAYS = 15;
 
 var state = {
   page: "queue", view: "all",
@@ -486,7 +493,7 @@ var state = {
   markCounts: {saved:0,archived:0,applied:0}, prevVisit: null,
   detailOpen: false, menuOpen: false, toast: null,
   importData: null, importChoice: {}, openSessions: {},
-  gapFamily: "", gapMin: null
+  gapFamily: "", gapMin: null, recentOnly: true
 };
 
 /* ---------------- storage ---------------- */
@@ -612,6 +619,10 @@ function params(extra){
     var f=state.filters[k];
     if(f.type==="flag") p.set(f.param,"true"); else p.set(f.param, f.value);
   });
+  // Scoped to the Queue page itself so a saved or archived job is never
+  // hidden by this: those pages call params() too, and this must not
+  // reach them.
+  if(state.page==="queue" && state.recentOnly) p.set("max_detected_age_days", RECENT_DAYS);
   if(extra) Object.keys(extra).forEach(function(k){ if(extra[k]!=null) p.set(k, extra[k]); });
   return p;
 }
@@ -758,6 +769,11 @@ function railBar(){
     '<button class="chip'+(state.filters.early_career_only?" on":"")+'" data-act="toggleearly"'+
       ' aria-pressed="'+(!!state.filters.early_career_only)+'">Early career'+
       (state.stats.labelled_new_grad!=null?'<span class="chip-n">'+state.stats.labelled_new_grad+'</span>':'')+
+    '</button>'+
+    '<button class="chip'+(state.recentOnly?" on":"")+'" data-act="togglerecent"'+
+      ' aria-pressed="'+(!!state.recentOnly)+'" title="'+
+      (state.recentOnly?"Showing only what ACE detected in the last "+RECENT_DAYS+" days. Nothing older is deleted.":"Showing every age. Postings ACE detected more than "+RECENT_DAYS+" days ago are included.")+'">'+
+      "Last "+RECENT_DAYS+" days"+
     '</button>'+
     chips+
     '<button class="chip" data-act="filters">'+icon(I.plus)+'Filter</button>'+
@@ -1300,6 +1316,12 @@ document.addEventListener("click", function(e){
       if(state.filters.early_career_only) delete state.filters.early_career_only;
       else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Early career",pinned:true};
       loadShell().then(function(){ loadJobs(); }); return; }
+    if(d.act==="togglerecent"){
+      state.recentOnly = !state.recentOnly;
+      showToast(state.recentOnly
+        ? "Showing the last "+RECENT_DAYS+" days"
+        : "Showing every age. Nothing was deleted; this only widens what you see.");
+      loadShell().then(function(){ loadJobs(); }); return; }
     // The read line only means anything in arrival order, so this
     // switches to it rather than drawing a boundary through a
     // best-match list where new arrivals are scattered.
@@ -1511,6 +1533,9 @@ var PALETTE=[
   {label:"Toggle early career only", run:function(){
       if(state.filters.early_career_only) delete state.filters.early_career_only;
       else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Early career",pinned:true};
+      goTo("queue"); }},
+  {label:"Toggle last 15 days only", run:function(){
+      state.recentOnly = !state.recentOnly;
       goTo("queue"); }},
   {label:"Sort by best match", run:function(){ state.sort="best_match"; loadJobs(); }},
   {label:"Sort by newest", run:function(){ state.sort="newest"; loadJobs(); }},

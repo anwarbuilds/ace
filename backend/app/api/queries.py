@@ -119,6 +119,17 @@ class JobFilters:
     # needs to resolve to the minute or the marker is wrong all day.
     since: datetime | None = None
 
+    # Default Queue housekeeping: hide postings ACE detected more than
+    # this many days ago. Deliberately keyed on first_seen_at rather
+    # than posted_at, which many sources omit or misreport and is
+    # already documented as untrustworthy across sources. first_seen_at
+    # is never null and is a timestamp ACE itself controls.
+    #
+    # This never deletes anything. A job past this window still exists,
+    # still counts in Skills and Resume statistics, and is reachable
+    # through Saved, Archive, or search with the cutoff cleared.
+    max_detected_age_days: int | None = None
+
     # "saved", "archived" or "applied". Filtered in SQL rather than in
     # the client, so these pages search all 777 jobs instead of whichever
     # page happened to be loaded.
@@ -483,6 +494,22 @@ def _apply_filters(
             > _as_utc(
                 filters.since
             )
+        )
+
+    if (
+        filters.max_detected_age_days
+        is not None
+    ):
+        cutoff = now - timedelta(
+            days=(
+                filters
+                .max_detected_age_days
+            )
+        )
+
+        statement = statement.where(
+            JobRecord.first_seen_at
+            >= cutoff
         )
 
     if filters.verified_only:
