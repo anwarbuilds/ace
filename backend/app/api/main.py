@@ -36,6 +36,14 @@ from backend.app.api.marks import (
     mark_counts,
     set_mark,
 )
+from backend.app.applications.parsing import (
+    ApplicationParseError,
+    parse_applications,
+)
+from backend.app.applications.service import (
+    apply_import,
+    preview_import,
+)
 from backend.app.api.queries import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
@@ -101,6 +109,22 @@ MARK_FILTERS = frozenset(
         "applied",
     }
 )
+
+
+class ApplicationDecision(BaseModel):
+    """One confirmed row of an application import."""
+
+    job_id: int
+
+    applied_on: str | None = None
+
+
+class ApplicationImport(BaseModel):
+    """The rows a user confirmed after reviewing the preview."""
+
+    decisions: list[
+        ApplicationDecision
+    ] = []
 
 
 class MarkUpdate(BaseModel):
@@ -766,6 +790,138 @@ def create_app() -> FastAPI:
                 else record.applied_at
                 .isoformat()
             ),
+        }
+
+    @app.post(
+        "/api/applications/preview"
+    )
+    def preview_applications(
+        file: UploadFile = File(
+            ...,
+        ),
+        session: Session = Depends(
+            get_session
+        ),
+    ) -> dict:
+        """Report what importing this file would do, changing nothing.
+
+        Separate from the import itself so a wrong match is seen before
+        it is recorded, not after.
+        """
+
+        payload = file.file.read()
+
+        try:
+            rows = parse_applications(
+                payload=payload,
+                filename=(
+                    file.filename or ""
+                ),
+            )
+        except ApplicationParseError as error:
+            raise HTTPException(
+                status_code=422,
+                detail=str(
+                    error
+                ),
+            ) from error
+
+        preview = preview_import(
+            session,
+            rows=rows,
+        )
+
+        by_number = {
+            row.row_number: row
+            for row in preview.rows
+        }
+
+        return {
+            "counts": preview.counts,
+            "total": len(
+                preview.rows
+            ),
+            "rows": [
+                {
+                    "row_number": (
+                        match.row_number
+                    ),
+                    "status": match.status,
+                    "method": match.method,
+                    "job_id": match.job_id,
+                    "company": by_number[
+                        match.row_number
+                    ].company,
+                    "title": by_number[
+                        match.row_number
+                    ].title,
+                    "applied_on": (
+                        None
+                        if by_number[
+                            match.row_number
+                        ].applied_on
+                        is None
+                        else by_number[
+                            match.row_number
+                        ]
+                        .applied_on
+                        .isoformat()
+                    ),
+                    "candidates": [
+                        {
+                            "job_id": (
+                                candidate
+                                .job_id
+                            ),
+                            "company": (
+                                candidate
+                                .company
+                            ),
+                            "title": (
+                                candidate
+                                .title
+                            ),
+                        }
+                        for candidate
+                        in match.candidates
+                    ],
+                }
+                for match in preview.matches
+            ],
+        }
+
+    @app.post(
+        "/api/applications/import"
+    )
+    def import_applications(
+        payload: ApplicationImport,
+        session: Session = Depends(
+            get_session
+        ),
+    ) -> dict:
+        """Record applications for the confirmed rows only."""
+
+        marked = apply_import(
+            session,
+            decisions=[
+                {
+                    "job_id": (
+                        decision.job_id
+                    ),
+                    "applied_on": (
+                        decision.applied_on
+                    ),
+                }
+                for decision in (
+                    payload.decisions
+                )
+            ],
+        )
+
+        session.commit()
+
+        return {
+            "marked": marked,
         }
 
     @app.get(

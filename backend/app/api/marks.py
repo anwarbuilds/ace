@@ -46,6 +46,7 @@ def set_mark(
     review_state: str | None = None,
     clear_review: bool = False,
     applied: bool | None = None,
+    applied_at: datetime | None = None,
     now: datetime | None = None,
 ) -> JobMarkRecord:
     """Create or update one job's mark.
@@ -55,6 +56,11 @@ def set_mark(
 
     ``clear_review`` is separate from ``review_state=None`` because None
     is also the "leave it alone" signal, and the two must not collide.
+
+    ``applied_at`` is separate from ``now`` because an imported
+    application happened on its own date, while the row was written
+    today. Collapsing the two would make every imported application
+    look as though it happened at import time.
     """
 
     if (
@@ -101,7 +107,11 @@ def set_mark(
         )
 
     if applied is True:
-        record.applied_at = stamp
+        record.applied_at = (
+            applied_at
+            if applied_at is not None
+            else stamp
+        )
     elif applied is False:
         record.applied_at = None
 

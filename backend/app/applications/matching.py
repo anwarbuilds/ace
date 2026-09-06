@@ -1,0 +1,358 @@
+"""Deciding which stored posting an application row refers to.
+
+The asymmetry here drives every decision: a missed match costs one row
+the user re-checks by hand, while a wrong match silently tells them they
+already applied to something they did not. So this never guesses. When
+two postings are equally good candidates the row is reported as
+ambiguous and left for the user, rather than resolved by a tiebreak that
+would be arbitrary.
+
+Three strategies, strongest first:
+
+1. The posting URL, which identifies a job exactly.
+2. Company and title, both normalized.
+3. Company plus a strong token overlap on the title, for rows typed by
+   hand where the title was abbreviated.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import re
+from urllib.parse import urlsplit
+
+
+# Below this share of shared title words, a same-company candidate is
+# not proposed at all. Set high because "Software Engineer" overlaps
+# almost everything a tech company posts.
+TITLE_OVERLAP_THRESHOLD = 0.75
+
+
+# Words that carry no distinguishing weight in a job title.
+TITLE_STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "at",
+        "for",
+        "in",
+        "of",
+        "the",
+        "to",
+        "with",
+        "new",
+        "grad",
+        "graduate",
+        "entry",
+        "level",
+        "i",
+        "ii",
+        "1",
+        "2",
+    }
+)
+
+
+# Suffixes companies add to their own name but job trackers rarely do.
+COMPANY_SUFFIXES = (
+    "inc",
+    "llc",
+    "ltd",
+    "corp",
+    "corporation",
+    "co",
+    "gmbh",
+    "plc",
+    "technologies",
+    "technology",
+    "labs",
+    "group",
+    "holdings",
+)
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class Candidate:
+    """One stored posting a row might refer to."""
+
+    job_id: int
+
+    company: str
+
+    title: str
+
+    official_url: str
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class RowMatch:
+    """The outcome of matching one application row."""
+
+    row_number: int
+
+    status: str
+
+    method: str | None = None
+
+    job_id: int | None = None
+
+    candidates: tuple[Candidate, ...] = ()
+
+
+MATCHED = "matched"
+
+AMBIGUOUS = "ambiguous"
+
+UNMATCHED = "unmatched"
+
+UNUSABLE = "unusable"
+
+
+def normalize_url(
+    value: str | None,
+) -> str | None:
+    """Reduce a posting URL to a comparable identity.
+
+    Query strings carry tracking parameters that differ between the copy
+    a person saved and the copy ACE stored, so they are dropped. The
+    path is kept, because that is what identifies the posting.
+    """
+
+    if not value:
+        return None
+
+    text = str(
+        value
+    ).strip()
+
+    if not text:
+        return None
+
+    if "://" not in text:
+        text = f"https://{text}"
+
+    try:
+        parts = urlsplit(
+            text
+        )
+    except ValueError:
+        return None
+
+    host = (
+        parts.netloc or ""
+    ).lower()
+
+    if host.startswith(
+        "www."
+    ):
+        host = host[4:]
+
+    path = (
+        parts.path or ""
+    ).rstrip(
+        "/"
+    ).lower()
+
+    if not host:
+        return None
+
+    return f"{host}{path}"
+
+
+def normalize_company(
+    value: str | None,
+) -> str:
+    """Reduce a company name to a comparable form."""
+
+    text = re.sub(
+        r"[^a-z0-9 ]+",
+        " ",
+        str(
+            value or ""
+        ).lower(),
+    )
+
+    words = [
+        word
+        for word in text.split()
+        if word not in COMPANY_SUFFIXES
+    ]
+
+    return " ".join(
+        words
+    )
+
+
+def title_tokens(
+    value: str | None,
+) -> frozenset[str]:
+    """Reduce a job title to its distinguishing words."""
+
+    text = re.sub(
+        r"[^a-z0-9 ]+",
+        " ",
+        str(
+            value or ""
+        ).lower(),
+    )
+
+    return frozenset(
+        word
+        for word in text.split()
+        if word not in TITLE_STOPWORDS
+    )
+
+
+def title_overlap(
+    left: str | None,
+    right: str | None,
+) -> float:
+    """Return the share of the shorter title's words that both share."""
+
+    a = title_tokens(
+        left
+    )
+
+    b = title_tokens(
+        right
+    )
+
+    if not a or not b:
+        return 0.0
+
+    return len(
+        a & b
+    ) / min(
+        len(a),
+        len(b),
+    )
+
+
+def match_row(
+    row,
+    *,
+    by_url: dict[str, Candidate],
+    by_company: dict[str, list[Candidate]],
+) -> RowMatch:
+    """Decide which stored posting one application row refers to."""
+
+    if not row.is_usable:
+        return RowMatch(
+            row_number=row.row_number,
+            status=UNUSABLE,
+        )
+
+    key = normalize_url(
+        row.url
+    )
+
+    if key and key in by_url:
+        return RowMatch(
+            row_number=row.row_number,
+            status=MATCHED,
+            method="url",
+            job_id=by_url[key].job_id,
+        )
+
+    company = normalize_company(
+        row.company
+    )
+
+    if not company:
+        return RowMatch(
+            row_number=row.row_number,
+            status=UNMATCHED,
+        )
+
+    pool = by_company.get(
+        company,
+        [],
+    )
+
+    if not pool:
+        return RowMatch(
+            row_number=row.row_number,
+            status=UNMATCHED,
+        )
+
+    wanted = title_tokens(
+        row.title
+    )
+
+    exact = [
+        candidate
+        for candidate in pool
+        if title_tokens(
+            candidate.title
+        )
+        == wanted
+    ]
+
+    if len(exact) == 1:
+        return RowMatch(
+            row_number=row.row_number,
+            status=MATCHED,
+            method="company and title",
+            job_id=exact[0].job_id,
+        )
+
+    if len(exact) > 1:
+        return RowMatch(
+            row_number=row.row_number,
+            status=AMBIGUOUS,
+            method="company and title",
+            candidates=tuple(
+                exact[:8]
+            ),
+        )
+
+    scored = sorted(
+        (
+            (
+                title_overlap(
+                    row.title,
+                    candidate.title,
+                ),
+                candidate,
+            )
+            for candidate in pool
+        ),
+        key=lambda pair: -pair[0],
+    )
+
+    close = [
+        candidate
+        for score, candidate in scored
+        if score
+        >= TITLE_OVERLAP_THRESHOLD
+    ]
+
+    if len(close) == 1:
+        return RowMatch(
+            row_number=row.row_number,
+            status=MATCHED,
+            method="company and similar title",
+            job_id=close[0].job_id,
+        )
+
+    if len(close) > 1:
+        return RowMatch(
+            row_number=row.row_number,
+            status=AMBIGUOUS,
+            method="company and similar title",
+            candidates=tuple(
+                close[:8]
+            ),
+        )
+
+    return RowMatch(
+        row_number=row.row_number,
+        status=UNMATCHED,
+    )
