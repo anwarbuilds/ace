@@ -127,13 +127,6 @@
 <div class="stats" id="stats"></div>
 
 <div class="filters">
-  <span><label for="status">Show</label>
-  <select id="status">
-    <option value="PASS">Apply to these</option>
-    <option value="REJECT">Excluded (audit)</option>
-    <option value="PASS,REJECT">Everything</option>
-  </select></span>
-
   <span><label for="family">Role family</label>
   <select id="family"><option value="">Any</option></select></span>
 
@@ -205,7 +198,9 @@
 
   function params() {
     var p = new URLSearchParams();
-    p.set("status", el("status").value);
+    // The site is the apply-ready list. Rejected postings are never
+    // shown here; inspect them through the API if ever needed.
+    p.set("status", "PASS");
     p.set("sort", el("sort").value);
     p.set("active_only", el("active").value);
     p.set("early_career_only", el("grad").value);
@@ -281,8 +276,8 @@
   function renderJobs(data) {
     if (!data.items.length) {
       el("results").innerHTML =
-        '<div class="empty">No jobs match these filters.<br>Try widening “Posted within” or clearing the search.</div>';
-      el("meta").textContent = "0 results";
+        '<div class="empty">Nothing apply-ready in this window.<br>Try widening “Posted within”.</div>';
+      el("meta").textContent = "0 apply-ready";
       el("pager").innerHTML = "";
       return;
     }
@@ -291,7 +286,8 @@
 
     var first = data.offset + 1;
     var last = data.offset + data.items.length;
-    el("meta").textContent = "Showing " + first + "–" + last + " of " + data.total;
+    el("meta").textContent =
+      "Showing " + first + "–" + last + " of " + data.total + " apply-ready";
 
     var buttons = "";
     if (data.offset > 0) { buttons += '<button id="prev">← Previous</button>'; }
@@ -342,7 +338,7 @@
       .catch(function () {});
   }
 
-  ["status", "family", "company", "age", "sort", "active", "grad"].forEach(function (id) {
+  ["family", "company", "age", "sort", "active", "grad"].forEach(function (id) {
     el(id).addEventListener("change", function () { offset = 0; load(); });
   });
 
