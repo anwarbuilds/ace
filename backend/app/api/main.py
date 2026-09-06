@@ -284,6 +284,13 @@ def create_app() -> FastAPI:
                 "this discovery run."
             ),
         ),
+        since: datetime | None = Query(
+            default=None,
+            description=(
+                "Only jobs first seen after this "
+                "instant, for new since last visit."
+            ),
+        ),
         min_match: int | None = Query(
             default=None,
             ge=0,
@@ -355,6 +362,7 @@ def create_app() -> FastAPI:
                 resume_id=resume_id,
                 session_id=session_id,
                 min_match=min_match,
+                since=since,
                 sort=normalized_sort,
                 limit=limit,
                 offset=offset,
@@ -416,9 +424,20 @@ def create_app() -> FastAPI:
         always equals the number of rows the user is looking at.
         """
 
+        active_resume = (
+            get_active_resume(
+                session
+            )
+        )
+
         stats = build_stats(
             session,
             filters=JobFilters(
+                resume_id=(
+                    None
+                    if active_resume is None
+                    else active_resume.id
+                ),
                 families=_split_csv(
                     family
                 ),

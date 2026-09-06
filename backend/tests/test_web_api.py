@@ -961,3 +961,139 @@ def test_no_polls_yet_reports_no_last_poll_time(
             )
             is None
         )
+
+
+def test_match_filter_does_not_multiply_the_total(
+    session_factory,
+) -> None:
+    """A match filter must count jobs, not job-score pairs.
+
+    The page query joined the score table but its count query did not,
+    so a min_match filter left the count referencing a table absent
+    from its FROM clause and the database answered with a cartesian
+    product. With a second resume in the table, 3 jobs reported as 6.
+    This is user-visible: the number sits on the "Highly matched"
+    control.
+    """
+
+    from backend.app.db.models import (
+        JobResumeScoreRecord,
+        ResumeRecord,
+    )
+
+    with session_factory() as session:
+        resumes = []
+
+        for label in (
+            "active",
+            "older",
+        ):
+            record = ResumeRecord(
+                label=label,
+                filename=f"{label}.pdf",
+                content_hash=label * 8,
+                raw_text="Python.",
+                extracted_skills=[
+                    "python",
+                ],
+                is_active=(
+                    label == "active"
+                ),
+                uploaded_at=NOW,
+            )
+
+            session.add(
+                record
+            )
+
+            resumes.append(
+                record
+            )
+
+        session.flush()
+
+        for index in (
+            "1",
+            "2",
+            "3",
+        ):
+            job = add_job(
+                session,
+                external_id=index,
+            )
+
+            # Every job carries a score for BOTH resumes, which is what
+            # the unconstrained join multiplied by.
+            for resume in resumes:
+                session.add(
+                    JobResumeScoreRecord(
+                        job_id=job.id,
+                        resume_id=resume.id,
+                        score=90,
+                        matched_skills=[
+                            "python",
+                        ],
+                        missing_skills=[],
+                        related_skills=[],
+                        algorithm_version="test",
+                        scored_at=NOW,
+                    )
+                )
+
+        session.flush()
+
+        page = list_jobs(
+            session,
+            filters=JobFilters(
+                resume_id=resumes[0].id,
+                min_match=70,
+            ),
+            now=NOW,
+        )
+
+        assert page.total == 3
+
+        assert len(
+            page.items
+        ) == 3
+
+
+def test_since_filter_is_minute_accurate(
+    session_factory,
+) -> None:
+    """"New since last visit" must resolve finer than a day.
+
+    max_age_days cannot express "since 2:14 PM", and rounding it up to
+    a day would mark a whole day of jobs as new every time.
+    """
+
+    with session_factory() as session:
+        add_job(
+            session,
+            external_id="1",
+        )
+
+        add_job(
+            session,
+            external_id="5",
+        )
+
+        cutoff = NOW - timedelta(
+            hours=3
+        )
+
+        page = list_jobs(
+            session,
+            filters=JobFilters(
+                since=cutoff,
+            ),
+            now=NOW,
+        )
+
+        # Job "1" was first seen 1 hour ago, job "5" five hours ago.
+        assert page.total == 1
+
+        assert (
+            page.items[0].external_id
+            == "1"
+        )

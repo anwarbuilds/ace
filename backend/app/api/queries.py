@@ -66,6 +66,14 @@ SORT_OPTIONS = (
 )
 
 
+# Match tiers. Defined here rather than in the UI so the count behind
+# the "Highly matched" control and the rows it reveals can never come
+# from two different definitions of "high".
+MATCH_HIGH_MIN = 70
+
+MATCH_MEDIUM_MIN = 45
+
+
 @dataclass(
     frozen=True,
     slots=True,
@@ -100,6 +108,11 @@ class JobFilters:
     session_id: int | None = None
 
     min_match: int | None = None
+
+    # Only jobs first seen after this instant. Distinct from
+    # max_age_days, which is day-granular: "new since your last visit"
+    # needs to resolve to the minute or the marker is wrong all day.
+    since: datetime | None = None
 
     sort: str = "new_grad_first"
 
@@ -259,6 +272,40 @@ def _string_list(
     )
 
 
+def _join_scores(
+    statement: Select,
+    filters: JobFilters,
+) -> Select:
+    """Attach the evaluation and score tables to a job query.
+
+    Both the page query and its count must join identically. When only
+    the page query joined the score table, a min_match filter left the
+    count referencing a table that was not in its FROM clause, and the
+    database answered with a cartesian product: 777 jobs reported as
+    3,045,840.
+    """
+
+    return (
+        statement.join(
+            JobEvaluationRecord,
+            JobEvaluationRecord.job_id
+            == JobRecord.id,
+        )
+        .outerjoin(
+            JobResumeScoreRecord,
+            (
+                JobResumeScoreRecord.job_id
+                == JobRecord.id
+            )
+            & (
+                JobResumeScoreRecord
+                .resume_id
+                == filters.resume_id
+            ),
+        )
+    )
+
+
 def _apply_filters(
     statement: Select,
     filters: JobFilters,
@@ -322,6 +369,14 @@ def _apply_filters(
         statement = statement.where(
             JobResumeScoreRecord.score
             >= filters.min_match
+        )
+
+    if filters.since is not None:
+        statement = statement.where(
+            JobRecord.first_seen_at
+            > _as_utc(
+                filters.since
+            )
         )
 
     if filters.verified_only:
@@ -469,29 +524,13 @@ def list_jobs(
         filters.offset,
     )
 
-    base = (
+    base = _join_scores(
         select(
             JobRecord,
             JobEvaluationRecord,
             JobResumeScoreRecord,
-        )
-        .join(
-            JobEvaluationRecord,
-            JobEvaluationRecord.job_id
-            == JobRecord.id,
-        )
-        .outerjoin(
-            JobResumeScoreRecord,
-            (
-                JobResumeScoreRecord.job_id
-                == JobRecord.id
-            )
-            & (
-                JobResumeScoreRecord
-                .resume_id
-                == filters.resume_id
-            ),
-        )
+        ),
+        filters,
     )
 
     filtered = _apply_filters(
@@ -505,12 +544,11 @@ def list_jobs(
             func.count()
         ).select_from(
             _apply_filters(
-                select(
-                    JobRecord.id
-                ).join(
-                    JobEvaluationRecord,
-                    JobEvaluationRecord.job_id
-                    == JobRecord.id,
+                _join_scores(
+                    select(
+                        JobRecord.id
+                    ),
+                    filters,
                 ),
                 filters,
                 now=reference_time,
@@ -767,12 +805,11 @@ def build_stats(
         )
 
         statement = _apply_filters(
-            select(
-                JobRecord.id
-            ).join(
-                JobEvaluationRecord,
-                JobEvaluationRecord.job_id
-                == JobRecord.id,
+            _join_scores(
+                select(
+                    JobRecord.id
+                ),
+                tile_filters,
             ),
             tile_filters,
             now=reference_time,
@@ -799,6 +836,77 @@ def build_stats(
         max_age_days=7
     )
 
+    def _tier_count(
+        *,
+        low: int | None,
+        high: int | None,
+        unscored: bool = False,
+    ) -> int:
+        """Count gate-passing jobs whose match falls in one band.
+
+        Unscored is counted explicitly rather than inferred. Nearly half
+        the queue has no score because the posting was never readable,
+        and treating that as a zero would rank a job ACE could not read
+        alongside one it read and rejected.
+        """
+
+        statement = _apply_filters(
+            _join_scores(
+                select(
+                    JobRecord.id
+                ),
+                active_filters,
+            ),
+            active_filters,
+            now=reference_time,
+        )
+
+        if unscored:
+            statement = statement.where(
+                JobResumeScoreRecord
+                .score
+                .is_(
+                    None
+                )
+            )
+        else:
+            statement = statement.where(
+                JobResumeScoreRecord
+                .score
+                .is_not(
+                    None
+                )
+            )
+
+            if low is not None:
+                statement = (
+                    statement.where(
+                        JobResumeScoreRecord
+                        .score
+                        >= low
+                    )
+                )
+
+            if high is not None:
+                statement = (
+                    statement.where(
+                        JobResumeScoreRecord
+                        .score
+                        < high
+                    )
+                )
+
+        return int(
+            session.scalar(
+                select(
+                    func.count()
+                ).select_from(
+                    statement.subquery()
+                )
+            )
+            or 0
+        )
+
     labelled_new_grad = (
         _qualifying_count(
             early_career_only=True
@@ -822,6 +930,31 @@ def build_stats(
         "verified_jobs": verified,
         "qualifying_active_jobs": (
             qualifying
+        ),
+        # Match tiers. These drive the queue's view selector, so they
+        # must be computed under the same filters as the list itself.
+        "match_high": _tier_count(
+            low=MATCH_HIGH_MIN,
+            high=None,
+        ),
+        "match_medium": _tier_count(
+            low=MATCH_MEDIUM_MIN,
+            high=MATCH_HIGH_MIN,
+        ),
+        "match_minimal": _tier_count(
+            low=None,
+            high=MATCH_MEDIUM_MIN,
+        ),
+        "match_unscored": _tier_count(
+            low=None,
+            high=None,
+            unscored=True,
+        ),
+        "match_high_min": (
+            MATCH_HIGH_MIN
+        ),
+        "match_medium_min": (
+            MATCH_MEDIUM_MIN
         ),
         "generated_at": (
             reference_time.isoformat()
