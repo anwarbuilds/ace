@@ -36,6 +36,8 @@ from backend.app.api.queries import (
     JobFilters,
     build_facets,
     build_stats,
+    last_poll_completed_at,
+    list_discovery_runs,
     list_jobs,
 )
 from backend.app.db.session import SessionLocal
@@ -140,6 +142,9 @@ def _serialize_job(
         ),
         "posting_age_days": (
             job.posting_age_days
+        ),
+        "first_seen_session_id": (
+            job.first_seen_session_id
         ),
         "is_early_career": (
             job.is_early_career
@@ -269,6 +274,13 @@ def create_app() -> FastAPI:
                 "actually read."
             ),
         ),
+        session_id: int | None = Query(
+            default=None,
+            description=(
+                "Only jobs first found in "
+                "this discovery run."
+            ),
+        ),
         min_match: int | None = Query(
             default=None,
             ge=0,
@@ -338,6 +350,7 @@ def create_app() -> FastAPI:
                 ),
                 verified_only=verified_only,
                 resume_id=resume_id,
+                session_id=session_id,
                 min_match=min_match,
                 sort=normalized_sort,
                 limit=limit,
@@ -400,7 +413,7 @@ def create_app() -> FastAPI:
         always equals the number of rows the user is looking at.
         """
 
-        return build_stats(
+        stats = build_stats(
             session,
             filters=JobFilters(
                 families=_split_csv(
@@ -423,6 +436,61 @@ def create_app() -> FastAPI:
                 verified_only=verified_only,
             ),
         )
+
+        last_poll = (
+            last_poll_completed_at(
+                session
+            )
+        )
+
+        stats["last_poll_at"] = (
+            None
+            if last_poll is None
+            else last_poll.isoformat()
+        )
+
+        return stats
+
+    @app.get(
+        "/api/sessions"
+    )
+    def get_sessions(
+        session: Session = Depends(
+            get_session
+        ),
+        limit: int = Query(
+            default=20,
+            ge=1,
+            le=100,
+        ),
+    ) -> dict:
+        """Return recent discovery runs and when ACE last checked.
+
+        Runs exist only where something was actually found, so this is a
+        history of arrivals rather than a log of scheduler activity.
+        The last-checked time is separate, because a poll that found
+        nothing is still a poll.
+        """
+
+        last_poll = (
+            last_poll_completed_at(
+                session
+            )
+        )
+
+        return {
+            "last_poll_at": (
+                None
+                if last_poll is None
+                else last_poll.isoformat()
+            ),
+            "sessions": (
+                list_discovery_runs(
+                    session,
+                    limit=limit,
+                )
+            ),
+        }
 
     @app.get(
         "/api/resume"

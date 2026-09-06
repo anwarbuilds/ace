@@ -841,3 +841,123 @@ def test_unfiltered_stats_count_everything_qualifying(
         stats["qualifying_active_jobs"]
         == 2
     )
+
+
+# ----------------------------------------------------------------------
+# Discovery runs
+# ----------------------------------------------------------------------
+
+
+def test_jobs_can_be_filtered_to_one_discovery_run(
+    session_factory,
+) -> None:
+    """The UI groups arrivals by the run that found them."""
+
+    from backend.app.db.models import (
+        PollSessionRecord,
+    )
+
+    with session_factory.begin() as session:
+        run = PollSessionRecord(
+            started_at=NOW,
+            last_activity_at=NOW,
+            jobs_discovered=1,
+            qualifying_discovered=1,
+        )
+
+        session.add(
+            run
+        )
+
+        session.flush()
+
+        mine = add_job(
+            session,
+            external_id="1",
+        )
+
+        mine.first_seen_session_id = (
+            run.id
+        )
+
+        add_job(
+            session,
+            external_id="2",
+        )
+
+        session.flush()
+
+        run_id = run.id
+
+    with session_factory() as session:
+        page = list_jobs(
+            session,
+            filters=JobFilters(
+                session_id=run_id
+            ),
+            now=NOW,
+        )
+
+    assert page.total == 1
+
+    assert (
+        page.items[0].external_id == "1"
+    )
+
+    assert (
+        page.items[0]
+        .first_seen_session_id
+        == run_id
+    )
+
+
+def test_last_poll_time_reflects_checking_not_finding(
+    session_factory,
+) -> None:
+    """A poll that found nothing is still a poll.
+
+    Answering "when did you last look" with the last time something
+    turned up would imply ACE had stopped running.
+    """
+
+    from backend.app.api.queries import (
+        last_poll_completed_at,
+    )
+    from backend.app.db.models import (
+        SourceState,
+    )
+
+    with session_factory.begin() as session:
+        session.add(
+            SourceState(
+                source="greenhouse",
+                source_account="example",
+                initialized_at=NOW,
+                last_success_at=NOW,
+                last_job_count=0,
+            )
+        )
+
+    with session_factory() as session:
+        assert (
+            last_poll_completed_at(
+                session
+            )
+            is not None
+        )
+
+
+def test_no_polls_yet_reports_no_last_poll_time(
+    session_factory,
+) -> None:
+    from backend.app.api.queries import (
+        last_poll_completed_at,
+    )
+
+    with session_factory() as session:
+        assert (
+            last_poll_completed_at(
+                session
+            )
+            is None
+        )

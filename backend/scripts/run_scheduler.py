@@ -29,6 +29,9 @@ from backend.app.db.session import (
 from backend.app.evaluation.freshness import (
     FreshnessPolicy,
 )
+from backend.app.persistence.sessions import (
+    record_discoveries,
+)
 from backend.app.scheduling import (
     SchedulerRuntime,
     SourceDefinition,
@@ -314,9 +317,35 @@ def main(
             ),
         )
 
+    def record_cycle(
+        *,
+        started_at,
+    ) -> None:
+        """Group anything this cycle discovered into a run."""
+
+        with SessionLocal.begin() as session:
+            run = record_discoveries(
+                session,
+                since=started_at,
+            )
+
+        if run is not None:
+            LOGGER.info(
+                (
+                    "discovery_run_updated "
+                    "session_id=%s "
+                    "jobs_discovered=%d "
+                    "qualifying=%d"
+                ),
+                run.id,
+                run.jobs_discovered,
+                run.qualifying_discovered,
+            )
+
     runtime = SchedulerRuntime(
         registry=registry,
         poller=poll_source,
+        cycle_recorder=record_cycle,
     )
 
     if runtime.source_count == 0:

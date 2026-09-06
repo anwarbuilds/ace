@@ -32,6 +32,10 @@ to the existing scheduling service.
 import logging
 import threading
 import time
+from datetime import (
+    datetime,
+    timezone,
+)
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Protocol
@@ -72,6 +76,22 @@ class Sleeper(Protocol):
         seconds: float,
     ) -> None:
         """Sleep for the requested duration."""
+
+
+class CycleRecorder(Protocol):
+    """Called once per cycle to record what it discovered.
+
+    Injected so the runtime stays free of database knowledge: it can be
+    tested without a database, and what a cycle *means* for presentation
+    stays out of the scheduling loop.
+    """
+
+    def __call__(
+        self,
+        *,
+        started_at: datetime,
+    ) -> None:
+        """Record the discoveries made during one cycle."""
 
 
 class SourcePoller(Protocol):
@@ -188,6 +208,9 @@ class SchedulerRuntime:
         concurrency: int = (
             DEFAULT_CONCURRENCY
         ),
+        cycle_recorder: (
+            CycleRecorder | None
+        ) = None,
     ) -> None:
         self._sources = (
             registry.enabled_sources
@@ -201,6 +224,10 @@ class SchedulerRuntime:
         self._concurrency = max(
             1,
             concurrency,
+        )
+
+        self._cycle_recorder = (
+            cycle_recorder
         )
 
         # next-due times are read and written from worker threads.
@@ -267,6 +294,10 @@ class SchedulerRuntime:
                 succeeded=(),
                 failed=(),
             )
+
+        cycle_started_at = datetime.now(
+            timezone.utc
+        )
 
         results_lock = threading.Lock()
 
@@ -409,6 +440,24 @@ class SchedulerRuntime:
                         run_one,
                         due_sources,
                     )
+                )
+
+        if (
+            self._cycle_recorder
+            is not None
+        ):
+            try:
+                self._cycle_recorder(
+                    started_at=(
+                        cycle_started_at
+                    )
+                )
+
+            except Exception:
+                # Recording is presentation only. Losing it must never
+                # fail a cycle that successfully collected jobs.
+                self._logger.exception(
+                    "cycle_recording_failed"
                 )
 
         return SchedulerCycleResult(

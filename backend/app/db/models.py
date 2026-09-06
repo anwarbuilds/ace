@@ -97,6 +97,10 @@ class JobRecord(Base):
             "ix_jobs_is_active",
             "is_active",
         ),
+        Index(
+            "ix_jobs_first_seen_session",
+            "first_seen_session_id",
+        ),
     )
 
     id: Mapped[int] = mapped_column(
@@ -188,6 +192,18 @@ class JobRecord(Base):
 
     closed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
+        nullable=True,
+    )
+
+    # The discovery run that first saw this job, so the web application
+    # can group new arrivals into readable batches instead of one long
+    # undifferentiated list.
+    first_seen_session_id: Mapped[int | None] = mapped_column(
+        BIGINT_ID,
+        ForeignKey(
+            "poll_sessions.id",
+            ondelete="SET NULL",
+        ),
         nullable=True,
     )
 
@@ -601,4 +617,52 @@ class JobResumeScoreRecord(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+
+
+class PollSessionRecord(Base):
+    """One discovery run: a batch of newly found jobs.
+
+    Not one row per scheduler cycle. Most cycles poll a single source
+    and find nothing, so cycle-level rows would be noise. A session is
+    opened when a cycle discovers new jobs and extended while further
+    discoveries arrive close behind it, which produces the grouping a
+    person means by "this morning's pull".
+    """
+
+    __tablename__ = "poll_sessions"
+
+    __table_args__ = (
+        Index(
+            "ix_poll_sessions_started",
+            "started_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BIGINT_ID,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    last_activity_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    jobs_discovered: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="0",
+    )
+
+    qualifying_discovered: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="0",
     )

@@ -32,6 +32,8 @@ from backend.app.db.models import (
     JobEvaluationRecord,
     JobRecord,
     JobResumeScoreRecord,
+    PollSessionRecord,
+    SourceState,
 )
 
 
@@ -95,6 +97,8 @@ class JobFilters:
 
     resume_id: int | None = None
 
+    session_id: int | None = None
+
     min_match: int | None = None
 
     sort: str = "new_grad_first"
@@ -150,6 +154,8 @@ class JobListing:
     closed_at: datetime | None
 
     posting_age_days: int | None
+
+    first_seen_session_id: int | None = None
 
     is_early_career: bool = False
 
@@ -299,6 +305,12 @@ def _apply_filters(
             JobRecord.source.in_(
                 filters.sources
             )
+        )
+
+    if filters.session_id is not None:
+        statement = statement.where(
+            JobRecord.first_seen_session_id
+            == filters.session_id
         )
 
     if filters.min_match is not None:
@@ -568,6 +580,9 @@ def list_jobs(
                     job.posted_at,
                     now=reference_time,
                 )
+            ),
+            first_seen_session_id=(
+                job.first_seen_session_id
             ),
             is_early_career=bool(
                 evaluation.is_early_career
@@ -857,3 +872,144 @@ def build_facets(
             SORT_OPTIONS
         ),
     }
+
+
+def last_poll_completed_at(
+    session: Session,
+) -> datetime | None:
+    """Return when ACE last successfully checked any source.
+
+    Read from source state rather than from discovery runs: a poll that
+    found nothing is still a poll, and answering "when did you last
+    look" with the last time something turned up would be misleading.
+    """
+
+    latest = session.scalar(
+        select(
+            func.max(
+                SourceState.last_success_at
+            )
+        )
+    )
+
+    return _as_utc(
+        latest
+    )
+
+
+def list_discovery_runs(
+    session: Session,
+    *,
+    limit: int = 20,
+    now: datetime | None = None,
+) -> list[dict]:
+    """Return recent discovery runs, newest first.
+
+    Only runs that actually found something exist, so this is a history
+    of arrivals rather than a log of scheduler activity.
+    """
+
+    reference = (
+        _as_utc(
+            now
+        )
+        or datetime.now(
+            timezone.utc
+        )
+    )
+
+    rows = session.scalars(
+        select(
+            PollSessionRecord
+        )
+        .order_by(
+            PollSessionRecord
+            .last_activity_at.desc()
+        )
+        .limit(
+            max(
+                1,
+                min(
+                    limit,
+                    100,
+                ),
+            )
+        )
+    ).all()
+
+    runs: list[dict] = []
+
+    for row in rows:
+        started = _as_utc(
+            row.started_at
+        )
+
+        finished = _as_utc(
+            row.last_activity_at
+        )
+
+        # Count what is still open and qualifying now, which is what the
+        # user can actually act on -- the stored count is a record of
+        # what arrived, including jobs since closed.
+        open_qualifying = session.scalar(
+            select(
+                func.count()
+            )
+            .select_from(
+                JobRecord
+            )
+            .join(
+                JobEvaluationRecord,
+                JobEvaluationRecord.job_id
+                == JobRecord.id,
+            )
+            .where(
+                JobRecord
+                .first_seen_session_id
+                == row.id,
+                JobRecord.is_active.is_(
+                    True
+                ),
+                JobEvaluationRecord
+                .eligibility_status.in_(
+                    QUALIFYING_STATUSES
+                ),
+            )
+        )
+
+        runs.append(
+            {
+                "id": row.id,
+                "started_at": (
+                    None
+                    if started is None
+                    else started.isoformat()
+                ),
+                "finished_at": (
+                    None
+                    if finished is None
+                    else finished.isoformat()
+                ),
+                "jobs_discovered": (
+                    row.jobs_discovered
+                ),
+                "qualifying_discovered": (
+                    row.qualifying_discovered
+                ),
+                "qualifying_open_now": int(
+                    open_qualifying or 0
+                ),
+                "age_seconds": (
+                    None
+                    if finished is None
+                    else int(
+                        (
+                            reference
+                            - finished
+                        ).total_seconds()
+                    )
+                ),
+            }
+        )
+
+    return runs
