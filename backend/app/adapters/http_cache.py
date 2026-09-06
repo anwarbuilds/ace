@@ -118,3 +118,38 @@ def is_unchanged(
     """Return whether the server said nothing changed."""
 
     return response.status_code == 304
+
+
+def conditional_headers(
+    base: dict[str, str] | None,
+    validators: CacheValidators | None,
+) -> dict[str, str]:
+    """Merge conditional validators into a request's headers."""
+
+    headers = dict(
+        base or {}
+    )
+
+    if validators is not None:
+        headers.update(
+            validators.request_headers()
+        )
+
+    return headers
+
+
+def unchanged_result(
+    validators: CacheValidators | None,
+) -> tuple[
+    list,
+    bool,
+    CacheValidators,
+]:
+    """Return the canonical "nothing changed" adapter result."""
+
+    return (
+        [],
+        True,
+        validators
+        or CacheValidators(),
+    )

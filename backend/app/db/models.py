@@ -244,6 +244,14 @@ class SourceState(Base):
         nullable=True,
     )
 
+    # When this source was last fetched unconditionally. A provider
+    # returning a stale validator could otherwise keep answering 304
+    # forever, and ACE would go quietly out of date.
+    last_full_fetch_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
 
 class JobSourceRecord(Base):
     """Persistent external job source monitored by ACE.

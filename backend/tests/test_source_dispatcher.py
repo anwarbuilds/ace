@@ -8,6 +8,9 @@ from datetime import (
 
 import pytest
 
+from backend.app.adapters.http_cache import (
+    CacheValidators,
+)
 from backend.app.models.job import (
     CanonicalJob,
 )
@@ -33,6 +36,9 @@ DETECTED_AT = datetime(
     0,
     tzinfo=timezone.utc,
 )
+
+
+_NO_VALIDATORS = CacheValidators()
 
 
 def make_source(
@@ -230,6 +236,7 @@ def test_greenhouse_fetcher_uses_source_configuration() -> None:
     def fake_fetcher(
         board_token: str,
         company_name: str,
+        validators=None,
     ) -> list[CanonicalJob]:
         observed[
             "board_token"
@@ -239,9 +246,13 @@ def test_greenhouse_fetcher_uses_source_configuration() -> None:
             "company_name"
         ] = company_name
 
-        return [
-            expected_job,
-        ]
+        return (
+            [
+                expected_job,
+            ],
+            False,
+            _NO_VALIDATORS,
+        )
 
     fetcher = GreenhouseSourceFetcher(
         fetcher=fake_fetcher,
@@ -304,6 +315,7 @@ def test_ashby_fetcher_uses_source_configuration() -> None:
     def fake_fetcher(
         board_name: str,
         company_name: str,
+        validators=None,
     ) -> list[CanonicalJob]:
         observed[
             "board_name"
@@ -313,9 +325,13 @@ def test_ashby_fetcher_uses_source_configuration() -> None:
             "company_name"
         ] = company_name
 
-        return [
-            expected_job,
-        ]
+        return (
+            [
+                expected_job,
+            ],
+            False,
+            _NO_VALIDATORS,
+        )
 
     fetcher = AshbySourceFetcher(
         fetcher=fake_fetcher,

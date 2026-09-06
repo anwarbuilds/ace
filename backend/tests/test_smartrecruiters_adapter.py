@@ -142,7 +142,7 @@ def test_fetches_and_normalizes_smartrecruiters_posting() -> None:
     with httpx.Client(
         transport=transport
     ) as client:
-        jobs = (
+        jobs, _unchanged, _validators = (
             fetch_smartrecruiters_jobs(
                 "ExampleCompany",
                 "Example Company",
@@ -344,7 +344,7 @@ def test_paginates_all_postings() -> None:
     with httpx.Client(
         transport=transport
     ) as client:
-        jobs = (
+        jobs, _unchanged, _validators = (
             fetch_smartrecruiters_jobs(
                 "ExampleCompany",
                 "Example Company",

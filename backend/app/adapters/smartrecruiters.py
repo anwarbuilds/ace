@@ -20,6 +20,13 @@ from urllib.parse import quote
 
 import httpx
 
+from backend.app.adapters.http_cache import (
+    CacheValidators,
+    conditional_headers,
+    is_unchanged,
+    unchanged_result,
+    validators_from_response,
+)
 from backend.app.models.job import CanonicalJob
 
 
@@ -512,7 +519,12 @@ def fetch_smartrecruiters_jobs(
     max_detail_fetches: int = (
         DEFAULT_MAX_DETAIL_FETCHES
     ),
-) -> list[CanonicalJob]:
+    validators: CacheValidators | None = None,
+) -> tuple[
+    list[CanonicalJob],
+    bool,
+    CacheValidators,
+]:
     """Fetch all active postings for one SmartRecruiters company.
 
     ``should_fetch_detail`` receives a posting title and decides whether
@@ -523,6 +535,14 @@ def fetch_smartrecruiters_jobs(
     Every listed posting is still returned, including those whose detail
     was skipped: the snapshot is authoritative for lifecycle, so
     omitting them would mark live jobs closed on the next poll.
+
+    The conditional check applies to the first page of the listing. If
+    that is unchanged the whole company listing is, so nothing is
+    downloaded and no detail requests are made at all.
+
+    Returns:
+        The jobs, whether the listing was unchanged, and the validators
+        to send on the next poll.
     """
 
     normalized_company_identifier = (
@@ -583,17 +603,68 @@ def fetch_smartrecruiters_jobs(
 
         offset = 0
 
+        next_validators = (
+            CacheValidators()
+        )
+
         while True:
-            payload = _get_json_object(
-                client,
-                postings_url,
-                params={
-                    "limit": (
-                        DEFAULT_PAGE_SIZE
+            if offset == 0:
+                first = client.get(
+                    postings_url,
+                    params={
+                        "limit": (
+                            DEFAULT_PAGE_SIZE
+                        ),
+                        "offset": 0,
+                    },
+                    headers=(
+                        conditional_headers(
+                            None,
+                            validators,
+                        )
                     ),
-                    "offset": offset,
-                },
-            )
+                )
+
+                if is_unchanged(
+                    first
+                ):
+                    return unchanged_result(
+                        validators
+                    )
+
+                first.raise_for_status()
+
+                next_validators = (
+                    validators_from_response(
+                        first
+                    )
+                )
+
+                payload = first.json()
+
+                if not isinstance(
+                    payload,
+                    dict,
+                ):
+                    raise ValueError(
+                        (
+                            "SmartRecruiters postings "
+                            "response was not a JSON "
+                            "object."
+                        )
+                    )
+
+            else:
+                payload = _get_json_object(
+                    client,
+                    postings_url,
+                    params={
+                        "limit": (
+                            DEFAULT_PAGE_SIZE
+                        ),
+                        "offset": offset,
+                    },
+                )
 
             content = payload.get(
                 "content"
@@ -800,7 +871,11 @@ def fetch_smartrecruiters_jobs(
                 job
             )
 
-        return jobs
+        return (
+            jobs,
+            False,
+            next_validators,
+        )
 
     finally:
         if owns_client:

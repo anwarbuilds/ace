@@ -9,6 +9,13 @@ import re
 
 import httpx
 
+from backend.app.adapters.http_cache import (
+    CacheValidators,
+    conditional_headers,
+    is_unchanged,
+    unchanged_result,
+    validators_from_response,
+)
 from backend.app.models.job import CanonicalJob
 
 
@@ -49,7 +56,13 @@ def _clean_html(raw_html: str | None) -> str:
 def fetch_greenhouse_jobs(
     board_token: str,
     company_name: str,
-) -> list[CanonicalJob]:
+    *,
+    validators: CacheValidators | None = None,
+) -> tuple[
+    list[CanonicalJob],
+    bool,
+    CacheValidators,
+]:
     """Fetch and normalize published jobs from a Greenhouse board.
 
     Args:
@@ -59,8 +72,14 @@ def fetch_greenhouse_jobs(
         company_name:
             Human-readable employer name ACE should store.
 
+        validators:
+            HTTP validators from the previous poll. Greenhouse honours
+            ETag, so an unchanged board answers 304 with no body and the
+            entire download and diff are skipped.
+
     Returns:
-        A list of normalized CanonicalJob objects.
+        The jobs, whether the board was unchanged, and the validators to
+        send on the next poll.
 
     Raises:
         httpx.HTTPStatusError:
@@ -83,11 +102,27 @@ def fetch_greenhouse_jobs(
     response = httpx.get(
         url,
         params=params,
-        headers=headers,
+        headers=conditional_headers(
+            headers,
+            validators,
+        ),
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
 
+    if is_unchanged(
+        response
+    ):
+        return unchanged_result(
+            validators
+        )
+
     response.raise_for_status()
+
+    next_validators = (
+        validators_from_response(
+            response
+        )
+    )
 
     payload = response.json()
 
@@ -113,4 +148,8 @@ def fetch_greenhouse_jobs(
 
         normalized_jobs.append(normalized_job)
 
-    return normalized_jobs
+    return (
+        normalized_jobs,
+        False,
+        next_validators,
+    )

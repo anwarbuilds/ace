@@ -111,7 +111,13 @@ class SourcePollResult:
     def evaluated_count(
         self,
     ) -> int:
-        """Return the number of changed jobs evaluated."""
+        """Return the number of changed jobs evaluated.
+
+        Zero for an unchanged snapshot: there was nothing to evaluate.
+        """
+
+        if self.workflow is None:
+            return 0
 
         return (
             self.workflow
@@ -123,7 +129,10 @@ class SourcePollResult:
     def alert_candidate_count(
         self,
     ) -> int:
-        """Return the number of notification-ready jobs."""
+        """Return the number of jobs that passed every rule."""
+
+        if self.workflow is None:
+            return 0
 
         return (
             self.workflow
@@ -272,6 +281,10 @@ def poll_source_once(
             last_modified=(
                 fetched_snapshot
                 .last_modified
+            ),
+            observed_at=(
+                fetched_snapshot
+                .detected_at
             ),
         )
 

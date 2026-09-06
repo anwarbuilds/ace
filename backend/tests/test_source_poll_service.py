@@ -452,3 +452,88 @@ def test_poll_result_exposes_summary_counts(
         result.alert_candidate_count
         == 2
     )
+
+
+# ----------------------------------------------------------------------
+# Conditional fetching
+#
+# A 304 means the list is byte-identical, so nothing was added, edited
+# or closed. Skipping the diff is therefore correct rather than a trade
+# of accuracy for speed.
+# ----------------------------------------------------------------------
+
+
+def test_unchanged_snapshot_skips_the_whole_diff(
+    monkeypatch,
+) -> None:
+    """A 304 must not touch job state, only the success markers."""
+
+    source = make_source()
+
+    events: list[str] = []
+
+    class _RecordingRepository(
+        _StubRepository
+    ):
+        def record_source_unchanged(
+            self,
+            **_kwargs,
+        ) -> None:
+            events.append(
+                "unchanged"
+            )
+
+    snapshot = FetchedSourceSnapshot(
+        source_definition=source,
+        detected_at=DETECTED_AT,
+        jobs=(),
+        unchanged=True,
+    )
+
+    monkeypatch.setattr(
+        service_module,
+        "JobRepository",
+        lambda _session: (
+            _RecordingRepository()
+        ),
+    )
+
+    def fail_if_called(
+        *args,
+        **kwargs,
+    ):
+        events.append(
+            "workflow"
+        )
+
+        raise AssertionError(
+            "an unchanged snapshot must "
+            "not run the workflow"
+        )
+
+    monkeypatch.setattr(
+        service_module,
+        "run_source_snapshot_workflow",
+        fail_if_called,
+    )
+
+    result = poll_source_once(
+        source=source,
+        fetcher=FakeFetcher(
+            snapshot=snapshot,
+            events=[],
+        ),
+        transaction_factory=(
+            FakeTransactionFactory(
+                events=[]
+            )
+        ),
+    )
+
+    assert events == [
+        "unchanged"
+    ]
+
+    assert result.workflow is None
+
+    assert result.evaluated_count == 0

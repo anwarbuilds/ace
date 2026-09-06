@@ -1,7 +1,11 @@
 """SQLAlchemy repository for ACE job persistence."""
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import (
+    datetime,
+    timedelta,
+    timezone,
+)
 
 from sqlalchemy import (
     func,
@@ -314,8 +318,16 @@ class JobRepository:
         *,
         source: str,
         source_account: str,
+        force_full_fetch_after: timedelta | None = None,
+        now: datetime | None = None,
     ) -> tuple[str | None, str | None]:
-        """Return the HTTP validators remembered for one source."""
+        """Return the HTTP validators remembered for one source.
+
+        Returns nothing when the source is due an unconditional fetch.
+        A provider returning a stale validator could otherwise keep
+        answering 304 forever, and ACE would go quietly out of date --
+        the failure this system is least able to notice.
+        """
 
         state = self._session.get(
             SourceState,
@@ -330,6 +342,46 @@ class JobRepository:
                 None,
                 None,
             )
+
+        if (
+            force_full_fetch_after
+            is not None
+        ):
+            reference = (
+                now
+                if now is not None
+                else datetime.now(
+                    timezone.utc
+                )
+            )
+
+            last_full = (
+                state.last_full_fetch_at
+            )
+
+            if last_full is None:
+                return (
+                    None,
+                    None,
+                )
+
+            if (
+                last_full.tzinfo is None
+            ):
+                last_full = (
+                    last_full.replace(
+                        tzinfo=timezone.utc
+                    )
+                )
+
+            if (
+                reference - last_full
+                >= force_full_fetch_after
+            ):
+                return (
+                    None,
+                    None,
+                )
 
         return (
             state.http_etag,
@@ -374,6 +426,7 @@ class JobRepository:
         source_account: str,
         etag: str | None,
         last_modified: str | None,
+        observed_at: datetime,
     ) -> None:
         """Persist the validators to replay on the next poll."""
 
@@ -392,6 +445,12 @@ class JobRepository:
 
         state.http_last_modified = (
             last_modified
+        )
+
+        # This path runs only after a 200, so it doubles as the record
+        # of the last unconditional fetch.
+        state.last_full_fetch_at = (
+            observed_at
         )
 
         self._session.flush()

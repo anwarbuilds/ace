@@ -8,6 +8,7 @@ work. Those responsibilities belong to later orchestration layers.
 """
 
 from collections.abc import Mapping
+from datetime import timedelta
 from typing import Protocol
 
 from backend.app.adapters.ashby import (
@@ -146,13 +147,32 @@ class GreenhouseSourceFetcher:
     def __init__(
         self,
         *,
-        fetcher: GreenhouseFetcher = (
-            fetch_greenhouse_jobs
-        ),
+        fetcher=fetch_greenhouse_jobs,
         clock: Clock = utc_now,
+        validator_lookup=None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
+        self._validator_lookup = (
+            validator_lookup
+        )
+
+    def _validators(
+        self,
+        source: SourceDefinition,
+    ):
+        """Return the validators remembered for this source."""
+
+        from backend.app.adapters.http_cache import (
+            CacheValidators,
+        )
+
+        if self._validator_lookup is None:
+            return CacheValidators()
+
+        return self._validator_lookup(
+            source
+        )
 
     def __call__(
         self,
@@ -172,25 +192,27 @@ class GreenhouseSourceFetcher:
                 )
             )
 
-        live_snapshot = (
-            fetch_live_greenhouse_snapshot(
-                board_token=(
-                    source.source_account
+        jobs, unchanged, validators = (
+            self._fetcher(
+                source.source_account,
+                source.company_name,
+                validators=self._validators(
+                    source
                 ),
-                company_name=(
-                    source.company_name
-                ),
-                fetcher=self._fetcher,
-                clock=self._clock,
             )
         )
 
         return FetchedSourceSnapshot(
             source_definition=source,
-            detected_at=(
-                live_snapshot.detected_at
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
             ),
-            jobs=live_snapshot.jobs,
+            unchanged=unchanged,
+            etag=validators.etag,
+            last_modified=(
+                validators.last_modified
+            ),
         )
 
 
@@ -200,13 +222,32 @@ class AshbySourceFetcher:
     def __init__(
         self,
         *,
-        fetcher: AshbyFetcher = (
-            fetch_ashby_jobs
-        ),
+        fetcher=fetch_ashby_jobs,
         clock: Clock = utc_now,
+        validator_lookup=None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
+        self._validator_lookup = (
+            validator_lookup
+        )
+
+    def _validators(
+        self,
+        source: SourceDefinition,
+    ):
+        """Return the validators remembered for this source."""
+
+        from backend.app.adapters.http_cache import (
+            CacheValidators,
+        )
+
+        if self._validator_lookup is None:
+            return CacheValidators()
+
+        return self._validator_lookup(
+            source
+        )
 
     def __call__(
         self,
@@ -226,9 +267,14 @@ class AshbySourceFetcher:
                 )
             )
 
-        jobs = self._fetcher(
-            source.source_account,
-            source.company_name,
+        jobs, unchanged, validators = (
+            self._fetcher(
+                source.source_account,
+                source.company_name,
+                validators=self._validators(
+                    source
+                ),
+            )
         )
 
         return FetchedSourceSnapshot(
@@ -236,6 +282,11 @@ class AshbySourceFetcher:
             detected_at=self._clock(),
             jobs=tuple(
                 jobs
+            ),
+            unchanged=unchanged,
+            etag=validators.etag,
+            last_modified=(
+                validators.last_modified
             ),
         )
 
@@ -246,13 +297,32 @@ class SmartRecruitersSourceFetcher:
     def __init__(
         self,
         *,
-        fetcher: SmartRecruitersFetcher = (
-            fetch_smartrecruiters_jobs
-        ),
+        fetcher=fetch_smartrecruiters_jobs,
         clock: Clock = utc_now,
+        validator_lookup=None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
+        self._validator_lookup = (
+            validator_lookup
+        )
+
+    def _validators(
+        self,
+        source: SourceDefinition,
+    ):
+        """Return the validators remembered for this source."""
+
+        from backend.app.adapters.http_cache import (
+            CacheValidators,
+        )
+
+        if self._validator_lookup is None:
+            return CacheValidators()
+
+        return self._validator_lookup(
+            source
+        )
 
     def __call__(
         self,
@@ -272,17 +342,24 @@ class SmartRecruitersSourceFetcher:
                 )
             )
 
-        jobs = self._fetcher(
-            source.source_account,
-            source.company_name,
-            should_fetch_detail=(
-                build_detail_predicate(
-                    source="smartrecruiters",
-                    company_name=(
-                        source.company_name
-                    ),
-                )
-            ),
+        jobs, unchanged, validators = (
+            self._fetcher(
+                source.source_account,
+                source.company_name,
+                should_fetch_detail=(
+                    build_detail_predicate(
+                        source=(
+                            "smartrecruiters"
+                        ),
+                        company_name=(
+                            source.company_name
+                        ),
+                    )
+                ),
+                validators=self._validators(
+                    source
+                ),
+            )
         )
 
         return FetchedSourceSnapshot(
@@ -290,6 +367,11 @@ class SmartRecruitersSourceFetcher:
             detected_at=self._clock(),
             jobs=tuple(
                 jobs
+            ),
+            unchanged=unchanged,
+            etag=validators.etag,
+            last_modified=(
+                validators.last_modified
             ),
         )
 
@@ -300,13 +382,32 @@ class LeverSourceFetcher:
     def __init__(
         self,
         *,
-        fetcher: LeverFetcher = (
-            fetch_lever_jobs
-        ),
+        fetcher=fetch_lever_jobs,
         clock: Clock = utc_now,
+        validator_lookup=None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
+        self._validator_lookup = (
+            validator_lookup
+        )
+
+    def _validators(
+        self,
+        source: SourceDefinition,
+    ):
+        """Return the validators remembered for this source."""
+
+        from backend.app.adapters.http_cache import (
+            CacheValidators,
+        )
+
+        if self._validator_lookup is None:
+            return CacheValidators()
+
+        return self._validator_lookup(
+            source
+        )
 
     def __call__(
         self,
@@ -326,16 +427,21 @@ class LeverSourceFetcher:
                 )
             )
 
-        jobs = self._fetcher(
-            source_account=(
-                source.source_account
-            ),
-            company_name=(
-                source.company_name
-            ),
-            source_host=(
-                source.source_host
-            ),
+        jobs, unchanged, validators = (
+            self._fetcher(
+                source_account=(
+                    source.source_account
+                ),
+                company_name=(
+                    source.company_name
+                ),
+                source_host=(
+                    source.source_host
+                ),
+                validators=self._validators(
+                    source
+                ),
+            )
         )
 
         return FetchedSourceSnapshot(
@@ -345,6 +451,11 @@ class LeverSourceFetcher:
             ),
             jobs=tuple(
                 jobs
+            ),
+            unchanged=unchanged,
+            etag=validators.etag,
+            last_modified=(
+                validators.last_modified
             ),
         )
 
@@ -622,6 +733,13 @@ class SourceDispatcher:
         return result
 
 
+# How long a source may go without an unconditional fetch. Bounds how
+# long a stale validator could hide real changes.
+FULL_REFETCH_INTERVAL = timedelta(
+    hours=6
+)
+
+
 def _stored_validators(
     source: SourceDefinition,
 ):
@@ -629,6 +747,9 @@ def _stored_validators(
 
     Read in its own short session, outside any poll transaction, so a
     lookup can never hold a connection while the network is slow.
+
+    Returns nothing when the source is due a full fetch, which forces an
+    unconditional request and re-establishes the truth.
     """
 
     from backend.app.adapters.http_cache import (
@@ -652,6 +773,9 @@ def _stored_validators(
                 source_account=(
                     source.source_account
                 ),
+                force_full_fetch_after=(
+                    FULL_REFETCH_INTERVAL
+                ),
             )
         )
 
@@ -669,16 +793,32 @@ def build_default_source_dispatcher() -> (
     return SourceDispatcher(
         {
             SourceType.ASHBY: (
-                AshbySourceFetcher()
+                AshbySourceFetcher(
+                    validator_lookup=(
+                        _stored_validators
+                    )
+                )
             ),
             SourceType.GREENHOUSE: (
-                GreenhouseSourceFetcher()
+                GreenhouseSourceFetcher(
+                    validator_lookup=(
+                        _stored_validators
+                    )
+                )
             ),
             SourceType.LEVER: (
-                LeverSourceFetcher()
+                LeverSourceFetcher(
+                    validator_lookup=(
+                        _stored_validators
+                    )
+                )
             ),
             SourceType.SMARTRECRUITERS: (
-                SmartRecruitersSourceFetcher()
+                SmartRecruitersSourceFetcher(
+                    validator_lookup=(
+                        _stored_validators
+                    )
+                )
             ),
             SourceType.WORKDAY: (
                 WorkdaySourceFetcher()

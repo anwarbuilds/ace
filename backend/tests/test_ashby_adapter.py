@@ -66,7 +66,7 @@ def test_fetch_ashby_jobs_normalizes_public_posting() -> None:
         }
     )
 
-    jobs = fetch_ashby_jobs(
+    jobs, _unchanged, _validators = fetch_ashby_jobs(
         "ExampleAI",
         "Example AI",
         client=client,
@@ -139,7 +139,7 @@ def test_unlisted_ashby_posting_is_ignored() -> None:
         }
     )
 
-    jobs = fetch_ashby_jobs(
+    jobs, _unchanged, _validators = fetch_ashby_jobs(
         "ExampleAI",
         "Example AI",
         client=client,
@@ -166,7 +166,7 @@ def test_missing_description_is_allowed() -> None:
         }
     )
 
-    jobs = fetch_ashby_jobs(
+    jobs, _unchanged, _validators = fetch_ashby_jobs(
         "ExampleAI",
         "Example AI",
         client=client,
@@ -194,7 +194,7 @@ def test_missing_location_uses_unknown() -> None:
         }
     )
 
-    jobs = fetch_ashby_jobs(
+    jobs, _unchanged, _validators = fetch_ashby_jobs(
         "ExampleAI",
         "Example AI",
         client=client,
@@ -223,7 +223,7 @@ def test_invalid_datetime_is_treated_as_missing() -> None:
         }
     )
 
-    jobs = fetch_ashby_jobs(
+    jobs, _unchanged, _validators = fetch_ashby_jobs(
         "ExampleAI",
         "Example AI",
         client=client,

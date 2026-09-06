@@ -17,6 +17,13 @@ from urllib.parse import quote
 
 import httpx
 
+from backend.app.adapters.http_cache import (
+    CacheValidators,
+    conditional_headers,
+    is_unchanged,
+    unchanged_result,
+    validators_from_response,
+)
 from backend.app.models.job import CanonicalJob
 
 
@@ -434,8 +441,18 @@ def fetch_lever_jobs(
     company_name: str,
     source_host: str | None,
     page_size: int = DEFAULT_PAGE_SIZE,
-) -> list[CanonicalJob]:
-    """Fetch all currently published jobs from one Lever site."""
+    validators: CacheValidators | None = None,
+) -> tuple[
+    list[CanonicalJob],
+    bool,
+    CacheValidators,
+]:
+    """Fetch all currently published jobs from one Lever site.
+
+    The conditional check applies to the first page only: if that is
+    unchanged the whole board is, because Lever returns a stable
+    ordering. Later pages are fetched normally.
+    """
 
     account = (
         source_account.strip()
@@ -488,7 +505,18 @@ def fetch_lever_jobs(
 
     skip = 0
 
+    next_validators = CacheValidators()
+
     while True:
+        base_headers = {
+            "Accept": (
+                "application/json"
+            ),
+            "User-Agent": (
+                USER_AGENT
+            ),
+        }
+
         response = httpx.get(
             url,
             params={
@@ -496,21 +524,35 @@ def fetch_lever_jobs(
                 "skip": skip,
                 "limit": page_size,
             },
-            headers={
-                "Accept": (
-                    "application/json"
-                ),
-                "User-Agent": (
-                    USER_AGENT
-                ),
-            },
+            headers=(
+                conditional_headers(
+                    base_headers,
+                    validators,
+                )
+                if skip == 0
+                else base_headers
+            ),
             timeout=(
                 REQUEST_TIMEOUT_SECONDS
             ),
             follow_redirects=True,
         )
 
+        if skip == 0 and is_unchanged(
+            response
+        ):
+            return unchanged_result(
+                validators
+            )
+
         response.raise_for_status()
+
+        if skip == 0:
+            next_validators = (
+                validators_from_response(
+                    response
+                )
+            )
 
         payload = response.json()
 
@@ -582,4 +624,8 @@ def fetch_lever_jobs(
             payload
         )
 
-    return jobs
+    return (
+        jobs,
+        False,
+        next_validators,
+    )

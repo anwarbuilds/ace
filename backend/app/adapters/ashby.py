@@ -10,6 +10,13 @@ from datetime import datetime
 
 import httpx
 
+from backend.app.adapters.http_cache import (
+    CacheValidators,
+    conditional_headers,
+    is_unchanged,
+    unchanged_result,
+    validators_from_response,
+)
 from backend.app.models.job import CanonicalJob
 
 
@@ -25,8 +32,18 @@ def fetch_ashby_jobs(
     company_name: str,
     *,
     client: httpx.Client | None = None,
-) -> list[CanonicalJob]:
-    """Fetch one public Ashby board."""
+    validators: CacheValidators | None = None,
+) -> tuple[
+    list[CanonicalJob],
+    bool,
+    CacheValidators,
+]:
+    """Fetch one public Ashby board.
+
+    Ashby boards are the catalog's largest downloads -- one reaches 12
+    MB -- and honour ETag, so an unchanged board answers 304 with no
+    body and the whole diff is skipped.
+    """
 
     normalized_board_name = board_name.strip()
 
@@ -58,8 +75,28 @@ def fetch_ashby_jobs(
     )
 
     try:
-        response = http_client.get(url)
+        response = http_client.get(
+            url,
+            headers=conditional_headers(
+                None,
+                validators,
+            ),
+        )
+
+        if is_unchanged(
+            response
+        ):
+            return unchanged_result(
+                validators
+            )
+
         response.raise_for_status()
+
+        next_validators = (
+            validators_from_response(
+                response
+            )
+        )
 
         payload = response.json()
     finally:
@@ -125,7 +162,11 @@ def fetch_ashby_jobs(
             )
         )
 
-    return jobs
+    return (
+        jobs,
+        False,
+        next_validators,
+    )
 
 
 def _external_id_from_job_url(

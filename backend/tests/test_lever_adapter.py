@@ -85,7 +85,7 @@ def test_global_lever_board_is_normalized(
         fake_get,
     )
 
-    jobs = fetch_lever_jobs(
+    jobs, _unchanged, _validators = fetch_lever_jobs(
         source_account=(
             "examplecompany"
         ),
@@ -203,7 +203,7 @@ def test_eu_lever_board_uses_eu_api(
         fake_get,
     )
 
-    jobs = fetch_lever_jobs(
+    jobs, _unchanged, _validators = fetch_lever_jobs(
         source_account="example-eu",
         company_name="Example EU",
         source_host=(
@@ -288,7 +288,7 @@ def test_lever_pagination_fetches_all_pages(
         fake_get,
     )
 
-    jobs = fetch_lever_jobs(
+    jobs, _unchanged, _validators = fetch_lever_jobs(
         source_account="example",
         company_name="Example",
         source_host="jobs.lever.co",
@@ -340,7 +340,7 @@ def test_remote_workplace_is_location_fallback(
         ),
     )
 
-    jobs = fetch_lever_jobs(
+    jobs, _unchanged, _validators = fetch_lever_jobs(
         source_account="example",
         company_name="Example",
         source_host="jobs.lever.co",
