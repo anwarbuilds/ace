@@ -54,7 +54,7 @@ from backend.app.persistence.types import (
 )
 
 
-DEFAULT_MAX_ALERT_POSTING_AGE_DAYS = 7
+DEFAULT_MAX_ALERT_POSTING_AGE_DAYS = 10
 
 
 class FreshnessReason(

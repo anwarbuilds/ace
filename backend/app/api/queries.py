@@ -50,6 +50,7 @@ QUALIFYING_STATUSES = (
 
 
 SORT_OPTIONS = (
+    "new_grad_first",
     "newest",
     "oldest",
     "recently_posted",
@@ -83,7 +84,9 @@ class JobFilters:
 
     active_only: bool = True
 
-    sort: str = "newest"
+    early_career_only: bool = False
+
+    sort: str = "new_grad_first"
 
     limit: int = DEFAULT_PAGE_SIZE
 
@@ -136,6 +139,8 @@ class JobListing:
     closed_at: datetime | None
 
     posting_age_days: int | None
+
+    is_early_career: bool = False
 
 
 @dataclass(
@@ -277,6 +282,12 @@ def _apply_filters(
             )
         )
 
+    if filters.early_career_only:
+        statement = statement.where(
+            JobEvaluationRecord
+            .is_early_career.is_(True)
+        )
+
     if filters.max_age_days is not None:
         cutoff = now - timedelta(
             days=filters.max_age_days
@@ -319,6 +330,16 @@ def _apply_sort(
     sort: str,
 ) -> Select:
     """Apply a deterministic ordering to a job query."""
+
+    if sort == "new_grad_first":
+        # Explicitly labelled new-grad roles lead, then freshest first.
+        return statement.order_by(
+            JobEvaluationRecord
+            .is_early_career.desc(),
+            JobRecord.posted_at.desc()
+            .nullslast(),
+            JobRecord.id.desc(),
+        )
 
     if sort == "oldest":
         return statement.order_by(
@@ -483,6 +504,9 @@ def list_jobs(
                     job.posted_at,
                     now=reference_time,
                 )
+            ),
+            is_early_career=bool(
+                evaluation.is_early_career
             ),
         )
         for job, evaluation in rows

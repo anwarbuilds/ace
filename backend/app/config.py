@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     # A job that fails freshness remains in the database and remains
     # available to the web application.
 
-    max_alert_posting_age_days: int = 7
+    max_alert_posting_age_days: int = 10
 
     alert_on_unknown_posting_age: bool = False
 

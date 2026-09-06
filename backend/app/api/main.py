@@ -128,6 +128,9 @@ def _serialize_job(
         "posting_age_days": (
             job.posting_age_days
         ),
+        "is_early_career": (
+            job.is_early_career
+        ),
     }
 
 
@@ -227,8 +230,16 @@ def create_app() -> FastAPI:
         active_only: bool = Query(
             default=True,
         ),
+        early_career_only: bool = Query(
+            default=False,
+            description=(
+                "Only postings that "
+                "explicitly present as "
+                "new-grad roles."
+            ),
+        ),
         sort: str = Query(
-            default="newest",
+            default="new_grad_first",
         ),
         limit: int = Query(
             default=DEFAULT_PAGE_SIZE,
@@ -245,7 +256,7 @@ def create_app() -> FastAPI:
         normalized_sort = (
             sort
             if sort in SORT_OPTIONS
-            else "newest"
+            else "new_grad_first"
         )
 
         page = list_jobs(
@@ -271,6 +282,9 @@ def create_app() -> FastAPI:
                     max_age_days
                 ),
                 active_only=active_only,
+                early_career_only=(
+                    early_career_only
+                ),
                 sort=normalized_sort,
                 limit=limit,
                 offset=offset,

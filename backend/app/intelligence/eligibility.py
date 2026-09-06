@@ -8,7 +8,8 @@ Core invariants:
 1. Role classification determines the target role family.
 2. Eligibility determines inclusion.
 3. A surfaced job means "apply to this". There is no partial tier.
-   Only new-grad / early-career roles are surfaced.
+   An unlabelled role is included; only seniority and a high experience
+   bar exclude.
 4. Missing sponsorship information is unknown, not rejection.
 5. Missing experience information is unknown, not rejection.
 6. Explicitly PhD-targeted roles are excluded.
@@ -40,7 +41,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-06-v10"
+    "2026-09-06-v11"
 )
 
 
@@ -111,8 +112,8 @@ class EligibilityReasonCode(
         "SYSTEMS_LANGUAGE_ONLY"
     )
 
-    NOT_EARLY_CAREER = (
-        "NOT_EARLY_CAREER"
+    EARLY_CAREER_SIGNAL = (
+        "EARLY_CAREER_SIGNAL"
     )
 
     NO_HARD_BLOCKER = (
@@ -1408,19 +1409,32 @@ def evaluate_job(
             )
         )
 
-    if not _is_early_career_role(
-        job,
-        required_years=required_years,
-    ):
-        reject_codes.append(
+    # An unlabelled role is not excluded. A terse startup posting that
+    # states no experience bar and never says "new grad" is frequently
+    # open to one, and silence has always meant unknown in ACE rather
+    # than rejection. Seniority and experience rules still exclude the
+    # roles that genuinely are not open.
+    #
+    # The signal is kept as information so the queue can lead with
+    # explicitly labelled new-grad roles.
+    is_early_career = (
+        _is_early_career_role(
+            job,
+            required_years=required_years,
+        )
+    )
+
+    if is_early_career:
+        note_codes.append(
             EligibilityReasonCode
-            .NOT_EARLY_CAREER
+            .EARLY_CAREER_SIGNAL
         )
 
-        reject_reasons.append(
+        note_reasons.append(
             (
-                "Posting is not a new-grad or "
-                "early-career role."
+                "Posting is explicitly a "
+                "new-grad or early-career "
+                "role."
             )
         )
 

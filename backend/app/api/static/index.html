@@ -94,6 +94,7 @@
   .tag.REJECT { color: var(--muted); }
   .tag.PRIMARY { color: var(--primary-tag); border-color: var(--primary-tag); }
   .tag.fresh { color: var(--pass); border-color: var(--pass); }
+  .tag.NEWGRAD { color: var(--primary-tag); border-color: var(--primary-tag); font-weight: 700; }
   .tag.closed { color: #f85149; border-color: #f85149; }
   .row { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
   .why { color: var(--muted); font-size: 12.5px; margin-top: 6px; font-style: italic; }
@@ -115,7 +116,7 @@
 <body>
 <header>
   <div class="header-row">
-    <div class="brand">ACE <span id="subtitle">new-grad roles, last 7 days</span></div>
+    <div class="brand">ACE <span id="subtitle">early-career roles, last 10 days</span></div>
     <div class="spacer"></div>
     <input type="search" id="q" placeholder="Search title, company, location…" autocomplete="off">
     <button id="theme">Theme</button>
@@ -139,16 +140,24 @@
   <span><label for="company">Company</label>
   <select id="company"><option value="">Any</option></select></span>
 
+  <span><label for="grad">Labelled</label>
+  <select id="grad">
+    <option value="false">All roles</option>
+    <option value="true">New-grad labelled only</option>
+  </select></span>
+
   <span><label for="age">Posted within</label>
   <select id="age">
     <option value="1">24 hours</option>
     <option value="3">3 days</option>
-    <option value="7" selected>7 days</option>
+    <option value="7">7 days</option>
+    <option value="10" selected>10 days</option>
     <option value="14">14 days</option>
   </select></span>
 
   <span><label for="sort">Sort</label>
   <select id="sort">
+    <option value="new_grad_first">New-grad first</option>
     <option value="newest">Newest to ACE</option>
     <option value="recently_posted">Recently posted</option>
     <option value="company">Company</option>
@@ -199,6 +208,7 @@
     p.set("status", el("status").value);
     p.set("sort", el("sort").value);
     p.set("active_only", el("active").value);
+    p.set("early_career_only", el("grad").value);
     p.set("limit", String(PAGE_SIZE));
     p.set("offset", String(offset));
     var q = el("q").value.trim();
@@ -237,9 +247,11 @@
   }
 
   function card(job) {
-    var tags = [
-      '<span class="tag">' + esc(job.role_family) + "</span>"
-    ];
+    var tags = [];
+    if (job.is_early_career) {
+      tags.push('<span class="tag NEWGRAD">NEW GRAD</span>');
+    }
+    tags.push('<span class="tag">' + esc(job.role_family) + "</span>");
     if (job.posting_age_days !== null && job.posting_age_days <= 3) {
       tags.push('<span class="tag fresh">FRESH</span>');
     }
@@ -330,7 +342,7 @@
       .catch(function () {});
   }
 
-  ["status", "family", "company", "age", "sort", "active"].forEach(function (id) {
+  ["status", "family", "company", "age", "sort", "active", "grad"].forEach(function (id) {
     el(id).addEventListener("change", function () { offset = 0; load(); });
   });
 

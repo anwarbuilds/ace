@@ -689,6 +689,13 @@ class JobEvaluationRecord(Base):
             "role_family",
             "role_priority",
         ),
+        Index(
+            (
+                "ix_job_evaluations_"
+                "early_career"
+            ),
+            "is_early_career",
+        ),
     )
 
     job_id: Mapped[int] = mapped_column(
@@ -739,6 +746,15 @@ class JobEvaluationRecord(Base):
     content_hash: Mapped[str] = mapped_column(
         String(64),
         nullable=False,
+    )
+
+    # True when the posting explicitly presents itself as a new-grad or
+    # early-career role. Informational: it orders the queue, it never
+    # excludes, because unlabelled roles are frequently open to grads.
+    is_early_career: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
     )
 
     evaluated_at: Mapped[datetime] = mapped_column(

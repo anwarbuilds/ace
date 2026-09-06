@@ -24,6 +24,9 @@ from backend.app.db.models import (
     JobRecord,
 )
 from backend.app.evaluation.types import EvaluatedJob
+from backend.app.intelligence.eligibility import (
+    EligibilityReasonCode,
+)
 from backend.app.persistence.hashing import (
     compute_job_content_hash,
 )
@@ -67,6 +70,11 @@ def _evaluation_values(
             compute_job_content_hash(
                 candidate.job
             )
+        ),
+        "is_early_career": (
+            EligibilityReasonCode
+            .EARLY_CAREER_SIGNAL
+            in decision.reason_codes
         ),
         "evaluated_at": evaluated_at,
     }

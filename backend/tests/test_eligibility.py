@@ -1140,3 +1140,140 @@ def test_incidental_mentions_do_not_block(
             decision
         )
     )
+
+
+# ----------------------------------------------------------------------
+# Unlabelled roles are included
+#
+# A terse startup posting that states no experience bar and never says
+# "new grad" is frequently open to one. Silence means unknown, not
+# rejection. Seniority and a high experience bar still exclude.
+# ----------------------------------------------------------------------
+
+
+def test_unlabelled_role_is_included() -> None:
+    """A plain posting with no experience bar is not excluded."""
+
+    decision = evaluate_job(
+        _job(
+            title="Software Engineer",
+            description=(
+                "Build software in Python."
+            ),
+            early_career=False,
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.PASS
+    )
+
+
+def test_labelled_role_carries_early_career_signal() -> None:
+    """An explicit new-grad label is recorded for ordering."""
+
+    decision = evaluate_job(
+        _job(
+            title=(
+                "Software Engineer, New Grad"
+            ),
+            description=(
+                "Build software in Python."
+            ),
+            early_career=False,
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.PASS
+    )
+
+    assert (
+        "EARLY_CAREER_SIGNAL"
+        in _codes(
+            decision
+        )
+    )
+
+
+def test_unlabelled_role_carries_no_signal() -> None:
+    """The signal marks labelled roles only."""
+
+    decision = evaluate_job(
+        _job(
+            title="Software Engineer",
+            description=(
+                "Build software in Python."
+            ),
+            early_career=False,
+        )
+    )
+
+    assert (
+        "EARLY_CAREER_SIGNAL"
+        not in _codes(
+            decision
+        )
+    )
+
+
+def test_low_experience_bar_counts_as_early_career() -> None:
+    """Two years or less is early-career even without the words."""
+
+    decision = evaluate_job(
+        _job(
+            description=(
+                "MINIMUM QUALIFICATIONS 2+ "
+                "years of experience."
+            ),
+            early_career=False,
+        )
+    )
+
+    assert (
+        "EARLY_CAREER_SIGNAL"
+        in _codes(
+            decision
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "title,description",
+    [
+        (
+            "Senior Software Engineer",
+            "Build software in Python.",
+        ),
+        (
+            "Software Engineer",
+            "MINIMUM QUALIFICATIONS 6+ "
+            "years of experience.",
+        ),
+        (
+            "Software Engineer",
+            "Top Secret security clearance "
+            "required.",
+        ),
+    ],
+)
+def test_genuinely_closed_roles_still_excluded(
+    title: str,
+    description: str,
+) -> None:
+    """Including unlabelled roles must not weaken the real blockers."""
+
+    decision = evaluate_job(
+        _job(
+            title=title,
+            description=description,
+            early_career=False,
+        )
+    )
+
+    assert (
+        decision.status
+        is EligibilityStatus.REJECT
+    )
