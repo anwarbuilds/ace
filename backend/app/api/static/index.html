@@ -219,10 +219,10 @@
 
   function renderStats(s) {
     var cards = [
-      ["Apply-ready", s.qualifying_active_jobs],
-      ["Posted last 7d", s.posted_last_7_days],
-      ["Active jobs", s.active_jobs],
-      ["Jobs tracked", s.total_jobs]
+      ["New today", s.posted_today],
+      ["New this week", s.posted_last_7_days],
+      ["New-grad labelled", s.labelled_new_grad],
+      ["Total apply-ready", s.qualifying_active_jobs]
     ];
     el("stats").innerHTML = cards.map(function (c) {
       return '<div class="stat"><b>' + esc(c[1]) + "</b><span>" + esc(c[0]) + "</span></div>";

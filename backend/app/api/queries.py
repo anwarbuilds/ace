@@ -604,120 +604,92 @@ def build_stats(
         )
     )
 
-    total_jobs = session.scalar(
-        select(
-            func.count()
-        ).select_from(
-            JobRecord
-        )
-    )
+    def _qualifying_count(
+        *,
+        max_age_days: int | None = None,
+        early_career_only: bool = False,
+    ) -> int:
+        """Count open, gate-passing jobs under optional constraints."""
 
-    active_jobs = session.scalar(
-        select(
-            func.count()
-        )
-        .select_from(
-            JobRecord
-        )
-        .where(
-            JobRecord.is_active.is_(
-                True
+        statement = (
+            select(
+                func.count()
+            )
+            .select_from(
+                JobRecord
+            )
+            .join(
+                JobEvaluationRecord,
+                JobEvaluationRecord.job_id
+                == JobRecord.id,
+            )
+            .where(
+                JobRecord.is_active.is_(
+                    True
+                ),
+                JobEvaluationRecord
+                .eligibility_status.in_(
+                    QUALIFYING_STATUSES
+                ),
             )
         )
+
+        if max_age_days is not None:
+            statement = statement.where(
+                JobRecord.posted_at.is_not(
+                    None
+                ),
+                JobRecord.posted_at
+                >= reference_time
+                - timedelta(
+                    days=max_age_days
+                ),
+            )
+
+        if early_career_only:
+            statement = statement.where(
+                JobEvaluationRecord
+                .is_early_career.is_(
+                    True
+                )
+            )
+
+        return int(
+            session.scalar(
+                statement
+            )
+            or 0
+        )
+
+    qualifying = _qualifying_count()
+
+    posted_today = _qualifying_count(
+        max_age_days=1
     )
 
-    evaluated_jobs = session.scalar(
-        select(
-            func.count()
-        ).select_from(
-            JobEvaluationRecord
-        )
+    fresh = _qualifying_count(
+        max_age_days=7
     )
 
-    by_status = dict(
-        count_by(
-            session,
-            JobEvaluationRecord
-            .eligibility_status,
-            statuses=(),
-        )
-    )
-
-    qualifying = session.scalar(
-        select(
-            func.count()
-        )
-        .select_from(
-            JobRecord
-        )
-        .join(
-            JobEvaluationRecord,
-            JobEvaluationRecord.job_id
-            == JobRecord.id,
-        )
-        .where(
-            JobRecord.is_active.is_(
-                True
-            ),
-            JobEvaluationRecord
-            .eligibility_status.in_(
-                QUALIFYING_STATUSES
-            ),
-        )
-    )
-
-    fresh_cutoff = (
-        reference_time
-        - timedelta(
-            days=7
-        )
-    )
-
-    fresh = session.scalar(
-        select(
-            func.count()
-        )
-        .select_from(
-            JobRecord
-        )
-        .join(
-            JobEvaluationRecord,
-            JobEvaluationRecord.job_id
-            == JobRecord.id,
-        )
-        .where(
-            JobRecord.is_active.is_(
-                True
-            ),
-            JobEvaluationRecord
-            .eligibility_status.in_(
-                QUALIFYING_STATUSES
-            ),
-            JobRecord.posted_at.is_not(
-                None
-            ),
-            JobRecord.posted_at
-            >= fresh_cutoff,
+    labelled_new_grad = (
+        _qualifying_count(
+            early_career_only=True
         )
     )
 
     return {
-        "total_jobs": int(
-            total_jobs or 0
+        # Every figure here describes the apply-ready queue. Corpus
+        # size is deliberately absent: this page exists to show what to
+        # apply to, and a 15,000-row total only invites the question of
+        # why those rows are not on screen.
+        "posted_today": posted_today,
+        "posted_last_7_days": fresh,
+        "labelled_new_grad": (
+            labelled_new_grad
         ),
-        "active_jobs": int(
-            active_jobs or 0
+        "qualifying_active_jobs": (
+            qualifying
         ),
-        "evaluated_jobs": int(
-            evaluated_jobs or 0
-        ),
-        "qualifying_active_jobs": int(
-            qualifying or 0
-        ),
-        "posted_last_7_days": int(
-            fresh or 0
-        ),
-        "by_eligibility": by_status,
         "generated_at": (
             reference_time.isoformat()
         ),

@@ -546,26 +546,40 @@ def test_limit_is_capped(
     assert page.limit <= 200
 
 
-def test_stats_report_qualifying_and_fresh_counts(
+def test_stats_describe_only_the_apply_ready_queue(
     session_factory,
 ) -> None:
+    """Every headline figure counts jobs worth applying to.
+
+    Corpus size is deliberately absent: the page exists to show what to
+    apply to, and a total that includes rejected postings only invites
+    the question of why they are not on screen.
+    """
+
     with session_factory.begin() as session:
         add_job(
             session,
             external_id="1",
-            age_days=2,
+            age_days=0,
         )
 
         add_job(
             session,
             external_id="2",
-            age_days=40,
+            age_days=3,
         )
 
         add_job(
             session,
             external_id="3",
+            age_days=40,
+        )
+
+        add_job(
+            session,
+            external_id="4",
             status="REJECT",
+            age_days=0,
         )
 
     with session_factory() as session:
@@ -574,25 +588,69 @@ def test_stats_report_qualifying_and_fresh_counts(
             now=NOW,
         )
 
-    assert stats["total_jobs"] == 3
+    assert stats["posted_today"] == 1
+
+    assert (
+        stats["posted_last_7_days"] == 2
+    )
+
+    assert (
+        stats["qualifying_active_jobs"]
+        == 3
+    )
+
+    # Nothing leaks the size of the rejected corpus.
+    assert "total_jobs" not in stats
+
+    assert "active_jobs" not in stats
+
+    assert (
+        "by_eligibility" not in stats
+    )
+
+
+def test_stats_count_labelled_new_grad_roles(
+    session_factory,
+) -> None:
+    """The labelled-new-grad tile counts only flagged postings."""
+
+    with session_factory.begin() as session:
+        job = add_job(
+            session,
+            external_id="1",
+            age_days=1,
+        )
+
+        session.query(
+            JobEvaluationRecord
+        ).filter(
+            JobEvaluationRecord.job_id
+            == job.id
+        ).update(
+            {
+                "is_early_career": True,
+            }
+        )
+
+        add_job(
+            session,
+            external_id="2",
+            age_days=1,
+        )
+
+    with session_factory() as session:
+        stats = build_stats(
+            session,
+            now=NOW,
+        )
+
+    assert (
+        stats["labelled_new_grad"] == 1
+    )
 
     assert (
         stats["qualifying_active_jobs"]
         == 2
-    )
-
-    assert (
-        stats["posted_last_7_days"] == 1
-    )
-
-    assert (
-        stats["by_eligibility"]["PASS"]
-        == 2
-    )
-
-    assert (
-        stats["by_eligibility"]["REJECT"]
-        == 1
     )
 
 
@@ -655,4 +713,9 @@ def test_empty_database_is_handled(
 
     assert page.items == ()
 
-    assert stats["total_jobs"] == 0
+    assert (
+        stats["qualifying_active_jobs"]
+        == 0
+    )
+
+    assert stats["posted_today"] == 0
