@@ -22,12 +22,18 @@ from datetime import (
 
 from sqlalchemy import (
     Select,
+    case,
     func,
     or_,
     select,
 )
 from sqlalchemy.orm import Session
 
+from backend.app.intelligence.companies import (
+    CompanyTier,
+    classify_company,
+    names_for_tier,
+)
 from backend.app.matching.skills import (
     related_skills,
 )
@@ -63,12 +69,22 @@ QUALIFYING_STATUSES = (
 SORT_OPTIONS = (
     "best_match",
     "new_grad_first",
+    "big_tech_first",
     "newest",
     "oldest",
     "recently_posted",
     "company",
     "title",
 )
+
+
+# Sorts combine. "new_grad_first,best_match" means exactly what it
+# reads as: early-career postings lead, and inside that group the
+# strongest resume matches come first. One sort at a time forced a
+# false choice between two things the user cares about at once.
+SORT_SEPARATOR = ","
+
+MAX_SORT_KEYS = 3
 
 
 # Match tiers. Defined here rather than in the UI so the count behind
@@ -134,6 +150,9 @@ class JobFilters:
     # the client, so these pages search all 777 jobs instead of whichever
     # page happened to be loaded.
     mark: str | None = None
+
+    # Employer tiers to keep, e.g. ("BIG_TECH", "TOP_TIER").
+    tiers: tuple[str, ...] = ()
 
     sort: str = "new_grad_first"
 
@@ -213,6 +232,8 @@ class JobListing:
         ...,
     ] = ()
 
+    company_tier: str = CompanyTier.OTHER.value
+
     previous_match_score: int | None = None
 
     score_changed_at: datetime | None = None
@@ -222,6 +243,12 @@ class JobListing:
     review_state: str | None = None
 
     applied_at: datetime | None = None
+
+    application_status: str | None = None
+
+    status_changed_at: datetime | None = None
+
+    status_note: str | None = None
 
 
 @dataclass(
@@ -462,6 +489,73 @@ def _apply_filters(
             >= filters.min_match
         )
 
+    if filters.tiers:
+        wanted = {
+            tier
+            for tier in filters.tiers
+            if tier
+            in CompanyTier.__members__
+        }
+
+        if wanted:
+            lowered = func.lower(
+                func.trim(
+                    JobRecord.company
+                )
+            )
+
+            named: set[str] = set()
+
+            for tier in wanted:
+                named |= names_for_tier(
+                    CompanyTier[
+                        tier
+                    ]
+                )
+
+            if (
+                CompanyTier.OTHER.value
+                in wanted
+            ):
+                # "Everything unlisted" is the complement, not a list.
+                everything = (
+                    names_for_tier(
+                        CompanyTier.BIG_TECH
+                    )
+                    | names_for_tier(
+                        CompanyTier.TOP_TIER
+                    )
+                    | names_for_tier(
+                        CompanyTier.ESTABLISHED
+                    )
+                )
+
+                statement = statement.where(
+                    or_(
+                        lowered.in_(
+                            tuple(
+                                named
+                            )
+                        )
+                        if named
+                        else False,
+                        lowered.notin_(
+                            tuple(
+                                everything
+                            )
+                        ),
+                    )
+                )
+
+            else:
+                statement = statement.where(
+                    lowered.in_(
+                        tuple(
+                            named
+                        )
+                    )
+                )
+
     if filters.mark == "saved":
         statement = statement.where(
             JobMarkRecord.is_saved.is_(
@@ -563,66 +657,177 @@ def _apply_filters(
     return statement
 
 
+def company_tier_rank():
+    """Return a SQL expression ranking a posting by employer tier.
+
+    Built from the same name sets :func:`classify_company` reads, and
+    tested against it, so a posting can never sort as big tech while
+    its badge says otherwise. Exact lowercase matching is what makes
+    that guarantee possible.
+    """
+
+    lowered = func.lower(
+        func.trim(
+            JobRecord.company
+        )
+    )
+
+    return case(
+        (
+            lowered.in_(
+                tuple(
+                    names_for_tier(
+                        CompanyTier.BIG_TECH
+                    )
+                )
+            ),
+            0,
+        ),
+        (
+            lowered.in_(
+                tuple(
+                    names_for_tier(
+                        CompanyTier.TOP_TIER
+                    )
+                )
+            ),
+            1,
+        ),
+        (
+            lowered.in_(
+                tuple(
+                    names_for_tier(
+                        CompanyTier
+                        .ESTABLISHED
+                    )
+                )
+            ),
+            2,
+        ),
+        else_=3,
+    )
+
+
+def _sort_keys(
+    sort: str,
+) -> list:
+    """Return the ordering columns for one named sort."""
+
+    if sort == "best_match":
+        # Highest match first. Unscored postings sort last rather than
+        # as zero: ACE could not read them, which is not the same as a
+        # poor fit.
+        return [
+            JobResumeScoreRecord.score.desc()
+            .nullslast(),
+        ]
+
+    if sort == "new_grad_first":
+        # Verified postings lead, then labelled new-grad. An unverified
+        # posting is a lead to check, not a result.
+        return [
+            JobEvaluationRecord
+            .requirements_verified.desc(),
+            JobEvaluationRecord
+            .is_early_career.desc(),
+        ]
+
+    if sort == "big_tech_first":
+        return [
+            company_tier_rank().asc(),
+        ]
+
+    if sort == "oldest":
+        return [
+            JobRecord.first_seen_at.asc(),
+        ]
+
+    if sort == "recently_posted":
+        return [
+            JobRecord.posted_at.desc()
+            .nullslast(),
+        ]
+
+    if sort == "company":
+        return [
+            JobRecord.company.asc(),
+            JobRecord.title.asc(),
+        ]
+
+    if sort == "title":
+        return [
+            JobRecord.title.asc(),
+            JobRecord.company.asc(),
+        ]
+
+    return [
+        JobRecord.first_seen_at.desc(),
+    ]
+
+
+def parse_sort(
+    sort: str | None,
+) -> tuple[str, ...]:
+    """Return the requested sort keys, in order, ignoring unknown ones.
+
+    An unrecognised key is dropped rather than rejected: a stale
+    bookmark should still return the user's jobs, just ordered by
+    whatever of their request still makes sense.
+    """
+
+    requested = [
+        item.strip()
+        for item in (
+            sort or ""
+        ).split(
+            SORT_SEPARATOR
+        )
+        if item.strip()
+    ]
+
+    keys: list[str] = []
+
+    for item in requested:
+        if (
+            item in SORT_OPTIONS
+            and item not in keys
+        ):
+            keys.append(
+                item
+            )
+
+    return tuple(
+        keys[:MAX_SORT_KEYS]
+    ) or (
+        "new_grad_first",
+    )
+
+
 def _apply_sort(
     statement: Select,
     sort: str,
 ) -> Select:
     """Apply a deterministic ordering to a job query."""
 
-    if sort == "best_match":
-        # Highest match first. Unscored postings sort last rather than
-        # as zero: ACE could not read them, which is not the same as a
-        # poor fit.
-        return statement.order_by(
-            JobResumeScoreRecord.score.desc()
-            .nullslast(),
-            JobRecord.posted_at.desc()
-            .nullslast(),
-            JobRecord.id.desc(),
+    columns: list = []
+
+    for key in parse_sort(
+        sort
+    ):
+        columns.extend(
+            _sort_keys(
+                key
+            )
         )
 
-    if sort == "new_grad_first":
-        # Verified postings lead, then labelled new-grad, then freshest.
-        # An unverified posting is a lead to check, not a result.
-        return statement.order_by(
-            JobEvaluationRecord
-            .requirements_verified.desc(),
-            JobEvaluationRecord
-            .is_early_career.desc(),
-            JobRecord.posted_at.desc()
-            .nullslast(),
-            JobRecord.id.desc(),
-        )
-
-    if sort == "oldest":
-        return statement.order_by(
-            JobRecord.first_seen_at.asc(),
-            JobRecord.id.asc(),
-        )
-
-    if sort == "recently_posted":
-        return statement.order_by(
-            JobRecord.posted_at.desc()
-            .nullslast(),
-            JobRecord.id.desc(),
-        )
-
-    if sort == "company":
-        return statement.order_by(
-            JobRecord.company.asc(),
-            JobRecord.title.asc(),
-            JobRecord.id.asc(),
-        )
-
-    if sort == "title":
-        return statement.order_by(
-            JobRecord.title.asc(),
-            JobRecord.company.asc(),
-            JobRecord.id.asc(),
-        )
+    # Freshness then id closes every ordering, so a page boundary can
+    # never repeat or skip a row.
+    columns.append(
+        JobRecord.first_seen_at.desc()
+    )
 
     return statement.order_by(
-        JobRecord.first_seen_at.desc(),
+        *columns,
         JobRecord.id.desc(),
     )
 
@@ -824,6 +1029,11 @@ def list_jobs(
                     resume_skills,
                 )
             ),
+            company_tier=(
+                classify_company(
+                    job.company
+                ).value
+            ),
             previous_match_score=(
                 None
                 if match is None
@@ -847,6 +1057,21 @@ def list_jobs(
                 None
                 if mark is None
                 else mark.applied_at
+            ),
+            application_status=(
+                None
+                if mark is None
+                else mark.application_status
+            ),
+            status_changed_at=(
+                None
+                if mark is None
+                else mark.status_changed_at
+            ),
+            status_note=(
+                None
+                if mark is None
+                else mark.status_note
             ),
         )
         for job, evaluation, match, mark in rows

@@ -383,13 +383,29 @@ def test_counts_describe_the_whole_corpus(
             now=NOW,
         )
 
-        assert mark_counts(
+        counts = mark_counts(
             session
-        ) == {
-            "saved": 2,
-            "archived": 1,
-            "applied": 1,
-        }
+        )
+
+        assert counts["saved"] == 2
+
+        assert counts["archived"] == 1
+
+        assert counts["applied"] == 1
+
+        # Applying is itself a status, so the count carries through.
+        assert (
+            counts["by_status"]
+            == {
+                "applied": 1,
+            }
+        )
+
+        # Nothing has closed yet, so the application is still open.
+        assert (
+            counts["open_applications"]
+            == 1
+        )
 
 
 def test_marks_do_not_multiply_the_listing(
@@ -424,3 +440,206 @@ def test_marks_do_not_multiply_the_listing(
         assert len(
             page.items
         ) == 4
+
+
+def test_applying_records_a_status_not_just_a_date(
+    session_factory,
+) -> None:
+    """A job marked applied with no state at all reads as unknown."""
+
+    with session_factory() as session:
+        job = add_job(
+            session,
+            index=1,
+        )
+
+        record = set_mark(
+            session,
+            job_id=job.id,
+            applied=True,
+            now=NOW,
+        )
+
+        assert (
+            record.application_status
+            == "applied"
+        )
+
+
+def test_a_rejection_does_not_overwrite_the_applied_date(
+    session_factory,
+) -> None:
+    """applied_at is when it was sent; status is where it stands.
+
+    Collapsing the two would lose the date the moment an outcome
+    arrived, which is exactly when the history becomes interesting.
+    """
+
+    from datetime import timedelta
+
+    applied_on = NOW - timedelta(
+        days=20
+    )
+
+    with session_factory() as session:
+        job = add_job(
+            session,
+            index=1,
+        )
+
+        set_mark(
+            session,
+            job_id=job.id,
+            applied=True,
+            applied_at=applied_on,
+            now=applied_on,
+        )
+
+        record = set_mark(
+            session,
+            job_id=job.id,
+            application_status="rejected",
+            now=NOW,
+        )
+
+        # SQLite drops tzinfo on round-trip where PostgreSQL keeps it,
+        # so compare the instant rather than the object.
+        assert (
+            record.applied_at
+            .replace(tzinfo=None)
+            == applied_on.replace(
+                tzinfo=None
+            )
+        )
+
+        assert (
+            record.application_status
+            == "rejected"
+        )
+
+        # The move is timestamped separately from the application.
+        assert (
+            record.status_changed_at
+            .replace(tzinfo=None)
+            != record.applied_at
+            .replace(tzinfo=None)
+        )
+
+
+def test_a_status_implies_an_application_was_sent(
+    session_factory,
+) -> None:
+    """"Rejected" on a job ACE thinks was never applied to is nonsense."""
+
+    with session_factory() as session:
+        job = add_job(
+            session,
+            index=1,
+        )
+
+        record = set_mark(
+            session,
+            job_id=job.id,
+            application_status="rejected",
+            now=NOW,
+        )
+
+        assert record.applied_at is not None
+
+
+def test_unapplying_clears_the_status_too(
+    session_factory,
+) -> None:
+    """An application that never happened has no outcome."""
+
+    with session_factory() as session:
+        job = add_job(
+            session,
+            index=1,
+        )
+
+        set_mark(
+            session,
+            job_id=job.id,
+            application_status="rejected",
+            now=NOW,
+        )
+
+        record = set_mark(
+            session,
+            job_id=job.id,
+            applied=False,
+            now=NOW,
+        )
+
+        assert record.applied_at is None
+
+        assert (
+            record.application_status
+            is None
+        )
+
+
+def test_unknown_application_status_is_refused(
+    session_factory,
+) -> None:
+    with session_factory() as session:
+        job = add_job(
+            session,
+            index=1,
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="unknown application status",
+        ):
+            set_mark(
+                session,
+                job_id=job.id,
+                application_status="maybe",
+                now=NOW,
+            )
+
+
+def test_closed_applications_are_not_counted_as_open(
+    session_factory,
+) -> None:
+    """A rejection is finished business and should stop asking for time."""
+
+    with session_factory() as session:
+        live = add_job(
+            session,
+            index=1,
+        )
+
+        dead = add_job(
+            session,
+            index=2,
+        )
+
+        set_mark(
+            session,
+            job_id=live.id,
+            application_status=(
+                "interviewing"
+            ),
+            now=NOW,
+        )
+
+        set_mark(
+            session,
+            job_id=dead.id,
+            application_status="rejected",
+            now=NOW,
+        )
+
+        counts = mark_counts(
+            session
+        )
+
+        assert counts["applied"] == 2
+
+        assert (
+            counts["open_applications"]
+            == 1
+        )

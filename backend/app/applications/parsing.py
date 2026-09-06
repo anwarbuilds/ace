@@ -61,7 +61,95 @@ COLUMN_SYNONYMS: dict[str, tuple[str, ...]] = {
         "link",
         "url",
     ),
+    "status": (
+        "application status",
+        "current status",
+        "outcome",
+        "result",
+        "stage",
+        "status",
+    ),
 }
+
+
+# What people actually type in a status column, mapped onto ACE's
+# vocabulary. Re-importing an updated sheet is the whole point of the
+# feature, so a rejection written as "rejected", "no", "declined" or
+# "closed" all has to land in the same place.
+STATUS_SYNONYMS: dict[str, str] = {
+    "applied": "applied",
+    "submitted": "applied",
+    "sent": "applied",
+    "in progress": "applied",
+    "pending": "applied",
+    "waiting": "applied",
+    "no response": "applied",
+    "screening": "screening",
+    "screen": "screening",
+    "phone screen": "screening",
+    "recruiter screen": "screening",
+    "oa": "screening",
+    "online assessment": "screening",
+    "assessment": "screening",
+    "interview": "interviewing",
+    "interviewing": "interviewing",
+    "interviews": "interviewing",
+    "onsite": "interviewing",
+    "final round": "interviewing",
+    "technical": "interviewing",
+    "offer": "offer",
+    "offered": "offer",
+    "accepted": "accepted",
+    "signed": "accepted",
+    "rejected": "rejected",
+    "reject": "rejected",
+    "declined": "rejected",
+    "no": "rejected",
+    "closed": "rejected",
+    "not selected": "rejected",
+    "unsuccessful": "rejected",
+    "withdrawn": "withdrawn",
+    "withdrew": "withdrawn",
+    "ghosted": "ghosted",
+    "no reply": "ghosted",
+}
+
+
+def parse_status(
+    value,
+) -> str | None:
+    """Map a free-text status cell onto ACE's vocabulary.
+
+    Returns None for anything unrecognised rather than guessing. A
+    wrong status is worse than no status: it would tell the user a live
+    application was rejected.
+    """
+
+    text = str(
+        value or ""
+    ).strip().lower()
+
+    if not text:
+        return None
+
+    if text in STATUS_SYNONYMS:
+        return STATUS_SYNONYMS[
+            text
+        ]
+
+    # "Rejected 3/4", "Interview scheduled": take the leading phrase.
+    for phrase, status in sorted(
+        STATUS_SYNONYMS.items(),
+        key=lambda pair: -len(
+            pair[0]
+        ),
+    ):
+        if text.startswith(
+            phrase
+        ):
+            return status
+
+    return None
 
 
 DATE_FORMATS = (
@@ -95,6 +183,8 @@ class ApplicationRow:
     applied_on: date | None
 
     url: str | None
+
+    status: str | None = None
 
     @property
     def is_usable(self) -> bool:
@@ -447,6 +537,12 @@ def parse_applications(
                     "url",
                 )
                 or None,
+                status=parse_status(
+                    cell(
+                        row,
+                        "status",
+                    )
+                ),
             )
         )
 

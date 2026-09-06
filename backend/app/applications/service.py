@@ -177,7 +177,8 @@ def apply_import(
 ) -> int:
     """Record applications for the confirmed rows.
 
-    Each decision is ``{"job_id": int, "applied_on": date | None}``.
+    Each decision is
+    ``{"job_id": int, "applied_on": date | None, "status": str | None}``.
     A row without a usable date still counts as applied, stamped with
     the import time, because the fact of applying matters more than the
     day and dropping the row would lose it silently.
@@ -227,6 +228,10 @@ def apply_import(
             "applied_on"
         )
 
+        status = decision.get(
+            "status"
+        ) or None
+
         when = stamp
 
         if isinstance(
@@ -264,6 +269,7 @@ def apply_import(
             job_id=job_id,
             applied=True,
             applied_at=when,
+            application_status=status,
             now=stamp,
         )
 

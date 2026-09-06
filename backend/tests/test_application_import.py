@@ -659,3 +659,154 @@ def test_unknown_job_ids_are_skipped(
         )
 
         assert marked == 0
+
+
+# --- status column ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("Applied", "applied"),
+        ("REJECTED", "rejected"),
+        ("Rejected 3/4", "rejected"),
+        ("Interview scheduled", "interviewing"),
+        ("OA", "screening"),
+        ("Declined", "rejected"),
+        ("no", "rejected"),
+        ("Offer", "offer"),
+        ("", None),
+        ("something nobody writes", None),
+    ],
+)
+def test_status_cells_map_onto_ace_vocabulary(
+    raw,
+    expected,
+) -> None:
+    """Re-importing an updated sheet is the point, so spellings vary.
+
+    Anything unrecognised returns None rather than a guess: a wrong
+    status would tell the user a live application was rejected.
+    """
+
+    from backend.app.applications.parsing import (
+        parse_status,
+    )
+
+    assert parse_status(
+        raw
+    ) == expected
+
+
+def test_a_status_column_is_read_when_present() -> None:
+    rows = parse_applications(
+        payload=csv_bytes(
+            "Company,Job Title,Status\n"
+            "Stripe,Backend Engineer,Rejected\n"
+        ),
+        filename="h.csv",
+    )
+
+    assert rows[0].status == "rejected"
+
+
+def test_a_sheet_without_a_status_column_still_parses() -> None:
+    """Status is optional; most people's first sheet will not have one."""
+
+    rows = parse_applications(
+        payload=csv_bytes(
+            "Company,Job Title\n"
+            "Stripe,Backend Engineer\n"
+        ),
+        filename="h.csv",
+    )
+
+    assert rows[0].status is None
+
+
+def test_importing_a_status_records_it(
+    session_factory,
+) -> None:
+    with session_factory() as session:
+        job = add_job(
+            session,
+            index=1,
+        )
+
+        apply_import(
+            session,
+            decisions=[
+                {
+                    "job_id": job.id,
+                    "applied_on": "2026-03-04",
+                    "status": "rejected",
+                },
+            ],
+            now=NOW,
+        )
+
+        mark = session.get(
+            JobMarkRecord,
+            job.id,
+        )
+
+        assert (
+            mark.application_status
+            == "rejected"
+        )
+
+        # The application date still comes from the sheet, not today.
+        assert (
+            mark.applied_at.date()
+            == date(
+                2026,
+                3,
+                4,
+            )
+        )
+
+
+def test_re_importing_moves_a_status_forward(
+    session_factory,
+) -> None:
+    """The whole reason to re-upload: outcomes change over time."""
+
+    with session_factory() as session:
+        job = add_job(
+            session,
+            index=1,
+        )
+
+        apply_import(
+            session,
+            decisions=[
+                {
+                    "job_id": job.id,
+                    "applied_on": "2026-03-04",
+                    "status": "applied",
+                },
+            ],
+            now=NOW,
+        )
+
+        apply_import(
+            session,
+            decisions=[
+                {
+                    "job_id": job.id,
+                    "applied_on": "2026-03-04",
+                    "status": "rejected",
+                },
+            ],
+            now=NOW,
+        )
+
+        mark = session.get(
+            JobMarkRecord,
+            job.id,
+        )
+
+        assert (
+            mark.application_status
+            == "rejected"
+        )

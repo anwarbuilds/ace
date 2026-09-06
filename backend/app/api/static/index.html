@@ -6,1407 +6,1259 @@
 <title>ACE</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;450;500;600&display=swap" rel="stylesheet">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M6 26 L17 9 L26 26' fill='none' stroke='%23F2F0EB' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='17' cy='4.5' r='2.5' fill='%23C9A961'/%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M6 26 L17 9 L26 26' fill='none' stroke='%23B292F0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='17' cy='4.5' r='2.5' fill='%23E3BE5C'/%3E%3C/svg%3E">
 <style>
 /* ============================================================
-   ACE design tokens
-   Light palette on bare :root. Dark redefines tokens only.
+   ACE tokens. Light on bare :root; dark redefines tokens only.
+   Every value below was contrast-checked against its own ground.
    ============================================================ */
-:root {
-  --canvas:#FCFAF6; --surface-1:#FFFFFF; --surface-2:#F5F2EB;
-  --raised:#FFFFFF; --hover:#EFEBE2; --selected:#FBF2DC;
-  --border-subtle:#E9E4D9; --border:#DBD5C8; --border-strong:#BEB6A6;
-  --text:#1A1917; --text-secondary:#55524B; --text-muted:#6B6760;
-  --gold-text:#7A5F18; --gold-solid:#6E5615; --gold-rail:#9C7A22;
-  --gold-surface:#FAF1D9; --gold-on-solid:#FFFFFF;
-  --success:#2E7A50; --warning:#96631F; --danger:#A63F36; --info:#35608F;
-  --shadow-sm:0 1px 2px rgba(26,25,23,.06);
-  --shadow-md:0 4px 12px rgba(26,25,23,.08);
-  --shadow-lg:0 12px 32px rgba(26,25,23,.12);
-  --backdrop:rgba(26,25,23,.32);
-
-  --r-sm:4px; --r-md:6px; --r-lg:10px;
-  --fast:90ms; --base:140ms; --slow:220ms;
+:root{
+  --canvas:#FCFAFE; --surface-1:#FFFFFF; --surface-2:#F5F1FA; --raised:#FFFFFF;
+  --hover:#EFE9F7; --selected:#F0E6FB;
+  --border-subtle:#EAE3F3; --border:#DCD2EA; --border-strong:#B9A9D1;
+  --text:#1A1226; --text-secondary:#544A66; --text-muted:#6B6083;
+  --gold:#7A5D12; --gold-solid:#6B5110; --gold-rail:#A8801E; --gold-surface:#FBF2DA; --on-gold:#FFFFFF;
+  --purple:#5B3A9E; --purple-rail:#7B52C9; --purple-surface:#F0E7FC; --on-purple:#FFFFFF;
+  --success:#2C7A4E; --warning:#8F5F1C; --danger:#A63A3A; --info:#2F5C8F;
+  --shadow-sm:0 1px 2px rgba(26,18,38,.06);
+  --shadow-md:0 6px 18px rgba(26,18,38,.10);
+  --shadow-lg:0 18px 48px rgba(26,18,38,.16);
+  --backdrop:rgba(26,18,38,.36);
+  --r-sm:4px; --r-md:7px; --r-lg:12px;
+  --fast:90ms; --base:150ms; --slow:240ms;
   --ease-out:cubic-bezier(.2,0,0,1); --ease-in:cubic-bezier(.4,0,1,1);
   --ease-emph:cubic-bezier(.32,.72,0,1);
   --sans:'IBM Plex Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
-  --w-side:232px; --w-list:480px;
+  --side:236px; --gutter:28px;
 }
-:root:not([data-theme="light"]) {
-  --canvas:#0A0A0B; --surface-1:#121214; --surface-2:#17181A;
-  --raised:#1D1E21; --hover:#212226; --selected:#262218;
-  --border-subtle:#1F2023; --border:#2A2C31; --border-strong:#3B3E44;
-  --text:#F2F0EB; --text-secondary:#A9A69F; --text-muted:#8B8984;
-  --gold-text:#C9A961; --gold-solid:#C9A961; --gold-rail:#C9A961;
-  --gold-surface:#1E1A10; --gold-on-solid:#0A0A0B;
-  --success:#57A06F; --warning:#C98F45; --danger:#C85F55; --info:#6293C9;
-  --shadow-sm:none; --shadow-md:0 4px 12px rgba(0,0,0,.5);
-  --shadow-lg:0 12px 32px rgba(0,0,0,.65);
-  --backdrop:rgba(10,10,11,.5);
+:root:not([data-theme="light"]){
+  --canvas:#0D0817; --surface-1:#141020; --surface-2:#1A1428; --raised:#221A33;
+  --hover:#2A2040; --selected:#31234D;
+  --border-subtle:#231B33; --border:#2F2545; --border-strong:#453763;
+  --text:#F3EFFA; --text-secondary:#B9AFD0; --text-muted:#9086AA;
+  --gold:#E3BE5C; --gold-solid:#E3BE5C; --gold-rail:#E3BE5C; --gold-surface:#241C0F; --on-gold:#0D0817;
+  --purple:#B292F0; --purple-rail:#B292F0; --purple-surface:#2A1D45; --on-purple:#0D0817;
+  --success:#5FB07F; --warning:#D9A055; --danger:#DE6B6B; --info:#6FA0DE;
+  --shadow-sm:none;
+  --shadow-md:0 6px 18px rgba(0,0,0,.55);
+  --shadow-lg:0 18px 48px rgba(0,0,0,.7);
+  --backdrop:rgba(6,3,12,.66);
 }
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --canvas:#FCFAF6; --surface-1:#FFFFFF; --surface-2:#F5F2EB;
-    --raised:#FFFFFF; --hover:#EFEBE2; --selected:#FBF2DC;
-    --border-subtle:#E9E4D9; --border:#DBD5C8; --border-strong:#BEB6A6;
-    --text:#1A1917; --text-secondary:#55524B; --text-muted:#6B6760;
-    --gold-text:#7A5F18; --gold-solid:#6E5615; --gold-rail:#9C7A22;
-    --gold-surface:#FAF1D9; --gold-on-solid:#FFFFFF;
-    --success:#2E7A50; --warning:#96631F; --danger:#A63F36; --info:#35608F;
-    --shadow-sm:0 1px 2px rgba(26,25,23,.06);
-    --shadow-md:0 4px 12px rgba(26,25,23,.08);
-    --shadow-lg:0 12px 32px rgba(26,25,23,.12);
-    --backdrop:rgba(26,25,23,.32);
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --canvas:#FCFAFE; --surface-1:#FFFFFF; --surface-2:#F5F1FA; --raised:#FFFFFF;
+    --hover:#EFE9F7; --selected:#F0E6FB;
+    --border-subtle:#EAE3F3; --border:#DCD2EA; --border-strong:#B9A9D1;
+    --text:#1A1226; --text-secondary:#544A66; --text-muted:#6B6083;
+    --gold:#7A5D12; --gold-solid:#6B5110; --gold-rail:#A8801E; --gold-surface:#FBF2DA; --on-gold:#FFFFFF;
+    --purple:#5B3A9E; --purple-rail:#7B52C9; --purple-surface:#F0E7FC; --on-purple:#FFFFFF;
+    --success:#2C7A4E; --warning:#8F5F1C; --danger:#A63A3A; --info:#2F5C8F;
+    --shadow-sm:0 1px 2px rgba(26,18,38,.06);
+    --shadow-md:0 6px 18px rgba(26,18,38,.10);
+    --shadow-lg:0 18px 48px rgba(26,18,38,.16);
+    --backdrop:rgba(26,18,38,.36);
   }
 }
-
 *,*::before,*::after{box-sizing:border-box}
 html,body{height:100%}
 body{
   margin:0;background:var(--canvas);color:var(--text);
   font-family:var(--sans);font-size:14px;line-height:1.5;
-  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
-  overflow:hidden;
+  -webkit-font-smoothing:antialiased;overflow:hidden;
 }
-button,input,select{font:inherit;color:inherit}
+button,input,select,textarea{font:inherit;color:inherit}
 button{background:none;border:none;padding:0;cursor:pointer}
 a{color:inherit;text-decoration:none}
 :focus{outline:none}
-:focus-visible{outline:2px solid var(--gold-text);outline-offset:2px;border-radius:var(--r-sm)}
+:focus-visible{outline:2px solid var(--purple);outline-offset:2px;border-radius:var(--r-sm)}
 .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
-.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-.skip{position:absolute;left:8px;top:-40px;z-index:100;background:var(--raised);color:var(--text);padding:8px 12px;border-radius:var(--r-md);border:1px solid var(--border);transition:top var(--fast)}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.skip{position:absolute;left:8px;top:-40px;z-index:100;background:var(--raised);padding:8px 12px;border-radius:var(--r-md);border:1px solid var(--border);transition:top var(--fast)}
 .skip:focus{top:8px}
 
-/* ============================ shell ============================ */
-.app{display:grid;grid-template-columns:var(--w-side) var(--w-list) minmax(520px,1fr);grid-template-rows:100vh;grid-template-rows:100dvh;height:100vh;height:100dvh}
-.side,.list-col,.detail,.wide{min-height:0}
+/* ===================== shell ===================== */
+.app{display:grid;grid-template-columns:var(--side) minmax(0,1fr);grid-template-rows:100vh;height:100vh;height:100dvh}
+.side,.main{min-height:0;min-width:0}
 
-/* ---------- sidebar ---------- */
+/* ---- sidebar: a quiet purple rail ---- */
 .side{
-  display:flex;flex-direction:column;padding:20px 12px 12px;
-  border-right:1px solid var(--border-subtle);min-width:0;
+  display:flex;flex-direction:column;padding:22px 12px 12px;
+  background:var(--surface-1);border-right:1px solid var(--border-subtle);
 }
-.brand{display:flex;align-items:center;gap:9px;padding:0 8px 24px;user-select:none}
-.brand svg{flex:none}
-.brand-name{font-size:14px;font-weight:600;letter-spacing:.14em}
-.nav{display:flex;flex-direction:column;gap:1px}
+.brand{display:flex;align-items:center;gap:10px;padding:0 10px 26px;user-select:none}
+.brand-name{font-size:15px;font-weight:700;letter-spacing:.18em}
+.nav{display:flex;flex-direction:column;gap:2px}
 .nav-item{
-  display:flex;align-items:center;gap:8px;height:32px;padding:0 8px 0 10px;
+  display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;
   border-radius:var(--r-md);color:var(--text-secondary);
-  font-size:13.5px;font-weight:450;letter-spacing:-.003em;
-  border-left:2px solid transparent;transition:background var(--fast) var(--ease-out),color var(--fast) var(--ease-out);
-  text-align:left;width:100%;
+  font-size:13.5px;font-weight:450;width:100%;text-align:left;
+  position:relative;transition:background var(--fast) var(--ease-out),color var(--fast) var(--ease-out);
 }
 .nav-item:hover{background:var(--hover);color:var(--text)}
-.nav-item[aria-current="page"]{
-  background:var(--selected);color:var(--text);font-weight:500;
-  border-left-color:var(--gold-rail);
+.nav-item[aria-current="page"]{background:var(--selected);color:var(--text);font-weight:600}
+.nav-item[aria-current="page"]::before{
+  content:"";position:absolute;left:-12px;top:7px;bottom:7px;width:3px;
+  border-radius:0 2px 2px 0;background:var(--purple-rail);
 }
-.nav-item[aria-current="page"] .nav-label{color:var(--gold-text)}
 .nav-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nav-count{font-size:11.5px;color:var(--text-muted);letter-spacing:.01em}
-.nav-rule{height:1px;background:var(--border-subtle);margin:12px 8px}
-.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:1px;padding-top:12px}
+.nav-count{font-family:var(--mono);font-size:11.5px;color:var(--text-muted)}
+.nav-rule{height:1px;background:var(--border-subtle);margin:14px 10px}
+.nav-head{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);padding:0 10px 7px}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:2px;padding-top:14px}
 
-/* ---------- list column ---------- */
-.list-col{display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--border-subtle)}
-.list-head{padding:20px 20px 0;flex:none}
-.head-top{display:flex;align-items:baseline;gap:12px}
-.page-title{font-size:20px;font-weight:600;letter-spacing:-.011em;margin:0}
-.head-total{margin-left:auto;font-size:13px;color:var(--text-muted)}
-.head-live{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
-.live{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11.5px;letter-spacing:.01em;color:var(--text-secondary);border-radius:var(--r-md);padding:2px 4px;margin-left:-4px;transition:background var(--fast)}
-button.live:hover{background:var(--hover)}
-.dot{width:6px;height:6px;border-radius:999px;background:var(--gold-rail);flex:none}
+/* ---- main column ---- */
+.main{display:flex;flex-direction:column;overflow:hidden}
+.head{flex:none;padding:20px var(--gutter) 0}
+.head-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.h1{font-size:22px;font-weight:700;letter-spacing:-.02em;margin:0}
+.h1-count{font-family:var(--mono);font-size:14px;color:var(--text-muted);font-weight:500}
+.spacer{flex:1}
+.live{
+  display:inline-flex;align-items:center;gap:8px;padding:5px 10px;border-radius:999px;
+  background:var(--surface-2);border:1px solid var(--border-subtle);
+  font-family:var(--mono);font-size:11.5px;color:var(--text-secondary);
+  transition:background var(--fast),border-color var(--fast);
+}
+button.live:hover{background:var(--hover);border-color:var(--border)}
+.live-stale{color:var(--warning);border-color:var(--warning)}
+.dot{width:7px;height:7px;border-radius:999px;background:var(--success);flex:none}
 .dot.stale{background:var(--warning)}
-.live-stale{color:var(--warning)}
-.since{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--text-secondary)}
-.since-btn{border-radius:var(--r-sm);padding:2px 6px;margin-right:-6px;transition:background var(--fast),color var(--fast)}
-.since-btn:hover{background:var(--hover);color:var(--text)}
-
-/* segmented view control */
-.views{display:flex;gap:2px;margin-top:14px;background:var(--surface-2);padding:3px;border-radius:var(--r-md);border:1px solid var(--border-subtle)}
-.view{
-  flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
-  height:28px;padding:0 8px;border-radius:var(--r-sm);
-  font-size:12.5px;font-weight:450;color:var(--text-secondary);white-space:nowrap;
-  transition:background var(--fast) var(--ease-out),color var(--fast) var(--ease-out);
+.since-btn{
+  font-family:var(--mono);font-size:11.5px;color:var(--purple);
+  padding:5px 10px;border-radius:999px;background:var(--purple-surface);
+  transition:filter var(--fast);
 }
-.view:hover{color:var(--text)}
-.view[aria-selected="true"]{background:var(--gold-surface);color:var(--gold-text);font-weight:500}
-.view-n{font-family:var(--mono);font-size:11px;opacity:.85}
+.since-btn:hover{filter:brightness(1.08)}
 
-/* filter rail */
-.rail{display:flex;align-items:center;gap:6px;margin-top:12px;padding-bottom:12px;flex-wrap:wrap}
+/* ---- view tabs: big, horizontal, Netflix-ish ---- */
+.tabs{display:flex;gap:26px;margin-top:18px;border-bottom:1px solid var(--border-subtle);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{
+  position:relative;padding:0 0 12px;white-space:nowrap;
+  font-size:14px;font-weight:500;color:var(--text-muted);
+  display:flex;align-items:center;gap:7px;
+  transition:color var(--fast) var(--ease-out);
+}
+.tab:hover{color:var(--text)}
+.tab[aria-selected="true"]{color:var(--text);font-weight:600}
+.tab[aria-selected="true"]::after{
+  content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;
+  background:var(--gold-rail);border-radius:2px 2px 0 0;
+}
+.tab-n{font-family:var(--mono);font-size:11.5px;color:var(--text-muted);
+  background:var(--surface-2);padding:1px 7px;border-radius:999px}
+.tab[aria-selected="true"] .tab-n{background:var(--gold-surface);color:var(--gold)}
+
+/* ---- control bar ---- */
+.controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:14px var(--gutter) 12px}
 .search{
-  display:flex;align-items:center;gap:7px;height:28px;padding:0 9px;flex:1;min-width:140px;
-  background:var(--surface-2);border:1px solid var(--border-subtle);border-radius:var(--r-sm);
-  transition:border-color var(--fast)
+  display:flex;align-items:center;gap:8px;height:32px;padding:0 11px;
+  min-width:230px;flex:0 1 340px;
+  background:var(--surface-2);border:1px solid var(--border-subtle);border-radius:var(--r-md);
+  transition:border-color var(--fast),background var(--fast);
 }
-.search:focus-within{border-color:var(--border-strong)}
-.search input{flex:1;min-width:0;background:none;border:none;font-size:12.5px;padding:0}
+.search:focus-within{border-color:var(--purple);background:var(--surface-1)}
+.search input{flex:1;min-width:0;background:none;border:none;font-size:13px;padding:0}
 .search input::placeholder{color:var(--text-muted)}
-.kbd{font-family:var(--mono);font-size:10.5px;color:var(--text-muted);border:1px solid var(--border-subtle);border-radius:3px;padding:1px 4px;flex:none}
+.kbd{font-family:var(--mono);font-size:10.5px;color:var(--text-muted);border:1px solid var(--border);border-radius:3px;padding:1px 5px}
 .chip{
-  display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;
-  border:1px solid var(--border-subtle);border-radius:var(--r-md);background:transparent;
+  display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;
+  border:1px solid var(--border-subtle);border-radius:var(--r-md);
   font-size:12.5px;color:var(--text-secondary);white-space:nowrap;
-  transition:background var(--fast) var(--ease-out),border-color var(--fast) var(--ease-out),color var(--fast) var(--ease-out);
+  transition:background var(--fast) var(--ease-out),border-color var(--fast),color var(--fast);
 }
 .chip:hover{background:var(--hover);border-color:var(--border);color:var(--text)}
-.chip.on{background:var(--surface-2);border-color:var(--border-strong);color:var(--text);font-weight:500}
-.chip-n{font-family:var(--mono);font-size:11px;color:var(--text-muted);margin-left:-2px}
-.chip.on .chip-n{color:var(--text-secondary)}
-.chip-x{color:var(--text-muted);font-size:13px;line-height:1;margin-right:-2px}
-.chip-x:hover{color:var(--text)}
-.link-btn{font-size:12.5px;color:var(--text-muted);padding:0 4px;border-radius:var(--r-sm);transition:color var(--fast)}
-.link-btn:hover{color:var(--text)}
+.chip.on{background:var(--purple-surface);border-color:var(--purple);color:var(--purple);font-weight:600}
+.chip.on-gold{background:var(--gold-surface);border-color:var(--gold-rail);color:var(--gold);font-weight:600}
+.chip-n{font-family:var(--mono);font-size:11px;opacity:.8}
+.chip-x{font-size:14px;line-height:1;opacity:.7;margin-right:-3px}
+.chip-x:hover{opacity:1}
+.ctl-label{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-left:4px}
+.link-btn{font-size:12.5px;color:var(--text-muted);padding:4px 6px;border-radius:var(--r-sm);transition:color var(--fast),background var(--fast)}
+.link-btn:hover{color:var(--text);background:var(--hover)}
 
-/* ---------- list ---------- */
-.list-scroll{flex:1;overflow-y:auto;overscroll-behavior:contain}
-.list{list-style:none;margin:0;padding:0 0 40px}
-.row{
-  position:relative;display:grid;grid-template-columns:1fr auto;
-  gap:2px 12px;padding:12px 20px 12px 18px;cursor:default;
-  border-left:2px solid transparent;border-bottom:1px solid var(--border-subtle);
-  transition:background var(--fast) var(--ease-out);
+/* ===================== the table ===================== */
+.scroll{flex:1;overflow-y:auto;overscroll-behavior:contain}
+.tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+.tbl thead th{
+  position:sticky;top:0;z-index:5;background:var(--canvas);
+  text-align:left;font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--text-muted);padding:0 12px 9px;border-bottom:1px solid var(--border);
+  white-space:nowrap;
 }
+.tbl thead th:first-child{padding-left:var(--gutter)}
+.tbl thead th:last-child{padding-right:var(--gutter)}
+.tbl th.sortable{cursor:pointer;user-select:none}
+.tbl th.sortable:hover{color:var(--text)}
+.th-on{color:var(--gold)}
+.th-i{font-family:var(--mono);font-size:9px;vertical-align:super;margin-left:3px}
+.row{border-bottom:1px solid var(--border-subtle);transition:background var(--fast) var(--ease-out)}
 .row:hover{background:var(--hover)}
 .row[aria-selected="true"]{background:var(--selected)}
-.row.tier-high{border-left-color:var(--gold-rail)}
-.row.tier-medium{border-left-color:var(--border-strong)}
-.row.tier-minimal{border-left-color:var(--border)}
-.row.tier-unscored{border-left-style:dotted;border-left-color:var(--border-strong)}
-.row.done{opacity:.42}
-.r-title{
-  grid-column:1;font-size:14.5px;font-weight:500;letter-spacing:-.006em;line-height:20px;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
-  overflow-wrap:anywhere;
-}
-.r-score{grid-column:2;grid-row:1;text-align:right;white-space:nowrap;font-size:11px;font-weight:600;letter-spacing:.04em}
-.r-score .n{font-family:var(--mono);font-size:13px;font-weight:500;letter-spacing:.01em;margin-left:5px}
-.tier-high .r-score{color:var(--gold-text)}
-.tier-medium .r-score{color:var(--text)}
-.tier-minimal .r-score{color:var(--text-muted)}
-.tier-unscored .r-score{color:var(--text-muted);font-weight:400;font-style:italic;letter-spacing:0;text-transform:none;font-size:12px}
-.r-meta{grid-column:1;font-size:12.5px;color:var(--text-secondary);line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.r-meta b{font-weight:600;color:var(--text-secondary)}
-.exp-early{color:var(--text);font-weight:600}
+.row.done{opacity:.45}
+.row td{padding:11px 12px;vertical-align:middle;font-size:13px}
+.row td:first-child{padding-left:var(--gutter)}
+.row td:last-child{padding-right:var(--gutter)}
+.c-rail{width:4px;padding:0!important}
+.rail{width:3px;height:34px;border-radius:2px;background:transparent}
+.rail.t-BIG_TECH{background:var(--gold-rail)}
+.rail.t-TOP_TIER{background:var(--purple-rail)}
+.rail.t-ESTABLISHED{background:var(--border-strong)}
+.c-co{width:190px}
+.co-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.co-tier{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-top:2px}
+.t-BIG_TECH .co-tier,.tier-BIG_TECH{color:var(--gold)}
+.t-TOP_TIER .co-tier,.tier-TOP_TIER{color:var(--purple)}
+.t-ESTABLISHED .co-tier,.tier-ESTABLISHED{color:var(--text-muted)}
+.c-title{min-width:0}
+.j-title{font-size:13.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.j-title:hover{color:var(--purple)}
+.j-sub{font-size:11.5px;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-loc{width:190px;color:var(--text-secondary);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-exp{width:140px;font-size:12.5px}
+.exp-early{color:var(--success);font-weight:600}
 .exp-known{color:var(--text-secondary)}
 .exp-unknown{color:var(--text-muted);font-style:italic}
-.r-side{grid-column:2;grid-row:2;display:flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap}
-.badge{
-  display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 6px;border-radius:var(--r-sm);
-  background:var(--surface-2);color:var(--text-secondary);
-  font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
-}
-.badge.new{background:transparent;color:var(--text);padding:0}
-.badge.move{background:var(--gold-surface);color:var(--gold-text);text-transform:none;letter-spacing:0;font-weight:500}
-.badge.warn{background:transparent;color:var(--warning);border:1px solid var(--warning);text-transform:none;letter-spacing:0;font-weight:500}
-.r-note{font-size:11.5px;color:var(--text-muted);font-style:italic}
-.r-acts{display:none;gap:2px;align-items:center}
-.row:hover .r-acts,.row[aria-selected="true"] .r-acts{display:flex}
-.row:hover .r-when,.row[aria-selected="true"] .r-when{display:none}
+.c-match{width:112px;white-space:nowrap}
+.m-tier{font-size:10px;font-weight:700;letter-spacing:.06em}
+.m-n{font-family:var(--mono);font-size:14px;font-weight:600;margin-left:6px}
+.m-high{color:var(--gold)} .m-medium{color:var(--text)} .m-minimal{color:var(--text-muted)}
+.m-unscored{color:var(--text-muted);font-style:italic;font-size:11.5px}
+.c-status{width:132px}
+.c-when{width:86px;font-family:var(--mono);font-size:11.5px;color:var(--text-muted);white-space:nowrap}
+.c-act{width:118px;text-align:right;white-space:nowrap}
+.acts{display:inline-flex;gap:2px;opacity:0;transition:opacity var(--fast)}
+.row:hover .acts,.row:focus-within .acts{opacity:1}
 .iconbtn{
   width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;
   border-radius:var(--r-md);color:var(--text-muted);
-  transition:background var(--fast) var(--ease-out),color var(--fast) var(--ease-out);
+  transition:background var(--fast),color var(--fast);
 }
 .iconbtn:hover{background:var(--border-subtle);color:var(--text)}
-.iconbtn.on{color:var(--gold-text)}
-.iconbtn.saved svg{fill:currentColor}
-.list-end{
-  padding:18px 20px 26px;text-align:center;font-family:var(--mono);
-  font-size:11.5px;letter-spacing:.01em;color:var(--text-muted);
-}
-.readline{display:flex;align-items:center;gap:10px;padding:20px 20px 16px;user-select:none}
-.readline::before,.readline::after{content:"";height:1px;background:var(--border-subtle);flex:1}
-.readline span{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap}
+.iconbtn.on{color:var(--gold)}
+.iconbtn.on svg{fill:currentColor}
 
-/* ---------- detail ---------- */
-.detail{display:flex;flex-direction:column;min-width:0;background:var(--canvas)}
-.d-scroll{flex:1;overflow-y:auto;padding:24px 28px 24px}
-.d-nav{display:flex;align-items:center;gap:2px;justify-content:flex-end;margin-bottom:4px}
-.d-title{font-size:19px;font-weight:600;letter-spacing:-.012em;line-height:26px;margin:0 0 6px;overflow-wrap:anywhere}
-.d-sub{font-size:14px;font-weight:500;color:var(--text-secondary);margin-bottom:20px}
-.scorecard{
-  background:var(--surface-2);border:1px solid var(--border-subtle);border-radius:var(--r-lg);
-  padding:14px 16px;display:flex;align-items:center;gap:14px;margin-bottom:24px;
+/* badges */
+.badge{
+  display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 8px;border-radius:999px;
+  font-size:10.5px;font-weight:600;letter-spacing:.04em;white-space:nowrap;
+  background:var(--surface-2);color:var(--text-secondary);
 }
-.sc-tier{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase}
-.sc-sub{font-size:12.5px;color:var(--text-muted);margin-top:3px}
-.sc-n{margin-left:auto;font-family:var(--mono);font-size:28px;font-weight:400;letter-spacing:-.01em;line-height:1}
-.high .sc-tier,.high .sc-n{color:var(--gold-text)}
-.medium .sc-tier,.medium .sc-n{color:var(--text)}
-.minimal .sc-tier,.minimal .sc-n{color:var(--text-muted)}
-.unscored .sc-tier{color:var(--text-muted)}
-.unscored .sc-n{font-size:13px;color:var(--text-muted);font-style:italic}
-.eyebrow{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted);margin:0 0 10px}
-.sect{margin-bottom:22px}
-.skills{display:flex;flex-wrap:wrap;gap:6px}
-.skill{
-  display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:var(--r-sm);
-  background:var(--surface-2);border:1px solid var(--border-subtle);font-size:12.5px;color:var(--text)
+.badge.new{background:var(--purple-surface);color:var(--purple)}
+.badge.move{background:var(--gold-surface);color:var(--gold)}
+.badge.applied{background:var(--purple-surface);color:var(--purple)}
+.badge.screening,.badge.interviewing{background:var(--gold-surface);color:var(--gold)}
+.badge.offer,.badge.accepted{background:rgba(95,176,127,.16);color:var(--success)}
+.badge.rejected,.badge.withdrawn,.badge.ghosted{background:rgba(222,107,107,.14);color:var(--danger)}
+.badge.saved{background:var(--surface-2);color:var(--text-secondary)}
+
+.readline{padding:0}
+.readline td{padding:16px var(--gutter) 12px;border-bottom:1px solid var(--border-subtle)}
+.readline span{
+  display:inline-flex;align-items:center;gap:10px;width:100%;
+  font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--purple);
 }
-.skill.miss{background:transparent;color:var(--text-muted)}
-.rel{display:flex;flex-direction:column;gap:7px}
-.rel-row{display:flex;align-items:baseline;gap:8px;font-size:13px;flex-wrap:wrap}
-.rel-via{font-size:12.5px;color:var(--text-muted)}
-.d-rule{height:1px;background:var(--border-subtle);margin:24px 0}
-.kv{display:grid;grid-template-columns:132px 1fr;gap:8px 16px;font-size:13px}
-.kv dt{color:var(--text-muted)}
-.kv dd{margin:0;color:var(--text);font-family:var(--mono);font-size:12.5px}
-.why{font-size:13px;color:var(--text-secondary);line-height:20px}
-.d-foot{
-  flex:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
-  padding:16px 28px;border-top:1px solid var(--border-subtle);background:var(--canvas);
+.readline span::after{content:"";flex:1;height:1px;background:var(--border)}
+.grouphead td{
+  padding:22px var(--gutter) 8px;border-bottom:1px solid var(--border-subtle);
+  background:var(--canvas);
 }
+.gh{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.gh-t{font-size:14px;font-weight:700;letter-spacing:-.01em}
+.gh-m{font-family:var(--mono);font-size:11.5px;color:var(--text-muted)}
+.gh-none{font-size:12.5px;color:var(--text-muted);font-style:italic}
+.tail{padding:22px var(--gutter) 40px;text-align:center;font-family:var(--mono);font-size:11.5px;color:var(--text-muted)}
+
+/* ===================== job detail page ===================== */
+.jp{flex:1;overflow-y:auto}
+.jp-in{max-width:1180px;padding:8px var(--gutter) 60px}
+.jp-back{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text-muted);padding:6px 8px;margin:0 0 14px -8px;border-radius:var(--r-md)}
+.jp-back:hover{background:var(--hover);color:var(--text)}
+.jp-tier{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;margin-bottom:8px}
+.jp-title{font-size:30px;font-weight:700;letter-spacing:-.025em;line-height:1.18;margin:0 0 10px;text-wrap:balance}
+.jp-meta{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:14px;color:var(--text-secondary);margin-bottom:22px}
+.jp-co{font-weight:600;color:var(--text)}
+.jp-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.85fr);gap:26px;align-items:start}
+.card{background:var(--surface-1);border:1px solid var(--border-subtle);border-radius:var(--r-lg);padding:20px 22px;margin-bottom:16px}
+.card.match{
+  background:linear-gradient(135deg,var(--purple-surface),var(--surface-1) 72%);
+  border-color:var(--border);
+}
+.eyebrow{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);margin:0 0 12px}
+.score-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.score-n{font-family:var(--mono);font-size:44px;font-weight:600;line-height:1;letter-spacing:-.03em}
+.score-meta{font-size:12.5px;color:var(--text-muted);margin-top:4px}
+.meter{height:6px;border-radius:999px;background:var(--surface-2);overflow:hidden;margin-top:14px}
+.meter i{display:block;height:100%;border-radius:999px;background:var(--gold-rail)}
+.skills{display:flex;flex-wrap:wrap;gap:7px}
+.sk{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:var(--r-md);
+  background:var(--surface-2);border:1px solid var(--border-subtle);font-size:12.5px}
+.sk.have{border-color:var(--success);color:var(--text)}
+.sk.miss{background:transparent;color:var(--text-muted);border-style:dashed}
+.rel{display:flex;flex-direction:column;gap:8px}
+.rel-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
+.rel-via{font-size:12px;color:var(--text-muted)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:10px 16px;font-size:12.5px}
+.kv dt{color:var(--text-muted);white-space:nowrap}
+.kv dd{margin:0;font-family:var(--mono);font-size:12px;overflow-wrap:anywhere}
+.why{font-size:13px;color:var(--text-secondary);line-height:1.65}
+.why b{color:var(--text);font-weight:600}
+.acts-col{display:flex;flex-direction:column;gap:9px}
+.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:4px}
+
+/* buttons */
 .btn{
-  display:inline-flex;align-items:center;justify-content:center;gap:7px;height:32px;padding:0 14px;
-  border-radius:var(--r-md);font-size:13px;font-weight:500;letter-spacing:-.002em;
-  border:1px solid transparent;
-  transition:background var(--fast) var(--ease-out),border-color var(--fast) var(--ease-out),color var(--fast) var(--ease-out);
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 16px;
+  border-radius:var(--r-md);font-size:13px;font-weight:500;border:1px solid transparent;
+  transition:background var(--fast),border-color var(--fast),color var(--fast),filter var(--fast);
 }
-.btn-primary{height:36px;padding:0 16px;background:var(--gold-solid);color:var(--gold-on-solid);font-weight:500}
-.btn-primary:hover{filter:brightness(1.08)}
-.btn-primary svg{transition:transform var(--fast) var(--ease-out)}
-.btn-primary:hover svg{transform:translate(1px,-1px)}
-.btn-secondary{background:var(--raised);border-color:var(--border);color:var(--text)}
+.btn-primary{background:var(--gold-solid);color:var(--on-gold);font-weight:600;height:42px;font-size:14px}
+.btn-primary:hover{filter:brightness(1.09)}
+.btn-primary svg{transition:transform var(--fast)}
+.btn-primary:hover svg{transform:translate(2px,-2px)}
+.btn-secondary{background:var(--surface-2);border-color:var(--border);color:var(--text)}
 .btn-secondary:hover{background:var(--hover)}
 .btn-ghost{color:var(--text-secondary)}
 .btn-ghost:hover{background:var(--hover);color:var(--text)}
-.btn-ghost.on{color:var(--gold-text)}
+.btn-ghost.on{background:var(--purple-surface);color:var(--purple);font-weight:600}
+.btn-sm{height:30px;padding:0 11px;font-size:12px}
 .btn:disabled{opacity:.4;cursor:not-allowed}
-.info{
-  width:16px;height:16px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;
-  border:1px solid var(--border-strong);color:var(--text-muted);font-size:10px;font-weight:600;
-  transition:color var(--fast),border-color var(--fast)
-}
+.info{width:16px;height:16px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid var(--border-strong);color:var(--text-muted);font-size:10px;font-weight:700}
 .info:hover{color:var(--text);border-color:var(--text-muted)}
 
-/* ---------- feed / pages ---------- */
-.page-scroll{flex:1;overflow-y:auto;padding:0 0 60px}
-.wide{grid-column:2 / -1;display:flex;flex-direction:column;min-width:0}
-.wide .list-head{padding:20px 28px 0}
-.pad{padding:0 28px}
-.sess{display:grid;grid-template-columns:88px 1fr;gap:0 16px;padding:14px 28px;border-bottom:1px solid var(--border-subtle)}
-.sess-t{font-family:var(--mono);font-size:11.5px;color:var(--text-muted);padding-top:2px;letter-spacing:.01em}
-.sess-h{font-size:13px;color:var(--text);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.sess-none{font-size:12.5px;color:var(--text-muted);margin-top:3px}
-.sess-jobs{display:flex;flex-direction:column;gap:1px;margin-top:8px}
-.sess-job{
-  display:grid;grid-template-columns:1fr auto;gap:0 12px;padding:7px 10px;
-  border-left:2px solid transparent;background:var(--surface-2);border-radius:var(--r-sm);
-}
-.sess-job.tier-high{border-left-color:var(--gold-rail)}
-.sess-job.tier-medium{border-left-color:var(--border-strong)}
-.sess-job.tier-minimal{border-left-color:var(--border)}
-.sess-job.tier-unscored{border-left-style:dotted;border-left-color:var(--border-strong)}
-.sess-job-t{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sess-job-m{grid-row:2;font-size:12px;color:var(--text-muted)}
-.sess-job-s{grid-row:1;grid-column:2;font-family:var(--mono);font-size:11.5px;color:var(--text-secondary);white-space:nowrap}
-.tier-high .sess-job-s{color:var(--gold-text)}
-.sess-more{margin-top:8px;display:inline-block}
-.daybar{padding:22px 28px 8px;font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted)}
-.bars{display:flex;flex-direction:column;gap:9px;margin:14px 0 4px}
-.bar-row{display:grid;grid-template-columns:96px 1fr 52px;gap:12px;align-items:center;font-size:13px}
-.bar-track{height:8px;background:var(--surface-2);border-radius:2px;overflow:hidden}
-.bar-fill{height:100%;background:var(--border-strong);border-radius:2px}
-.bar-fill.dotted{background:repeating-linear-gradient(90deg,var(--border-strong) 0 3px,transparent 3px 6px)}
+/* ===================== other pages ===================== */
+.page{flex:1;overflow-y:auto;padding:4px var(--gutter) 60px}
+.wrap{max-width:1180px}
+.sect{margin-bottom:30px}
+.bars{display:flex;flex-direction:column;gap:10px}
+.bar{display:grid;grid-template-columns:150px 1fr 58px;gap:14px;align-items:center;font-size:13px}
+.bar-t{height:9px;background:var(--surface-2);border-radius:999px;overflow:hidden}
+.bar-f{height:100%;border-radius:999px;background:var(--purple-rail)}
+.bar-f.gold{background:var(--gold-rail)}
+.bar-f.dot{background:repeating-linear-gradient(90deg,var(--border-strong) 0 3px,transparent 3px 7px)}
 .bar-n{font-family:var(--mono);font-size:12.5px;color:var(--text-secondary);text-align:right}
-.gap-row{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border-subtle);font-size:13px}
-.gap-n{font-family:var(--mono);font-size:12.5px;color:var(--text-muted)}
-.foot-note{font-size:12.5px;color:var(--text-muted);padding:16px 28px 0;border-top:1px solid var(--border-subtle);margin-top:20px}
+.gaprow{display:grid;grid-template-columns:1fr auto auto;gap:16px;align-items:center;
+  padding:11px 0;border-bottom:1px solid var(--border-subtle);font-size:13px}
+.gap-n{font-family:var(--mono);font-size:12px;color:var(--text-muted)}
+.note{font-size:12.5px;color:var(--text-muted);padding-top:16px;border-top:1px solid var(--border-subtle);margin-top:18px}
+.cards3{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.stat{background:var(--surface-1);border:1px solid var(--border-subtle);border-radius:var(--r-lg);padding:16px 18px}
+.stat-n{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-.02em}
+.stat-l{font-size:12px;color:var(--text-muted);margin-top:3px}
 
-/* ---------- empty / skeleton / toast ---------- */
-.empty{padding:28px 20px;max-width:420px}
-.empty h3{font-size:14.5px;font-weight:500;margin:0 0 6px}
-.empty p{font-size:13px;color:var(--text-secondary);margin:0 0 14px;line-height:20px}
-.sk{padding:12px 20px 12px 18px;border-left:2px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle)}
-.sk-b{height:11px;background:var(--surface-2);border-radius:3px}
-.sk-b+.sk-b{margin-top:9px}
+/* empty / skeleton / toast / popover */
+.empty{padding:34px 0;max-width:460px}
+.empty h3{font-size:15px;font-weight:600;margin:0 0 7px}
+.empty p{font-size:13px;color:var(--text-secondary);margin:0 0 16px;line-height:1.6}
+.sk-row td{padding:14px 12px}
+.sk-b{height:11px;background:var(--surface-2);border-radius:4px}
 .toast{
-  position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;
-  display:flex;align-items:center;gap:14px;padding:10px 14px;
+  position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:60;
+  display:flex;align-items:center;gap:16px;padding:11px 16px;
   background:var(--raised);border:1px solid var(--border);border-radius:var(--r-lg);
-  box-shadow:var(--shadow-lg);font-size:13px;
-  animation:rise var(--base) var(--ease-out);
+  box-shadow:var(--shadow-lg);font-size:13px;animation:rise var(--base) var(--ease-out);
 }
-@keyframes rise{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
-.sheet-wrap{position:fixed;inset:0;z-index:80;background:var(--backdrop);display:flex;justify-content:center;align-items:flex-start;padding:6vh 16px}
-.sheet{
-  width:min(900px,96vw);max-height:84vh;display:flex;flex-direction:column;
-  background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-lg);
-  box-shadow:var(--shadow-lg);overflow:hidden;animation:pop var(--base) var(--ease-out);
-}
-.sheet-head{padding:18px 20px 14px;border-bottom:1px solid var(--border-subtle)}
-.sheet-head h3{margin:0 0 4px;font-size:15px;font-weight:600}
-.sheet-body{overflow-y:auto;padding:8px 20px 16px}
-.sheet-foot{padding:14px 20px;border-top:1px solid var(--border-subtle);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.imp-row{display:grid;grid-template-columns:96px 1fr 132px;gap:10px 14px;align-items:start;padding:10px 0;border-bottom:1px solid var(--border-subtle);font-size:13px}
-.imp-tag{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding-top:2px}
-.imp-matched{color:var(--success)}
-.imp-ambiguous{color:var(--warning)}
-.imp-unmatched,.imp-unusable{color:var(--text-muted)}
-.imp-what{min-width:0}
-.imp-what b{font-weight:600}
-.imp-sub{font-size:12px;color:var(--text-muted);margin-top:2px}
-.imp-date{font-family:var(--mono);font-size:12px;color:var(--text-secondary);text-align:right}
-.imp-pick{grid-column:2 / -1;margin-top:6px}
-.imp-pick select{
-  width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);
-  border-radius:var(--r-sm);padding:6px 8px;font-size:12.5px;
-}
-.imp-sum{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--text-secondary);margin-top:6px}
-.imp-sum b{font-family:var(--mono);color:var(--text);font-weight:500}
-.palette-wrap{position:fixed;inset:0;z-index:80;background:var(--backdrop);display:flex;justify-content:center;padding-top:14vh}
-.palette{
-  width:min(560px,92vw);height:max-content;max-height:60vh;display:flex;flex-direction:column;
-  background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-lg);
-  box-shadow:var(--shadow-lg);overflow:hidden;animation:pop var(--base) var(--ease-out);
-}
-.palette input{
-  border:none;border-bottom:1px solid var(--border-subtle);background:none;
-  padding:14px 16px;font-size:14px;width:100%;
-}
-.palette input::placeholder{color:var(--text-muted)}
-.palette-list{overflow-y:auto;padding:6px}
-.pal-opt{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:var(--r-md);font-size:13px;color:var(--text-secondary)}
-.pal-opt:hover,.pal-opt.on{background:var(--hover);color:var(--text)}
-.pal-none{padding:16px;font-size:13px;color:var(--text-muted)}
-.pop{
-  position:fixed;z-index:70;background:var(--surface-1);border:1px solid var(--border);
-  border-radius:var(--r-lg);box-shadow:var(--shadow-lg);padding:16px;max-width:320px;
-  animation:pop var(--base) var(--ease-out);
-}
-@keyframes pop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-.pop h4{font-size:13px;font-weight:600;margin:0 0 8px}
-.pop p{font-size:12.5px;color:var(--text-secondary);margin:0 0 8px;line-height:18px}
+@keyframes rise{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+.pop{position:fixed;z-index:70;background:var(--surface-1);border:1px solid var(--border);
+  border-radius:var(--r-lg);box-shadow:var(--shadow-lg);padding:16px;max-width:330px;animation:pop var(--base) var(--ease-out)}
+@keyframes pop{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.pop h4{font-size:13px;font-weight:600;margin:0 0 9px}
+.pop p{font-size:12.5px;color:var(--text-secondary);margin:0 0 9px;line-height:1.55}
 .pop p:last-child{margin-bottom:0}
-.pop-list{max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:1px;margin:0 -6px}
-.pop-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--r-sm);font-size:12.5px;text-align:left;width:100%;transition:background var(--fast)}
+.pop-list{max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:1px;margin:0 -6px}
+.pop-opt{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:var(--r-sm);font-size:12.5px;text-align:left;width:100%}
 .pop-opt:hover{background:var(--hover)}
+.pop-opt.on{background:var(--purple-surface);color:var(--purple);font-weight:600}
 .pop-opt .n{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-muted)}
-.pop-group{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted);padding:10px 8px 4px}
-.mobile-only{display:none}
-.arrive{animation:arrive 320ms var(--ease-out) 400ms both}
-@keyframes arrive{from{box-shadow:inset 2px 0 0 var(--gold-rail)}to{box-shadow:inset 2px 0 0 transparent}}
-
-/* ============================ responsive ============================ */
-@media (max-width:1439px){:root{--w-list:440px}}
-@media (max-width:1159px){
-  :root{--w-side:56px;--w-list:400px}
-  .brand-name,.nav-label,.nav-count{display:none}
-  .nav-item{justify-content:center;padding:0;border-left-width:0;position:relative}
-  .nav-item[aria-current="page"]::before{content:"";position:absolute;left:-12px;top:6px;bottom:6px;width:2px;background:var(--gold-rail)}
-  .side{padding:20px 8px 12px;align-items:center}
-  .brand{padding:0 0 24px}
-}
+.pop-group{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);padding:12px 9px 5px}
 .scrim{position:fixed;inset:0;z-index:45;background:var(--backdrop)}
-@media (min-width:1024px){.scrim{display:none}}
-@media (max-width:1023px){
-  .app{grid-template-columns:1fr}
-  .side{
-    display:flex;position:fixed;left:0;top:0;bottom:0;width:248px;z-index:50;
-    background:var(--canvas);border-right:1px solid var(--border);
-    transform:translateX(-100%);transition:transform var(--slow) var(--ease-emph);
-  }
-  .side.open{transform:translateX(0)}
-  .list-col{border-right:none}
-  .detail{position:fixed;inset:0;z-index:40;transform:translateX(100%);transition:transform var(--slow) var(--ease-emph);border-left:none}
-  .detail.open{transform:translateX(0)}
-  .wide{grid-column:1}
-  .mobile-only{display:flex}
-  .list-head{padding:14px 16px 0}
-  .row{padding:14px 16px 14px 14px;grid-template-columns:1fr}
-  .r-score{grid-column:1;grid-row:3;text-align:left;margin-top:4px}
-  .r-side{grid-column:1;grid-row:4;justify-content:flex-start;margin-top:4px}
-  /* Raw source locations can run to three lines ("USA-TX Plano Legacy
-     Drive Suite 700; USA-California-San Jose-1320 Ridder Park Drive"),
-     which triples the row height. Two lines is the contract. */
-  .r-meta{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  .r-acts{display:flex}
-  .row:hover .r-when,.row[aria-selected="true"] .r-when{display:inline}
-  .iconbtn{width:44px;height:44px}
-  .views{overflow-x:auto;scrollbar-width:none}
-  .views::-webkit-scrollbar{display:none}
-  .view{flex:none}
-  .view-n{display:none}
-  .d-scroll{padding:16px 20px}
-  .d-foot{padding:12px 20px}
-  .btn-primary{flex:1}
-  .sess{grid-template-columns:1fr;padding:14px 16px}
-  .sess-t{padding-bottom:6px}
-  .daybar,.pad,.wide .list-head,.foot-note{padding-left:16px;padding-right:16px}
-  .bar-row{grid-template-columns:88px 1fr 44px}
-}
-.topbar{
-  display:none;align-items:center;gap:10px;padding:10px 16px;
-  border-bottom:1px solid var(--border-subtle);flex:none
-}
-@media (max-width:1023px){
-  .topbar{display:flex}
-  /* The collapsed-rail rule hides brand text; the top bar needs it back. */
-  .topbar .brand-name{display:inline;letter-spacing:.14em}
-}
+@media (min-width:1025px){.scrim{display:none}}
+.topbar{display:none;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border-subtle);flex:none}
 
+/* palette + sheets */
+.palette-wrap{position:fixed;inset:0;z-index:80;background:var(--backdrop);display:flex;justify-content:center;padding-top:13vh}
+.palette{width:min(580px,93vw);max-height:62vh;display:flex;flex-direction:column;background:var(--surface-1);
+  border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);overflow:hidden;animation:pop var(--base) var(--ease-out)}
+.palette input{border:none;border-bottom:1px solid var(--border-subtle);background:none;padding:15px 18px;font-size:14.5px;width:100%}
+.palette-list{overflow-y:auto;padding:7px}
+.pal-opt{display:block;width:100%;text-align:left;padding:9px 11px;border-radius:var(--r-md);font-size:13px;color:var(--text-secondary)}
+.pal-opt:hover,.pal-opt.on{background:var(--purple-surface);color:var(--purple)}
+.pal-none{padding:18px;font-size:13px;color:var(--text-muted)}
+.sheet-wrap{position:fixed;inset:0;z-index:80;background:var(--backdrop);display:flex;justify-content:center;align-items:flex-start;padding:6vh 16px}
+.sheet{width:min(940px,96vw);max-height:85vh;display:flex;flex-direction:column;background:var(--surface-1);
+  border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);overflow:hidden;animation:pop var(--base) var(--ease-out)}
+.sheet-head{padding:20px 22px 15px;border-bottom:1px solid var(--border-subtle)}
+.sheet-head h3{margin:0 0 6px;font-size:16px;font-weight:700}
+.sheet-body{overflow-y:auto;padding:10px 22px 18px}
+.sheet-foot{padding:15px 22px;border-top:1px solid var(--border-subtle);display:flex;gap:11px;flex-wrap:wrap;align-items:center}
+.imp{display:grid;grid-template-columns:104px 1fr 140px;gap:11px 15px;align-items:start;padding:11px 0;border-bottom:1px solid var(--border-subtle);font-size:13px}
+.imp-tag{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding-top:2px}
+.imp-matched{color:var(--success)} .imp-ambiguous{color:var(--warning)}
+.imp-unmatched,.imp-unusable{color:var(--text-muted)}
+.imp-sub{font-size:11.5px;color:var(--text-muted);margin-top:3px}
+.imp-r{text-align:right;font-family:var(--mono);font-size:12px;color:var(--text-secondary)}
+.imp-pick{grid-column:2 / -1;margin-top:7px}
+select{width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:7px 9px;font-size:12.5px}
+.sum{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--text-secondary);margin-top:7px}
+.sum b{font-family:var(--mono);color:var(--text);font-weight:600}
+
+/* ===================== responsive ===================== */
+@media (max-width:1400px){ .c-loc{width:150px} .c-exp{width:120px} }
+@media (max-width:1200px){
+  :root{--gutter:20px}
+  .c-loc{display:none} .tbl thead th.c-loc{display:none}
+}
+@media (max-width:1024px){
+  :root{--side:0px}
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{position:fixed;left:0;top:0;bottom:0;width:250px;z-index:50;transform:translateX(-100%);
+    transition:transform var(--slow) var(--ease-emph);border-right:1px solid var(--border)}
+  .side.open{transform:translateX(0)}
+  .topbar{display:flex}
+  .c-exp,.tbl thead th.c-exp,.c-when,.tbl thead th.c-when{display:none}
+  .jp-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:720px){
+  :root{--gutter:14px}
+  .tbl,.tbl thead,.tbl tbody,.tbl tr,.tbl td{display:block;width:100%}
+  .tbl thead{display:none}
+  .row{padding:13px var(--gutter);position:relative;border-bottom:1px solid var(--border-subtle)}
+  .row td{padding:0;border:none}
+  .row td.c-rail{position:absolute;left:0;top:11px;bottom:11px;width:3px}
+  .rail{height:100%}
+  .c-co,.c-title,.c-match,.c-status,.c-act{width:auto}
+  .c-co{margin-bottom:3px}
+  .co-name{display:inline;font-size:12px;color:var(--text-muted);font-weight:600}
+  .co-tier{display:inline;margin-left:7px}
+  .j-title{white-space:normal;font-size:14.5px;margin-bottom:5px}
+  .c-match{margin-top:7px}
+  .c-status{margin-top:7px}
+  .c-act{text-align:left;margin-top:9px}
+  .acts{opacity:1}
+  .iconbtn{width:42px;height:42px}
+  .h1{font-size:19px}
+  .jp-title{font-size:23px}
+  .imp{grid-template-columns:1fr}
+}
 @media (prefers-reduced-motion:reduce){
-  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:80ms!important}
-  .detail{transition:none}
-  .arrive{animation:none}
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:80ms!important}
+  .side{transition:none}
 }
 </style>
 </head>
 <body>
-<a class="skip" href="#list">Skip to opportunities</a>
+<a class="skip" href="#main">Skip to opportunities</a>
 <div class="app" id="app"></div>
 <script>
 "use strict";
 /* ============================================================
    ACE client
    ============================================================ */
-var API = "";
-var HIGH = 70, MED = 45;
-// One page of rows. Fetched on demand as the list is scrolled, so the
-// queue is never silently truncated at the first page.
-var PAGE = 60;
-// Default Queue housekeeping: hide postings detected more than this
-// many days ago. Nothing is deleted. Saved, Archive, Skills and Resume
-// statistics all still see the full history; this only shapes the
-// default Queue view, and is a per-session toggle, not a standing
-// preference, so it never silently hides something without a visible,
-// one-click way back.
-var RECENT_DAYS = 15;
+var API="";
+var HIGH=70, MED=45, PAGE=60, RECENT_DAYS=15;
 
-var state = {
-  page: "queue", view: "all",
-  q: "", sort: "best_match",
-  filters: {},          // key -> {type,value,label}
-  items: [], total: 0, loading: true, loadingMore: false, hasMore: false, offset: 0, reqToken: 0,
-  selectedId: null,
-  stats: {}, sessions: [], lastPoll: null,
-  resume: null, gap: [],
-  facets: {companies:[],sources:[],families:[]},
-  markCounts: {saved:0,archived:0,applied:0}, prevVisit: null,
-  detailOpen: false, menuOpen: false, toast: null,
-  importData: null, importChoice: {}, openSessions: {},
-  gapFamily: "", gapMin: null, recentOnly: true
+var TIER_LABEL={BIG_TECH:"Big tech", TOP_TIER:"Top tier", ESTABLISHED:"Established", OTHER:""};
+var STATUSES=["applied","screening","interviewing","offer","accepted","rejected","withdrawn","ghosted"];
+var STATUS_LABEL={applied:"Applied",screening:"Screening",interviewing:"Interviewing",offer:"Offer",
+  accepted:"Accepted",rejected:"Rejected",withdrawn:"Withdrawn",ghosted:"No reply"};
+var CLOSED=["rejected","withdrawn","ghosted","accepted"];
+
+/* Sorts combine. Order is the order you picked them in. */
+var SORTS=[
+  ["new_grad_first","New grad first"],
+  ["best_match","Best match"],
+  ["big_tech_first","Big tech first"],
+  ["newest","Newest"],
+  ["oldest","Oldest"],
+  ["company","Company"]
+];
+
+var state={
+  page:"queue", view:"all", jobId:null,
+  q:"", sorts:["new_grad_first","best_match"],
+  filters:{}, tiers:[], recentOnly:true,
+  items:[], total:0, loading:true, loadingMore:false, hasMore:false, offset:0, reqToken:0,
+  selectedId:null, scrollTo:false,
+  stats:{}, sessions:[], lastPoll:null, markCounts:{saved:0,archived:0,applied:0,open_applications:0,by_status:{}},
+  resume:null, gap:[], facets:{companies:[],sources:[],families:[]},
+  prevVisit:null, newSinceVisit:0,
+  menuOpen:false, toast:null, undoFn:null,
+  importData:null, importChoice:{}, gapFamily:"", gapMin:null,
+  palHits:null, palIndex:0
 };
 
 /* ---------------- storage ---------------- */
-function load(k, d){ try{ var v=localStorage.getItem(k); return v==null?d:JSON.parse(v);}catch(e){return d;} }
-function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
-
+function load(k,d){ try{var v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;} }
+function save(k,v){ try{localStorage.setItem(k,JSON.stringify(v));}catch(e){} }
 function initVisit(){
-  var now = Date.now();
-  var cur = load("ace.visit.current", null);
-  var prev = load("ace.visit.previous", null);
-  // A refresh inside 30 minutes keeps the same marker, so the read line
-  // does not vanish the moment the page is reloaded.
-  if (cur && (now - cur) < 30*60*1000) { state.prevVisit = prev ? new Date(prev) : null; }
-  else { if (cur) { save("ace.visit.previous", cur); prev = cur; }
-         state.prevVisit = prev ? new Date(prev) : null; }
-  save("ace.visit.current", now);
+  var now=Date.now(), cur=load("ace.visit.current",null), prev=load("ace.visit.previous",null);
+  if(cur && (now-cur)<30*60*1000){ state.prevVisit=prev?new Date(prev):null; }
+  else { if(cur){ save("ace.visit.previous",cur); prev=cur; } state.prevVisit=prev?new Date(prev):null; }
+  save("ace.visit.current",now);
 }
 
 /* ---------------- helpers ---------------- */
 function tierOf(s){ if(s==null) return "unscored"; if(s>=HIGH) return "high"; if(s>=MED) return "medium"; return "minimal"; }
-/* A re-score reshuffles the ranking silently. Showing the move makes
-   ACE's own learning visible, but only while it is news: the annotation
-   is shown for scores written since the last visit, then stops. */
-function tierMove(j){
-  if(j.previous_match_score==null || j.match_score==null) return null;
-  var from=tierOf(j.previous_match_score), to=tierOf(j.match_score);
-  if(from===to) return null;
-  if(!state.prevVisit || !j.score_changed_at) return null;
-  if(new Date(j.score_changed_at) <= state.prevVisit) return null;
-  return tierLabel(from)+" \u2192 "+tierLabel(to);
-}
 function tierLabel(t){ return t==="high"?"HIGH":t==="medium"?"MEDIUM":t==="minimal"?"MINIMAL":"Not scored"; }
-function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){
-  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
-/* Sources sometimes ship em dashes in titles. ACE never renders one. */
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+/* ACE never renders an em dash; sources sometimes ship them. */
 function clean(s){ return String(s==null?"":s)
-  .replace(/\s*[—–]\s*/g, ", ")   // ACE never renders an em dash
-  .replace(/\s+([,;:])/g, "$1")   // "Engineer , Service" -> "Engineer, Service"
-  .replace(/\s{2,}/g, " ").trim(); }
+  .replace(/\s*[—–]\s*/g,", ").replace(/\s+([,;:])/g,"$1").replace(/\s{2,}/g," ").trim(); }
 function ago(iso){
   if(!iso) return "";
   var d=(Date.now()-new Date(iso).getTime())/1000;
   if(d<60) return "just now";
-  if(d<3600) return Math.floor(d/60)+"m ago";
-  if(d<86400) return Math.floor(d/3600)+"h ago";
-  if(d<86400*7) return Math.floor(d/86400)+"d ago";
+  if(d<3600) return Math.floor(d/60)+"m";
+  if(d<86400) return Math.floor(d/3600)+"h";
+  if(d<86400*7) return Math.floor(d/86400)+"d";
   return new Date(iso).toLocaleDateString(undefined,{month:"short",day:"numeric"});
 }
-function shortDate(d){ return d? new Date(d).toLocaleDateString(undefined,{month:"short",day:"numeric"}) : ""; }
 function clock(d){ return new Date(d).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}); }
+function shortDate(d){ return d?new Date(d).toLocaleDateString(undefined,{month:"short",day:"numeric"}):""; }
 function dayName(d){
   var t=new Date(), y=new Date(Date.now()-86400000), x=new Date(d);
   if(x.toDateString()===t.toDateString()) return "Today";
   if(x.toDateString()===y.toDateString()) return "Yesterday";
   return x.toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"});
 }
-/* Experience fit is the user's standing constraint, so every row states
-   it rather than leaving a gap. Three honest states: labelled early
-   career, an extracted ceiling, or nothing stated. Unlabelled roles are
-   kept (ACE does not drop them), so "not stated" must read as neutral
-   and not as a rejection. */
+function isWide(){ return window.matchMedia("(min-width: 1025px)").matches; }
 function expFit(j){
-  if(j.is_early_career) return {text:"Early career", cls:"exp-early"};
-  if(j.required_experience_years!=null)
-    return {text:j.required_experience_years+" yrs max", cls:"exp-known"};
-  return {text:"Experience not stated", cls:"exp-unknown"};
+  if(j.is_early_career) return {t:"Early career",c:"exp-early"};
+  if(j.required_experience_years!=null) return {t:j.required_experience_years+" yrs max",c:"exp-known"};
+  return {t:"Not stated",c:"exp-unknown"};
 }
-function yoe(j){ return expFit(j).text; }
-/* The split pane exists at exactly the width the CSS says it does.
-   Reading the same media query keeps JS and CSS from drifting, and
-   avoids window.innerWidth, which some environments report as 0. */
-function isWide(){ return window.matchMedia("(min-width: 1024px)").matches; }
-/* Marks ride on the listing row rather than a separate client store,
-   so what is drawn is always what the server holds. */
-/* Role families arrive as SCREAMING_SNAKE. Title-casing alone renders
-   "AI_ML_ENGINEERING" as "Ai ml engineering", so initialisms are kept. */
-var FAMILY_INITIALISMS = {AI:1, ML:1, UI:1, UX:1, QA:1, IT:1, SRE:1};
-function familyLabel(value){
-  return String(value||"").split("_").map(function(word, index){
-    if(FAMILY_INITIALISMS[word]) return word;
-    var lower = word.toLowerCase();
-    return index===0 ? lower.charAt(0).toUpperCase()+lower.slice(1) : lower;
-  }).join(" ");
+function markOf(j){ return {saved:!!j.is_saved, reviewed:j.review_state==="reviewed",
+  dismissed:j.review_state==="dismissed", applied:!!j.applied_at, status:j.application_status}; }
+function isDone(j){ return j.review_state==="reviewed"||j.review_state==="dismissed"; }
+function jobById(id){ for(var i=0;i<state.items.length;i++) if(state.items[i].id===id) return state.items[i]; return null; }
+function tierMove(j){
+  if(j.previous_match_score==null||j.match_score==null) return null;
+  var a=tierOf(j.previous_match_score), b=tierOf(j.match_score);
+  if(a===b||!state.prevVisit||!j.score_changed_at) return null;
+  if(new Date(j.score_changed_at)<=state.prevVisit) return null;
+  return tierLabel(a)+" → "+tierLabel(b);
 }
-function markOf(j){
-  return {
-    saved: !!j.is_saved,
-    reviewed: j.review_state==="reviewed",
-    dismissed: j.review_state==="dismissed",
-    applied: !!j.applied_at
-  };
-}
-function isDone(j){ return j.review_state==="reviewed" || j.review_state==="dismissed"; }
-function jobById(id){
-  for(var i=0;i<state.items.length;i++) if(state.items[i].id===id) return state.items[i];
-  return null;
-}
-function icon(p, extra){
-  return '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"'+(extra||"")+'>'+p+'</svg>';
-}
-var I = {
+function icon(p,sz){ return '<svg width="'+(sz||16)+'" height="'+(sz||16)+'" viewBox="0 0 16 16" fill="none" '+
+  'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>'; }
+var I={
   star:'<path d="M8 2l1.8 3.9 4.2.5-3.1 2.9.8 4.2L8 11.5 4.3 13.5l.8-4.2L2 6.4l4.2-.5z"/>',
-  check:'<path d="M3 8.5l3.2 3.2L13 5"/>',
-  x:'<path d="M4 4l8 8M12 4l-8 8"/>',
+  check:'<path d="M3 8.5l3.2 3.2L13 5"/>', x:'<path d="M4 4l8 8M12 4l-8 8"/>',
   ext:'<path d="M6 3h7v7M13 3L6.5 9.5"/><path d="M11 9.5V13H3V5h3.5"/>',
   left:'<path d="M10 3L5 8l5 5"/>', right:'<path d="M6 3l5 5-5 5"/>',
   search:'<circle cx="7.2" cy="7.2" r="4.2"/><path d="M10.4 10.4L13.5 13.5"/>',
-  plus:'<path d="M8 3.5v9M3.5 8h9"/>',
+  plus:'<path d="M8 3.5v9M3.5 8h9"/>', menu:'<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>',
+  queue:'<path d="M2.5 4h11M2.5 8h11M2.5 12h7"/>', feed:'<path d="M3 12.5V7M8 12.5V3.5M13 12.5V9.5"/>',
+  doc:'<path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/>', grid:'<path d="M3 3h4v4H3zM9 3h4v4H9zM3 9h4v4H3zM9 9h4v4H9z"/>',
   sun:'<circle cx="8" cy="8" r="3"/><path d="M8 1v1.6M8 13.4V15M15 8h-1.6M2.6 8H1M12.9 3.1l-1.1 1.1M4.2 11.8l-1.1 1.1M12.9 12.9l-1.1-1.1M4.2 4.2L3.1 3.1"/>',
   gear:'<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v1.8M8 12.7v1.8M14.5 8h-1.8M3.3 8H1.5M12.6 3.4l-1.3 1.3M4.7 11.3l-1.3 1.3M12.6 12.6l-1.3-1.3M4.7 4.7L3.4 3.4"/>',
-  menu:'<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>',
-  queue:'<path d="M2.5 4h11M2.5 8h11M2.5 12h7"/>',
-  feed:'<path d="M3 12.5V7M8 12.5V3.5M13 12.5V9.5"/>',
-  doc:'<path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/>',
-  grid:'<path d="M3 3h4v4H3zM9 3h4v4H9zM3 9h4v4H3zM9 9h4v4H9z"/>'
+  briefcase:'<rect x="2" y="5" width="12" height="9" rx="1.5"/><path d="M6 5V3.5h4V5"/>'
 };
 
 /* ---------------- data ---------------- */
 function params(extra){
-  var p = new URLSearchParams();
-  if(state.q) p.set("q", state.q);
+  var p=new URLSearchParams();
+  if(state.q) p.set("q",state.q);
   Object.keys(state.filters).forEach(function(k){
     var f=state.filters[k];
-    if(f.type==="flag") p.set(f.param,"true"); else p.set(f.param, f.value);
+    if(f.type==="flag") p.set(f.param,"true"); else p.set(f.param,f.value);
   });
-  // Scoped to the Queue page itself so a saved or archived job is never
-  // hidden by this: those pages call params() too, and this must not
-  // reach them.
-  if(state.page==="queue" && state.recentOnly) p.set("max_detected_age_days", RECENT_DAYS);
-  if(extra) Object.keys(extra).forEach(function(k){ if(extra[k]!=null) p.set(k, extra[k]); });
+  if(state.tiers.length) p.set("tier",state.tiers.join(","));
+  // Scoped to the Queue itself: a saved or archived job must never be
+  // hidden by a housekeeping default.
+  if(state.page==="queue" && state.recentOnly) p.set("max_detected_age_days",RECENT_DAYS);
+  if(extra) Object.keys(extra).forEach(function(k){ if(extra[k]!=null) p.set(k,extra[k]); });
   return p;
 }
+function sortParam(){ return state.sorts.length?state.sorts.join(","):"new_grad_first"; }
 function viewParams(){
-  var e = {sort:state.sort, limit:PAGE, offset:state.offset};
+  var e={sort:sortParam(), limit:PAGE, offset:state.offset};
   if(state.page==="saved"){ e.mark="saved"; return e; }
   if(state.page==="archive"){ e.mark="archived"; return e; }
-  if(state.view==="matched"){ e.min_match=HIGH; e.sort="best_match"; }
-  if(state.view==="new" && state.prevVisit){ e.since=state.prevVisit.toISOString(); e.sort="newest"; }
+  if(state.page==="applied"){ e.mark="applied"; e.sort="newest"; return e; }
+  if(state.view==="matched") e.min_match=HIGH;
+  if(state.view==="new"&&state.prevVisit){ e.since=state.prevVisit.toISOString(); e.sort="newest"; }
   if(state.view==="latest"){ var s=state.sessions[0]; if(s) e.session_id=s.id; e.sort="newest"; }
   return e;
 }
-function get(path, p){
+function get(path,p){
   return fetch(API+path+(p&&p.toString()?"?"+p.toString():"")).then(function(r){
     if(!r.ok) throw new Error(r.status); return r.json(); });
 }
 function loadJobs(append){
-  if(append){ if(state.loadingMore || !state.hasMore) return Promise.resolve(); state.loadingMore = true; }
-  else { state.offset = 0; state.loading = true; state.items = []; state.reqToken++; render(); }
-  // Two loads can be in flight at once (navigating and switching view,
-  // or typing quickly). Without a token the slower, older response wins
-  // and the list disagrees with the controls above it.
-  var token = state.reqToken;
-  return get("/api/jobs", params(viewParams())).then(function(d){
-    if(token !== state.reqToken) return;
-    state.items = append ? state.items.concat(d.items) : d.items;
-    state.offset = state.offset + d.items.length;
-    state.hasMore = d.has_more;
-    state.total = d.total;
-    state.loading = false; state.loadingMore = false;
-
-    if(state.selectedId && !state.items.some(function(j){return j.id===state.selectedId;})) state.selectedId = null;
-    if(!state.selectedId && state.items.length && isWide()) state.selectedId = state.items[0].id;
+  if(append){ if(state.loadingMore||!state.hasMore) return Promise.resolve(); state.loadingMore=true; }
+  else { state.offset=0; state.loading=true; state.items=[]; state.reqToken++; render(); }
+  var token=state.reqToken;
+  return get("/api/jobs",params(viewParams())).then(function(d){
+    if(token!==state.reqToken) return;
+    state.items=append?state.items.concat(d.items):d.items;
+    state.offset=state.offset+d.items.length;
+    state.hasMore=d.has_more; state.total=d.total;
+    state.loading=false; state.loadingMore=false;
+    if(state.selectedId&&!state.items.some(function(j){return j.id===state.selectedId;})) state.selectedId=null;
     render(append);
   }).catch(function(){
-    if(token !== state.reqToken) return;
+    if(token!==state.reqToken) return;
     state.loading=false; state.loadingMore=false; render();
   });
 }
 function loadShell(){
   return Promise.all([
-    get("/api/stats", params()).then(function(d){ state.stats=d; state.lastPoll=d.last_poll_at; }),
-    get("/api/sessions", new URLSearchParams({limit:"25", jobs_per_session:"3"})).then(function(d){ state.sessions=d.sessions||[]; if(d.last_poll_at) state.lastPoll=d.last_poll_at; }),
+    get("/api/stats",params()).then(function(d){ state.stats=d; state.lastPoll=d.last_poll_at; }),
+    get("/api/sessions",new URLSearchParams({limit:"30",jobs_per_session:"6"})).then(function(d){
+      state.sessions=d.sessions||[]; if(d.last_poll_at) state.lastPoll=d.last_poll_at; }),
     get("/api/facets").then(function(d){ state.facets=d; }),
     get("/api/resume").then(function(d){ state.resume=d.resume; state.gap=d.skills_gap||[]; }),
     get("/api/marks").then(function(d){ state.markCounts=d; }),
     refreshNewCount()
   ]).catch(function(){});
 }
-
-/* ---------------- render: shell ---------------- */
-function navItem(id,label,count,ic){
-  var on = state.page===id;
-  return '<button class="nav-item" data-nav="'+id+'"'+(on?' aria-current="page"':'')+' title="'+esc(label)+'">'+
-    icon(ic)+'<span class="nav-label">'+esc(label)+'</span>'+
-    (count!=null?'<span class="nav-count num">'+count+'</span>':'')+'</button>';
+function refreshNewCount(){
+  if(!state.prevVisit){ state.newSinceVisit=0; return Promise.resolve(); }
+  return get("/api/jobs",params({since:state.prevVisit.toISOString(),limit:1}))
+    .then(function(d){ state.newSinceVisit=d.total; }).catch(function(){});
 }
+function refreshMarkCounts(){ return get("/api/marks").then(function(d){ state.markCounts=d; }).catch(function(){}); }
+function reloadGap(){
+  var p=new URLSearchParams();
+  if(state.gapFamily) p.set("family",state.gapFamily);
+  if(state.gapMin!=null) p.set("min_match",state.gapMin);
+  return get("/api/resume",p).then(function(d){ state.resume=d.resume; state.gap=d.skills_gap||[]; render(); })
+    .catch(function(){ render(); });
+}
+
+/* ---------------- marks ---------------- */
+function putMark(id,body){
+  return fetch(API+"/api/marks/"+id,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+    .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); });
+}
+function applyMark(j,res){
+  j.is_saved=res.is_saved; j.review_state=res.review_state; j.applied_at=res.applied_at;
+  j.application_status=res.application_status; j.status_changed_at=res.status_changed_at;
+}
+function mark(id,key,advance){
+  var j=jobById(id);
+  if(!j){ showToast("That opportunity is no longer on screen"); render(); return; }
+  var was=markOf(j)[key];
+  var body = key==="saved"?{saved:!was} : key==="applied"?{applied:!was}
+           : was?{clear_review:true}:{review_state:key};
+  var undoBody = key==="saved"?{saved:was} : key==="applied"?{applied:was}
+           : was?{review_state:key}:{clear_review:true};
+  var label={saved:was?"Removed from saved":"Saved",
+             reviewed:was?"Review cleared":"Marked reviewed",
+             dismissed:was?"Restored":"Marked not relevant",
+             applied:was?"Applied cleared":"Marked applied"}[key];
+  putMark(id,body).then(function(res){
+    applyMark(j,res); refreshMarkCounts();
+    showToast(label,function(){ putMark(id,undoBody).then(function(b){ applyMark(j,b); refreshMarkCounts(); render(); }); });
+    var onMarkPage=(state.page==="saved"&&key==="saved"&&was)||
+                   (state.page==="archive"&&(key==="reviewed"||key==="dismissed")&&was)||
+                   (state.page==="applied"&&key==="applied"&&was);
+    if(onMarkPage){
+      state.items=state.items.filter(function(x){return x.id!==id;});
+      state.total=Math.max(0,state.total-1);
+    }
+    if(advance&&key!=="saved"&&key!=="applied"&&!was) step(1); else render();
+  }).catch(function(){ showToast("Could not save that change"); render(); });
+}
+function setStatus(id,status){
+  var j=jobById(id); if(!j) return;
+  var was=j.application_status;
+  putMark(id,{application_status:status}).then(function(res){
+    applyMark(j,res); refreshMarkCounts();
+    showToast(STATUS_LABEL[status]+" recorded", function(){
+      putMark(id, was?{application_status:was}:{applied:false}).then(function(b){
+        applyMark(j,b); refreshMarkCounts(); render(); });
+    });
+    render();
+  }).catch(function(){ showToast("Could not record that status"); render(); });
+}
+
+/* ---------------- sidebar ---------------- */
+function navItem(id,label,count,ic){
+  var on=state.page===id;
+  return '<button class="nav-item" data-nav="'+id+'"'+(on?' aria-current="page"':'')+'>'+
+    icon(ic)+'<span class="nav-label">'+esc(label)+'</span>'+
+    (count?'<span class="nav-count">'+count+'</span>':'')+'</button>';
+}
+function isStale(){ return !state.lastPoll || (Date.now()-new Date(state.lastPoll).getTime())>45*60*1000; }
 function sidebar(){
-  var s=state.stats;
-  var open=state.menuOpen?" open":"";
-  var savedN = state.markCounts.saved;
-  var archN  = state.markCounts.archived;
-  return '<nav class="side'+open+'" aria-label="Main">'+
+  var s=state.stats, m=state.markCounts;
+  return '<nav class="side'+(state.menuOpen?" open":"")+'" aria-label="Main">'+
     '<div class="brand">'+
-      '<svg width="20" height="20" viewBox="0 0 32 32" aria-hidden="true">'+
-      '<path d="M6 26 L17 9 L26 26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+
-      '<circle cx="17" cy="4.5" r="2.5" fill="var(--gold-rail)"/></svg>'+
+      '<svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true">'+
+      '<path d="M6 26 L17 9 L26 26" fill="none" stroke="var(--purple-rail)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>'+
+      '<circle cx="17" cy="4.5" r="2.6" fill="var(--gold-rail)"/></svg>'+
       '<span class="brand-name">ACE</span></div>'+
     '<div class="nav">'+
-      navItem("queue","Queue", s.qualifying_active_jobs!=null?s.qualifying_active_jobs:"", I.queue)+
-      navItem("feed","Feed",null,I.feed)+
-      navItem("resumes","Resumes",null,I.doc)+
+      navItem("queue","Queue",s.qualifying_active_jobs||"",I.queue)+
+      navItem("pulls","Pulls",null,I.feed)+
+    '</div>'+
+    '<div class="nav-rule"></div>'+
+    '<div class="nav-head">Pipeline</div><div class="nav">'+
+      navItem("saved","Saved",m.saved||null,I.star)+
+      navItem("applied","Applied",m.applied||null,I.briefcase)+
+      navItem("archive","Archive",m.archived||null,I.check)+
+    '</div>'+
+    '<div class="nav-rule"></div>'+
+    '<div class="nav-head">Intelligence</div><div class="nav">'+
+      navItem("resumes","Resume",null,I.doc)+
       navItem("skills","Skills",null,I.grid)+
-    '</div><div class="nav-rule"></div><div class="nav">'+
-      navItem("saved","Saved",savedN||null,I.star)+
-      navItem("archive","Archive",archN||null,I.check)+
     '</div>'+
     '<div class="side-foot">'+
-      '<button class="nav-item" data-act="live"><span class="dot'+(isStale()?' stale':'')+'"></span>'+
+      '<button class="nav-item" data-act="live"><span class="dot'+(isStale()?" stale":"")+'"></span>'+
         '<span class="nav-label"'+(isStale()?' style="color:var(--warning)"':'')+'>'+
         (isStale()?"Not updating":"Live")+'</span></button>'+
       '<button class="nav-item" data-act="theme">'+icon(I.sun)+'<span class="nav-label">Theme</span></button>'+
-      '<button class="nav-item" data-act="settings"'+(state.page==="settings"?' aria-current="page"':'')+'>'+
-        icon(I.gear)+'<span class="nav-label">Settings</span></button>'+
+      navItem("settings","Settings",null,I.gear)+
     '</div></nav>';
 }
-function isStale(){
-  if(!state.lastPoll) return true;
-  return (Date.now()-new Date(state.lastPoll).getTime()) > 45*60*1000;
-}
-function liveStrip(){
-  var stale=isStale();
-  // Saying "ACE Live" while nothing is polling is the wrong word in
-  // the one moment it matters. A stopped scheduler once went unnoticed
-  // for an hour because the only clue was a timestamp quietly ageing
-  // next to the word "Live".
-  var label = !state.lastPoll ? "No pull recorded"
-    : stale ? ("Not updating · Last pull "+ago(state.lastPoll))
-    : ("ACE Live · Updated "+ago(state.lastPoll));
-  return '<button class="live'+(stale?" live-stale":"")+'" data-act="live" title="Discovery status">'+
-    '<span class="dot'+(stale?' stale':'')+'"></span>'+label+'</button>';
-}
 
-/* ---------------- render: queue ---------------- */
-/* Counted by the server over the whole queue, not over the rows that
-   happen to be loaded. Counting locally made the header disagree with
-   itself: the same visit read "19 new" under one sort and "60 new"
-   under another, because it was really counting the page. */
-function newCount(){ return state.newSinceVisit || 0; }
-function refreshNewCount(){
-  if(!state.prevVisit){ state.newSinceVisit = 0; return Promise.resolve(); }
-  var p = params({since: state.prevVisit.toISOString(), limit: 1});
-  return get("/api/jobs", p).then(function(d){
-    state.newSinceVisit = d.total;
-  }).catch(function(){});
+/* ---------------- header ---------------- */
+function liveChip(){
+  var stale=isStale();
+  var label=!state.lastPoll?"No pull recorded":stale?("Not updating · "+ago(state.lastPoll)):("Live · updated "+ago(state.lastPoll));
+  return '<button class="live'+(stale?" live-stale":"")+'" data-act="live">'+
+    '<span class="dot'+(stale?" stale":"")+'"></span>'+label+'</button>';
 }
-function viewsBar(){
+function tabsBar(){
   var s=state.stats, latest=state.sessions[0];
-  var defs=[
-    ["all","All", s.qualifying_active_jobs],
-    ["matched","Highly matched", s.match_high],
-    ["new","New", state.prevVisit?newCount():null],
-    ["latest","Latest pull", latest?latest.qualifying_open_now:null]
-  ];
-  return '<div class="views" role="tablist" aria-label="Queue view">'+defs.map(function(d,i){
+  var defs=[["all","All",s.qualifying_active_jobs],
+            ["matched","Highly matched",s.match_high],
+            ["new","New for you",state.newSinceVisit||null],
+            ["latest","Latest pull",latest?latest.qualifying_open_now:null]];
+  return '<div class="tabs" role="tablist">'+defs.map(function(d){
     var on=state.view===d[0];
-    return '<button class="view" role="tab" data-view="'+d[0]+'" aria-selected="'+on+'" title="'+esc(d[1])+' ('+(i+1)+')">'+
-      '<span>'+d[1]+'</span>'+(d[2]!=null?'<span class="view-n">'+d[2]+'</span>':'')+'</button>';
+    return '<button class="tab" role="tab" data-view="'+d[0]+'" aria-selected="'+on+'">'+esc(d[1])+
+      (d[2]!=null?'<span class="tab-n">'+d[2]+'</span>':'')+'</button>';
   }).join("")+'</div>';
 }
-function railBar(){
-  var chips = Object.keys(state.filters).filter(function(k){
-    return !state.filters[k].pinned;
-  }).map(function(k){
+function controls(){
+  var chips=Object.keys(state.filters).filter(function(k){return !state.filters[k].pinned;}).map(function(k){
     var f=state.filters[k];
-    return '<span class="chip on">'+esc(f.label)+
-      '<button class="chip-x" data-unfilter="'+esc(k)+'" aria-label="Remove filter '+esc(f.label)+'">&times;</button></span>';
+    return '<button class="chip on" data-unfilter="'+esc(k)+'">'+esc(f.label)+'<span class="chip-x">&times;</span></button>';
   }).join("");
-  var many = Object.keys(state.filters).filter(function(k){return !state.filters[k].pinned;}).length>1;
-  return '<div class="rail">'+
+  var tierChips=["BIG_TECH","TOP_TIER","ESTABLISHED"].map(function(t){
+    var on=state.tiers.indexOf(t)>=0;
+    return '<button class="chip'+(on?(t==="BIG_TECH"?" on-gold":" on"):"")+'" data-tier="'+t+'">'+
+      TIER_LABEL[t]+'</button>';
+  }).join("");
+  return '<div class="controls">'+
     '<label class="search">'+icon(I.search)+
-      '<input id="q" type="search" placeholder="Search company, title, skill" value="'+esc(state.q)+'" aria-label="Search opportunities">'+
+      '<input id="q" type="search" placeholder="Search company, title, skill" value="'+esc(state.q)+'" aria-label="Search">'+
       '<span class="kbd">/</span></label>'+
-    '<button class="chip'+(state.filters.early_career_only?" on":"")+'" data-act="toggleearly"'+
-      ' aria-pressed="'+(!!state.filters.early_career_only)+'">Early career'+
-      (state.stats.labelled_new_grad!=null?'<span class="chip-n">'+state.stats.labelled_new_grad+'</span>':'')+
-    '</button>'+
-    '<button class="chip'+(state.recentOnly?" on":"")+'" data-act="togglerecent"'+
-      ' aria-pressed="'+(!!state.recentOnly)+'" title="'+
-      (state.recentOnly?"Showing only what ACE detected in the last "+RECENT_DAYS+" days. Nothing older is deleted.":"Showing every age. Postings ACE detected more than "+RECENT_DAYS+" days ago are included.")+'">'+
-      "Last "+RECENT_DAYS+" days"+
-    '</button>'+
+    '<span class="ctl-label">Sort</span>'+
+    SORTS.slice(0,3).map(function(o){
+      var i=state.sorts.indexOf(o[0]);
+      return '<button class="chip'+(i>=0?" on":"")+'" data-sort="'+o[0]+'" title="Sorts combine, in the order you pick them">'+
+        esc(o[1])+(i>=0?'<span class="chip-n">'+(i+1)+'</span>':'')+'</button>';
+    }).join("")+
+    '<button class="link-btn" data-act="sortmore">More</button>'+
+    '<span class="ctl-label">Tier</span>'+tierChips+
+    '<span class="ctl-label">Filter</span>'+
+    '<button class="chip'+(state.filters.early_career_only?" on":"")+'" data-act="toggleearly">Early career</button>'+
+    '<button class="chip'+(state.recentOnly?" on":"")+'" data-act="togglerecent">Last '+RECENT_DAYS+' days</button>'+
     chips+
-    '<button class="chip" data-act="filters">'+icon(I.plus)+'Filter</button>'+
-    (many?'<button class="link-btn" data-act="clearfilters">Clear all</button>':'')+
-    '<button class="link-btn" data-act="sort" title="Change sort">'+sortLabel()+'</button>'+
+    '<button class="chip" data-act="filters">'+icon(I.plus)+'More</button>'+
   '</div>';
 }
-function sortLabel(){
-  return {best_match:"Best match",newest:"Newest",oldest:"Oldest",new_grad_first:"New grad first"}[state.sort]||"Sort";
+
+/* ---------------- the table ---------------- */
+function headCell(label,sortKey,cls){
+  if(!sortKey) return '<th class="'+(cls||"")+'">'+label+'</th>';
+  var i=state.sorts.indexOf(sortKey);
+  return '<th class="sortable '+(cls||"")+(i>=0?" th-on":"")+'" data-sort="'+sortKey+'">'+label+
+    (i>=0?'<span class="th-i">'+(i+1)+'</span>':'')+'</th>';
 }
-function jobRow(j, showRead){
-  var t=tierOf(j.match_score), m=markOf(j);
-  var isNew = state.prevVisit && new Date(j.first_seen_at)>state.prevVisit;
-  var fit=expFit(j);
-  var meta=['<b>'+esc(j.company)+'</b>', esc(j.location),
-            '<span class="'+fit.cls+'">'+esc(fit.text)+'</span>'];
-  var move = tierMove(j);
-  var badge = move?'<span class="badge move">'+esc(move)+'</span>' : m.applied?'<span class="badge">'+icon(I.check)+' Applied '+shortDate(j.applied_at)+'</span>'
-    : isNew?'<span class="badge new">NEW</span>'
-    : m.saved?'<span class="badge">Saved</span>'
-    : m.reviewed?'<span class="badge">Reviewed</span>' : "";
-  var scoreHtml = t==="unscored"
-    ? 'Not scored'
-    : tierLabel(t)+' ·<span class="n">'+j.match_score+'</span>';
-  return (showRead?readLine():"")+
-  '<li class="row tier-'+t+(isDone(j)?' done':'')+'" role="option" data-id="'+j.id+'" tabindex="-1"'+
-      ' aria-selected="'+(state.selectedId===j.id)+'"'+
-      ' aria-label="'+esc(clean(j.title))+'. '+esc(j.company)+', '+esc(j.location)+'. '+
-      (t==="unscored"?"Not scored":("Match "+t+", "+j.match_score+" out of 100"))+'. Detected '+ago(j.first_seen_at)+'.">'+
-    '<div class="r-title">'+esc(clean(j.title))+'</div>'+
-    '<div class="r-score">'+scoreHtml+'</div>'+
-    '<div class="r-meta">'+meta.join(" · ")+'</div>'+
-    '<div class="r-side">'+
-      (t==="unscored"?'<span class="r-note">Description unavailable</span>':"")+
-      badge+
-      '<span class="r-when num" style="font-size:11.5px;color:var(--text-muted)">'+ago(j.first_seen_at)+'</span>'+
-      '<span class="r-acts">'+
-        '<button class="iconbtn'+(m.saved?' on saved':'')+'" data-mark="saved" data-id="'+j.id+'" aria-label="Save" aria-pressed="'+(!!m.saved)+'">'+icon(I.star)+'</button>'+
-        '<button class="iconbtn'+(m.reviewed?' on':'')+'" data-mark="reviewed" data-id="'+j.id+'" aria-label="Mark reviewed" aria-pressed="'+(!!m.reviewed)+'">'+icon(I.check)+'</button>'+
-        '<button class="iconbtn'+(m.dismissed?' on':'')+'" data-mark="dismissed" data-id="'+j.id+'" aria-label="Not relevant" aria-pressed="'+(!!m.dismissed)+'">'+icon(I.x)+'</button>'+
-        '<a class="iconbtn" href="'+esc(j.official_url)+'" target="_blank" rel="noopener" data-stop aria-label="Open official posting">'+icon(I.ext)+'</a>'+
-      '</span>'+
-    '</div></li>';
+function statusCell(j){
+  var m=markOf(j);
+  if(m.status) return '<span class="badge '+m.status+'">'+STATUS_LABEL[m.status]+
+    (j.applied_at?' · '+shortDate(j.applied_at):'')+'</span>';
+  var move=tierMove(j);
+  if(move) return '<span class="badge move">'+esc(move)+'</span>';
+  if(state.prevVisit && new Date(j.first_seen_at)>state.prevVisit) return '<span class="badge new">NEW</span>';
+  if(m.saved) return '<span class="badge saved">Saved</span>';
+  if(m.reviewed) return '<span class="badge">Reviewed</span>';
+  return "";
 }
-function readLine(){
-  return '<li class="readline" role="separator" aria-label="Last visit, '+clock(state.prevVisit)+'">'+
-    '<span>Last visit, '+clock(state.prevVisit)+'</span></li>';
+function jobRow(j){
+  var t=tierOf(j.match_score), m=markOf(j), fit=expFit(j), tier=j.company_tier||"OTHER";
+  return '<tr class="row t-'+tier+(isDone(j)?" done":"")+'" data-id="'+j.id+'" tabindex="0"'+
+      ' aria-selected="'+(state.selectedId===j.id)+'">'+
+    '<td class="c-rail"><div class="rail t-'+tier+'"></div></td>'+
+    '<td class="c-co"><div class="co-name">'+esc(j.company)+'</div>'+
+      (TIER_LABEL[tier]?'<div class="co-tier">'+TIER_LABEL[tier]+'</div>':'')+'</td>'+
+    '<td class="c-title"><a class="j-title" href="#job/'+j.id+'" data-open="'+j.id+'">'+esc(clean(j.title))+'</a></td>'+
+    '<td class="c-loc">'+esc(j.location)+'</td>'+
+    '<td class="c-exp"><span class="'+fit.c+'">'+esc(fit.t)+'</span></td>'+
+    '<td class="c-match">'+(t==="unscored"
+        ? '<span class="m-unscored">Not scored</span>'
+        : '<span class="m-tier m-'+t+'">'+tierLabel(t)+'</span><span class="m-n m-'+t+'">'+j.match_score+'</span>')+'</td>'+
+    '<td class="c-status">'+statusCell(j)+'</td>'+
+    '<td class="c-when">'+ago(j.first_seen_at)+'</td>'+
+    '<td class="c-act"><span class="acts">'+
+      '<button class="iconbtn'+(m.saved?" on":"")+'" data-mark="saved" data-id="'+j.id+'" aria-label="Save">'+icon(I.star)+'</button>'+
+      '<button class="iconbtn'+(m.reviewed?" on":"")+'" data-mark="reviewed" data-id="'+j.id+'" aria-label="Reviewed">'+icon(I.check)+'</button>'+
+      '<button class="iconbtn'+(m.dismissed?" on":"")+'" data-mark="dismissed" data-id="'+j.id+'" aria-label="Not relevant">'+icon(I.x)+'</button>'+
+      '<a class="iconbtn" href="'+esc(j.official_url)+'" target="_blank" rel="noopener" data-stop aria-label="Open posting">'+icon(I.ext)+'</a>'+
+    '</span></td></tr>';
+}
+function tableHead(){
+  return '<thead><tr>'+
+    '<th class="c-rail"></th>'+
+    headCell("Company","company","c-co")+
+    headCell("Role",null,"c-title")+
+    headCell("Location",null,"c-loc")+
+    headCell("Experience","new_grad_first","c-exp")+
+    headCell("Match","best_match","c-match")+
+    headCell("Status",null,"c-status")+
+    headCell("Seen","newest","c-when")+
+    '<th class="c-act"></th></tr></thead>';
 }
 function skeleton(){
   var out="";
-  for(var i=0;i<6;i++) out+='<li class="sk"><div class="sk-b" style="width:'+(52+i*4)+'%"></div><div class="sk-b" style="width:38%"></div></li>';
+  for(var i=0;i<8;i++) out+='<tr class="sk-row"><td class="c-rail"></td><td colspan="8">'+
+    '<div class="sk-b" style="width:'+(40+i*5)+'%"></div></td></tr>';
   return out;
 }
-function emptyState(){
-  var v=state.view, s=state.stats;
-  if(state.page==="saved") return box("No saved opportunities","Press s on any opportunity to save it here.");
-  if(state.page==="archive") return box("Nothing archived yet","Opportunities you mark reviewed or not relevant appear here.");
-  if(state.q) return box('Nothing found for "'+esc(state.q)+'"',"No opportunities match this search.",
-    '<button class="btn btn-secondary" data-act="clearq">Clear search</button>');
-  if(v==="matched") return box("No highly matched opportunities right now",
-    (s.match_medium||0)+" medium and "+(s.match_minimal||0)+" minimal matches are available in All.",
-    '<button class="btn btn-secondary" data-view="all">View all opportunities</button>');
-  if(v==="new") return box("Nothing new since your last visit",
-    "ACE last pulled "+(state.lastPoll?ago(state.lastPoll):"recently")+". You are up to date.",
-    '<button class="btn btn-secondary" data-view="all">View all opportunities</button>');
-  if(v==="latest"){
-    var l=state.sessions[0];
-    var prior=state.sessions.filter(function(x){return x.qualifying_discovered>0;})[0];
-    return box("Latest pull, "+(l?clock(l.started_at):"not recorded"),
-      (l?(l.jobs_discovered+" opportunities found, none passed your filters."):"No pull recorded yet.")+
-      (prior?(" The previous qualifying pull was "+dayName(prior.started_at).toLowerCase()+" at "+clock(prior.started_at)+" and added "+prior.qualifying_discovered+"."):""),
-      (prior?'<button class="btn btn-secondary" data-session="'+prior.id+'">View that pull</button> ':'')+
-      '<button class="btn btn-ghost" data-view="all">Back to all opportunities</button>');
-  }
-  return box("No opportunities","Nothing matches the current filters.",
-    Object.keys(state.filters).length?'<button class="btn btn-secondary" data-act="clearfilters">Clear filters</button>':'');
+function readRow(){
+  return '<tr class="readline"><td colspan="9"><span>Last visit, '+clock(state.prevVisit)+'</span></td></tr>';
 }
-function box(h,p,actions){
-  return '<div class="empty"><h3>'+h+'</h3><p>'+p+'</p>'+(actions||"")+'</div>';
-}
-function queueList(){
-  if(state.loading) return '<ul class="list">'+skeleton()+'</ul>';
+function queueTable(){
+  if(state.loading) return '<table class="tbl">'+tableHead()+'<tbody>'+skeleton()+'</tbody></table>';
   if(!state.items.length) return emptyState();
-  var showReadAt = -1;
-  if(state.sort==="newest" && state.prevVisit){
+  var readAt=-1;
+  if(state.sorts[0]==="newest"&&state.prevVisit){
     for(var i=0;i<state.items.length;i++){
-      if(new Date(state.items[i].first_seen_at) <= state.prevVisit){ showReadAt=i; break; }
+      if(new Date(state.items[i].first_seen_at)<=state.prevVisit){ readAt=i; break; }
     }
   }
-  var tail = state.loadingMore
-    ? '<li class="list-end">Loading more</li>'
-    : state.hasMore
-      ? '<li class="list-end">Showing '+state.items.length+' of '+state.total+'</li>'
-      : '<li class="list-end">End of queue · '+state.items.length+' opportunit'+(state.items.length===1?'y':'ies')+'</li>';
-  return '<ul class="list" id="list" role="listbox" aria-label="Opportunities" tabindex="0">'+
-    state.items.map(function(j,i){ return jobRow(j, i===showReadAt); }).join("")+tail+'</ul>';
+  var body=state.items.map(function(j,i){ return (i===readAt?readRow():"")+jobRow(j); }).join("");
+  var tail=state.loadingMore?"Loading more"
+    :state.hasMore?("Showing "+state.items.length+" of "+state.total)
+    :("End of list · "+state.items.length+" opportunit"+(state.items.length===1?"y":"ies"));
+  return '<table class="tbl" id="main">'+tableHead()+'<tbody>'+body+'</tbody></table>'+
+    '<div class="tail">'+tail+'</div>';
 }
-function queueHead(){
-  var titles={queue:"Queue",saved:"Saved",archive:"Archive"};
-  var n=newCount();
-  return '<div class="list-head">'+
-    '<div class="head-top"><h1 class="page-title">'+titles[state.page]+'</h1>'+
-      '<span class="head-total num">'+(state.loading?"":state.total)+'</span></div>'+
-    '<div class="head-live">'+liveStrip()+
-      (n&&state.page==="queue"
-        ? '<button class="since since-btn" data-act="shownew" title="Show them in arrival order">'+
-            n+' new since '+clock(state.prevVisit)+'</button>'
-        : '')+
-    '</div>'+
-    (state.page==="queue"?viewsBar():"")+railBar()+'</div>';
+function box(h,p,a){ return '<div class="empty"><h3>'+h+'</h3><p>'+p+'</p>'+(a||"")+'</div>'; }
+function emptyState(){
+  var s=state.stats;
+  if(state.page==="saved") return box("Nothing saved yet","Press s on any row, or use the star, to keep it here.");
+  if(state.page==="applied") return box("No applications recorded",
+    "Mark a job applied, or import your spreadsheet to bring your history in.",
+    '<button class="btn btn-secondary" data-act="importapps">Import applications</button>');
+  if(state.page==="archive") return box("Nothing archived","Jobs you mark reviewed or not relevant land here.");
+  if(state.q) return box('Nothing found for "'+esc(state.q)+'"',"No opportunities match this search.",
+    '<button class="btn btn-secondary" data-act="clearq">Clear search</button>');
+  if(state.tiers.length) return box("Nothing in these tiers",
+    "No opportunities from the employer tiers you selected.",
+    '<button class="btn btn-secondary" data-act="cleartiers">Clear tier filter</button>');
+  if(state.view==="matched") return box("No highly matched opportunities right now",
+    (s.match_medium||0)+" medium and "+(s.match_minimal||0)+" minimal matches are waiting in All.",
+    '<button class="btn btn-secondary" data-view="all">View all</button>');
+  if(state.view==="new") return box("Nothing new since your last visit",
+    "ACE last pulled "+(state.lastPoll?ago(state.lastPoll)+" ago":"recently")+". You are up to date.",
+    '<button class="btn btn-secondary" data-view="all">View all</button>');
+  if(state.view==="latest"){
+    var l=state.sessions[0], prior=state.sessions.filter(function(x){return x.qualifying_discovered>0;})[0];
+    return box("Latest pull, "+(l?clock(l.started_at):"not recorded"),
+      (l?(l.jobs_discovered+" opportunities found, none passed your filters."):"No pull recorded yet.")+
+      (prior?(" The last pull that added anything was "+dayName(prior.started_at).toLowerCase()+" at "+clock(prior.started_at)+"."):""),
+      '<button class="btn btn-secondary" data-nav="pulls">See all pulls</button> '+
+      '<button class="btn btn-ghost" data-view="all">Back to all</button>');
+  }
+  return box("Nothing here","No opportunities match the current filters.",
+    '<button class="btn btn-secondary" data-act="clearall">Clear filters</button>');
+}
+function queuePage(){
+  var titles={queue:"Queue",saved:"Saved",applied:"Applied",archive:"Archive"};
+  return '<div class="head">'+
+    '<div class="head-row"><h1 class="h1">'+titles[state.page]+'</h1>'+
+      '<span class="h1-count">'+(state.loading?"":state.total)+'</span>'+
+      '<span class="spacer"></span>'+
+      (state.newSinceVisit&&state.page==="queue"
+        ?'<button class="since-btn" data-act="shownew">'+state.newSinceVisit+' new since '+clock(state.prevVisit)+'</button>':'')+
+      liveChip()+'</div>'+
+    (state.page==="queue"?tabsBar():"")+controls()+'</div>'+
+    '<div class="scroll">'+queueTable()+'</div>';
 }
 
-/* ---------------- render: detail ---------------- */
-function detailPane(){
-  var j = state.items.filter(function(x){return x.id===state.selectedId;})[0];
-  if(!j) return '<section class="detail" aria-label="Opportunity detail"><div class="d-scroll">'+
-    '<div class="empty"><h3>No opportunity selected</h3><p>Choose one from the list, or use the arrow keys to move through it.</p></div></div></section>';
-  var t=tierOf(j.match_score), m=markOf(j);
+/* ---------------- job detail page ---------------- */
+function jobPage(){
+  var j=state.detailJob;
+  if(!j) return '<div class="page"><div class="wrap">'+box("Loading","Fetching this opportunity.")+'</div></div>';
+  var t=tierOf(j.match_score), m=markOf(j), tier=j.company_tier||"OTHER", fit=expFit(j);
   var why=[];
   if(j.role_family) why.push(j.role_family.replace(/_/g," ").toLowerCase().replace(/^\w/,function(c){return c.toUpperCase();}));
-  if(j.is_early_career) why.push("Early career");
+  if(j.is_early_career) why.push("Labelled early career");
   else if(j.required_experience_years!=null) why.push(j.required_experience_years+" years or less required");
   why.push("No eligibility blocker found");
-  var idx = state.items.map(function(x){return x.id;}).indexOf(j.id);
 
-  return '<section class="detail'+(state.detailOpen?' open':'')+'" aria-label="Opportunity detail">'+
-   '<div class="d-scroll">'+
-    '<div class="d-nav">'+
-      '<button class="iconbtn mobile-only" data-act="closedetail" aria-label="Back to list">'+icon(I.left)+'</button>'+
-      '<span style="flex:1"></span>'+
-      '<button class="iconbtn" data-step="-1" aria-label="Previous opportunity"'+(idx<=0?" disabled":"")+'>'+icon(I.left)+'</button>'+
-      '<button class="iconbtn" data-step="1" aria-label="Next opportunity"'+(idx>=state.items.length-1?" disabled":"")+'>'+icon(I.right)+'</button>'+
+  return '<div class="jp"><div class="jp-in">'+
+    '<button class="jp-back" data-act="back">'+icon(I.left,14)+'Back to '+(state.returnTo==="pulls"?"pulls":"queue")+'</button>'+
+    (TIER_LABEL[tier]?'<div class="jp-tier tier-'+tier+'">'+TIER_LABEL[tier]+'</div>':'')+
+    '<h1 class="jp-title">'+esc(clean(j.title))+'</h1>'+
+    '<div class="jp-meta"><span class="jp-co">'+esc(j.company)+'</span><span>·</span>'+
+      '<span>'+esc(j.location)+'</span><span>·</span>'+
+      '<span class="'+fit.c+'">'+esc(fit.t)+'</span>'+
+      (m.status?'<span class="badge '+m.status+'">'+STATUS_LABEL[m.status]+
+        (j.applied_at?' · '+shortDate(j.applied_at):'')+'</span>':'')+'</div>'+
+
+    '<div class="jp-grid"><div>'+
+      '<div class="card match"><p class="eyebrow">Resume match</p>'+
+        '<div class="score-row"><div>'+
+          '<div class="score-n m-'+t+'">'+(t==="unscored"?"n/a":j.match_score)+'</div>'+
+          '<div class="score-meta">'+(t==="unscored"
+            ? "ACE could not read this posting"
+            : tierLabel(t)+" against "+esc(state.resume?state.resume.label:"your resume"))+
+            ' <button class="info" data-act="scoreinfo" aria-label="What this means">i</button></div>'+
+        '</div></div>'+
+        (t!=="unscored"?'<div class="meter"><i style="width:'+j.match_score+'%"></i></div>':'')+
+      '</div>'+
+
+      (j.matched_skills.length?'<div class="card"><p class="eyebrow">Skills you have</p><div class="skills">'+
+        j.matched_skills.map(function(s){return '<span class="sk have">'+esc(s)+'</span>';}).join("")+'</div></div>':'')+
+
+      (j.related_skills.length?'<div class="card"><p class="eyebrow">Counted as partial credit</p><div class="rel">'+
+        j.related_skills.map(function(s){
+          var ev=(j.related_evidence||[]).filter(function(e){return e.skill===s;})[0];
+          return '<div class="rel-row"><span class="sk">'+esc(s)+'</span>'+
+            '<span class="rel-via">'+(ev?"via your "+esc(ev.via):"related to your experience")+'</span></div>';
+        }).join("")+'</div></div>':'')+
+
+      (j.missing_skills.length?'<div class="card"><p class="eyebrow">Not on your resume</p><div class="skills">'+
+        j.missing_skills.map(function(s){return '<span class="sk miss">'+esc(s)+'</span>';}).join("")+'</div></div>':'')+
+
+      '<div class="card"><p class="eyebrow">Why this is in your queue</p>'+
+        '<p class="why">'+esc(why.join(" · "))+'.<br>'+
+        'No sponsorship language was found in this posting.</p></div>'+
     '</div>'+
-    '<h2 class="d-title">'+esc(clean(j.title))+'</h2>'+
-    '<div class="d-sub">'+esc(j.company)+' · '+esc(j.location)+(yoe(j)?' · '+esc(yoe(j)):'')+'</div>'+
 
-    '<div class="scorecard '+t+'">'+
-      '<div><div class="sc-tier">'+tierLabel(t)+'</div>'+
-        '<div class="sc-sub">'+(t==="unscored"
-          ? "ACE could not read this posting"
-          : "Matched against "+esc(state.resume?state.resume.label:"your resume"))+
-        ' <button class="info" data-act="scoreinfo" aria-label="What the match score means">i</button></div></div>'+
-      '<div class="sc-n">'+(t==="unscored"?"no score":j.match_score)+'</div>'+
-    '</div>'+
+    '<div>'+
+      '<div class="card"><div class="acts-col">'+
+        '<a class="btn btn-primary" href="'+esc(j.official_url)+'" target="_blank" rel="noopener">Open official posting'+icon(I.ext)+'</a>'+
+        '<div class="status-grid">'+
+          '<button class="btn btn-ghost btn-sm'+(m.saved?" on":"")+'" data-mark="saved" data-id="'+j.id+'">'+icon(I.star,14)+'Save</button>'+
+          '<button class="btn btn-ghost btn-sm'+(m.reviewed?" on":"")+'" data-mark="reviewed" data-id="'+j.id+'">'+icon(I.check,14)+'Reviewed</button>'+
+          '<button class="btn btn-ghost btn-sm'+(m.dismissed?" on":"")+'" data-mark="dismissed" data-id="'+j.id+'">'+icon(I.x,14)+'Not relevant</button>'+
+          '<button class="btn btn-ghost btn-sm'+(m.applied?" on":"")+'" data-mark="applied" data-id="'+j.id+'">'+icon(I.briefcase,14)+'Applied</button>'+
+        '</div>'+
+      '</div></div>'+
 
-    (j.matched_skills.length?'<div class="sect"><p class="eyebrow">Matched</p><div class="skills">'+
-      j.matched_skills.map(function(s){return '<span class="skill">'+esc(s)+'</span>';}).join("")+'</div></div>':"")+
+      '<div class="card"><p class="eyebrow">Application status</p>'+
+        (m.applied
+          ?'<p class="why" style="margin:0 0 12px"><b>'+STATUS_LABEL[m.status||"applied"]+'</b>'+
+            (j.applied_at?', applied '+shortDate(j.applied_at):'')+
+            (j.status_changed_at&&m.status&&m.status!=="applied"?'<br>Updated '+shortDate(j.status_changed_at):'')+'</p>'
+          :'<p class="why" style="margin:0 0 12px">Not applied yet.</p>')+
+        '<div class="status-grid">'+STATUSES.map(function(st){
+          return '<button class="btn btn-ghost btn-sm'+(m.status===st?" on":"")+'" data-status="'+st+'" data-id="'+j.id+'">'+
+            STATUS_LABEL[st]+'</button>';
+        }).join("")+'</div></div>'+
 
-    (j.related_skills.length?'<div class="sect"><p class="eyebrow">Related</p><div class="rel">'+
-      j.related_skills.map(function(s){
-        var ev=(j.related_evidence||[]).filter(function(e){return e.skill===s;})[0];
-        return '<div class="rel-row"><span class="skill">'+esc(s)+'</span>'+
-          '<span class="rel-via">'+(ev?'via '+esc(ev.via):'counted as partial credit')+'</span></div>';
-      }).join("")+'</div></div>':"")+
-
-    (j.missing_skills.length?'<div class="sect"><p class="eyebrow">Missing</p><div class="skills">'+
-      j.missing_skills.map(function(s){return '<span class="skill miss">'+esc(s)+'</span>';}).join("")+'</div></div>':"")+
-
-    '<div class="d-rule"></div>'+
-    '<div class="sect"><p class="eyebrow">Why this is in your queue</p>'+
-      '<p class="why">'+esc(why.join(" · "))+'.<br>No sponsorship language found in this posting.</p></div>'+
-
-    '<div class="sect"><p class="eyebrow">Details</p><dl class="kv">'+
-      '<dt>First detected</dt><dd>'+new Date(j.first_seen_at).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})+'</dd>'+
-      '<dt>Last confirmed</dt><dd>'+new Date(j.last_seen_at).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})+'</dd>'+
-      '<dt>Source</dt><dd>'+esc(j.source)+(j.requirements_verified?", verified":", not readable")+'</dd>'+
-    '</dl></div>'+
-   '</div>'+
-   '<div class="d-foot">'+
-     '<a class="btn btn-primary" href="'+esc(j.official_url)+'" target="_blank" rel="noopener">Open official posting'+icon(I.ext)+'</a>'+
-     '<button class="btn btn-ghost'+(m.saved?' on':'')+'" data-mark="saved" data-id="'+j.id+'">'+icon(I.star)+(m.saved?"Saved":"Save")+'</button>'+
-     '<button class="btn btn-ghost'+(m.reviewed?' on':'')+'" data-mark="reviewed" data-id="'+j.id+'">'+icon(I.check)+'Reviewed</button>'+
-     '<button class="btn btn-ghost'+(m.dismissed?' on':'')+'" data-mark="dismissed" data-id="'+j.id+'">'+icon(I.x)+'Not relevant</button>'+
-     '<button class="btn btn-ghost'+(m.applied?' on':'')+'" data-mark="applied" data-id="'+j.id+'" title="Mark applied (a)">'+
-       icon(I.check)+(m.applied?'Applied '+shortDate(j.applied_at):'Applied')+'</button>'+
-   '</div></section>';
+      '<div class="card"><p class="eyebrow">Details</p><dl class="kv">'+
+        '<dt>First detected</dt><dd>'+new Date(j.first_seen_at).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})+'</dd>'+
+        '<dt>Last confirmed</dt><dd>'+new Date(j.last_seen_at).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})+'</dd>'+
+        '<dt>Source</dt><dd>'+esc(j.source)+(j.requirements_verified?", verified":", not readable")+'</dd>'+
+        (j.requisition_id?'<dt>Requisition</dt><dd>'+esc(j.requisition_id)+'</dd>':'')+
+      '</dl></div>'+
+    '</div></div>'+
+  '</div></div>';
 }
 
-/* ---------------- render: feed ---------------- */
-function feedPage(){
+/* ---------------- pulls page ---------------- */
+function pullsPage(){
   var groups=[], last=null;
+  var anyPullJobs=state.sessions.some(function(s){ return (s.jobs||[]).length>0; });
   state.sessions.forEach(function(s){
     var d=dayName(s.started_at);
     if(d!==last){ groups.push({day:d,rows:[]}); last=d; }
     groups[groups.length-1].rows.push(s);
   });
   var body = state.sessions.length ? groups.map(function(g){
-    return '<div class="daybar">'+esc(g.day)+'</div>'+g.rows.map(function(s){
-      var qual=s.qualifying_discovered;
-      var jobs=s.jobs||[];
-      var hidden=Math.max(0, qual-jobs.length);
-      var open=state.openSessions[s.id];
-      var shown=open?jobs:jobs.slice(0,3);
-      return '<div class="sess"><div class="sess-t">'+clock(s.started_at)+'</div><div>'+
-        '<div class="sess-h"><span>'+s.jobs_discovered+' found, '+qual+' qualifying</span>'+
-        (qual>0?'<button class="link-btn" data-session="'+s.id+'">Open in Queue &rarr;</button>':'')+'</div>'+
-        (qual===0?'<div class="sess-none">Nothing new passed your filters.</div>':'')+
-        (shown.length?'<div class="sess-jobs">'+shown.map(function(j){
-          var t=tierOf(j.match_score);
-          return '<div class="sess-job tier-'+t+'">'+
-            '<span class="sess-job-t">'+esc(clean(j.title))+'</span>'+
-            '<span class="sess-job-m">'+esc(j.company)+'</span>'+
-            '<span class="sess-job-s">'+(t==="unscored"?"Not scored":tierLabel(t)+" \u00b7 "+j.match_score)+'</span>'+
-          '</div>';
-        }).join("")+'</div>':'')+
-        // Runs vary from 4 to nearly 900 jobs. Without this one big run
-        // buries a week of feed.
-        (hidden>0?'<button class="link-btn sess-more" data-session="'+s.id+'">Show '+hidden+' more in Queue &rarr;</button>':'')+
-      '</div></div>';
-    }).join("");
-  }).join("") : box("No pulls recorded yet","ACE records a run once it has checked its sources.");
-  return '<div class="wide"><div class="list-head">'+
-    '<div class="head-top"><h1 class="page-title">Feed</h1></div>'+
-    '<div class="head-live">'+liveStrip()+'</div></div>'+
-    '<div class="page-scroll" style="margin-top:16px">'+body+'</div></div>';
+    return '<tr class="grouphead"><td colspan="9"><div class="gh">'+
+        '<span class="gh-t">'+esc(g.day)+'</span>'+
+        '<span class="gh-m">'+g.rows.length+' pull'+(g.rows.length===1?"":"s")+' · '+
+        g.rows.reduce(function(a,b){return a+b.qualifying_discovered;},0)+' qualifying</span></div></td></tr>'+
+      g.rows.map(function(s){
+        var jobs=s.jobs||[], hidden=Math.max(0,s.qualifying_discovered-jobs.length);
+        return '<tr class="grouphead"><td colspan="9"><div class="gh">'+
+            '<span class="gh-t" style="font-size:13px;font-weight:600">'+clock(s.started_at)+'</span>'+
+            '<span class="gh-m">'+s.jobs_discovered+' found · '+s.qualifying_discovered+' qualifying</span>'+
+            (s.qualifying_discovered>0?'<button class="link-btn" data-session="'+s.id+'">Open in Queue</button>':'')+
+            (s.qualifying_discovered===0?'<span class="gh-none">Nothing new passed your filters</span>':'')+
+          '</div></td></tr>'+
+          jobs.map(function(j){ return jobRow(j); }).join("")+
+          (hidden>0?'<tr class="grouphead"><td colspan="9"><button class="link-btn" data-session="'+s.id+'">Show '+hidden+' more from this pull</button></td></tr>':'');
+      }).join("");
+  }).join("") : "";
+
+  return '<div class="head">'+
+    '<div class="head-row"><h1 class="h1">Pulls</h1>'+
+      '<span class="h1-count">'+state.sessions.length+'</span>'+
+      '<span class="spacer"></span>'+liveChip()+'</div>'+
+    '<div class="controls"><p class="why" style="margin:0;max-width:70ch">'+
+      'Every time ACE checked its sources, newest first. A pull that found nothing still appears, because that is how you know it ran.'+
+    '</p></div></div>'+
+    '<div class="scroll">'+(state.sessions.length
+      // Column headings only earn their space once there is something
+      // under them. Every pull being empty is common and normal.
+      ? '<table class="tbl">'+(anyPullJobs?tableHead():"")+'<tbody>'+body+'</tbody></table>'+
+        '<div class="tail">End of recorded pulls</div>'
+      : '<div style="padding:0 var(--gutter)">'+box("No pulls recorded yet","ACE records a run once it has checked its sources.")+'</div>')+
+    '</div>';
 }
 
-/* ---------------- render: resumes ---------------- */
-function resumesPage(){
+/* ---------------- resume / skills / settings ---------------- */
+function resumePage(){
   var s=state.stats, r=state.resume;
   var total=(s.match_high||0)+(s.match_medium||0)+(s.match_minimal||0)+(s.match_unscored||0);
-  function bar(label,n,dotted){
-    var pct= total? Math.round(n/total*100):0;
-    return '<div class="bar-row"><span>'+label+'</span>'+
-      '<span class="bar-track"><span class="bar-fill'+(dotted?" dotted":"")+'" style="width:'+pct+'%"></span></span>'+
+  function bar(l,n,cls){
+    var pct=total?Math.round(n/total*100):0;
+    return '<div class="bar"><span>'+l+'</span><span class="bar-t"><span class="bar-f '+(cls||"")+'" style="width:'+pct+'%"></span></span>'+
       '<span class="bar-n">'+n+'</span></div>';
   }
-  var body = r ? (
-    '<div class="pad">'+
-    '<div class="head-top" style="margin-top:8px"><h2 style="font-size:15px;font-weight:600;margin:0">'+esc(r.label)+'</h2>'+
-      '<span class="badge" style="margin-left:10px">Active</span></div>'+
-    '<div class="sess-none">Uploaded '+new Date(r.uploaded_at).toLocaleDateString(undefined,{month:"short",day:"numeric"})+' · '+r.skills.length+' skills detected</div>'+
-    '<div class="bars">'+bar("HIGH",s.match_high||0)+bar("MEDIUM",s.match_medium||0)+
-      bar("MINIMAL",s.match_minimal||0)+bar("Not scored",s.match_unscored||0,true)+'</div>'+
-    '<div class="sect" style="margin-top:26px"><p class="eyebrow">Strongest coverage</p><div class="skills">'+
-      r.skills.slice(0,14).map(function(k){return '<span class="skill">'+esc(k)+'</span>';}).join("")+'</div></div>'+
+  var body = r ? '<div class="wrap">'+
+    '<div class="cards3 sect">'+
+      '<div class="stat"><div class="stat-n m-high">'+(s.match_high||0)+'</div><div class="stat-l">High matches</div></div>'+
+      '<div class="stat"><div class="stat-n">'+(s.match_medium||0)+'</div><div class="stat-l">Medium matches</div></div>'+
+      '<div class="stat"><div class="stat-n">'+r.skills.length+'</div><div class="stat-l">Skills detected</div></div>'+
+      '<div class="stat"><div class="stat-n">'+(state.markCounts.open_applications||0)+'</div><div class="stat-l">Open applications</div></div>'+
+    '</div>'+
+    '<div class="sect"><p class="eyebrow">'+esc(r.label)+' · uploaded '+shortDate(r.uploaded_at)+'</p>'+
+      '<div class="bars">'+bar("HIGH",s.match_high||0,"gold")+bar("MEDIUM",s.match_medium||0)+
+        bar("MINIMAL",s.match_minimal||0)+bar("Not scored",s.match_unscored||0,"dot")+'</div></div>'+
+    '<div class="sect"><p class="eyebrow">Strongest coverage</p><div class="skills">'+
+      r.skills.slice(0,18).map(function(k){return '<span class="sk have">'+esc(k)+'</span>';}).join("")+'</div></div>'+
     '<div class="sect"><p class="eyebrow">Most requested, missing from this resume</p>'+
-      (state.gap.length? state.gap.slice(0,8).map(function(g){
-        return '<div class="gap-row"><span>'+esc(g.skill)+'</span><span class="gap-n">in '+g.count+' of your queue</span>'+
-          '<button class="link-btn" data-skillq="'+esc(g.skill)+'">View jobs &rarr;</button></div>';
-      }).join("") : '<p class="why">No gaps recorded yet.</p>')+'</div>'+
-    '<div class="foot-note">Counted from postings ACE could read. '+(s.match_unscored||0)+' of '+total+' have no description available.</div>'+
+      (state.gap.length?state.gap.slice(0,8).map(function(g){
+        return '<div class="gaprow"><span>'+esc(g.skill)+'</span><span class="gap-n">in '+g.count+' of your queue</span>'+
+          '<button class="link-btn" data-skillq="'+esc(g.skill)+'">View jobs</button></div>';
+      }).join(""):'<p class="why">No gaps recorded yet.</p>')+'</div>'+
+    '<div class="note">Counted from postings ACE could read. '+(s.match_unscored||0)+' of '+total+' have no description available.</div>'+
+    '<div style="margin-top:20px"><button class="btn btn-secondary" data-act="upload">Replace resume</button></div>'+
     '</div>'
-  ) : box("No resume yet","Upload a resume to turn your queue into a ranked list.",
-      '<button class="btn btn-secondary" data-act="upload">Upload resume</button>');
-  return '<div class="wide"><div class="list-head"><div class="head-top"><h1 class="page-title">Resumes</h1></div></div>'+
-    '<div class="page-scroll" style="margin-top:12px">'+body+'</div></div>';
+   : '<div class="wrap">'+box("No resume yet","Upload one to turn your queue into a ranked list.",
+      '<button class="btn btn-primary" data-act="upload">Upload resume</button>')+'</div>';
+  return '<div class="head"><div class="head-row"><h1 class="h1">Resume</h1><span class="spacer"></span>'+liveChip()+'</div></div>'+
+    '<div class="page">'+body+'</div>';
 }
-
-/* ---------------- render: skills ---------------- */
 function skillsPage(){
-  var s=state.stats, have=state.resume?state.resume.skills:[];
-  var gap=state.gap;
-  var fams=[["","All roles"]].concat((state.facets.families||[]).map(function(f){
-    return [f.value, familyLabel(f.value)];
-  }));
-  var filters='<div class="rail" style="margin:0 0 18px">'+
-    fams.map(function(f){
-      return '<button class="chip'+(state.gapFamily===f[0]?" on":"")+'" data-gapfam="'+esc(f[0])+'">'+esc(f[1])+'</button>';
-    }).join("")+
-    '<span style="width:12px"></span>'+
-    [["","All matches"],[String(HIGH),"Roles I already fit"]].map(function(t){
-      return '<button class="chip'+(String(state.gapMin||"")===t[0]?" on":"")+'" data-gapmin="'+t[0]+'">'+t[1]+'</button>';
-    }).join("")+
-  '</div>';
-  var max = gap.length? gap[0].count : 1;
-  var body='<div class="pad">'+filters+
-    '<div class="sect"><p class="eyebrow">On your resume</p><div class="skills">'+
-      (have.length? have.map(function(k){return '<span class="skill">'+esc(k)+'</span>';}).join("")
-        : '<span class="rel-via">No resume uploaded.</span>')+'</div></div>'+
-    '<div class="sect"><p class="eyebrow">Gaps, ranked by demand</p><div class="bars">'+
-      (gap.length? gap.slice(0,12).map(function(g){ // eslint-disable-line
-        return '<div class="bar-row"><span>'+esc(g.skill)+'</span>'+
-          '<span class="bar-track"><span class="bar-fill" style="width:'+Math.round(g.count/max*100)+'%"></span></span>'+
-          '<span class="bar-n">'+g.count+'</span></div>';
-      }).join("") : '<p class="why">Upload a resume to see which skills your queue asks for.</p>')+'</div>'+
-      (gap.length?'<div style="margin-top:12px">'+gap.slice(0,5).map(function(g){
-        return '<button class="chip" data-skillq="'+esc(g.skill)+'" style="margin:0 6px 6px 0">'+esc(g.skill)+' · view jobs</button>';
-      }).join("")+'</div>':'')+'</div>'+
-    '<div class="foot-note">Counted from postings ACE could read. '+(s.match_unscored||0)+' of '+
-      ((s.match_high||0)+(s.match_medium||0)+(s.match_minimal||0)+(s.match_unscored||0))+' have no description available.</div></div>';
-  return '<div class="wide"><div class="list-head"><div class="head-top"><h1 class="page-title">Skills</h1>'+
-    '<span class="head-total">Across '+(s.qualifying_active_jobs||0)+' opportunities</span></div></div>'+
-    '<div class="page-scroll" style="margin-top:12px">'+body+'</div></div>';
+  var s=state.stats, have=state.resume?state.resume.skills:[], gap=state.gap;
+  var max=gap.length?gap[0].count:1;
+  var fams=[["","All roles"]].concat((state.facets.families||[]).map(function(f){return [f.value,familyLabel(f.value)];}));
+  return '<div class="head"><div class="head-row"><h1 class="h1">Skills</h1>'+
+      '<span class="h1-count">across '+(s.qualifying_active_jobs||0)+'</span><span class="spacer"></span>'+liveChip()+'</div>'+
+    '<div class="controls">'+
+      fams.map(function(f){return '<button class="chip'+(state.gapFamily===f[0]?" on":"")+'" data-gapfam="'+esc(f[0])+'">'+esc(f[1])+'</button>';}).join("")+
+      '<span class="ctl-label">Match</span>'+
+      [["","All"],[String(HIGH),"Roles I already fit"]].map(function(t){
+        return '<button class="chip'+(String(state.gapMin||"")===t[0]?" on":"")+'" data-gapmin="'+t[0]+'">'+t[1]+'</button>';
+      }).join("")+
+    '</div></div>'+
+    '<div class="page"><div class="wrap">'+
+      '<div class="sect"><p class="eyebrow">On your resume</p><div class="skills">'+
+        (have.length?have.map(function(k){return '<span class="sk have">'+esc(k)+'</span>';}).join("")
+          :'<span class="rel-via">No resume uploaded.</span>')+'</div></div>'+
+      '<div class="sect"><p class="eyebrow">Gaps, ranked by demand</p><div class="bars">'+
+        (gap.length?gap.slice(0,14).map(function(g){
+          return '<div class="bar"><span>'+esc(g.skill)+'</span><span class="bar-t">'+
+            '<span class="bar-f" style="width:'+Math.round(g.count/max*100)+'%"></span></span>'+
+            '<span class="bar-n">'+g.count+'</span></div>';
+        }).join(""):'<p class="why">Upload a resume to see what your queue asks for.</p>')+'</div>'+
+        (gap.length?'<div class="controls" style="padding-left:0">'+gap.slice(0,6).map(function(g){
+          return '<button class="chip" data-skillq="'+esc(g.skill)+'">'+esc(g.skill)+'</button>';}).join("")+'</div>':'')+
+      '</div>'+
+      '<div class="note">Counted from postings ACE could read. '+(s.match_unscored||0)+' of '+
+        ((s.match_high||0)+(s.match_medium||0)+(s.match_minimal||0)+(s.match_unscored||0))+' have no description available.</div>'+
+    '</div></div>';
 }
-
+var FAMILY_INITIALISMS={AI:1,ML:1,UI:1,UX:1,QA:1,IT:1,SRE:1};
+function familyLabel(v){
+  return String(v||"").split("_").map(function(w,i){
+    if(FAMILY_INITIALISMS[w]) return w;
+    var l=w.toLowerCase();
+    return i===0?l.charAt(0).toUpperCase()+l.slice(1):l;
+  }).join(" ");
+}
 function settingsPage(){
-  var f=state.facets, r=state.resume, s=state.stats;
+  var f=state.facets, r=state.resume, s=state.stats, m=state.markCounts;
   var theme=load("ace.theme","dark");
-  var sources=(f.sources||[]);
-  return '<div class="wide"><div class="list-head"><div class="head-top"><h1 class="page-title">Settings</h1></div></div>'+
-   '<div class="page-scroll" style="margin-top:12px"><div class="pad">'+
-
-   '<div class="sect"><p class="eyebrow">Appearance</p>'+
-     '<div class="rail" style="margin:0">'+
-       ["dark","light","system"].map(function(t){
-         return '<button class="chip'+(theme===t?" on":"")+'" data-settheme="'+t+'">'+t+'</button>';
-       }).join("")+
-     '</div>'+
-     '<p class="sess-none">Dark is ACE\'s default. System follows your operating system.</p></div>'+
-
-   '<div class="sect"><p class="eyebrow">Active resume</p>'+
-     (r? '<div class="gap-row"><span>'+esc(r.label)+'</span>'+
-           '<span class="gap-n">'+r.skills.length+' skills</span>'+
-           '<button class="link-btn" data-act="upload">Replace</button></div>'
-       : '<p class="why">No resume stored. Matching is unavailable until one is uploaded.</p>'+
-         '<button class="btn btn-secondary" data-act="upload" style="margin-top:10px">Upload resume</button>')+
-   '</div>'+
-
-   '<div class="sect"><p class="eyebrow">Application history</p>'+
-     '<p class="why">Import a spreadsheet of roles you have already applied to. '+
-     'ACE annotates the postings it can place and leaves the rest alone.</p>'+
-     '<button class="btn btn-secondary" data-act="importapps" style="margin-top:10px">Import applications</button>'+
-   '</div>'+
-
-   '<div class="sect"><p class="eyebrow">Your marks</p><dl class="kv">'+
-     '<dt>Saved</dt><dd>'+state.markCounts.saved+'</dd>'+
-     '<dt>Archived</dt><dd>'+state.markCounts.archived+'</dd>'+
-     '<dt>Applied</dt><dd>'+state.markCounts.applied+'</dd>'+
-   '</dl><p class="sess-none">Stored on the server, so they follow you between browsers.</p></div>'+
-
-   '<div class="sect"><p class="eyebrow">Sources, '+sources.length+' reporting</p>'+
-     (sources.length? '<dl class="kv">'+sources.map(function(o){
-        return '<dt>'+esc(o.value)+'</dt><dd>'+o.count+'</dd>';
-      }).join("")+'</dl>' : '<p class="why">No sources have reported yet.</p>')+
-     '<p class="sess-none">Counts are qualifying opportunities currently open, not everything stored.</p></div>'+
-
-   '<div class="sect"><p class="eyebrow">Queue</p><dl class="kv">'+
-     '<dt>Actionable</dt><dd>'+(s.qualifying_active_jobs||0)+'</dd>'+
-     '<dt>Description read</dt><dd>'+(s.verified_jobs||0)+'</dd>'+
-     '<dt>Not scored</dt><dd>'+(s.match_unscored||0)+'</dd>'+
-     '<dt>Last pull</dt><dd>'+(state.lastPoll?clock(state.lastPoll):"none")+'</dd>'+
-   '</dl></div>'+
-
-   '<div class="foot-note">Press Ctrl or Command plus K for the command palette.</div>'+
-   '</div></div></div>';
+  var byStatus=m.by_status||{};
+  return '<div class="head"><div class="head-row"><h1 class="h1">Settings</h1><span class="spacer"></span>'+liveChip()+'</div></div>'+
+    '<div class="page"><div class="wrap">'+
+    '<div class="sect"><p class="eyebrow">Appearance</p><div class="controls" style="padding-left:0">'+
+      ["dark","light","system"].map(function(t){
+        return '<button class="chip'+(theme===t?" on":"")+'" data-settheme="'+t+'">'+t+'</button>';}).join("")+
+      '</div><p class="why">Dark is the default. System follows your operating system.</p></div>'+
+    '<div class="sect"><p class="eyebrow">Application history</p>'+
+      '<p class="why">Import a spreadsheet of roles you have applied to. A status column is read if present, so re-importing an updated sheet moves jobs to rejected, interviewing and so on. Nothing is recorded until you confirm.</p>'+
+      '<div style="margin-top:12px"><button class="btn btn-secondary" data-act="importapps">Import applications</button></div></div>'+
+    '<div class="sect"><p class="eyebrow">Your pipeline</p><div class="cards3">'+
+      '<div class="stat"><div class="stat-n">'+(m.applied||0)+'</div><div class="stat-l">Applied</div></div>'+
+      '<div class="stat"><div class="stat-n">'+(m.open_applications||0)+'</div><div class="stat-l">Still open</div></div>'+
+      '<div class="stat"><div class="stat-n">'+(byStatus.rejected||0)+'</div><div class="stat-l">Rejected</div></div>'+
+      '<div class="stat"><div class="stat-n">'+(m.saved||0)+'</div><div class="stat-l">Saved</div></div>'+
+    '</div></div>'+
+    '<div class="sect"><p class="eyebrow">Active resume</p>'+
+      (r?'<div class="gaprow"><span>'+esc(r.label)+'</span><span class="gap-n">'+r.skills.length+' skills</span>'+
+        '<button class="link-btn" data-act="upload">Replace</button></div>'
+       :'<p class="why">No resume stored. Matching is unavailable until one is uploaded.</p>')+'</div>'+
+    '<div class="sect"><p class="eyebrow">Sources, '+(f.sources||[]).length+' reporting</p><dl class="kv">'+
+      (f.sources||[]).map(function(o){return '<dt>'+esc(o.value)+'</dt><dd>'+o.count+'</dd>';}).join("")+
+      '</dl><p class="why" style="margin-top:10px">Counts are qualifying opportunities currently open.</p></div>'+
+    '<div class="note">Press Ctrl or Command plus K for the command palette.</div>'+
+    '</div></div>';
 }
 
-/* ---------------- render root ---------------- */
+/* ---------------- render ---------------- */
 function render(keepScroll){
   var app=document.getElementById("app");
-  var prior = keepScroll ? (document.querySelector(".list-scroll")||{}).scrollTop : null;
+  var prior=keepScroll?(document.querySelector(".scroll")||{}).scrollTop:null;
   var main;
-  if(state.page==="feed") main=feedPage();
-  else if(state.page==="resumes") main=resumesPage();
+  if(state.page==="job") main=jobPage();
+  else if(state.page==="pulls") main=pullsPage();
+  else if(state.page==="resumes") main=resumePage();
   else if(state.page==="skills") main=skillsPage();
   else if(state.page==="settings") main=settingsPage();
-  else main='<div class="list-col">'+
-      '<div class="topbar">'+
-        '<button class="iconbtn" data-act="menu" aria-label="Menu">'+icon(I.menu)+'</button>'+
-        '<span class="brand-name" style="font-size:13px">ACE</span></div>'+
-      queueHead()+'<div class="list-scroll">'+queueList()+'</div></div>'+detailPane();
-  app.innerHTML = sidebar()+main+
-    (state.menuOpen?'<div class="scrim" data-act="closemenu"></div>':"");
-  if(state.toast) app.insertAdjacentHTML("beforeend", state.toast);
+  else main=queuePage();
 
-  var scroller = document.querySelector(".list-scroll");
-  if(scroller){
-    if(prior!=null) scroller.scrollTop = prior;
-    scroller.addEventListener("scroll", onListScroll, {passive:true});
+  app.innerHTML=sidebar()+
+    '<div class="main">'+
+      '<div class="topbar"><button class="iconbtn" data-act="menu" aria-label="Menu">'+icon(I.menu)+'</button>'+
+      '<span class="brand-name" style="font-size:13px">ACE</span></div>'+
+      main+'</div>'+
+    (state.menuOpen?'<div class="scrim" data-act="closemenu"></div>':"")+
+    (state.toast||"");
+
+  var sc=document.querySelector(".scroll");
+  if(sc){
+    if(prior!=null) sc.scrollTop=prior;
+    sc.addEventListener("scroll",onScroll,{passive:true});
   }
   var sel=document.querySelector('.row[aria-selected="true"]');
-  if(sel && state.scrollTo){ sel.scrollIntoView({block:"nearest"}); state.scrollTo=false; }
+  if(sel&&state.scrollTo){ sel.scrollIntoView({block:"nearest"}); state.scrollTo=false; }
 }
-
-function onListScroll(e){
+function onScroll(e){
   var el=e.currentTarget;
-  if(el.scrollHeight - el.scrollTop - el.clientHeight < 600) loadJobs(true);
+  if(state.page!=="pulls" && el.scrollHeight-el.scrollTop-el.clientHeight<700) loadJobs(true);
 }
 
-/* ---------------- interaction ---------------- */
-function setPage(p){ state.page=p; state.selectedId=null; state.menuOpen=false; closePop();
-  if(p==="queue"||p==="saved"||p==="archive") loadJobs(); else render(); }
-function isJobPage(){ return ["queue","saved","archive"].indexOf(state.page)>=0; }
-function setView(v){ goTo("queue", v); }
-/* Changes page and view together and loads exactly once. Calling
-   setPage then setView fired two overlapping requests, and the older
-   one could land last, leaving the list disagreeing with the control. */
-function goTo(page, view){
+/* ---------------- navigation ---------------- */
+function isJobList(){ return ["queue","saved","applied","archive"].indexOf(state.page)>=0; }
+function goTo(page,view){
   state.page=page; state.menuOpen=false; state.selectedId=null; closePop();
-  if(view){
-    state.view=view;
-    if(view==="new"||view==="latest") state.sort="newest";
-    else if(view==="matched") state.sort="best_match";
-  }
-  if(isJobPage()) loadJobs(); else render();
+  if(view){ state.view=view; if(view==="new"||view==="latest") state.sorts=["newest"]; }
+  if(isJobList()) loadJobs(); else render();
 }
-function select(id, scroll){ state.selectedId=id; state.scrollTo=!!scroll;
-  if(!isWide()) state.detailOpen=true; render(); }
+function setPage(p){ goTo(p); }
+function openJob(id){
+  var j=jobById(id);
+  state.returnTo=state.page;
+  state.detailJob=j||null;
+  state.page="job"; state.jobId=id; closePop();
+  render();
+  if(!j){
+    // Reached by a direct link rather than from the list.
+    get("/api/jobs",new URLSearchParams({limit:"1"})).then(function(){}).catch(function(){});
+  }
+  window.scrollTo(0,0);
+}
 function step(d){
   var ids=state.items.map(function(j){return j.id;});
   var i=ids.indexOf(state.selectedId);
   var n=Math.max(0,Math.min(ids.length-1,(i<0?0:i+d)));
-  if(ids[n]!=null) select(ids[n], true);
+  if(ids[n]!=null){ state.selectedId=ids[n]; state.scrollTo=true; render(); }
 }
-function putMark(id, body){
-  return fetch(API+"/api/marks/"+id, {
-    method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)
-  }).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); });
+function toggleSort(key){
+  var i=state.sorts.indexOf(key);
+  if(i>=0) state.sorts.splice(i,1); else state.sorts.push(key);
+  if(state.sorts.length>3) state.sorts.shift();
+  loadJobs();
 }
-function applyMark(j, res){
-  j.is_saved=res.is_saved; j.review_state=res.review_state; j.applied_at=res.applied_at;
+function toggleTier(t){
+  var i=state.tiers.indexOf(t);
+  if(i>=0) state.tiers.splice(i,1); else state.tiers.push(t);
+  loadShell().then(function(){ loadJobs(); });
 }
-function mark(id, key, advance){
-  var j=jobById(id);
-  if(!j){ showToast("That opportunity is no longer on screen"); render(); return; }
-  var was=markOf(j)[key];
-  var body = key==="saved" ? {saved:!was}
-           : key==="applied" ? {applied:!was}
-           : was ? {clear_review:true} : {review_state:key};
-  var undoBody = key==="saved" ? {saved:was}
-           : key==="applied" ? {applied:was}
-           : was ? {review_state:key} : {clear_review:true};
-  var label={saved:was?"Removed from saved":"Saved",
-             reviewed:was?"Review cleared":"Marked reviewed",
-             dismissed:was?"Restored":"Marked not relevant",
-             applied:was?"Applied cleared":"Marked applied"}[key];
 
-  putMark(id, body).then(function(res){
-    applyMark(j, res);
-    refreshMarkCounts();
-    showToast(label, function(){
-      putMark(id, undoBody).then(function(back){
-        applyMark(j, back); refreshMarkCounts(); render();
-      });
-    });
-    // On a page defined by a mark, undoing it should remove the row.
-    if((state.page==="saved" && key==="saved" && was) ||
-       (state.page==="archive" && (key==="reviewed"||key==="dismissed") && was)){
-      state.items = state.items.filter(function(x){ return x.id!==id; });
-      state.total = Math.max(0, state.total-1);
-      if(state.selectedId===id) state.selectedId = state.items.length?state.items[0].id:null;
-    }
-    if(advance && key!=="saved" && key!=="applied" && !was) step(1); else render();
-  }).catch(function(){ showToast("Could not save that change"); render(); });
-}
-function reloadGap(){
-  var p=new URLSearchParams();
-  if(state.gapFamily) p.set("family", state.gapFamily);
-  if(state.gapMin!=null) p.set("min_match", state.gapMin);
-  return get("/api/resume", p).then(function(d){
-    state.resume=d.resume; state.gap=d.skills_gap||[]; render();
-  }).catch(function(){ render(); });
-}
-function refreshMarkCounts(){
-  return get("/api/marks").then(function(d){ state.markCounts=d; }).catch(function(){});
-}
+/* ---------------- toast / popovers ---------------- */
 var toastTimer=null;
-function showToast(msg, undo){
+function showToast(msg,undo){
   state.toast='<div class="toast" role="status"><span>'+esc(msg)+'</span>'+
-    '<button class="link-btn" data-act="undo">Undo</button></div>';
-  state.undoFn=undo;
+    (undo?'<button class="link-btn" data-act="undo">Undo</button>':'')+'</div>';
+  state.undoFn=undo||null;
   clearTimeout(toastTimer);
   toastTimer=setTimeout(function(){ state.toast=null; state.undoFn=null; render(); },4000);
 }
 function closePop(){ var p=document.querySelector(".pop"); if(p) p.remove(); }
-function openPop(anchor, html){
+function openPop(anchor,html){
   closePop();
   var d=document.createElement("div"); d.className="pop"; d.innerHTML=html;
   document.body.appendChild(d);
   var r=anchor.getBoundingClientRect(), w=d.offsetWidth, h=d.offsetHeight;
   var vw=window.innerWidth||document.documentElement.clientWidth;
   var vh=window.innerHeight||document.documentElement.clientHeight;
-  d.style.left=Math.max(8,Math.min(vw-w-8, r.left))+"px";
-  d.style.top=(r.bottom+6+h>vh? Math.max(8,r.top-h-6): r.bottom+6)+"px";
+  d.style.left=Math.max(8,Math.min(vw-w-8,r.left))+"px";
+  d.style.top=(r.bottom+6+h>vh?Math.max(8,r.top-h-6):r.bottom+6)+"px";
   return d;
 }
-function filterPop(anchor){
+function sortMorePop(a){
+  openPop(a,'<h4>Sort by</h4><p>Sorts combine. The number shows the order they apply in.</p><div class="pop-list">'+
+    SORTS.map(function(o){
+      var i=state.sorts.indexOf(o[0]);
+      return '<button class="pop-opt'+(i>=0?" on":"")+'" data-sort="'+o[0]+'">'+o[1]+
+        (i>=0?'<span class="n">'+(i+1)+'</span>':'')+'</button>';
+    }).join("")+'</div>');
+}
+function filterPop(a){
   var f=state.facets;
-  function grp(title,list,param,type){
+  function grp(t,list,param){
     if(!list||!list.length) return "";
-    return '<div class="pop-group">'+title+'</div>'+list.slice(0,8).map(function(o){
+    return '<div class="pop-group">'+t+'</div>'+list.slice(0,8).map(function(o){
       return '<button class="pop-opt" data-addfilter="'+param+'" data-value="'+esc(o.value)+'">'+
-        esc(String(o.value).replace(/_/g," ").toLowerCase())+'<span class="n">'+o.count+'</span></button>';
-    }).join("");
+        esc(String(o.value).replace(/_/g," ").toLowerCase())+'<span class="n">'+o.count+'</span></button>';}).join("");
   }
-  openPop(anchor,'<h4>Add a filter</h4><div class="pop-list">'+
+  openPop(a,'<h4>Add a filter</h4><div class="pop-list">'+
     '<div class="pop-group">Quick</div>'+
     '<button class="pop-opt" data-addflag="verified_only">Description available</button>'+
-    '<button class="pop-opt" data-addfilter="mark" data-value="applied">Applied</button>'+
-    '<button class="pop-opt" data-addfilter="mark" data-value="saved">Saved</button>'+
     grp("Company",f.companies,"company")+grp("Source",f.sources,"source")+grp("Role family",f.families,"family")+
-  '</div>');
+    '</div>');
 }
-function sortPop(anchor){
-  var opts=[["best_match","Best match"],["newest","Newest"],["oldest","Oldest"],["new_grad_first","New grad first"]];
-  openPop(anchor,'<h4>Sort by</h4><div class="pop-list">'+opts.map(function(o){
-    return '<button class="pop-opt" data-sort="'+o[0]+'">'+o[1]+(state.sort===o[0]?' <span class="n">current</span>':'')+'</button>';
-  }).join("")+'</div>');
-}
-function livePop(anchor){
+function livePop(a){
   var l=state.sessions[0], stale=isStale();
-  openPop(anchor,'<h4>'+(stale?"ACE is not updating":"Discovery status")+'</h4>'+
-    '<p>Last pull '+(state.lastPoll?clock(state.lastPoll)+", "+ago(state.lastPoll):"not recorded")+'.</p>'+
+  openPop(a,'<h4>'+(stale?"ACE is not updating":"Discovery status")+'</h4>'+
+    '<p>Last pull '+(state.lastPoll?clock(state.lastPoll)+", "+ago(state.lastPoll)+" ago":"not recorded")+'.</p>'+
     (stale
-      ? '<p>ACE polls every few minutes, so a gap this long means the '+
-        'scheduler has stopped. Everything already found is still here '+
-        'and nothing has been lost.</p>'+
-        '<p>On the machine running ACE: <b>docker compose ps</b> to see '+
-        'its state, then <b>docker compose up -d scheduler</b>.</p>'
-      : (l?'<p>'+l.jobs_discovered+' opportunities found, '+l.qualifying_discovered+' passed your filters.</p>':'')+
-        '<p>'+state.sessions.length+' runs recorded.</p>'));
+      ?'<p>ACE polls every few minutes, so a gap this long means the scheduler has stopped. Everything already found is still here.</p>'+
+       '<p>On the machine running ACE: <b>docker compose ps</b>, then <b>docker compose up -d scheduler</b>.</p>'
+      :(l?'<p>'+l.jobs_discovered+' found, '+l.qualifying_discovered+' passed your filters.</p>':'')+
+       '<p>'+state.sessions.length+' pulls recorded.</p>'));
 }
-function scorePop(anchor){
-  openPop(anchor,'<h4>Match score</h4>'+
+function scorePop(a){
+  openPop(a,'<h4>Match score</h4>'+
     '<p>How much of this posting’s stated requirements your active resume already evidences. Related skills count as a partial match.</p>'+
     '<p>It helps you decide what to read first. It does not predict whether you will be hired.</p>');
 }
 
-document.addEventListener("click", function(e){
-  var pal=e.target.closest("[data-pal]");
-  if(pal){ runPalette(parseInt(pal.dataset.pal,10)); return; }
-  var t=e.target.closest("[data-nav],[data-view],[data-act],[data-mark],[data-step],[data-unfilter],[data-addfilter],[data-addflag],[data-sort],[data-session],[data-skillq],[data-settheme],[data-pal],[data-gapfam],[data-gapmin],.row");
-  if(!t){ if(!e.target.closest(".pop")) closePop(); return; }
-  if(e.target.closest("[data-stop]")) { e.stopPropagation(); return; }
-  var d=t.dataset;
-
-  if(d.nav){ setPage(d.nav); return; }
-  if(d.view){ setView(d.view); return; }
-  if(d.step){ e.stopPropagation(); step(parseInt(d.step,10)); return; }
-  if(d.mark){ e.stopPropagation(); mark(parseInt(d.id,10), d.mark, false); return; }
-  if(d.unfilter){ delete state.filters[d.unfilter]; loadShell().then(function(){ loadJobs(); }); return; }
-  if(d.addfilter){ state.filters[d.addfilter+":"+d.value]={param:d.addfilter,value:d.value,type:"value",
-      label:String(d.value).replace(/_/g," ").toLowerCase()}; closePop(); loadShell().then(function(){ loadJobs(); }); return; }
-  if(d.addflag){ state.filters[d.addflag]={param:d.addflag,type:"flag",
-      label:d.addflag==="early_career_only"?"Early career":"Description available"}; closePop(); loadShell().then(function(){ loadJobs(); }); return; }
-  if(d.sort){ state.sort=d.sort; closePop(); loadJobs(); return; }
-  if(d.session){ state.page="queue"; state.view="latest"; state.sort="newest";
-    var sid=parseInt(d.session,10);
-    var i=state.sessions.map(function(s){return s.id;}).indexOf(sid);
-    if(i>0){ var picked=state.sessions[i]; state.sessions=[picked].concat(state.sessions.filter(function(s){return s.id!==sid;})); }
-    loadJobs(); return; }
-  if(d.skillq){ state.page="queue"; state.view="all"; state.q=d.skillq; loadJobs(); return; }
-  if(d.gapfam!==undefined){ state.gapFamily=d.gapfam; reloadGap(); return; }
-  if(d.gapmin!==undefined){ state.gapMin=d.gapmin?parseInt(d.gapmin,10):null; reloadGap(); return; }
-  if(d.settheme){ save("ace.theme",d.settheme); applyTheme(d.settheme); render(); return; }
-
-  if(d.act){
-    if(d.act==="toggleearly"){
-      if(state.filters.early_career_only) delete state.filters.early_career_only;
-      else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Early career",pinned:true};
-      loadShell().then(function(){ loadJobs(); }); return; }
-    if(d.act==="togglerecent"){
-      state.recentOnly = !state.recentOnly;
-      showToast(state.recentOnly
-        ? "Showing the last "+RECENT_DAYS+" days"
-        : "Showing every age. Nothing was deleted; this only widens what you see.");
-      loadShell().then(function(){ loadJobs(); }); return; }
-    // The read line only means anything in arrival order, so this
-    // switches to it rather than drawing a boundary through a
-    // best-match list where new arrivals are scattered.
-    if(d.act==="shownew"){ state.sort="newest"; goTo("queue","all"); return; }
-    if(d.act==="theme"){ cycleTheme(); return; }
-    if(d.act==="filters"){ filterPop(t); return; }
-    if(d.act==="sort"){ sortPop(t); return; }
-    if(d.act==="live"){ livePop(t); return; }
-    if(d.act==="scoreinfo"){ scorePop(t); return; }
-    if(d.act==="clearfilters"){ state.filters={}; loadShell().then(function(){ loadJobs(); }); return; }
-    if(d.act==="clearq"){ state.q=""; loadJobs(); return; }
-    if(d.act==="closedetail"){ state.detailOpen=false; render(); return; }
-    if(d.act==="undo"){ if(state.undoFn) state.undoFn(); state.toast=null; render(); return; }
-    if(d.act==="menu"){ state.menuOpen=true; render(); return; }
-    if(d.act==="closemenu"){ state.menuOpen=false; render(); return; }
-    if(d.act==="upload"){ pickResume(); return; }
-    if(d.act==="importapps"){ pickApplications(); return; }
-    if(d.act==="doimport"){ runImport(); return; }
-    if(d.act==="closeimport"){ closeImport(); return; }
-    if(d.act==="settings"){ setPage("settings"); return; }
-    if(d.act==="palette"){ openPalette(); return; }
-  }
-  var row=e.target.closest(".row");
-  if(row) select(parseInt(row.dataset.id,10), false);
-});
-
-document.addEventListener("input", function(e){
-  if(e.target.id==="q"){
-    state.q=e.target.value;
-    clearTimeout(state.qt);
-    state.qt=setTimeout(function(){ var c=document.getElementById("q"); var pos=c&&c.selectionStart;
-      loadJobs().then(function(){ var n=document.getElementById("q"); if(n){ n.focus(); if(pos!=null) n.setSelectionRange(pos,pos);} }); },260);
-  }
-});
-
-document.addEventListener("keydown", function(e){
-  var typing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
-  if(e.key==="/" && !typing){ e.preventDefault(); var q=document.getElementById("q"); if(q) q.focus(); return; }
-  if((e.metaKey||e.ctrlKey) && (e.key==="k"||e.key==="K")){ e.preventDefault(); openPalette(); return; }
-  if(state.palHits){
-    if(e.key==="ArrowDown"){ e.preventDefault(); state.palIndex=Math.min(state.palHits.length-1,state.palIndex+1); drawPalette(document.getElementById("pal-q").value); return; }
-    if(e.key==="ArrowUp"){ e.preventDefault(); state.palIndex=Math.max(0,state.palIndex-1); drawPalette(document.getElementById("pal-q").value); return; }
-    if(e.key==="Enter"){ e.preventDefault(); runPalette(state.palIndex); return; }
-    if(e.key==="Escape"){ e.preventDefault(); closePalette(); return; }
-  }
-  if(typing){ if(e.key==="Escape"){ e.target.blur(); } return; }
-  if(e.key==="Escape"){ if(state.importData){ closeImport(); return; }
-    if(state.menuOpen){ state.menuOpen=false; render(); return; }
-    if(document.querySelector(".pop")) closePop();
-    else if(state.detailOpen){ state.detailOpen=false; render(); } return; }
-  if(!isJobPage()) return;
-  var k=e.key;
-  if(k==="ArrowDown"||k==="j"){ e.preventDefault(); step(1); }
-  else if(k==="ArrowUp"||k==="k"){ e.preventDefault(); step(-1); }
-  else if(k==="Enter"&&state.selectedId){ var j=state.items.filter(function(x){return x.id===state.selectedId;})[0];
-    if(j) window.open(j.official_url,"_blank","noopener"); }
-  else if(k==="s"&&state.selectedId){ mark(state.selectedId,"saved",false); }
-  else if(k==="e"&&state.selectedId){ mark(state.selectedId,"reviewed",true); }
-  else if(k==="x"&&state.selectedId){ mark(state.selectedId,"dismissed",true); }
-  else if(k==="a"&&state.selectedId){ mark(state.selectedId,"applied",false); }
-  else if(k>="1"&&k<="4"&&state.page==="queue"){ setView(["all","matched","new","latest"][parseInt(k,10)-1]); }
-});
-
 /* ---------------- resume upload ---------------- */
 function pickResume(){
   var input=document.createElement("input");
-  input.type="file";
-  input.accept=".pdf,.docx,.txt";
-  input.addEventListener("change", function(){
-    var file=input.files && input.files[0];
-    if(!file) return;
-    state.uploading=true; render();
-    var body=new FormData(); body.append("file", file);
-    fetch(API+"/api/resume", {method:"POST", body:body}).then(function(r){
+  input.type="file"; input.accept=".pdf,.docx,.txt";
+  input.addEventListener("change",function(){
+    var file=input.files&&input.files[0]; if(!file) return;
+    var body=new FormData(); body.append("file",file);
+    showToast("Reading "+file.name); render();
+    fetch(API+"/api/resume",{method:"POST",body:body}).then(function(r){
       return r.json().then(function(d){ if(!r.ok) throw new Error(d.detail||"upload failed"); return d; });
     }).then(function(d){
-      state.uploading=false;
       showToast("Resume stored, "+d.jobs_scored+" jobs rescored, "+d.skills.length+" skills found");
-      state.selectedId=null;
       loadShell().then(function(){ loadJobs(); });
-    }).catch(function(err){
-      state.uploading=false;
-      showToast(String(err.message||"Could not read that file"));
-      render();
-    });
+    }).catch(function(e){ showToast(String(e.message||"Could not read that file")); render(); });
   });
   input.click();
 }
@@ -1414,39 +1266,26 @@ function pickResume(){
 /* ---------------- application import ---------------- */
 function pickApplications(){
   var input=document.createElement("input");
-  input.type="file";
-  input.accept=".csv,.tsv,.txt,.xlsx,.xlsm";
-  input.addEventListener("change", function(){
-    var file=input.files && input.files[0];
-    if(!file) return;
-    var body=new FormData(); body.append("file", file);
+  input.type="file"; input.accept=".csv,.tsv,.txt,.xlsx,.xlsm";
+  input.addEventListener("change",function(){
+    var file=input.files&&input.files[0]; if(!file) return;
+    var body=new FormData(); body.append("file",file);
     showToast("Reading "+file.name); render();
-    fetch(API+"/api/applications/preview", {method:"POST", body:body}).then(function(r){
+    fetch(API+"/api/applications/preview",{method:"POST",body:body}).then(function(r){
       return r.json().then(function(d){ if(!r.ok) throw new Error(d.detail||"Could not read that file"); return d; });
     }).then(function(d){
-      state.toast=null;
-      state.importData=d;
-      state.importChoice={};
-      d.rows.forEach(function(r){
-        if(r.status==="matched") state.importChoice[r.row_number]=r.job_id;
-      });
+      state.toast=null; state.importData=d; state.importChoice={};
+      d.rows.forEach(function(r){ if(r.status==="matched") state.importChoice[r.row_number]=r.job_id; });
       renderImport();
-    }).catch(function(err){ showToast(String(err.message||"Could not read that file")); render(); });
+    }).catch(function(e){ showToast(String(e.message||"Could not read that file")); render(); });
   });
   input.click();
 }
-function closeImport(){
-  var el=document.querySelector(".sheet-wrap"); if(el) el.remove();
-  state.importData=null;
-}
-function importSelectedCount(){
-  return Object.keys(state.importChoice||{}).filter(function(k){
-    return state.importChoice[k];
-  }).length;
-}
+function closeImport(){ var el=document.querySelector(".sheet-wrap"); if(el) el.remove(); state.importData=null; }
+function importCount(){ return Object.keys(state.importChoice||{}).filter(function(k){return state.importChoice[k];}).length; }
 function renderImport(){
   var d=state.importData; if(!d) return;
-  var existing=document.querySelector(".sheet-wrap"); if(existing) existing.remove();
+  var ex=document.querySelector(".sheet-wrap"); if(ex) ex.remove();
   var c=d.counts||{};
   var rows=d.rows.map(function(r){
     var chosen=state.importChoice[r.row_number];
@@ -1456,187 +1295,241 @@ function renderImport(){
         '<option value="">Skip, '+r.candidates.length+' possible matches</option>'+
         r.candidates.map(function(cd){
           return '<option value="'+cd.job_id+'"'+(String(chosen)===String(cd.job_id)?" selected":"")+'>'+
-            esc(cd.company)+', '+esc(clean(cd.title))+'</option>';
-        }).join("")+'</select></div>';
+            esc(cd.company)+', '+esc(clean(cd.title))+'</option>';}).join("")+'</select></div>';
     }
-    var note = r.status==="matched" ? ("Matched by "+esc(r.method))
-      : r.status==="ambiguous" ? "Several postings fit. Choose one, or skip."
-      : r.status==="unusable" ? "Needs a role title or a link."
-      : "No stored posting matches this.";
-    return '<div class="imp-row">'+
-      '<span class="imp-tag imp-'+r.status+'">'+r.status+'</span>'+
-      '<div class="imp-what"><b>'+esc(r.company||"Unknown")+'</b>, '+esc(clean(r.title)||"untitled")+
+    var note=r.status==="matched"?("Matched by "+esc(r.method))
+      :r.status==="ambiguous"?"Several postings fit. Choose one, or skip."
+      :r.status==="unusable"?"Needs a role title or a link."
+      :"No stored posting matches this.";
+    return '<div class="imp"><span class="imp-tag imp-'+r.status+'">'+r.status+'</span>'+
+      '<div><b>'+esc(r.company||"Unknown")+'</b>, '+esc(clean(r.title)||"untitled")+
         '<div class="imp-sub">'+note+'</div></div>'+
-      '<span class="imp-date">'+(r.applied_on||"no date")+'</span>'+
-      pick+
-    '</div>';
+      '<span class="imp-r">'+(r.applied_on||"no date")+
+        (r.application_status?'<br>'+esc(STATUS_LABEL[r.application_status]||r.application_status):'')+'</span>'+
+      pick+'</div>';
   }).join("");
-
-  var el=document.createElement("div");
-  el.className="sheet-wrap";
+  var el=document.createElement("div"); el.className="sheet-wrap";
   el.innerHTML='<div class="sheet" role="dialog" aria-modal="true" aria-label="Import applications">'+
     '<div class="sheet-head"><h3>Import applications</h3>'+
-      '<div class="imp-sum">'+
-        '<span><b>'+(c.matched||0)+'</b> matched</span>'+
+      '<div class="sum"><span><b>'+(c.matched||0)+'</b> matched</span>'+
         '<span><b>'+(c.ambiguous||0)+'</b> need a choice</span>'+
         '<span><b>'+(c.unmatched||0)+'</b> not found</span>'+
         (c.unusable?'<span><b>'+c.unusable+'</b> incomplete</span>':'')+
-        '<span>of <b>'+d.total+'</b> rows</span>'+
-      '</div>'+
-      '<p class="imp-sub">Nothing is recorded until you confirm. Rows ACE could not place are left alone.</p>'+
-    '</div>'+
+        '<span>of <b>'+d.total+'</b> rows</span></div>'+
+      '<p class="imp-sub">Nothing is recorded until you confirm. A status column is read if your sheet has one.</p></div>'+
     '<div class="sheet-body">'+rows+'</div>'+
-    '<div class="sheet-foot">'+
-      '<button class="btn btn-primary" data-act="doimport">Mark '+importSelectedCount()+' as applied</button>'+
-      '<button class="btn btn-ghost" data-act="closeimport">Cancel</button>'+
-    '</div></div>';
+    '<div class="sheet-foot"><button class="btn btn-primary" data-act="doimport">Import '+importCount()+'</button>'+
+      '<button class="btn btn-ghost" data-act="closeimport">Cancel</button></div></div>';
   document.body.appendChild(el);
-  el.addEventListener("mousedown", function(e){ if(e.target===el) closeImport(); });
-  el.addEventListener("change", function(e){
+  el.addEventListener("mousedown",function(e){ if(e.target===el) closeImport(); });
+  el.addEventListener("change",function(e){
     var sel=e.target.closest("[data-improw]"); if(!sel) return;
-    state.importChoice[sel.dataset.improw]= sel.value? parseInt(sel.value,10) : null;
-    var btn=el.querySelector('[data-act="doimport"]');
-    if(btn) btn.textContent="Mark "+importSelectedCount()+" as applied";
+    state.importChoice[sel.dataset.improw]=sel.value?parseInt(sel.value,10):null;
+    var b=el.querySelector('[data-act="doimport"]'); if(b) b.textContent="Import "+importCount();
   });
 }
 function runImport(){
   var d=state.importData; if(!d) return;
   var byRow={}; d.rows.forEach(function(r){ byRow[r.row_number]=r; });
-  var decisions=Object.keys(state.importChoice).filter(function(k){
-    return state.importChoice[k];
-  }).map(function(k){
-    return {job_id: state.importChoice[k], applied_on: (byRow[k]||{}).applied_on || null};
-  });
+  var decisions=Object.keys(state.importChoice).filter(function(k){return state.importChoice[k];})
+    .map(function(k){ var r=byRow[k]||{};
+      return {job_id:state.importChoice[k], applied_on:r.applied_on||null,
+              status:r.application_status||null}; });
   if(!decisions.length){ showToast("Nothing selected to import"); render(); return; }
-  fetch(API+"/api/applications/import", {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({decisions:decisions})
-  }).then(function(r){ return r.json(); }).then(function(res){
-    closeImport();
-    showToast("Marked "+res.marked+" as applied");
-    refreshMarkCounts().then(function(){ loadJobs(); });
+  fetch(API+"/api/applications/import",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({decisions:decisions})}).then(function(r){return r.json();}).then(function(res){
+    closeImport(); showToast("Recorded "+res.marked+" applications");
+    refreshMarkCounts().then(function(){ loadShell().then(function(){ loadJobs(); }); });
   }).catch(function(){ showToast("Import failed"); render(); });
 }
 
 /* ---------------- command palette ---------------- */
 var PALETTE=[
-  {label:"Go to Queue", run:function(){ setPage("queue"); }},
-  {label:"Go to Feed", run:function(){ setPage("feed"); }},
-  {label:"Go to Resumes", run:function(){ setPage("resumes"); }},
-  {label:"Go to Skills", run:function(){ setPage("skills"); }},
-  {label:"Go to Saved", run:function(){ setPage("saved"); }},
-  {label:"Go to Archive", run:function(){ setPage("archive"); }},
-  {label:"Show all opportunities", run:function(){ goTo("queue","all"); }},
-  {label:"Show highly matched", run:function(){ goTo("queue","matched"); }},
-  {label:"Show new since last visit", run:function(){ goTo("queue","new"); }},
-  {label:"Show latest pull", run:function(){ goTo("queue","latest"); }},
-  {label:"Toggle early career only", run:function(){
+  {label:"Go to Queue",run:function(){ goTo("queue"); }},
+  {label:"Go to Pulls",run:function(){ goTo("pulls"); }},
+  {label:"Go to Saved",run:function(){ goTo("saved"); }},
+  {label:"Go to Applied",run:function(){ goTo("applied"); }},
+  {label:"Go to Archive",run:function(){ goTo("archive"); }},
+  {label:"Go to Resume",run:function(){ goTo("resumes"); }},
+  {label:"Go to Skills",run:function(){ goTo("skills"); }},
+  {label:"Go to Settings",run:function(){ goTo("settings"); }},
+  {label:"Show all opportunities",run:function(){ goTo("queue","all"); }},
+  {label:"Show highly matched",run:function(){ goTo("queue","matched"); }},
+  {label:"Show new since last visit",run:function(){ goTo("queue","new"); }},
+  {label:"Show latest pull",run:function(){ goTo("queue","latest"); }},
+  {label:"Filter to big tech",run:function(){ state.tiers=["BIG_TECH"]; goTo("queue"); }},
+  {label:"Filter to big tech and top tier",run:function(){ state.tiers=["BIG_TECH","TOP_TIER"]; goTo("queue"); }},
+  {label:"Clear tier filter",run:function(){ state.tiers=[]; goTo("queue"); }},
+  {label:"Sort by best match",run:function(){ state.sorts=["best_match"]; goTo("queue"); }},
+  {label:"Sort new grad first, then best match",run:function(){ state.sorts=["new_grad_first","best_match"]; goTo("queue"); }},
+  {label:"Sort big tech first, then best match",run:function(){ state.sorts=["big_tech_first","best_match"]; goTo("queue"); }},
+  {label:"Toggle early career only",run:function(){
       if(state.filters.early_career_only) delete state.filters.early_career_only;
       else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Early career",pinned:true};
       goTo("queue"); }},
-  {label:"Toggle last 15 days only", run:function(){
-      state.recentOnly = !state.recentOnly;
-      goTo("queue"); }},
-  {label:"Sort by best match", run:function(){ state.sort="best_match"; loadJobs(); }},
-  {label:"Sort by newest", run:function(){ state.sort="newest"; loadJobs(); }},
-  {label:"Clear all filters", run:function(){ state.filters={}; state.q=""; loadShell().then(function(){ loadJobs(); }); }},
-  {label:"Upload resume", run:function(){ pickResume(); }},
-  {label:"Import applications", run:function(){ pickApplications(); }},
-  {label:"Show applied", run:function(){
-      state.filters.applied={param:"mark",value:"applied",type:"value",label:"Applied"};
-      goTo("queue","all"); }},
-  {label:"Switch theme", run:function(){ cycleTheme(); }},
-  {label:"Open settings", run:function(){ setPage("settings"); }}
+  {label:"Toggle last 15 days only",run:function(){ state.recentOnly=!state.recentOnly; goTo("queue"); }},
+  {label:"Clear all filters",run:function(){ state.filters={}; state.tiers=[]; state.q=""; goTo("queue"); }},
+  {label:"Upload resume",run:function(){ pickResume(); }},
+  {label:"Import applications",run:function(){ pickApplications(); }},
+  {label:"Switch theme",run:function(){ cycleTheme(); }}
 ];
 function openPalette(){
   closePalette();
-  var el=document.createElement("div");
-  el.className="palette-wrap";
+  var el=document.createElement("div"); el.className="palette-wrap";
   el.innerHTML='<div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">'+
     '<input id="pal-q" type="text" placeholder="Type a command" autocomplete="off" aria-label="Command">'+
     '<div class="palette-list" id="pal-list"></div></div>';
   document.body.appendChild(el);
-  state.palIndex=0;
-  drawPalette("");
-  var q=document.getElementById("pal-q");
-  q.focus();
-  q.addEventListener("input", function(){ state.palIndex=0; drawPalette(q.value); });
-  el.addEventListener("mousedown", function(e){ if(e.target===el) closePalette(); });
-}
-function paletteMatches(term){
-  var t=(term||"").toLowerCase();
-  return PALETTE.filter(function(c){ return c.label.toLowerCase().indexOf(t)>=0; });
+  state.palIndex=0; drawPalette("");
+  var q=document.getElementById("pal-q"); q.focus();
+  q.addEventListener("input",function(){ state.palIndex=0; drawPalette(q.value); });
+  el.addEventListener("mousedown",function(e){ if(e.target===el) closePalette(); });
 }
 function drawPalette(term){
-  var list=document.getElementById("pal-list");
-  if(!list) return;
-  var hits=paletteMatches(term);
+  var list=document.getElementById("pal-list"); if(!list) return;
+  var t=(term||"").toLowerCase();
+  var hits=PALETTE.filter(function(c){ return c.label.toLowerCase().indexOf(t)>=0; });
   state.palHits=hits;
   if(state.palIndex>=hits.length) state.palIndex=Math.max(0,hits.length-1);
-  list.innerHTML = hits.length
-    ? hits.map(function(c,i){
-        return '<button class="pal-opt'+(i===state.palIndex?" on":"")+'" data-pal="'+i+'">'+esc(c.label)+'</button>';
-      }).join("")
-    : '<div class="pal-none">No matching command</div>';
+  list.innerHTML=hits.length?hits.map(function(c,i){
+    return '<button class="pal-opt'+(i===state.palIndex?" on":"")+'" data-pal="'+i+'">'+esc(c.label)+'</button>';
+  }).join(""):'<div class="pal-none">No matching command</div>';
 }
-function closePalette(){
-  var el=document.querySelector(".palette-wrap");
-  if(el) el.remove();
-  state.palHits=null;
-}
-function runPalette(i){
-  var hits=state.palHits||[];
-  var c=hits[i];
-  closePalette();
-  if(c) c.run();
-}
+function closePalette(){ var el=document.querySelector(".palette-wrap"); if(el) el.remove(); state.palHits=null; }
+function runPalette(i){ var h=state.palHits||[]; var c=h[i]; closePalette(); if(c) c.run(); }
+
+/* ---------------- events ---------------- */
+document.addEventListener("click",function(e){
+  var pal=e.target.closest("[data-pal]");
+  if(pal){ runPalette(parseInt(pal.dataset.pal,10)); return; }
+  if(e.target.closest("[data-stop]")){ e.stopPropagation(); return; }
+  var t=e.target.closest("[data-nav],[data-view],[data-act],[data-mark],[data-status],[data-open],[data-sort],[data-tier],"+
+    "[data-unfilter],[data-addfilter],[data-addflag],[data-session],[data-skillq],[data-settheme],[data-gapfam],[data-gapmin],.row");
+  if(!t){ if(!e.target.closest(".pop")) closePop(); return; }
+  var d=t.dataset;
+
+  if(d.open){ e.preventDefault(); openJob(parseInt(d.open,10)); return; }
+  if(d.nav){ goTo(d.nav); return; }
+  if(d.view){ goTo("queue",d.view); return; }
+  if(d.sort){ toggleSort(d.sort); closePop(); return; }
+  if(d.tier){ toggleTier(d.tier); return; }
+  if(d.mark){ e.stopPropagation(); mark(parseInt(d.id,10),d.mark,false); return; }
+  if(d.status){ e.stopPropagation(); setStatus(parseInt(d.id,10),d.status); return; }
+  if(d.unfilter){ delete state.filters[d.unfilter]; loadShell().then(function(){ loadJobs(); }); return; }
+  if(d.addfilter){ state.filters[d.addfilter+":"+d.value]={param:d.addfilter,value:d.value,type:"value",
+      label:String(d.value).replace(/_/g," ").toLowerCase()}; closePop(); loadShell().then(function(){ loadJobs(); }); return; }
+  if(d.addflag){ state.filters[d.addflag]={param:d.addflag,type:"flag",label:"Description available"};
+      closePop(); loadShell().then(function(){ loadJobs(); }); return; }
+  if(d.session){ var sid=parseInt(d.session,10);
+      var i=state.sessions.map(function(s){return s.id;}).indexOf(sid);
+      if(i>0){ var p=state.sessions[i]; state.sessions=[p].concat(state.sessions.filter(function(s){return s.id!==sid;})); }
+      goTo("queue","latest"); return; }
+  if(d.skillq){ state.q=d.skillq; goTo("queue","all"); return; }
+  if(d.settheme){ save("ace.theme",d.settheme); applyTheme(d.settheme); render(); return; }
+  if(d.gapfam!==undefined){ state.gapFamily=d.gapfam; reloadGap(); return; }
+  if(d.gapmin!==undefined){ state.gapMin=d.gapmin?parseInt(d.gapmin,10):null; reloadGap(); return; }
+
+  if(d.act){
+    if(d.act==="theme"){ cycleTheme(); return; }
+    if(d.act==="live"){ livePop(t); return; }
+    if(d.act==="scoreinfo"){ scorePop(t); return; }
+    if(d.act==="sortmore"){ sortMorePop(t); return; }
+    if(d.act==="filters"){ filterPop(t); return; }
+    if(d.act==="toggleearly"){
+      if(state.filters.early_career_only) delete state.filters.early_career_only;
+      else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Early career",pinned:true};
+      loadShell().then(function(){ loadJobs(); }); return; }
+    if(d.act==="togglerecent"){ state.recentOnly=!state.recentOnly;
+      showToast(state.recentOnly?"Showing the last "+RECENT_DAYS+" days":"Showing every age. Nothing was deleted.");
+      loadShell().then(function(){ loadJobs(); }); return; }
+    if(d.act==="clearq"){ state.q=""; loadJobs(); return; }
+    if(d.act==="cleartiers"){ state.tiers=[]; loadShell().then(function(){ loadJobs(); }); return; }
+    if(d.act==="clearall"){ state.filters={}; state.tiers=[]; state.q=""; loadShell().then(function(){ loadJobs(); }); return; }
+    if(d.act==="shownew"){ state.sorts=["newest"]; goTo("queue","all"); return; }
+    if(d.act==="back"){ goTo(state.returnTo||"queue"); return; }
+    if(d.act==="menu"){ state.menuOpen=true; render(); return; }
+    if(d.act==="closemenu"){ state.menuOpen=false; render(); return; }
+    if(d.act==="undo"){ if(state.undoFn) state.undoFn(); state.toast=null; render(); return; }
+    if(d.act==="upload"){ pickResume(); return; }
+    if(d.act==="importapps"){ pickApplications(); return; }
+    if(d.act==="doimport"){ runImport(); return; }
+    if(d.act==="closeimport"){ closeImport(); return; }
+  }
+  var row=e.target.closest(".row");
+  if(row&&row.dataset.id){ openJob(parseInt(row.dataset.id,10)); }
+});
+
+document.addEventListener("input",function(e){
+  if(e.target.id==="q"){
+    state.q=e.target.value;
+    clearTimeout(state.qt);
+    state.qt=setTimeout(function(){
+      var c=document.getElementById("q"), pos=c&&c.selectionStart;
+      loadJobs().then(function(){
+        var n=document.getElementById("q");
+        if(n){ n.focus(); if(pos!=null) n.setSelectionRange(pos,pos); }
+      });
+    },260);
+  }
+});
+
+document.addEventListener("keydown",function(e){
+  var typing=/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+  if((e.metaKey||e.ctrlKey)&&(e.key==="k"||e.key==="K")){ e.preventDefault(); openPalette(); return; }
+  if(state.palHits){
+    if(e.key==="ArrowDown"){ e.preventDefault(); state.palIndex=Math.min(state.palHits.length-1,state.palIndex+1); drawPalette(document.getElementById("pal-q").value); return; }
+    if(e.key==="ArrowUp"){ e.preventDefault(); state.palIndex=Math.max(0,state.palIndex-1); drawPalette(document.getElementById("pal-q").value); return; }
+    if(e.key==="Enter"){ e.preventDefault(); runPalette(state.palIndex); return; }
+    if(e.key==="Escape"){ e.preventDefault(); closePalette(); return; }
+  }
+  if(e.key==="/"&&!typing){ e.preventDefault(); var q=document.getElementById("q"); if(q) q.focus(); return; }
+  if(typing){ if(e.key==="Escape") e.target.blur(); return; }
+  if(e.key==="Escape"){
+    if(state.importData){ closeImport(); return; }
+    if(state.menuOpen){ state.menuOpen=false; render(); return; }
+    if(document.querySelector(".pop")){ closePop(); return; }
+    if(state.page==="job"){ goTo(state.returnTo||"queue"); return; }
+    return;
+  }
+  if(state.page==="job"&&state.detailJob){
+    var j=state.detailJob;
+    if(e.key==="Enter"){ window.open(j.official_url,"_blank","noopener"); }
+    else if(e.key==="s"){ mark(j.id,"saved",false); }
+    return;
+  }
+  if(!isJobList()) return;
+  var k=e.key;
+  if(k==="ArrowDown"||k==="j"){ e.preventDefault(); step(1); }
+  else if(k==="ArrowUp"||k==="k"){ e.preventDefault(); step(-1); }
+  else if(k==="Enter"&&state.selectedId){ openJob(state.selectedId); }
+  else if(k==="o"&&state.selectedId){ var jj=jobById(state.selectedId); if(jj) window.open(jj.official_url,"_blank","noopener"); }
+  else if(k==="s"&&state.selectedId){ mark(state.selectedId,"saved",false); }
+  else if(k==="e"&&state.selectedId){ mark(state.selectedId,"reviewed",true); }
+  else if(k==="x"&&state.selectedId){ mark(state.selectedId,"dismissed",true); }
+  else if(k==="a"&&state.selectedId){ mark(state.selectedId,"applied",false); }
+  else if(k>="1"&&k<="4"&&state.page==="queue"){ goTo("queue",["all","matched","new","latest"][parseInt(k,10)-1]); }
+});
 
 /* ---------------- theme ---------------- */
 function cycleTheme(){
   var cur=load("ace.theme","dark");
-  var next = cur==="dark"?"light":cur==="light"?"system":"dark";
-  save("ace.theme",next); applyTheme(next);
-  showToast("Theme: "+next); render();
+  var next=cur==="dark"?"light":cur==="light"?"system":"dark";
+  save("ace.theme",next); applyTheme(next); showToast("Theme: "+next); render();
 }
 function applyTheme(t){
   if(t==="system") document.documentElement.removeAttribute("data-theme");
   else document.documentElement.setAttribute("data-theme",t);
 }
 
-/* One-time lift of marks written before they were durable. Without
-   this, moving them server-side would quietly discard whatever the user
-   had already saved or archived in this browser. */
-function migrateLocalMarks(){
-  var old = load("ace.marks", null);
-  if(!old || load("ace.marks.migrated", false)) return;
-  var ids = Object.keys(old);
-  if(!ids.length){ save("ace.marks.migrated", true); return; }
-  Promise.all(ids.map(function(id){
-    var m = old[id] || {};
-    var body = {saved: !!m.saved};
-    if(m.reviewed) body.review_state = "reviewed";
-    else if(m.dismissed) body.review_state = "dismissed";
-    return putMark(id, body).catch(function(){});
-  })).then(function(){
-    save("ace.marks.migrated", true);
-    refreshMarkCounts().then(function(){ render(); });
-  });
-}
-
 /* ---------------- boot ---------------- */
-// ?theme=light|dark|system overrides the stored choice, so either theme
-// can be opened directly without clearing storage.
-var urlTheme = new URLSearchParams(location.search).get("theme");
-var validTheme = urlTheme && ["light","dark","system"].indexOf(urlTheme)>=0;
-if(validTheme) save("ace.theme", urlTheme);
-// Applied directly rather than read back, so the override still works
-// where localStorage is unavailable.
-applyTheme(validTheme ? urlTheme : load("ace.theme","dark"));
-migrateLocalMarks();
+var urlTheme=new URLSearchParams(location.search).get("theme");
+var validTheme=urlTheme&&["light","dark","system"].indexOf(urlTheme)>=0;
+if(validTheme) save("ace.theme",urlTheme);
+applyTheme(validTheme?urlTheme:load("ace.theme","dark"));
 initVisit();
 render();
 loadShell().then(function(){ loadJobs(); });
-setInterval(function(){ loadShell().then(function(){ if(state.page==="queue") render(); }); }, 120000);
+setInterval(function(){ loadShell().then(function(){ if(isJobList()) render(); }); },120000);
 </script>
 </body>
 </html>

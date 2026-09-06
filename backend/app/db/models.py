@@ -748,6 +748,24 @@ class JobMarkRecord(Base):
         nullable=True,
     )
 
+    # Where the application stands now. Separate from applied_at, which
+    # records when it was sent and never moves, because a rejection
+    # must not overwrite the date it was applied.
+    application_status: Mapped[str | None] = mapped_column(
+        String(24),
+        nullable=True,
+    )
+
+    status_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    status_note: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

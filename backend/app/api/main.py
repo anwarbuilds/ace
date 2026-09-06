@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from backend.app.api.marks import (
+    APPLICATION_STATUSES,
     REVIEW_STATES,
     mark_counts,
     set_mark,
@@ -48,6 +49,8 @@ from backend.app.api.queries import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
     SORT_OPTIONS,
+    SORT_SEPARATOR,
+    parse_sort,
     JobFilters,
     build_facets,
     build_stats,
@@ -118,6 +121,8 @@ class ApplicationDecision(BaseModel):
 
     applied_on: str | None = None
 
+    status: str | None = None
+
 
 class ApplicationImport(BaseModel):
     """The rows a user confirmed after reviewing the preview."""
@@ -142,6 +147,10 @@ class MarkUpdate(BaseModel):
     clear_review: bool = False
 
     applied: bool | None = None
+
+    application_status: str | None = None
+
+    status_note: str | None = None
 
 
 def _with_session_jobs(
@@ -306,6 +315,20 @@ def _serialize_job(
         "review_state": (
             job.review_state
         ),
+        "company_tier": (
+            job.company_tier
+        ),
+        "application_status": (
+            job.application_status
+        ),
+        "status_changed_at": (
+            None
+            if job.status_changed_at is None
+            else job.status_changed_at.isoformat()
+        ),
+        "status_note": (
+            job.status_note
+        ),
         "applied_at": (
             None
             if job.applied_at is None
@@ -456,6 +479,14 @@ def create_app() -> FastAPI:
                 "is deleted; the row still exists."
             ),
         ),
+        tier: str | None = Query(
+            default=None,
+            description=(
+                "Employer tiers to keep, comma "
+                "separated: BIG_TECH, TOP_TIER, "
+                "ESTABLISHED, OTHER."
+            ),
+        ),
         min_match: int | None = Query(
             default=None,
             ge=0,
@@ -481,10 +512,15 @@ def create_app() -> FastAPI:
     ) -> dict:
         """Return one filtered page of jobs."""
 
+        # Sorts combine, so this parses a comma-separated list rather
+        # than validating one name. Unknown keys are dropped, not
+        # rejected: a stale bookmark should still return the jobs.
         normalized_sort = (
-            sort
-            if sort in SORT_OPTIONS
-            else "new_grad_first"
+            SORT_SEPARATOR.join(
+                parse_sort(
+                    sort
+                )
+            )
         )
 
         resume = get_active_resume(
@@ -530,6 +566,9 @@ def create_app() -> FastAPI:
                 since=since,
                 max_detected_age_days=(
                     max_detected_age_days
+                ),
+                tiers=_split_csv(
+                    tier
                 ),
                 mark=(
                     mark
@@ -876,6 +915,23 @@ def create_app() -> FastAPI:
                 ),
             )
 
+        if (
+            payload.application_status
+            is not None
+            and payload.application_status
+            not in APPLICATION_STATUSES
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "application_status must be "
+                    "one of: "
+                    + ", ".join(
+                        APPLICATION_STATUSES
+                    )
+                ),
+            )
+
         record = set_mark(
             session,
             job_id=job_id,
@@ -887,6 +943,12 @@ def create_app() -> FastAPI:
                 payload.clear_review
             ),
             applied=payload.applied,
+            application_status=(
+                payload.application_status
+            ),
+            status_note=(
+                payload.status_note
+            ),
         )
 
         session.commit()
@@ -903,6 +965,19 @@ def create_app() -> FastAPI:
                 is None
                 else record.applied_at
                 .isoformat()
+            ),
+            "application_status": (
+                record.application_status
+            ),
+            "status_changed_at": (
+                None
+                if record.status_changed_at
+                is None
+                else record.status_changed_at
+                .isoformat()
+            ),
+            "status_note": (
+                record.status_note
             ),
         }
 
@@ -981,6 +1056,15 @@ def create_app() -> FastAPI:
                         .applied_on
                         .isoformat()
                     ),
+                    # Named apart from "status" above, which is the
+                    # match outcome. One field cannot mean both how
+                    # confidently ACE placed the row and where the
+                    # application stands.
+                    "application_status": (
+                        by_number[
+                            match.row_number
+                        ].status
+                    ),
                     "candidates": [
                         {
                             "job_id": (
@@ -1024,6 +1108,12 @@ def create_app() -> FastAPI:
                     ),
                     "applied_on": (
                         decision.applied_on
+                    ),
+                    "status": (
+                        decision.status
+                        if decision.status
+                        in APPLICATION_STATUSES
+                        else None
                     ),
                 }
                 for decision in (

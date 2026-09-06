@@ -25,6 +25,32 @@ REVIEW_STATES = (
 )
 
 
+# Where an application stands. Ordered as it progresses, so the
+# interface can show forward motion rather than a flat set of labels.
+APPLICATION_STATUSES = (
+    "applied",
+    "screening",
+    "interviewing",
+    "offer",
+    "accepted",
+    "rejected",
+    "withdrawn",
+    "ghosted",
+)
+
+
+# Statuses that mean the loop is closed. A posting in one of these is
+# finished business, and the interface can stop asking for attention.
+CLOSED_STATUSES = frozenset(
+    {
+        "rejected",
+        "withdrawn",
+        "ghosted",
+        "accepted",
+    }
+)
+
+
 def get_mark(
     session: Session,
     *,
@@ -47,6 +73,8 @@ def set_mark(
     clear_review: bool = False,
     applied: bool | None = None,
     applied_at: datetime | None = None,
+    application_status: str | None = None,
+    status_note: str | None = None,
     now: datetime | None = None,
 ) -> JobMarkRecord:
     """Create or update one job's mark.
@@ -71,6 +99,16 @@ def set_mark(
         raise ValueError(
             "unknown review state: "
             f"{review_state!r}"
+        )
+
+    if (
+        application_status is not None
+        and application_status
+        not in APPLICATION_STATUSES
+    ):
+        raise ValueError(
+            "unknown application status: "
+            f"{application_status!r}"
         )
 
     stamp = (
@@ -112,8 +150,61 @@ def set_mark(
             if applied_at is not None
             else stamp
         )
+
+        # Applying is itself a status. Without this a job could be
+        # marked applied yet show no state at all.
+        if (
+            record.application_status
+            is None
+            and application_status is None
+        ):
+            record.application_status = (
+                "applied"
+            )
+
+            record.status_changed_at = (
+                record.applied_at
+            )
+
     elif applied is False:
         record.applied_at = None
+
+        record.application_status = None
+
+        record.status_changed_at = None
+
+        record.status_note = None
+
+    if application_status is not None:
+        moved = (
+            record.application_status
+            != application_status
+        )
+
+        record.application_status = (
+            application_status
+        )
+
+        if moved:
+            record.status_changed_at = (
+                stamp
+            )
+
+        # A status implies an application was sent. Recording one
+        # without a date would leave "rejected" hanging on a posting
+        # ACE believes was never applied to.
+        if record.applied_at is None:
+            record.applied_at = (
+                applied_at
+                if applied_at is not None
+                else stamp
+            )
+
+    if status_note is not None:
+        record.status_note = (
+            status_note.strip()
+            or None
+        )
 
     record.updated_at = stamp
 
@@ -136,6 +227,8 @@ def mark_counts(
             JobMarkRecord.is_saved,
             JobMarkRecord.review_state,
             JobMarkRecord.applied_at,
+            JobMarkRecord
+            .application_status,
         )
     ).all()
 
@@ -145,10 +238,15 @@ def mark_counts(
 
     applied = 0
 
+    open_applications = 0
+
+    by_status: dict[str, int] = {}
+
     for (
         is_saved,
         review_state,
         applied_at,
+        status,
     ) in rows:
         if is_saved:
             saved += 1
@@ -159,8 +257,27 @@ def mark_counts(
         if applied_at is not None:
             applied += 1
 
+        if status:
+            by_status[status] = (
+                by_status.get(
+                    status,
+                    0,
+                )
+                + 1
+            )
+
+            if (
+                status
+                not in CLOSED_STATUSES
+            ):
+                open_applications += 1
+
     return {
         "saved": saved,
         "archived": archived,
         "applied": applied,
+        "open_applications": (
+            open_applications
+        ),
+        "by_status": by_status,
     }
