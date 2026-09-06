@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-06-v14"
+    "2026-09-06-v16"
 )
 
 
@@ -368,6 +368,32 @@ SENIOR_TITLE_PATTERNS = (
     r"\bdirector\b",
     r"\bengineer\s+iii\b",
     r"\bengineer\s+iv\b",
+    # Numeric career levels, as Netflix and others write them:
+    # "Software Engineer 4", "AI Engineer 6 - Ads Platform". Level 4
+    # and above is senior at every company that numbers this way, and
+    # the level is the only signal available: 66 of 67 qualifying
+    # Netflix postings never state years of experience at all, so the
+    # experience rules cannot see them.
+    #
+    # Threshold is 4 because 1 to 3 are genuinely early career, and
+    # those must keep passing ("Software Engineer 1", "Software
+    # Engineer 3"). Measured against the stored corpus before adding:
+    # 85 of 31,323 active titles match and none of them were passing,
+    # so no queue entry is lost to this rule.
+    # The lookaheads stop a duration reading as a level: a co-op titled
+    # "Project Engineer - 8 to 12 months" is not a level 8 engineer.
+    r"\b(?:engineer|developer|scientist|architect|programmer)"
+    r"\s*[-\u2013,]?\s*[4-9]\b"
+    r"(?!\s*(?:to|[-\u2013])\s*\d)"
+    r"(?!\s*(?:month|week|year|day|hour)s?\b)",
+    r"\blevel\s*[-\u2013]?\s*[4-9]\b",
+    # Netflix also writes the level as "(L5)" or "Engineer L5". Both
+    # forms are anchored deliberately: a bare \bL[4-9]\b would also
+    # match "L4 Autonomous Vehicles" and "L7 load balancer", where the
+    # number is a domain term and says nothing about seniority.
+    r"\(\s*L[4-9]\s*\)",
+    r"\b(?:engineer|developer|scientist|architect|programmer)"
+    r"\s+L[4-9]\b",
 )
 
 

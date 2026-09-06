@@ -6,6 +6,7 @@ from backend.app.intelligence.eligibility import (
     ELIGIBILITY_RULE_VERSION,
     EligibilityReasonCode,
     EligibilityStatus,
+    _is_clearly_senior,
     evaluate_job,
 )
 from backend.app.intelligence.roles import (
@@ -1287,3 +1288,88 @@ def test_genuinely_closed_roles_still_excluded(
         decision.status
         is EligibilityStatus.REJECT
     )
+
+
+def test_numeric_career_levels_are_treated_as_senior() -> None:
+    """Level 4 and above is senior wherever companies number roles.
+
+    This is the only signal available for them: 66 of 67 qualifying
+    Netflix postings never state years of experience, so the experience
+    rules cannot see their seniority at all.
+    """
+
+    for title in (
+        "Software Engineer 4- Ink",
+        "AI Engineer 6 - Ads Platform",
+        "Full Stack Software Engineer 5",
+        "Software Engineer, Level 5",
+        "Data Scientist 4",
+    ):
+        assert _is_clearly_senior(
+            title
+        ), title
+
+
+def test_low_numeric_levels_remain_early_career() -> None:
+    """1 to 3 are genuinely early career and must keep passing."""
+
+    for title in (
+        "Software Engineer 1",
+        "Software Engineer 1 - Java",
+        "Software Engineer 3",
+        "Software Engineer 2",
+    ):
+        assert not _is_clearly_senior(
+            title
+        ), title
+
+
+def test_a_year_in_a_title_is_not_a_career_level() -> None:
+    """"2024 Cohort" must not be read as level 2024."""
+
+    assert not _is_clearly_senior(
+        "Backend Engineer 2024 Cohort"
+    )
+
+
+def test_parenthesised_career_levels_are_senior() -> None:
+    """Netflix also writes the level as "(L5)" or "Engineer L5"."""
+
+    for title in (
+        "Software Engineer L5 - Audio Tools",
+        "Distributed Systems Engineer (L5) - Compute",
+        "Software Engineer (L7) - Networking",
+    ):
+        assert _is_clearly_senior(
+            title
+        ), title
+
+
+def test_autonomy_levels_are_not_career_levels() -> None:
+    """"L4 autonomous driving" is a domain term, not a seniority.
+
+    A bare L-number rule would reject early-career self-driving roles
+    for saying what the car does.
+    """
+
+    for title in (
+        "L4 Autonomous Driving Perception Engineer",
+        "Software Engineer, L4 Autonomous Vehicles",
+        "L7 Load Balancer Engineer",
+    ):
+        assert not _is_clearly_senior(
+            title
+        ), title
+
+
+def test_a_duration_is_not_a_career_level() -> None:
+    """"Engineer - 8 to 12 months" is a contract length, not a level 8."""
+
+    for title in (
+        "Co-op Winter 2027 - Project "
+        "Engineer - 8 to 12 months",
+        "Software Engineer - 6 month contract",
+    ):
+        assert not _is_clearly_senior(
+            title
+        ), title

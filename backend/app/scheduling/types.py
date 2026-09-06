@@ -39,6 +39,7 @@ class SourceType(StrEnum):
     WORKDAY = "workday"
     AMAZON = "amazon"
     SIMPLIFY = "simplify"
+    EIGHTFOLD = "eightfold"
 
 
 def _require_non_empty(

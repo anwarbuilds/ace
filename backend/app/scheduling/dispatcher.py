@@ -26,6 +26,9 @@ from backend.app.adapters.lever import (
 from backend.app.adapters.smartrecruiters import (
     fetch_smartrecruiters_jobs,
 )
+from backend.app.adapters.eightfold import (
+    fetch_eightfold_jobs,
+)
 from backend.app.adapters.amazon import (
     fetch_amazon_jobs,
 )
@@ -174,6 +177,20 @@ class AmazonFetcher(Protocol):
         company_name: str,
     ) -> list[CanonicalJob]:
         """Fetch and normalize recent Amazon postings."""
+
+
+class EightfoldFetcher(Protocol):
+    """Callable capable of fetching one Eightfold career site."""
+
+    def __call__(
+        self,
+        tenant_host: str,
+        company_name: str,
+        *,
+        domain: str | None = None,
+        should_fetch_detail=None,
+    ) -> list[CanonicalJob]:
+        """Fetch and normalize one Eightfold tenant."""
 
 
 class SimplifyFetcher(Protocol):
@@ -651,6 +668,80 @@ class AmazonSourceFetcher:
         )
 
 
+class EightfoldSourceFetcher:
+    """Dispatch adapter for Eightfold-hosted career sites.
+
+    Descriptions live behind a per-posting request, so the gate is run
+    on titles first and only survivors earn one. On Netflix that is 79
+    of 501, which is the difference between one poll and five hundred
+    extra requests against someone else's server.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher: EightfoldFetcher = (
+            fetch_eightfold_jobs
+        ),
+        clock: Clock = utc_now,
+        predicate_factory=None,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+        self._predicate_factory = (
+            predicate_factory
+        )
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch one Eightfold tenant."""
+
+        if (
+            source.source_type
+            != SourceType.EIGHTFOLD
+        ):
+            raise ValueError(
+                (
+                    "EightfoldSourceFetcher "
+                    "requires an EIGHTFOLD "
+                    "SourceDefinition."
+                )
+            )
+
+        predicate = None
+
+        if self._predicate_factory is not None:
+            predicate = (
+                self._predicate_factory(
+                    source=(
+                        SourceType.EIGHTFOLD
+                        .value
+                    ),
+                    company_name=(
+                        source.company_name
+                    ),
+                )
+            )
+
+        jobs = self._fetcher(
+            source.source_host
+            or source.source_account,
+            source.company_name,
+            domain=source.source_account,
+            should_fetch_detail=predicate,
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
 class SimplifySourceFetcher:
     """Dispatch adapter for the curated new-grad feed.
 
@@ -901,6 +992,13 @@ def build_default_source_dispatcher() -> (
             ),
             SourceType.AMAZON: (
                 AmazonSourceFetcher()
+            ),
+            SourceType.EIGHTFOLD: (
+                EightfoldSourceFetcher(
+                    predicate_factory=(
+                        build_detail_predicate
+                    )
+                )
             ),
             SourceType.SIMPLIFY: (
                 SimplifySourceFetcher(
