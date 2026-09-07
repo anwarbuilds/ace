@@ -39,6 +39,7 @@ from backend.app.applications.parsing import (
 )
 from backend.app.db.models import (
     ExternalApplicationRecord,
+    JobMarkRecord,
     JobRecord,
 )
 
@@ -181,12 +182,30 @@ def preview_import(
         session
     )
 
+    # Jobs an application is already recorded against. Lets a row the
+    # user resolved by hand on an earlier upload settle itself on the
+    # next one, which is what makes re-uploading a daily habit rather
+    # than a chore.
+    already_applied = frozenset(
+        session.scalars(
+            select(
+                JobMarkRecord.job_id
+            ).where(
+                JobMarkRecord.applied_at
+                .is_not(
+                    None
+                )
+            )
+        ).all()
+    )
+
     matches = tuple(
         match_row(
             row,
             by_url=by_url,
             by_company=by_company,
             by_tight=by_tight,
+            already_applied=already_applied,
         )
         for row in rows
     )

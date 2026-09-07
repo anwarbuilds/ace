@@ -423,14 +423,66 @@ def match_row(
     by_url: dict[str, Candidate],
     by_company: dict[str, list[Candidate]],
     by_tight: dict[str, list[Candidate]] | None = None,
+    already_applied: frozenset[int] | None = None,
 ) -> RowMatch:
-    """Decide which stored posting one application row refers to."""
+    """Decide which stored posting one application row refers to.
+
+    ``already_applied`` carries the jobs an application is recorded
+    against. Re-uploading an updated sheet is the intended daily habit,
+    and without this every ambiguous row would have to be resolved by
+    hand again on every upload. A candidate the user has already
+    applied to is the one they picked last time.
+    """
 
     by_tight = (
         by_tight
         if by_tight is not None
         else {}
     )
+
+    applied = (
+        already_applied
+        if already_applied is not None
+        else frozenset()
+    )
+
+    def settle(
+        candidates: list[Candidate],
+        *,
+        method: str,
+    ) -> RowMatch:
+        """Resolve a set of equally good candidates.
+
+        One already carrying an application is the choice made on a
+        previous upload, so it is honoured rather than asked again.
+        Two would mean the user applied to both, which the sheet cannot
+        disambiguate, so that stays a question for them.
+        """
+
+        chosen = [
+            candidate
+            for candidate in candidates
+            if candidate.job_id in applied
+        ]
+
+        if len(chosen) == 1:
+            return RowMatch(
+                row_number=row.row_number,
+                status=MATCHED,
+                method=(
+                    "your earlier choice"
+                ),
+                job_id=chosen[0].job_id,
+            )
+
+        return RowMatch(
+            row_number=row.row_number,
+            status=AMBIGUOUS,
+            method=method,
+            candidates=tuple(
+                candidates[:8]
+            ),
+        )
 
     if not row.is_usable:
         return RowMatch(
@@ -512,13 +564,9 @@ def match_row(
         )
 
     if len(exact) > 1:
-        return RowMatch(
-            row_number=row.row_number,
-            status=AMBIGUOUS,
+        return settle(
+            exact,
             method="company and title",
-            candidates=tuple(
-                exact[:8]
-            ),
         )
 
     scored = sorted(
@@ -551,12 +599,10 @@ def match_row(
         )
 
     if len(close) > 1:
-        return RowMatch(
-            row_number=row.row_number,
-            status=AMBIGUOUS,
-            method="company and similar title",
-            candidates=tuple(
-                close[:8]
+        return settle(
+            close,
+            method=(
+                "company and similar title"
             ),
         )
 

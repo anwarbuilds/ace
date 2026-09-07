@@ -810,3 +810,127 @@ def test_re_importing_moves_a_status_forward(
             mark.application_status
             == "rejected"
         )
+
+
+def test_an_earlier_choice_settles_the_row_next_time(
+    session_factory,
+) -> None:
+    """Re-uploading is the daily habit, so a choice must stick.
+
+    Two identical Amazon titles are genuinely ambiguous on the first
+    upload. Once the user has picked one, the next upload must not ask
+    the same question again.
+    """
+
+    from backend.app.api.marks import (
+        set_mark,
+    )
+
+    with session_factory() as session:
+        first = add_job(
+            session,
+            index=1,
+            company="Amazon",
+            title="Software Development Engineer",
+        )
+
+        add_job(
+            session,
+            index=2,
+            company="Amazon",
+            title="Software Development Engineer",
+        )
+
+        rows = parse_applications(
+            payload=csv_bytes(
+                "Company,Job Title\n"
+                "Amazon,Software Development "
+                "Engineer\n"
+            ),
+            filename="h.csv",
+        )
+
+        # First upload: a real question.
+        assert (
+            preview_import(
+                session,
+                rows=rows,
+            )
+            .matches[0]
+            .status
+            == AMBIGUOUS
+        )
+
+        # The user picks one.
+        set_mark(
+            session,
+            job_id=first.id,
+            applied=True,
+            now=NOW,
+        )
+
+        # Second upload: settled, on the job they chose.
+        match = preview_import(
+            session,
+            rows=rows,
+        ).matches[0]
+
+        assert match.status == MATCHED
+
+        assert match.job_id == first.id
+
+        assert (
+            match.method
+            == "your earlier choice"
+        )
+
+
+def test_applying_to_both_stays_a_question(
+    session_factory,
+) -> None:
+    """Two applied candidates cannot be told apart by the sheet."""
+
+    from backend.app.api.marks import (
+        set_mark,
+    )
+
+    with session_factory() as session:
+        for index in (
+            1,
+            2,
+        ):
+            job = add_job(
+                session,
+                index=index,
+                company="Amazon",
+                title=(
+                    "Software Development "
+                    "Engineer"
+                ),
+            )
+
+            set_mark(
+                session,
+                job_id=job.id,
+                applied=True,
+                now=NOW,
+            )
+
+        rows = parse_applications(
+            payload=csv_bytes(
+                "Company,Job Title\n"
+                "Amazon,Software Development "
+                "Engineer\n"
+            ),
+            filename="h.csv",
+        )
+
+        assert (
+            preview_import(
+                session,
+                rows=rows,
+            )
+            .matches[0]
+            .status
+            == AMBIGUOUS
+        )
