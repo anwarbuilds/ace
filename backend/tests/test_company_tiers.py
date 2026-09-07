@@ -22,6 +22,7 @@ from sqlalchemy.orm import (
 
 from backend.app.api.queries import (
     JobFilters,
+    build_stats,
     list_jobs,
     parse_sort,
 )
@@ -475,3 +476,172 @@ def test_combining_sorts_groups_then_orders_within_the_group(
             ("Unknown Co", True),
             ("Amazon", False),
         ]
+
+
+def test_a_company_can_be_excluded(
+    session_factory,
+) -> None:
+    """"Everything except Amazon" is a different question from
+    "only Amazon", and both are worth wanting."""
+
+    with session_factory() as session:
+        add_job(
+            session,
+            index=1,
+            company="Amazon",
+        )
+
+        add_job(
+            session,
+            index=2,
+            company="Stripe",
+        )
+
+        page = list_jobs(
+            session,
+            filters=JobFilters(
+                exclude_companies=(
+                    "Amazon",
+                ),
+            ),
+            now=NOW,
+        )
+
+        assert page.total == 1
+
+        assert (
+            page.items[0].company
+            == "Stripe"
+        )
+
+
+def test_exclusion_ignores_case(
+    session_factory,
+) -> None:
+    with session_factory() as session:
+        add_job(
+            session,
+            index=1,
+            company="Amazon",
+        )
+
+        page = list_jobs(
+            session,
+            filters=JobFilters(
+                exclude_companies=(
+                    "amazon",
+                ),
+            ),
+            now=NOW,
+        )
+
+        assert page.total == 0
+
+
+def test_exclusion_stacks_with_every_other_filter(
+    session_factory,
+) -> None:
+    """The whole point: narrow to big tech, then drop one name."""
+
+    with session_factory() as session:
+        add_job(
+            session,
+            index=1,
+            company="Amazon",
+            early_career=True,
+        )
+
+        add_job(
+            session,
+            index=2,
+            company="NVIDIA",
+            early_career=True,
+        )
+
+        add_job(
+            session,
+            index=3,
+            company="Unknown Co",
+            early_career=True,
+        )
+
+        page = list_jobs(
+            session,
+            filters=JobFilters(
+                tiers=(
+                    "BIG_TECH",
+                ),
+                early_career_only=True,
+                exclude_companies=(
+                    "Amazon",
+                ),
+                sort=(
+                    "new_grad_first,"
+                    "best_match"
+                ),
+            ),
+            now=NOW,
+        )
+
+        assert page.total == 1
+
+        assert (
+            page.items[0].company
+            == "NVIDIA"
+        )
+
+
+def test_stats_honour_tier_and_exclusion(
+    session_factory,
+) -> None:
+    """The headline total must equal the rows on screen.
+
+    A count that disagrees with the list reads as jobs being withheld.
+    """
+
+    with session_factory() as session:
+        add_job(
+            session,
+            index=1,
+            company="Amazon",
+        )
+
+        add_job(
+            session,
+            index=2,
+            company="NVIDIA",
+        )
+
+        add_job(
+            session,
+            index=3,
+            company="Unknown Co",
+        )
+
+        filters = JobFilters(
+            tiers=(
+                "BIG_TECH",
+            ),
+            exclude_companies=(
+                "Amazon",
+            ),
+        )
+
+        page = list_jobs(
+            session,
+            filters=filters,
+            now=NOW,
+        )
+
+        stats = build_stats(
+            session,
+            filters=filters,
+            now=NOW,
+        )
+
+        assert page.total == 1
+
+        assert (
+            stats["qualifying_active_jobs"]
+            == page.total
+        )

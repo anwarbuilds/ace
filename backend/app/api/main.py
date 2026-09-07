@@ -429,6 +429,15 @@ def create_app() -> FastAPI:
                 "names."
             ),
         ),
+        exclude_company: str | None = Query(
+            default=None,
+            description=(
+                "Comma-separated company "
+                "names to leave out. "
+                "Combines with every other "
+                "filter."
+            ),
+        ),
         source: str | None = Query(
             default=None,
             description=(
@@ -570,6 +579,11 @@ def create_app() -> FastAPI:
                 companies=_split_csv(
                     company
                 ),
+                exclude_companies=(
+                    _split_csv(
+                        exclude_company
+                    )
+                ),
                 sources=_split_csv(
                     source
                 ),
@@ -632,6 +646,15 @@ def create_app() -> FastAPI:
         company: str | None = Query(
             default=None,
         ),
+        exclude_company: str | None = Query(
+            default=None,
+        ),
+        # Accepted so the headline count always describes the rows on
+        # screen. A total that disagrees with the list reads as jobs
+        # being withheld.
+        tier: str | None = Query(
+            default=None,
+        ),
         source: str | None = Query(
             default=None,
         ),
@@ -683,6 +706,14 @@ def create_app() -> FastAPI:
                 ),
                 companies=_split_csv(
                     company
+                ),
+                exclude_companies=(
+                    _split_csv(
+                        exclude_company
+                    )
+                ),
+                tiers=_split_csv(
+                    tier
                 ),
                 sources=_split_csv(
                     source

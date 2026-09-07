@@ -112,6 +112,13 @@ class JobFilters:
 
     companies: tuple[str, ...] = ()
 
+    # Companies to remove from the results. Kept separate from
+    # `companies` rather than expressed as a negative there, because
+    # "only these" and "everything except these" are different
+    # questions and a user often wants both at once: every big-tech
+    # role, except Amazon's.
+    exclude_companies: tuple[str, ...] = ()
+
     sources: tuple[str, ...] = ()
 
     search: str | None = None
@@ -481,6 +488,22 @@ def _apply_filters(
         statement = statement.where(
             JobRecord.company.in_(
                 filters.companies
+            )
+        )
+
+    if filters.exclude_companies:
+        statement = statement.where(
+            func.lower(
+                JobRecord.company
+            ).notin_(
+                tuple(
+                    name.strip().lower()
+                    for name in (
+                        filters
+                        .exclude_companies
+                    )
+                    if name.strip()
+                )
             )
         )
 
