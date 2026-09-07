@@ -639,7 +639,10 @@ function viewParams(){
   return e;
 }
 function get(path,p){
-  return fetch(API+path+(p&&p.toString()?"?"+p.toString():"")).then(function(r){
+  // no-store on both sides: these responses describe rows that change
+  // under the reader, and a cached one is simply wrong.
+  return fetch(API+path+(p&&p.toString()?"?"+p.toString():""),
+               {cache:"no-store"}).then(function(r){
     if(!r.ok) throw new Error(r.status); return r.json(); });
 }
 function loadJobs(append){
@@ -1084,7 +1087,20 @@ function pullsPage(){
     if(d!==last){ groups.push({day:d,rows:[]}); last=d; }
     groups[groups.length-1].rows.push(s);
   });
-  var body = state.sessions.length ? groups.map(function(g){
+  // A poll only writes a row when it discovers something, so the most
+  // recent check is usually absent from the list. Showing it explicitly
+  // is the difference between "ACE is idle" and "ACE looked and there
+  // was nothing", which is the question this page exists to answer.
+  var newest=state.sessions[0];
+  var latestRow="";
+  if(state.lastPoll && (!newest || new Date(state.lastPoll)>new Date(newest.started_at))){
+    latestRow='<tr class="grouphead"><td colspan="9"><div class="gh">'+
+      '<span class="gh-t">'+dayName(state.lastPoll)+'</span>'+
+      '<span class="gh-m">'+clock(state.lastPoll)+' · checked, no new postings</span>'+
+      '<span class="gh-none">most recent check, '+ago(state.lastPoll)+' ago</span>'+
+    '</div></td></tr>';
+  }
+  var body = state.sessions.length ? latestRow+groups.map(function(g){
     return '<tr class="grouphead"><td colspan="9"><div class="gh">'+
         '<span class="gh-t">'+esc(g.day)+'</span>'+
         '<span class="gh-m">'+g.rows.length+' pull'+(g.rows.length===1?"":"s")+' · '+
@@ -1107,7 +1123,9 @@ function pullsPage(){
       '<span class="h1-count">'+state.sessions.length+'</span>'+
       '<span class="spacer"></span>'+liveChip()+'</div>'+
     '<div class="controls"><p class="why" style="margin:0;max-width:70ch">'+
-      'Every time ACE checked its sources, newest first. A pull that found nothing still appears, because that is how you know it ran.'+
+      'Every pull that discovered a posting, newest first, including the ones where nothing '+
+      'passed your filters. A check that finds no new postings at all is not recorded as its '+
+      'own row, so the most recent check is shown separately above.'+
     '</p></div></div>'+
     '<div class="scroll">'+(state.sessions.length
       // Column headings only earn their space once there is something
@@ -1473,8 +1491,10 @@ function livePop(a){
     (stale
       ?'<p>ACE polls every few minutes, so a gap this long means the scheduler has stopped. Everything already found is still here.</p>'+
        '<p>On the machine running ACE: <b>docker compose ps</b>, then <b>docker compose up -d scheduler</b>.</p>'
-      :(l?'<p>'+l.jobs_discovered+' found, '+l.qualifying_discovered+' passed your filters.</p>':'')+
-       '<p>'+state.sessions.length+' pulls recorded.</p>'));
+      :(l?'<p>Most recent pull that found anything: '+l.jobs_discovered+' found, '+
+          l.qualifying_discovered+' passed your filters.</p>':'')+
+       '<p>'+state.sessions.length+' pulls recorded. A check that finds nothing new is not '+
+       'recorded as its own row.</p>'));
 }
 function scorePop(a){
   openPop(a,'<h4>Match score</h4>'+
@@ -1614,8 +1634,14 @@ function runImport(){
     closeImport();
     showToast("Recorded "+res.marked+" applications"+
       (res.recorded?" and kept "+res.recorded+" from your history":""));
-    refreshMarkCounts().then(function(){ loadExternal().then(function(){
-      loadShell().then(function(){ loadJobs(); }); }); });
+    // Land on Applied rather than staying on the Queue. Newly applied
+    // jobs sink under the default sort, so from the Queue an import
+    // looks like rows vanishing rather than statuses updating, and the
+    // user reasonably reads that as nothing having happened.
+    refreshMarkCounts()
+      .then(loadExternal)
+      .then(loadShell)
+      .then(function(){ goTo("applied"); });
   }).catch(function(){ showToast("Import failed"); render(); });
 }
 

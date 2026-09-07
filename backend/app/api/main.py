@@ -377,6 +377,23 @@ def _serialize_job(
     }
 
 
+def _no_store(
+    response,
+):
+    """Mark a response as never cacheable.
+
+    Every route here reads rows the scheduler and the user are both
+    changing. A browser reusing an earlier body shows a queue that no
+    longer exists, and the reader cannot tell.
+    """
+
+    response.headers["Cache-Control"] = (
+        "no-store, no-cache, must-revalidate"
+    )
+
+    return response
+
+
 def create_app() -> FastAPI:
     """Build the ACE web application."""
 
@@ -388,6 +405,26 @@ def create_app() -> FastAPI:
         ),
         version="1.0.0",
     )
+
+    @app.middleware("http")
+    async def add_no_store(
+        request,
+        call_next,
+    ):
+        """Stop the browser caching a mutable read model."""
+
+        response = await call_next(
+            request
+        )
+
+        if request.url.path.startswith(
+            "/api/"
+        ):
+            _no_store(
+                response
+            )
+
+        return response
 
     @app.get(
         "/healthz"
