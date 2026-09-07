@@ -589,7 +589,19 @@ function expFit(j){
 function markOf(j){ return {saved:!!j.is_saved, reviewed:j.review_state==="reviewed",
   dismissed:j.review_state==="dismissed", applied:!!j.applied_at, status:j.application_status}; }
 function isDone(j){ return j.review_state==="reviewed"||j.review_state==="dismissed"; }
-function jobById(id){ for(var i=0;i<state.items.length;i++) if(state.items[i].id===id) return state.items[i]; return null; }
+// Every list the user can act on, not just the queue. Pulls renders the
+// same rows from its own sessions, and acting on one used to report
+// "no longer on screen" while it sat there in plain sight.
+function jobById(id){
+  for(var i=0;i<state.items.length;i++) if(state.items[i].id===id) return state.items[i];
+  for(var s=0;s<state.sessions.length;s++){
+    var js=state.sessions[s].jobs||[];
+    for(var k=0;k<js.length;k++) if(js[k].id===id) return js[k];
+  }
+  if(state.detailJob&&state.detailJob.id===id) return state.detailJob;
+  if(state.heldRow&&state.heldRow.id===id) return state.heldRow;
+  return null;
+}
 function tierMove(j){
   if(j.previous_match_score==null||j.match_score==null) return null;
   var a=tierOf(j.previous_match_score), b=tierOf(j.match_score);

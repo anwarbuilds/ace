@@ -1269,3 +1269,124 @@ def test_an_unrelated_placeholder_survives(
                 session
             )
         ) == 1
+
+
+def test_one_sheet_naming_a_role_twice_is_one_record(
+    session_factory,
+) -> None:
+    """A row added in this call is invisible to a query until the
+    session flushes, so two rows sharing a match key built two records
+    with one key and failed the unique index. The user's sheet holds
+    two near-identical PayPal roles, and it took the whole import
+    down."""
+
+    with session_factory() as session:
+        written = record_external_applications(
+            session,
+            entries=[
+                {
+                    "company": "PayPal",
+                    "title": (
+                        "Software Engineer -"
+                        " Cloud Infrastructure"
+                        " and DevOps"
+                    ),
+                    "applied_on": None,
+                    "status": None,
+                    "url": None,
+                },
+                {
+                    "company": "Paypal",
+                    "title": (
+                        "Software Engineer- Cloud"
+                        " Infrastructure and Devops"
+                    ),
+                    "applied_on": None,
+                    "status": "rejected",
+                    "url": None,
+                },
+            ],
+        )
+
+        session.commit()
+
+        assert written == 2
+
+        records = list_external_applications(
+            session
+        )
+
+        assert len(
+            records
+        ) == 1, "the unique key was violated rather than merged"
+
+        assert (
+            records[0].application_status
+            == "rejected"
+        ), "the later row should win"
+
+
+def test_a_row_without_a_title_is_still_kept(
+    session_factory,
+) -> None:
+    """The company and the date already say an application happened.
+    Dropping the row loses that, and the client offers these rows for
+    keeping, so the server refusing them silently would be a lie."""
+
+    with session_factory() as session:
+        record_external_applications(
+            session,
+            entries=[
+                {
+                    "company": "Stripe",
+                    "title": "",
+                    "applied_on": None,
+                    "status": None,
+                    "url": None,
+                },
+            ],
+        )
+
+        session.commit()
+
+        records = list_external_applications(
+            session
+        )
+
+        assert len(
+            records
+        ) == 1
+
+        assert (
+            records[0].company
+            == "Stripe"
+        )
+
+
+def test_a_row_without_a_company_is_refused(
+    session_factory,
+) -> None:
+    """It names nothing and cannot be de-duplicated."""
+
+    with session_factory() as session:
+        record_external_applications(
+            session,
+            entries=[
+                {
+                    "company": "",
+                    "title": "Backend Engineer",
+                    "applied_on": None,
+                    "status": None,
+                    "url": None,
+                },
+            ],
+        )
+
+        session.commit()
+
+        assert (
+            list_external_applications(
+                session
+            )
+            == []
+        )

@@ -318,6 +318,15 @@ def record_external_applications(
 
     written = 0
 
+    # Rows added by this call are not visible to a query until the
+    # session flushes, so a sheet naming the same role twice would
+    # build two records with one key and fail the unique index on
+    # insert. One sheet, one record.
+    pending: dict[
+        str,
+        ExternalApplicationRecord,
+    ] = {}
+
     for entry in entries:
         company = str(
             entry.get(
@@ -333,9 +342,10 @@ def record_external_applications(
             or ""
         ).strip()
 
-        if not company or not title:
-            # Without both there is nothing to show and nothing to
-            # de-duplicate on.
+        if not company:
+            # A row with no company names nothing and cannot be
+            # de-duplicated. A missing title is survivable: the company
+            # and the date still say an application happened.
             continue
 
         key = external_match_key(
@@ -343,15 +353,20 @@ def record_external_applications(
             title=title,
         )
 
-        record = session.scalar(
-            select(
-                ExternalApplicationRecord
-            ).where(
-                ExternalApplicationRecord
-                .match_key
-                == key
-            )
+        record = pending.get(
+            key
         )
+
+        if record is None:
+            record = session.scalar(
+                select(
+                    ExternalApplicationRecord
+                ).where(
+                    ExternalApplicationRecord
+                    .match_key
+                    == key
+                )
+            )
 
         if record is None:
             record = (
@@ -366,6 +381,8 @@ def record_external_applications(
             session.add(
                 record
             )
+
+        pending[key] = record
 
         record.company = company
 
