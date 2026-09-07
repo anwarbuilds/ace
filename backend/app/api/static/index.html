@@ -359,41 +359,8 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .ans-edit input:focus,.ans-edit textarea:focus{border-color:var(--purple)}
 @media (max-width:720px){ .ans-edit{grid-template-columns:1fr auto} }
 
-/* ===================== apply mode ===================== */
-.am{position:fixed;inset:0;z-index:90;background:var(--canvas);display:flex;flex-direction:column}
-.am-bar{height:3px;background:var(--surface-2);flex:none}
-.am-bar i{display:block;height:100%;background:var(--gold-rail);transition:width var(--base) var(--ease-out)}
-.am-top{display:flex;align-items:center;gap:16px;padding:16px var(--gutter);flex:none;flex-wrap:wrap}
+/* small mono counter, shared by the answers panel */
 .am-count{font-family:var(--mono);font-size:12.5px;color:var(--text-muted)}
-.am-stats{margin-left:auto;display:flex;gap:16px;font-family:var(--mono);font-size:12px;color:var(--text-muted)}
-.am-stats b{color:var(--gold);font-weight:600}
-.am-body{flex:1;overflow-y:auto;display:flex;justify-content:center;padding:8px var(--gutter) 24px}
-.am-card{width:100%;max-width:780px}
-.am-tier{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
-.am-co{font-size:15px;font-weight:600;color:var(--text-secondary);margin-bottom:6px}
-.am-title{font-size:34px;font-weight:700;letter-spacing:-.028em;line-height:1.15;margin:0 0 14px;text-wrap:balance}
-.am-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px;color:var(--text-secondary);margin-bottom:22px}
-.am-score{display:flex;align-items:baseline;gap:10px;margin-bottom:22px}
-.am-score-n{font-family:var(--mono);font-size:38px;font-weight:600;line-height:1;letter-spacing:-.03em}
-.am-why{font-size:13.5px;color:var(--text-secondary);line-height:1.65;margin-bottom:20px}
-.am-keys{flex:none;border-top:1px solid var(--border-subtle);padding:14px var(--gutter);
-  display:flex;gap:22px;flex-wrap:wrap;align-items:center;background:var(--surface-1)}
-.am-key{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-secondary)}
-.am-key kbd{font-family:var(--mono);font-size:11px;background:var(--surface-2);border:1px solid var(--border);
-  border-bottom-width:2px;border-radius:5px;padding:3px 7px;color:var(--text)}
-.am-key.primary kbd{background:var(--gold-solid);color:var(--on-gold);border-color:var(--gold-solid)}
-.am-done{max-width:520px;margin:8vh auto 0;text-align:center}
-.am-done h2{font-size:24px;font-weight:700;letter-spacing:-.02em;margin:0 0 10px}
-.am-done p{font-size:14px;color:var(--text-secondary);line-height:1.6;margin:0 0 20px}
-.am-tally{display:flex;justify-content:center;gap:32px;margin:26px 0}
-.am-tally div{text-align:center}
-.am-tally b{display:block;font-family:var(--mono);font-size:30px;font-weight:600}
-.am-tally span{font-size:12px;color:var(--text-muted)}
-@media (max-width:720px){
-  .am-title{font-size:24px}
-  .am-keys{gap:12px;padding:12px var(--gutter)}
-  .am-key{font-size:11.5px}
-}
 
 /* ===================== other pages ===================== */
 .page{flex:1;overflow-y:auto;padding:4px var(--gutter) 60px}
@@ -570,9 +537,7 @@ var state={
   palHits:null, palIndex:0,
   // Apply Mode: one posting at a time over whatever the Queue is
   // currently filtered to, driven entirely from the keyboard.
-  answers:[], answersOpen:false,
-  applyMode:false, applyIndex:0,
-  applySession:{applied:0, saved:0, skipped:0, startedAt:null}
+  answers:[], answersOpen:false
 };
 
 /* ---------------- storage ---------------- */
@@ -643,7 +608,6 @@ var I={
   briefcase:'<rect x="2" y="5" width="12" height="9" rx="1.5"/><path d="M6 5V3.5h4V5"/>',
   upload:'<path d="M8 11V3M5 6l3-3 3 3"/><path d="M2.5 11v2.5h11V11"/>',
   minus:'<path d="M3.5 8h9"/>',
-  bolt:'<path d="M9 1.5L3.5 9h4l-.5 5.5L13 7H9z"/>',
   copy:'<rect x="5.5" y="5.5" width="8" height="9" rx="1.5"/><path d="M10.5 5.5V2.5h-8v8h2"/>'
 };
 
@@ -868,10 +832,6 @@ function controls(){
     '<button class="chip'+(state.recentOnly?" on":"")+'" data-act="togglerecent">Last '+RECENT_DAYS+' days</button>'+
     chips+exChips+
     '<button class="chip" data-act="filters">'+icon(I.plus)+'More</button>'+
-    '<span class="spacer"></span>'+
-    '<button class="btn btn-primary btn-sm" data-act="applymode" '+
-      'title="Work through this list one at a time, from the keyboard">'+
-      icon(I.bolt,14)+'Apply mode</button>'+
   '</div>';
 }
 
@@ -1260,125 +1220,6 @@ function settingsPage(){
     '</div></div>';
 }
 
-/* ---------------- apply mode ---------------- */
-function enterApply(){
-  if(!state.items.length){ showToast("Nothing to apply to in this list"); render(); return; }
-  // Start at the first posting not already handled, so re-entering
-  // resumes rather than replaying what is done.
-  var start=-1;
-  for(var i=0;i<state.items.length;i++){
-    if(!state.items[i].applied_at && !isDone(state.items[i])){ start=i; break; }
-  }
-  state.applyIndex=start<0?0:start;
-  state.applyMode=true;
-  state.applySession={applied:0, saved:0, skipped:0, startedAt:Date.now()};
-  render();
-}
-function exitApply(){ state.applyMode=false; render(); }
-function applyAdvance(delta){
-  var next=state.applyIndex+delta;
-  if(next<0) next=0;
-  state.applyIndex=next;
-  // Keep the runway loaded so a long session never stalls.
-  if(state.hasMore && next>state.items.length-8) loadJobs(true);
-  render();
-}
-function applyAct(kind){
-  var j=state.items[state.applyIndex];
-  if(!j) return;
-  var body = kind==="applied"?{applied:true}
-           : kind==="saved"?{saved:true}
-           : {review_state:"dismissed"};
-  state.applySession[kind]=(state.applySession[kind]||0)+1;
-  applyAdvance(1);
-  // Written in the background: the next posting is already on screen,
-  // because waiting on a round trip between every application is what
-  // makes a rapid pass feel slow.
-  putMark(j.id, body).then(function(res){
-    applyMark(j,res); refreshMarkCounts();
-  }).catch(function(){
-    state.applySession[kind]=Math.max(0,(state.applySession[kind]||1)-1);
-    showToast("Could not record that. It is still in your queue.");
-    render();
-  });
-}
-function applyElapsed(){
-  if(!state.applySession.startedAt) return "";
-  var m=Math.round((Date.now()-state.applySession.startedAt)/60000);
-  return m<1?"just started":(m+" min");
-}
-function applyPage(){
-  var j=state.items[state.applyIndex];
-  var se=state.applySession;
-
-  if(!j){
-    return '<div class="am"><div class="am-bar"><i style="width:100%"></i></div>'+
-      '<div class="am-body"><div class="am-done">'+
-        '<h2>'+(se.applied?"Session done":"Nothing left here")+'</h2>'+
-        '<p>'+(se.applied
-          ? "You worked through everything in this list."
-          : "This list has no more postings. Widen the filters and start again.")+'</p>'+
-        '<div class="am-tally">'+
-          '<div><b class="m-high">'+se.applied+'</b><span>applied</span></div>'+
-          '<div><b>'+se.saved+'</b><span>saved</span></div>'+
-          '<div><b>'+se.skipped+'</b><span>skipped</span></div>'+
-        '</div>'+
-        '<p>'+applyElapsed()+' in this session.</p>'+
-        '<button class="btn btn-primary" data-act="exitapply">Back to the queue</button>'+
-      '</div></div></div>';
-  }
-
-  var t=tierOf(j.match_score), tier=j.company_tier||"OTHER", fit=expFit(j);
-  var pct=state.total?Math.round((state.applyIndex/state.total)*100):0;
-  var why=[];
-  if(j.role_family) why.push(j.role_family.replace(/_/g," ").toLowerCase().replace(/^\w/,function(c){return c.toUpperCase();}));
-  if(j.is_early_career) why.push("Labelled early career");
-  else if(j.required_experience_years!=null) why.push(j.required_experience_years+" years or less");
-  why.push("No eligibility blocker found");
-
-  return '<div class="am">'+
-    '<div class="am-bar"><i style="width:'+pct+'%"></i></div>'+
-    '<div class="am-top">'+
-      '<span class="am-count">'+(state.applyIndex+1)+' of '+state.total+'</span>'+
-      '<button class="link-btn" data-act="exitapply">Exit</button>'+
-      '<span class="am-stats">'+
-        '<span>applied <b>'+se.applied+'</b></span>'+
-        '<span>saved '+se.saved+'</span>'+
-        '<span>skipped '+se.skipped+'</span>'+
-        '<span>'+applyElapsed()+'</span>'+
-      '</span>'+
-    '</div>'+
-    '<div class="am-body"><div class="am-card">'+
-      (TIER_LABEL[tier]?'<div class="am-tier tier-'+tier+'">'+TIER_LABEL[tier]+'</div>':'')+
-      '<div class="am-co">'+esc(j.company)+'</div>'+
-      '<h1 class="am-title">'+esc(clean(j.title))+'</h1>'+
-      '<div class="am-meta"><span>'+esc(j.location)+'</span><span>·</span>'+
-        '<span class="'+fit.c+'">'+esc(fit.t)+'</span>'+
-        (j.applied_at?'<span class="badge applied">Already applied '+shortDate(j.applied_at)+'</span>':'')+
-      '</div>'+
-      '<div class="am-score">'+
-        (t==="unscored"
-          ? '<span class="m-unscored" style="font-size:15px">Not scored, ACE could not read this posting</span>'
-          : '<span class="am-score-n m-'+t+'">'+j.match_score+'</span>'+
-            '<span class="m-tier m-'+t+'" style="font-size:12px">'+tierLabel(t)+' match</span>')+
-      '</div>'+
-      (j.matched_skills.length?'<div class="sect"><p class="eyebrow">You have</p><div class="skills">'+
-        j.matched_skills.slice(0,12).map(function(k){return '<span class="sk have">'+esc(k)+'</span>';}).join("")+'</div></div>':'')+
-      (j.missing_skills.length?'<div class="sect"><p class="eyebrow">Not on your resume</p><div class="skills">'+
-        j.missing_skills.slice(0,8).map(function(k){return '<span class="sk miss">'+esc(k)+'</span>';}).join("")+'</div></div>':'')+
-      '<p class="am-why">'+esc(why.join(" · "))+'.</p>'+
-    '</div></div>'+
-    '<div class="am-keys">'+
-      '<span class="am-key primary"><kbd>Enter</kbd>open the posting</span>'+
-      '<span class="am-key"><kbd>A</kbd>applied, next</span>'+
-      '<span class="am-key"><kbd>S</kbd>save for later</span>'+
-      '<span class="am-key"><kbd>X</kbd>skip</span>'+
-      '<span class="am-key"><kbd>C</kbd>your answers</span>'+
-      '<span class="am-key"><kbd>&larr;</kbd>back</span>'+
-      '<span class="am-key"><kbd>Esc</kbd>exit</span>'+
-    '</div></div>';
-}
-
 /* ---------------- answer bank ---------------- */
 function copyAnswer(id, el){
   var a=state.answers.filter(function(x){return String(x.id)===String(id);})[0];
@@ -1390,8 +1231,7 @@ function copyAnswer(id, el){
   }
   function fallback(){
     // The async clipboard needs a secure context, which plain http on a
-    // LAN address does not get. This path is the one that actually runs
-    // for most of these copies.
+    // LAN address does not get. This path is the one that usually runs.
     var t=document.createElement("textarea");
     t.value=a.value; t.style.position="fixed"; t.style.opacity="0";
     document.body.appendChild(t); t.select();
@@ -1443,8 +1283,8 @@ function answersPage(){
     '<div class="page"><div class="wrap">'+
       '<p class="why" style="max-width:70ch;margin-bottom:22px">'+
         'The things every application form asks for. Fill them in once, then copy any of them in '+
-        'one click while a form is open, from the button in the bottom corner or from Apply mode. '+
-        'Leave blank anything you are not asked for, and add your own questions at the end.</p>'+
+        'one click while a form is open, from the button in the bottom corner. Leave blank anything '+
+        'you are not asked for, and add your own questions at the end.</p>'+
       '<div id="ansform">'+rows.map(function(a){
         return '<div class="ans-edit">'+
           '<input type="text" class="ans-label" value="'+esc(a.label)+'" placeholder="Question" aria-label="Question">'+
@@ -1478,12 +1318,6 @@ function render(keepScroll){
   var app=document.getElementById("app");
   var prior=keepScroll?(document.querySelector(".scroll")||{}).scrollTop:null;
   var main;
-  if(state.applyMode && isJobList()){
-    // The panel follows into Apply mode, which is exactly where a form
-    // is open in the other tab.
-    app.innerHTML=applyPage()+answerToggle()+answerPanel()+(state.toast||"");
-    return;
-  }
   if(state.page==="job") main=jobPage();
   else if(state.page==="pulls") main=pullsPage();
   else if(state.page==="resumes") main=resumePage();
@@ -1557,8 +1391,15 @@ function step(d){
 }
 function toggleSort(key){
   var i=state.sorts.indexOf(key);
-  if(i>=0) state.sorts.splice(i,1); else state.sorts.push(key);
-  if(state.sorts.length>3) state.sorts.shift();
+  if(i>=0){
+    state.sorts.splice(i,1);
+  } else {
+    // Turning a sort on makes it the primary one, the way clicking a
+    // column header does. Appending it instead put "Not applied first"
+    // third, where it only broke ties and looked broken.
+    state.sorts.unshift(key);
+    if(state.sorts.length>3) state.sorts.pop();
+  }
   loadJobs();
 }
 function toggleExclude(name){
@@ -1806,7 +1647,6 @@ var PALETTE=[
   {label:"Toggle last 15 days only",run:function(){ state.recentOnly=!state.recentOnly; goTo("queue"); }},
   {label:"Clear all filters",run:function(){ state.filters={}; state.tiers=[]; state.excluded=[]; state.q=""; goTo("queue"); }},
   {label:"Show every company again",run:function(){ state.excluded=[]; goTo("queue"); }},
-  {label:"Start apply mode",run:function(){ enterApply(); }},
   {label:"Open your answers",run:function(){ state.answersOpen=true; render(); }},
   {label:"Edit your answers",run:function(){ goTo("answers"); }},
   {label:"Upload resume",run:function(){ pickResume(); }},
@@ -1909,8 +1749,6 @@ document.addEventListener("click",function(e){
       }
       return; }
     if(d.act==="delrow"){ var r=t.closest(".ans-edit"); if(r) r.remove(); return; }
-    if(d.act==="applymode"){ enterApply(); return; }
-    if(d.act==="exitapply"){ exitApply(); return; }
     if(d.act==="menu"){ state.menuOpen=true; render(); return; }
     if(d.act==="closemenu"){ state.menuOpen=false; render(); return; }
     if(d.act==="undo"){ if(state.undoFn) state.undoFn(); state.toast=null; render(); return; }
@@ -1945,27 +1783,6 @@ document.addEventListener("keydown",function(e){
     if(e.key==="ArrowUp"){ e.preventDefault(); state.palIndex=Math.max(0,state.palIndex-1); drawPalette(document.getElementById("pal-q").value); return; }
     if(e.key==="Enter"){ e.preventDefault(); runPalette(state.palIndex); return; }
     if(e.key==="Escape"){ e.preventDefault(); closePalette(); return; }
-  }
-  if(state.applyMode && !typing){
-    var k2=e.key;
-    if(k2==="Escape"){
-      e.preventDefault();
-      if(state.answersOpen){ state.answersOpen=false; render(); return; }
-      exitApply(); return;
-    }
-    if(k2==="c"||k2==="C"){ e.preventDefault(); state.answersOpen=!state.answersOpen; render(); return; }
-    if(k2==="Enter"){
-      e.preventDefault();
-      var cur=state.items[state.applyIndex];
-      if(cur) window.open(cur.official_url,"_blank","noopener");
-      return;
-    }
-    if(k2==="a"||k2==="A"){ e.preventDefault(); applyAct("applied"); return; }
-    if(k2==="s"||k2==="S"){ e.preventDefault(); applyAct("saved"); return; }
-    if(k2==="x"||k2==="X"){ e.preventDefault(); applyAct("skipped"); return; }
-    if(k2==="ArrowLeft"){ e.preventDefault(); applyAdvance(-1); return; }
-    if(k2==="ArrowRight"){ e.preventDefault(); applyAdvance(1); return; }
-    return;
   }
   if(e.key==="/"&&!typing){ e.preventDefault(); var q=document.getElementById("q"); if(q) q.focus(); return; }
   if(typing){ if(e.key==="Escape") e.target.blur(); return; }
