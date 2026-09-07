@@ -856,3 +856,43 @@ class ExternalApplicationRecord(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+
+class ApplicationAnswerRecord(Base):
+    """One answer the user gives on most application forms.
+
+    Label and value are free-form because no fixed schema survives
+    contact with real forms: one asks for a portfolio, the next for a
+    Dribbble, the next for "tell us something surprising".
+    """
+
+    __tablename__ = "application_answers"
+
+    id: Mapped[int] = mapped_column(
+        BIGINT_ID,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    label: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+    )
+
+    value: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default="",
+    )
+
+    sort_order: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="0",
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )

@@ -67,6 +67,7 @@ QUALIFYING_STATUSES = (
 
 
 SORT_OPTIONS = (
+    "unapplied_first",
     "best_match",
     "new_grad_first",
     "big_tech_first",
@@ -160,6 +161,9 @@ class JobFilters:
 
     # Employer tiers to keep, e.g. ("BIG_TECH", "TOP_TIER").
     tiers: tuple[str, ...] = ()
+
+    # Specific jobs, used to open one directly by id.
+    job_ids: tuple[int, ...] = ()
 
     sort: str = "new_grad_first"
 
@@ -491,6 +495,13 @@ def _apply_filters(
             )
         )
 
+    if filters.job_ids:
+        statement = statement.where(
+            JobRecord.id.in_(
+                filters.job_ids
+            )
+        )
+
     if filters.exclude_companies:
         statement = statement.where(
             func.lower(
@@ -769,6 +780,23 @@ def _sort_keys(
             .is_early_career.desc(),
         ]
 
+    if sort == "unapplied_first":
+        # Everything still to do floats up; anything already applied to
+        # sinks. Makes returning to a long queue pick up where the work
+        # actually stopped rather than at the top.
+        return [
+            case(
+                (
+                    JobMarkRecord.applied_at
+                    .is_not(
+                        None
+                    ),
+                    1,
+                ),
+                else_=0,
+            ).asc(),
+        ]
+
     if sort == "big_tech_first":
         return [
             company_tier_rank().asc(),
@@ -866,6 +894,40 @@ def _apply_sort(
     return statement.order_by(
         *columns,
         JobRecord.id.desc(),
+    )
+
+
+def get_job(
+    session: Session,
+    *,
+    job_id: int,
+    resume_id: int | None = None,
+    now: datetime | None = None,
+) -> JobListing | None:
+    """Return one job by id, shaped exactly like a listing row.
+
+    Exists so a job page can be opened directly, from a new tab or a
+    shared link, without the list it came from.
+    """
+
+    page = list_jobs(
+        session,
+        filters=JobFilters(
+            job_ids=(
+                job_id,
+            ),
+            statuses=(),
+            active_only=False,
+            resume_id=resume_id,
+            limit=1,
+        ),
+        now=now,
+    )
+
+    return (
+        page.items[0]
+        if page.items
+        else None
     )
 
 

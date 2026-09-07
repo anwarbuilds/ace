@@ -26,7 +26,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import text
+from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
 
 from pydantic import BaseModel
@@ -49,6 +49,7 @@ from backend.app.applications.service import (
 )
 from backend.app.api.queries import (
     DEFAULT_PAGE_SIZE,
+    get_job,
     MAX_PAGE_SIZE,
     SORT_OPTIONS,
     SORT_SEPARATOR,
@@ -60,7 +61,10 @@ from backend.app.api.queries import (
     list_discovery_runs,
     list_jobs,
 )
-from backend.app.db.models import JobRecord
+from backend.app.db.models import (
+    ApplicationAnswerRecord,
+    JobRecord,
+)
 from backend.app.db.session import SessionLocal
 from backend.app.matching.parsing import (
     ResumeParseError,
@@ -152,6 +156,20 @@ class ApplicationImport(BaseModel):
     external: list[
         ExternalApplicationEntry
     ] = []
+
+
+class AnswerItem(BaseModel):
+    """One row of the answer bank."""
+
+    label: str
+
+    value: str = ""
+
+
+class AnswerBank(BaseModel):
+    """The whole answer bank, as submitted by the editor."""
+
+    items: list[AnswerItem] = []
 
 
 class MarkUpdate(BaseModel):
@@ -634,6 +652,46 @@ def create_app() -> FastAPI:
         }
 
     @app.get(
+        "/api/jobs/{job_id}"
+    )
+    def get_one_job(
+        job_id: int,
+        session: Session = Depends(
+            get_session
+        ),
+    ) -> dict:
+        """Return one job, so its page can be opened directly.
+
+        Deliberately ignores the eligibility gate and the active filter:
+        a link to a specific posting should resolve even after the
+        posting closes or the rules change under it.
+        """
+
+        resume = get_active_resume(
+            session
+        )
+
+        job = get_job(
+            session,
+            job_id=job_id,
+            resume_id=(
+                None
+                if resume is None
+                else resume.id
+            ),
+        )
+
+        if job is None:
+            raise HTTPException(
+                status_code=404,
+                detail="unknown job",
+            )
+
+        return _serialize_job(
+            job
+        )
+
+    @app.get(
         "/api/stats"
     )
     def get_stats(
@@ -951,6 +1009,91 @@ def create_app() -> FastAPI:
             "total": len(
                 rows
             ),
+        }
+
+    @app.get(
+        "/api/answers"
+    )
+    def get_answers(
+        session: Session = Depends(
+            get_session
+        ),
+    ) -> dict:
+        """Return the answer bank, in display order."""
+
+        rows = session.scalars(
+            select(
+                ApplicationAnswerRecord
+            ).order_by(
+                ApplicationAnswerRecord
+                .sort_order,
+                ApplicationAnswerRecord.id,
+            )
+        ).all()
+
+        return {
+            "items": [
+                {
+                    "id": row.id,
+                    "label": row.label,
+                    "value": row.value,
+                }
+                for row in rows
+            ],
+        }
+
+    @app.put(
+        "/api/answers"
+    )
+    def put_answers(
+        payload: AnswerBank,
+        session: Session = Depends(
+            get_session
+        ),
+    ) -> dict:
+        """Replace the answer bank with what the user submitted.
+
+        A whole-bank replace rather than per-field patches, because the
+        editor lets rows be added, renamed, reordered and removed in one
+        pass and reconciling that field by field would be a worse API
+        for no benefit at this size.
+        """
+
+        session.execute(
+            delete(
+                ApplicationAnswerRecord
+            )
+        )
+
+        now = datetime.now(
+            timezone.utc
+        )
+
+        kept = 0
+
+        for index, item in enumerate(
+            payload.items
+        ):
+            label = item.label.strip()
+
+            if not label:
+                continue
+
+            session.add(
+                ApplicationAnswerRecord(
+                    label=label[:120],
+                    value=item.value,
+                    sort_order=index,
+                    updated_at=now,
+                )
+            )
+
+            kept += 1
+
+        session.commit()
+
+        return {
+            "saved": kept,
         }
 
     @app.get(

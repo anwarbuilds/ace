@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-06-v16"
+    "2026-09-07-v17"
 )
 
 
@@ -103,6 +103,10 @@ class EligibilityReasonCode(
 
     SPONSORSHIP_BLOCKER = (
         "SPONSORSHIP_BLOCKER"
+    )
+
+    SECURITY_ROLE = (
+        "SECURITY_ROLE"
     )
 
     HARDWARE_EMBEDDED_ROLE = (
@@ -667,6 +671,23 @@ def has_verifiable_requirements(
 # Title signals are treated as decisive because a hardware title is a
 # reliable statement of what the job is.
 
+# Security work is a specialism the user is not pursuing, so it is
+# rejected on the title alone rather than left to be skipped by hand
+# every day. Deliberately broad: a general engineering role sitting on
+# a security team is still a security team, and the user asked for
+# these out of the queue outright.
+SECURITY_TITLE_PATTERNS = (
+    r"\bsecurity\b",
+    r"\bappsec\b",
+    r"\binfosec\b",
+    r"\bcyber\s*security\b",
+    r"\bpenetration\s+test",
+    r"\bvulnerability\b",
+    r"\bcryptograph",
+    r"\btrust\s+and\s+safety\b",
+)
+
+
 HARDWARE_TITLE_PATTERNS = (
     r"\bembedded\b",
     r"\bfirmware\b",
@@ -790,13 +811,19 @@ CASE_SENSITIVE_OTHER_LANGUAGE_PATTERNS = (
 # A number is only an experience requirement when it is actually
 # attached to experience language. Matching bare digits picked up
 # unrelated figures such as salary bands and founding years.
+# The words between "years" and the experience noun are unbounded in
+# real postings: "5+ years backend software engineering experience",
+# "7+ years distributed systems experience". A whitelist of adjectives
+# missed all of those, so 5+ year roles reached the queue with no
+# requirement recorded at all. Any few words are allowed instead, and
+# the requirement is the noun that follows.
 EXPERIENCE_CONTEXT = (
-    r"(?:of\s+)?"
-    r"(?:relevant\s+|professional\s+|industry\s+|"
-    r"hands-?on\s+|work\s+|software\s+|engineering\s+|"
-    r"full-?time\s+)*"
-    r"(?:experience|building|shipping|working|developing|"
-    r"designing|writing|programming)"
+    r"(?:of\s+|in\s+|with\s+)?"
+    r"(?:[A-Za-z][\w/+#.\-]*[\s,]+){0,5}?"
+    r"(?:experience|expertise|background|"
+    r"building|shipping|working|developing|"
+    r"designing|writing|programming|engineering|"
+    r"roles?|positions?)"
 )
 
 
@@ -1163,6 +1190,40 @@ def _experience_figures(
     )
 
 
+def _experience_range_ceiling(
+    description: str,
+) -> int | None:
+    """Return the highest upper bound any stated range reaches.
+
+    A posting asking for "2 to 10+ years" sets its floor at two, so a
+    candidate with three qualifies and it should pass. It is still not
+    an early-career role, and calling it one puts senior work in a list
+    that means "a new graduate can apply to this".
+    """
+
+    highs = [
+        int(
+            match.group(
+                "high"
+            )
+        )
+        for match in (
+            EXPERIENCE_RANGE_PATTERN
+            .finditer(
+                description or ""
+            )
+        )
+    ]
+
+    return (
+        max(
+            highs
+        )
+        if highs
+        else None
+    )
+
+
 def _required_experience_years(
     description: str,
 ) -> int | None:
@@ -1229,10 +1290,39 @@ def _is_early_career_role(
     ):
         return True
 
+    # A range reaching well past early career disqualifies it, even
+    # though its floor is low enough to apply against.
+    ceiling = _experience_range_ceiling(
+        job.description
+    )
+
+    if (
+        ceiling is not None
+        and ceiling
+        > MAX_REQUIRED_EXPERIENCE_YEARS
+    ):
+        return False
+
     return (
         required_years is not None
         and required_years
         <= EARLY_CAREER_MAX_YEARS
+    )
+
+
+def _is_security_role(
+    job: CanonicalJob,
+) -> bool:
+    """Detect security-specialist postings.
+
+    Title only. A general backend role that merely mentions security in
+    its description is not a security role, and matching the body would
+    reject most of the queue.
+    """
+
+    return _matches_any_regex(
+        job.title,
+        SECURITY_TITLE_PATTERNS,
     )
 
 
@@ -1573,6 +1663,22 @@ def evaluate_job(
                 "Posting is an internship or "
                 "placement; ACE is scoped to "
                 "full-time early-career roles."
+            )
+        )
+
+    if _is_security_role(
+        job
+    ):
+        reject_codes.append(
+            EligibilityReasonCode
+            .SECURITY_ROLE
+        )
+
+        reject_reasons.append(
+            (
+                "Posting is a security "
+                "specialism, which is outside "
+                "what the user is pursuing."
             )
         )
 

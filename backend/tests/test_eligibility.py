@@ -328,7 +328,16 @@ def test_four_year_requirement_rejected() -> None:
     )
 
 
-def test_four_year_new_grad_role_qualifies() -> None:
+def test_a_new_grad_title_does_not_excuse_four_years() -> None:
+    """The number wins over the label.
+
+    This previously passed, but only because the extractor could not
+    read "4+ years of related experience" at all: "related" was not in
+    a whitelist of adjectives. Once the figure is actually seen, four
+    or more years is excluded, which is what
+    MAX_REQUIRED_EXPERIENCE_YEARS has always documented.
+    """
+
     decision = evaluate_job(
         make_job(
             title=(
@@ -344,8 +353,169 @@ def test_four_year_new_grad_role_qualifies() -> None:
 
     assert (
         decision.status
+        == EligibilityStatus.REJECT
+    )
+
+
+def test_a_new_grad_role_below_the_bar_qualifies() -> None:
+    decision = evaluate_job(
+        make_job(
+            title=(
+                "Software Engineer - New Grad"
+            ),
+            description=(
+                "This early career role lists "
+                "2+ years of related "
+                "experience."
+            ),
+        )
+    )
+
+    assert (
+        decision.status
         == EligibilityStatus.PASS
     )
+
+
+def test_experience_is_read_through_any_adjectives() -> None:
+    """Real postings do not use a fixed vocabulary.
+
+    A whitelist of adjectives between "years" and "experience" missed
+    "5+ years backend software engineering experience" and every
+    phrasing like it, so senior roles reached the queue with no
+    requirement recorded at all.
+    """
+
+    for phrasing in (
+        "5+ years backend software "
+        "engineering experience",
+        "7+ years distributed systems "
+        "experience",
+        "6+ years of professional "
+        "full-stack development experience",
+        "8+ years in roles such as "
+        "software engineering",
+    ):
+        decision = evaluate_job(
+            make_job(
+                title="Software Engineer",
+                description=(
+                    "We are hiring. "
+                    + phrasing
+                    + " is required."
+                ),
+            )
+        )
+
+        assert (
+            decision.status
+            == EligibilityStatus.REJECT
+        ), phrasing
+
+
+def test_company_age_is_not_an_experience_requirement() -> None:
+    """"Founded 18 years ago" is not a demand for 18 years of work."""
+
+    for phrasing in (
+        "Before founding Sierra, Clay "
+        "spent 18 years at Google.",
+        "We have been transforming "
+        "computing for more than 25 years.",
+    ):
+        decision = evaluate_job(
+            make_job(
+                title=(
+                    "Software Engineer, "
+                    "New Grad"
+                ),
+                description=(
+                    phrasing
+                    + " Join our team."
+                ),
+            )
+        )
+
+        assert (
+            decision.status
+            == EligibilityStatus.PASS
+        ), phrasing
+
+
+def test_a_wide_range_is_not_early_career() -> None:
+    """"2 to 10+ years" has a floor you clear and a ceiling you do not.
+
+    It should still pass, since the minimum is two, but calling it
+    early career puts senior work in a list that means "a new graduate
+    can apply to this".
+    """
+
+    # early_career=False: the shared fixture otherwise injects "this is
+    # a new grad role" into the description, and an explicit marker
+    # like that is meant to win over an inferred range.
+    decision = evaluate_job(
+        make_job(
+            title="Full Stack Engineer",
+            early_career=False,
+            description=(
+                "Minimum requirements: 2-10+ "
+                "years of industry software "
+                "engineering experience. "
+                + VERIFIABLE_PAD
+            ),
+        )
+    )
+
+    assert (
+        decision.status
+        == EligibilityStatus.PASS
+    )
+
+    assert (
+        EligibilityReasonCode
+        .EARLY_CAREER_SIGNAL
+        not in decision.reason_codes
+    )
+
+
+def test_security_titles_are_rejected() -> None:
+    """A specialism the user is not pursuing, filtered on title alone."""
+
+    for title in (
+        "Security Platform Engineer",
+        "Software Engineer, Security",
+        "Security Software Engineer, "
+        "Vulnerability Operations",
+        "Application Security Engineer",
+    ):
+        decision = evaluate_job(
+            make_job(
+                title=title,
+            )
+        )
+
+        assert (
+            decision.status
+            == EligibilityStatus.REJECT
+        ), title
+
+
+def test_ordinary_engineering_titles_survive_the_security_rule() -> None:
+    for title in (
+        "Software Engineer, Backend",
+        "Software Engineer, New Grad",
+        "Backend Engineer, Payments",
+        "Full Stack Engineer",
+    ):
+        decision = evaluate_job(
+            make_job(
+                title=title,
+            )
+        )
+
+        assert (
+            decision.status
+            == EligibilityStatus.PASS
+        ), title
 
 
 def test_seven_year_requirement_always_rejected() -> None:
