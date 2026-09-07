@@ -1097,3 +1097,58 @@ def test_a_wrong_location_does_not_force_a_match(
             .status
             == AMBIGUOUS
         )
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("14 August", date(2026, 8, 14)),
+        ("2 September", date(2026, 9, 2)),
+        ("August 14", date(2026, 8, 14)),
+        ("30 Aug", date(2026, 8, 30)),
+    ],
+)
+def test_dates_without_a_year_are_read(
+    raw,
+    expected,
+) -> None:
+    """A single season of applications drops the year, because within
+    one job search it is obvious.
+
+    Refusing them lost every date in a real 96-row sheet.
+    """
+
+    from backend.app.applications.parsing import (
+        parse_date,
+    )
+
+    assert parse_date(
+        raw,
+        today=date(
+            2026,
+            9,
+            7,
+        ),
+    ) == expected
+
+
+def test_a_yearless_date_far_ahead_is_read_as_last_year() -> None:
+    """"20 December" on a sheet opened in January means the one just
+    gone, not eleven months away."""
+
+    from backend.app.applications.parsing import (
+        parse_date,
+    )
+
+    assert parse_date(
+        "20 December",
+        today=date(
+            2026,
+            1,
+            10,
+        ),
+    ) == date(
+        2025,
+        12,
+        20,
+    )

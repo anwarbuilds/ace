@@ -168,10 +168,29 @@ DATE_FORMATS = (
     "%b %d, %Y",
     "%b %d %Y",
     "%B %d, %Y",
+    "%B %d %Y",
     "%d %b %Y",
+    "%d %B %Y",
     "%m-%d-%Y",
     "%d-%m-%Y",
 )
+
+
+# People tracking a single season of applications drop the year, because
+# within one job search it is obvious. "14 August" and "6 September" are
+# how a real sheet reads, and refusing them loses every date in the file.
+YEARLESS_FORMATS = (
+    "%d %B",
+    "%d %b",
+    "%B %d",
+    "%b %d",
+)
+
+
+# How far ahead a yearless date may land before it is read as last year.
+# A sheet written in January listing "20 December" means the December
+# just gone, not the one eleven months away.
+FUTURE_TOLERANCE_DAYS = 45
 
 
 @dataclass(
@@ -282,6 +301,8 @@ def map_columns(
 
 def parse_date(
     value,
+    *,
+    today: date | None = None,
 ) -> date | None:
     """Parse a date cell, returning None when it cannot be read.
 
@@ -323,6 +344,59 @@ def parse_date(
             ).date()
         except ValueError:
             continue
+
+    return _parse_yearless(
+        text,
+        today=today,
+    )
+
+
+def _parse_yearless(
+    text: str,
+    *,
+    today: date | None = None,
+) -> date | None:
+    """Read a date written without a year, inferring the likely one.
+
+    The current year is assumed. A result landing well in the future is
+    read as the previous year instead, which is what "20 December" means
+    on a sheet opened in January.
+    """
+
+    reference = (
+        today
+        if today is not None
+        else date.today()
+    )
+
+    for fmt in YEARLESS_FORMATS:
+        try:
+            parsed = datetime.strptime(
+                text,
+                fmt,
+            ).date()
+        except ValueError:
+            continue
+
+        try:
+            candidate = parsed.replace(
+                year=reference.year
+            )
+        except ValueError:
+            # 29 February in a non-leap year.
+            continue
+
+        if (
+            candidate - reference
+        ).days > FUTURE_TOLERANCE_DAYS:
+            try:
+                candidate = candidate.replace(
+                    year=reference.year - 1
+                )
+            except ValueError:
+                continue
+
+        return candidate
 
     return None
 
