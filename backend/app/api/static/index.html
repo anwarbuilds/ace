@@ -469,7 +469,11 @@ select{width:100%;background:var(--surface-2);color:var(--text);border:1px solid
    ACE client
    ============================================================ */
 var API="";
-var HIGH=70, MED=45, PAGE=60, RECENT_DAYS=15;
+var HIGH=70, MED=45, PAGE=60;
+// Optional Queue housekeeping, off by default: the user would rather
+// see the whole queue and narrow it deliberately than have anything
+// hidden without being asked. Nothing is ever deleted either way.
+var RECENT_DAYS=15;
 
 var TIER_LABEL={BIG_TECH:"Big tech", TOP_TIER:"Top tier", ESTABLISHED:"Established", OTHER:""};
 var STATUSES=["applied","screening","interviewing","offer","accepted","rejected","withdrawn","ghosted"];
@@ -490,7 +494,7 @@ var SORTS=[
 var state={
   page:"queue", view:"all", jobId:null,
   q:"", sorts:["new_grad_first","best_match"],
-  filters:{}, tiers:[], excluded:[], recentOnly:true,
+  filters:{}, tiers:[], excluded:[], recentOnly:false,
   items:[], total:0, loading:true, loadingMore:false, hasMore:false, offset:0, reqToken:0,
   selectedId:null, scrollTo:false,
   stats:{}, sessions:[], lastPoll:null, markCounts:{saved:0,archived:0,applied:0,open_applications:0,by_status:{}},
