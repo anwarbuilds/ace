@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "ACE Autofill",
+  "version": "1.0.0",
+  "description": "Fills application forms from the answer bank in your local ACE instance. It never submits anything.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://job-boards.greenhouse.io/*",
+        "https://boards.greenhouse.io/*",
+        "https://*.greenhouse.io/*",
+        "https://jobs.ashbyhq.com/*",
+        "https://jobs.lever.co/*"
+      ],
+      "js": ["fields.js", "content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "action": { "default_popup": "popup.html", "default_title": "ACE Autofill" }
+}
