@@ -549,4 +549,70 @@ def apply_import(
 
         marked += 1
 
+    drop_external_duplicates(
+        session,
+        job_ids=seen,
+    )
+
     return marked
+
+
+def drop_external_duplicates(
+    session: Session,
+    *,
+    job_ids: set[int],
+) -> int:
+    """Remove standalone records now covered by a real posting.
+
+    An ambiguous row is kept as history until a posting is chosen for
+    it, which means choosing one later would leave the application
+    listed twice: once as a job mark and once as the placeholder. The
+    placeholder is the one to drop, because the posting carries more.
+
+    Returns:
+        How many placeholders were removed.
+    """
+
+    if not job_ids:
+        return 0
+
+    keys = set()
+
+    for job in session.scalars(
+        select(
+            JobRecord
+        ).where(
+            JobRecord.id.in_(
+                job_ids
+            )
+        )
+    ):
+        keys.add(
+            external_match_key(
+                company=job.company,
+                title=job.title,
+            )
+        )
+
+    if not keys:
+        return 0
+
+    removed = 0
+
+    for record in session.scalars(
+        select(
+            ExternalApplicationRecord
+        ).where(
+            ExternalApplicationRecord
+            .match_key.in_(
+                keys
+            )
+        )
+    ):
+        session.delete(
+            record
+        )
+
+        removed += 1
+
+    return removed

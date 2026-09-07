@@ -37,7 +37,9 @@ from backend.app.applications.parsing import (
 )
 from backend.app.applications.service import (
     apply_import,
+    list_external_applications,
     preview_import,
+    record_external_applications,
 )
 from backend.app.db.base import Base
 from backend.app.db.models import (
@@ -1152,3 +1154,118 @@ def test_a_yearless_date_far_ahead_is_read_as_last_year() -> None:
         12,
         20,
     )
+
+
+def test_choosing_a_posting_removes_the_placeholder(
+    session_factory,
+) -> None:
+    """An ambiguous row is kept as history until a posting is chosen
+    for it. Choosing one later must not leave the application listed
+    twice, once as a mark and once as the placeholder it replaced."""
+
+    with session_factory() as session:
+        job = add_job(
+            session,
+            index=1,
+            company="Workday",
+            title=(
+                "Software Development"
+                " Engineer"
+            ),
+        )
+
+        record_external_applications(
+            session,
+            entries=[
+                {
+                    "company": "Workday",
+                    "title": (
+                        "Software Development"
+                        " Engineer"
+                    ),
+                    "applied_on": None,
+                    "status": None,
+                    "url": None,
+                },
+            ],
+        )
+
+        session.commit()
+
+        assert len(
+            list_external_applications(
+                session
+            )
+        ) == 1
+
+        apply_import(
+            session,
+            decisions=[
+                {
+                    "job_id": job.id,
+                    "applied_on": None,
+                    "status": None,
+                },
+            ],
+        )
+
+        session.commit()
+
+        assert (
+            list_external_applications(
+                session
+            )
+            == []
+        ), "the placeholder outlived the posting that replaced it"
+
+
+def test_an_unrelated_placeholder_survives(
+    session_factory,
+) -> None:
+    """Cleanup keys on company and title, so importing one row must not
+    quietly delete history belonging to another."""
+
+    with session_factory() as session:
+        job = add_job(
+            session,
+            index=1,
+            company="Workday",
+            title="Backend Engineer",
+        )
+
+        record_external_applications(
+            session,
+            entries=[
+                {
+                    "company": "Workday",
+                    "title": (
+                        "Machine Learning"
+                        " Engineer"
+                    ),
+                    "applied_on": None,
+                    "status": None,
+                    "url": None,
+                },
+            ],
+        )
+
+        session.commit()
+
+        apply_import(
+            session,
+            decisions=[
+                {
+                    "job_id": job.id,
+                    "applied_on": None,
+                    "status": None,
+                },
+            ],
+        )
+
+        session.commit()
+
+        assert len(
+            list_external_applications(
+                session
+            )
+        ) == 1

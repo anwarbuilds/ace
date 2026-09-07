@@ -1565,9 +1565,14 @@ function closeImport(){ var el=document.querySelector(".sheet-wrap"); if(el) el.
 function importCount(){ return Object.keys(state.importChoice||{}).filter(function(k){return state.importChoice[k];}).length; }
 function unplaceableRows(){
   var d=state.importData; if(!d) return [];
-  // Nothing to attach to, but enough detail to stand on its own.
+  // Every row that will not become a job mark, so that no application
+  // can fall between the two buckets and be dropped. An ambiguous row
+  // belongs here until a posting is chosen for it, and a row with no
+  // title is still an application worth keeping.
   return d.rows.filter(function(r){
-    return (r.status==="unmatched"||r.status==="unusable") && r.company && r.title;
+    if(!r.company) return false;
+    if(r.status==="ambiguous") return !state.importChoice[r.row_number];
+    return r.status==="unmatched"||r.status==="unusable";
   });
 }
 function importLabel(){
@@ -1584,7 +1589,7 @@ function renderImport(){
     var pick="";
     if(r.status==="ambiguous"){
       pick='<div class="imp-pick"><select data-improw="'+r.row_number+'">'+
-        '<option value="">Skip, '+r.candidates.length+' possible matches</option>'+
+        '<option value="">Keep as history, '+r.candidates.length+' possible matches</option>'+
         r.candidates.map(function(cd){
           // Location first: these options are often identical apart
           // from where they are.
@@ -1592,7 +1597,7 @@ function renderImport(){
             (cd.location?esc(cd.location)+' \u00b7 ':'')+esc(clean(cd.title))+'</option>';}).join("")+'</select></div>';
     }
     var note=r.status==="matched"?("Matched by "+esc(r.method))
-      :r.status==="ambiguous"?"Several postings fit. Choose one, or skip."
+      :r.status==="ambiguous"?"Several postings fit. Choose one, or keep it as history."
       :r.status==="unusable"?"Needs a role title or a link."
       :"No stored posting matches this.";
     return '<div class="imp"><span class="imp-tag imp-'+r.status+'">'+r.status+'</span>'+
@@ -1613,9 +1618,11 @@ function renderImport(){
       '<p class="imp-sub">Nothing is recorded until you confirm. A status column is read if your sheet has one, '+
         'and re-uploading an updated sheet moves existing rows forward rather than duplicating them.</p>'+
       (unplaceable>0
-        ? '<p class="imp-sub" style="margin-top:7px">ACE only stores postings it has seen since it started watching'+
-          (state.stats.corpus_started_at?" on "+shortDate(state.stats.corpus_started_at):"")+'. '+
-          unplaceable+' of these were applied to before that, or have since closed, so there is no posting to attach them to.</p>'
+        ? '<p class="imp-sub" style="margin-top:7px">'+unplaceable+
+          ' will be kept as history rather than attached to a posting. ACE only stores postings it has seen since it '+
+          'started watching'+(state.stats.corpus_started_at?" on "+shortDate(state.stats.corpus_started_at):"")+
+          ', so anything applied to before that, or since closed, has nothing to attach to. '+
+          'A row where several postings fit is kept the same way until you choose one.</p>'
         : '')+
       '</div>'+
     '<div class="sheet-body">'+rows+'</div>'+
@@ -1623,20 +1630,25 @@ function renderImport(){
       '<button class="btn btn-primary" data-act="doimport">'+importLabel()+'</button>'+
       (unplaceable>0
         ? '<label class="imp-keep"><input type="checkbox" id="keep-ext"'+(state.keepExternal?" checked":"")+'>'+
-          'Also keep the '+unplaceable+' ACE could not place, as history</label>'
+          'Also keep the <span class="imp-keep-n">'+unplaceable+'</span> ACE could not place, as history</label>'
         : '')+
       '<button class="btn btn-ghost" data-act="closeimport">Cancel</button></div></div>';
   document.body.appendChild(el);
   el.addEventListener("mousedown",function(e){ if(e.target===el) closeImport(); });
+  // Choosing a posting moves a row from the history bucket into the
+  // matched one, so both tallies have to be redrawn together or the
+  // dialog claims it will keep a row it is about to attach.
+  function syncImportTotals(){
+    var b=el.querySelector('[data-act="doimport"]'); if(b) b.textContent=importLabel();
+    var n=el.querySelector(".imp-keep-n"); if(n) n.textContent=String(unplaceableRows().length);
+  }
   el.addEventListener("change",function(e){
     if(e.target.id==="keep-ext"){
-      state.keepExternal=e.target.checked;
-      var bb=el.querySelector('[data-act="doimport"]'); if(bb) bb.textContent=importLabel();
-      return;
+      state.keepExternal=e.target.checked; syncImportTotals(); return;
     }
     var sel=e.target.closest("[data-improw]"); if(!sel) return;
     state.importChoice[sel.dataset.improw]=sel.value?parseInt(sel.value,10):null;
-    var b=el.querySelector('[data-act="doimport"]'); if(b) b.textContent=importLabel();
+    syncImportTotals();
   });
 }
 function runImport(){
