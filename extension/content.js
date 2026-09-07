@@ -8,6 +8,9 @@
 (function () {
   var answers = {};
   var lastFill = [];
+  var loaded = false;
+  var filledOnce = false;
+  var lastResult = null;
 
   function setNatively(field, value) {
     // React tracks its own value on the node and ignores a plain
@@ -215,14 +218,131 @@
     host.innerHTML = body;
   }
 
+  function countReady() {
+    var ready = 0;
+
+    fillable().forEach(function (field) {
+      var name = aceAnswerNameFor(aceQuestionFor(field));
+      if (name && answers[name] && aceIsEmpty(field)) ready += 1;
+    });
+
+    return ready;
+  }
+
+  function looksLikeForm() {
+    return fillable().filter(function (field) {
+      return field.type !== "radio" && field.type !== "checkbox";
+    }).length >= 4;
+  }
+
+  function describe(result) {
+    return '<div class="ace-t">Filled ' + result.filled.length + ' field' +
+      (result.filled.length === 1 ? "" : "s") + '</div>' +
+      (result.already
+        ? '<div class="ace-s">' + result.already +
+          ' already had a value and were left alone.</div>'
+        : "") +
+      (result.unmatched.length
+        ? '<div class="ace-s ace-warn">Your answer matched none of the options for: ' +
+          result.unmatched.join("; ") + '. Reword it in ACE to match.</div>'
+        : "") +
+      (result.unknown.length
+        ? '<div class="ace-s">Not answered: ' +
+          result.unknown.slice(0, 4).map(function (question) {
+            return question.replace(/[<>&]/g, "");
+          }).join("; ") + '</div>'
+        : "") +
+      '<div class="ace-s ace-warn">Check it before you submit.</div>';
+  }
+
+  function offer(host, ready) {
+    render(host,
+      '<div class="ace-t">ACE can fill ' + ready + ' field' +
+        (ready === 1 ? "" : "s") + '</div>' +
+      (filledOnce ? '<div class="ace-s">New questions appeared on this step.</div>' : "") +
+      '<button class="ace-go">Fill</button>');
+
+    host.querySelector(".ace-go").addEventListener("click", function () {
+      var result = plan();
+      filledOnce = true;
+      lastResult = result;
+
+      render(host, describe(result) + '<button class="ace-go ace-undo">Undo</button>');
+
+      host.querySelector(".ace-undo").addEventListener("click", function () {
+        undo();
+        filledOnce = false;
+        lastResult = null;
+        host.remove();
+      });
+    });
+  }
+
+  /* Recomputed whenever the page changes, because these forms are not
+     there when the script is.
+
+     Waiting for the first input to exist was not enough: a Netflix
+     application page has cookie-consent checkboxes in the markup from
+     the start, so the check passed instantly and the real form mounted
+     seconds later against a badge that had already given up. The same
+     applies as the user moves between steps of a multi-step form. */
+  /* React reconciles the nodes it owns and drops the class ACE put on
+     them, so on a React form the outline vanishes a moment after the
+     fill and the user cannot see what was touched. Re-applied whenever
+     the page settles. */
+  function paint() {
+    lastFill.forEach(function (record) {
+      if (record.field.isConnected) {
+        record.field.classList.add("ace-filled");
+      }
+    });
+  }
+
+  function refresh() {
+    if (!ready()) return;
+
+    paint();
+
+    var host = document.querySelector(".ace-badge") || badge();
+    var count = countReady();
+
+    if (count) {
+      offer(host, count);
+      return;
+    }
+
+    if (lastResult) {
+      render(host, describe(lastResult) +
+        '<button class="ace-go ace-undo">Undo</button>');
+      host.querySelector(".ace-undo").addEventListener("click", function () {
+        undo();
+        filledOnce = false;
+        lastResult = null;
+        host.remove();
+      });
+      return;
+    }
+
+    if (looksLikeForm()) {
+      render(host,
+        '<div class="ace-t">Nothing left to fill</div>' +
+        '<div class="ace-s">Every field ACE knows already has a value, ' +
+        'or this form asks questions your bank has no answer for.</div>');
+    } else {
+      host.remove();
+    }
+  }
+
+  function ready() {
+    return loaded;
+  }
+
   function start() {
     chrome.runtime.sendMessage({ type: "answers" }, function (reply) {
       if (chrome.runtime.lastError) return;
 
-      var host = badge();
-
       if (!reply || !reply.ok) {
-        render(host,
+        render(badge(),
           '<div class="ace-t">ACE is not reachable</div>' +
           '<div class="ace-s">Start it, or set the address from the toolbar icon.</div>');
         return;
@@ -238,81 +358,35 @@
       });
 
       if (!known) {
-        render(host,
+        render(badge(),
           '<div class="ace-t">No answers saved yet</div>' +
           '<div class="ace-s">Fill them in once in ACE and they land here.</div>');
         return;
       }
 
-      var ready = 0;
+      loaded = true;
+      refresh();
 
-      fillable().forEach(function (field) {
-        var name = aceAnswerNameFor(aceQuestionFor(field));
-        if (name && answers[name] && aceIsEmpty(field)) ready += 1;
-      });
+      // Debounced, because a React form mounting fires a great many
+      // mutations and each one would otherwise rebuild the badge.
+      var pending = null;
 
-      if (!ready) {
-        // Silence is ambiguous: on a covered site it looks the same as
-        // an extension that failed to load. Say so where the page is
-        // clearly a form, and stay quiet everywhere else.
-        var looksLikeForm = fillable().filter(function (field) {
-          return field.type !== "radio" && field.type !== "checkbox";
-        }).length >= 4;
-
-        if (looksLikeForm) {
-          render(host,
-            '<div class="ace-t">Nothing left to fill</div>' +
-            '<div class="ace-s">Every field ACE knows already has a value, ' +
-            'or this form asks questions your bank has no answer for.</div>');
-        } else {
-          host.remove();
-        }
-
-        return;
-      }
-
-      render(host,
-        '<div class="ace-t">ACE can fill ' + ready + ' field' + (ready === 1 ? "" : "s") + '</div>' +
-        '<button class="ace-go">Fill</button>');
-
-      host.querySelector(".ace-go").addEventListener("click", function () {
-        var result = plan();
-
-        render(host,
-          '<div class="ace-t">Filled ' + result.filled.length + ' field' +
-            (result.filled.length === 1 ? "" : "s") + '</div>' +
-          (result.already
-            ? '<div class="ace-s">' + result.already + ' already had a value and were left alone.</div>'
-            : "") +
-          (result.unmatched.length
-            ? '<div class="ace-s ace-warn">Your answer matched none of the options for: ' +
-              result.unmatched.join("; ") + '. Reword it in ACE to match.</div>'
-            : "") +
-          (result.unknown.length
-            ? '<div class="ace-s">Not answered: ' +
-              result.unknown.slice(0, 4).map(function (q) {
-                return q.replace(/[<>&]/g, "");
-              }).join("; ") + '</div>'
-            : "") +
-          '<div class="ace-s ace-warn">Check it before you submit.</div>' +
-          '<button class="ace-go ace-undo">Undo</button>');
-
-        host.querySelector(".ace-undo").addEventListener("click", function () {
-          undo();
-          host.remove();
-        });
-      });
+      new MutationObserver(function () {
+        clearTimeout(pending);
+        pending = setTimeout(refresh, 400);
+      }).observe(document.body, { childList: true, subtree: true });
     });
   }
 
-  // Forms on these sites mount after the document is ready, so one pass
-  // at load would find an empty page.
-  var tries = 0;
-  var timer = setInterval(function () {
-    tries += 1;
-    if (document.querySelector("input, select, textarea") || tries > 20) {
-      clearInterval(timer);
-      start();
+  /* document_idle should guarantee a body, but the script also runs in
+     every frame, and a frame can be that early. Without this the first
+     appendChild throws and the extension dies silently. */
+  (function boot() {
+    if (!document.body) {
+      setTimeout(boot, 50);
+      return;
     }
-  }, 500);
+
+    start();
+  })();
 })();
