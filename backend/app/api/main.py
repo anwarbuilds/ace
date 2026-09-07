@@ -1595,11 +1595,100 @@ def create_app() -> FastAPI:
         session: Session = Depends(
             get_session
         ),
+        q: str | None = Query(
+            default=None,
+        ),
+        company: str | None = Query(
+            default=None,
+        ),
+        exclude_company: str | None = Query(
+            default=None,
+        ),
+        source: str | None = Query(
+            default=None,
+        ),
+        family: str | None = Query(
+            default=None,
+        ),
+        tier: str | None = Query(
+            default=None,
+        ),
+        early_career_only: bool = Query(
+            default=False,
+        ),
+        verified_only: bool = Query(
+            default=False,
+        ),
+        min_match: int | None = Query(
+            default=None,
+            ge=0,
+            le=100,
+        ),
+        max_detected_age_days: (
+            int | None
+        ) = Query(
+            default=None,
+            ge=1,
+            le=3650,
+        ),
+        mark: str | None = Query(
+            default=None,
+        ),
     ) -> dict:
-        """Return available filter options."""
+        """Return available filter options, counted where the user is.
+
+        The same narrowing the Queue is under, so a count in the menu
+        is the number of rows choosing it will actually show.
+        """
+
+        # min_match is scored against the active resume, so the filter
+        # cannot be honoured without knowing which resume that is.
+        resume = (
+            None
+            if min_match is None
+            else get_active_resume(
+                session
+            )
+        )
 
         return build_facets(
-            session
+            session,
+            filters=JobFilters(
+                families=_split_csv(
+                    family
+                ),
+                companies=_split_csv(
+                    company
+                ),
+                exclude_companies=(
+                    _split_csv(
+                        exclude_company
+                    )
+                ),
+                sources=_split_csv(
+                    source
+                ),
+                tiers=_split_csv(
+                    tier
+                ),
+                search=q,
+                early_career_only=(
+                    early_career_only
+                ),
+                verified_only=(
+                    verified_only
+                ),
+                min_match=min_match,
+                max_detected_age_days=(
+                    max_detected_age_days
+                ),
+                mark=mark,
+                resume_id=(
+                    None
+                    if resume is None
+                    else resume.id
+                ),
+            ),
         )
 
     if STATIC_DIRECTORY.is_dir():

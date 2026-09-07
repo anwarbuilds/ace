@@ -1183,3 +1183,102 @@ def test_a_run_that_found_nothing_keeps_an_empty_list(
         )
 
         assert enriched[0]["jobs"] == []
+
+
+def test_facet_counts_narrow_to_the_active_filters(
+    session_factory,
+) -> None:
+    """A count in the menu has to be the number of rows choosing it
+    will show. Counted over the whole corpus, the menu offered a
+    company the active tier filter had already removed, and choosing
+    it emptied the screen."""
+
+    with session_factory() as session:
+        add_job(
+            session,
+            external_id="1",
+            company="Amazon",
+        )
+
+        add_job(
+            session,
+            external_id="2",
+            company="Jobsbridge",
+        )
+
+        session.commit()
+
+        everything = build_facets(
+            session
+        )
+
+        assert {
+            row["value"]
+            for row in everything[
+                "companies"
+            ]
+        } == {
+            "Amazon",
+            "Jobsbridge",
+        }
+
+        big_tech = build_facets(
+            session,
+            filters=JobFilters(
+                tiers=(
+                    "BIG_TECH",
+                ),
+            ),
+        )
+
+        offered = {
+            row["value"]: row["count"]
+            for row in big_tech[
+                "companies"
+            ]
+        }
+
+        assert offered == {
+            "Amazon": 1,
+        }, "the menu offered a company the tier filter had removed"
+
+
+def test_a_facet_does_not_narrow_itself(
+    session_factory,
+) -> None:
+    """Filtering to one company must still list the others, or the
+    menu becomes a dead end you cannot get out of."""
+
+    with session_factory() as session:
+        add_job(
+            session,
+            external_id="1",
+            company="Amazon",
+        )
+
+        add_job(
+            session,
+            external_id="2",
+            company="Stripe",
+        )
+
+        session.commit()
+
+        facets = build_facets(
+            session,
+            filters=JobFilters(
+                companies=(
+                    "Amazon",
+                ),
+            ),
+        )
+
+        assert {
+            row["value"]
+            for row in facets[
+                "companies"
+            ]
+        } == {
+            "Amazon",
+            "Stripe",
+        }

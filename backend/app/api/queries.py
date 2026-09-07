@@ -1194,8 +1194,19 @@ def count_by(
     statuses: Sequence[str] = (
         QUALIFYING_STATUSES
     ),
+    filters: JobFilters | None = None,
+    now: datetime | None = None,
 ) -> list[tuple[str, int]]:
-    """Return counts grouped by one column, largest first."""
+    """Return counts grouped by one column, largest first.
+
+    ``filters`` narrows the count to what the user is already looking
+    at. Without it the menu offers "Jobsbridge 69" while a big-tech
+    tier filter is on, and choosing it empties the screen: the count
+    was counted over a corpus the user had already filtered away.
+
+    The caller is expected to clear the dimension being counted, so
+    that choosing a company still shows every company alongside it.
+    """
 
     statement = (
         select(
@@ -1234,6 +1245,20 @@ def count_by(
                     statuses
                 )
             )
+        )
+
+    if filters is not None:
+        statement = _apply_filters(
+            statement,
+            filters,
+            now=(
+                _as_utc(
+                    now
+                )
+                or datetime.now(
+                    timezone.utc
+                )
+            ),
         )
 
     return [
@@ -1491,52 +1516,67 @@ def build_stats(
 
 def build_facets(
     session: Session,
+    *,
+    filters: JobFilters | None = None,
+    now: datetime | None = None,
 ) -> dict:
-    """Return the filter options the UI should offer."""
+    """Return the filter options the UI should offer.
+
+    Counts are taken within what the user is already looking at, so a
+    number in the menu is the number of rows choosing it will show. Each
+    facet clears its own dimension first: filtering to one company must
+    still list the others, or the menu becomes a dead end.
+    """
+
+    def within(
+        column,
+        **cleared,
+    ):
+        narrowed = (
+            None
+            if filters is None
+            else replace(
+                filters,
+                **cleared,
+            )
+        )
+
+        return [
+            {
+                "value": value,
+                "count": count,
+            }
+            for value, count in count_by(
+                session,
+                column,
+                filters=narrowed,
+                now=now,
+            )
+        ]
 
     return {
-        "families": [
-            {
-                "value": value,
-                "count": count,
-            }
-            for value, count in count_by(
-                session,
-                JobEvaluationRecord
-                .role_family,
-            )
-        ],
-        "priorities": [
-            {
-                "value": value,
-                "count": count,
-            }
-            for value, count in count_by(
-                session,
-                JobEvaluationRecord
-                .role_priority,
-            )
-        ],
-        "companies": [
-            {
-                "value": value,
-                "count": count,
-            }
-            for value, count in count_by(
-                session,
-                JobRecord.company,
-            )
-        ],
-        "sources": [
-            {
-                "value": value,
-                "count": count,
-            }
-            for value, count in count_by(
-                session,
-                JobRecord.source,
-            )
-        ],
+        "families": within(
+            JobEvaluationRecord
+            .role_family,
+            families=(),
+        ),
+        "priorities": within(
+            JobEvaluationRecord
+            .role_priority,
+            priorities=(),
+        ),
+        # Both company dimensions clear together: the menu offers
+        # "only this" and "hide this" from one list, so neither may
+        # narrow it.
+        "companies": within(
+            JobRecord.company,
+            companies=(),
+            exclude_companies=(),
+        ),
+        "sources": within(
+            JobRecord.source,
+            sources=(),
+        ),
         "statuses": [
             "PASS",
             "REJECT",

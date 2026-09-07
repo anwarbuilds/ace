@@ -409,6 +409,79 @@ def test_a_company_outside_the_top_few_is_reachable(
     )
 
 
+def test_a_filter_offered_never_empties_the_queue(
+    page,
+) -> None:
+    """Counts were taken over the whole corpus, so with a tier filter
+    on, the menu offered companies that filter had already removed.
+    Choosing one showed nothing, which reads as the tap doing nothing
+    at all."""
+
+    before = page.eval(
+        "state.total"
+    )
+
+    page.click(
+        '[data-tier="BIG_TECH"]'
+    )
+
+    # Waiting on `!state.loading` alone is a race: the flag is still
+    # false from the previous load until loadJobs actually starts, so
+    # the assertions below would read the numbers from before the tap.
+    page.wait_for(
+        "!state.loading && "
+        "state.tiers[0]==='BIG_TECH' && "
+        "state.total!==" + str(
+            before
+        )
+    )
+
+    total = page.eval(
+        "state.total"
+    )
+
+    assert total > 0
+
+    assert page.eval(
+        "state.facets.companies"
+        ".reduce(function(a,b){"
+        "return a+b.count;},0)"
+    ) == total, (
+        "the menu counts more rows than the queue holds"
+    )
+
+    _open_filters(
+        page
+    )
+
+    picked = page.eval(
+        "(function(){var b=document"
+        ".querySelectorAll('.pop-opt"
+        "[data-addfilter=\"company\"]');"
+        "if(!b.length) return '';"
+        "b[b.length-1].click();"
+        "return b[b.length-1]"
+        ".dataset.value;})()"
+    )
+
+    assert picked, "no company was offered"
+
+    page.wait_for(
+        "!state.loading && "
+        "state.total!==" + str(
+            total
+        )
+    )
+
+    assert page.eval(
+        "state.total"
+    ) > 0, f"choosing {picked} emptied the queue"
+
+    page.click(
+        '[data-tier="BIG_TECH"]'
+    )
+
+
 # --- pages load -------------------------------------------------------
 
 

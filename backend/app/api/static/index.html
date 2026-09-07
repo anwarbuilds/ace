@@ -646,6 +646,17 @@ function params(extra){
   return p;
 }
 function sortParam(){ return state.sorts.length?state.sorts.join(","):"new_grad_first"; }
+// What the user is looking at, without paging or ordering. Facet counts
+// have to be taken inside this, or the menu offers rows that the filters
+// already on screen have removed.
+function facetParams(){
+  var e={};
+  if(state.page==="saved") e.mark="saved";
+  else if(state.page==="archive") e.mark="archived";
+  else if(state.page==="applied") e.mark="applied";
+  else if(state.view==="matched") e.min_match=HIGH;
+  return e;
+}
 function viewParams(){
   var e={sort:sortParam(), limit:PAGE, offset:state.offset};
   if(state.page==="saved"){ e.mark="saved"; return e; }
@@ -693,7 +704,7 @@ function loadShell(){
     get("/api/stats",params()).then(function(d){ state.stats=d; state.lastPoll=d.last_poll_at; }),
     get("/api/sessions",new URLSearchParams({limit:"30",jobs_per_session:"6"})).then(function(d){
       state.sessions=d.sessions||[]; if(d.last_poll_at) state.lastPoll=d.last_poll_at; }),
-    get("/api/facets").then(function(d){ state.facets=d; }),
+    get("/api/facets",params(facetParams())).then(function(d){ state.facets=d; }),
     get("/api/resume").then(function(d){ state.resume=d.resume; state.gap=d.skills_gap||[]; }),
     get("/api/marks").then(function(d){ state.markCounts=d; }),
     get("/api/answers").then(function(d){ state.answers=d.items||[]; }),
