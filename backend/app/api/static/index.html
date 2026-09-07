@@ -526,6 +526,7 @@ var state={
   page:"queue", view:"all", jobId:null,
   q:"", sorts:["unapplied_first","new_grad_first","best_match"],
   filters:{}, tiers:[], excluded:[], recentOnly:false,
+  pinned:null, heldRow:null,
   items:[], total:0, loading:true, loadingMore:false, hasMore:false, offset:0, reqToken:0,
   selectedId:null, scrollTo:false,
   stats:{}, sessions:[], lastPoll:null, markCounts:{saved:0,archived:0,applied:0,open_applications:0,by_status:{}},
@@ -608,6 +609,7 @@ var I={
   briefcase:'<rect x="2" y="5" width="12" height="9" rx="1.5"/><path d="M6 5V3.5h4V5"/>',
   upload:'<path d="M8 11V3M5 6l3-3 3 3"/><path d="M2.5 11v2.5h11V11"/>',
   minus:'<path d="M3.5 8h9"/>',
+  download:'<path d="M8 3v8M5 8l3 3 3-3"/><path d="M2.5 11v2.5h11V11"/>',
   copy:'<rect x="5.5" y="5.5" width="8" height="9" rx="1.5"/><path d="M10.5 5.5V2.5h-8v8h2"/>'
 };
 
@@ -652,6 +654,14 @@ function loadJobs(append){
   return get("/api/jobs",params(viewParams())).then(function(d){
     if(token!==state.reqToken) return;
     state.items=append?state.items.concat(d.items):d.items;
+    // A row the user just acted on stays visible for this load even if
+    // the sort would now place it out of reach.
+    if(state.pinned && !append){
+      var held=state.heldRow;
+      if(held && !state.items.some(function(x){return x.id===held.id;})){
+        state.items.unshift(held);
+      }
+    }
     state.offset=state.offset+d.items.length;
     state.hasMore=d.has_more; state.total=d.total;
     state.loading=false; state.loadingMore=false;
@@ -705,6 +715,10 @@ function applyMark(j,res){
 function mark(id,key,advance){
   var j=jobById(id);
   if(!j){ showToast("That opportunity is no longer on screen"); render(); return; }
+  // Marking applied re-sorts the row to the bottom under the default
+  // sort. Holding it in place until the next load means the click looks
+  // like it did something instead of making the row disappear.
+  if(key==="applied") state.pinned=id;
   var was=markOf(j)[key];
   var body = key==="saved"?{saved:!was} : key==="applied"?{applied:!was}
            : was?{clear_review:true}:{review_state:key};
@@ -716,6 +730,7 @@ function mark(id,key,advance){
              applied:was?"Applied cleared":"Marked applied"}[key];
   putMark(id,body).then(function(res){
     applyMark(j,res); refreshMarkCounts();
+    if(key==="applied") state.heldRow=j;
     showToast(label,function(){ putMark(id,undoBody).then(function(b){ applyMark(j,b); refreshMarkCounts(); render(); }); });
     var onMarkPage=(state.page==="saved"&&key==="saved"&&was)||
                    (state.page==="archive"&&(key==="reviewed"||key==="dismissed")&&was)||
@@ -875,6 +890,9 @@ function jobRow(j){
       '<button class="iconbtn'+(m.saved?" on":"")+'" data-mark="saved" data-id="'+j.id+'" aria-label="Save">'+icon(I.star)+'</button>'+
       '<button class="iconbtn'+(m.reviewed?" on":"")+'" data-mark="reviewed" data-id="'+j.id+'" aria-label="Reviewed">'+icon(I.check)+'</button>'+
       '<button class="iconbtn'+(m.dismissed?" on":"")+'" data-mark="dismissed" data-id="'+j.id+'" aria-label="Not relevant">'+icon(I.x)+'</button>'+
+      '<button class="iconbtn'+(m.applied?" on":"")+'" data-mark="applied" data-id="'+j.id+'" '+
+        'title="'+(m.applied?"Applied "+shortDate(j.applied_at):"Mark applied (a)")+'" '+
+        'aria-label="Mark applied" aria-pressed="'+(!!m.applied)+'">'+icon(I.briefcase)+'</button>'+
       '<a class="iconbtn" href="'+esc(j.official_url)+'" target="_blank" rel="noopener" data-stop aria-label="Open posting">'+icon(I.ext)+'</a>'+
     '</span></td></tr>';
 }
@@ -956,8 +974,9 @@ function emptyState(){
 function appliedHint(){
   if(state.page!=="applied") return "";
   return '<div class="ext-note" style="padding-top:12px">'+
-    'Upload your spreadsheet again whenever it changes. Rows already recorded are updated in place, '+
-    'so a job moving from applied to rejected is reflected rather than added twice.</div>';
+    'Mark a job applied straight from the queue and it lands here, no spreadsheet needed. '+
+    'Export whenever you want the sheet, or import one to bring in history ACE did not see. '+
+    'Re-importing updates rows in place rather than duplicating them.</div>';
 }
 function externalBlock(){
   if(state.page!=="applied"||!state.externalApps.length) return "";
@@ -984,8 +1003,11 @@ function queuePage(){
       '<span class="h1-count">'+(state.loading?"":state.total)+'</span>'+
       '<span class="spacer"></span>'+
       (state.page==="applied"
-        ?'<button class="btn btn-secondary btn-sm" data-act="importapps">'+icon(I.upload,14)+
-         'Update from spreadsheet</button>':'')+
+        ?'<a class="btn btn-secondary btn-sm" href="'+API+'/api/applications/export.csv" '+
+          'download title="Download your history as a spreadsheet">'+icon(I.download,14)+
+          'Export sheet</a>'+
+         '<button class="btn btn-secondary btn-sm" data-act="importapps">'+icon(I.upload,14)+
+         'Import sheet</button>':'')+
       (state.newSinceVisit&&state.page==="queue"
         ?'<button class="since-btn" data-act="shownew">'+state.newSinceVisit+' new since '+clock(state.prevVisit)+'</button>':'')+
       liveChip()+'</div>'+
@@ -1369,6 +1391,7 @@ function onScroll(e){
 /* ---------------- navigation ---------------- */
 function isJobList(){ return ["queue","saved","applied","archive"].indexOf(state.page)>=0; }
 function goTo(page,view){
+  state.pinned=null; state.heldRow=null;
   if(location.hash) location.hash="";
   state.page=page; state.menuOpen=false; state.selectedId=null; closePop();
   if(view){ state.view=view; if(view==="new"||view==="latest") state.sorts=["newest"]; }

@@ -10,6 +10,8 @@ second, divergent source of truth.
 """
 
 from collections.abc import Iterator
+import csv
+import io
 from datetime import (
     datetime,
     timezone,
@@ -24,7 +26,10 @@ from fastapi import (
     Query,
     UploadFile,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import (
+    FileResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
@@ -375,6 +380,24 @@ def _serialize_job(
             else job.applied_at.isoformat()
         ),
     }
+
+
+def _sheet_date(
+    moment: datetime | None,
+) -> str:
+    """Format a date the way the user's own tracker writes it.
+
+    Their sheet carries no year, so the export does not add one. An
+    export that reformats the columns it is meant to slot into is a
+    file they have to fix before using.
+    """
+
+    if moment is None:
+        return ""
+
+    return moment.strftime(
+        "%-d %B"
+    )
 
 
 def _no_store(
@@ -1047,6 +1070,143 @@ def create_app() -> FastAPI:
                 rows
             ),
         }
+
+    @app.get(
+        "/api/applications/export.csv"
+    )
+    def export_applications(
+        session: Session = Depends(
+            get_session
+        ),
+    ):
+        """Return the whole application history as a spreadsheet.
+
+        This is the direction the data should flow. Marking a job
+        applied in ACE takes one click; retyping it into a sheet and
+        uploading that sheet back is the same fact entered twice, and
+        the second entry is the one that goes stale.
+
+        Columns match the sheet the user already keeps, so the export
+        drops straight into their existing tracker.
+        """
+
+        resume = get_active_resume(
+            session
+        )
+
+        page = list_jobs(
+            session,
+            filters=JobFilters(
+                mark="applied",
+                statuses=(),
+                active_only=False,
+                resume_id=(
+                    None
+                    if resume is None
+                    else resume.id
+                ),
+                sort="newest",
+                limit=MAX_PAGE_SIZE,
+            ),
+        )
+
+        # Paired with the date so the two sources can be merged into
+        # one chronological sheet rather than one list after another.
+        dated: list[
+            tuple[
+                datetime | None,
+                list[str],
+            ]
+        ] = [
+            (
+                job.applied_at,
+                [
+                    job.company,
+                    job.title,
+                    "Full Time",
+                    _sheet_date(
+                        job.applied_at
+                    ),
+                    (
+                        job.application_status
+                        or "applied"
+                    ).capitalize(),
+                    job.official_url,
+                ],
+            )
+            for job in page.items
+        ]
+
+        # History with no stored posting behind it belongs in the same
+        # sheet: it is the same application either way.
+        for record in (
+            list_external_applications(
+                session
+            )
+        ):
+            dated.append(
+                (
+                    record.applied_at,
+                    [
+                        record.company,
+                        record.title,
+                        "Full Time",
+                        _sheet_date(
+                            record.applied_at
+                        ),
+                        (
+                            record.application_status
+                            or "applied"
+                        ).capitalize(),
+                        record.url or "",
+                    ],
+                )
+            )
+
+        # Most recent first, with undated history last: an application
+        # whose date was never recorded is the least useful row to lead
+        # a sheet with.
+        dated.sort(
+            key=lambda pair: (
+                pair[0] is not None,
+                pair[0]
+                or datetime.min,
+            ),
+            reverse=True,
+        )
+
+        buffer = io.StringIO()
+
+        writer = csv.writer(
+            buffer
+        )
+
+        writer.writerow(
+            [
+                "Company Name",
+                "Role Title",
+                "Type",
+                "Date Applied",
+                "Status",
+                "Link",
+            ]
+        )
+
+        writer.writerows(
+            row
+            for _, row in dated
+        )
+
+        return Response(
+            content=buffer.getvalue(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": (
+                    "attachment; "
+                    "filename=\"ace-applications.csv\""
+                ),
+            },
+        )
 
     @app.get(
         "/api/answers"

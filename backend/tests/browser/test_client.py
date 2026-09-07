@@ -344,6 +344,218 @@ def test_every_page_renders_something(
     )
 
 
+# --- marking applied --------------------------------------------------
+
+
+def _first_unapplied(
+    page,
+) -> int:
+    """Return a queue row that is not already applied.
+
+    Tests must never toggle a real application off, so they pick a row
+    whose state they can restore exactly.
+    """
+
+    job_id = page.eval(
+        "(function(){var j=state.items"
+        ".filter(function(x){"
+        "return !x.applied_at;})[0];"
+        "return j ? j.id : 0;})()"
+    )
+
+    if not job_id:
+        pytest.skip(
+            "every queued job is already applied"
+        )
+
+    return job_id
+
+
+def _applied_on_server(
+    job_id: int,
+    expected: str,
+) -> str:
+    """Return an expression that resolves true once the server agrees.
+
+    The comparison sits inside the ``then`` because the browser hands
+    back a promise: comparing the promise itself to a string is a
+    perfectly valid expression that is simply always false.
+    """
+
+    return (
+        f"fetch('/api/jobs/{job_id}')"
+        ".then(function(r){"
+        "return r.json();})"
+        ".then(function(d){return "
+        "String(d.application_status)"
+        f"==={expected!r}".replace(
+            "'",
+            '"',
+        )
+        + ";})"
+    )
+
+
+def _mark_applied(
+    page,
+    job_id: int,
+) -> None:
+    """Click the row's Applied button and wait for the write to land.
+
+    Waiting matters beyond the assertion: cleanup issues its own write,
+    and a test that races ahead of the browser's request can have the
+    two arrive out of order and leave a real job marked applied.
+    """
+
+    page.click(
+        f'.row[data-id="{job_id}"] '
+        '.iconbtn[data-mark="applied"]'
+    )
+
+    page.wait_for(
+        _applied_on_server(
+            job_id,
+            "applied",
+        )
+    )
+
+
+def _clear_applied(
+    page,
+    job_id: int,
+) -> None:
+    """Put the job back the way the test found it.
+
+    This goes through the API rather than the button so cleanup still
+    runs when the assertion about the button is what failed, and it
+    waits for confirmation rather than trusting the write.
+    """
+
+    page.eval(
+        f"putMark({job_id},"
+        "{applied:false})"
+    )
+
+    page.wait_for(
+        _applied_on_server(
+            job_id,
+            "null",
+        )
+    )
+
+
+def test_a_queue_row_can_record_an_application(
+    page,
+) -> None:
+    """Recording an application used to mean an undiscoverable
+    keystroke or a round trip through a spreadsheet, which is why the
+    spreadsheet existed at all."""
+
+    job_id = _first_unapplied(
+        page
+    )
+
+    try:
+        _mark_applied(
+            page,
+            job_id,
+        )
+    finally:
+        _clear_applied(
+            page,
+            job_id,
+        )
+
+
+def test_a_just_applied_row_survives_a_reload(
+    page,
+) -> None:
+    """The default sort sinks applied jobs to the bottom of a queue
+    thousands long, so the next load would drop the row off the page
+    entirely and the click would read as the job vanishing."""
+
+    job_id = _first_unapplied(
+        page
+    )
+
+    try:
+        _mark_applied(
+            page,
+            job_id,
+        )
+
+        page.eval(
+            "loadJobs()"
+        )
+
+        page.wait_for(
+            "!state.loading"
+        )
+
+        assert page.eval(
+            "state.items.some(function(j){"
+            f"return j.id==={job_id};}})"
+        ), "the row left the screen when it was marked"
+
+        assert "Applied" in page.text(
+            f'.row[data-id="{job_id}"] '
+            ".c-status"
+        )
+    finally:
+        _clear_applied(
+            page,
+            job_id,
+        )
+
+
+def test_the_exported_sheet_keeps_its_columns(
+    page,
+) -> None:
+    """The export exists to drop into a tracker the user already keeps.
+    Renaming a column turns it into a file they have to fix first."""
+
+    header = page.eval(
+        "fetch('/api/applications"
+        "/export.csv')"
+        ".then(function(r){"
+        "return r.text();})"
+        ".then(function(t){"
+        "return t.split('\\n')[0]"
+        ".trim();})"
+    )
+
+    assert header == (
+        "Company Name,Role Title,Type,"
+        "Date Applied,Status,Link"
+    )
+
+
+def test_the_applied_page_offers_the_sheet(
+    page,
+) -> None:
+    """Exporting is what makes marking in ACE a replacement for the
+    spreadsheet rather than a second place to keep the same list."""
+
+    page.eval(
+        'goTo("applied")'
+    )
+
+    page.wait_for(
+        "state.page==='applied' "
+        "&& !state.loading"
+    )
+
+    assert page.eval(
+        "(function(){var a=document"
+        ".querySelector("
+        "'a[href*=\"export.csv\"]');"
+        "return a ? a.getAttribute"
+        "('href') : '';})()"
+    ).endswith(
+        "/api/applications/export.csv"
+    )
+
+
 # --- content rules ----------------------------------------------------
 
 
