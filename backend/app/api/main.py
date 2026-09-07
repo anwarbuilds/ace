@@ -1139,6 +1139,13 @@ def create_app() -> FastAPI:
                                 candidate
                                 .title
                             ),
+                            # Without this the four Palantir options
+                            # render identically and the choice cannot
+                            # be made at all.
+                            "location": (
+                                candidate
+                                .location
+                            ),
                         }
                         for candidate
                         in match.candidates

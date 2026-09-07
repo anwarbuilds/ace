@@ -87,6 +87,12 @@ class Candidate:
 
     official_url: str
 
+    # Carried because employers post the same title in many cities.
+    # Palantir has four openings whose titles are character-identical
+    # and differ only here, so without it the user is asked to choose
+    # between four options that render the same.
+    location: str = ""
+
 
 @dataclass(
     frozen=True,
@@ -354,6 +360,50 @@ def title_tokens(
     )
 
 
+def location_matches(
+    wanted: str | None,
+    candidate: str | None,
+) -> bool:
+    """Return whether two location strings plausibly describe one place.
+
+    Deliberately loose. A tracker says "Chicago" where an ATS says
+    "Chicago, IL, United States", and the only job here is telling four
+    otherwise identical postings apart, so a shared place name is
+    enough.
+    """
+
+    a = {
+        token
+        for token in re.sub(
+            r"[^a-z0-9 ]+",
+            " ",
+            str(
+                wanted or ""
+            ).lower(),
+        ).split()
+        if len(token) > 1
+    }
+
+    b = {
+        token
+        for token in re.sub(
+            r"[^a-z0-9 ]+",
+            " ",
+            str(
+                candidate or ""
+            ).lower(),
+        ).split()
+        if len(token) > 1
+    }
+
+    if not a or not b:
+        return False
+
+    return bool(
+        a & b
+    )
+
+
 def title_overlap(
     left: str | None,
     right: str | None,
@@ -474,6 +524,40 @@ def match_row(
                 ),
                 job_id=chosen[0].job_id,
             )
+
+        # A location in the sheet is usually all it takes: these
+        # candidates are identical apart from where they are.
+        if getattr(
+            row,
+            "location",
+            None,
+        ):
+            local = [
+                candidate
+                for candidate in candidates
+                if location_matches(
+                    row.location,
+                    candidate.location,
+                )
+            ]
+
+            if len(local) == 1:
+                return RowMatch(
+                    row_number=(
+                        row.row_number
+                    ),
+                    status=MATCHED,
+                    method=(
+                        "company, title "
+                        "and location"
+                    ),
+                    job_id=(
+                        local[0].job_id
+                    ),
+                )
+
+            if local:
+                candidates = local
 
         return RowMatch(
             row_number=row.row_number,

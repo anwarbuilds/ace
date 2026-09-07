@@ -61,6 +61,13 @@ COLUMN_SYNONYMS: dict[str, tuple[str, ...]] = {
         "link",
         "url",
     ),
+    "location": (
+        "job location",
+        "office",
+        "city",
+        "location",
+        "based in",
+    ),
     "status": (
         "application status",
         "current status",
@@ -185,6 +192,10 @@ class ApplicationRow:
     url: str | None
 
     status: str | None = None
+
+    # Optional, and the difference between a clean match and a
+    # question when an employer posts one title in many cities.
+    location: str | None = None
 
     @property
     def is_usable(self) -> bool:
@@ -543,6 +554,11 @@ def parse_applications(
                         "status",
                     )
                 ),
+                location=cell(
+                    row,
+                    "location",
+                )
+                or None,
             )
         )
 

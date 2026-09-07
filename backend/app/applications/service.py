@@ -115,6 +115,7 @@ def _load_indexes(
             JobRecord.company,
             JobRecord.title,
             JobRecord.official_url,
+            JobRecord.location,
         )
     ).all()
 
@@ -123,12 +124,14 @@ def _load_indexes(
         company,
         title,
         url,
+        location,
     ) in rows:
         candidate = Candidate(
             job_id=job_id,
             company=company,
             title=title,
             official_url=url,
+            location=location or "",
         )
 
         key = normalize_url(

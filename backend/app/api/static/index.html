@@ -1356,8 +1356,10 @@ function renderImport(){
       pick='<div class="imp-pick"><select data-improw="'+r.row_number+'">'+
         '<option value="">Skip, '+r.candidates.length+' possible matches</option>'+
         r.candidates.map(function(cd){
+          // Location first: these options are often identical apart
+          // from where they are.
           return '<option value="'+cd.job_id+'"'+(String(chosen)===String(cd.job_id)?" selected":"")+'>'+
-            esc(cd.company)+', '+esc(clean(cd.title))+'</option>';}).join("")+'</select></div>';
+            (cd.location?esc(cd.location)+' \u00b7 ':'')+esc(clean(cd.title))+'</option>';}).join("")+'</select></div>';
     }
     var note=r.status==="matched"?("Matched by "+esc(r.method))
       :r.status==="ambiguous"?"Several postings fit. Choose one, or skip."

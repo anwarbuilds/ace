@@ -934,3 +934,166 @@ def test_applying_to_both_stays_a_question(
             .status
             == AMBIGUOUS
         )
+
+
+def test_location_settles_identical_titles(
+    session_factory,
+) -> None:
+    """Employers post one title in many cities.
+
+    Palantir has four openings whose titles are character-identical and
+    differ only by city. A location column in the sheet resolves them
+    without asking.
+    """
+
+    with session_factory() as session:
+        for index, city in enumerate(
+            (
+                "Chicago, IL",
+                "New York, NY",
+                "London, United Kingdom",
+            ),
+            start=1,
+        ):
+            job = add_job(
+                session,
+                index=index,
+                company="Palantir",
+                title=(
+                    "Forward Deployed "
+                    "Software Engineer, "
+                    "New Grad"
+                ),
+            )
+
+            job.location = city
+
+        session.flush()
+
+        rows = parse_applications(
+            payload=csv_bytes(
+                "Company,Job Title,Location\n"
+                "Palantir,\"Forward Deployed "
+                "Software Engineer, New Grad\","
+                "Chicago\n"
+            ),
+            filename="h.csv",
+        )
+
+        match = preview_import(
+            session,
+            rows=rows,
+        ).matches[0]
+
+        assert match.status == MATCHED
+
+        assert (
+            match.method
+            == "company, title and location"
+        )
+
+
+def test_without_a_location_the_choice_is_still_offered(
+    session_factory,
+) -> None:
+    """And every candidate must carry its location.
+
+    Four options rendering identically is a question the user cannot
+    answer, which is worse than not asking.
+    """
+
+    with session_factory() as session:
+        for index, city in enumerate(
+            (
+                "Chicago, IL",
+                "New York, NY",
+            ),
+            start=1,
+        ):
+            job = add_job(
+                session,
+                index=index,
+                company="Palantir",
+                title=(
+                    "Forward Deployed "
+                    "Software Engineer, "
+                    "New Grad"
+                ),
+            )
+
+            job.location = city
+
+        session.flush()
+
+        rows = parse_applications(
+            payload=csv_bytes(
+                "Company,Job Title\n"
+                "Palantir,\"Forward Deployed "
+                "Software Engineer, New Grad\"\n"
+            ),
+            filename="h.csv",
+        )
+
+        match = preview_import(
+            session,
+            rows=rows,
+        ).matches[0]
+
+        assert match.status == AMBIGUOUS
+
+        assert {
+            candidate.location
+            for candidate in match.candidates
+        } == {
+            "Chicago, IL",
+            "New York, NY",
+        }
+
+
+def test_a_wrong_location_does_not_force_a_match(
+    session_factory,
+) -> None:
+    """A city that matches nothing leaves the question open."""
+
+    with session_factory() as session:
+        for index, city in enumerate(
+            (
+                "Chicago, IL",
+                "New York, NY",
+            ),
+            start=1,
+        ):
+            job = add_job(
+                session,
+                index=index,
+                company="Palantir",
+                title=(
+                    "Forward Deployed "
+                    "Software Engineer, "
+                    "New Grad"
+                ),
+            )
+
+            job.location = city
+
+        session.flush()
+
+        rows = parse_applications(
+            payload=csv_bytes(
+                "Company,Job Title,Location\n"
+                "Palantir,\"Forward Deployed "
+                "Software Engineer, New Grad\","
+                "Berlin\n"
+            ),
+            filename="h.csv",
+        )
+
+        assert (
+            preview_import(
+                session,
+                rows=rows,
+            )
+            .matches[0]
+            .status
+            == AMBIGUOUS
+        )
