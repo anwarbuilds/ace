@@ -10,12 +10,14 @@ input{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #d8cfe8;
   font-size:12px;font-family:inherit}
 button{margin-top:9px;background:#c9a227;color:#231633;border:0;padding:7px 12px;border-radius:6px;
   font-weight:600;font-size:12px;cursor:pointer;width:100%;font-family:inherit}
-.s{margin-top:9px;font-size:11.5px;color:#63558a;min-height:16px}
+.s{margin-top:8px;font-size:11.5px;color:#63558a}
+.s.warn{color:#8a5a00}
 </style>
 <h1>ACE Autofill</h1>
 <p>Fills Greenhouse, Ashby and Lever forms from your answer bank. It never submits.</p>
 <label for="base">ACE address</label>
 <input id="base" type="url" spellcheck="false" placeholder="http://localhost:8000">
 <button id="save">Save and test</button>
-<div class="s" id="status"></div>
+<div class="s" id="answers"></div>
+<div class="s" id="page"></div>
 <script src="popup.js"></script>

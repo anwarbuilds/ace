@@ -409,6 +409,8 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .pop-search{width:100%;padding:7px 9px;margin:2px 0 4px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-2);color:var(--text);font-size:12.5px;font-family:inherit}
 .pop-search:focus{outline:none;border-color:var(--purple)}
 .pop-note{font-size:11px;color:var(--text-muted);padding:6px 9px}
+.ans-sec{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);padding:20px 0 7px;border-top:1px solid var(--border);margin-top:14px}
+.ans-sec:first-child{border-top:0;margin-top:0;padding-top:0}
 .ab-sec{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);padding:12px 8px 4px}
 .ab-toggle .n{margin-left:6px;font-family:var(--mono);font-size:10.5px;color:var(--text-muted)}
 .ab-toggle.ab-empty{border-style:dashed}
@@ -1382,6 +1384,13 @@ function answerPanel(){
       '<span class="spacer"></span><span class="am-count">Esc closes</span>'+
     '</div></div>';
 }
+function answerRow(a){
+  return '<div class="ans-edit">'+
+    '<input type="text" class="ans-label" value="'+esc(a.label)+'" placeholder="Question" aria-label="Question">'+
+    '<textarea class="ans-value" placeholder="Your answer" aria-label="Answer">'+esc(a.value)+'</textarea>'+
+    '<button class="iconbtn" data-act="delrow" aria-label="Remove this question">'+icon(I.x)+'</button>'+
+  '</div>';
+}
 function answersPage(){
   var rows=state.answers.length?state.answers:[{id:"new0",label:"",value:""}];
   return '<div class="head"><div class="head-row"><h1 class="h1">Answers</h1>'+
@@ -1392,13 +1401,15 @@ function answersPage(){
         'The things every application form asks for. Fill them in once, then copy any of them in '+
         'one click while a form is open, from the button in the bottom corner. Leave blank anything '+
         'you are not asked for, and add your own questions at the end.</p>'+
-      '<div id="ansform">'+rows.map(function(a){
-        return '<div class="ans-edit">'+
-          '<input type="text" class="ans-label" value="'+esc(a.label)+'" placeholder="Question" aria-label="Question">'+
-          '<textarea class="ans-value" placeholder="Your answer" aria-label="Answer">'+esc(a.value)+'</textarea>'+
-          '<button class="iconbtn" data-act="delrow" aria-label="Remove this question">'+icon(I.x)+'</button>'+
-        '</div>';
-      }).join("")+'</div>'+
+      // Headings sit inside the one form container, so saving still
+      // reads the rows in the order they appear and adding a question
+      // still appends to the end.
+      '<div id="ansform">'+(state.answers.length
+        ? answerSections().map(function(sec){
+            return '<div class="ans-sec">'+esc(sec[0])+'</div>'+
+              sec[1].map(answerRow).join("");
+          }).join("")
+        : rows.map(answerRow).join(""))+'</div>'+
       '<div style="display:flex;gap:10px;margin-top:14px">'+
         '<button class="btn btn-secondary" data-act="addrow">Add a question</button>'+
         '<button class="btn btn-primary" data-act="saveanswers">Save answers</button>'+

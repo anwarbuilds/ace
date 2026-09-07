@@ -3,12 +3,17 @@
   "name": "ACE Autofill",
   "version": "1.0.0",
   "description": "Fills application forms from the answer bank in your local ACE instance. It never submits anything.",
-  "permissions": ["storage"],
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
   "host_permissions": [
     "http://localhost:8000/*",
     "http://127.0.0.1:8000/*"
   ],
-  "background": { "service_worker": "background.js" },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": [
@@ -16,13 +21,29 @@
         "https://boards.greenhouse.io/*",
         "https://*.greenhouse.io/*",
         "https://jobs.ashbyhq.com/*",
-        "https://jobs.lever.co/*"
+        "https://jobs.lever.co/*",
+        "https://jobs.smartrecruiters.com/*",
+        "https://*.smartrecruiters.com/*",
+        "https://explore.jobs.netflix.net/*",
+        "https://*.eightfold.ai/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://*.myworkdaysite.com/*",
+        "https://www.amazon.jobs/*",
+        "https://ats.rippling.com/*"
       ],
-      "js": ["fields.js", "content.js"],
-      "css": ["content.css"],
+      "js": [
+        "fields.js",
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_idle",
       "all_frames": true
     }
   ],
-  "action": { "default_popup": "popup.html", "default_title": "ACE Autofill" }
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ACE Autofill"
+  }
 }

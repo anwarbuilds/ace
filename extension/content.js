@@ -29,6 +29,29 @@
     field.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
+  /* A select showing "Select ..." is empty, whatever its value says.
+     Treating a placeholder as an answer made ACE skip the disability
+     status question on a real Lever form and report it as already
+     filled. */
+  function aceIsEmpty(field) {
+    // A checkbox reports value "on" whether or not it is ticked, so
+    // testing value counted every unticked box as already answered and
+    // ACE skipped whole groups it could have filled.
+    if (field.type === "checkbox" || field.type === "radio") {
+      return !field.checked;
+    }
+
+    if (field.tagName !== "SELECT") return !field.value;
+
+    var option = field.options[field.selectedIndex];
+    if (!option) return true;
+    if (!option.value) return true;
+
+    return /^(select|choose|please select|-+|)\s*\.*$/.test(
+      aceNormalise(option.textContent)
+    );
+  }
+
   function fillable() {
     return Array.prototype.filter.call(
       document.querySelectorAll("input, select, textarea"),
@@ -78,7 +101,15 @@
       var wanted = aceNormalise(value);
 
       if (!option || !wanted) return false;
-      if (option.indexOf(wanted) < 0 && wanted.indexOf(option) < 0) return false;
+
+      // Whole words. "female" contains "male", so a substring test
+      // ticked both boxes in a gender group on a real Lever form.
+      var same =
+        option === wanted ||
+        acePhraseIn(option, wanted) ||
+        acePhraseIn(wanted, option);
+
+      if (!same) return false;
       if (field.checked) return false;
 
       field.click();
@@ -92,6 +123,10 @@
   function plan() {
     var filled = [];
     var unknown = [];
+    // A question ACE knows, holding an answer that matches none of the
+    // offered options. Silence here is the worst kind: the user thinks
+    // it was handled. Naming it tells them exactly what to reword.
+    var unmatched = [];
     var already = 0;
 
     fillable().forEach(function (field) {
@@ -111,26 +146,51 @@
       var value = answers[name];
       if (!value) return;
 
-      if (field.type !== "radio" && field.value) {
+      if (!aceIsEmpty(field)) {
         already += 1;
         return;
       }
 
       var previous = field.value;
 
-      if (fillOne(field, value)) {
-        field.classList.add("ace-filled");
-        lastFill.push({ field: field, previous: previous, radio: field.type === "radio" });
-        filled.push(name);
+      var isChoice =
+        field.tagName === "SELECT" ||
+        field.type === "radio" ||
+        field.type === "checkbox";
+
+      if (!fillOne(field, value)) {
+        if (isChoice && unmatched.indexOf(name) < 0) unmatched.push(name);
+        return;
       }
+
+      field.classList.add("ace-filled");
+
+      lastFill.push({
+        field: field,
+        previous: previous,
+        ticked: field.type === "radio" || field.type === "checkbox"
+      });
+
+      filled.push(name);
     });
 
-    return { filled: filled, unknown: unknown, already: already };
+    // A group ticked by one of its options is answered, whatever its
+    // other options reported on the way past.
+    unmatched = unmatched.filter(function (name) {
+      return filled.indexOf(name) < 0;
+    });
+
+    return {
+      filled: filled,
+      unknown: unknown,
+      unmatched: unmatched,
+      already: already
+    };
   }
 
   function undo() {
     lastFill.forEach(function (record) {
-      if (record.radio) {
+      if (record.ticked) {
         record.field.checked = false;
         record.field.dispatchEvent(new Event("change", { bubbles: true }));
       } else {
@@ -188,11 +248,26 @@
 
       fillable().forEach(function (field) {
         var name = aceAnswerNameFor(aceQuestionFor(field));
-        if (name && answers[name] && !(field.type !== "radio" && field.value)) ready += 1;
+        if (name && answers[name] && aceIsEmpty(field)) ready += 1;
       });
 
       if (!ready) {
-        host.remove();
+        // Silence is ambiguous: on a covered site it looks the same as
+        // an extension that failed to load. Say so where the page is
+        // clearly a form, and stay quiet everywhere else.
+        var looksLikeForm = fillable().filter(function (field) {
+          return field.type !== "radio" && field.type !== "checkbox";
+        }).length >= 4;
+
+        if (looksLikeForm) {
+          render(host,
+            '<div class="ace-t">Nothing left to fill</div>' +
+            '<div class="ace-s">Every field ACE knows already has a value, ' +
+            'or this form asks questions your bank has no answer for.</div>');
+        } else {
+          host.remove();
+        }
+
         return;
       }
 
@@ -208,6 +283,10 @@
             (result.filled.length === 1 ? "" : "s") + '</div>' +
           (result.already
             ? '<div class="ace-s">' + result.already + ' already had a value and were left alone.</div>'
+            : "") +
+          (result.unmatched.length
+            ? '<div class="ace-s ace-warn">Your answer matched none of the options for: ' +
+              result.unmatched.join("; ") + '. Reword it in ACE to match.</div>'
             : "") +
           (result.unknown.length
             ? '<div class="ace-s">Not answered: ' +

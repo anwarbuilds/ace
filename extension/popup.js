@@ -1,9 +1,21 @@
 /* The address is configurable because ACE runs wherever the user runs
    it, and a wrong address is otherwise indistinguishable from an
-   extension that simply does nothing. */
+   extension that simply does nothing.
+
+   The same is true of an unsupported page. "Nothing to autofill" on a
+   site the extension was never loaded into looks identical to a broken
+   extension, so the popup says which of the two it is. */
+
+var COVERED = [
+  "greenhouse.io", "jobs.ashbyhq.com", "jobs.lever.co",
+  "smartrecruiters.com", "explore.jobs.netflix.net", "eightfold.ai",
+  "myworkdayjobs.com", "myworkdaysite.com", "www.amazon.jobs",
+  "ats.rippling.com"
+];
 
 var base = document.getElementById("base");
-var status = document.getElementById("status");
+var answerLine = document.getElementById("answers");
+var pageLine = document.getElementById("page");
 
 chrome.storage.local.get({ base: "http://localhost:8000" }, function (config) {
   base.value = config.base;
@@ -11,11 +23,12 @@ chrome.storage.local.get({ base: "http://localhost:8000" }, function (config) {
 });
 
 function check() {
-  status.textContent = "Checking...";
+  answerLine.textContent = "Checking ACE...";
 
   chrome.runtime.sendMessage({ type: "answers" }, function (reply) {
     if (!reply || !reply.ok) {
-      status.textContent = "Cannot reach ACE. Is it running?";
+      answerLine.textContent = "Cannot reach ACE. Is it running?";
+      answerLine.className = "s warn";
       return;
     }
 
@@ -23,10 +36,27 @@ function check() {
       return item.value;
     }).length;
 
-    status.textContent = filled
+    answerLine.className = filled ? "s" : "s warn";
+    answerLine.textContent = filled
       ? filled + " of " + reply.items.length + " answers saved."
       : "Connected, but no answers are filled in yet.";
   });
+
+  chrome.tabs.query(
+    { active: true, currentWindow: true },
+    function (tabs) {
+      var url = (tabs && tabs[0] && tabs[0].url) || "";
+
+      var covered = COVERED.some(function (host) {
+        return url.indexOf(host) >= 0;
+      });
+
+      pageLine.className = covered ? "s" : "s warn";
+      pageLine.textContent = covered
+        ? "This page is one ACE fills."
+        : "ACE does not fill this site. Tell it which one and it can be added.";
+    }
+  );
 }
 
 document.getElementById("save").addEventListener("click", function () {

@@ -53,7 +53,9 @@ var ACE_RULES = [
   { answer: "Postcode", any: ["zip", "postal code", "postcode"] },
   { answer: "City", any: ["city", "town"] },
   { answer: "State", any: ["state", "province", "region"] },
-  { answer: "Country", any: ["country"] },
+  // "country code" sits next to a phone box and wants +1, not a
+  // country name, so it is left for the user.
+  { answer: "Country", any: ["country"], not: ["code"] },
   { answer: "Address", any: ["street", "address line", "address"] },
   { answer: "Location",
     any: ["current location", "where are you located", "location"] },
