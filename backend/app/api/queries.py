@@ -432,18 +432,32 @@ def _apply_filters(
 ) -> Select:
     """Apply user filters to a job query."""
 
-    if filters.active_only:
+    if filters.active_only and not filters.mark:
         statement = statement.where(
             JobRecord.is_active.is_(
                 True
             )
         )
 
-    if filters.statuses:
+    # A mark is a record of a decision the user already made. Filtering
+    # it through the eligibility gate asks "should you apply to this"
+    # about something already applied to, and hid 20 of 27 real
+    # applications because ACE later judged the posting senior or out of
+    # family. The gate governs recommendations, never history.
+    if filters.statuses and not filters.mark:
         statement = statement.where(
             JobEvaluationRecord
             .eligibility_status.in_(
                 filters.statuses
+            )
+        )
+
+    # Same reasoning for closure: a posting going away does not unmake
+    # the application.
+    if filters.mark:
+        statement = statement.where(
+            JobRecord.id.is_not(
+                None
             )
         )
 
@@ -1236,6 +1250,14 @@ def build_stats(
             or 0
         )
 
+    corpus_started = session.scalar(
+        select(
+            func.min(
+                JobRecord.first_seen_at
+            )
+        )
+    )
+
     qualifying = _qualifying_count()
 
     posted_today = _qualifying_count(
@@ -1365,6 +1387,16 @@ def build_stats(
         ),
         "match_medium_min": (
             MATCH_MEDIUM_MIN
+        ),
+        # When ACE first saw anything. Applications sent before this
+        # can never be matched to a stored posting, and the interface
+        # needs to be able to say so rather than implying a failure.
+        "corpus_started_at": (
+            None
+            if corpus_started is None
+            else _as_utc(
+                corpus_started
+            ).isoformat()
         ),
         "generated_at": (
             reference_time.isoformat()

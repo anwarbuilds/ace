@@ -401,6 +401,13 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .imp-sub{font-size:11.5px;color:var(--text-muted);margin-top:3px}
 .imp-r{text-align:right;font-family:var(--mono);font-size:12px;color:var(--text-secondary)}
 .imp-pick{grid-column:2 / -1;margin-top:7px}
+.imp-keep{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-secondary);cursor:pointer}
+.imp-keep input{accent-color:var(--purple);width:15px;height:15px}
+.ext-row{display:grid;grid-template-columns:190px minmax(0,1fr) 132px 90px;gap:12px;align-items:center;
+  padding:11px var(--gutter);border-bottom:1px solid var(--border-subtle);font-size:13px}
+.ext-row .co-name{font-weight:600}
+.ext-note{padding:18px var(--gutter) 10px;font-size:12.5px;color:var(--text-muted);max-width:72ch}
+.ext-head{padding:26px var(--gutter) 10px;font-size:13px;font-weight:700;letter-spacing:-.01em}
 select{width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);
   border-radius:var(--r-sm);padding:7px 9px;font-size:12.5px}
 .sum{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--text-secondary);margin-top:7px}
@@ -487,7 +494,8 @@ var state={
   resume:null, gap:[], facets:{companies:[],sources:[],families:[]},
   prevVisit:null, newSinceVisit:0,
   menuOpen:false, toast:null, undoFn:null,
-  importData:null, importChoice:{}, gapFamily:"", gapMin:null,
+  importData:null, importChoice:{}, keepExternal:true, externalApps:[],
+  gapFamily:"", gapMin:null,
   palHits:null, palIndex:0
 };
 
@@ -556,7 +564,8 @@ var I={
   doc:'<path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/>', grid:'<path d="M3 3h4v4H3zM9 3h4v4H9zM3 9h4v4H3zM9 9h4v4H9z"/>',
   sun:'<circle cx="8" cy="8" r="3"/><path d="M8 1v1.6M8 13.4V15M15 8h-1.6M2.6 8H1M12.9 3.1l-1.1 1.1M4.2 11.8l-1.1 1.1M12.9 12.9l-1.1-1.1M4.2 4.2L3.1 3.1"/>',
   gear:'<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v1.8M8 12.7v1.8M14.5 8h-1.8M3.3 8H1.5M12.6 3.4l-1.3 1.3M4.7 11.3l-1.3 1.3M12.6 12.6l-1.3-1.3M4.7 4.7L3.4 3.4"/>',
-  briefcase:'<rect x="2" y="5" width="12" height="9" rx="1.5"/><path d="M6 5V3.5h4V5"/>'
+  briefcase:'<rect x="2" y="5" width="12" height="9" rx="1.5"/><path d="M6 5V3.5h4V5"/>',
+  upload:'<path d="M8 11V3M5 6l3-3 3 3"/><path d="M2.5 11v2.5h11V11"/>'
 };
 
 /* ---------------- data ---------------- */
@@ -614,6 +623,7 @@ function loadShell(){
     get("/api/facets").then(function(d){ state.facets=d; }),
     get("/api/resume").then(function(d){ state.resume=d.resume; state.gap=d.skills_gap||[]; }),
     get("/api/marks").then(function(d){ state.markCounts=d; }),
+    loadExternal(),
     refreshNewCount()
   ]).catch(function(){});
 }
@@ -623,6 +633,10 @@ function refreshNewCount(){
     .then(function(d){ state.newSinceVisit=d.total; }).catch(function(){});
 }
 function refreshMarkCounts(){ return get("/api/marks").then(function(d){ state.markCounts=d; }).catch(function(){}); }
+function loadExternal(){
+  return get("/api/applications/external")
+    .then(function(d){ state.externalApps=d.items||[]; }).catch(function(){});
+}
 function reloadGap(){
   var p=new URLSearchParams();
   if(state.gapFamily) p.set("family",state.gapFamily);
@@ -701,7 +715,8 @@ function sidebar(){
     '<div class="nav-rule"></div>'+
     '<div class="nav-head">Pipeline</div><div class="nav">'+
       navItem("saved","Saved",m.saved||null,I.star)+
-      navItem("applied","Applied",m.applied||null,I.briefcase)+
+      navItem("applied","Applied",
+        ((m.applied||0)+state.externalApps.length)||null,I.briefcase)+
       navItem("archive","Archive",m.archived||null,I.check)+
     '</div>'+
     '<div class="nav-rule"></div>'+
@@ -848,9 +863,17 @@ function box(h,p,a){ return '<div class="empty"><h3>'+h+'</h3><p>'+p+'</p>'+(a||
 function emptyState(){
   var s=state.stats;
   if(state.page==="saved") return box("Nothing saved yet","Press s on any row, or use the star, to keep it here.");
-  if(state.page==="applied") return box("No applications recorded",
-    "Mark a job applied, or import your spreadsheet to bring your history in.",
-    '<button class="btn btn-secondary" data-act="importapps">Import applications</button>');
+  if(state.page==="applied"){
+    if(state.externalApps.length){
+      // History exists, it simply has no live posting behind it.
+      return box("Nothing currently tracked",
+        "None of the postings you applied to are still open in ACE. Your earlier applications are listed below.",
+        '<button class="btn btn-secondary" data-act="importapps">Import applications</button>');
+    }
+    return box("No applications recorded",
+      "Mark a job applied, or import your spreadsheet to bring your history in.",
+      '<button class="btn btn-secondary" data-act="importapps">Import applications</button>');
+  }
   if(state.page==="archive") return box("Nothing archived","Jobs you mark reviewed or not relevant land here.");
   if(state.q) return box('Nothing found for "'+esc(state.q)+'"',"No opportunities match this search.",
     '<button class="btn btn-secondary" data-act="clearq">Clear search</button>');
@@ -874,17 +897,44 @@ function emptyState(){
   return box("Nothing here","No opportunities match the current filters.",
     '<button class="btn btn-secondary" data-act="clearall">Clear filters</button>');
 }
+function appliedHint(){
+  if(state.page!=="applied") return "";
+  return '<div class="ext-note" style="padding-top:12px">'+
+    'Upload your spreadsheet again whenever it changes. Rows already recorded are updated in place, '+
+    'so a job moving from applied to rejected is reflected rather than added twice.</div>';
+}
+function externalBlock(){
+  if(state.page!=="applied"||!state.externalApps.length) return "";
+  return '<div class="ext-head">From your history</div>'+
+    '<div class="ext-note">Applications to postings ACE never stored, because they were sent or closed '+
+      (state.stats.corpus_started_at
+        ? 'before ACE started watching on '+shortDate(state.stats.corpus_started_at)+'. '
+        : 'before ACE started watching. ')+
+      'There is no live posting to open, so these are a record only.</div>'+
+    state.externalApps.map(function(a){
+      var st=a.application_status;
+      return '<div class="ext-row">'+
+        '<span class="co-name">'+esc(a.company)+'</span>'+
+        '<span>'+esc(clean(a.title))+'</span>'+
+        '<span>'+(st?'<span class="badge '+st+'">'+(STATUS_LABEL[st]||st)+'</span>':'')+'</span>'+
+        '<span class="c-when">'+(a.applied_at?shortDate(a.applied_at):"")+'</span>'+
+      '</div>';
+    }).join("");
+}
 function queuePage(){
   var titles={queue:"Queue",saved:"Saved",applied:"Applied",archive:"Archive"};
   return '<div class="head">'+
     '<div class="head-row"><h1 class="h1">'+titles[state.page]+'</h1>'+
       '<span class="h1-count">'+(state.loading?"":state.total)+'</span>'+
       '<span class="spacer"></span>'+
+      (state.page==="applied"
+        ?'<button class="btn btn-secondary btn-sm" data-act="importapps">'+icon(I.upload,14)+
+         'Update from spreadsheet</button>':'')+
       (state.newSinceVisit&&state.page==="queue"
         ?'<button class="since-btn" data-act="shownew">'+state.newSinceVisit+' new since '+clock(state.prevVisit)+'</button>':'')+
       liveChip()+'</div>'+
     (state.page==="queue"?tabsBar():"")+controls()+'</div>'+
-    '<div class="scroll">'+queueTable()+'</div>';
+    '<div class="scroll">'+appliedHint()+queueTable()+externalBlock()+'</div>';
 }
 
 /* ---------------- job detail page ---------------- */
@@ -1283,10 +1333,22 @@ function pickApplications(){
 }
 function closeImport(){ var el=document.querySelector(".sheet-wrap"); if(el) el.remove(); state.importData=null; }
 function importCount(){ return Object.keys(state.importChoice||{}).filter(function(k){return state.importChoice[k];}).length; }
+function unplaceableRows(){
+  var d=state.importData; if(!d) return [];
+  // Nothing to attach to, but enough detail to stand on its own.
+  return d.rows.filter(function(r){
+    return (r.status==="unmatched"||r.status==="unusable") && r.company && r.title;
+  });
+}
+function importLabel(){
+  var n=importCount(), ext=state.keepExternal?unplaceableRows().length:0;
+  return ext?("Import "+n+" and keep "+ext):("Import "+n);
+}
 function renderImport(){
   var d=state.importData; if(!d) return;
   var ex=document.querySelector(".sheet-wrap"); if(ex) ex.remove();
   var c=d.counts||{};
+  var unplaceable=unplaceableRows().length;
   var rows=d.rows.map(function(r){
     var chosen=state.importChoice[r.row_number];
     var pick="";
@@ -1316,16 +1378,33 @@ function renderImport(){
         '<span><b>'+(c.unmatched||0)+'</b> not found</span>'+
         (c.unusable?'<span><b>'+c.unusable+'</b> incomplete</span>':'')+
         '<span>of <b>'+d.total+'</b> rows</span></div>'+
-      '<p class="imp-sub">Nothing is recorded until you confirm. A status column is read if your sheet has one.</p></div>'+
+      '<p class="imp-sub">Nothing is recorded until you confirm. A status column is read if your sheet has one, '+
+        'and re-uploading an updated sheet moves existing rows forward rather than duplicating them.</p>'+
+      (unplaceable>0
+        ? '<p class="imp-sub" style="margin-top:7px">ACE only stores postings it has seen since it started watching'+
+          (state.stats.corpus_started_at?" on "+shortDate(state.stats.corpus_started_at):"")+'. '+
+          unplaceable+' of these were applied to before that, or have since closed, so there is no posting to attach them to.</p>'
+        : '')+
+      '</div>'+
     '<div class="sheet-body">'+rows+'</div>'+
-    '<div class="sheet-foot"><button class="btn btn-primary" data-act="doimport">Import '+importCount()+'</button>'+
+    '<div class="sheet-foot">'+
+      '<button class="btn btn-primary" data-act="doimport">'+importLabel()+'</button>'+
+      (unplaceable>0
+        ? '<label class="imp-keep"><input type="checkbox" id="keep-ext"'+(state.keepExternal?" checked":"")+'>'+
+          'Also keep the '+unplaceable+' ACE could not place, as history</label>'
+        : '')+
       '<button class="btn btn-ghost" data-act="closeimport">Cancel</button></div></div>';
   document.body.appendChild(el);
   el.addEventListener("mousedown",function(e){ if(e.target===el) closeImport(); });
   el.addEventListener("change",function(e){
+    if(e.target.id==="keep-ext"){
+      state.keepExternal=e.target.checked;
+      var bb=el.querySelector('[data-act="doimport"]'); if(bb) bb.textContent=importLabel();
+      return;
+    }
     var sel=e.target.closest("[data-improw]"); if(!sel) return;
     state.importChoice[sel.dataset.improw]=sel.value?parseInt(sel.value,10):null;
-    var b=el.querySelector('[data-act="doimport"]'); if(b) b.textContent="Import "+importCount();
+    var b=el.querySelector('[data-act="doimport"]'); if(b) b.textContent=importLabel();
   });
 }
 function runImport(){
@@ -1335,11 +1414,19 @@ function runImport(){
     .map(function(k){ var r=byRow[k]||{};
       return {job_id:state.importChoice[k], applied_on:r.applied_on||null,
               status:r.application_status||null}; });
-  if(!decisions.length){ showToast("Nothing selected to import"); render(); return; }
+  var external=state.keepExternal?unplaceableRows().map(function(r){
+    return {company:r.company, title:r.title, applied_on:r.applied_on||null,
+            status:r.application_status||null, url:null};
+  }):[];
+  if(!decisions.length&&!external.length){ showToast("Nothing selected to import"); render(); return; }
   fetch(API+"/api/applications/import",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({decisions:decisions})}).then(function(r){return r.json();}).then(function(res){
-    closeImport(); showToast("Recorded "+res.marked+" applications");
-    refreshMarkCounts().then(function(){ loadShell().then(function(){ loadJobs(); }); });
+    body:JSON.stringify({decisions:decisions,external:external})})
+  .then(function(r){return r.json();}).then(function(res){
+    closeImport();
+    showToast("Recorded "+res.marked+" applications"+
+      (res.recorded?" and kept "+res.recorded+" from your history":""));
+    refreshMarkCounts().then(function(){ loadExternal().then(function(){
+      loadShell().then(function(){ loadJobs(); }); }); });
   }).catch(function(){ showToast("Import failed"); render(); });
 }
 

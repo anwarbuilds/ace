@@ -190,10 +190,135 @@ def normalize_company(
     )
 
 
+def tighten_company(
+    value: str | None,
+) -> str:
+    """Return a company name with its spacing removed entirely.
+
+    "Open AI" and "OpenAI" are the same employer, and a tracker written
+    by hand will not agree with an ATS about the space. Comparing the
+    spaceless forms costs nothing and recovered several hundred stored
+    postings that were reporting as not found.
+    """
+
+    return normalize_company(
+        value
+    ).replace(
+        " ",
+        "",
+    )
+
+
+# People write "SDE" in a tracker and "Software Development Engineer"
+# is what the employer posted. Without expansion those share no words
+# at all and the row reports as not found even though ACE holds the
+# posting. Expansion happens on both sides, so it cannot matter which
+# form is abbreviated.
+TITLE_ABBREVIATIONS: dict[str, tuple[str, ...]] = {
+    "sde": (
+        "software",
+        "development",
+        "engineer",
+    ),
+    "swe": (
+        "software",
+        "engineer",
+    ),
+    "sre": (
+        "site",
+        "reliability",
+        "engineer",
+    ),
+    "mts": (
+        "member",
+        "technical",
+        "staff",
+    ),
+    "mle": (
+        "machine",
+        "learning",
+        "engineer",
+    ),
+    "ds": (
+        "data",
+        "scientist",
+    ),
+    "de": (
+        "data",
+        "engineer",
+    ),
+    "pm": (
+        "product",
+        "manager",
+    ),
+    "tpm": (
+        "technical",
+        "program",
+        "manager",
+    ),
+    "fde": (
+        "forward",
+        "deployed",
+        "engineer",
+    ),
+    "ml": (
+        "machine",
+        "learning",
+    ),
+    "nlp": (
+        "natural",
+        "language",
+        "processing",
+    ),
+    "cv": (
+        "computer",
+        "vision",
+    ),
+    "qa": (
+        "quality",
+        "assurance",
+    ),
+    "eng": (
+        "engineer",
+    ),
+    "engg": (
+        "engineer",
+    ),
+    "dev": (
+        "developer",
+    ),
+    "sw": (
+        "software",
+    ),
+    "infra": (
+        "infrastructure",
+    ),
+    "ops": (
+        "operations",
+    ),
+    "fullstack": (
+        "full",
+        "stack",
+    ),
+    "backend": (
+        "back",
+        "end",
+    ),
+    "frontend": (
+        "front",
+        "end",
+    ),
+}
+
+
 def title_tokens(
     value: str | None,
 ) -> frozenset[str]:
-    """Reduce a job title to its distinguishing words."""
+    """Reduce a job title to its distinguishing words.
+
+    Known abbreviations expand to the words they stand for, so a title
+    typed short still overlaps the title as posted.
+    """
 
     text = re.sub(
         r"[^a-z0-9 ]+",
@@ -203,10 +328,29 @@ def title_tokens(
         ).lower(),
     )
 
+    words: set[str] = set()
+
+    for word in text.split():
+        if word in TITLE_STOPWORDS:
+            continue
+
+        expansion = (
+            TITLE_ABBREVIATIONS.get(
+                word
+            )
+        )
+
+        if expansion:
+            words.update(
+                expansion
+            )
+        else:
+            words.add(
+                word
+            )
+
     return frozenset(
-        word
-        for word in text.split()
-        if word not in TITLE_STOPWORDS
+        words
     )
 
 
@@ -235,13 +379,58 @@ def title_overlap(
     )
 
 
+def _partial_company_pool(
+    company: str,
+    *,
+    by_company: dict[str, list[Candidate]],
+) -> list[Candidate]:
+    """Return candidates whose name contains the row's name as words.
+
+    Whole words only, so "chase" reaches "jp morgan chase" but "ai"
+    does not reach every company with those two letters inside it.
+    Every partial hit is pooled together rather than picked between:
+    if more than one employer survives, the title checks will report
+    the row as ambiguous and the user decides.
+    """
+
+    wanted = set(
+        company.split()
+    )
+
+    if not wanted:
+        return []
+
+    pooled: list[Candidate] = []
+
+    for stored, candidates in (
+        by_company.items()
+    ):
+        words = set(
+            stored.split()
+        )
+
+        if wanted < words or words < wanted:
+            pooled.extend(
+                candidates
+            )
+
+    return pooled
+
+
 def match_row(
     row,
     *,
     by_url: dict[str, Candidate],
     by_company: dict[str, list[Candidate]],
+    by_tight: dict[str, list[Candidate]] | None = None,
 ) -> RowMatch:
     """Decide which stored posting one application row refers to."""
+
+    by_tight = (
+        by_tight
+        if by_tight is not None
+        else {}
+    )
 
     if not row.is_usable:
         return RowMatch(
@@ -275,6 +464,25 @@ def match_row(
         company,
         [],
     )
+
+    if not pool:
+        # "Open AI" against a stored "OpenAI".
+        pool = by_tight.get(
+            tighten_company(
+                row.company
+            ),
+            [],
+        )
+
+    if not pool:
+        # "Chase" against a stored "JP Morgan Chase". Only accepted
+        # when the shorter name is a whole word inside the longer one,
+        # and the result still has to survive the title checks below,
+        # so a loose company match cannot produce a match on its own.
+        pool = _partial_company_pool(
+            company,
+            by_company=by_company,
+        )
 
     if not pool:
         return RowMatch(

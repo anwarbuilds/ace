@@ -31,11 +31,16 @@ from backend.app.applications.matching import (
     match_row,
     normalize_company,
     normalize_url,
+    tighten_company,
+    title_tokens,
 )
 from backend.app.applications.parsing import (
     ApplicationRow,
 )
-from backend.app.db.models import JobRecord
+from backend.app.db.models import (
+    ExternalApplicationRecord,
+    JobRecord,
+)
 
 
 @dataclass(
@@ -77,6 +82,7 @@ def _load_indexes(
 ) -> tuple[
     dict[str, Candidate],
     dict[str, list[Candidate]],
+    dict[str, list[Candidate]],
 ]:
     """Index every stored job by URL and by company.
 
@@ -88,6 +94,14 @@ def _load_indexes(
     by_url: dict[str, Candidate] = {}
 
     by_company: dict[
+        str,
+        list[Candidate],
+    ] = defaultdict(
+        list
+    )
+
+    # Spaceless names, so "Open AI" reaches a stored "OpenAI".
+    by_tight: dict[
         str,
         list[Candidate],
     ] = defaultdict(
@@ -133,10 +147,21 @@ def _load_indexes(
             candidate
         )
 
+        by_tight[
+            tighten_company(
+                company
+            )
+        ].append(
+            candidate
+        )
+
     return (
         by_url,
         dict(
             by_company
+        ),
+        dict(
+            by_tight
         ),
     )
 
@@ -148,7 +173,11 @@ def preview_import(
 ) -> ImportPreview:
     """Match every row against stored jobs, writing nothing."""
 
-    by_url, by_company = _load_indexes(
+    (
+        by_url,
+        by_company,
+        by_tight,
+    ) = _load_indexes(
         session
     )
 
@@ -157,6 +186,7 @@ def preview_import(
             row,
             by_url=by_url,
             by_company=by_company,
+            by_tight=by_tight,
         )
         for row in rows
     )
@@ -166,6 +196,228 @@ def preview_import(
             rows
         ),
         matches=matches,
+    )
+
+
+def external_match_key(
+    *,
+    company: str | None,
+    title: str | None,
+) -> str:
+    """Return the de-duplication identity for a standalone application.
+
+    Normalised on both halves, so the same row in a re-uploaded sheet
+    updates the existing record instead of adding a second one.
+    """
+
+    return (
+        normalize_company(
+            company
+        )
+        + "|"
+        + " ".join(
+            sorted(
+                title_tokens(
+                    title
+                )
+            )
+        )
+    )
+
+
+def _applied_instant(
+    applied_on,
+    *,
+    fallback: datetime,
+) -> datetime:
+    """Turn a sheet's date cell into a stored instant."""
+
+    if isinstance(
+        applied_on,
+        date,
+    ):
+        return datetime.combine(
+            applied_on,
+            time(
+                12,
+                0,
+            ),
+            tzinfo=timezone.utc,
+        )
+
+    if isinstance(
+        applied_on,
+        str,
+    ) and applied_on:
+        try:
+            return datetime.combine(
+                date.fromisoformat(
+                    applied_on
+                ),
+                time(
+                    12,
+                    0,
+                ),
+                tzinfo=timezone.utc,
+            )
+        except ValueError:
+            return fallback
+
+    return fallback
+
+
+def record_external_applications(
+    session: Session,
+    *,
+    entries: list[dict],
+    now: datetime | None = None,
+) -> int:
+    """Store applications that have no stored posting to attach to.
+
+    Each entry is
+    ``{"company", "title", "applied_on", "status", "url"}``.
+
+    Re-importing the same sheet updates rather than duplicates, and a
+    status already recorded is only overwritten when the new sheet
+    actually states one. A blank status column on a later upload must
+    not silently erase a rejection recorded earlier.
+
+    Returns:
+        How many rows were written or updated.
+    """
+
+    stamp = (
+        now
+        if now is not None
+        else datetime.now(
+            timezone.utc
+        )
+    )
+
+    written = 0
+
+    for entry in entries:
+        company = str(
+            entry.get(
+                "company"
+            )
+            or ""
+        ).strip()
+
+        title = str(
+            entry.get(
+                "title"
+            )
+            or ""
+        ).strip()
+
+        if not company or not title:
+            # Without both there is nothing to show and nothing to
+            # de-duplicate on.
+            continue
+
+        key = external_match_key(
+            company=company,
+            title=title,
+        )
+
+        record = session.scalar(
+            select(
+                ExternalApplicationRecord
+            ).where(
+                ExternalApplicationRecord
+                .match_key
+                == key
+            )
+        )
+
+        if record is None:
+            record = (
+                ExternalApplicationRecord(
+                    company=company,
+                    title=title,
+                    match_key=key,
+                    created_at=stamp,
+                )
+            )
+
+            session.add(
+                record
+            )
+
+        record.company = company
+
+        record.title = title
+
+        when = _applied_instant(
+            entry.get(
+                "applied_on"
+            ),
+            fallback=stamp,
+        )
+
+        record.applied_at = when
+
+        status = entry.get(
+            "status"
+        ) or None
+
+        if status:
+            if (
+                record.application_status
+                != status
+            ):
+                record.status_changed_at = (
+                    stamp
+                )
+
+            record.application_status = (
+                status
+            )
+
+        elif (
+            record.application_status
+            is None
+        ):
+            record.application_status = (
+                "applied"
+            )
+
+            record.status_changed_at = when
+
+        if entry.get(
+            "url"
+        ):
+            record.url = str(
+                entry["url"]
+            )
+
+        record.updated_at = stamp
+
+        written += 1
+
+    session.flush()
+
+    return written
+
+
+def list_external_applications(
+    session: Session,
+) -> list[ExternalApplicationRecord]:
+    """Return every standalone application, most recent first."""
+
+    return list(
+        session.scalars(
+            select(
+                ExternalApplicationRecord
+            ).order_by(
+                ExternalApplicationRecord
+                .applied_at.desc()
+                .nullslast(),
+                ExternalApplicationRecord
+                .id.desc(),
+            )
+        ).all()
     )
 
 

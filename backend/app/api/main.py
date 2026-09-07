@@ -43,7 +43,9 @@ from backend.app.applications.parsing import (
 )
 from backend.app.applications.service import (
     apply_import,
+    list_external_applications,
     preview_import,
+    record_external_applications,
 )
 from backend.app.api.queries import (
     DEFAULT_PAGE_SIZE,
@@ -124,11 +126,31 @@ class ApplicationDecision(BaseModel):
     status: str | None = None
 
 
+class ExternalApplicationEntry(BaseModel):
+    """One application with no stored posting to attach it to."""
+
+    company: str
+
+    title: str
+
+    applied_on: str | None = None
+
+    status: str | None = None
+
+    url: str | None = None
+
+
 class ApplicationImport(BaseModel):
     """The rows a user confirmed after reviewing the preview."""
 
     decisions: list[
         ApplicationDecision
+    ] = []
+
+    # Rows ACE could not place against a stored posting, kept as
+    # standalone history rather than dropped.
+    external: list[
+        ExternalApplicationEntry
     ] = []
 
 
@@ -863,6 +885,44 @@ def create_app() -> FastAPI:
         }
 
     @app.get(
+        "/api/applications/external"
+    )
+    def get_external_applications(
+        session: Session = Depends(
+            get_session
+        ),
+    ) -> dict:
+        """Return applications with no stored posting behind them."""
+
+        rows = list_external_applications(
+            session
+        )
+
+        return {
+            "items": [
+                {
+                    "id": row.id,
+                    "company": row.company,
+                    "title": row.title,
+                    "applied_at": (
+                        None
+                        if row.applied_at is None
+                        else row.applied_at
+                        .isoformat()
+                    ),
+                    "application_status": (
+                        row.application_status
+                    ),
+                    "url": row.url,
+                }
+                for row in rows
+            ],
+            "total": len(
+                rows
+            ),
+        }
+
+    @app.get(
         "/api/marks"
     )
     def get_marks(
@@ -1099,6 +1159,27 @@ def create_app() -> FastAPI:
     ) -> dict:
         """Record applications for the confirmed rows only."""
 
+        recorded = record_external_applications(
+            session,
+            entries=[
+                {
+                    "company": entry.company,
+                    "title": entry.title,
+                    "applied_on": (
+                        entry.applied_on
+                    ),
+                    "status": (
+                        entry.status
+                        if entry.status
+                        in APPLICATION_STATUSES
+                        else None
+                    ),
+                    "url": entry.url,
+                }
+                for entry in payload.external
+            ],
+        )
+
         marked = apply_import(
             session,
             decisions=[
@@ -1126,6 +1207,7 @@ def create_app() -> FastAPI:
 
         return {
             "marked": marked,
+            "recorded": recorded,
         }
 
     @app.get(

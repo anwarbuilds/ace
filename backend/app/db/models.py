@@ -771,3 +771,88 @@ class JobMarkRecord(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+
+class ExternalApplicationRecord(Base):
+    """An application to a posting ACE never stored.
+
+    ACE's corpus starts the day it began watching, so an application
+    sent earlier, to a posting that has since closed, has nothing to
+    attach to. These rows keep that history rather than discarding it,
+    which is what stops the Applied page from being a record of what
+    ACE happened to witness instead of where the user actually applied.
+
+    They are never matched to a job. If ACE later discovers the same
+    role reposted, that is a different opening.
+    """
+
+    __tablename__ = "external_applications"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "match_key",
+            name=(
+                "uq_external_applications_"
+                "match_key"
+            ),
+        ),
+        Index(
+            "ix_external_applications_status",
+            "application_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BIGINT_ID,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    company: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    title: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+    )
+
+    # Normalised company and title. Stored so the unique constraint can
+    # enforce that re-importing a sheet updates rather than duplicates.
+    match_key: Mapped[str] = mapped_column(
+        String(600),
+        nullable=False,
+    )
+
+    applied_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    application_status: Mapped[str | None] = mapped_column(
+        String(24),
+        nullable=True,
+    )
+
+    status_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    url: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )

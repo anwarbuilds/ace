@@ -643,3 +643,118 @@ def test_closed_applications_are_not_counted_as_open(
             counts["open_applications"]
             == 1
         )
+
+
+def test_marked_pages_ignore_the_eligibility_gate(
+    session_factory,
+) -> None:
+    """History is not a recommendation and must not be filtered as one.
+
+    A job applied to, then later judged senior or out of family by a
+    rule change, still happened. Filtering marked pages through the
+    gate hid 20 of 27 real applications from the Applied page.
+    """
+
+    with session_factory() as session:
+        kept = add_job(
+            session,
+            index=1,
+        )
+
+        rejected = add_job(
+            session,
+            index=2,
+        )
+
+        session.get(
+            JobEvaluationRecord,
+            rejected.id,
+        ).eligibility_status = "REJECT"
+
+        session.flush()
+
+        for job in (
+            kept,
+            rejected,
+        ):
+            set_mark(
+                session,
+                job_id=job.id,
+                applied=True,
+                now=NOW,
+            )
+
+        page = list_jobs(
+            session,
+            filters=JobFilters(
+                mark="applied",
+            ),
+            now=NOW,
+        )
+
+        assert page.total == 2
+
+
+def test_marked_pages_still_show_closed_postings(
+    session_factory,
+) -> None:
+    """A posting closing does not unmake the application."""
+
+    with session_factory() as session:
+        job = add_job(
+            session,
+            index=1,
+        )
+
+        job.is_active = False
+
+        session.flush()
+
+        set_mark(
+            session,
+            job_id=job.id,
+            applied=True,
+            now=NOW,
+        )
+
+        page = list_jobs(
+            session,
+            filters=JobFilters(
+                mark="applied",
+            ),
+            now=NOW,
+        )
+
+        assert page.total == 1
+
+
+def test_the_queue_still_respects_the_gate(
+    session_factory,
+) -> None:
+    """The exemption is for marked pages only, not everywhere."""
+
+    with session_factory() as session:
+        add_job(
+            session,
+            index=1,
+        )
+
+        rejected = add_job(
+            session,
+            index=2,
+        )
+
+        session.get(
+            JobEvaluationRecord,
+            rejected.id,
+        ).eligibility_status = "REJECT"
+
+        session.flush()
+
+        page = list_jobs(
+            session,
+            filters=JobFilters(),
+            now=NOW,
+        )
+
+        assert page.total == 1
