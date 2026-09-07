@@ -294,6 +294,121 @@ def test_the_age_filter_is_off_until_asked_for(
     ) is False
 
 
+def _open_filters(
+    page,
+) -> None:
+    """Open the Add a filter popover."""
+
+    page.click(
+        '[data-act="filters"]'
+    )
+
+    page.wait_for(
+        "!!document.getElementById"
+        "('filter-q')"
+    )
+
+
+def test_company_names_keep_their_capitals(
+    page,
+) -> None:
+    """The list folded every value to lower case, which suits
+    SOFTWARE_ENGINEERING and mangles ByteDance and IXL Learning."""
+
+    _open_filters(
+        page
+    )
+
+    top = page.eval(
+        "state.facets.companies[0].value"
+    )
+
+    assert top != top.lower(), (
+        "pick a corpus whose busiest company "
+        "has capitals to test against"
+    )
+
+    assert page.eval(
+        "Array.from(document"
+        ".querySelectorAll('.pop-opt"
+        "[data-addfilter=\"company\"]'))"
+        ".some(function(b){return "
+        "b.textContent.indexOf("
+        + repr(
+            top
+        ).replace(
+            "'",
+            '"',
+        )
+        + ")>=0;})"
+    ), f"{top} was not offered under its own name"
+
+
+def test_a_company_outside_the_top_few_is_reachable(
+    page,
+) -> None:
+    """Only the ten busiest companies were listed, so the other 159
+    could not be filtered on at all."""
+
+    _open_filters(
+        page
+    )
+
+    target = page.eval(
+        "(function(){var c=state.facets"
+        ".companies;return c.length>20 ?"
+        " c[c.length-1].value : '';})()"
+    )
+
+    if not target:
+        pytest.skip(
+            "corpus too small to have a tail"
+        )
+
+    assert not page.eval(
+        "Array.from(document"
+        ".querySelectorAll('.pop-opt'))"
+        ".some(function(b){return "
+        "b.textContent.indexOf("
+        + repr(
+            target
+        ).replace(
+            "'",
+            '"',
+        )
+        + ")>=0;})"
+    ), "the whole list is rendered, so search is not what makes it reachable"
+
+    page.eval(
+        "(function(){var i=document"
+        ".getElementById('filter-q');"
+        "i.value="
+        + repr(
+            target
+        ).replace(
+            "'",
+            '"',
+        )
+        + ";i.dispatchEvent("
+        "new Event('input'));})()"
+    )
+
+    assert page.wait_for(
+        "Array.from(document"
+        ".querySelectorAll('.pop-opt"
+        "[data-addfilter=\"company\"]'))"
+        ".some(function(b){return "
+        "b.textContent.indexOf("
+        + repr(
+            target
+        ).replace(
+            "'",
+            '"',
+        )
+        + ")>=0;})"
+    )
+
+
 # --- pages load -------------------------------------------------------
 
 
