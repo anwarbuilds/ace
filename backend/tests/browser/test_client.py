@@ -409,6 +409,54 @@ def test_a_company_outside_the_top_few_is_reachable(
     )
 
 
+def test_the_more_line_expands_its_group(
+    page,
+) -> None:
+    """It counted what was hidden and did nothing when tapped, which
+    is exactly how the user described it: like text, with no action
+    on it."""
+
+    _open_filters(
+        page
+    )
+
+    shown = page.eval(
+        "document.querySelectorAll("
+        "'.pop-opt[data-addfilter="
+        "\"company\"]').length"
+    )
+
+    total = page.eval(
+        "state.facets.companies.length"
+    )
+
+    if total <= shown:
+        pytest.skip(
+            "no companies are held back"
+        )
+
+    page.click(
+        '.pop-more[data-expand="company"]'
+    )
+
+    assert page.eval(
+        "!!document.querySelector('.pop')"
+    ), "expanding closed the menu"
+
+    assert page.eval(
+        "document.querySelectorAll("
+        "'.pop-opt[data-addfilter="
+        "\"company\"]').length"
+    ) == total, "the group did not open"
+
+    # One group at a time: opening the whole menu at once buries the
+    # sources and families under 169 companies.
+    assert page.eval(
+        "document.querySelectorAll("
+        "'.pop-opt[data-exclude]').length"
+    ) == shown
+
+
 def test_a_filter_offered_never_empties_the_queue(
     page,
 ) -> None:

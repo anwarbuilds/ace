@@ -409,6 +409,8 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .pop-search{width:100%;padding:7px 9px;margin:2px 0 4px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-2);color:var(--text);font-size:12.5px;font-family:inherit}
 .pop-search:focus{outline:none;border-color:var(--purple)}
 .pop-note{font-size:11px;color:var(--text-muted);padding:6px 9px}
+.pop-more{display:block;width:100%;text-align:left;padding:7px 9px;border-radius:var(--r-sm);font-size:11.5px;font-weight:600;color:var(--purple)}
+.pop-more:hover{background:var(--hover)}
 .pop-group{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);padding:12px 9px 5px}
 .scrim{position:fixed;inset:0;z-index:45;background:var(--backdrop)}
 @media (min-width:1025px){.scrim{display:none}}
@@ -536,7 +538,7 @@ var state={
   resume:null, gap:[], facets:{companies:[],sources:[],families:[]},
   prevVisit:null, newSinceVisit:0,
   menuOpen:false, toast:null, undoFn:null,
-  filterQuery:"",
+  filterQuery:"", filterOpen:{},
   importData:null, importChoice:{}, keepExternal:true, externalApps:[],
   gapFamily:"", gapMin:null,
   palHits:null, palIndex:0,
@@ -1517,7 +1519,21 @@ var FILTER_PREVIEW=8;
 function filterPopBody(){
   var f=state.facets, q=(state.filterQuery||"").trim().toLowerCase();
   function hit(o){ return !q||String(o.value).toLowerCase().indexOf(q)>=0; }
-  function tail(n){ return n>0?'<div class="pop-note">'+n+' more, type to find one</div>':""; }
+  // A count of what is hidden is not an instruction. Written as a line
+  // of text it reads as something to tap, and tapping did nothing, so
+  // it is a button that opens the group it is counting.
+  function tail(key,n){
+    return n>0
+      ? '<button class="pop-more" data-expand="'+key+'">Show '+n+' more</button>'
+      : "";
+  }
+  function cut(key,list){
+    if(q||state.filterOpen[key]) return list.slice(0,300);
+    return list.slice(0,FILTER_PREVIEW);
+  }
+  function rest(key,list){
+    return (q||state.filterOpen[key])?0:list.length-FILTER_PREVIEW;
+  }
   // Sources and families are stored as SOFTWARE_ENGINEERING and read
   // better folded down. Company names are already written the way their
   // company writes them, so folding those loses real information.
@@ -1525,22 +1541,22 @@ function filterPopBody(){
     list=(list||[]).filter(hit);
     if(!list.length) return "";
     return '<div class="pop-group">'+t+'</div>'+
-      (q?list.slice(0,60):list.slice(0,FILTER_PREVIEW)).map(function(o){
+      cut(param,list).map(function(o){
         var label=fold?String(o.value).replace(/_/g," ").toLowerCase():String(o.value);
         return '<button class="pop-opt" data-addfilter="'+param+'" data-value="'+esc(o.value)+'">'+
           esc(label)+'<span class="n">'+o.count+'</span></button>';}).join("")+
-      tail(q?0:list.length-FILTER_PREVIEW);
+      tail(param,rest(param,list));
   }
   // Companies get both directions. "Only Amazon" and "everything except
   // Amazon" are both worth wanting, often at the same time.
   var ex=(f.companies||[]).filter(hit);
   var exGroup=ex.length
     ? '<div class="pop-group">Hide a company</div>'+
-      (q?ex.slice(0,60):ex.slice(0,FILTER_PREVIEW)).map(function(o){
+      cut("exclude",ex).map(function(o){
         var off=state.excluded.indexOf(o.value)>=0;
         return '<button class="pop-opt'+(off?" on":"")+'" data-exclude="'+esc(o.value)+'">'+
           icon(I.minus,13)+esc(o.value)+'<span class="n">'+o.count+'</span></button>';}).join("")+
-      tail(q?0:ex.length-FILTER_PREVIEW)
+      tail("exclude",rest("exclude",ex))
     : "";
   var body=(q?"":'<div class="pop-group">Quick</div>'+
       '<button class="pop-opt" data-addflag="verified_only">Description available</button>')+
@@ -1549,7 +1565,7 @@ function filterPopBody(){
   return body||'<div class="pop-note">Nothing matches that.</div>';
 }
 function filterPop(a){
-  state.filterQuery="";
+  state.filterQuery=""; state.filterOpen={};
   var d=openPop(a,'<h4>Add a filter</h4>'+
     '<input class="pop-search" id="filter-q" placeholder="Search companies and sources" '+
       'autocomplete="off" aria-label="Search filters">'+
@@ -1804,6 +1820,7 @@ document.addEventListener("click",function(e){
   if(e.target.closest("[data-stop]")){ e.stopPropagation(); return; }
   var t=e.target.closest("[data-nav],[data-view],[data-act],[data-mark],[data-status],[data-open],[data-sort],[data-tier],"+
     "[data-exclude],[data-unexclude],[data-unfilter],[data-addfilter],[data-addflag],[data-session],[data-skillq],"+
+    "[data-expand],"+
     "[data-settheme],[data-gapfam],[data-gapmin],.row");
   if(!t){ if(!e.target.closest(".pop")) closePop(); return; }
   var d=t.dataset;
@@ -1811,6 +1828,8 @@ document.addEventListener("click",function(e){
   if(d.open){ e.preventDefault(); openJob(parseInt(d.open,10)); return; }
   if(d.nav){ goTo(d.nav); return; }
   if(d.view){ goTo("queue",d.view); return; }
+  if(d.expand){ state.filterOpen[d.expand]=true;
+      var pl=document.querySelector(".pop-list"); if(pl) pl.innerHTML=filterPopBody(); return; }
   if(d.sort){ toggleSort(d.sort); closePop(); return; }
   if(d.tier){ toggleTier(d.tier); return; }
   if(d.exclude){ toggleExclude(d.exclude); closePop(); return; }
