@@ -441,17 +441,17 @@ def test_company_age_is_not_an_experience_requirement() -> None:
         ), phrasing
 
 
-def test_a_wide_range_is_not_early_career() -> None:
-    """"2 to 10+ years" has a floor you clear and a ceiling you do not.
+def test_a_wide_range_is_rejected() -> None:
+    """"2 to 10+ years" is a mid-level posting with a low floor.
 
-    It should still pass, since the minimum is two, but calling it
-    early career puts senior work in a list that means "a new graduate
-    can apply to this".
+    This reverses an earlier decision. That decision let it pass on the
+    grounds that a candidate clearing the floor could apply, and marked
+    it only as not-early-career. The user reported the result as noise:
+    a queue meaning "a new graduate can apply to this" filled with
+    postings wanting four or more years, and asked for anything above
+    three to be rejected outright. The ceiling now decides.
     """
 
-    # early_career=False: the shared fixture otherwise injects "this is
-    # a new grad role" into the description, and an explicit marker
-    # like that is meant to win over an inferred range.
     decision = evaluate_job(
         make_job(
             title="Full Stack Engineer",
@@ -467,13 +467,35 @@ def test_a_wide_range_is_not_early_career() -> None:
 
     assert (
         decision.status
-        == EligibilityStatus.PASS
+        == EligibilityStatus.REJECT
     )
 
     assert (
         EligibilityReasonCode
-        .EARLY_CAREER_SIGNAL
-        not in decision.reason_codes
+        .EXPERIENCE_TOO_HIGH
+        in decision.reason_codes
+    )
+
+
+def test_a_range_inside_the_cap_still_passes() -> None:
+    """The ceiling rule must not swallow genuine early-career ranges."""
+
+    decision = evaluate_job(
+        make_job(
+            title="Software Engineer",
+            early_career=False,
+            description=(
+                "Minimum requirements: 1-3 "
+                "years of software engineering "
+                "experience. "
+                + VERIFIABLE_PAD
+            ),
+        )
+    )
+
+    assert (
+        decision.status
+        == EligibilityStatus.PASS
     )
 
 

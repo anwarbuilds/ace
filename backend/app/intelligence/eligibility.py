@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-07-v19"
+    "2026-09-08-v21"
 )
 
 
@@ -370,8 +370,18 @@ SENIOR_TITLE_PATTERNS = (
     r"\blead\b",
     r"\bmanager\b",
     r"\bdirector\b",
-    r"\bengineer\s+iii\b",
+    # Level II is the first rung above new grad: Amazon's SDE II asks
+    # 2 to 4 years, and 89 of them were sitting in the queue. Measured
+    # before adding: 370 active titles match, 89 were passing.
+    # Written for any of the role nouns, because "Software Developer
+    # II" and "Data Scientist II" are the same rung.
+    r"\b(?:engineer|developer|scientist|architect|"
+    r"programmer|analyst)\s+i{2,3}\b",
     r"\bengineer\s+iv\b",
+    # Deliberately roman only. Numeric levels 1 to 3 were measured and
+    # kept as early career, because Netflix and others number a normal
+    # engineer "Software Engineer 3". "SDE II" is a different
+    # convention: Amazon's level II asks 2 to 4 years.
     # Numeric career levels, as Netflix and others write them:
     # "Software Engineer 4", "AI Engineer 6 - Ads Platform". Level 4
     # and above is senior at every company that numbers this way, and
@@ -855,6 +865,15 @@ EXPERIENCE_PATTERN = re.compile(
 # (6+ years)", "software engineering experience of 5+ years". Written
 # that way it escaped the pattern above entirely and the posting was
 # recorded as stating no requirement.
+# A figure with no experience noun after it. Only trusted inside a
+# qualifications section, where it is unambiguous.
+EXPERIENCE_BARE_PATTERN = re.compile(
+    r"(?P<years>\d{1,2})\s*\+\s*"
+    r"(?:years?|yrs?)\b",
+    re.IGNORECASE,
+)
+
+
 EXPERIENCE_TRAILING_PATTERN = re.compile(
     r"(?:experience|expertise|background)"
     r"[\s:]*[\(\[]?\s*(?:of\s+|at\s+least\s+)?"
@@ -878,6 +897,9 @@ PREFERRED_SECTION_PATTERNS = (
     r"good\s+to\s+have",
     r"pluses",
     r"it'?s\s+a\s+plus",
+    r"desired\s+capabilities",
+    r"desired\s+skills",
+    r"ideally\s+you",
 )
 
 
@@ -890,6 +912,18 @@ REQUIRED_SECTION_PATTERNS = (
     r"what\s+we'?re\s+looking\s+for",
     r"who\s+you\s+are",
     r"about\s+you",
+    # Real headers found in the corpus that were unrecognised, so a
+    # figure under them read as unsectioned and was not trusted.
+    # NVIDIA writes "What we need to see:" and its 6+ years went
+    # unrecorded.
+    r"what\s+we\s+need\s+to\s+see",
+    r"what\s+you'?ll\s+bring",
+    r"what\s+you\s+bring",
+    r"your\s+(?:skills\s+and\s+)?experience",
+    r"skills\s+and\s+experience",
+    r"your\s+background",
+    r"must\s+haves?",
+    r"you\s+(?:will\s+)?have",
     r"qualifications",
 )
 
@@ -1074,6 +1108,76 @@ def _has_early_career_signal(
     )
 
 
+# Figures describing the company rather than the candidate. "Our team
+# has 10+ years of combined experience building X" is a boast, and
+# reading it as a requirement rejects a genuine early-career posting.
+COLLECTIVE_EXPERIENCE_PATTERN = re.compile(
+    r"(?:our|the)\s+(?:team|company|"
+    r"founders?|leadership|group)\b"
+    r"[^.]{0,60}$"
+    r"|\bcombined\b[^.]{0,30}$"
+    r"|\bcollectively\b[^.]{0,30}$"
+    r"|\bwe\s+have\b[^.]{0,40}$",
+    re.IGNORECASE,
+)
+
+
+def _describes_the_company(
+    description: str,
+    position: int,
+) -> bool:
+    """Return whether a figure is about the employer, not the reader."""
+
+    return bool(
+        COLLECTIVE_EXPERIENCE_PATTERN.search(
+            description[
+                max(
+                    0,
+                    position - 90,
+                ):position
+            ]
+        )
+    )
+
+
+def _inside_a_qualifications_section(
+    description: str,
+    position: int,
+) -> bool:
+    """Return whether any qualifications header precedes this point.
+
+    Used to trust a bare figure. "6+ years in EDA compute" and "5+
+    years Unix / Linux" state a requirement with no experience noun
+    after the number, so the noun-anchored patterns miss them entirely
+    and the posting reads as stating no requirement at all. Inside a
+    qualifications block that reading is wrong: a bare "N+ years" there
+    is the bar.
+
+    Outside such a block the same figure is untrustworthy, since "10+
+    years of combined team experience" is about the company.
+    """
+
+    window = description[
+        max(
+            0,
+            position
+            - SECTION_LOOKBACK_CHARS,
+        ):position
+    ]
+
+    return any(
+        re.search(
+            pattern,
+            window,
+            re.IGNORECASE,
+        )
+        for pattern in (
+            REQUIRED_SECTION_PATTERNS
+            + PREFERRED_SECTION_PATTERNS
+        )
+    )
+
+
 def _nearest_section_is_preferred(
     description: str,
     position: int,
@@ -1215,8 +1319,27 @@ def _experience_figures(
                 description
             )
         )
+        + [
+            match
+            for match in (
+                EXPERIENCE_BARE_PATTERN
+                .finditer(
+                    description
+                )
+            )
+            if _inside_a_qualifications_section(
+                description,
+                match.start(),
+            )
+        ]
     ):
         if match.start() in consumed:
+            continue
+
+        if _describes_the_company(
+            description,
+            match.start(),
+        ):
             continue
 
         years = int(
@@ -1651,7 +1774,32 @@ def evaluate_job(
     # bar. A posting that calls itself a new-grad role while demanding
     # seven years is contradicting itself, and the years are the part
     # that survives contact with a recruiter.
+    # A range reaching well past the cap is a mid-level posting whose
+    # floor happens to be low: "3 to 5+ years" wants someone with four.
+    # Its floor alone kept it in a queue that means "a new graduate can
+    # apply to this", which is the noise the user reported.
+    ceiling = _experience_range_ceiling(
+        job.description
+    )
+
     if (
+        ceiling is not None
+        and ceiling
+        > MAX_REQUIRED_EXPERIENCE_YEARS
+    ):
+        reject_codes.append(
+            EligibilityReasonCode
+            .EXPERIENCE_TOO_HIGH
+        )
+
+        reject_reasons.append(
+            (
+                "Posting asks for a range "
+                f"reaching {ceiling} years."
+            )
+        )
+
+    elif (
         required_years is not None
         and required_years
         >= MAX_REQUIRED_EXPERIENCE_YEARS
