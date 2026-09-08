@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-07-v17"
+    "2026-09-07-v19"
 )
 
 
@@ -819,10 +819,18 @@ CASE_SENSITIVE_OTHER_LANGUAGE_PATTERNS = (
 # the requirement is the noun that follows.
 EXPERIENCE_CONTEXT = (
     r"(?:of\s+|in\s+|with\s+)?"
-    r"(?:[A-Za-z][\w/+#.\-]*[\s,]+){0,5}?"
+    r"(?:[A-Za-z][\w/+#.\-]*[\s,]+){0,6}?"
     r"(?:experience|expertise|background|"
     r"building|shipping|working|developing|"
     r"designing|writing|programming|engineering|"
+    r"managing|leading|operating|architecting|"
+    r"maintaining|supporting|"
+    # Real postings that slipped through with no figure recorded at
+    # all: "5+ years of full software development life cycle",
+    # "5+ years in software development", "7+ years of full-time
+    # software engineering".
+    r"development|engineer|software|"
+    r"industry|professional|"
     r"roles?|positions?)"
 )
 
@@ -839,6 +847,18 @@ EXPERIENCE_RANGE_PATTERN = re.compile(
 EXPERIENCE_PATTERN = re.compile(
     rf"(?P<years>\d{{1,2}})\s*\+?\s*(?:years?|yrs?)\s+"
     rf"{EXPERIENCE_CONTEXT}",
+    re.IGNORECASE,
+)
+
+
+# The figure also appears after the noun: "Relevant industry experience
+# (6+ years)", "software engineering experience of 5+ years". Written
+# that way it escaped the pattern above entirely and the posting was
+# recorded as stating no requirement.
+EXPERIENCE_TRAILING_PATTERN = re.compile(
+    r"(?:experience|expertise|background)"
+    r"[\s:]*[\(\[]?\s*(?:of\s+|at\s+least\s+)?"
+    r"(?P<years>\d{1,2})\s*\+?\s*(?:years?|yrs?)",
     re.IGNORECASE,
 )
 
@@ -1077,6 +1097,15 @@ def _nearest_section_is_preferred(
 
     nearest_required = -1
 
+    # Kept so a required header sitting inside a preferred one can be
+    # discarded. "Preferred qualifications" contains "qualifications",
+    # which is itself a required header and starts ten characters
+    # later, so the bare word won on position and every preferred
+    # figure was recorded as required.
+    preferred_spans: list[
+        tuple[int, int]
+    ] = []
+
     for pattern in (
         PREFERRED_SECTION_PATTERNS
     ):
@@ -1085,6 +1114,13 @@ def _nearest_section_is_preferred(
             window,
             re.IGNORECASE,
         ):
+            preferred_spans.append(
+                (
+                    match.start(),
+                    match.end(),
+                )
+            )
+
             nearest_preferred = max(
                 nearest_preferred,
                 match.start(),
@@ -1098,6 +1134,16 @@ def _nearest_section_is_preferred(
             window,
             re.IGNORECASE,
         ):
+            if any(
+                start
+                <= match.start()
+                < end
+                for start, end in (
+                    preferred_spans
+                )
+            ):
+                continue
+
             nearest_required = max(
                 nearest_required,
                 match.start(),
@@ -1158,8 +1204,16 @@ def _experience_figures(
             )
 
     for match in (
-        EXPERIENCE_PATTERN.finditer(
-            description
+        list(
+            EXPERIENCE_PATTERN.finditer(
+                description
+            )
+        )
+        + list(
+            EXPERIENCE_TRAILING_PATTERN
+            .finditer(
+                description
+            )
         )
     ):
         if match.start() in consumed:
@@ -1227,10 +1281,15 @@ def _experience_range_ceiling(
 def _required_experience_years(
     description: str,
 ) -> int | None:
-    """Extract the lowest experience bar the posting actually sets.
+    """Extract the experience bar the posting actually sets.
 
-    The minimum is used rather than the maximum: a posting listing both
-    "3+ years" and "7+ years" will consider a candidate with three.
+    The maximum is used rather than the minimum. Taking the lowest
+    figure read a posting's incidental requirements as its headline
+    one: a real Workday posting stating "5+ years" alongside several
+    "1+ year with <tool>" lines was recorded as a one-year role and
+    reached the queue. The largest figure in the required section is
+    the bar a recruiter actually applies; the small ones are sub-skills
+    attached to it.
 
     When a posting states experience only in an optional section, that
     figure is still used. A role whose sole stated experience bar is
@@ -1250,12 +1309,12 @@ def _required_experience_years(
     )
 
     if required:
-        return min(
+        return max(
             required
         )
 
     if optional:
-        return min(
+        return max(
             optional
         )
 
@@ -1277,6 +1336,18 @@ def _is_early_career_role(
     single list meaning "apply to this", so an unlabelled senior-leaning
     role is noise rather than opportunity.
     """
+
+    # Checked before any early-career phrasing. A posting calling
+    # itself a new-grad role while asking for seven years is
+    # contradicting itself, and the years are the half a recruiter
+    # applies. Boilerplate mentioning "new grad" elsewhere in a senior
+    # posting used to override the bar entirely.
+    if (
+        required_years is not None
+        and required_years
+        > EARLY_CAREER_MAX_YEARS
+    ):
+        return False
 
     if _matches_any_regex(
         job.title,
