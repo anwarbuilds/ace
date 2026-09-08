@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-08-v25"
+    "2026-09-08-v26"
 )
 
 
@@ -1813,6 +1813,21 @@ def _is_early_career_role(
     ):
         return False
 
+    # Checked here, with the other bars, rather than after the phrasing.
+    # A range reaching ten years is not a graduate posting even when
+    # its floor lets a graduate apply, and leaving this below the
+    # signal let boilerplate about new grads override it.
+    ceiling = _experience_range_ceiling(
+        job.description
+    )
+
+    if (
+        ceiling is not None
+        and ceiling
+        > MAX_REQUIRED_EXPERIENCE_YEARS
+    ):
+        return False
+
     if _matches_any_regex(
         job.title,
         EARLY_CAREER_TITLE_PATTERNS,
@@ -1824,19 +1839,6 @@ def _is_early_career_role(
         EARLY_CAREER_TITLE_PATTERNS,
     ):
         return True
-
-    # A range reaching well past early career disqualifies it, even
-    # though its floor is low enough to apply against.
-    ceiling = _experience_range_ceiling(
-        job.description
-    )
-
-    if (
-        ceiling is not None
-        and ceiling
-        > MAX_REQUIRED_EXPERIENCE_YEARS
-    ):
-        return False
 
     return (
         required_years is not None
@@ -2119,32 +2121,17 @@ def evaluate_job(
         job.description
     )
 
-    # A range reaching well past the cap is a mid-level posting whose
-    # floor happens to be low: "3 to 5+ years" wants someone with four.
-    # Its floor alone kept it in a queue that means "a new graduate can
-    # apply to this", which is the noise the user reported.
-    ceiling = _experience_range_ceiling(
-        job.description
-    )
-
+    # A bounded range is judged by its floor, not its ceiling. Stripe
+    # writes "Minimum requirements 2-10+ years" and means it: the floor
+    # is the bar, and a candidate clearing it can apply. Rejecting on
+    # the ceiling threw away 25 software postings whose floors were one
+    # or two years, including a role titled "Software Engineer I".
+    #
+    # The ceiling still decides the early-career label, because a range
+    # reaching ten years is not a graduate posting even when a graduate
+    # may apply. Labelling and eligibility are different questions and
+    # were briefly conflated here.
     if (
-        ceiling is not None
-        and ceiling
-        > MAX_REQUIRED_EXPERIENCE_YEARS
-    ):
-        reject_codes.append(
-            EligibilityReasonCode
-            .EXPERIENCE_TOO_HIGH
-        )
-
-        reject_reasons.append(
-            (
-                "Posting asks for a range "
-                f"reaching {ceiling} years."
-            )
-        )
-
-    elif (
         open_ended is not None
         and open_ended
         >= MAX_OPEN_ENDED_YEARS

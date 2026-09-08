@@ -523,15 +523,27 @@ def test_company_age_is_not_an_experience_requirement() -> None:
         ), phrasing
 
 
-def test_a_wide_range_is_rejected() -> None:
-    """"2 to 10+ years" is a mid-level posting with a low floor.
+def test_a_wide_range_passes_on_its_floor() -> None:
+    """"2 to 10+ years" is judged by the two, not the ten.
 
-    This reverses an earlier decision. That decision let it pass on the
-    grounds that a candidate clearing the floor could apply, and marked
-    it only as not-early-career. The user reported the result as noise:
-    a queue meaning "a new graduate can apply to this" filled with
-    postings wanting four or more years, and asked for anything above
-    three to be rejected outright. The ceiling now decides.
+    This rule has now moved twice, so the reasoning is recorded rather
+    than the conclusion. It first passed on the floor. It was then made
+    to reject, because the user reported a queue meaning "a graduate
+    can apply to this" full of postings wanting four or more years. It
+    passes again now, because that change turned out to throw away
+    twenty-five software postings whose floors were one or two years,
+    including one titled "Software Engineer I".
+
+    The two instructions are not in conflict once open-ended and
+    bounded are separated. "3+ years" sets a floor and takes whoever
+    clears it, so a graduate competes with someone who has five: that
+    is rejected. "2 to 10 years" is a band a candidate with two is
+    inside, and Stripe writes exactly that under the heading "Minimum
+    requirements".
+
+    The ceiling still decides the early-career label, because a range
+    reaching ten years is not a graduate posting even when a graduate
+    may apply.
     """
 
     decision = evaluate_job(
@@ -549,13 +561,15 @@ def test_a_wide_range_is_rejected() -> None:
 
     assert (
         decision.status
-        == EligibilityStatus.REJECT
+        == EligibilityStatus.PASS
     )
 
+    # The ceiling still withholds the early-career label, so the
+    # posting is reachable without claiming to be a graduate role.
     assert (
         EligibilityReasonCode
-        .EXPERIENCE_TOO_HIGH
-        in decision.reason_codes
+        .EARLY_CAREER_SIGNAL
+        not in decision.reason_codes
     )
 
 

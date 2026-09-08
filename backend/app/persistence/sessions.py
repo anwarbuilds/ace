@@ -52,19 +52,39 @@ from backend.app.db.models import (
 # Discoveries arriving within this gap belong to the same run. Long
 # enough to absorb a staggered sweep across 128 sources, short enough
 # that a morning pull and an afternoon one stay separate.
-SESSION_MERGE_WINDOW = timedelta(
-    minutes=20
+# Activity is logged in fixed clock buckets rather than by merging on
+# idleness. The scheduler completes a cycle every few seconds and polls
+# whichever sources are due, so there is no natural "one pull" to log:
+# a row per cycle is nine thousand a day, and merging on idleness
+# produced one row covering two and a half hours that read as a single
+# check at lunchtime.
+#
+# A bucket is a period the reader can reason about. Every fifteen
+# minutes with any activity becomes exactly one row, always starting on
+# the quarter hour, so the log is predictable and at most ninety-six
+# rows a day.
+SESSION_BUCKET = timedelta(
+    minutes=15
 )
 
 
-# However quiet things stay, an entry stops growing after this. Without
-# a cap one row covered 12:13pm to 2:44pm and read as a single check
-# that happened at lunchtime, while the header correctly said the last
-# check was a minute ago. A log entry has to describe a period short
-# enough to mean something.
-SESSION_MAX_SPAN = timedelta(
-    hours=1
-)
+SESSION_MERGE_WINDOW = SESSION_BUCKET
+
+
+def bucket_start(
+    moment: datetime,
+) -> datetime:
+    """Return the quarter-hour boundary a moment falls in."""
+
+    return moment.replace(
+        minute=(
+            moment.minute
+            // 15
+        )
+        * 15,
+        second=0,
+        microsecond=0,
+    )
 
 
 def _as_utc(
@@ -125,25 +145,22 @@ def _open_session(
         .limit(1)
     ).first()
 
-    if recent is not None:
-        last_activity = _as_utc(
-            recent.last_activity_at
-        )
+    bucket = bucket_start(
+        now
+    )
 
-        started = _as_utc(
+    # Same bucket, same row. Compared on the boundary rather than on
+    # elapsed idleness, so two checks either side of the quarter hour
+    # are two rows however close together they ran.
+    if recent is not None and bucket_start(
+        _as_utc(
             recent.started_at
         )
-
-        if (
-            now - last_activity
-            <= merge_window
-            and now - started
-            <= SESSION_MAX_SPAN
-        ):
-            return recent
+    ) == bucket:
+        return recent
 
     record = PollSessionRecord(
-        started_at=now,
+        started_at=bucket,
         last_activity_at=now,
         jobs_discovered=0,
         qualifying_discovered=0,

@@ -447,12 +447,11 @@ def test_a_check_that_finds_nothing_is_still_recorded(
         assert run.jobs_discovered == 0
 
 
-def test_a_quiet_stretch_extends_one_entry(
+def test_checks_in_one_quarter_hour_are_one_row(
     session_factory,
 ) -> None:
-    """The scheduler completes a cycle every few seconds, so a row per
-    cycle would be thousands a day. Inside the merge window the same
-    entry is extended instead."""
+    """The scheduler completes a cycle every few seconds. A row per
+    cycle would be nine thousand a day."""
 
     with session_factory() as session:
         first = record_check(
@@ -464,83 +463,10 @@ def test_a_quiet_stretch_extends_one_entry(
 
         first_id = first.id
 
-        later = record_check(
-            session,
-            now=NOW
-            + timedelta(
-                minutes=5
-            ),
-        )
-
-        session.commit()
-
-        assert later.id == first_id
-
-        stamp = later.last_activity_at
-
-        if stamp.tzinfo is None:
-            stamp = stamp.replace(
-                tzinfo=timezone.utc
-            )
-
-        assert stamp == NOW + timedelta(
-            minutes=5
-        )
-
-
-def test_a_gap_past_the_window_starts_a_new_entry(
-    session_factory,
-) -> None:
-    """Otherwise one row would swallow a whole day and the log could
-    not show when ACE stopped."""
-
-    with session_factory() as session:
-        first = record_check(
-            session,
-            now=NOW,
-        )
-
-        session.flush()
-
-        first_id = first.id
-
-        later = record_check(
-            session,
-            now=NOW
-            + timedelta(
-                minutes=45
-            ),
-        )
-
-        session.commit()
-
-        assert later.id != first_id
-
-
-def test_an_entry_stops_growing_after_an_hour(
-    session_factory,
-) -> None:
-    """One row covered 12:13pm to 2:44pm and read as a single check
-    that happened at lunchtime, while the header correctly said the
-    last check was a minute ago. A log entry has to describe a period
-    short enough to mean something."""
-
-    with session_factory() as session:
-        first = record_check(
-            session,
-            now=NOW,
-        )
-
-        session.flush()
-
-        first_id = first.id
-
-        # Inside the merge window each time, so without a span cap this
-        # would extend the same entry indefinitely.
         for minutes in (
-            15,
-            30,
-            45,
+            2,
+            9,
+            14,
         ):
             same = record_check(
                 session,
@@ -550,16 +476,71 @@ def test_an_entry_stops_growing_after_an_hour(
                 ),
             )
 
-            assert same.id == first_id
+            assert same.id == first_id, minutes
+
+        session.commit()
+
+
+def test_the_next_quarter_hour_is_a_new_row(
+    session_factory,
+) -> None:
+    """Merging on idleness instead produced one row covering two and a
+    half hours, which read as a single check at lunchtime. A boundary
+    the reader can predict is what makes the log legible."""
+
+    with session_factory() as session:
+        first = record_check(
+            session,
+            now=NOW
+            + timedelta(
+                minutes=14
+            ),
+        )
+
+        session.flush()
 
         later = record_check(
             session,
             now=NOW
             + timedelta(
-                minutes=70
+                minutes=16
             ),
         )
 
         session.commit()
 
-        assert later.id != first_id
+        # Two minutes apart and still two rows: the boundary decides,
+        # not the gap.
+        assert later.id != first.id
+
+
+def test_a_row_starts_on_the_quarter_hour(
+    session_factory,
+) -> None:
+    """So the log reads 2:45, 3:00, 3:15 rather than wherever the
+    scheduler happened to wake."""
+
+    with session_factory() as session:
+        run = record_check(
+            session,
+            now=NOW
+            + timedelta(
+                minutes=23,
+                seconds=41,
+            ),
+        )
+
+        session.commit()
+
+        started = run.started_at
+
+        if started.tzinfo is None:
+            started = started.replace(
+                tzinfo=timezone.utc
+            )
+
+        assert started == NOW + timedelta(
+            minutes=15
+        )
+
+
