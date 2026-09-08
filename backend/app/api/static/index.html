@@ -408,7 +408,37 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .pop-opt .n{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-muted)}
 .pop-search{width:100%;padding:7px 9px;margin:2px 0 4px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-2);color:var(--text);font-size:12.5px;font-family:inherit}
 .pop-search:focus{outline:none;border-color:var(--purple)}
-.pl-wrap{padding:4px var(--gutter) 40px;max-width:1100px}\n.pl-stat{display:flex;flex-direction:column;gap:2px}\n.pl-k{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}\n.pl-v{font-size:14px;font-weight:600}\n.pl-v.bad{color:var(--danger,#b3261e)}\n.pl-day{margin-top:26px}\n.pl-day-h{display:flex;align-items:baseline;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}\n.pl-day-t{font-size:14px;font-weight:600}\n.pl-day-m{font-size:12px;color:var(--text-muted)}\n.pl-run{margin-top:14px;border:1px solid var(--border);border-radius:var(--r-md,10px);overflow:hidden}\n.pl-run-h{display:flex;align-items:center;gap:12px;padding:9px 14px;background:var(--surface-2)}\n.pl-time{font-family:var(--mono);font-size:12px;font-weight:600}\n.pl-count{font-size:12px;font-weight:600;color:var(--purple)}\n.pl-seen{font-size:11.5px;color:var(--text-muted);margin-right:auto}\n.pl-tbl{width:100%}\n.pl-more{display:block;padding:9px 14px;border-top:1px solid var(--border);width:100%;text-align:left}\n.pl-quiet{font-size:11.5px;color:var(--text-muted);padding:12px 2px 0}\n.pop-note{font-size:11px;color:var(--text-muted);padding:6px 9px}
+.ctl-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%}
+.ctl-row+.ctl-row{margin-top:9px}
+.ctl-grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ctl-active{padding-top:9px;border-top:1px dashed var(--border)}
+.pl-wrap{padding:4px var(--gutter) 40px;max-width:1080px}
+.pl-stats{display:flex;gap:30px;flex-wrap:wrap}
+.pl-stat{display:flex;flex-direction:column;gap:3px}
+.pl-k{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.pl-v{font-size:15px;font-weight:600}
+.pl-v.bad{color:#d06a5e}
+.pl-day{margin-top:30px}
+.pl-day-h{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding-bottom:9px;border-bottom:1px solid var(--border)}
+.pl-day-t{font-size:14px;font-weight:650;margin:0}
+.pl-day-m{font-size:11.5px;color:var(--text-muted)}
+.pl-day-m.strong{color:var(--text);font-weight:600}
+.pl-runs{margin-top:10px;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.pl-run+.pl-run{border-top:1px solid var(--border)}
+.pl-row{display:flex;align-items:center;gap:14px;width:100%;padding:10px 14px;background:none;border:0;text-align:left;color:inherit;font:inherit;cursor:pointer}
+.pl-row:disabled{cursor:default;opacity:.62}
+.pl-row:not(:disabled):hover{background:var(--hover)}
+.pl-run.open .pl-row{background:var(--surface-2)}
+.pl-caret{width:10px;color:var(--text-muted);font-size:11px}
+.pl-time{font-family:var(--mono);font-size:12px;font-weight:600;min-width:74px}
+.pl-badge{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-muted);min-width:96px;text-align:center}
+.pl-badge.hit{background:var(--purple-surface);color:var(--purple);font-weight:600}
+.pl-seen{font-size:11.5px;color:var(--text-muted);margin-right:auto}
+.pl-ago{font-size:11px;color:var(--text-muted);font-family:var(--mono)}
+.pl-jobs{border-top:1px solid var(--border);background:var(--surface-1)}
+.pl-tbl{width:100%}
+.pl-actions{padding:9px 14px}
+.pop-note{font-size:11px;color:var(--text-muted);padding:6px 9px}
 .ans-sec{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);padding:20px 0 7px;border-top:1px solid var(--border);margin-top:14px}
 .ans-sec:first-child{border-top:0;margin-top:0;padding-top:0}
 .ab-sec{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);padding:12px 8px 4px}
@@ -535,7 +565,7 @@ var SORTS=[
 var state={
   page:"queue", view:"all", jobId:null,
   q:"", sorts:["unapplied_first","new_grad_first","best_match"],
-  filters:{}, tiers:[], excluded:[], recentOnly:false,
+  filters:{}, tiers:[], excluded:[], recentOnly:false, openPull:null,
   pinned:null, heldRow:null,
   items:[], total:0, loading:true, loadingMore:false, hasMore:false, offset:0, reqToken:0,
   selectedId:null, scrollTo:false,
@@ -867,23 +897,40 @@ function controls(){
     return '<button class="chip'+(on?(t==="BIG_TECH"?" on-gold":" on"):"")+'" data-tier="'+t+'">'+
       TIER_LABEL[t]+'</button>';
   }).join("");
+  // Active filters read first: they are the only thing here that
+  // changes what is on screen, and they were buried at the end of a
+  // single run-on row behind everything that was merely available.
+  var active=chips+exChips;
   return '<div class="controls">'+
-    '<label class="search">'+icon(I.search)+
-      '<input id="q" type="search" placeholder="Search company, title, skill" value="'+esc(state.q)+'" aria-label="Search">'+
-      '<span class="kbd">/</span></label>'+
-    '<span class="ctl-label">Sort</span>'+
-    SORTS.slice(0,4).map(function(o){
-      var i=state.sorts.indexOf(o[0]);
-      return '<button class="chip'+(i>=0?" on":"")+'" data-sort="'+o[0]+'" title="Sorts combine, in the order you pick them">'+
-        esc(o[1])+(i>=0?'<span class="chip-n">'+(i+1)+'</span>':'')+'</button>';
-    }).join("")+
-    '<button class="link-btn" data-act="sortmore">More</button>'+
-    '<span class="ctl-label">Tier</span>'+tierChips+
-    '<span class="ctl-label">Filter</span>'+
-    '<button class="chip'+(state.filters.early_career_only?" on":"")+'" data-act="toggleearly">Early career</button>'+
-    '<button class="chip'+(state.recentOnly?" on":"")+'" data-act="togglerecent">Last '+RECENT_DAYS+' days</button>'+
-    chips+exChips+
-    '<button class="chip" data-act="filters">'+icon(I.plus)+'More</button>'+
+    '<div class="ctl-row">'+
+      '<label class="search">'+icon(I.search)+
+        '<input id="q" type="search" placeholder="Search company, title, skill" value="'+esc(state.q)+'" aria-label="Search">'+
+      '</label>'+
+      '<div class="ctl-grp"><span class="ctl-label">Sort</span>'+
+        SORTS.slice(0,4).map(function(o){
+          var i=state.sorts.indexOf(o[0]);
+          return '<button class="chip'+(i>=0?" on":"")+'" data-sort="'+o[0]+'" title="Sorts combine, in the order you pick them">'+
+            esc(o[1])+(i>=0?'<span class="chip-n">'+(i+1)+'</span>':'')+'</button>';
+        }).join("")+
+        '<button class="link-btn" data-act="sortmore">More</button></div>'+
+    '</div>'+
+    '<div class="ctl-row">'+
+      '<div class="ctl-grp"><span class="ctl-label">Company tier</span>'+tierChips+'</div>'+
+      '<div class="ctl-grp"><span class="ctl-label">Show only</span>'+
+        '<button class="chip'+(state.filters.early_career_only?" on":"")+'" data-act="toggleearly">Early career</button>'+
+        '<button class="chip" data-act="filters">'+icon(I.plus)+'Add filter</button></div>'+
+    '</div>'+
+    // Offered whenever anything is narrowing the list, including a
+    // tier or a search term, which are toggled elsewhere. Hiding the
+    // escape hatch unless a chip happened to be present left the user
+    // with no single way back to the full queue.
+    (active||state.tiers.length||state.q
+      ? '<div class="ctl-row ctl-active"><span class="ctl-label">Filtering by</span>'+
+        (active||'<span class="ctl-none">'+
+          (state.tiers.length?state.tiers.map(function(t){return TIER_LABEL[t];}).join(", "):"")+
+          (state.q?(state.tiers.length?', ':'')+'search "'+esc(state.q)+'"':'')+'</span>')+
+        '<button class="link-btn" data-act="clearfilters">Clear all</button></div>'
+      : '')+
   '</div>';
 }
 
@@ -1143,54 +1190,69 @@ function pullsPage(){
     groups[groups.length-1].rows.push(s);
   });
   var st=state.stats||{};
-  var healthy=(st.sources_polled!=null&&st.sources_enabled)
-    ? st.sources_polled+" of "+st.sources_enabled+" sources polling" : "";
   var sick=(st.sources_enabled&&st.sources_polled!=null&&st.sources_polled<st.sources_enabled);
 
-  // A pull that found nothing is the normal case and there are dozens
-  // of them. One row each buried the two or three that actually found
-  // something, which is the only thing this page is read for.
-  function dayBlock(g){
-    var found=g.rows.reduce(function(a,b){return a+b.jobs_discovered;},0);
-    var qual=g.rows.reduce(function(a,b){return a+b.qualifying_discovered;},0);
-    var hits=g.rows.filter(function(s){return s.qualifying_discovered>0;});
-    var quiet=g.rows.length-hits.length;
-    return '<div class="pl-day">'+
-        '<div class="pl-day-h"><span class="pl-day-t">'+esc(g.day)+'</span>'+
-          '<span class="pl-day-m">'+g.rows.length+' check'+(g.rows.length===1?"":"s")+
-          ' · '+found.toLocaleString()+' seen · <b>'+qual+'</b> passed your filters</span></div>'+
-        hits.map(function(s){
-          var jobs=s.jobs||[], hidden=Math.max(0,s.qualifying_discovered-jobs.length);
-          return '<div class="pl-run">'+
-            '<div class="pl-run-h"><span class="pl-time">'+clock(s.started_at)+'</span>'+
-              '<span class="pl-count">'+s.qualifying_discovered+' new</span>'+
-              '<span class="pl-seen">of '+s.jobs_discovered.toLocaleString()+' seen</span>'+
-              '<button class="link-btn" data-session="'+s.id+'">Open in Queue</button></div>'+
-            (jobs.length?'<table class="tbl pl-tbl"><tbody>'+
-              jobs.map(function(j){ return jobRow(j); }).join("")+'</tbody></table>':'')+
-            (hidden>0?'<button class="link-btn pl-more" data-session="'+s.id+'">Show '+hidden+' more from this check</button>':'')+
-          '</div>';
-        }).join("")+
-        (quiet?'<div class="pl-quiet">'+quiet+' other check'+(quiet===1?"":"s")+
-          ' found nothing new</div>':'')+
-      '</div>';
+  // Every check gets a row, including the ones that found nothing:
+  // this is a log, and a log that hides its quiet entries cannot be
+  // used to answer "was ACE running at 3am". The jobs a check found
+  // sit behind a click, so a day of checks stays one screen.
+  function runRow(s){
+    var open=state.openPull===s.id;
+    var jobs=s.jobs||[];
+    var hidden=Math.max(0,s.qualifying_discovered-jobs.length);
+    var hit=s.qualifying_discovered>0;
+    return '<div class="pl-run'+(hit?" hit":"")+(open?" open":"")+'">'+
+      '<button class="pl-row" data-pull="'+s.id+'"'+(hit?'':' disabled')+'>'+
+        '<span class="pl-caret">'+(hit?(open?"\u25be":"\u25b8"):"\u00b7")+'</span>'+
+        '<span class="pl-time">'+clock(s.started_at)+'</span>'+
+        '<span class="pl-badge'+(hit?" hit":"")+'">'+
+          (hit?s.qualifying_discovered+" passed":"nothing new")+'</span>'+
+        '<span class="pl-seen">'+s.jobs_discovered.toLocaleString()+
+          ' posting'+(s.jobs_discovered===1?"":"s")+' seen</span>'+
+        '<span class="pl-ago">'+ago(s.started_at)+'</span>'+
+      '</button>'+
+      (open?'<div class="pl-jobs">'+
+        (jobs.length?'<table class="tbl pl-tbl"><tbody>'+
+          jobs.map(function(j){ return jobRow(j); }).join("")+'</tbody></table>':'')+
+        '<div class="pl-actions">'+
+          (hidden>0?'<button class="link-btn" data-session="'+s.id+'">Show '+hidden+' more in the Queue</button>':
+            '<button class="link-btn" data-session="'+s.id+'">Open these in the Queue</button>')+
+        '</div></div>':'')+
+    '</div>';
   }
 
-  // ago() already returns "just now" for the recent case, and
-  // appending to that read as "just now ago".
+  function dayBlock(g){
+    var seen=g.rows.reduce(function(a,b){return a+b.jobs_discovered;},0);
+    var qual=g.rows.reduce(function(a,b){return a+b.qualifying_discovered;},0);
+    return '<section class="pl-day">'+
+        '<header class="pl-day-h">'+
+          '<h2 class="pl-day-t">'+esc(g.day)+'</h2>'+
+          '<span class="pl-day-m">'+g.rows.length+' check'+(g.rows.length===1?"":"s")+'</span>'+
+          '<span class="pl-day-m">'+seen.toLocaleString()+' seen</span>'+
+          '<span class="pl-day-m strong">'+qual+' passed your filters</span>'+
+        '</header>'+
+        '<div class="pl-runs">'+g.rows.map(runRow).join("")+'</div>'+
+      '</section>';
+  }
+
   var elapsed=state.lastPoll?ago(state.lastPoll):"";
   var since=!state.lastPoll?"not recorded"
     :(/^just now$/i.test(elapsed)?elapsed:elapsed+" ago");
+  function stat(k,v,bad){
+    return '<div class="pl-stat"><span class="pl-k">'+esc(k)+'</span>'+
+      '<span class="pl-v'+(bad?" bad":"")+'">'+esc(v)+'</span></div>';
+  }
   return '<div class="head">'+
     '<div class="head-row"><h1 class="h1">Activity</h1>'+
       '<span class="spacer"></span>'+liveChip()+'</div>'+
-    '<div class="controls" style="gap:22px">'+
-      '<div class="pl-stat"><span class="pl-k">Last check</span><span class="pl-v">'+esc(since)+'</span></div>'+
-      '<div class="pl-stat"><span class="pl-k">Sources</span><span class="pl-v'+(sick?" bad":"")+'">'+
-        esc(healthy||"unknown")+'</span></div>'+
-      '<div class="pl-stat"><span class="pl-k">In your queue</span><span class="pl-v">'+
-        (st.qualifying_active_jobs!=null?st.qualifying_active_jobs.toLocaleString():"-")+'</span></div>'+
-    '</div></div>'+
+    '<div class="controls"><div class="pl-stats">'+
+      stat("Last check",since,false)+
+      stat("Sources polling",
+        (st.sources_polled!=null&&st.sources_enabled)
+          ? st.sources_polled+" of "+st.sources_enabled : "unknown", sick)+
+      stat("Jobs in queue",
+        st.qualifying_active_jobs!=null?st.qualifying_active_jobs.toLocaleString():"-",false)+
+    '</div></div></div>'+
     '<div class="scroll"><div class="pl-wrap">'+
       (state.sessions.length
         ? groups.map(dayBlock).join("")+'<div class="tail">End of recorded activity</div>'
@@ -1875,6 +1937,7 @@ document.addEventListener("click",function(e){
   if(e.target.closest("[data-stop]")){ e.stopPropagation(); return; }
   var t=e.target.closest("[data-nav],[data-view],[data-act],[data-mark],[data-status],[data-open],[data-sort],[data-tier],"+
     "[data-exclude],[data-unexclude],[data-unfilter],[data-addfilter],[data-addflag],[data-session],[data-skillq],"+
+    "[data-pull],"+
     "[data-expand],"+
     "[data-settheme],[data-gapfam],[data-gapmin],.row");
   if(!t){ if(!e.target.closest(".pop")) closePop(); return; }
@@ -1883,6 +1946,8 @@ document.addEventListener("click",function(e){
   if(d.open){ e.preventDefault(); openJob(parseInt(d.open,10)); return; }
   if(d.nav){ goTo(d.nav); return; }
   if(d.view){ goTo("queue",d.view); return; }
+  if(d.pull){ var pid=parseInt(d.pull,10);
+      state.openPull=(state.openPull===pid?null:pid); render(); return; }
   if(d.expand){ state.filterOpen[d.expand]=true;
       var pl=document.querySelector(".pop-list"); if(pl) pl.innerHTML=filterPopBody(); return; }
   if(d.sort){ toggleSort(d.sort); closePop(); return; }
@@ -1914,6 +1979,9 @@ document.addEventListener("click",function(e){
     if(d.act==="toggleearly"){
       if(state.filters.early_career_only) delete state.filters.early_career_only;
       else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Early career",pinned:true};
+      loadShell().then(function(){ loadJobs(); }); return; }
+    if(d.act==="clearfilters"){
+      state.filters={}; state.excluded=[]; state.tiers=[]; state.q="";
       loadShell().then(function(){ loadJobs(); }); return; }
     if(d.act==="togglerecent"){ state.recentOnly=!state.recentOnly;
       showToast(state.recentOnly?"Showing the last "+RECENT_DAYS+" days":"Showing every age. Nothing was deleted.");

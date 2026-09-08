@@ -792,6 +792,120 @@ def test_the_applied_page_offers_the_sheet(
     )
 
 
+def test_every_check_is_logged_and_jobs_hide_behind_a_click(
+    page,
+) -> None:
+    """A log that hides its quiet entries cannot answer "was ACE
+    running at 3am", and one that expands every entry is a wall."""
+
+    page.eval(
+        'goTo("pulls")'
+    )
+
+    page.wait_for(
+        "document.querySelectorAll"
+        "('.pl-row').length>0"
+    )
+
+    rows = page.eval(
+        "document.querySelectorAll"
+        "('.pl-row').length"
+    )
+
+    assert rows == page.eval(
+        "state.sessions.length"
+    ), "checks that found nothing were dropped from the log"
+
+    assert page.eval(
+        "document.querySelectorAll"
+        "('.pl-jobs').length"
+    ) == 0, "jobs were shown before anything was clicked"
+
+    if not page.eval(
+        "document.querySelectorAll"
+        "('.pl-row:not(:disabled)')"
+        ".length"
+    ):
+        pytest.skip(
+            "no check found a job to expand"
+        )
+
+    page.click(
+        ".pl-row:not(:disabled)"
+    )
+
+    assert page.eval(
+        "document.querySelectorAll"
+        "('.pl-jobs .row').length"
+    ) > 0, "expanding a check showed no jobs"
+
+    page.click(
+        ".pl-run.open .pl-row"
+    )
+
+    assert page.eval(
+        "document.querySelectorAll"
+        "('.pl-jobs').length"
+    ) == 0, "clicking again did not collapse it"
+
+
+def test_the_control_bar_separates_its_groups(
+    page,
+) -> None:
+    """The labels ran straight into their chips, which is what made
+    the bar unreadable. Measured rather than eyeballed, because the
+    cause was CSS that never applied at all."""
+
+    assert page.eval(
+        "getComputedStyle(document"
+        ".querySelector('.ctl-grp')).gap"
+    ) == "6px"
+
+    assert page.eval(
+        "(function(){var l=document"
+        ".querySelector('.ctl-label');"
+        "var c=l.nextElementSibling;"
+        "return Math.round("
+        "c.getBoundingClientRect().left"
+        "-l.getBoundingClientRect()"
+        ".right);})()"
+    ) >= 4, "the label is touching its first chip"
+
+
+def test_the_queue_offers_one_way_back(
+    page,
+) -> None:
+    """Clear all was only rendered when a chip happened to exist, so a
+    tier filter left no single way back to the full queue."""
+
+    before = page.eval(
+        "state.total"
+    )
+
+    page.click(
+        '[data-tier="BIG_TECH"]'
+    )
+
+    page.wait_for(
+        "!state.loading && "
+        "state.total!==" + str(
+            before
+        )
+    )
+
+    page.click(
+        '[data-act="clearfilters"]'
+    )
+
+    page.wait_for(
+        "!state.loading && "
+        "state.tiers.length===0 && "
+        "state.total===" + str(
+            before
+        )
+    )
+
+
 # --- content rules ----------------------------------------------------
 
 
