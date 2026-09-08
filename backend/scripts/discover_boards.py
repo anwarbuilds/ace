@@ -133,6 +133,19 @@ def unreached_companies() -> list[str]:
     )
 
 
+# The host a source is fetched from. Greenhouse and Ashby default it
+# themselves, but Lever refuses without one and every board the prober
+# registered failed with "Lever source_host is required" before this
+# was set. Found by auditing which sources had never polled.
+SOURCE_HOSTS = {
+    "lever": "jobs.lever.co",
+    "ashby": "jobs.ashbyhq.com",
+    "greenhouse": (
+        "job-boards.greenhouse.io"
+    ),
+}
+
+
 def register(
     candidates: list[BoardCandidate],
 ) -> int:
@@ -168,6 +181,9 @@ def register(
                     ),
                     company_name=(
                         candidate.company
+                    ),
+                    source_host=SOURCE_HOSTS.get(
+                        candidate.source_type
                     ),
                     enabled=True,
                     # The tail is polled daily. Every board on a
