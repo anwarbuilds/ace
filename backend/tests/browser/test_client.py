@@ -536,7 +536,7 @@ def test_a_filter_offered_never_empties_the_queue(
 @pytest.mark.parametrize(
     "page_name,marker",
     [
-        ("pulls", ".gh"),
+        ("pulls", ".pl-day"),
         ("resumes", ".wrap"),
         ("skills", ".wrap"),
         ("answers", ".ans-edit"),

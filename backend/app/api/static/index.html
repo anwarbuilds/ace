@@ -408,7 +408,7 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .pop-opt .n{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-muted)}
 .pop-search{width:100%;padding:7px 9px;margin:2px 0 4px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-2);color:var(--text);font-size:12.5px;font-family:inherit}
 .pop-search:focus{outline:none;border-color:var(--purple)}
-.pop-note{font-size:11px;color:var(--text-muted);padding:6px 9px}
+.pl-wrap{padding:4px var(--gutter) 40px;max-width:1100px}\n.pl-stat{display:flex;flex-direction:column;gap:2px}\n.pl-k{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}\n.pl-v{font-size:14px;font-weight:600}\n.pl-v.bad{color:var(--danger,#b3261e)}\n.pl-day{margin-top:26px}\n.pl-day-h{display:flex;align-items:baseline;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}\n.pl-day-t{font-size:14px;font-weight:600}\n.pl-day-m{font-size:12px;color:var(--text-muted)}\n.pl-run{margin-top:14px;border:1px solid var(--border);border-radius:var(--r-md,10px);overflow:hidden}\n.pl-run-h{display:flex;align-items:center;gap:12px;padding:9px 14px;background:var(--surface-2)}\n.pl-time{font-family:var(--mono);font-size:12px;font-weight:600}\n.pl-count{font-size:12px;font-weight:600;color:var(--purple)}\n.pl-seen{font-size:11.5px;color:var(--text-muted);margin-right:auto}\n.pl-tbl{width:100%}\n.pl-more{display:block;padding:9px 14px;border-top:1px solid var(--border);width:100%;text-align:left}\n.pl-quiet{font-size:11.5px;color:var(--text-muted);padding:12px 2px 0}\n.pop-note{font-size:11px;color:var(--text-muted);padding:6px 9px}
 .ans-sec{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);padding:20px 0 7px;border-top:1px solid var(--border);margin-top:14px}
 .ans-sec:first-child{border-top:0;margin-top:0;padding-top:0}
 .ab-sec{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);padding:12px 8px 4px}
@@ -1137,59 +1137,65 @@ function jobPage(){
 /* ---------------- pulls page ---------------- */
 function pullsPage(){
   var groups=[], last=null;
-  var anyPullJobs=state.sessions.some(function(s){ return (s.jobs||[]).length>0; });
   state.sessions.forEach(function(s){
     var d=dayName(s.started_at);
     if(d!==last){ groups.push({day:d,rows:[]}); last=d; }
     groups[groups.length-1].rows.push(s);
   });
-  // A poll only writes a row when it discovers something, so the most
-  // recent check is usually absent from the list. Showing it explicitly
-  // is the difference between "ACE is idle" and "ACE looked and there
-  // was nothing", which is the question this page exists to answer.
-  var newest=state.sessions[0];
-  var latestRow="";
-  if(state.lastPoll && (!newest || new Date(state.lastPoll)>new Date(newest.started_at))){
-    latestRow='<tr class="grouphead"><td colspan="9"><div class="gh">'+
-      '<span class="gh-t">'+dayName(state.lastPoll)+'</span>'+
-      '<span class="gh-m">'+clock(state.lastPoll)+' · checked, no new postings</span>'+
-      '<span class="gh-none">most recent check, '+ago(state.lastPoll)+' ago</span>'+
-    '</div></td></tr>';
-  }
-  var body = state.sessions.length ? latestRow+groups.map(function(g){
-    return '<tr class="grouphead"><td colspan="9"><div class="gh">'+
-        '<span class="gh-t">'+esc(g.day)+'</span>'+
-        '<span class="gh-m">'+g.rows.length+' pull'+(g.rows.length===1?"":"s")+' · '+
-        g.rows.reduce(function(a,b){return a+b.qualifying_discovered;},0)+' qualifying</span></div></td></tr>'+
-      g.rows.map(function(s){
-        var jobs=s.jobs||[], hidden=Math.max(0,s.qualifying_discovered-jobs.length);
-        return '<tr class="grouphead"><td colspan="9"><div class="gh">'+
-            '<span class="gh-t" style="font-size:13px;font-weight:600">'+clock(s.started_at)+'</span>'+
-            '<span class="gh-m">'+s.jobs_discovered+' found · '+s.qualifying_discovered+' qualifying</span>'+
-            (s.qualifying_discovered>0?'<button class="link-btn" data-session="'+s.id+'">Open in Queue</button>':'')+
-            (s.qualifying_discovered===0?'<span class="gh-none">Nothing new passed your filters</span>':'')+
-          '</div></td></tr>'+
-          jobs.map(function(j){ return jobRow(j); }).join("")+
-          (hidden>0?'<tr class="grouphead"><td colspan="9"><button class="link-btn" data-session="'+s.id+'">Show '+hidden+' more from this pull</button></td></tr>':'');
-      }).join("");
-  }).join("") : "";
+  var st=state.stats||{};
+  var healthy=(st.sources_polled!=null&&st.sources_enabled)
+    ? st.sources_polled+" of "+st.sources_enabled+" sources polling" : "";
+  var sick=(st.sources_enabled&&st.sources_polled!=null&&st.sources_polled<st.sources_enabled);
 
+  // A pull that found nothing is the normal case and there are dozens
+  // of them. One row each buried the two or three that actually found
+  // something, which is the only thing this page is read for.
+  function dayBlock(g){
+    var found=g.rows.reduce(function(a,b){return a+b.jobs_discovered;},0);
+    var qual=g.rows.reduce(function(a,b){return a+b.qualifying_discovered;},0);
+    var hits=g.rows.filter(function(s){return s.qualifying_discovered>0;});
+    var quiet=g.rows.length-hits.length;
+    return '<div class="pl-day">'+
+        '<div class="pl-day-h"><span class="pl-day-t">'+esc(g.day)+'</span>'+
+          '<span class="pl-day-m">'+g.rows.length+' check'+(g.rows.length===1?"":"s")+
+          ' · '+found.toLocaleString()+' seen · <b>'+qual+'</b> passed your filters</span></div>'+
+        hits.map(function(s){
+          var jobs=s.jobs||[], hidden=Math.max(0,s.qualifying_discovered-jobs.length);
+          return '<div class="pl-run">'+
+            '<div class="pl-run-h"><span class="pl-time">'+clock(s.started_at)+'</span>'+
+              '<span class="pl-count">'+s.qualifying_discovered+' new</span>'+
+              '<span class="pl-seen">of '+s.jobs_discovered.toLocaleString()+' seen</span>'+
+              '<button class="link-btn" data-session="'+s.id+'">Open in Queue</button></div>'+
+            (jobs.length?'<table class="tbl pl-tbl"><tbody>'+
+              jobs.map(function(j){ return jobRow(j); }).join("")+'</tbody></table>':'')+
+            (hidden>0?'<button class="link-btn pl-more" data-session="'+s.id+'">Show '+hidden+' more from this check</button>':'')+
+          '</div>';
+        }).join("")+
+        (quiet?'<div class="pl-quiet">'+quiet+' other check'+(quiet===1?"":"s")+
+          ' found nothing new</div>':'')+
+      '</div>';
+  }
+
+  // ago() already returns "just now" for the recent case, and
+  // appending to that read as "just now ago".
+  var elapsed=state.lastPoll?ago(state.lastPoll):"";
+  var since=!state.lastPoll?"not recorded"
+    :(/^just now$/i.test(elapsed)?elapsed:elapsed+" ago");
   return '<div class="head">'+
-    '<div class="head-row"><h1 class="h1">Pulls</h1>'+
-      '<span class="h1-count">'+state.sessions.length+'</span>'+
+    '<div class="head-row"><h1 class="h1">Activity</h1>'+
       '<span class="spacer"></span>'+liveChip()+'</div>'+
-    '<div class="controls"><p class="why" style="margin:0;max-width:70ch">'+
-      'Every pull that discovered a posting, newest first, including the ones where nothing '+
-      'passed your filters. A check that finds no new postings at all is not recorded as its '+
-      'own row, so the most recent check is shown separately above.'+
-    '</p></div></div>'+
-    '<div class="scroll">'+(state.sessions.length
-      // Column headings only earn their space once there is something
-      // under them. Every pull being empty is common and normal.
-      ? '<table class="tbl">'+(anyPullJobs?tableHead():"")+'<tbody>'+body+'</tbody></table>'+
-        '<div class="tail">End of recorded pulls</div>'
-      : '<div style="padding:0 var(--gutter)">'+box("No pulls recorded yet","ACE records a run once it has checked its sources.")+'</div>')+
-    '</div>';
+    '<div class="controls" style="gap:22px">'+
+      '<div class="pl-stat"><span class="pl-k">Last check</span><span class="pl-v">'+esc(since)+'</span></div>'+
+      '<div class="pl-stat"><span class="pl-k">Sources</span><span class="pl-v'+(sick?" bad":"")+'">'+
+        esc(healthy||"unknown")+'</span></div>'+
+      '<div class="pl-stat"><span class="pl-k">In your queue</span><span class="pl-v">'+
+        (st.qualifying_active_jobs!=null?st.qualifying_active_jobs.toLocaleString():"-")+'</span></div>'+
+    '</div></div>'+
+    '<div class="scroll"><div class="pl-wrap">'+
+      (state.sessions.length
+        ? groups.map(dayBlock).join("")+'<div class="tail">End of recorded activity</div>'
+        : box("Nothing recorded yet","ACE records a check once it has looked at its sources."))+
+    '</div></div>';
 }
 
 /* ---------------- resume / skills / settings ---------------- */

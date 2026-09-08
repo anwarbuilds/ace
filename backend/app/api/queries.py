@@ -43,6 +43,7 @@ from backend.app.db.models import (
     JobRecord,
     JobResumeScoreRecord,
     PollSessionRecord,
+    JobSourceRecord,
     ResumeRecord,
     SourceState,
 )
@@ -1508,6 +1509,53 @@ def build_stats(
                 corpus_started
             ).isoformat()
         ),
+        # Enough to say whether ACE is actually watching what it
+        # claims. Eleven registered boards once failed on every cycle
+        # with nothing on screen to show it.
+        "sources_enabled": session.scalar(
+            select(
+                func.count()
+            )
+            .select_from(
+                JobSourceRecord
+            )
+            .where(
+                JobSourceRecord.enabled.is_(
+                    True
+                )
+            )
+        )
+        or 0,
+        # Only enabled sources count. A state row can outlive the
+        # source that made it, and a polled figure larger than the
+        # enabled one reads as a bug in the page.
+        "sources_polled": session.scalar(
+            select(
+                func.count()
+            )
+            .select_from(
+                JobSourceRecord
+            )
+            .join(
+                SourceState,
+                (
+                    SourceState.source
+                    == JobSourceRecord
+                    .source_type
+                )
+                & (
+                    SourceState.source_account
+                    == JobSourceRecord
+                    .source_account
+                ),
+            )
+            .where(
+                JobSourceRecord.enabled.is_(
+                    True
+                )
+            )
+        )
+        or 0,
         "generated_at": (
             reference_time.isoformat()
         ),
