@@ -106,6 +106,78 @@ def normalise_company(
     ).strip()
 
 
+# Words a company may carry in one list and drop in another. ACE
+# registered Anduril's board as "Anduril" while a held-out list writes
+# "Anduril Industries", and the benchmark counted a board ACE already
+# polls as a miss. Only trailing words are dropped, so "Apple" never
+# matches "Apple Bank": the extra word there is not generic.
+GENERIC_TAIL_WORDS = frozenset(
+    {
+        "industries",
+        "systems",
+        "solutions",
+        "software",
+        "sciences",
+        "studios",
+        "holdings",
+        "international",
+        "global",
+        "ventures",
+        "partners",
+        "capital",
+        "management",
+        "consulting",
+        "services",
+        "enterprises",
+        "digital",
+        "interactive",
+        "networks",
+        "communications",
+        "america",
+        "usa",
+        "us",
+    }
+)
+
+
+def company_keys(
+    name: str | None,
+) -> set[str]:
+    """Return the forms a company might be written as.
+
+    Both the full normalised name and the name with generic trailing
+    words removed, so one list writing "Anduril Industries" and another
+    writing "Anduril" resolve to a common key.
+    """
+
+    key = normalise_company(
+        name
+    )
+
+    if not key:
+        return set()
+
+    keys = {
+        key
+    }
+
+    words = key.split()
+
+    while (
+        len(words) > 1
+        and words[-1] in GENERIC_TAIL_WORDS
+    ):
+        words = words[:-1]
+
+        keys.add(
+            " ".join(
+                words
+            )
+        )
+
+    return keys
+
+
 def companies_in_markdown(
     text: str,
 ) -> set[str]:
@@ -239,6 +311,17 @@ def measure_list(
         markdown
     )
 
+    def reaches(
+        company: str,
+        side: set[str],
+    ) -> bool:
+        return bool(
+            company_keys(
+                company
+            )
+            & side
+        )
+
     reachable = corpus | watched
 
     return ListResult(
@@ -246,15 +329,30 @@ def measure_list(
         listed=len(
             listed
         ),
-        in_corpus=len(
-            listed & corpus
+        in_corpus=sum(
+            1
+            for company in listed
+            if reaches(
+                company,
+                corpus,
+            )
         ),
-        watched=len(
-            listed & watched
+        watched=sum(
+            1
+            for company in listed
+            if reaches(
+                company,
+                watched,
+            )
         ),
         missing=tuple(
             sorted(
-                listed - reachable
+                company
+                for company in listed
+                if not reaches(
+                    company,
+                    reachable,
+                )
             )
         ),
     )

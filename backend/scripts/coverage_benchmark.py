@@ -22,6 +22,7 @@ from backend.app.coverage.benchmark import (
     HELD_OUT_LISTS,
     ListResult,
     measure_list,
+    company_keys,
     normalise_company,
     overall_recall,
 )
@@ -83,9 +84,7 @@ def main() -> int:
 
     with SessionLocal() as session:
         corpus = {
-            normalise_company(
-                name
-            )
+            key
             for name in session.scalars(
                 select(
                     JobRecord.company
@@ -97,17 +96,21 @@ def main() -> int:
                 )
                 .distinct()
             )
+            for key in company_keys(
+                name
+            )
         }
 
         watched = {
-            normalise_company(
-                name
-            )
+            key
             for name in session.scalars(
                 select(
                     JobSourceRecord
                     .company_name
                 ).distinct()
+            )
+            for key in company_keys(
+                name
             )
         }
 
