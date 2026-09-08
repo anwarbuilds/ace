@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-08-v24"
+    "2026-09-08-v25"
 )
 
 
@@ -388,6 +388,49 @@ US_CITY_NAMES = frozenset(
         "hartford",
         "bay area",
         "silicon valley",
+        # Found by auditing what was still being rejected after the
+        # first pass, which is the point of the audit: the list is
+        # never finished and the gap is invisible without it.
+        "sf",
+        "emeryville",
+        "berkeley",
+        "oakland",
+        "pasadena",
+        "long beach",
+        "fremont",
+        "santa barbara",
+        "portland oregon",
+        "ann arbor",
+        "madison wi",
+        "boulder co",
+        "reston",
+        "mclean",
+        "bethesda",
+        "cambridge ma",
+        "waltham",
+        "burlington ma",
+        "plano",
+        "fort worth",
+        "san antonio",
+        "colorado springs",
+        "provo",
+        "boise",
+        "omaha",
+        "des moines",
+        "louisville",
+        "memphis",
+        "new orleans",
+        "jacksonville",
+        "charleston sc",
+        "richmond va",
+        "buffalo",
+        "rochester ny",
+        "albany ny",
+        "syracuse",
+        "princeton",
+        "morristown",
+        "trenton",
+        "wilmington de",
     }
 )
 

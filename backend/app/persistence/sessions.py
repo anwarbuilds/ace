@@ -57,6 +57,16 @@ SESSION_MERGE_WINDOW = timedelta(
 )
 
 
+# However quiet things stay, an entry stops growing after this. Without
+# a cap one row covered 12:13pm to 2:44pm and read as a single check
+# that happened at lunchtime, while the header correctly said the last
+# check was a minute ago. A log entry has to describe a period short
+# enough to mean something.
+SESSION_MAX_SPAN = timedelta(
+    hours=1
+)
+
+
 def _as_utc(
     value: datetime,
 ) -> datetime:
@@ -120,9 +130,15 @@ def _open_session(
             recent.last_activity_at
         )
 
+        started = _as_utc(
+            recent.started_at
+        )
+
         if (
             now - last_activity
             <= merge_window
+            and now - started
+            <= SESSION_MAX_SPAN
         ):
             return recent
 

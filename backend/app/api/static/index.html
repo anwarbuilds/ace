@@ -430,7 +430,8 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .pl-row:not(:disabled):hover{background:var(--hover)}
 .pl-run.open .pl-row{background:var(--surface-2)}
 .pl-caret{width:10px;color:var(--text-muted);font-size:11px}
-.pl-time{font-family:var(--mono);font-size:12px;font-weight:600;min-width:148px}
+.pl-time{font-family:var(--mono);font-size:12px;font-weight:600;min-width:158px}
+.pl-since{font-weight:400;color:var(--text-muted)}
 .pl-badge{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-muted);min-width:96px;text-align:center}
 .pl-badge.hit{background:var(--purple-surface);color:var(--purple);font-weight:600}
 .pl-seen{font-size:11.5px;color:var(--text-muted);margin-right:auto}
@@ -1207,11 +1208,13 @@ function pullsPage(){
     var sawNothing=!s.jobs_discovered;
     var label=hit?(s.qualifying_discovered+" passed")
       :(sawNothing?"no new postings":"nothing new");
-    // A quiet stretch is one row whose span grows, so the window it
-    // covers has to be on screen or the row looks like a single
-    // instant hours ago.
+    // The latest activity leads. A quiet stretch is one row whose span
+    // grows, and leading with the start time made an entry that was
+    // current a minute ago read as something that happened at lunch.
+    var latest=s.finished_at||s.started_at;
     var span=(s.finished_at&&clock(s.finished_at)!==clock(s.started_at))
-      ? clock(s.started_at)+" - "+clock(s.finished_at) : clock(s.started_at);
+      ? clock(s.finished_at)+'<span class="pl-since"> since '+clock(s.started_at)+'</span>'
+      : clock(s.started_at);
     return '<div class="pl-run'+(hit?" hit":"")+(open?" open":"")+'">'+
       '<button class="pl-row" data-pull="'+s.id+'"'+(hit?'':' disabled')+'>'+
         '<span class="pl-caret">'+(hit?(open?"\u25be":"\u25b8"):"\u00b7")+'</span>'+

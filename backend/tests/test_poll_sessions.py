@@ -515,3 +515,51 @@ def test_a_gap_past_the_window_starts_a_new_entry(
         session.commit()
 
         assert later.id != first_id
+
+
+def test_an_entry_stops_growing_after_an_hour(
+    session_factory,
+) -> None:
+    """One row covered 12:13pm to 2:44pm and read as a single check
+    that happened at lunchtime, while the header correctly said the
+    last check was a minute ago. A log entry has to describe a period
+    short enough to mean something."""
+
+    with session_factory() as session:
+        first = record_check(
+            session,
+            now=NOW,
+        )
+
+        session.flush()
+
+        first_id = first.id
+
+        # Inside the merge window each time, so without a span cap this
+        # would extend the same entry indefinitely.
+        for minutes in (
+            15,
+            30,
+            45,
+        ):
+            same = record_check(
+                session,
+                now=NOW
+                + timedelta(
+                    minutes=minutes
+                ),
+            )
+
+            assert same.id == first_id
+
+        later = record_check(
+            session,
+            now=NOW
+            + timedelta(
+                minutes=70
+            ),
+        )
+
+        session.commit()
+
+        assert later.id != first_id
