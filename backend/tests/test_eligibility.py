@@ -289,7 +289,16 @@ def test_senior_role_rejected() -> None:
     )
 
 
-def test_three_year_requirement_qualifies() -> None:
+def test_an_open_ended_three_year_bar_is_rejected() -> None:
+    """"3+ years" sets a floor and takes whoever clears it.
+
+    This reverses an earlier decision that let three-year postings
+    through. The user drew the line themselves after reading the
+    dashboard: anything between zero and three should be there,
+    three-plus should not. A floor of three means competing with
+    someone who has five; a band of one to three does not.
+    """
+
     decision = evaluate_job(
         make_job(
             description=(
@@ -302,12 +311,84 @@ def test_three_year_requirement_qualifies() -> None:
 
     assert (
         decision.status
-        == EligibilityStatus.PASS
+        == EligibilityStatus.REJECT
     )
 
     assert (
-        decision.required_experience_years
-        == 3
+        EligibilityReasonCode
+        .EXPERIENCE_TOO_HIGH
+        in decision.reason_codes
+    )
+
+
+def test_a_capped_three_years_is_not_a_floor() -> None:
+    """"No more than 3 years of professional experience" contains the
+    words "more than 3 years", and reading that as a floor inverts the
+    most explicit early-career signal a posting can carry.
+
+    A real Aquatic Capital posting titled "Software Engineer, Early
+    Career" was rejected by exactly that inversion.
+    """
+
+    decision = evaluate_job(
+        make_job(
+            title=(
+                "Software Engineer, "
+                "Early Career"
+            ),
+            description=(
+                "No more than 3 years of "
+                "professional "
+                "(post-education) "
+                "experience. "
+                + VERIFIABLE_PAD
+            ),
+        )
+    )
+
+    assert (
+        decision.status
+        == EligibilityStatus.PASS
+    )
+
+
+def test_a_bounded_three_year_band_qualifies() -> None:
+    """The same figure as a bound describes the band the role sits in,
+    and a graduate is inside it."""
+
+    decision = evaluate_job(
+        make_job(
+            description=(
+                "Requires 1 to 3 years of "
+                "software engineering "
+                "experience."
+            ),
+        )
+    )
+
+    assert (
+        decision.status
+        == EligibilityStatus.PASS
+    )
+
+
+def test_an_open_ended_two_year_bar_still_qualifies() -> None:
+    """The line is at three. "2+ years" is inside the range the user
+    asked for and must keep passing."""
+
+    decision = evaluate_job(
+        make_job(
+            description=(
+                "Requires 2+ years of "
+                "software engineering "
+                "experience."
+            ),
+        )
+    )
+
+    assert (
+        decision.status
+        == EligibilityStatus.PASS
     )
 
 

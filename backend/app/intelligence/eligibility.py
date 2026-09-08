@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-08-v21"
+    "2026-09-08-v23"
 )
 
 
@@ -50,6 +50,17 @@ ELIGIBILITY_RULE_VERSION = (
 # or more years is excluded outright rather than softened, because ACE
 # now surfaces a single list meaning "apply to this".
 MAX_REQUIRED_EXPERIENCE_YEARS = 4
+
+
+# An open-ended bar at or above this is rejected, while the same figure
+# stated as a bound is kept. "3+ years" and "1 to 3 years" both extract
+# as three, and they are not the same posting: the first sets a floor
+# and takes whoever is above it, so a graduate competes with someone
+# who has five. The second describes the band the role sits in.
+#
+# The user drew this line themselves: anything between zero and three
+# should be there, three-plus should not.
+MAX_OPEN_ENDED_YEARS = 3
 
 
 class EligibilityStatus(
@@ -917,6 +928,7 @@ REQUIRED_SECTION_PATTERNS = (
     # NVIDIA writes "What we need to see:" and its 6+ years went
     # unrecorded.
     r"what\s+we\s+need\s+to\s+see",
+    r"qualifications\s+we\s+need",
     r"what\s+you'?ll\s+bring",
     r"what\s+you\s+bring",
     r"your\s+(?:skills\s+and\s+)?experience",
@@ -1111,13 +1123,19 @@ def _has_early_career_signal(
 # Figures describing the company rather than the candidate. "Our team
 # has 10+ years of combined experience building X" is a boast, and
 # reading it as a requirement rejects a genuine early-career posting.
+# The collective subject has to actually own the years. Matching any
+# mention of "the team" within sixty characters suppressed a real
+# requirement on a Sigma Computing posting whose text read "throughout
+# the team and company Qualifications We Need 5+ years", where the
+# team is the scope of the work and not the holder of the experience.
 COLLECTIVE_EXPERIENCE_PATTERN = re.compile(
     r"(?:our|the)\s+(?:team|company|"
-    r"founders?|leadership|group)\b"
-    r"[^.]{0,60}$"
-    r"|\bcombined\b[^.]{0,30}$"
-    r"|\bcollectively\b[^.]{0,30}$"
-    r"|\bwe\s+have\b[^.]{0,40}$",
+    r"founders?|leadership|group)\s+"
+    r"(?:has|have|brings?|combines?|"
+    r"bring|share)\b[^.]{0,30}$"
+    r"|\bcombined\b[^.]{0,24}$"
+    r"|\bcollectively\b[^.]{0,24}$"
+    r"|\bwe\s+have\b[^.]{0,36}$",
     re.IGNORECASE,
 )
 
@@ -1397,6 +1415,168 @@ def _experience_range_ceiling(
             highs
         )
         if highs
+        else None
+    )
+
+
+# Wording that leaves the top of the range open. A figure with none of
+# these around it is a bound, not a floor.
+# Wording that caps experience instead of setting a floor. Checked
+# first and decisively: "No more than 3 years of professional
+# experience" contains "more than 3 years", and reading that as a floor
+# inverts the meaning of the most explicit early-career signal a
+# posting can carry. A real Aquatic Capital posting titled "Software
+# Engineer, Early Career" was rejected by exactly that inversion.
+CEILING_PREFIXES = re.compile(
+    r"(?:no\s+more\s+than|not\s+more\s+than|"
+    r"at\s+most|up\s+to|fewer\s+than|less\s+than|"
+    r"under|within|maximum\s+of|max\.?)\s*$",
+    re.IGNORECASE,
+)
+
+
+OPEN_ENDED_PREFIXES = re.compile(
+    r"(?:at\s+least|minimum\s+of|minimum|min\.?|"
+    r"over|more\s+than|no\s+less\s+than)\s*$",
+    re.IGNORECASE,
+)
+
+# The "+" sits against the digits, but "or more" comes after the unit:
+# "3+ years" and "3 years or more" mean the same thing.
+OPEN_ENDED_SUFFIX = re.compile(
+    r"^\s*(?:\+"
+    r"|(?:years?|yrs?)?\s*"
+    r"(?:or\s+more|or\s+greater|"
+    r"or\s+above|and\s+above|plus\b))",
+    re.IGNORECASE,
+)
+
+
+def _is_open_ended(
+    description: str,
+    match: re.Match,
+) -> bool:
+    """Return whether a figure sets a floor rather than a bound.
+
+    The "+" is usually attached to the number, but the same meaning is
+    written as "at least three years" and "three years or more", and a
+    posting saying either is asking for three-or-anything.
+    """
+
+    start = match.start(
+        "years"
+    )
+
+    end = match.end(
+        "years"
+    )
+
+    before = description[
+        max(
+            0,
+            start - 26,
+        ):start
+    ]
+
+    if CEILING_PREFIXES.search(
+        before
+    ):
+        return False
+
+    if OPEN_ENDED_SUFFIX.search(
+        description[end:end + 22]
+    ):
+        return True
+
+    return bool(
+        OPEN_ENDED_PREFIXES.search(
+            before
+        )
+    )
+
+
+def _open_ended_required_years(
+    description: str,
+) -> int | None:
+    """Return the highest open-ended bar the posting sets as a
+    requirement.
+
+    Ranges are skipped entirely: they are bounded by construction, and
+    "2-5+ years" is judged by its ceiling elsewhere.
+    """
+
+    if not description:
+        return None
+
+    consumed: set[int] = set()
+
+    for match in (
+        EXPERIENCE_RANGE_PATTERN.finditer(
+            description
+        )
+    ):
+        consumed.update(
+            range(
+                match.start(),
+                match.end(),
+            )
+        )
+
+    figures: list[int] = []
+
+    for match in (
+        list(
+            EXPERIENCE_PATTERN.finditer(
+                description
+            )
+        )
+        + list(
+            EXPERIENCE_TRAILING_PATTERN
+            .finditer(
+                description
+            )
+        )
+        + list(
+            EXPERIENCE_BARE_PATTERN
+            .finditer(
+                description
+            )
+        )
+    ):
+        if match.start() in consumed:
+            continue
+
+        if _describes_the_company(
+            description,
+            match.start(),
+        ):
+            continue
+
+        if _nearest_section_is_preferred(
+            description,
+            match.start(),
+        ):
+            continue
+
+        if not _is_open_ended(
+            description,
+            match,
+        ):
+            continue
+
+        figures.append(
+            int(
+                match.group(
+                    "years"
+                )
+            )
+        )
+
+    return (
+        max(
+            figures
+        )
+        if figures
         else None
     )
 
@@ -1774,6 +1954,10 @@ def evaluate_job(
     # bar. A posting that calls itself a new-grad role while demanding
     # seven years is contradicting itself, and the years are the part
     # that survives contact with a recruiter.
+    open_ended = _open_ended_required_years(
+        job.description
+    )
+
     # A range reaching well past the cap is a mid-level posting whose
     # floor happens to be low: "3 to 5+ years" wants someone with four.
     # Its floor alone kept it in a queue that means "a new graduate can
@@ -1796,6 +1980,24 @@ def evaluate_job(
             (
                 "Posting asks for a range "
                 f"reaching {ceiling} years."
+            )
+        )
+
+    elif (
+        open_ended is not None
+        and open_ended
+        >= MAX_OPEN_ENDED_YEARS
+    ):
+        reject_codes.append(
+            EligibilityReasonCode
+            .EXPERIENCE_TOO_HIGH
+        )
+
+        reject_reasons.append(
+            (
+                "Posting asks for "
+                f"{open_ended}+ years, with "
+                "no upper bound."
             )
         )
 
