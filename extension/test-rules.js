@@ -65,7 +65,56 @@ var CASES = [
   ["we work from our offices on mondays, tuesdays, and thursdays", null]
 ];
 
+/* Choosing between the options a form offers. The stored answers are
+   short and real options are sentences, so every one of these was a
+   miss or a misfire before the matcher scored intent and overlap. */
+var OPTION_CASES = [
+  [["Yes", "No"], "Yes", 0],
+  [["Yes, I am authorized to work in the United States",
+    "No, I am not authorized"], "Yes", 0],
+  [["Yes, I will require sponsorship",
+    "No, I will not require sponsorship"], "No", 1],
+
+  // The case that failed on a real Lever form: the user's wording
+  // shares no phrase with the option, only its negative shape.
+  [["Yes, I have a disability, or have had one in the past",
+    "No, I do not have a disability, or have not had one in the past",
+    "I do not wish to answer"],
+   "I do not have any disability", 1],
+
+  [["I identify as one or more of the classifications of a protected veteran",
+    "I am not a protected veteran",
+    "I decline to self-identify"], "I am not a protected veteran", 1],
+
+  // "male" is inside "female", which ticked both boxes on a real form.
+  [["Male", "Female", "Decline to self-identify"], "Male", 0],
+  [["Asian (not Hispanic or Latino)", "White (not Hispanic or Latino)",
+    "Two or more races"], "Asian", 0],
+  [["He/Him", "She/Her", "They/Them", "Prefer not to say"], "He/Him", 0],
+
+  // "no" is inside "know".
+  [["I do not know", "Yes", "No"], "No", 2],
+
+  // Refusing is the right answer when nothing fits, or when two fit
+  // equally well.
+  [["Bachelors degree", "Masters degree"], "PhD", -1],
+  [["Option A", "Option B"], "Something else", -1]
+];
+
 var failures = 0;
+
+OPTION_CASES.forEach(function (entry) {
+  var got = aceChooseOption(entry[0], entry[1]);
+
+  if (got !== entry[2]) {
+    failures += 1;
+    console.log(
+      "FAIL  answer " + JSON.stringify(entry[1]) +
+      "\n      got index " + got + ", want " + entry[2] +
+      "\n      options " + JSON.stringify(entry[0])
+    );
+  }
+});
 
 CASES.forEach(function (pair) {
   var got = aceAnswerNameFor(pair[0]);
@@ -80,10 +129,12 @@ CASES.forEach(function (pair) {
   }
 });
 
+var total = CASES.length + OPTION_CASES.length;
+
 console.log(
   failures
-    ? failures + " of " + CASES.length + " failed"
-    : "all " + CASES.length + " cases pass"
+    ? failures + " of " + total + " failed"
+    : "all " + total + " cases pass"
 );
 
 process.exit(failures ? 1 : 0);

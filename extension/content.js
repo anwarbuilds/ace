@@ -9,8 +9,12 @@
   var answers = {};
   var lastFill = [];
   var loaded = false;
+  // The element fillOne actually ticked, which for a group is not
+  // the one it was handed.
+  var lastPicked = null;
   var filledOnce = false;
   var lastResult = null;
+  var pending = null;
 
   function setNatively(field, value) {
     // React tracks its own value on the node and ignores a plain
@@ -70,22 +74,49 @@
   }
 
   function chooseOption(select, wanted) {
-    var target = aceNormalise(wanted);
     var options = Array.prototype.slice.call(select.options);
 
-    var exact = options.filter(function (option) {
-      return aceNormalise(option.textContent) === target;
-    })[0];
+    // A placeholder is not an answer, and leaving it in the running
+    // lets "Select ..." win a containment match against anything.
+    var offered = options.filter(function (option, index) {
+      return !(index === 0 && !option.value);
+    });
 
-    if (exact) return exact;
+    var index = aceChooseOption(
+      offered.map(function (option) { return option.textContent; }),
+      wanted
+    );
 
-    // A form's wording rarely matches the user's wording, so a
-    // containment match is the realistic case: "Yes" against
-    // "Yes, I am authorized to work".
-    return options.filter(function (option) {
-      var text = aceNormalise(option.textContent);
-      return text && (text.indexOf(target) >= 0 || target.indexOf(text) >= 0);
-    })[0] || null;
+    return index >= 0 ? offered[index] : null;
+  }
+
+  /* Every input in this control's group, in the order a person reads
+     them. Radios and checkboxes are one question spread over several
+     elements, so the choice is made across the whole group at once
+     rather than by testing each box against the answer alone. */
+  function groupMembers(field) {
+    var name = field.getAttribute("name");
+    var scope = field.closest("fieldset, [role=radiogroup], [role=group]");
+
+    if (!scope && name) {
+      var node = field.parentElement;
+      for (var depth = 0; node && depth < 8; depth++) {
+        if (node.querySelectorAll('[name="' + CSS.escape(name) + '"]').length > 1) {
+          scope = node;
+          break;
+        }
+        node = node.parentElement;
+      }
+    }
+
+    if (!scope) return [field];
+
+    var selector = 'input[type="' + field.type + '"]' +
+      (name ? '[name="' + CSS.escape(name) + '"]' : "");
+
+    var members = Array.prototype.slice.call(scope.querySelectorAll(selector));
+
+    return members.length ? members : [field];
   }
 
   function fillOne(field, value) {
@@ -97,25 +128,27 @@
     }
 
     if (field.type === "radio" || field.type === "checkbox") {
-      // The rule already established that this group is the right
-      // question. This only decides which option in it to tick, and
-      // ticks nothing unless the option and the answer agree.
-      var option = aceOptionText(field);
-      var wanted = aceNormalise(value);
+      // Decided across the group, so the answer competes with every
+      // option at once. Testing one box in isolation ticked both
+      // "male" and "female", because one contains the other.
+      var members = groupMembers(field);
 
-      if (!option || !wanted) return false;
+      if (members[0] !== field) return false;
 
-      // Whole words. "female" contains "male", so a substring test
-      // ticked both boxes in a gender group on a real Lever form.
-      var same =
-        option === wanted ||
-        acePhraseIn(option, wanted) ||
-        acePhraseIn(wanted, option);
+      var chosen = aceChooseOption(members.map(aceOptionText), value);
 
-      if (!same) return false;
-      if (field.checked) return false;
+      if (chosen < 0) return false;
 
-      field.click();
+      var target = members[chosen];
+
+      if (target.checked) return false;
+
+      target.click();
+
+      // Reported against the element actually ticked, not the first in
+      // the group, so undo and the outline follow the right box.
+      lastPicked = target;
+
       return true;
     }
 
@@ -149,12 +182,22 @@
       var value = answers[name];
       if (!value) return;
 
-      if (!aceIsEmpty(field)) {
-        already += 1;
+      // A group with any box ticked is answered, whichever box it is.
+      // Testing only the element in hand treated every unticked option
+      // of an answered question as still needing an answer.
+      var group =
+        field.type === "radio" || field.type === "checkbox"
+          ? groupMembers(field)
+          : [field];
+
+      if (!group.every(aceIsEmpty)) {
+        if (group[0] === field) already += 1;
         return;
       }
 
       var previous = field.value;
+
+      lastPicked = null;
 
       var isChoice =
         field.tagName === "SELECT" ||
@@ -166,12 +209,16 @@
         return;
       }
 
-      field.classList.add("ace-filled");
+      var touched = lastPicked || field;
+
+      touched.classList.add("ace-filled");
 
       lastFill.push({
-        field: field,
+        field: touched,
         previous: previous,
-        ticked: field.type === "radio" || field.type === "checkbox"
+        ticked:
+          touched.type === "radio" ||
+          touched.type === "checkbox"
       });
 
       filled.push(name);
@@ -204,92 +251,42 @@
     lastFill = [];
   }
 
-  function badge() {
-    var existing = document.querySelector(".ace-badge");
-    if (existing) existing.remove();
+  /* Long option text is a definition paragraph in EEO questions, and
+     the panel is 330px wide. */
+  function tidy(text) {
+    var value = String(text == null ? "" : text)
+      .replace(/\s+/g, " ")
+      .trim();
 
-    var host = document.createElement("div");
-    host.className = "ace-badge";
-    document.body.appendChild(host);
-    return host;
+    return value.length > 54 ? value.slice(0, 51).trim() + "..." : value;
   }
 
-  function render(host, body) {
-    host.innerHTML = body;
+  function esc(text) {
+    return String(text == null ? "" : text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
-  function countReady() {
-    var ready = 0;
-
-    fillable().forEach(function (field) {
-      var name = aceAnswerNameFor(aceQuestionFor(field));
-      if (name && answers[name] && aceIsEmpty(field)) ready += 1;
-    });
-
-    return ready;
+  function render(host, html) {
+    host.innerHTML = html;
   }
 
+  /* Whether this page is a form at all.
+
+     Silence on a covered site looks the same as an extension that
+     failed to load, so ACE says "nothing to fill" where the page is
+     clearly a form and stays quiet everywhere else. */
   function looksLikeForm() {
     return fillable().filter(function (field) {
       return field.type !== "radio" && field.type !== "checkbox";
     }).length >= 4;
   }
 
-  function describe(result) {
-    return '<div class="ace-t">Filled ' + result.filled.length + ' field' +
-      (result.filled.length === 1 ? "" : "s") + '</div>' +
-      (result.already
-        ? '<div class="ace-s">' + result.already +
-          ' already had a value and were left alone.</div>'
-        : "") +
-      (result.unmatched.length
-        ? '<div class="ace-s ace-warn">Your answer matched none of the options for: ' +
-          result.unmatched.join("; ") + '. Reword it in ACE to match.</div>'
-        : "") +
-      (result.unknown.length
-        ? '<div class="ace-s">Not answered: ' +
-          result.unknown.slice(0, 4).map(function (question) {
-            return question.replace(/[<>&]/g, "");
-          }).join("; ") + '</div>'
-        : "") +
-      '<div class="ace-s ace-warn">Check it before you submit.</div>';
-  }
-
-  function offer(host, ready) {
-    render(host,
-      '<div class="ace-t">ACE can fill ' + ready + ' field' +
-        (ready === 1 ? "" : "s") + '</div>' +
-      (filledOnce ? '<div class="ace-s">New questions appeared on this step.</div>' : "") +
-      '<button class="ace-go">Fill</button>');
-
-    host.querySelector(".ace-go").addEventListener("click", function () {
-      var result = plan();
-      filledOnce = true;
-      lastResult = result;
-
-      render(host, describe(result) + '<button class="ace-go ace-undo">Undo</button>');
-
-      host.querySelector(".ace-undo").addEventListener("click", function () {
-        undo();
-        filledOnce = false;
-        lastResult = null;
-        host.remove();
-      });
-    });
-  }
-
-  /* Recomputed whenever the page changes, because these forms are not
-     there when the script is.
-
-     Waiting for the first input to exist was not enough: a Netflix
-     application page has cookie-consent checkboxes in the markup from
-     the start, so the check passed instantly and the real form mounted
-     seconds later against a badge that had already given up. The same
-     applies as the user moves between steps of a multi-step form. */
   /* React reconciles the nodes it owns and drops the class ACE put on
      them, so on a React form the outline vanishes a moment after the
-     fill and the user cannot see what was touched. Re-applied whenever
-     the page settles. */
+     fill and the user cannot see what was touched. */
   function paint() {
     lastFill.forEach(function (record) {
       if (record.field.isConnected) {
@@ -298,43 +295,201 @@
     });
   }
 
+  function panel() {
+    var existing = document.querySelector(".ace-panel");
+    if (existing) return existing;
+
+    var host = document.createElement("div");
+    host.className = "ace-panel";
+    document.body.appendChild(host);
+    return host;
+  }
+
+  function close() {
+    var existing = document.querySelector(".ace-panel");
+    if (existing) existing.remove();
+  }
+
+  function shell(title, subtitle, body, footer) {
+    return '<div class="ace-head">' +
+        '<div class="ace-mark">A</div>' +
+        '<div><div class="ace-title">' + esc(title) + '</div>' +
+        (subtitle ? '<div class="ace-sub">' + esc(subtitle) + '</div>' : "") +
+        '</div>' +
+        '<button class="ace-x" data-ace="close" title="Close">&times;</button>' +
+      '</div>' +
+      (body ? '<div class="ace-body">' + body + '</div>' : "") +
+      (footer ? '<div class="ace-foot">' + footer + '</div>' : "");
+  }
+
+  function rows(items, kind) {
+    return items.map(function (item) {
+      return '<div class="ace-item ' + kind + '">' +
+        '<span class="k">' + esc(item[0]) + '</span>' +
+        '<span class="v">' + esc(item[1]) + '</span>' +
+      '</div>';
+    }).join("");
+  }
+
+  /* What ACE would do, without doing it.
+
+     A preview rather than a bare count, because the count was the only
+     thing on offer and it said nothing about whether the answers were
+     the right ones. Seeing "Work authorisation -> Yes" before the
+     click is the difference between trusting it and checking every
+     field afterwards. */
+  function preview() {
+    var willFill = [];
+    var noOption = [];
+    var noAnswer = [];
+    var seen = {};
+
+    fillable().forEach(function (field) {
+      var question = aceQuestionFor(field);
+      if (!question) return;
+
+      var name = aceAnswerNameFor(question);
+      var label = question.split(" | ")[0].slice(0, 44);
+
+      if (!name) {
+        if (!seen["q:" + label]) {
+          seen["q:" + label] = 1;
+          noAnswer.push([label, "no answer saved"]);
+        }
+        return;
+      }
+
+      if (seen["a:" + name]) return;
+
+      var value = answers[name];
+      if (!value) {
+        seen["a:" + name] = 1;
+        noAnswer.push([name, "blank in ACE"]);
+        return;
+      }
+
+      var group =
+        field.type === "radio" || field.type === "checkbox"
+          ? groupMembers(field)
+          : [field];
+
+      if (!group.every(aceIsEmpty)) return;
+
+      var shown = value;
+
+      if (field.tagName === "SELECT") {
+        var option = chooseOption(field, value);
+        if (!option) {
+          seen["a:" + name] = 1;
+          noOption.push([name, tidy(value)]);
+          return;
+        }
+        shown = tidy(option.textContent);
+      } else if (
+        field.type === "radio" ||
+        field.type === "checkbox"
+      ) {
+        var index = aceChooseOption(group.map(aceOptionText), value);
+        if (index < 0) {
+          seen["a:" + name] = 1;
+          noOption.push([name, tidy(value)]);
+          return;
+        }
+        shown = aceOptionLabel(group[index]);
+      }
+
+      seen["a:" + name] = 1;
+      willFill.push([name, tidy(shown)]);
+    });
+
+    return {
+      willFill: willFill,
+      noOption: noOption,
+      noAnswer: noAnswer
+    };
+  }
+
+  function showPreview(host) {
+    var plan = preview();
+    pending = plan;
+
+    if (!plan.willFill.length && !plan.noOption.length) {
+      if (!looksLikeForm()) {
+        close();
+        return;
+      }
+
+      render(host, shell(
+        "Nothing to fill",
+        "Every field ACE knows already has a value.",
+        "",
+        '<span class="ace-note">' +
+          plan.noAnswer.length + ' question' +
+          (plan.noAnswer.length === 1 ? "" : "s") +
+          ' ACE has no answer for</span>'
+      ));
+      return;
+    }
+
+    var body =
+      (plan.willFill.length
+        ? '<div class="ace-group">Will fill</div>' + rows(plan.willFill, "")
+        : "") +
+      (plan.noOption.length
+        ? '<div class="ace-group">Your answer matches no option</div>' +
+          rows(plan.noOption, "miss")
+        : "") +
+      (plan.noAnswer.length
+        ? '<div class="ace-group">Left for you</div>' +
+          rows(plan.noAnswer.slice(0, 12), "skip")
+        : "");
+
+    render(host, shell(
+      "Fill " + plan.willFill.length + " field" +
+        (plan.willFill.length === 1 ? "" : "s"),
+      "Review before filling. ACE never submits.",
+      body,
+      '<button class="ace-btn" data-ace="fill">Fill</button>' +
+      '<span class="ace-note">or press Alt+A</span>'
+    ));
+  }
+
+  function showResult(host, result) {
+    var body =
+      (result.filled.length
+        ? '<div class="ace-group">Filled</div>' +
+          rows(result.filled.map(function (name) {
+            return [name, tidy(answers[name])];
+          }), "")
+        : "") +
+      (result.unmatched.length
+        ? '<div class="ace-group">Reword these in ACE</div>' +
+          rows(result.unmatched.map(function (name) {
+            return [name, tidy(answers[name])];
+          }), "miss")
+        : "");
+
+    render(host, shell(
+      "Filled " + result.filled.length + " field" +
+        (result.filled.length === 1 ? "" : "s"),
+      "Check it before you submit.",
+      body,
+      '<button class="ace-btn ghost" data-ace="undo">Undo</button>' +
+      (result.already
+        ? '<span class="ace-note">' + result.already +
+          ' already had a value</span>'
+        : "")
+    ));
+  }
+
   function refresh() {
-    if (!ready()) return;
+    if (!loaded) return;
 
     paint();
 
-    var host = document.querySelector(".ace-badge") || badge();
-    var count = countReady();
+    if (lastResult) return;
 
-    if (count) {
-      offer(host, count);
-      return;
-    }
-
-    if (lastResult) {
-      render(host, describe(lastResult) +
-        '<button class="ace-go ace-undo">Undo</button>');
-      host.querySelector(".ace-undo").addEventListener("click", function () {
-        undo();
-        filledOnce = false;
-        lastResult = null;
-        host.remove();
-      });
-      return;
-    }
-
-    if (looksLikeForm()) {
-      render(host,
-        '<div class="ace-t">Nothing left to fill</div>' +
-        '<div class="ace-s">Every field ACE knows already has a value, ' +
-        'or this form asks questions your bank has no answer for.</div>');
-    } else {
-      host.remove();
-    }
-  }
-
-  function ready() {
-    return loaded;
+    showPreview(panel());
   }
 
   function start() {
@@ -342,9 +497,12 @@
       if (chrome.runtime.lastError) return;
 
       if (!reply || !reply.ok) {
-        render(badge(),
-          '<div class="ace-t">ACE is not reachable</div>' +
-          '<div class="ace-s">Start it, or set the address from the toolbar icon.</div>');
+        render(panel(), shell(
+          "ACE is not reachable",
+          "Start it, or set the address from the toolbar icon.",
+          "",
+          ""
+        ));
         return;
       }
 
@@ -358,25 +516,70 @@
       });
 
       if (!known) {
-        render(badge(),
-          '<div class="ace-t">No answers saved yet</div>' +
-          '<div class="ace-s">Fill them in once in ACE and they land here.</div>');
+        render(panel(), shell(
+          "No answers saved yet",
+          "Fill them in once in ACE and they land here.",
+          "",
+          ""
+        ));
         return;
       }
 
       loaded = true;
       refresh();
 
-      // Debounced, because a React form mounting fires a great many
-      // mutations and each one would otherwise rebuild the badge.
-      var pending = null;
+      var queued = null;
 
       new MutationObserver(function () {
-        clearTimeout(pending);
-        pending = setTimeout(refresh, 400);
+        clearTimeout(queued);
+        queued = setTimeout(refresh, 400);
       }).observe(document.body, { childList: true, subtree: true });
     });
   }
+
+  function runFill() {
+    var host = panel();
+    var result = plan();
+    lastResult = result;
+    showResult(host, result);
+  }
+
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest("[data-ace]");
+    if (!button) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    var action = button.getAttribute("data-ace");
+
+    if (action === "close") {
+      close();
+      return;
+    }
+
+    if (action === "fill") {
+      runFill();
+      return;
+    }
+
+    if (action === "undo") {
+      undo();
+      lastResult = null;
+      close();
+    }
+  }, true);
+
+  // Alt+A rather than a bare letter: a form is full of text boxes and
+  // a plain shortcut would type into them.
+  document.addEventListener("keydown", function (event) {
+    if (event.altKey && (event.key === "a" || event.key === "A")) {
+      if (loaded && !lastResult) {
+        event.preventDefault();
+        runFill();
+      }
+    }
+  });
 
   /* document_idle should guarantee a body, but the script also runs in
      every frame, and a frame can be that early. Without this the first

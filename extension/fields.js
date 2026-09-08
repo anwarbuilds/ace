@@ -182,6 +182,35 @@ function aceTextWithoutControls(block) {
   return clone.textContent;
 }
 
+/* An option's text as written, for showing the user.
+
+   aceOptionText normalises for comparison, which lower-cases and
+   collapses the text. Showing that in the preview turned "He/Him" into
+   "he/him" and printed a whole EEO definition paragraph. */
+function aceOptionLabel(field) {
+  var raw = aceOptionRaw(field);
+  var text = raw.replace(/\s+/g, " ").trim();
+
+  return text.length > 54 ? text.slice(0, 51).trim() + "..." : text;
+}
+
+function aceOptionRaw(field) {
+  var wrapping = field.closest("label");
+  if (wrapping) return wrapping.textContent;
+
+  if (field.id) {
+    var labelled = document.querySelector(
+      'label[for="' + CSS.escape(field.id) + '"]'
+    );
+    if (labelled) return labelled.textContent;
+  }
+
+  var option = field.closest("[class*='option']");
+  if (option) return option.textContent;
+
+  return field.value || "";
+}
+
 /* What this one option says, for checking against the stored answer. */
 function aceOptionText(field) {
   var wrapping = field.closest("label");
@@ -324,4 +353,132 @@ function aceAnswerNameFor(question) {
   }
 
   return null;
+}
+
+
+/* Choosing between the options a form offers.
+
+   The stored answers are short, and real forms are not: "Yes" has to
+   reach "Yes, I am authorized to work in the United States", and
+   "I do not have any disability" has to reach "No, I don't have a
+   disability, or have not had one in the past". Substring matching
+   both fails that and misfires: "no" appears inside "I do not know".
+
+   Four rules, strongest first, and every one of them refuses to answer
+   when two options fit equally well. A wrong EEO answer, or a
+   sponsorship answer inverted, is worse than a blank the user fills
+   themselves. */
+
+var ACE_AFFIRMATIVE = /^(yes|y|true|i am|i do|i have|authorized|authorised)\b/;
+var ACE_NEGATIVE = /^(no|n|false|i am not|i do not|i don't|not |none|never)\b/;
+
+// Words carrying no distinguishing meaning, so overlap is scored on
+// what the options actually differ by.
+var ACE_STOPWORDS = {
+  i:1, a:1, an:1, the:1, of:1, to:1, in:1, on:1, at:1, or:1, and:1, is:1,
+  am:1, are:1, be:1, do:1, does:1, did:1, have:1, has:1, had:1, my:1,
+  me:1, you:1, your:1, for:1, with:1, that:1, this:1, it:1, as:1, by:1,
+  not:1, any:1, one:1, past:1, been:1, will:1, would:1, currently:1
+};
+
+function aceWords(text) {
+  return aceNormalise(text)
+    .replace(/[^a-z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter(function (word) { return word && !ACE_STOPWORDS[word]; });
+}
+
+function aceIntent(text) {
+  var value = aceNormalise(text).replace(/[^a-z0-9' ]/g, "");
+  if (ACE_NEGATIVE.test(value)) return "no";
+  if (ACE_AFFIRMATIVE.test(value)) return "yes";
+  return null;
+}
+
+/* Return the index of the option that answers, or -1.
+
+   `options` is a list of the visible texts, in order. */
+function aceChooseOption(options, answer) {
+  var wanted = aceNormalise(answer);
+  if (!wanted) return -1;
+
+  var texts = options.map(aceNormalise);
+
+  function only(matches) {
+    // Exactly one candidate, or nothing. Two equally good options mean
+    // the answer does not distinguish them and ACE must not pick.
+    return matches.length === 1 ? matches[0] : -1;
+  }
+
+  function indices(test) {
+    var found = [];
+    texts.forEach(function (text, index) {
+      if (text && test(text)) found.push(index);
+    });
+    return found;
+  }
+
+  var exact = indices(function (text) { return text === wanted; });
+  if (exact.length) return exact[0];
+
+  var contained = indices(function (text) {
+    return acePhraseIn(text, wanted) || acePhraseIn(wanted, text);
+  });
+  if (contained.length === 1) return contained[0];
+
+  // "I do not have any disability" against "No, I don't have a
+  // disability, or have not had one in the past": the shape of the
+  // answer decides, then the words settle which of the negatives.
+  var intent = aceIntent(answer);
+  if (intent) {
+    var sameIntent = indices(function (text) {
+      return aceIntent(text) === intent;
+    });
+
+    if (sameIntent.length === 1) return sameIntent[0];
+
+    if (sameIntent.length > 1) {
+      var narrowed = aceBestOverlap(texts, answer, sameIntent);
+      if (narrowed >= 0) return narrowed;
+    }
+  }
+
+  if (contained.length > 1) {
+    var settled = aceBestOverlap(texts, answer, contained);
+    if (settled >= 0) return settled;
+  }
+
+  return only(contained);
+}
+
+/* The candidate sharing the most meaningful words with the answer.
+
+   Requires a clear winner: a tie means the answer does not choose
+   between them, and a single shared word is coincidence rather than
+   agreement. */
+function aceBestOverlap(texts, answer, candidates) {
+  var wanted = aceWords(answer);
+  if (!wanted.length) return -1;
+
+  var best = -1;
+  var bestScore = 0;
+  var tied = false;
+
+  candidates.forEach(function (index) {
+    var words = aceWords(texts[index]);
+    var score = 0;
+    wanted.forEach(function (word) {
+      if (words.indexOf(word) >= 0) score += 1;
+    });
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = index;
+      tied = false;
+    } else if (score === bestScore && score > 0) {
+      tied = true;
+    }
+  });
+
+  return (!tied && bestScore >= 1) ? best : -1;
 }
