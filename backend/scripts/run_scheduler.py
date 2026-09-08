@@ -30,6 +30,7 @@ from backend.app.evaluation.freshness import (
     FreshnessPolicy,
 )
 from backend.app.persistence.sessions import (
+    record_check,
     record_discoveries,
 )
 from backend.app.scheduling import (
@@ -328,6 +329,13 @@ def main(
                 session,
                 since=started_at,
             )
+
+            if run is None:
+                # Nothing found, but ACE looked, and the log is read to
+                # find out whether it did.
+                record_check(
+                    session
+                )
 
         if run is not None:
             LOGGER.info(

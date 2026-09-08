@@ -142,6 +142,51 @@ def _open_session(
     return record
 
 
+def record_check(
+    session: Session,
+    *,
+    now: datetime | None = None,
+    merge_window: timedelta = (
+        SESSION_MERGE_WINDOW
+    ),
+) -> PollSessionRecord:
+    """Record that ACE looked, whether or not it found anything.
+
+    ``record_discoveries`` never creates an empty run, which is right
+    for a run: a run is a group of jobs. But it left the activity log
+    unable to answer the question it is read for. A check at 1:43pm
+    that found nothing appeared nowhere, so the page showed its most
+    recent entry as an hour old while the header said the last check
+    was a minute ago, and the two read as a contradiction.
+
+    The merge window does the work of keeping this affordable. The
+    scheduler completes a cycle roughly every ten seconds, so a row per
+    cycle would be nine thousand rows a day. Extending one row instead
+    means a quiet stretch is a single entry whose span grows, and the
+    log stays honest at around three rows an hour.
+    """
+
+    reference = (
+        _as_utc(
+            now
+        )
+        if now is not None
+        else datetime.now(
+            timezone.utc
+        )
+    )
+
+    run = _open_session(
+        session,
+        now=reference,
+        merge_window=merge_window,
+    )
+
+    run.last_activity_at = reference
+
+    return run
+
+
 def record_discoveries(
     session: Session,
     *,

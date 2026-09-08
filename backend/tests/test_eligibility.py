@@ -3,6 +3,7 @@
 import pytest
 
 from backend.app.intelligence.eligibility import (
+    _is_us_location,
     ELIGIBILITY_RULE_VERSION,
     EligibilityReasonCode,
     EligibilityStatus,
@@ -693,6 +694,69 @@ def test_low_requirement_wins_over_high_preference() -> None:
         decision.required_experience_years
         == 2
     )
+
+
+def test_a_bare_us_token_is_a_us_location() -> None:
+    """A real Stripe posting the user found on their own carried the
+    location "US" and was rejected as outside the US. The markers list
+    held "usa" and "united states" and matched by substring, so bare
+    "US" reached none of them."""
+
+    for location in (
+        "US",
+        "US-Remote",
+        "US-CA-Menlo Park",
+    ):
+        assert _is_us_location(
+            location
+        ), location
+
+
+def test_a_bare_us_city_is_a_us_location() -> None:
+    """Several large boards post a city with no country. 1,231 San
+    Francisco postings were being thrown away."""
+
+    for location in (
+        "San Francisco",
+        "San Francisco Bay Area",
+        "Chicago",
+        "Seattle",
+        "NYC",
+        "Sunnyvale",
+    ):
+        assert _is_us_location(
+            location
+        ), location
+
+
+def test_a_country_ending_in_us_is_not_the_us() -> None:
+    """The token has to stand alone. Belarus, Cyprus and Mauritius all
+    end in the two letters, and Houston contains them."""
+
+    for location in (
+        "Belarus",
+        "Cyprus",
+        "Mauritius",
+    ):
+        assert not _is_us_location(
+            location
+        ), location
+
+
+def test_an_unknown_location_is_not_assumed_us() -> None:
+    """Guessing would fill the queue with jobs the user cannot take."""
+
+    for location in (
+        "Unknown",
+        "2 Locations",
+        "Hybrid",
+        "Home based - EMEA",
+        "Dublin",
+        "Singapore",
+    ):
+        assert not _is_us_location(
+            location
+        ), location
 
 
 def test_phd_in_title_rejected() -> None:

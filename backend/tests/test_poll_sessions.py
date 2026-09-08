@@ -30,6 +30,7 @@ from backend.app.db.models import (
 )
 from backend.app.persistence.sessions import (
     SESSION_MERGE_WINDOW,
+    record_check,
     record_discoveries,
 )
 
@@ -416,3 +417,101 @@ def test_rejected_jobs_count_as_discovered_but_not_qualifying(
     assert run.jobs_discovered == 2
 
     assert run.qualifying_discovered == 1
+
+
+def test_a_check_that_finds_nothing_is_still_recorded(
+    session_factory,
+) -> None:
+    """record_discoveries never creates an empty run, which is right
+    for a run, and left the activity log unable to answer the question
+    it is read for. A check at 1:43pm that found nothing appeared
+    nowhere, so the log's newest entry read an hour old while the
+    header said the last check was a minute ago."""
+
+    with session_factory() as session:
+        assert record_discoveries(
+            session,
+            since=NOW,
+            now=NOW,
+        ) is None
+
+        run = record_check(
+            session,
+            now=NOW,
+        )
+
+        session.commit()
+
+        assert run is not None
+
+        assert run.jobs_discovered == 0
+
+
+def test_a_quiet_stretch_extends_one_entry(
+    session_factory,
+) -> None:
+    """The scheduler completes a cycle every few seconds, so a row per
+    cycle would be thousands a day. Inside the merge window the same
+    entry is extended instead."""
+
+    with session_factory() as session:
+        first = record_check(
+            session,
+            now=NOW,
+        )
+
+        session.flush()
+
+        first_id = first.id
+
+        later = record_check(
+            session,
+            now=NOW
+            + timedelta(
+                minutes=5
+            ),
+        )
+
+        session.commit()
+
+        assert later.id == first_id
+
+        stamp = later.last_activity_at
+
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(
+                tzinfo=timezone.utc
+            )
+
+        assert stamp == NOW + timedelta(
+            minutes=5
+        )
+
+
+def test_a_gap_past_the_window_starts_a_new_entry(
+    session_factory,
+) -> None:
+    """Otherwise one row would swallow a whole day and the log could
+    not show when ACE stopped."""
+
+    with session_factory() as session:
+        first = record_check(
+            session,
+            now=NOW,
+        )
+
+        session.flush()
+
+        first_id = first.id
+
+        later = record_check(
+            session,
+            now=NOW
+            + timedelta(
+                minutes=45
+            ),
+        )
+
+        session.commit()
+
+        assert later.id != first_id

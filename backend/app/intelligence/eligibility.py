@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-08-v23"
+    "2026-09-08-v24"
 )
 
 
@@ -301,6 +301,114 @@ US_LOCATION_MARKERS = (
     "remote - united states",
     "remote, united states",
     "remote / united states",
+)
+
+
+# Bare "US" as its own token, and the "US-CA-Menlo Park" shape several
+# boards use. Matched on token boundaries rather than as a substring,
+# because "us" sits inside Houston, Austin, Belarus and Mauritius.
+US_TOKEN_PATTERN = re.compile(
+    r"(?:^|[^a-z])u\.?s\.?a?(?:[^a-z]|$)",
+    re.IGNORECASE,
+)
+
+
+# US cities written with no country, which several large boards do.
+# Stripe posts "San Francisco" and "Chicago"; 1,231 San Francisco
+# postings alone were being rejected as outside the US.
+#
+# Deliberately excludes names whose non-US reading is common in job
+# postings: Cambridge, Birmingham, Manchester, Richmond, Vancouver,
+# London, Hamilton, Windsor, Waterloo. A bare one of those is genuinely
+# ambiguous and guessing wrong fills the queue with jobs the user
+# cannot take.
+US_CITY_NAMES = frozenset(
+    {
+        "san francisco",
+        "san jose",
+        "sunnyvale",
+        "mountain view",
+        "menlo park",
+        "palo alto",
+        "santa clara",
+        "cupertino",
+        "redwood city",
+        "san mateo",
+        "los angeles",
+        "san diego",
+        "sacramento",
+        "irvine",
+        "santa monica",
+        "new york",
+        "nyc",
+        "brooklyn",
+        "manhattan",
+        "seattle",
+        "bellevue",
+        "redmond",
+        "kirkland",
+        "chicago",
+        "boston",
+        "somerville",
+        "austin",
+        "dallas",
+        "houston",
+        "denver",
+        "boulder",
+        "atlanta",
+        "miami",
+        "orlando",
+        "tampa",
+        "philadelphia",
+        "pittsburgh",
+        "baltimore",
+        "washington dc",
+        "arlington va",
+        "detroit",
+        "minneapolis",
+        "phoenix",
+        "tempe",
+        "scottsdale",
+        "salt lake city",
+        "las vegas",
+        "nashville",
+        "charlotte",
+        "raleigh",
+        "durham",
+        "st louis",
+        "kansas city",
+        "columbus ohio",
+        "cleveland",
+        "indianapolis",
+        "milwaukee",
+        "new jersey",
+        "jersey city",
+        "hoboken",
+        "stamford",
+        "hartford",
+        "bay area",
+        "silicon valley",
+    }
+)
+
+
+# One alternation rather than a regex per city: this runs for every
+# posting in the corpus, and sixty-four separate searches per call made
+# a full re-evaluation take minutes.
+US_CITY_PATTERN = re.compile(
+    r"(?:^|[^a-z])(?:"
+    + "|".join(
+        re.escape(
+            city
+        )
+        for city in sorted(
+            US_CITY_NAMES,
+            key=len,
+            reverse=True,
+        )
+    )
+    + r")(?:[^a-z]|$)",
+    re.IGNORECASE,
 )
 
 
@@ -1016,6 +1124,16 @@ def _is_us_location(
         marker in normalized
         for marker
         in US_LOCATION_MARKERS
+    ):
+        return True
+
+    if US_TOKEN_PATTERN.search(
+        normalized
+    ):
+        return True
+
+    if US_CITY_PATTERN.search(
+        normalized
     ):
         return True
 

@@ -430,7 +430,7 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .pl-row:not(:disabled):hover{background:var(--hover)}
 .pl-run.open .pl-row{background:var(--surface-2)}
 .pl-caret{width:10px;color:var(--text-muted);font-size:11px}
-.pl-time{font-family:var(--mono);font-size:12px;font-weight:600;min-width:74px}
+.pl-time{font-family:var(--mono);font-size:12px;font-weight:600;min-width:148px}
 .pl-badge{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-muted);min-width:96px;text-align:center}
 .pl-badge.hit{background:var(--purple-surface);color:var(--purple);font-weight:600}
 .pl-seen{font-size:11.5px;color:var(--text-muted);margin-right:auto}
@@ -1201,15 +1201,26 @@ function pullsPage(){
     var jobs=s.jobs||[];
     var hidden=Math.max(0,s.qualifying_discovered-jobs.length);
     var hit=s.qualifying_discovered>0;
+    // Three outcomes, not two. "Nothing new" means postings were read
+    // and none qualified; "no new postings" means there was nothing to
+    // read. Collapsing them hid whether ACE had looked at all.
+    var sawNothing=!s.jobs_discovered;
+    var label=hit?(s.qualifying_discovered+" passed")
+      :(sawNothing?"no new postings":"nothing new");
+    // A quiet stretch is one row whose span grows, so the window it
+    // covers has to be on screen or the row looks like a single
+    // instant hours ago.
+    var span=(s.finished_at&&clock(s.finished_at)!==clock(s.started_at))
+      ? clock(s.started_at)+" - "+clock(s.finished_at) : clock(s.started_at);
     return '<div class="pl-run'+(hit?" hit":"")+(open?" open":"")+'">'+
       '<button class="pl-row" data-pull="'+s.id+'"'+(hit?'':' disabled')+'>'+
         '<span class="pl-caret">'+(hit?(open?"\u25be":"\u25b8"):"\u00b7")+'</span>'+
-        '<span class="pl-time">'+clock(s.started_at)+'</span>'+
-        '<span class="pl-badge'+(hit?" hit":"")+'">'+
-          (hit?s.qualifying_discovered+" passed":"nothing new")+'</span>'+
-        '<span class="pl-seen">'+s.jobs_discovered.toLocaleString()+
-          ' posting'+(s.jobs_discovered===1?"":"s")+' seen</span>'+
-        '<span class="pl-ago">'+ago(s.started_at)+'</span>'+
+        '<span class="pl-time">'+span+'</span>'+
+        '<span class="pl-badge'+(hit?" hit":"")+'">'+label+'</span>'+
+        '<span class="pl-seen">'+(sawNothing?"nothing to read"
+          :s.jobs_discovered.toLocaleString()+
+            ' posting'+(s.jobs_discovered===1?"":"s")+' seen')+'</span>'+
+        '<span class="pl-ago">'+ago(s.finished_at||s.started_at)+'</span>'+
       '</button>'+
       (open?'<div class="pl-jobs">'+
         (jobs.length?'<table class="tbl pl-tbl"><tbody>'+
@@ -1703,10 +1714,10 @@ function livePop(a){
     (stale
       ?'<p>ACE polls every few minutes, so a gap this long means the scheduler has stopped. Everything already found is still here.</p>'+
        '<p>On the machine running ACE: <b>docker compose ps</b>, then <b>docker compose up -d scheduler</b>.</p>'
-      :(l?'<p>Most recent pull that found anything: '+l.jobs_discovered+' found, '+
+      :(l?'<p>Most recent check: '+l.jobs_discovered+' found, '+
           l.qualifying_discovered+' passed your filters.</p>':'')+
-       '<p>'+state.sessions.length+' pulls recorded. A check that finds nothing new is not '+
-       'recorded as its own row.</p>'));
+       '<p>'+state.sessions.length+' checks recorded. A quiet stretch is one entry whose '+
+       'span keeps growing, because ACE completes a cycle every few seconds.</p>'));
 }
 function scorePop(a){
   openPop(a,'<h4>Match score</h4>'+
