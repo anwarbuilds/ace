@@ -167,6 +167,16 @@ class JobRecord(Base):
         nullable=True,
     )
 
+    # Only a handful of providers expose this at all -- None means the
+    # source never said, never "full-time assumed". Added after a real
+    # Vestwell posting and a real T-Mobile posting both passed the
+    # gate stating "contract" through Adzuna's own structured field,
+    # which was being read and then dropped before it reached storage.
+    employment_type: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
     content_hash: Mapped[str] = mapped_column(
         String(64),
         nullable=False,

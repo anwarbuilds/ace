@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-08-v26"
+    "2026-09-09-v28"
 )
 
 
@@ -138,6 +138,10 @@ class EligibilityReasonCode(
 
     INTERNSHIP_ROLE = (
         "INTERNSHIP_ROLE"
+    )
+
+    CONTRACT_ROLE = (
+        "CONTRACT_ROLE"
     )
 
     NO_HARD_BLOCKER = (
@@ -724,6 +728,9 @@ CLEARANCE_BLOCKER_PATTERNS = (
     r"\bsecurity\s+clearance\b",
     r"\bsecret\s+clearance\b",
     r"\bts\s*/\s*sci\b",
+    # Bare "TS clearance" — the SCI half is often dropped even though
+    # the requirement is identical to "TS/SCI".
+    r"\bts\s+clearance\b",
     r"\btop\s+secret\b",
     r"\bpolygraph\b",
     r"\bdod\s+clearance\b",
@@ -2232,6 +2239,29 @@ def evaluate_job(
                 "Posting is an internship or "
                 "placement; ACE is scoped to "
                 "full-time early-career roles."
+            )
+        )
+
+    # Only a source that explicitly said "contract" trips this. A
+    # source that never mentioned employment type at all is not
+    # assumed to be a contract role, and title/description language
+    # already carries its own hard-blocker rules elsewhere; this one
+    # exists because Adzuna reports the type as data, not as prose.
+    if (
+        job.employment_type
+        is not None
+        and "contract"
+        in job.employment_type
+    ):
+        reject_codes.append(
+            EligibilityReasonCode
+            .CONTRACT_ROLE
+        )
+
+        reject_reasons.append(
+            (
+                "Posting is a contract role, "
+                "not full-time employment."
             )
         )
 

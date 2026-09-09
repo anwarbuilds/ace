@@ -40,6 +40,15 @@ def compute_job_content_hash(
         "posted_at": _serialize_datetime(
             job.posted_at
         ),
+        # Eligibility-relevant, so its own change has to register as a
+        # content change and trigger re-evaluation the same way a
+        # title or description edit already does. Without this, a job
+        # whose employment_type flips from unknown to "contract" on a
+        # later poll would sit under a decision made before that was
+        # known, since nothing else about the posting changed.
+        "employment_type": (
+            job.employment_type
+        ),
     }
 
     serialized_payload = json.dumps(

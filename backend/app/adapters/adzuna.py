@@ -366,4 +366,20 @@ def _to_canonical(
         # Adzuna exposes no separate update stamp; created is the only
         # date it offers.
         updated_at=None,
+        # Only ever "contract" or absent in practice: most postings
+        # carry no value here at all, which is treated as unknown
+        # rather than assumed full-time. A real Vestwell posting and a
+        # real T-Mobile posting both stated "contract" explicitly and
+        # passed the gate before this was read at all.
+        employment_type=(
+            str(
+                posting.get(
+                    "contract_type"
+                )
+            ).strip().lower()
+            if posting.get(
+                "contract_type"
+            )
+            else None
+        ),
     )

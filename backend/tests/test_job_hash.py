@@ -88,3 +88,31 @@ def test_provider_update_timestamp_does_not_change_hash() -> None:
             timestamp_only_change
         )
     )
+
+def test_employment_type_change_changes_hash() -> None:
+    """Eligibility-relevant, so its own change has to register as a
+    content change and trigger re-evaluation the same way a title edit
+    already does.
+
+    A real Vestwell posting and a real T-Mobile posting proved this the
+    hard way: a later poll set employment_type to "contract" with
+    nothing else about either posting different, and because it was
+    not part of the hash, ACE never noticed and both stayed under a
+    decision made before that was known.
+    """
+
+    first = compute_job_content_hash(
+        make_job()
+    )
+
+    changed = make_job().model_copy(
+        update={
+            "employment_type": "contract",
+        }
+    )
+
+    second = compute_job_content_hash(
+        changed
+    )
+
+    assert first != second

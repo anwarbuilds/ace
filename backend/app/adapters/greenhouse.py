@@ -9,6 +9,9 @@ import re
 
 import httpx
 
+from backend.app.adapters.html_text import (
+    unescape_fully,
+)
 from backend.app.adapters.http_cache import (
     CacheValidators,
     conditional_headers,
@@ -36,7 +39,7 @@ def _clean_html(raw_html: str | None) -> str:
     if not raw_html:
         return ""
 
-    decoded_html = html.unescape(raw_html)
+    decoded_html = unescape_fully(raw_html)
 
     text_without_tags = re.sub(
         r"<[^>]+>",

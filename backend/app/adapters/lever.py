@@ -17,6 +17,9 @@ from urllib.parse import quote
 
 import httpx
 
+from backend.app.adapters.html_text import (
+    unescape_fully,
+)
 from backend.app.adapters.http_cache import (
     CacheValidators,
     conditional_headers,
@@ -56,7 +59,7 @@ def _clean_html(
     if not value:
         return ""
 
-    decoded = html.unescape(
+    decoded = unescape_fully(
         value
     )
 

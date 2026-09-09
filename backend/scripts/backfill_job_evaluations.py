@@ -103,6 +103,9 @@ def _to_canonical(
         updated_at=_as_utc(
             record.source_updated_at
         ),
+        employment_type=(
+            record.employment_type
+        ),
     )
 
 

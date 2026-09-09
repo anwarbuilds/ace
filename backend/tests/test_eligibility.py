@@ -39,6 +39,7 @@ def make_job(
     location: str = "Seattle, Washington",
     description: str = "",
     early_career: bool = True,
+    employment_type: str | None = None,
 ) -> CanonicalJob:
     """Create a normalized test job."""
 
@@ -59,6 +60,7 @@ def make_job(
         official_url=(
             "https://example.com/jobs/test-123"
         ),
+        employment_type=employment_type,
     )
 
 
@@ -320,6 +322,56 @@ def test_an_open_ended_three_year_bar_is_rejected() -> None:
         .EXPERIENCE_TOO_HIGH
         in decision.reason_codes
     )
+
+
+def test_an_explicit_contract_role_is_rejected() -> None:
+    """A real Vestwell posting and a real T-Mobile posting both stated
+    "contract" through Adzuna's own contract_type field, with nothing
+    in the title or description saying so, and both passed the gate
+    before this field was read at all."""
+
+    decision = evaluate_job(
+        make_job(
+            employment_type="contract",
+        )
+    )
+
+    assert (
+        decision.status
+        == EligibilityStatus.REJECT
+    )
+
+    assert (
+        EligibilityReasonCode
+        .CONTRACT_ROLE
+        in decision.reason_codes
+    )
+
+
+def test_an_unstated_employment_type_is_not_assumed_contract() -> (
+    None
+):
+    """Most postings, and every source except Adzuna, never say. None
+    means the source did not report it, never "full-time assumed" --
+    and never "contract assumed" either."""
+
+    for employment_type in (
+        None,
+        "permanent",
+        "full_time",
+    ):
+        decision = evaluate_job(
+            make_job(
+                employment_type=(
+                    employment_type
+                ),
+            )
+        )
+
+        assert (
+            decision.status
+            == EligibilityStatus.PASS
+        ), employment_type
 
 
 def test_a_capped_three_years_is_not_a_floor() -> None:
@@ -958,6 +1010,24 @@ def test_clearance_requirement_rejected() -> None:
             description=(
                 "Active security clearance "
                 "required."
+            ),
+        )
+    )
+
+    assert (
+        decision.status
+        == EligibilityStatus.REJECT
+    )
+
+
+def test_bare_ts_clearance_without_sci_is_rejected() -> None:
+    # "TS/SCI" was already caught; a posting that drops the SCI half
+    # and just says "TS clearance" carries the same requirement.
+    decision = evaluate_job(
+        make_job(
+            description=(
+                "Candidates must be able to obtain "
+                "a TS clearance within 6 months."
             ),
         )
     )

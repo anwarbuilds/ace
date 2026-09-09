@@ -357,6 +357,9 @@ def refresh_stale_evaluations(
                     updated_at=(
                         job.source_updated_at
                     ),
+                    employment_type=(
+                        job.employment_type
+                    ),
                 )
             )
 

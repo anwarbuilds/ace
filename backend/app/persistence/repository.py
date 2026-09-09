@@ -134,6 +134,9 @@ class JobRepository:
                     official_url=job.official_url,
                     posted_at=job.posted_at,
                     source_updated_at=job.updated_at,
+                    employment_type=(
+                        job.employment_type
+                    ),
                     content_hash=content_hash,
                     first_seen_at=observed_at,
                     last_seen_at=observed_at,
@@ -190,6 +193,10 @@ class JobRepository:
 
             existing_record.source_updated_at = (
                 job.updated_at
+            )
+
+            existing_record.employment_type = (
+                job.employment_type
             )
 
             existing_record.content_hash = (

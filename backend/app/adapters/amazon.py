@@ -42,6 +42,9 @@ from typing import Any
 
 import httpx
 
+from backend.app.adapters.html_text import (
+    unescape_fully,
+)
 from backend.app.adapters.retry import (
     request_with_retry,
 )
@@ -80,7 +83,7 @@ def _clean_html(
     if not value:
         return ""
 
-    decoded = html.unescape(
+    decoded = unescape_fully(
         value
     )
 

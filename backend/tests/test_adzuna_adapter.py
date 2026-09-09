@@ -121,6 +121,39 @@ def make_client(
 # --- normalization -------------------------------------------------
 
 
+def test_contract_type_is_carried_as_employment_type() -> None:
+    """A real Vestwell posting and a real T-Mobile posting both stated
+    "contract" through this field, with nothing in the title or
+    description saying so."""
+
+    record = posting()
+
+    record["contract_type"] = "contract"
+
+    canonical = _to_canonical(
+        record
+    )
+
+    assert (
+        canonical.employment_type
+        == "contract"
+    )
+
+
+def test_an_unstated_contract_type_is_none_not_full_time() -> None:
+    """Most postings never carry this field at all. Treated as
+    unknown, never as an assumption either way."""
+
+    canonical = _to_canonical(
+        posting()
+    )
+
+    assert (
+        canonical.employment_type
+        is None
+    )
+
+
 def test_a_complete_posting_normalizes() -> None:
     canonical = _to_canonical(
         posting()

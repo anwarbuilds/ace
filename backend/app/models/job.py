@@ -26,3 +26,10 @@ class CanonicalJob(BaseModel):
 
     posted_at: datetime | None = None
     updated_at: datetime | None = None
+
+    # Only a handful of providers expose this at all, so it is left
+    # unset rather than guessed at: None means "the source did not
+    # say", never "full-time assumed". Adzuna reports it directly as
+    # "contract_type"; most ATS boards never surface an equivalent
+    # field and this stays None for them.
+    employment_type: str | None = None
