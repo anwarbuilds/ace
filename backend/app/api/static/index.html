@@ -198,6 +198,13 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .th-on{color:var(--gold)}
 .th-i{font-family:var(--mono);font-size:9px;vertical-align:super;margin-left:3px}
 .row{border-bottom:1px solid var(--border-subtle);transition:background var(--fast) var(--ease-out)}
+.grp-head{cursor:pointer;background:var(--surface-1)}
+.grp-head:hover{background:var(--hover)}
+.grp-caret{display:inline-block;width:12px;color:var(--text-muted);font-size:11px}
+.grp-n{margin-left:10px;font-size:11px;font-weight:600;color:var(--purple);background:var(--purple-surface);
+  padding:1px 8px;border-radius:99px}
+.grp-member .c-title{padding-left:30px}
+.grp-member{background:var(--surface-1)}
 .row:hover{background:var(--hover)}
 .row[aria-selected="true"]{background:var(--selected)}
 .row.done{opacity:.45}
@@ -566,7 +573,7 @@ var SORTS=[
 var state={
   page:"queue", view:"all", jobId:null,
   q:"", sorts:["unapplied_first","new_grad_first","best_match"],
-  filters:{}, tiers:[], excluded:[], recentOnly:false, openPull:null,
+  filters:{}, tiers:[], excluded:[], recentOnly:false, openPull:null, expandedGroups:{},
   pinned:null, heldRow:null,
   items:[], total:0, loading:true, loadingMore:false, hasMore:false, offset:0, reqToken:0,
   selectedId:null, scrollTo:false,
@@ -953,9 +960,62 @@ function statusCell(j){
   if(m.reviewed) return '<span class="badge">Reviewed</span>';
   return "";
 }
-function jobRow(j){
+// Several companies repost one role once per team or vertical: Sierra's
+// "Software Engineer, Agent" across nine industries, TikTok's graduate
+// roles across dozens of teams. Each is a real, separately-appliable
+// posting, so nothing is discarded, but reading nine near-identical
+// rows to realize they are one decision is the noise the user reported.
+//
+// Grouped by company and the title with its trailing qualifier removed:
+// "Software Engineer, Agent - Healthcare" and "(Spanish speaking)" both
+// stem to "software engineer, agent". Only titles sharing a stem with
+// two or more others collapse, so two genuinely distinct roles that
+// happen to share a prefix are left alone.
+var GROUP_MIN=3;
+function jobStem(title){
+  var t=clean(title||"").replace(/\s*\([^)]*\)\s*$/,"").trim();
+  var parts=t.split(/\s+[-\u2013]\s+/);
+  return (parts.length>1?parts[0]:t).toLowerCase();
+}
+function jobGroupKey(j){ return (j.company||"")+"|"+jobStem(j.title); }
+// Grouping is computed over whatever page of the queue is loaded, so a
+// group can grow as more rows load in. Recomputed on every render
+// rather than cached, since state.items changes under it.
+function jobGroups(){
+  var by={};
+  state.items.forEach(function(j){
+    var k=jobGroupKey(j);
+    (by[k]=by[k]||[]).push(j);
+  });
+  return by;
+}
+function groupRepresentative(members){
+  // The best-matched member leads, since that is the one worth reading
+  // first; ties break by which was seen first.
+  return members.slice().sort(function(a,b){
+    var am=a.match_score==null?-1:a.match_score, bm=b.match_score==null?-1:b.match_score;
+    if(bm!==am) return bm-am;
+    return new Date(a.first_seen_at)-new Date(b.first_seen_at);
+  })[0];
+}
+function groupHeaderRow(members,key){
+  var lead=groupRepresentative(members);
+  var open=!!state.expandedGroups[key];
+  var tier=lead.company_tier||"OTHER";
+  return '<tr class="row grp-head t-'+tier+'" data-group="'+esc(key)+'" tabindex="0">'+
+    '<td class="c-rail"><div class="rail t-'+tier+'"></div></td>'+
+    '<td class="c-co"><div class="co-name">'+esc(lead.company)+'</div>'+
+      (TIER_LABEL[tier]?'<div class="co-tier">'+TIER_LABEL[tier]+'</div>':'')+'</td>'+
+    '<td class="c-title" colspan="6">'+
+      '<span class="grp-caret">'+(open?"\u25be":"\u25b8")+'</span> '+
+      esc(clean(lead.title))+
+      '<span class="grp-n">'+members.length+' similar openings</span>'+
+    '</td>'+
+    '<td class="c-act"></td></tr>';
+}
+function jobRow(j,inGroup){
   var t=tierOf(j.match_score), m=markOf(j), fit=expFit(j), tier=j.company_tier||"OTHER";
-  return '<tr class="row t-'+tier+(isDone(j)?" done":"")+'" data-id="'+j.id+'" tabindex="0"'+
+  return '<tr class="row t-'+tier+(isDone(j)?" done":"")+(inGroup?" grp-member":"")+'" data-id="'+j.id+'" tabindex="0"'+
       ' aria-selected="'+(state.selectedId===j.id)+'">'+
     '<td class="c-rail"><div class="rail t-'+tier+'"></div></td>'+
     '<td class="c-co"><div class="co-name">'+esc(j.company)+'</div>'+
@@ -1008,7 +1068,22 @@ function queueTable(){
       if(new Date(state.items[i].first_seen_at)<=state.prevVisit){ readAt=i; break; }
     }
   }
-  var body=state.items.map(function(j,i){ return (i===readAt?readRow():"")+jobRow(j); }).join("");
+  // Only the Queue groups. Saved, Applied and Archive are curated by
+  // the user's own actions, and collapsing there could bury a distinct
+  // vertical they specifically kept or applied to.
+  var groups=state.page==="queue"?jobGroups():{};
+  var rendered={};
+  var body=state.items.map(function(j,i){
+    var pre=(i===readAt?readRow():"");
+    var key=jobGroupKey(j);
+    var members=groups[key];
+    if(!members||members.length<GROUP_MIN) return pre+jobRow(j);
+    if(rendered[key]) return pre; // already shown as part of its group
+    rendered[key]=true;
+    var head=groupHeaderRow(members,key);
+    if(!state.expandedGroups[key]) return pre+head;
+    return pre+head+members.map(function(m){ return jobRow(m,true); }).join("");
+  }).join("");
   var tail=state.loadingMore?"Loading more"
     :state.hasMore?("Showing "+state.items.length+" of "+state.total)
     :("End of list · "+state.items.length+" opportunit"+(state.items.length===1?"y":"ies"));
@@ -1582,8 +1657,26 @@ function routeFromHash(){
   if(m){ openJob(parseInt(m[1],10),{fromHash:true}); return true; }
   return false;
 }
+// The ids a person can actually see, in the order the table shows
+// them. Keyboard navigation used to walk state.items directly, so
+// pressing "next" could select a job hidden inside a collapsed group:
+// the highlight and scroll had no row to land on, and it looked like
+// the key did nothing.
+function visibleItemIds(){
+  if(state.page!=="queue") return state.items.map(function(j){return j.id;});
+  var groups=jobGroups(), rendered={}, ids=[];
+  state.items.forEach(function(j){
+    var key=jobGroupKey(j), members=groups[key];
+    if(!members||members.length<GROUP_MIN){ ids.push(j.id); return; }
+    if(rendered[key]) return;
+    rendered[key]=true;
+    if(state.expandedGroups[key]) members.forEach(function(m){ ids.push(m.id); });
+    else ids.push(groupRepresentative(members).id);
+  });
+  return ids;
+}
 function step(d){
-  var ids=state.items.map(function(j){return j.id;});
+  var ids=visibleItemIds();
   var i=ids.indexOf(state.selectedId);
   var n=Math.max(0,Math.min(ids.length-1,(i<0?0:i+d)));
   if(ids[n]!=null){ state.selectedId=ids[n]; state.scrollTo=true; render(); }
@@ -1960,6 +2053,7 @@ document.addEventListener("click",function(e){
   if(d.view){ goTo("queue",d.view); return; }
   if(d.pull){ var pid=parseInt(d.pull,10);
       state.openPull=(state.openPull===pid?null:pid); render(); return; }
+  if(d.group){ state.expandedGroups[d.group]=!state.expandedGroups[d.group]; render(); return; }
   if(d.expand){ state.filterOpen[d.expand]=true;
       var pl=document.querySelector(".pop-list"); if(pl) pl.innerHTML=filterPopBody(); return; }
   if(d.sort){ toggleSort(d.sort); closePop(); return; }

@@ -906,6 +906,150 @@ def test_the_queue_offers_one_way_back(
     )
 
 
+def test_a_company_that_reposts_one_role_collapses(
+    page,
+) -> None:
+    """Sierra posts one role across nine industries and TikTok posts
+    graduate roles across dozens of teams. Nine near-identical rows to
+    realize they are one decision is the noise the user reported, and
+    a company with an application limit needs one row to choose from,
+    not nine separate ones."""
+
+    group = page.eval(
+        "(function(){"
+        "var g=jobGroups();"
+        "var k=Object.keys(g).filter("
+        "function(x){return g[x].length"
+        ">=GROUP_MIN;})[0];"
+        "return k||null;})()"
+    )
+
+    if not group:
+        pytest.skip(
+            "no repeated-role group in "
+            "the current queue"
+        )
+
+    assert page.eval(
+        "!!document.querySelector"
+        "('.grp-head')"
+    ), "a group exists in state but no header row was rendered"
+
+    expected_groups = page.eval(
+        "Object.keys(jobGroups())"
+        ".filter(function(k){"
+        "return jobGroups()[k].length"
+        ">=GROUP_MIN;}).length"
+    )
+
+    assert page.eval(
+        "document.querySelectorAll"
+        "('.grp-head').length"
+    ) == expected_groups, (
+        "a group was rendered more than "
+        "once, which happens if a later "
+        "member of the same group is not "
+        "recognised as already shown"
+    )
+
+    before = page.eval(
+        "document.querySelectorAll"
+        "('.grp-member').length"
+    )
+
+    assert before == 0, (
+        "a group started expanded"
+    )
+
+    page.click(
+        ".grp-head"
+    )
+
+    after = page.eval(
+        "document.querySelectorAll"
+        "('.grp-member').length"
+    )
+
+    assert after >= 3, (
+        "expanding a group showed "
+        "fewer than the members it "
+        "claimed"
+    )
+
+    assert page.eval(
+        "(function(){var m=document"
+        ".querySelector('.grp-member');"
+        "return !!m.querySelector("
+        "'[data-mark=\"applied\"]');"
+        "})()"
+    ), "an expanded member lost its own action buttons"
+
+    page.click(
+        ".grp-head"
+    )
+
+    assert page.eval(
+        "document.querySelectorAll"
+        "('.grp-member').length"
+    ) == 0, "collapsing again left members visible"
+
+
+def test_keyboard_navigation_skips_hidden_group_members(
+    page,
+) -> None:
+    """Selecting a job hidden inside a collapsed group used to move
+    the highlight to a row that was not on screen, which read as the
+    key doing nothing. Walking "next" across the whole list is what
+    actually exercises this: the old code, indexing raw item order,
+    would eventually land on every id including the hidden ones."""
+
+    all_ids = page.eval(
+        "state.items.map("
+        "function(j){return j.id;})"
+    )
+
+    visible_ids = page.eval(
+        "visibleItemIds()"
+    )
+
+    hidden = [
+        i
+        for i in all_ids
+        if i not in visible_ids
+    ]
+
+    if not hidden:
+        pytest.skip(
+            "nothing is currently "
+            "collapsed"
+        )
+
+    page.eval(
+        "state.selectedId=null"
+    )
+
+    visited = page.eval(
+        "(function(){"
+        "var seen=[];"
+        f"for(var i=0;i<{len(all_ids)};i++){{"
+        "step(1);"
+        "seen.push(state.selectedId);"
+        "}"
+        "return seen;})()"
+    )
+
+    hit = set(
+        visited
+    ) & set(
+        hidden
+    )
+
+    assert not hit, (
+        "stepping through the queue "
+        f"selected hidden id(s) {hit}"
+    )
+
+
 # --- content rules ----------------------------------------------------
 
 
