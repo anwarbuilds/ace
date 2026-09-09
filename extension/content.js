@@ -15,6 +15,14 @@
   var filledOnce = false;
   var lastResult = null;
   var pending = null;
+  // Set when the user explicitly closes the panel. Without this,
+  // closing it was only ever temporary: the MutationObserver below
+  // fires on essentially any DOM change, and refresh() re-created the
+  // panel within 400ms regardless of why it had been closed -- on a
+  // page where ACE's own panel sat over the real Submit button, there
+  // was no way to get it out of the way to click through.
+  var dismissed = false;
+  var lastHref = "";
 
   function setNatively(field, value) {
     // React tracks its own value on the node and ignores a plain
@@ -479,6 +487,7 @@
   }
 
   function close() {
+    dismissed = true;
     var existing = document.querySelector(".ace-panel");
     if (existing) existing.remove();
   }
@@ -661,9 +670,21 @@
   function refresh() {
     if (!loaded) return;
 
+    // Many boards route client-side between postings without a full
+    // reload -- the same DOM-mutation signal that re-triggers refresh()
+    // also fires on that navigation. Treat a URL change as a genuinely
+    // new page: an earlier dismissal was about the posting the user
+    // was just looking at, not this one.
+    if (location.href !== lastHref) {
+      lastHref = location.href;
+      dismissed = false;
+      lastResult = null;
+    }
+
     paint();
 
     if (lastResult) return;
+    if (dismissed) return;
 
     showPreview(panel());
   }
@@ -702,6 +723,7 @@
       }
 
       loaded = true;
+      lastHref = location.href;
       refresh();
 
       var queued = null;

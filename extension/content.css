@@ -1,8 +1,11 @@
 /* Deliberately narrow selectors and a high stacking context: this
    panel lives inside somebody else's stylesheet and must neither
    inherit from it nor be painted over by it. */
+/* Anchored top-right, not bottom-right: a form's own Submit control
+   is almost always at the bottom of the page, and a fixed panel
+   sitting on top of it blocks the one click the user needs most. */
 .ace-panel{
-  position:fixed;right:18px;bottom:18px;z-index:2147483647;
+  position:fixed;right:18px;top:18px;z-index:2147483647;
   width:330px;max-height:min(70vh,560px);display:flex;flex-direction:column;
   background:#1c1229;color:#f4f0fa;border:1px solid #4a3468;border-radius:12px;
   box-shadow:0 16px 48px rgba(0,0,0,.42);
