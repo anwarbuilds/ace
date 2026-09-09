@@ -187,6 +187,15 @@
       return true;
     }
 
+    if (aceIsAutocomplete(field)) {
+      // Never the generic text path: a raw value it does not
+      // recognise does not stay as harmless unmatched text, it gets
+      // silently replaced by whatever the widget defaults to. Handled
+      // separately in fillComboboxes, which can actually see its
+      // options.
+      return false;
+    }
+
     setNatively(field, value);
     return true;
   }
@@ -267,6 +276,134 @@
       unmatched: unmatched,
       already: already
     };
+  }
+
+  /* An Ashby-style autocomplete is a fourth control shape: its real
+     options exist only after the listbox opens, and that render is
+     asynchronous, confirmed against the live widget -- reading
+     [role=option] in the same synchronous tick as the click that
+     opens it finds nothing. Everything else in this file runs
+     synchronously; this is deliberately kept separate rather than
+     making the whole pipeline async for one widget type. */
+  function comboboxOptions() {
+    var box = document.querySelector("[role=listbox]");
+
+    return box
+      ? Array.prototype.slice.call(box.querySelectorAll("[role=option]"))
+      : [];
+  }
+
+  function waitForComboboxOptions(timeoutMs) {
+    return new Promise(function (resolve) {
+      var start = Date.now();
+
+      (function poll() {
+        var options = comboboxOptions();
+
+        if (options.length || Date.now() - start > timeoutMs) {
+          resolve(options);
+          return;
+        }
+
+        setTimeout(poll, 60);
+      })();
+    });
+  }
+
+  function closeCombobox(field) {
+    field.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        code: "Escape",
+        keyCode: 27,
+        bubbles: true
+      })
+    );
+
+    field.blur();
+  }
+
+  function fillOneCombobox(field, value) {
+    var toggle =
+      field.parentElement &&
+      field.parentElement.querySelector("button");
+
+    if (toggle) toggle.click();
+    else field.click();
+
+    return waitForComboboxOptions(1500).then(function (options) {
+      if (!options.length) {
+        closeCombobox(field);
+        return { matched: false };
+      }
+
+      var texts = options.map(function (option) {
+        return option.textContent;
+      });
+
+      var index = aceChooseOption(texts, value);
+
+      if (index < 0) {
+        // No option fits. Closed rather than left open with nothing
+        // chosen, and nothing is typed into the input either -- a
+        // wrong option is worse than this question staying blank for
+        // the user to answer themselves.
+        closeCombobox(field);
+        return { matched: false };
+      }
+
+      options[index].click();
+
+      return { matched: true, text: texts[index] };
+    });
+  }
+
+  /* Every autocomplete on the page, filled one at a time -- two open
+     listboxes at once would make comboboxOptions() ambiguous about
+     which one it is reading. */
+  function fillComboboxes() {
+    var filled = [];
+    var unmatched = [];
+
+    var fields = fillable().filter(aceIsAutocomplete);
+
+    return fields
+      .reduce(function (chain, field) {
+        return chain.then(function () {
+          var question = aceQuestionFor(field);
+          if (!question) return;
+
+          var name = aceAnswerNameFor(question);
+          if (!name) return;
+
+          var value = answers[name];
+          if (!value) return;
+
+          if (!aceIsEmpty(field)) return;
+
+          var previous = field.value;
+
+          return fillOneCombobox(field, value).then(function (outcome) {
+            if (!outcome.matched) {
+              if (unmatched.indexOf(name) < 0) unmatched.push(name);
+              return;
+            }
+
+            field.classList.add("ace-filled");
+
+            lastFill.push({
+              field: field,
+              previous: previous,
+              ticked: false
+            });
+
+            filled.push(name);
+          });
+        });
+      }, Promise.resolve())
+      .then(function () {
+        return { filled: filled, unmatched: unmatched };
+      });
   }
 
   function undo() {
@@ -428,6 +565,13 @@
           return;
         }
         shown = aceOptionLabel(group[index]);
+      } else if (aceIsAutocomplete(field)) {
+        // Its real options exist only once opened, which preview must
+        // not do -- nothing changes on the page until Fill is
+        // clicked. Shown honestly as a guess rather than a promise: a
+        // raw value with no matching option here is exactly how "Job
+        // Portal" silently became "Search Engine" on a real form.
+        shown = tidy(value) + " (if listed)";
       }
 
       seen["a:" + name] = 1;
@@ -572,8 +716,33 @@
   function runFill() {
     var host = panel();
     var result = plan();
-    lastResult = result;
-    showResult(host, result);
+
+    var comboFields = fillable().filter(aceIsAutocomplete);
+
+    if (!comboFields.length) {
+      lastResult = result;
+      showResult(host, result);
+      return;
+    }
+
+    // Filling comboboxes takes real time -- opening each one and
+    // waiting for its options is not instant -- so the badge says so
+    // rather than sitting on the last preview while it works.
+    render(host, shell(
+      "Filling…",
+      "Checking " + comboFields.length +
+        " field" + (comboFields.length === 1 ? "" : "s") +
+        " with its own options.",
+      "",
+      ""
+    ));
+
+    fillComboboxes().then(function (comboResult) {
+      result.filled = result.filled.concat(comboResult.filled);
+      result.unmatched = result.unmatched.concat(comboResult.unmatched);
+      lastResult = result;
+      showResult(host, result);
+    });
   }
 
   document.addEventListener("click", function (event) {

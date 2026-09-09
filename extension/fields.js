@@ -105,6 +105,23 @@ var ACE_RULES = [
    unfocusable checkbox that is not the thing to click. Found on a
    live Handshake application form; nothing in the earlier design
    anticipated a choice rendered as buttons. */
+/* Ashby's "How did you hear about us" and similar fields are a
+   controlled autocomplete: role="combobox", its real options rendered
+   only once opened, and nothing to do with a native <select>. Typing
+   a raw value into it and moving on is how "Job Portal" became
+   "Search Engine" on a real Applied Intuition form: the widget does
+   not accept freeform text, and on an unmatched value it silently
+   snapped to some option of its own choosing rather than staying
+   blank. Filling it correctly needs the listbox open and a real
+   option clicked, which fields.js cannot do on its own -- see
+   fillOneCombobox in content.js. */
+function aceIsAutocomplete(field) {
+  return (
+    field.tagName === "INPUT" &&
+    field.getAttribute("role") === "combobox"
+  );
+}
+
 function aceIsChoiceControl(field) {
   return (
     field.type === "radio" ||
