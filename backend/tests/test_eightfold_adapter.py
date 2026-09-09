@@ -175,6 +175,25 @@ def test_html_is_reduced_to_prose() -> None:
     assert "5+ years" in text
 
 
+def test_an_entity_outside_the_old_hardcoded_table_is_still_decoded() -> None:
+    # _clean_html used to replace only six hand-picked entities. An
+    # em dash used this exact phrasing in a real posting and survived
+    # as literal text because it was never in that list.
+    text = _clean_html("Full&mdash;time role.")
+
+    assert "—" in text
+
+    assert "&mdash;" not in text
+
+
+def test_a_double_encoded_entity_is_fully_decoded() -> None:
+    text = _clean_html("Full&amp;nbsp;time role.")
+
+    assert "&nbsp;" not in text
+
+    assert "&amp;" not in text
+
+
 def test_update_stamp_is_read_as_utc() -> None:
     assert _updated_at(
         {

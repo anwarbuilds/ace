@@ -177,6 +177,42 @@ def test_missing_description_is_allowed() -> None:
     assert jobs[0].description == ""
 
 
+def test_an_html_entity_in_the_plain_description_is_decoded() -> None:
+    # A real posting (WHOOP, via Ashby) held a literal "&#39;" in its
+    # "plain" description -- Ashby's plain-text field is not guaranteed
+    # free of entities a company's own content happened to carry.
+    client = make_client(
+        {
+            "jobs": [
+                {
+                    "title": "Software Engineer",
+                    "location": "Remote",
+                    "isListed": True,
+                    "descriptionPlain": (
+                        "Advance the team&#39;s roadmap."
+                    ),
+                    "jobUrl": (
+                        "https://jobs.ashbyhq.com/"
+                        "ExampleAI/"
+                        "engineer-123"
+                    ),
+                },
+            ],
+        }
+    )
+
+    jobs, _unchanged, _validators = fetch_ashby_jobs(
+        "ExampleAI",
+        "Example AI",
+        client=client,
+    )
+
+    assert (
+        jobs[0].description
+        == "Advance the team's roadmap."
+    )
+
+
 def test_missing_location_uses_unknown() -> None:
     client = make_client(
         {

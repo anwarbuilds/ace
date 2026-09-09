@@ -10,6 +10,7 @@ from datetime import datetime
 
 import httpx
 
+from backend.app.adapters.html_text import unescape_fully
 from backend.app.adapters.http_cache import (
     CacheValidators,
     conditional_headers,
@@ -143,7 +144,7 @@ def fetch_ashby_jobs(
                     raw_job.get("location")
                     or "Unknown"
                 ),
-                description=(
+                description=unescape_fully(
                     raw_job.get("descriptionPlain")
                     or raw_job.get("description")
                     or ""

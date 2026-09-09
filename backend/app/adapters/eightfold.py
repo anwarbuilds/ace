@@ -35,6 +35,7 @@ import re
 
 import httpx
 
+from backend.app.adapters.html_text import unescape_fully
 from backend.app.adapters.retry import request_with_retry
 from backend.app.models.job import CanonicalJob
 
@@ -99,18 +100,14 @@ def _clean_html(
         text,
     )
 
-    for entity, replacement in (
-        ("&amp;", "&"),
-        ("&lt;", "<"),
-        ("&gt;", ">"),
-        ("&quot;", '"'),
-        ("&#39;", "'"),
-        ("&nbsp;", " "),
-    ):
-        text = text.replace(
-            entity,
-            replacement,
-        )
+    # A hand-rolled table of six entities used to sit here. It only
+    # covered what one tenant's postings happened to use, and missed
+    # anything else the html5 entity table names (em dashes, curly
+    # quotes, ellipses...) -- those survived as literal text, which
+    # breaks the same whitespace-dependent phrase rules a double-
+    # encoded &nbsp; does. unescape_fully() covers the full table and
+    # loops to a fixed point, so it also catches doubly-encoded input.
+    text = unescape_fully(text)
 
     text = _WHITESPACE.sub(
         " ",
