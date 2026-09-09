@@ -45,6 +45,10 @@ class SourceType(StrEnum):
     # because the response shapes genuinely differ: different routes,
     # different field names, no shared parsing to fork on.
     EIGHTFOLD_PCSX = "eightfold_pcsx"
+    # A job-search aggregator, not one company's own board. Reads
+    # broadly across employers ACE has no direct adapter for, rather
+    # than one tenant's postings.
+    ADZUNA = "adzuna"
 
 
 def _require_non_empty(

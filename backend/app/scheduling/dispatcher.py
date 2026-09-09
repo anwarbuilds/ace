@@ -32,6 +32,12 @@ from backend.app.adapters.eightfold import (
 from backend.app.adapters.eightfold_pcsx import (
     fetch_eightfold_pcsx_jobs,
 )
+from backend.app.adapters.adzuna import (
+    fetch_adzuna_jobs,
+)
+from backend.app.coverage.benchmark import (
+    company_keys,
+)
 from backend.app.adapters.amazon import (
     fetch_amazon_jobs,
 )
@@ -208,6 +214,18 @@ class EightfoldPcsxFetcher(Protocol):
         should_fetch_detail=None,
     ) -> list[CanonicalJob]:
         """Fetch and normalize one Eightfold PCSX tenant."""
+
+
+class AdzunaFetcher(Protocol):
+    """Callable capable of fetching Adzuna's search results."""
+
+    def __call__(
+        self,
+        *,
+        app_id: str,
+        app_key: str,
+    ) -> list[CanonicalJob]:
+        """Fetch and normalize a set of Adzuna aggregator postings."""
 
 
 class SimplifyFetcher(Protocol):
@@ -1045,6 +1063,173 @@ def _stored_validators(
     )
 
 
+class AdzunaSourceFetcher:
+    """Dispatch adapter for the Adzuna job-search aggregator.
+
+    Unlike every other fetcher here, this one reads the database: a
+    result has to be checked against the companies ACE already polls
+    directly, or the aggregator would duplicate a job with a worse
+    link (its own apply page rather than the employer's) alongside the
+    better listing ACE already has. That check belongs at this layer
+    rather than inside the pure adapter, for the same reason
+    _stored_validators does: a short session opened and closed around
+    one lookup, never held while the network call runs.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher: AdzunaFetcher = (
+            fetch_adzuna_jobs
+        ),
+        credentials=None,
+        excluded_companies=None,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._credentials = (
+            credentials
+            or _adzuna_credentials
+        )
+        self._excluded_companies = (
+            excluded_companies
+            or _already_covered_companies
+        )
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch the Adzuna aggregator, minus companies ACE already
+        watches directly."""
+
+        if (
+            source.source_type
+            != SourceType.ADZUNA
+        ):
+            raise ValueError(
+                (
+                    "AdzunaSourceFetcher "
+                    "requires an ADZUNA "
+                    "SourceDefinition."
+                )
+            )
+
+        app_id, app_key = (
+            self._credentials()
+        )
+
+        if not app_id or not app_key:
+            raise ValueError(
+                (
+                    "Adzuna credentials are "
+                    "not configured. Set "
+                    "ADZUNA_APP_ID and "
+                    "ADZUNA_APP_KEY, or "
+                    "disable this source."
+                )
+            )
+
+        excluded = (
+            self._excluded_companies()
+        )
+
+        jobs = [
+            job
+            for job in self._fetcher(
+                app_id=app_id,
+                app_key=app_key,
+            )
+            if not (
+                company_keys(
+                    job.company
+                )
+                & excluded
+            )
+        ]
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
+def _adzuna_credentials() -> tuple[
+    str | None,
+    str | None,
+]:
+    """Read Adzuna credentials from settings.
+
+    A function rather than a value read once at import time, so a key
+    added to .env after the process started is still picked up the
+    next time this source is due -- consistent with every other
+    per-call, session-scoped lookup on this page.
+    """
+
+    from backend.app.config import (
+        get_settings,
+    )
+
+    settings = get_settings()
+
+    return (
+        settings.adzuna_app_id,
+        settings.adzuna_app_key,
+    )
+
+
+def _already_covered_companies() -> (
+    frozenset[str]
+):
+    """Return every company ACE already watches directly.
+
+    Read in its own short session, outside any poll transaction, for
+    the same reason _stored_validators is: a lookup must never hold a
+    connection open while the network call runs.
+
+    Sourced from job_sources rather than the jobs table itself, which
+    is the set of companies ACE actively polls rather than merely
+    holds old postings for -- the right question for "does the
+    aggregator add anything here", since a company ACE dropped
+    watching should be reachable through Adzuna again.
+    """
+
+    from sqlalchemy import select
+
+    from backend.app.coverage.benchmark import (
+        company_keys,
+    )
+    from backend.app.db.models import (
+        JobSourceRecord,
+    )
+    from backend.app.db.session import (
+        SessionLocal,
+    )
+
+    with SessionLocal() as session:
+        names = session.scalars(
+            select(
+                JobSourceRecord
+                .company_name
+            ).distinct()
+        ).all()
+
+    keys: set[str] = set()
+
+    for name in names:
+        keys |= company_keys(
+            name
+        )
+
+    return frozenset(
+        keys
+    )
+
+
 def build_default_source_dispatcher() -> (
     SourceDispatcher
 ):
@@ -1099,6 +1284,9 @@ def build_default_source_dispatcher() -> (
                         build_detail_predicate
                     )
                 )
+            ),
+            SourceType.ADZUNA: (
+                AdzunaSourceFetcher()
             ),
             SourceType.SIMPLIFY: (
                 SimplifySourceFetcher(
