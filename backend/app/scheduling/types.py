@@ -40,6 +40,11 @@ class SourceType(StrEnum):
     AMAZON = "amazon"
     SIMPLIFY = "simplify"
     EIGHTFOLD = "eightfold"
+    # Eightfold's newer product line, found on Amdocs. Kept as a
+    # distinct source type rather than a branch inside EIGHTFOLD
+    # because the response shapes genuinely differ: different routes,
+    # different field names, no shared parsing to fork on.
+    EIGHTFOLD_PCSX = "eightfold_pcsx"
 
 
 def _require_non_empty(

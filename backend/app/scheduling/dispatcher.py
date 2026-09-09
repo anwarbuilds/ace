@@ -29,6 +29,9 @@ from backend.app.adapters.smartrecruiters import (
 from backend.app.adapters.eightfold import (
     fetch_eightfold_jobs,
 )
+from backend.app.adapters.eightfold_pcsx import (
+    fetch_eightfold_pcsx_jobs,
+)
 from backend.app.adapters.amazon import (
     fetch_amazon_jobs,
 )
@@ -191,6 +194,20 @@ class EightfoldFetcher(Protocol):
         should_fetch_detail=None,
     ) -> list[CanonicalJob]:
         """Fetch and normalize one Eightfold tenant."""
+
+
+class EightfoldPcsxFetcher(Protocol):
+    """Callable capable of fetching one Eightfold PCSX career site."""
+
+    def __call__(
+        self,
+        tenant_host: str,
+        company_name: str,
+        *,
+        domain: str | None = None,
+        should_fetch_detail=None,
+    ) -> list[CanonicalJob]:
+        """Fetch and normalize one Eightfold PCSX tenant."""
 
 
 class SimplifyFetcher(Protocol):
@@ -742,6 +759,82 @@ class EightfoldSourceFetcher:
         )
 
 
+class EightfoldPcsxSourceFetcher:
+    """Dispatch adapter for Eightfold PCSX-hosted career sites.
+
+    Amdocs is the tenant that led to this: their board answers with a
+    403 under the classic Eightfold route, because it runs the newer
+    product line under /api/pcsx/ with different response shapes
+    entirely. Same predicated-detail approach as the classic adapter.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher: EightfoldPcsxFetcher = (
+            fetch_eightfold_pcsx_jobs
+        ),
+        clock: Clock = utc_now,
+        predicate_factory=None,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+        self._predicate_factory = (
+            predicate_factory
+        )
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch one Eightfold PCSX tenant."""
+
+        if (
+            source.source_type
+            != SourceType.EIGHTFOLD_PCSX
+        ):
+            raise ValueError(
+                (
+                    "EightfoldPcsxSourceFetcher "
+                    "requires an "
+                    "EIGHTFOLD_PCSX "
+                    "SourceDefinition."
+                )
+            )
+
+        predicate = None
+
+        if self._predicate_factory is not None:
+            predicate = (
+                self._predicate_factory(
+                    source=(
+                        SourceType
+                        .EIGHTFOLD_PCSX
+                        .value
+                    ),
+                    company_name=(
+                        source.company_name
+                    ),
+                )
+            )
+
+        jobs = self._fetcher(
+            source.source_host
+            or source.source_account,
+            source.company_name,
+            domain=source.source_account,
+            should_fetch_detail=predicate,
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
 class SimplifySourceFetcher:
     """Dispatch adapter for the curated new-grad feed.
 
@@ -995,6 +1088,13 @@ def build_default_source_dispatcher() -> (
             ),
             SourceType.EIGHTFOLD: (
                 EightfoldSourceFetcher(
+                    predicate_factory=(
+                        build_detail_predicate
+                    )
+                )
+            ),
+            SourceType.EIGHTFOLD_PCSX: (
+                EightfoldPcsxSourceFetcher(
                     predicate_factory=(
                         build_detail_predicate
                     )
