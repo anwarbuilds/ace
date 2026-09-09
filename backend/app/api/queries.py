@@ -1662,12 +1662,19 @@ def list_discovery_runs(
     session: Session,
     *,
     limit: int = 20,
+    before: datetime | None = None,
     now: datetime | None = None,
 ) -> list[dict]:
-    """Return recent discovery runs, newest first.
+    """Return discovery runs older than ``before``, newest first.
 
     Only runs that actually found something exist, so this is a history
     of arrivals rather than a log of scheduler activity.
+
+    ``before`` is the page cursor: the Activity page's own history was
+    hard-capped at the newest 100 runs with nothing past that reachable,
+    which on a busy day is barely more than a single day of the log the
+    page claims to be. Passing the oldest ``started_at`` already on
+    screen as ``before`` walks further back with no upper bound.
     """
 
     reference = (
@@ -1679,15 +1686,22 @@ def list_discovery_runs(
         )
     )
 
+    statement = select(
+        PollSessionRecord
+    ).order_by(
+        PollSessionRecord
+        .last_activity_at.desc()
+    )
+
+    if before is not None:
+        statement = statement.where(
+            PollSessionRecord
+            .started_at
+            < before
+        )
+
     rows = session.scalars(
-        select(
-            PollSessionRecord
-        )
-        .order_by(
-            PollSessionRecord
-            .last_activity_at.desc()
-        )
-        .limit(
+        statement.limit(
             max(
                 1,
                 min(

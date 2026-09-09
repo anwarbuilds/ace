@@ -1050,6 +1050,100 @@ def test_keyboard_navigation_skips_hidden_group_members(
     )
 
 
+def test_activity_history_reaches_past_the_first_page(
+    page,
+) -> None:
+    """The log was hard-capped at the newest 100 runs with nothing
+    past that reachable, which on a busy day is barely more than a
+    single day of the log the page claims to be."""
+
+    page.eval(
+        'goTo("pulls")'
+    )
+
+    page.wait_for(
+        "document.querySelectorAll"
+        "('.pl-row').length>0"
+    )
+
+    if page.eval(
+        "state.sessionsExhausted"
+    ):
+        pytest.skip(
+            "fewer than 30 sessions "
+            "recorded, nothing to page"
+        )
+
+    before = page.eval(
+        "state.sessions.length"
+    )
+
+    oldest_before = page.eval(
+        "state.sessions"
+        "[state.sessions.length-1]"
+        ".started_at"
+    )
+
+    page.click(
+        ".pl-loadmore"
+    )
+
+    page.wait_for(
+        "state.sessions.length>"
+        + str(
+            before
+        )
+    )
+
+    oldest_after = page.eval(
+        "state.sessions"
+        "[state.sessions.length-1]"
+        ".started_at"
+    )
+
+    assert page.eval(
+        "new Date(" + repr(
+            oldest_after
+        ).replace(
+            "'",
+            '"',
+        )
+        + ")<new Date(" + repr(
+            oldest_before
+        ).replace(
+            "'",
+            '"',
+        )
+        + ")"
+    ), "loading older activity did not reach further back in time"
+
+
+def test_the_activity_sidebar_shows_real_source_counts(
+    page,
+) -> None:
+    """The log column left the rest of the page empty on anything
+    past a laptop screen."""
+
+    page.eval(
+        'goTo("pulls")'
+    )
+
+    page.wait_for(
+        "!!document.querySelector"
+        "('.pl-side')"
+    )
+
+    rows = page.eval(
+        "document.querySelectorAll"
+        "('.pl-side-row').length"
+    )
+
+    assert rows == page.eval(
+        "(state.facets.sources||[])"
+        ".length"
+    )
+
+
 # --- content rules ----------------------------------------------------
 
 

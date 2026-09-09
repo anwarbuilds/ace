@@ -877,6 +877,14 @@ def create_app() -> FastAPI:
             ge=1,
             le=100,
         ),
+        before: datetime | None = Query(
+            default=None,
+            description=(
+                "Return runs started before "
+                "this time, for paging "
+                "further into history."
+            ),
+        ),
         jobs_per_session: int = Query(
             default=0,
             ge=0,
@@ -887,18 +895,21 @@ def create_app() -> FastAPI:
             ),
         ),
     ) -> dict:
-        """Return recent discovery runs and when ACE last checked.
+        """Return discovery runs and when ACE last checked.
 
         Runs exist only where something was actually found, so this is a
         history of arrivals rather than a log of scheduler activity.
         The last-checked time is separate, because a poll that found
-        nothing is still a poll.
+        nothing is still a poll, and is only reported when ``before`` is
+        unset: an older page is history, not a status check.
         """
 
         last_poll = (
             last_poll_completed_at(
                 session
             )
+            if before is None
+            else None
         )
 
         return {
@@ -912,6 +923,7 @@ def create_app() -> FastAPI:
                 runs=list_discovery_runs(
                     session,
                     limit=limit,
+                    before=before,
                 ),
                 per_session=jobs_per_session,
             ),

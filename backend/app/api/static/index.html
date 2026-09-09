@@ -419,7 +419,23 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .ctl-row+.ctl-row{margin-top:9px}
 .ctl-grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .ctl-active{padding-top:9px;border-top:1px dashed var(--border)}
-.pl-wrap{padding:4px var(--gutter) 40px;max-width:1080px}
+.pl-layout{display:flex;gap:32px;align-items:flex-start;max-width:1360px}
+.pl-wrap{padding:4px 0 40px var(--gutter);flex:1 1 auto;min-width:0}
+.pl-loadmore{display:block;width:100%;text-align:center;padding:11px;margin-top:18px;
+  border:1px dashed var(--border);border-radius:10px;font-size:12.5px;font-weight:600;color:var(--purple)}
+.pl-loadmore:hover{background:var(--hover)}
+.pl-side{flex:0 0 240px;position:sticky;top:16px;padding:16px 18px 18px;margin-top:4px;
+  border:1px solid var(--border);border-radius:12px;background:var(--surface-1)}
+.pl-side-t{font-size:11.5px;font-weight:650;letter-spacing:.02em;margin:0 0 14px;color:var(--text-muted);
+  text-transform:uppercase}
+.pl-side-list{display:flex;flex-direction:column;gap:11px}
+.pl-side-row{display:grid;grid-template-columns:74px 1fr 34px;align-items:center;gap:8px}
+.pl-side-name{font-size:11.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pl-side-bar{height:5px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.pl-side-fill{display:block;height:100%;background:var(--purple);border-radius:3px}
+.pl-side-n{font-size:11px;font-family:var(--mono);color:var(--text-muted);text-align:right}
+@media (max-width:900px){.pl-layout{flex-direction:column}.pl-side{position:static;width:100%;
+  margin:0 var(--gutter) 0 0}}
 .pl-stats{display:flex;gap:30px;flex-wrap:wrap}
 .pl-stat{display:flex;flex-direction:column;gap:3px}
 .pl-k{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
@@ -574,6 +590,7 @@ var state={
   page:"queue", view:"all", jobId:null,
   q:"", sorts:["unapplied_first","new_grad_first","best_match"],
   filters:{}, tiers:[], excluded:[], recentOnly:false, openPull:null, expandedGroups:{},
+  sessionsExhausted:false, loadingOlder:false,
   pinned:null, heldRow:null,
   items:[], total:0, loading:true, loadingMore:false, hasMore:false, offset:0, reqToken:0,
   selectedId:null, scrollTo:false,
@@ -748,7 +765,8 @@ function loadShell(){
   return Promise.all([
     get("/api/stats",params()).then(function(d){ state.stats=d; state.lastPoll=d.last_poll_at; }),
     get("/api/sessions",new URLSearchParams({limit:"30",jobs_per_session:"6"})).then(function(d){
-      state.sessions=d.sessions||[]; if(d.last_poll_at) state.lastPoll=d.last_poll_at; }),
+      state.sessions=d.sessions||[]; state.sessionsExhausted=false;
+      if(d.last_poll_at) state.lastPoll=d.last_poll_at; }),
     get("/api/facets",params(facetParams())).then(function(d){ state.facets=d; }),
     get("/api/resume").then(function(d){ state.resume=d.resume; state.gap=d.skills_gap||[]; }),
     get("/api/marks").then(function(d){ state.markCounts=d; }),
@@ -1258,6 +1276,24 @@ function jobPage(){
 }
 
 /* ---------------- pulls page ---------------- */
+// Sessions load 30 at a time and the page asks for more explicitly,
+// rather than fetching everything up front: on a busy day that is
+// dozens of rows the user is very unlikely to scroll to, and the
+// history genuinely has no natural end to cap at.
+function loadOlderSessions(){
+  if(state.loadingOlder||state.sessionsExhausted) return;
+  var oldest=state.sessions.length?state.sessions[state.sessions.length-1].started_at:null;
+  if(!oldest) return;
+  state.loadingOlder=true; render();
+  get("/api/sessions",new URLSearchParams({limit:"30",jobs_per_session:"6",before:oldest}))
+    .then(function(d){
+      var got=d.sessions||[];
+      state.sessions=state.sessions.concat(got);
+      state.sessionsExhausted=got.length<30;
+      state.loadingOlder=false;
+      render();
+    }).catch(function(){ state.loadingOlder=false; render(); });
+}
 function pullsPage(){
   var groups=[], last=null;
   state.sessions.forEach(function(s){
@@ -1340,11 +1376,40 @@ function pullsPage(){
       stat("Jobs in queue",
         st.qualifying_active_jobs!=null?st.qualifying_active_jobs.toLocaleString():"-",false)+
     '</div></div></div>'+
-    '<div class="scroll"><div class="pl-wrap">'+
-      (state.sessions.length
-        ? groups.map(dayBlock).join("")+'<div class="tail">End of recorded activity</div>'
-        : box("Nothing recorded yet","ACE records a check once it has looked at its sources."))+
+    '<div class="scroll"><div class="pl-layout">'+
+      '<div class="pl-wrap">'+
+        (state.sessions.length
+          ? groups.map(dayBlock).join("")+
+            (state.sessionsExhausted
+              ? '<div class="tail">End of recorded activity</div>'
+              : '<button class="link-btn pl-loadmore" data-act="loadoldersessions">'+
+                (state.loadingOlder?"Loading…":"Load older activity")+'</button>')
+          : box("Nothing recorded yet","ACE records a check once it has looked at its sources."))+
+      '</div>'+
+      pullsSidebar()+
     '</div></div>';
+}
+// The log column left a wide empty margin on anything past a laptop
+// screen. Filled with what the log itself cannot show: where the
+// queue's jobs are actually coming from, platform by platform, using
+// facets already loaded for the Queue page rather than a second call.
+function pullsSidebar(){
+  var sources=(state.facets.sources||[]).slice().sort(function(a,b){return b.count-a.count;});
+  var total=sources.reduce(function(a,b){return a+b.count;},0);
+  var SOURCE_LABEL={greenhouse:"Greenhouse",ashby:"Ashby",lever:"Lever",workday:"Workday",
+    smartrecruiters:"SmartRecruiters",amazon:"Amazon",simplify:"Simplify",eightfold:"Eightfold",
+    eightfold_pcsx:"Eightfold (PCS)",adzuna:"Adzuna"};
+  return '<aside class="pl-side">'+
+    '<h3 class="pl-side-t">Where your queue comes from</h3>'+
+    (total?'<div class="pl-side-list">'+sources.map(function(s){
+      var pct=total?Math.round(100*s.count/total):0;
+      return '<div class="pl-side-row">'+
+        '<span class="pl-side-name">'+esc(SOURCE_LABEL[s.value]||s.value)+'</span>'+
+        '<span class="pl-side-bar"><span class="pl-side-fill" style="width:'+pct+'%"></span></span>'+
+        '<span class="pl-side-n">'+s.count.toLocaleString()+'</span>'+
+      '</div>';
+    }).join("")+'</div>':'<p class="why">Nothing qualifying yet.</p>')+
+  '</aside>';
 }
 
 /* ---------------- resume / skills / settings ---------------- */
@@ -1479,7 +1544,8 @@ var ANSWER_SECTIONS=[
   ["Address",["Location","Address","City","State","Postcode","Country"]],
   ["Links",["LinkedIn","GitHub","Portfolio"]],
   ["Work authorisation",["Work authorisation","Need sponsorship now",
-    "Need sponsorship in future","Earliest start date"]],
+    "Need sponsorship in future","Earliest start date","Willing to relocate",
+    "Willing to work onsite"]],
   ["Education",["University","Degree","Graduation date","Years of experience"]],
   ["Voluntary disclosures",["Gender","Race or ethnicity","Veteran status","Disability status"]],
   ["Written answers",["Salary expectation","How did you hear about us","Why this company"]]
@@ -2053,6 +2119,7 @@ document.addEventListener("click",function(e){
   if(d.view){ goTo("queue",d.view); return; }
   if(d.pull){ var pid=parseInt(d.pull,10);
       state.openPull=(state.openPull===pid?null:pid); render(); return; }
+  if(d.act==="loadoldersessions"){ loadOlderSessions(); return; }
   if(d.group){ state.expandedGroups[d.group]=!state.expandedGroups[d.group]; render(); return; }
   if(d.expand){ state.filterOpen[d.expand]=true;
       var pl=document.querySelector(".pop-list"); if(pl) pl.innerHTML=filterPopBody(); return; }

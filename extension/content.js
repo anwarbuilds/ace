@@ -40,12 +40,22 @@
      Treating a placeholder as an answer made ACE skip the disability
      status question on a real Lever form and report it as already
      filled. */
+  // A radio and checkbox report emptiness through .checked; Ashby's
+  // button pair has no such property and uses aria-pressed instead.
+  function aceIsChosen(field) {
+    if (field.tagName === "BUTTON") {
+      return field.getAttribute("aria-pressed") === "true";
+    }
+
+    return !!field.checked;
+  }
+
   function aceIsEmpty(field) {
     // A checkbox reports value "on" whether or not it is ticked, so
     // testing value counted every unticked box as already answered and
     // ACE skipped whole groups it could have filled.
-    if (field.type === "checkbox" || field.type === "radio") {
-      return !field.checked;
+    if (aceIsChoiceControl(field)) {
+      return !aceIsChosen(field);
     }
 
     if (field.tagName !== "SELECT") return !field.value;
@@ -60,7 +70,7 @@
   }
 
   function fillable() {
-    return Array.prototype.filter.call(
+    var normal = Array.prototype.filter.call(
       document.querySelectorAll("input, select, textarea"),
       function (field) {
         if (field.disabled || field.readOnly) return false;
@@ -71,6 +81,19 @@
         return true;
       }
     );
+
+    // Ashby's Yes/No widget is two real <button> elements, excluded by
+    // the plain input/select/textarea query above and by every other
+    // provider's own submit buttons, which is why data-option is
+    // required rather than matching every button on the page.
+    var choiceButtons = Array.prototype.filter.call(
+      document.querySelectorAll("button[data-option]"),
+      function (field) {
+        return !field.disabled && field.offsetParent;
+      }
+    );
+
+    return normal.concat(choiceButtons);
   }
 
   function chooseOption(select, wanted) {
@@ -95,6 +118,18 @@
      elements, so the choice is made across the whole group at once
      rather than by testing each box against the answer alone. */
   function groupMembers(field) {
+    if (field.tagName === "BUTTON") {
+      // No shared name attribute links Ashby's Yes/No buttons to each
+      // other; the pair only shares an immediate parent.
+      var siblings = field.parentElement
+        ? Array.prototype.slice.call(
+            field.parentElement.querySelectorAll("button[data-option]")
+          )
+        : [];
+
+      return siblings.length ? siblings : [field];
+    }
+
     var name = field.getAttribute("name");
     var scope = field.closest("fieldset, [role=radiogroup], [role=group]");
 
@@ -127,7 +162,7 @@
       return true;
     }
 
-    if (field.type === "radio" || field.type === "checkbox") {
+    if (aceIsChoiceControl(field)) {
       // Decided across the group, so the answer competes with every
       // option at once. Testing one box in isolation ticked both
       // "male" and "female", because one contains the other.
@@ -141,7 +176,7 @@
 
       var target = members[chosen];
 
-      if (target.checked) return false;
+      if (aceIsChosen(target)) return false;
 
       target.click();
 
@@ -185,10 +220,9 @@
       // A group with any box ticked is answered, whichever box it is.
       // Testing only the element in hand treated every unticked option
       // of an answered question as still needing an answer.
-      var group =
-        field.type === "radio" || field.type === "checkbox"
-          ? groupMembers(field)
-          : [field];
+      var group = aceIsChoiceControl(field)
+        ? groupMembers(field)
+        : [field];
 
       if (!group.every(aceIsEmpty)) {
         if (group[0] === field) already += 1;
@@ -201,8 +235,7 @@
 
       var isChoice =
         field.tagName === "SELECT" ||
-        field.type === "radio" ||
-        field.type === "checkbox";
+        aceIsChoiceControl(field);
 
       if (!fillOne(field, value)) {
         if (isChoice && unmatched.indexOf(name) < 0) unmatched.push(name);
@@ -216,9 +249,7 @@
       lastFill.push({
         field: touched,
         previous: previous,
-        ticked:
-          touched.type === "radio" ||
-          touched.type === "checkbox"
+        ticked: aceIsChoiceControl(touched)
       });
 
       filled.push(name);
@@ -240,7 +271,12 @@
 
   function undo() {
     lastFill.forEach(function (record) {
-      if (record.ticked) {
+      if (record.ticked && record.field.tagName === "BUTTON") {
+        // Ashby's Yes/No widget has no property to unset; clicking the
+        // same button again is what toggles it back off, confirmed
+        // against the live control rather than assumed.
+        record.field.click();
+      } else if (record.ticked) {
         record.field.checked = false;
         record.field.dispatchEvent(new Event("change", { bubbles: true }));
       } else {
@@ -368,10 +404,9 @@
         return;
       }
 
-      var group =
-        field.type === "radio" || field.type === "checkbox"
-          ? groupMembers(field)
-          : [field];
+      var group = aceIsChoiceControl(field)
+        ? groupMembers(field)
+        : [field];
 
       if (!group.every(aceIsEmpty)) return;
 
@@ -385,10 +420,7 @@
           return;
         }
         shown = tidy(option.textContent);
-      } else if (
-        field.type === "radio" ||
-        field.type === "checkbox"
-      ) {
+      } else if (aceIsChoiceControl(field)) {
         var index = aceChooseOption(group.map(aceOptionText), value);
         if (index < 0) {
           seen["a:" + name] = 1;

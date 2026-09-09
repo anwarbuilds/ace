@@ -77,6 +77,15 @@ var ACE_RULES = [
   { answer: "How did you hear about us",
     any: ["how did you hear", "referral source", "how you found"] },
 
+  // Found on a real Handshake application form. Neither has a row in
+  // the bank yet; left unanswered until the user provides one, the
+  // same as any other question ACE cannot answer from a blank field.
+  { answer: "Willing to relocate",
+    any: ["willing to relocate", "open to relocat", "relocation required"] },
+  { answer: "Willing to work onsite",
+    any: ["willing to work from", "local office", "onsite and in person",
+          "work in office", "work from the office"] },
+
   // Transgender identity is asked separately and has no row in the
   // bank, so it is left for the user rather than answered from Gender.
   { answer: "Gender", any: ["gender"], not: ["transgender"] },
@@ -90,8 +99,28 @@ var ACE_RULES = [
           "why us", "why would you like to work"] }
 ];
 
+/* A control that offers a choice rather than free text: a radio, a
+   checkbox, or Ashby's own Yes/No widget, which is a pair of real
+   <button> elements with no name attribute linking them and a hidden,
+   unfocusable checkbox that is not the thing to click. Found on a
+   live Handshake application form; nothing in the earlier design
+   anticipated a choice rendered as buttons. */
+function aceIsChoiceControl(field) {
+  return (
+    field.type === "radio" ||
+    field.type === "checkbox" ||
+    (field.tagName === "BUTTON" && field.hasAttribute("data-option"))
+  );
+}
+
 function aceNormalise(text) {
   return String(text || "")
+    // A real Handshake form asked "now, or in the future, require
+    // sponsorship", and the comma between "future" and "require"
+    // broke a phrase match written as one contiguous string. Light
+    // punctuation is replaced with a space rather than dropped, so
+    // "future,require" cannot collapse into one word either.
+    .replace(/[,;:]/g, " ")
     .replace(/\s+/g, " ")
     .replace(/[‘’]/g, "'")
     .toLowerCase()
@@ -230,7 +259,7 @@ function aceOptionText(field) {
 }
 
 function aceQuestionFor(field) {
-  if (field.type === "radio" || field.type === "checkbox") {
+  if (aceIsChoiceControl(field)) {
     return aceGroupQuestion(field);
   }
 

@@ -62,7 +62,18 @@ var CASES = [
   ["what is your age range?", null],
   ["current company", null],
   ["video link url", null],
-  ["we work from our offices on mondays, tuesdays, and thursdays", null]
+  ["we work from our offices on mondays, tuesdays, and thursdays", null],
+
+  // Found on a real Handshake application form.
+  ["are you willing to relocate for this position if required?",
+   "Willing to relocate"],
+  ["this role is onsite and in person. are you willing to work "
+   + "from our local office monday-friday?", "Willing to work onsite"],
+
+  // The comma between "future" and "require" broke a phrase match
+  // written as one contiguous string on the real form's own wording.
+  ["will you now, or in the future, require sponsorship for "
+   + "employment visa status?", "Need sponsorship in future"]
 ];
 
 /* Choosing between the options a form offers. The stored answers are
@@ -117,7 +128,11 @@ OPTION_CASES.forEach(function (entry) {
 });
 
 CASES.forEach(function (pair) {
-  var got = aceAnswerNameFor(pair[0]);
+  // Through aceNormalise, matching how this is actually called: the
+  // pinned wording is written as a person reads it on the page, not
+  // pre-cleaned by hand, so a fixture with real punctuation is what
+  // it looks like in production.
+  var got = aceAnswerNameFor(aceNormalise(pair[0]));
 
   if (got !== pair[1]) {
     failures += 1;
