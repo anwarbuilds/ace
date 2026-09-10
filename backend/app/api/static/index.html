@@ -1374,23 +1374,32 @@ function pullsPage(){
     var open=state.openPull===s.id;
     var jobs=s.jobs||[];
     var hidden=Math.max(0,s.qualifying_discovered-jobs.length);
-    var hit=s.qualifying_discovered>0;
+    // Expandable only when there is actually something behind it.
+    // Keyed on the recorded count alone, a check whose postings have
+    // since gone stayed clickable and opened onto nothing -- which is
+    // exactly what removing a whole source produced: the count is
+    // history and cannot change, but the postings it counted were
+    // deleted, so 13 passed expanded to an empty list.
+    var hit=s.qualifying_discovered>0&&jobs.length>0;
+    // The badge still tells the truth about what the check found at
+    // the time, because that did happen.
+    var counted=s.qualifying_discovered>0;
     // Three outcomes, not two. "Nothing new" means postings were read
     // and none qualified; "no new postings" means there was nothing to
     // read. Collapsing them hid whether ACE had looked at all.
     var sawNothing=!s.jobs_discovered;
-    var label=hit?(s.qualifying_discovered+" passed")
+    var label=counted?(s.qualifying_discovered+" passed")
       :(sawNothing?"no new postings":"nothing new");
     // One row per quarter hour, labelled by the window it covers, so
     // the log reads 2:45, 3:00, 3:15 rather than wherever the
     // scheduler happened to wake.
     var span=clock(s.started_at)+
       '<span class="pl-since"> + 15m</span>';
-    return '<div class="pl-run'+(hit?" hit":"")+(open?" open":"")+'">'+
+    return '<div class="pl-run'+(counted?" hit":"")+(open?" open":"")+'">'+
       '<button class="pl-row" data-pull="'+s.id+'"'+(hit?'':' disabled')+'>'+
         '<span class="pl-caret">'+(hit?(open?"\u25be":"\u25b8"):"\u00b7")+'</span>'+
         '<span class="pl-time">'+span+'</span>'+
-        '<span class="pl-badge'+(hit?" hit":"")+'">'+label+'</span>'+
+        '<span class="pl-badge'+(counted?" hit":"")+'">'+label+'</span>'+
         '<span class="pl-seen">'+(sawNothing?"nothing to read"
           :s.jobs_discovered.toLocaleString()+
             ' posting'+(s.jobs_discovered===1?"":"s")+' seen')+'</span>'+
