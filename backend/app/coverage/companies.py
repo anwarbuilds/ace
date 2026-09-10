@@ -25,6 +25,14 @@ supported board tomorrow, and because the careers-page route finds
 tokens the name-guessing route cannot.
 
 Grouped only for readability; the grouping carries no behaviour.
+
+**Write names that identify one company.** Verification compares a
+board's declared name against the name here, and a short generic name
+passes against the wrong employer: "Aurora" matched a board declaring
+itself "Aurora Labs", which is a Web3 company and not the self-driving
+one meant. It was registered, caught in an audit and removed. Prefer
+"Aurora Innovation" over "Aurora", "Bolt Financial" over "Bolt". The
+verification is a floor, not a substitute for saying what you mean.
 """
 
 from __future__ import annotations
@@ -49,7 +57,7 @@ AI_AND_TOOLING = (
     "Fireworks AI",
     "Groq",
     "Cerebras",
-    "Lambda",
+    "Lambda Labs",
     "Modal",
     "Replicate",
     "Baseten",
@@ -74,7 +82,7 @@ AI_AND_TOOLING = (
     "Inflection AI",
     "Adept",
     "Imbue",
-    "Magic",
+    "Magic.dev",
     "Poolside",
     "Codeium",
     "Tabnine",
@@ -83,7 +91,7 @@ AI_AND_TOOLING = (
     "Cognition",
     "Reflection AI",
     "Decagon",
-    "Clay",
+    "Clay Labs",
     "Writer",
     "Typeface",
     "Jasper",
@@ -108,10 +116,10 @@ AI_AND_TOOLING = (
     "Marqo",
     "Voyage AI",
     "Contextual AI",
-    "Sana",
+    "Sana Labs",
     "Dust",
     "Lindy",
-    "Mem",
+    "Mem Labs",
     "Rewind AI",
     "Granola",
 )
@@ -165,7 +173,7 @@ INFRASTRUCTURE = (
     "Great Expectations",
     "Hex",
     "Sigma Computing",
-    "Omni",
+    "Omni Analytics",
     "Preset",
     "Metabase",
     "Starburst",
@@ -343,10 +351,10 @@ FINTECH = (
     "Toast",
     "Square",
     "Shift4",
-    "Bolt",
+    "Bolt Financial",
     "Modern Treasury",
-    "Unit",
-    "Column",
+    "Unit Finance",
+    "Column Bank",
     "Increase",
     "Lithic",
     "Highnote",
@@ -366,10 +374,10 @@ FINTECH = (
     "Tipalti",
     "Airwallex",
     "Rho",
-    "Arc",
+    "Arc Technologies",
     "Kraken",
-    "Gemini",
-    "Circle",
+    "Gemini Trust",
+    "Circle Internet Financial",
     "Fireblocks",
     "Chainalysis",
     "Alchemy",
@@ -435,7 +443,7 @@ AUTONOMY_AND_HARDWARE = (
     "Agility Robotics",
     "Boston Dynamics",
     "Cruise",
-    "Aurora",
+    "Aurora Innovation",
     "Kodiak Robotics",
     "Gatik",
     "May Mobility",

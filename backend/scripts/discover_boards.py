@@ -36,6 +36,7 @@ from backend.app.coverage.benchmark import (
 from backend.app.coverage.probing import (
     BoardCandidate,
     find_board,
+    find_board_via_careers_page,
 )
 from backend.app.db.models import (
     JobRecord,
@@ -176,6 +177,35 @@ def curated_match(
     )
 
 
+def probe_company(
+    company: str,
+) -> BoardCandidate | None:
+    """Try to find this company's board, by either route.
+
+    Guessing the token from the name is tried first because it costs
+    one request against a known API. Reading the token off the
+    company's own careers page is the fallback, and it is what reaches
+    a board named nothing like its employer -- Sourcegraph publishes at
+    ``sourcegraph91``.
+
+    Both routes end at the same verification. A token read from a page
+    is no more trusted than one guessed from a name: Mistral's careers
+    page links a board that returns 404, and registering what it said
+    would have subscribed ACE to nothing.
+    """
+
+    direct = find_board(
+        company
+    )
+
+    if direct is not None:
+        return direct
+
+    return find_board_via_careers_page(
+        company
+    )
+
+
 def register(
     candidates: list[BoardCandidate],
 ) -> int:
@@ -297,7 +327,7 @@ def main() -> int:
         found = [
             result
             for result in pool.map(
-                find_board,
+                probe_company,
                 companies,
             )
             if result is not None

@@ -553,3 +553,134 @@ def find_board(
             )
 
     return None
+
+# Domains a company of this name plausibly owns, and the paths a
+# careers page plausibly sits at. Guessing is cheap and wrong guesses
+# cost one 404; what must never be guessed is the board itself, which
+# is why anything found here still goes through board_belongs_to.
+CAREERS_DOMAIN_SUFFIXES = (
+    ".com",
+    ".ai",
+    ".io",
+    ".co",
+    ".dev",
+)
+
+CAREERS_PATHS = (
+    "/careers",
+    "/jobs",
+    "/careers/",
+    "/company/careers",
+    "/about/careers",
+)
+
+
+def careers_urls(
+    company: str,
+) -> list[str]:
+    """Return careers pages this company might publish."""
+
+    slug = re.sub(
+        r"[^a-z0-9]",
+        "",
+        company.lower(),
+    )
+
+    if not slug:
+        return []
+
+    urls = []
+
+    for suffix in CAREERS_DOMAIN_SUFFIXES:
+        for path in CAREERS_PATHS[:2]:
+            urls.append(
+                f"https://{slug}{suffix}{path}"
+            )
+
+    return urls
+
+
+def find_board_via_careers_page(
+    company: str,
+    *,
+    fetch=_fetch_json,
+    fetch_text=_fetch_text,
+) -> BoardCandidate | None:
+    """Find a board by reading the token off the company's own page.
+
+    This is the route for a token nothing like the company name.
+    Sourcegraph's board is ``sourcegraph91`` and no guess derived from
+    "Sourcegraph" reaches it; their careers page says so plainly.
+
+    The token is read, never trusted. Mistral's careers page links a
+    ``jobs.ashbyhq.com/mistral`` board that returns 404, so a route
+    that registered what it read would have subscribed ACE to nothing.
+    Everything found here goes through the same verification as a
+    guessed token: the board must answer, and it must identify itself
+    as this employer.
+    """
+
+    for url in careers_urls(
+        company
+    ):
+        html = fetch_text(
+            url
+        )
+
+        if not html:
+            continue
+
+        found = careers_page_token(
+            html
+        )
+
+        if found is None:
+            continue
+
+        source_type, token = found
+
+        payload = fetch(
+            dict(
+                board_endpoints(
+                    token
+                )
+            ).get(
+                source_type
+            )
+        )
+
+        jobs = _jobs_from(
+            payload
+        )
+
+        if not jobs:
+            continue
+
+        evidence = board_belongs_to(
+            company=company,
+            source_type=source_type,
+            token=token,
+            jobs=jobs,
+            fetch=fetch,
+            fetch_text=fetch_text,
+        )
+
+        if evidence is None:
+            continue
+
+        return BoardCandidate(
+            company=company,
+            source_type=source_type,
+            source_account=token,
+            job_count=len(
+                jobs
+            ),
+            evidence=(
+                evidence
+                + ", found on "
+                + url
+            ),
+        )
+
+    return None
+

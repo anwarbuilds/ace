@@ -229,3 +229,97 @@ def test_the_embed_path_is_not_mistaken_for_a_token() -> None:
         "greenhouse",
         "acme",
     )
+
+
+# ----------------------------------------------------------------------
+# Reading the token off a company's own careers page
+#
+# The route that reaches a board named nothing like its employer.
+# Sourcegraph publishes at "sourcegraph91"; no guess derived from the
+# name gets there, and their careers page says so plainly.
+# ----------------------------------------------------------------------
+
+
+def test_a_token_read_from_a_page_is_still_verified() -> None:
+    """Reading is not trusting.
+
+    Mistral's careers page links a jobs.ashbyhq.com/mistral board that
+    returns 404. A route that registered what it read would have
+    subscribed ACE to nothing at all, under a name the user recognises.
+    """
+
+    from backend.app.coverage.probing import (
+        find_board_via_careers_page,
+    )
+
+    def fetch_text(
+        _url: str,
+    ) -> str:
+        return (
+            '<a href="https://jobs.ashbyhq.com/'
+            'ghosttown">Careers</a>'
+        )
+
+    def fetch(
+        _url: str,
+    ):
+        # The board the page pointed at does not answer.
+        return None
+
+    assert find_board_via_careers_page(
+        "Ghost Town",
+        fetch=fetch,
+        fetch_text=fetch_text,
+    ) is None
+
+
+def test_a_verified_token_from_a_page_is_accepted() -> None:
+    """The Sourcegraph case, which name-guessing cannot reach."""
+
+    from backend.app.coverage.probing import (
+        find_board_via_careers_page,
+    )
+
+    def fetch_text(
+        url: str,
+    ) -> str:
+        if "careers" in url:
+            return (
+                '<a href="https://boards.greenhouse.io/'
+                'sourcegraph91">Open roles</a>'
+            )
+
+        return ""
+
+    def fetch(
+        url: str,
+    ):
+        if "sourcegraph91" in url:
+            return {
+                "jobs": [
+                    {
+                        "title": (
+                            "Software Engineer"
+                        ),
+                        "location": {
+                            "name": "Remote",
+                        },
+                    },
+                ],
+                "name": "Sourcegraph",
+            }
+
+        return None
+
+    found = find_board_via_careers_page(
+        "Sourcegraph",
+        fetch=fetch,
+        fetch_text=fetch_text,
+    )
+
+    assert found is not None
+
+    assert (
+        found.source_account
+        == "sourcegraph91"
+    )
