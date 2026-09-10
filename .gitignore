@@ -54,3 +54,11 @@ requiremnts1.txt
 ace-applications*.csv
 *resume*
 *Resume*
+
+# The durable memory file stays local, by the user's decision.
+#
+# It is the one document that records who this is for and what they
+# have applied to, and no amount of scrubbing makes that safe to
+# publish from a repo owned under a real name. Keeping it out entirely
+# is the honest answer rather than editing around the problem.
+docs/ACE-KNOWLEDGE.md
