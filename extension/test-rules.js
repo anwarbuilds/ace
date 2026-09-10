@@ -182,6 +182,31 @@ var OPTION_CASES = [
   [["Option A", "Option B"], "Something else", -1]
 ];
 
+/* The same stored answer against forms that word it differently.
+
+   ACE ships these wordings, so the user picks "Job board" once and
+   never has to predict that Dell writes it one way and Ashby another.
+   [options, answer, aliases, expected index] */
+var ALIAS_CASES = [
+  [["Job Board (e.g., LinkedIn, Indeed, Glassdoor)", "Employee Referral",
+    "Search Engine"],
+   "Job board", ["job board", "job portal", "indeed", "glassdoor"], 0],
+
+  // The same answer on a board that never uses the phrase at all.
+  [["AngelList", "Conference", "Indeed", "Other"],
+   "Job board", ["job board", "job portal", "indeed", "glassdoor"], 2],
+
+  // A consent control saying I Agree rather than Yes.
+  [["I Agree", "I Do Not Agree (Please note that appearing for the "
+    + "interview will be deemed as consent)"],
+   "Yes", ["yes", "i agree", "agree", "i accept"], 0],
+
+  // Aliases widen what is recognised, never what is guessed: nothing
+  // here means this thing, so it stays blank.
+  [["Carrier pigeon", "Smoke signal"],
+   "Job board", ["job board", "job portal", "indeed"], -1]
+];
+
 var failures = 0;
 
 OPTION_CASES.forEach(function (entry) {
@@ -192,6 +217,19 @@ OPTION_CASES.forEach(function (entry) {
     console.log(
       "FAIL  answer " + JSON.stringify(entry[1]) +
       "\n      got index " + got + ", want " + entry[2] +
+      "\n      options " + JSON.stringify(entry[0])
+    );
+  }
+});
+
+ALIAS_CASES.forEach(function (entry) {
+  var got = aceChooseOption(entry[0], entry[1], entry[2]);
+
+  if (got !== entry[3]) {
+    failures += 1;
+    console.log(
+      "FAIL  answer " + JSON.stringify(entry[1]) + " with aliases" +
+      "\n      got index " + got + ", want " + entry[3] +
       "\n      options " + JSON.stringify(entry[0])
     );
   }
@@ -227,7 +265,8 @@ CASES.forEach(function (pair) {
   }
 });
 
-var total = CASES.length + OPTION_CASES.length + DELL_CASES.length;
+var total = CASES.length + OPTION_CASES.length + DELL_CASES.length +
+  ALIAS_CASES.length;
 
 console.log(
   failures

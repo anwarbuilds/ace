@@ -363,7 +363,23 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .ans-edit input,.ans-edit textarea{width:100%;background:var(--surface-2);color:var(--text);
   border:1px solid var(--border);border-radius:var(--r-md);padding:8px 10px;font-size:13px}
 .ans-edit textarea{min-height:38px;resize:vertical;font-family:var(--sans)}
-.ans-edit input:focus,.ans-edit textarea:focus{border-color:var(--purple)}
+.ans-edit input:focus,.ans-edit textarea:focus,.ans-edit select:focus{border-color:var(--purple)}
+.ans-edit select{width:100%;background:var(--surface-2);color:var(--text);
+  border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:13px;font-family:var(--sans)}
+/* The question is ACE's, not the user's: renaming it would break the
+   match that finds it on a form. Shown as text, with the name carried
+   alongside so saving still reads a label for every row. */
+.ans-name{padding:9px 0;font-size:13px;color:var(--text);line-height:1.35}
+.ans-hint{font-size:11.5px;color:var(--text-muted);margin-top:4px;line-height:1.45}
+/* A yes/no answer is two buttons, because it is two answers. Typing
+   "No" into a text box was the thing that made the bank feel like
+   data entry rather than a set of decisions. */
+.ans-yn{display:flex;gap:7px}
+.ans-yn button{background:var(--surface-2);color:var(--text-secondary);border:1px solid var(--border);
+  border-radius:8px;padding:8px 17px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--sans)}
+.ans-yn button:hover{border-color:var(--purple)}
+.ans-yn button[aria-pressed="true"]{background:var(--purple);border-color:var(--purple);color:#fff}
+.ans-yn .ans-clear{font-weight:500;color:var(--text-muted);padding:8px 12px}
 @media (max-width:720px){ .ans-edit{grid-template-columns:1fr auto} }
 
 /* small mono counter, shared by the answers panel */
@@ -1549,11 +1565,24 @@ var ANSWER_SECTIONS=[
   ["Address",["Location","Address","City","State","Postcode","Country"]],
   ["Links",["LinkedIn","GitHub","Portfolio"]],
   ["Work authorisation",["Work authorisation","Need sponsorship now",
-    "Need sponsorship in future","Earliest start date","Willing to relocate",
-    "Willing to work onsite"]],
-  ["Education",["University","Degree","Graduation date","Years of experience"]],
-  ["Voluntary disclosures",["Gender","Race or ethnicity","Veteran status","Disability status"]],
-  ["Written answers",["Salary expectation","How did you hear about us","Why this company"]]
+    "Need sponsorship in future","On a temporary work visa",
+    "US citizen or permanent resident","Citizen of an embargoed country",
+    "Security clearance"]],
+  ["Background",["Employed by the federal government",
+    "Employed by state or local government","Involuntarily discharged from a job",
+    "Criminal conviction","Bound by a non-compete",
+    "Previously employed by this company","Related to an employee here",
+    "Employer relationship with this company","Relative owns a competing business"]],
+  ["Consent",["Consent to keep my application on file","Agree to the terms shown"]],
+  ["Education",["University","Degree","Field of study","GPA","Graduation date",
+    "Years of experience","Recent graduate"]],
+  ["Logistics",["Earliest start date","How did you hear about us",
+    "Preferred contact method","At least 18 years old","Role is located in the US",
+    "Willing to relocate","Willing to work onsite","Willing to travel",
+    "Driving licence","Needs an accommodation"]],
+  ["Voluntary disclosures",["Gender","Race or ethnicity","Veteran status",
+    "Disability status","Transgender","Sexual orientation"]],
+  ["Written answers",["Salary expectation","Why this company"]]
 ];
 function answerSections(){
   var seen={}, out=[];
@@ -1610,10 +1639,49 @@ function answerPanel(){
       '<span class="spacer"></span><span class="am-count">Esc closes</span>'+
     '</div></div>';
 }
+/* One row of the bank, drawn as whatever the question actually is.
+
+   A question with two possible answers is two buttons. A question with
+   a known set of answers is that set. Only genuinely open questions get
+   a text box. Before this every one of them was a text box, so
+   answering "are you at least 18" meant typing the word Yes, and
+   answering "how did you hear about us" meant guessing which wording
+   some future form would print. */
 function answerRow(a){
-  return '<div class="ans-edit">'+
-    '<input type="text" class="ans-label" value="'+esc(a.label)+'" placeholder="Question" aria-label="Question">'+
-    '<textarea class="ans-value" placeholder="Your answer" aria-label="Answer">'+esc(a.value)+'</textarea>'+
+  var control;
+
+  if(a.kind==="boolean"){
+    control='<div class="ans-yn" data-ansyn>'+
+      ["Yes","No"].map(function(opt){
+        return '<button type="button" data-act="ansyn" data-val="'+opt+'" aria-pressed="'+
+          (a.value===opt?"true":"false")+'">'+opt+'</button>';
+      }).join("")+
+      (a.value?'<button type="button" class="ans-clear" data-act="ansyn" data-val="">Clear</button>':'')+
+      '<input type="hidden" class="ans-value" value="'+esc(a.value)+'">'+
+    '</div>';
+  } else if(a.kind==="choice"){
+    // A value the catalogue no longer offers is kept and shown rather
+    // than silently dropped to blank: it is still the user's answer.
+    var opts=(a.options||[]).slice();
+    if(a.value&&opts.indexOf(a.value)<0) opts.push(a.value);
+    control='<select class="ans-value" aria-label="'+esc(a.label)+'">'+
+      '<option value=""'+(a.value?"":" selected")+'>Not answered</option>'+
+      opts.map(function(opt){
+        return '<option value="'+esc(opt)+'"'+(a.value===opt?" selected":"")+'>'+esc(opt)+'</option>';
+      }).join("")+'</select>';
+  } else {
+    control='<textarea class="ans-value" placeholder="Your answer" aria-label="Answer">'+
+      esc(a.value)+'</textarea>';
+  }
+
+  var name=a.known
+    ? '<div class="ans-name">'+esc(a.label)+
+      '<input type="hidden" class="ans-label" value="'+esc(a.label)+'"></div>'
+    : '<input type="text" class="ans-label" value="'+esc(a.label)+
+      '" placeholder="Question" aria-label="Question">';
+
+  return '<div class="ans-edit">'+name+
+    '<div>'+control+(a.hint?'<div class="ans-hint">'+esc(a.hint)+'</div>':'')+'</div>'+
     '<button class="iconbtn" data-act="delrow" aria-label="Remove this question">'+icon(I.x)+'</button>'+
   '</div>';
 }
@@ -1624,9 +1692,10 @@ function answersPage(){
       '<span class="spacer"></span>'+liveChip()+'</div></div>'+
     '<div class="page"><div class="wrap">'+
       '<p class="why" style="max-width:70ch;margin-bottom:22px">'+
-        'The things every application form asks for. Fill them in once, then copy any of them in '+
-        'one click while a form is open, from the button in the bottom corner. Leave blank anything '+
-        'you are not asked for, and add your own questions at the end.</p>'+
+        'The things every application form asks for. Answer them once and the extension fills '+
+        'them wherever they come up, however that form happens to word them \u2014 ACE knows that '+
+        'a job board and a job portal are the same thing, so you pick the answer, not the wording. '+
+        'Leave blank anything you would rather answer by hand, and add your own questions at the end.</p>'+
       // Headings sit inside the one form container, so saving still
       // reads the rows in the order they appear and adding a question
       // still appends to the end.
@@ -2219,6 +2288,25 @@ document.addEventListener("click",function(e){
       }
       return; }
     if(d.act==="delrow"){ var r=t.closest(".ans-edit"); if(r) r.remove(); return; }
+    if(d.act==="ansyn"){
+      // Pressed state and the hidden value move together, so what the
+      // page shows and what a save reads cannot drift apart.
+      var box=t.closest("[data-ansyn]"); if(!box) return;
+      var picked=t.getAttribute("data-val");
+      box.querySelectorAll("button[data-val]").forEach(function(b){
+        b.setAttribute("aria-pressed", b.getAttribute("data-val")===picked&&picked?"true":"false");
+      });
+      box.querySelector(".ans-value").value=picked;
+      var clear=box.querySelector(".ans-clear");
+      if(picked&&!clear){
+        var c=document.createElement("button");
+        c.type="button"; c.className="ans-clear";
+        c.setAttribute("data-act","ansyn"); c.setAttribute("data-val","");
+        c.textContent="Clear";
+        box.insertBefore(c, box.querySelector(".ans-value"));
+      } else if(!picked&&clear){ clear.remove(); }
+      return;
+    }
     if(d.act==="menu"){ state.menuOpen=true; render(); return; }
     if(d.act==="closemenu"){ state.menuOpen=false; render(); return; }
     if(d.act==="undo"){ if(state.undoFn) state.undoFn(); state.toast=null; render(); return; }

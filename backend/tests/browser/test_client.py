@@ -1332,3 +1332,125 @@ def test_a_recorded_row_can_still_be_attached_to_a_posting(
     page.eval(
         "closeImport()"
     )
+
+
+# --- the answer bank ---------------------------------------------------
+
+
+def _open_answers(
+    page,
+) -> None:
+    """Show the answers editor."""
+
+    page.eval(
+        'goTo("answers")'
+    )
+
+    page.wait_for(
+        "document.querySelectorAll"
+        "('.ans-edit').length > 10"
+    )
+
+
+def test_a_yes_no_question_is_two_buttons(
+    page,
+) -> None:
+    """The complaint that rewrote the bank.
+
+    Every question used to be a text box, so answering "are you at
+    least 18 years old" meant typing the word Yes, and answering "how
+    did you hear about us" meant guessing which wording some future
+    form would print.
+    """
+
+    _open_answers(
+        page
+    )
+
+    assert page.eval(
+        "document.querySelectorAll"
+        "('.ans-yn').length"
+    ) > 10
+
+    assert page.eval(
+        "document.querySelectorAll"
+        "('select.ans-value').length"
+    ) > 3
+
+
+def test_a_name_is_still_a_text_box(
+    page,
+) -> None:
+    """Only the questions with known answers became controls."""
+
+    _open_answers(
+        page
+    )
+
+    assert page.eval(
+        """(function(){
+          var rows=document.querySelectorAll('.ans-edit');
+          for(var i=0;i<rows.length;i++){
+            var n=rows[i].querySelector('.ans-name');
+            if(n&&n.textContent.indexOf('Full name')===0){
+              return !!rows[i].querySelector('textarea.ans-value');
+            }
+          }
+          return false;
+        })()"""
+    )
+
+
+def test_a_catalogue_question_cannot_be_renamed(
+    page,
+) -> None:
+    """The label is the key the extension's rules resolve to.
+
+    Letting it be edited would break the match that finds the question
+    on a form, silently and only on the next application.
+    """
+
+    _open_answers(
+        page
+    )
+
+    assert page.eval(
+        "document.querySelectorAll"
+        "('input.ans-label[type=text]').length"
+    ) == 0
+
+
+def test_pressing_a_toggle_is_what_gets_saved(
+    page,
+) -> None:
+    """What the page shows and what a save reads must not drift."""
+
+    _open_answers(
+        page
+    )
+
+    assert page.eval(
+        """(function(){
+          var rows=document.querySelectorAll('.ans-edit');
+          for(var i=0;i<rows.length;i++){
+            var n=rows[i].querySelector('.ans-name');
+            if(n&&n.textContent.indexOf('Criminal conviction')===0){
+              rows[i].querySelector('button[data-val=No]').click();
+              return rows[i].querySelector('.ans-value').value;
+            }
+          }
+          return 'row not found';
+        })()"""
+    ) == "No"
+
+    # Read back through the same function a save uses, rather than by
+    # reading the button again: the hidden value is what is submitted.
+    assert page.eval(
+        """(function(){
+          var all=collectAnswers();
+          for(var i=0;i<all.length;i++){
+            if(all[i].label==='Criminal conviction') return all[i].value;
+          }
+          return 'missing';
+        })()"""
+    ) == "No"

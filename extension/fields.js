@@ -731,31 +731,32 @@ function aceIntent(text) {
 /* Return the index of the option that answers, or -1.
 
    `options` is a list of the visible texts, in order. */
-/* One stored answer may offer several wordings, separated by "|".
+/* `aliases` is the other wordings ACE ships for this same answer.
 
-   Forms name the same thing differently and none of them is wrong:
-   a stored "Job Portal" matches nothing on a Dell form whose option
-   reads "Job Board (e.g., LinkedIn, Indeed, Glassdoor)". Rather than
-   guess that portal means board, the bank can hold
-   "LinkedIn | Job Board | Job Portal" and each is tried in turn. The
-   refusal to pick between two equally good options is unchanged, so
+   Forms name the same thing differently and none of them is wrong: a
+   stored "Job board" matches nothing on a Dell form whose option reads
+   "Job Board (e.g., LinkedIn, Indeed, Glassdoor)", and nothing at all
+   on one offering only "Indeed".
+
+   An earlier attempt had the user type the synonyms themselves, which
+   was the wrong half of the problem to solve: knowing that a job board
+   and a job portal are the same thing is ACE's job. They now come from
+   the catalogue the answers page picked from, so the user chooses a
+   concept once and never a wording.
+
+   Each is tried in turn, and the answer's own text always goes first.
+   The refusal to pick between two equally good options is unchanged, so
    this widens what can be recognised without widening what can be
    guessed. */
-function aceAlternatives(answer) {
-  return String(answer || "")
-    .split("|")
-    .map(function (part) { return part.trim(); })
-    .filter(function (part) { return part.length > 0; });
-}
+function aceChooseOption(options, answer, aliases) {
+  if (aliases && aliases.length) {
+    var tried = [answer].concat(aliases);
 
-function aceChooseOption(options, answer) {
-  var alternatives = aceAlternatives(answer);
-
-  if (alternatives.length > 1) {
-    for (var a = 0; a < alternatives.length; a++) {
-      var found = aceChooseOption(options, alternatives[a]);
+    for (var a = 0; a < tried.length; a++) {
+      var found = aceChooseOption(options, tried[a]);
       if (found >= 0) return found;
     }
+
     return -1;
   }
 

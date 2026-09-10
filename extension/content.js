@@ -7,6 +7,7 @@
 
 (function () {
   var answers = {};
+  var aliases = {};
   var lastFill = [];
   var loaded = false;
   // The element fillOne actually ticked, which for a group is not
@@ -111,7 +112,7 @@
     return normal.concat(choiceButtons);
   }
 
-  function chooseOption(select, wanted) {
+  function chooseOption(select, wanted, alts) {
     var options = Array.prototype.slice.call(select.options);
 
     // A placeholder is not an answer, and leaving it in the running
@@ -122,7 +123,8 @@
 
     var index = aceChooseOption(
       offered.map(function (option) { return option.textContent; }),
-      wanted
+      wanted,
+      alts
     );
 
     return index >= 0 ? offered[index] : null;
@@ -194,9 +196,12 @@
     return members.length ? members : [field];
   }
 
-  function fillOne(field, value) {
+  /* `alts` is the other wordings ACE ships for this same answer. It is
+     passed rather than looked up, because fillOne is handed a value and
+     never the question it came from. */
+  function fillOne(field, value, alts) {
     if (field.tagName === "SELECT") {
-      var option = chooseOption(field, value);
+      var option = chooseOption(field, value, alts);
       if (!option) return false;
       setNatively(field, option.value);
       return true;
@@ -210,7 +215,11 @@
 
       if (members[0] !== field) return false;
 
-      var chosen = aceChooseOption(members.map(aceOptionText), value);
+      var chosen = aceChooseOption(
+        members.map(aceOptionText),
+        value,
+        alts
+      );
 
       if (chosen < 0) return false;
 
@@ -286,7 +295,7 @@
         field.tagName === "SELECT" ||
         aceIsChoiceControl(field);
 
-      if (!fillOne(field, value)) {
+      if (!fillOne(field, value, aliases[name])) {
         if (isChoice && unmatched.indexOf(name) < 0) unmatched.push(name);
         return;
       }
@@ -363,7 +372,7 @@
     field.blur();
   }
 
-  function fillOneCombobox(field, value) {
+  function fillOneCombobox(field, value, alts) {
     var toggle =
       field.parentElement &&
       field.parentElement.querySelector("button");
@@ -381,7 +390,7 @@
         return option.textContent;
       });
 
-      var index = aceChooseOption(texts, value);
+      var index = aceChooseOption(texts, value, alts);
 
       if (index < 0) {
         // No option fits. Closed rather than left open with nothing
@@ -423,7 +432,8 @@
 
           var previous = field.value;
 
-          return fillOneCombobox(field, value).then(function (outcome) {
+          return fillOneCombobox(field, value, aliases[name])
+            .then(function (outcome) {
             if (!outcome.matched) {
               if (unmatched.indexOf(name) < 0) unmatched.push(name);
               return;
@@ -591,7 +601,16 @@
       var shown = value;
 
       if (field.tagName === "SELECT") {
-        var option = chooseOption(field, value);
+        // Judged with the same aliases the fill will use. Without them
+        // the preview reported a stored "Male" as matching no option on
+        // a form offering "Man", and then the fill picked it anyway --
+        // the two disagreeing about the same field is worse than either
+        // being wrong alone.
+        var option = chooseOption(
+          field,
+          value,
+          aliases[name]
+        );
         if (!option) {
           seen["a:" + name] = 1;
           noOption.push([name, tidy(value)]);
@@ -599,7 +618,11 @@
         }
         shown = tidy(option.textContent);
       } else if (aceIsChoiceControl(field)) {
-        var index = aceChooseOption(group.map(aceOptionText), value);
+        var index = aceChooseOption(
+          group.map(aceOptionText),
+          value,
+          aliases[name]
+        );
         if (index < 0) {
           seen["a:" + name] = 1;
           noOption.push([name, tidy(value)]);
@@ -740,6 +763,12 @@
       reply.items.forEach(function (item) {
         if (item.value) {
           answers[item.label] = item.value;
+          // The other wordings a form might print for this same
+          // answer, shipped by ACE rather than typed by the user. A
+          // stored "Job board" has to reach an option reading "Job
+          // Board (e.g., LinkedIn, Indeed, Glassdoor)", and knowing
+          // those are the same thing is not the user's job.
+          aliases[item.label] = item.aliases || [];
           known += 1;
         }
       });

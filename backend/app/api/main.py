@@ -43,6 +43,10 @@ from backend.app.api.marks import (
     mark_counts,
     set_mark,
 )
+from backend.app.answers.catalogue import (
+    aliases_for,
+    describe as describe_answer,
+)
 from backend.app.config import get_settings
 from backend.app.applications.parsing import (
     ApplicationParseError,
@@ -1273,6 +1277,22 @@ def create_app() -> FastAPI:
                     "id": row.id,
                     "label": row.label,
                     "value": row.value,
+                    # What kind of thing this is, so the editor can
+                    # offer a toggle or a list rather than a text box,
+                    # and the aliases for whatever is stored, so the
+                    # extension can recognise the same concept under a
+                    # form's own wording. Knowing that a job board and
+                    # a job portal are the same thing is ACE's job, not
+                    # something the user should have to type out.
+                    **describe_answer(
+                        row.label
+                    ),
+                    "aliases": list(
+                        aliases_for(
+                            row.label,
+                            row.value,
+                        )
+                    ),
                 }
                 for row in rows
             ],
