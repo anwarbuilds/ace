@@ -90,14 +90,21 @@
       }
     );
 
-    // Ashby's Yes/No widget is two real <button> elements, excluded by
-    // the plain input/select/textarea query above and by every other
-    // provider's own submit buttons, which is why data-option is
-    // required rather than matching every button on the page.
+    // A Yes/No rendered as two real <button> elements is excluded by
+    // the plain input/select/textarea query above. Every button on the
+    // page is considered and then filtered through aceIsChoiceControl,
+    // which requires one of the attributes that declare a button to be
+    // a choice: Ashby's own data-option, or the accessibility state
+    // that Oracle's Candidate Experience uses instead. A submit button
+    // carries none of them. Matching only data-option meant ACE could
+    // not see a single one of the twenty-two questions on a real Dell
+    // application.
     var choiceButtons = Array.prototype.filter.call(
-      document.querySelectorAll("button[data-option]"),
+      document.querySelectorAll("button"),
       function (field) {
-        return !field.disabled && field.offsetParent;
+        if (field.disabled || !field.offsetParent) return false;
+        if (field.type === "submit") return false;
+        return aceIsChoiceControl(field);
       }
     );
 
@@ -121,18 +128,43 @@
     return index >= 0 ? offered[index] : null;
   }
 
+  /* What shape of answer this control can accept.
+
+     Computed from the options themselves rather than declared, because
+     a Yes/No pair and a gender list are the same markup. Passing it to
+     the matcher is what stops a free-text answer reaching a control
+     that offers only Yes and No -- on a real Dell form that alone
+     stopped a stored degree being offered to "are you a recent
+     graduate", and a stored state to three separate questions naming
+     the United States. */
+  function kindOf(field) {
+    if (!aceIsChoiceControl(field)) {
+      return aceFieldKind(field, null);
+    }
+
+    return aceFieldKind(
+      field,
+      groupMembers(field).map(aceOptionText)
+    );
+  }
+
   /* Every input in this control's group, in the order a person reads
      them. Radios and checkboxes are one question spread over several
      elements, so the choice is made across the whole group at once
      rather than by testing each box against the answer alone. */
   function groupMembers(field) {
     if (field.tagName === "BUTTON") {
-      // No shared name attribute links Ashby's Yes/No buttons to each
-      // other; the pair only shares an immediate parent.
+      // No shared name attribute links these buttons to each other;
+      // the pair only shares an immediate parent.
+      // Ashby marks its pair with data-option; Oracle's Candidate
+      // Experience, which Dell runs on, marks the same shape with the
+      // accessibility state instead. Both are gathered and then
+      // filtered, so a decorative button in the same parent is not
+      // mistaken for one of the choices.
       var siblings = field.parentElement
         ? Array.prototype.slice.call(
-            field.parentElement.querySelectorAll("button[data-option]")
-          )
+            field.parentElement.querySelectorAll("button")
+          ).filter(aceIsChoiceControl)
         : [];
 
       return siblings.length ? siblings : [field];
@@ -221,7 +253,7 @@
       var question = aceQuestionFor(field);
       if (!question) return;
 
-      var name = aceAnswerNameFor(question);
+      var name = aceAnswerNameFor(question, kindOf(field));
 
       if (!name) {
         // Only worth reporting once per question, and only for things
@@ -381,7 +413,7 @@
           var question = aceQuestionFor(field);
           if (!question) return;
 
-          var name = aceAnswerNameFor(question);
+          var name = aceAnswerNameFor(question, kindOf(field));
           if (!name) return;
 
           var value = answers[name];
@@ -530,7 +562,7 @@
       var question = aceQuestionFor(field);
       if (!question) return;
 
-      var name = aceAnswerNameFor(question);
+      var name = aceAnswerNameFor(question, kindOf(field));
       var label = question.split(" | ")[0].slice(0, 44);
 
       if (!name) {

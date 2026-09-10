@@ -1,110 +1,322 @@
 /* Which answer belongs in which box.
 
    Matching is on the question a human reads, not on the field's name
-   attribute, because those are generated and differ per tenant. Each
-   rule lists phrases that identify the question and, where two
-   questions read almost alike, the phrases that rule it out. Order
-   matters: the first rule that matches wins, so the narrower questions
-   sit above the broader ones they would otherwise be swallowed by.
+   attribute, because those are generated and differ per tenant.
+
+   Three things decide a match, and all three had to exist before real
+   forms stopped being answered wrongly:
+
+   1. The phrases that identify the question, and the phrases that rule
+      it out.
+   2. How specific the match was. The longest matched phrase wins, not
+      the first rule in the list. A real Dell form asks "is the role you
+      are applying for located in the United States?", and "state"
+      matches inside "United States"; "role you are applying for" is
+      longer and is the honest answer.
+   3. What shape of answer the control can accept. A Yes/No pair cannot
+      hold "Masters in Computer Science", so a rule whose answer is free
+      text is refused there outright. On the same Dell form this alone
+      stopped four wrong matches, including "are you a recent graduate
+      (less than 3 years since you completed your most recent degree)?"
+      being answered with a degree.
 
    A field ACE cannot identify is left alone and reported. Filling a box
    with the wrong answer is far worse than leaving it empty, because the
    user is about to send it to an employer. */
 
+/* Answer shapes.
+
+   Only "yesno" is enforced strictly, and only in one direction: a
+   control offering nothing but Yes and No refuses any rule that is not
+   itself a yes/no question. Everything else stays permissive, because
+   a country is a text answer on one form and a dropdown on the next,
+   and aceChooseOption is the real guard there. */
+var ACE_YESNO = "yesno";
+var ACE_CHOICE = "choice";
+var ACE_TEXT = "text";
+
 var ACE_RULES = [
-  // Sponsorship reads as two near-identical questions. "Future" has to
-  // be tested before the plain form or it never matches.
-  { answer: "Need sponsorship in future",
+  // ------------------------------------------------------------------
+  // Work authorisation and immigration
+  //
+  // The cluster that matters most here, and the one general-purpose
+  // autofill tools deliberately leave to the user because their answers
+  // differ per person. This user's do not change, so ACE answers them
+  // -- which makes getting the polarity right the whole job. "Are you
+  // authorised to work" and "do you need sponsorship" are both Yes for
+  // someone authorised to work now who will need sponsorship
+  // later, and they are not the same question.
+  // ------------------------------------------------------------------
+
+  // "Future" has to be tested before the plain form or it never
+  // matches, and both are now scored so the longer phrase wins anyway.
+  { answer: "Need sponsorship in future", type: ACE_YESNO,
     any: ["in the future require", "future require", "future need",
-          "sponsorship in the future", "now or in the future"] },
-  { answer: "Need sponsorship now",
+          "sponsorship in the future", "now or in the future",
+          "future require sponsorship", "in the future need sponsorship"] },
+  { answer: "Need sponsorship now", type: ACE_YESNO,
     // "immigration sponsorship" is the wording Greenhouse actually
     // uses, and the shorter phrase alone never matched it.
     any: ["require immigration sponsorship", "need immigration sponsorship",
           "require sponsorship", "need sponsorship", "visa sponsorship",
-          "require visa", "sponsorship for employment"],
+          "require visa", "sponsorship for employment",
+          "immigration benefit sponsorship", "sponsorship to work"],
     not: ["future"] },
-  { answer: "Work authorisation",
+  { answer: "Work authorisation", type: ACE_YESNO,
     any: ["authorized to work", "authorised to work", "work authorization",
           "work authorisation", "legally authorized", "legally authorised",
-          "right to work", "eligible to work"] },
+          "right to work", "eligible to work",
+          "authorization documentation", "authorisation documentation"] },
 
-  { answer: "First name", any: ["first name", "given name", "forename"] },
-  { answer: "Last name", any: ["last name", "family name", "surname"] },
-  { answer: "Full name",
+  // On a temporary work visa is asked alongside the two above and is a
+  // different fact again: student work authorisation is authorisation
+  // without being one of the temporary work visas these forms mean
+  // (H-1B, L-1, TN).
+  { answer: "On a temporary work visa", type: ACE_YESNO,
+    any: ["temporary work visa", "temporary visa", "work visa",
+          "currently on a visa", "visa holder"],
+    not: ["sponsorship", "require", "need"] },
+  { answer: "US citizen or permanent resident", type: ACE_YESNO,
+    any: ["u s citizen", "us citizen", "united states citizen",
+          "citizen or permanent resident", "permanent resident",
+          "green card"],
+    not: ["embargo", "dual citizen", "trade"] },
+  // Dell asks this one at length. It is not a citizenship question in
+  // the ordinary sense and must not be answered from one.
+  { answer: "Citizen of an embargoed country", type: ACE_YESNO,
+    any: ["trade embargo", "embargoed country", "embargo"] },
+
+  // ------------------------------------------------------------------
+  // Background, clearance and prior employment
+  // ------------------------------------------------------------------
+
+  { answer: "Security clearance", type: ACE_YESNO,
+    any: ["security clearance", "active clearance", "clearance level",
+          "hold a clearance", "ts sci", "polygraph"] },
+  { answer: "Employed by the federal government", type: ACE_YESNO,
+    any: ["employed by the u s government", "employed by the us government",
+          "employed by the federal government", "federal government",
+          "u s government", "us government"],
+    not: ["state or local", "state and local"] },
+  { answer: "Employed by state or local government", type: ACE_YESNO,
+    any: ["state or local government", "state and local government",
+          "local government"] },
+  { answer: "Involuntarily discharged from a job", type: ACE_YESNO,
+    any: ["involuntarily discharged", "involuntarily separated",
+          "discharged or separated", "terminated for cause",
+          "asked to resign"] },
+  { answer: "Criminal conviction", type: ACE_YESNO,
+    any: ["convicted of a", "criminal conviction", "criminal record",
+          "felony", "misdemeanor", "pleaded guilty", "plead guilty"] },
+  { answer: "Bound by a non-compete", type: ACE_YESNO,
+    // Hyphens are left alone by aceNormalise, because collapsing them
+    // would turn "e-mail" into something the email rule no longer
+    // matches. So both spellings are listed instead.
+    any: ["non-compete", "non compete", "noncompete", "non-competition",
+          "restrictive covenant", "restrict your employment",
+          "preclude or restrict"] },
+  { answer: "Previously employed by this company", type: ACE_YESNO,
+    any: ["previously worked for", "previously been employed by",
+          "ever worked for", "former employee", "worked here before",
+          "previously applied"] },
+  { answer: "Related to an employee here", type: ACE_YESNO,
+    any: ["relatives employed", "family member employed",
+          "related to any employee", "relative who works",
+          "know anyone who works"] },
+
+  // ------------------------------------------------------------------
+  // Conflict of interest
+  //
+  // Dell asks five variations of "is your employer entangled with us".
+  // They share one answer for someone with no such entanglement, and
+  // they are kept separate from the question about a relative's
+  // business, which is a genuinely different fact.
+  // ------------------------------------------------------------------
+
+  { answer: "Employer relationship with this company", type: ACE_YESNO,
+    any: ["employer a reseller", "is your current employer a reseller",
+          "reseller of", "has a relationship with",
+          "relationship with dell", "delivery of services by",
+          "interact with", "on site permanently",
+          "regular basis at your employer"] },
+  { answer: "Relative owns a competing business", type: ACE_YESNO,
+    any: ["relative s own", "relatives own", "own any technology related",
+          "in competition with", "competing business",
+          "trading with or in competition"] },
+
+  // ------------------------------------------------------------------
+  // Consent and acknowledgement
+  // ------------------------------------------------------------------
+
+  { answer: "Consent to keep my application on file", type: ACE_YESNO,
+    any: ["retain your application", "keep your application on file",
+          "subsequent job opportunities", "future job opportunities",
+          "consider you for other", "talent community"] },
+  { answer: "Agree to the terms shown", type: ACE_YESNO,
+    any: ["screenshot", "please confirm your acceptance",
+          "confirm your acceptance", "hereby provide my consent",
+          "acknowledge and agree", "i agree and hereby"] },
+
+  // ------------------------------------------------------------------
+  // Identity and contact
+  // ------------------------------------------------------------------
+
+  { answer: "First name", type: ACE_TEXT,
+    any: ["first name", "given name", "forename"] },
+  { answer: "Last name", type: ACE_TEXT,
+    any: ["last name", "family name", "surname"] },
+  { answer: "Full name", type: ACE_TEXT,
     any: ["full name", "your name", "legal name"], exact: ["name"] },
 
-  { answer: "Email",
+  { answer: "Email", type: ACE_TEXT,
     any: ["email", "e-mail"],
-    // A marketing opt-in mentions email and is not an email box.
+    // A marketing opt-in mentions email and is not an email box, and
+    // so does Dell's "preferred method of communication", whose
+    // options are Email, Email SMS and Email WhatsApp.
     not: ["receive communications", "opt in", "opt-in", "subscribe",
-          "marketing", "sms"] },
-  { answer: "Phone",
+          "marketing", "sms", "preferred method", "method of communication"] },
+  { answer: "Phone", type: ACE_TEXT,
     any: ["phone", "mobile number", "telephone", "cell"],
     not: ["country"] },
-  { answer: "Pronouns", any: ["pronoun"] },
+  { answer: "Pronouns", type: ACE_CHOICE, any: ["pronoun"] },
 
-  { answer: "LinkedIn", any: ["linkedin"] },
-  { answer: "GitHub", any: ["github"] },
-  { answer: "Portfolio",
+  { answer: "LinkedIn", type: ACE_TEXT, any: ["linkedin"] },
+  { answer: "GitHub", type: ACE_TEXT, any: ["github"] },
+  { answer: "Portfolio", type: ACE_TEXT,
     any: ["portfolio", "personal website", "personal site", "website",
           "other website"] },
 
-  { answer: "Postcode", any: ["zip", "postal code", "postcode"] },
-  { answer: "City", any: ["city", "town"] },
-  { answer: "State", any: ["state", "province", "region"] },
+  { answer: "Postcode", type: ACE_TEXT, any: ["zip", "postal code", "postcode"] },
+  { answer: "City", type: ACE_TEXT, any: ["city", "town"] },
+  { answer: "State", type: ACE_TEXT,
+    any: ["state", "province", "region"],
+    // "United States" contains "state". Every Dell question naming the
+    // country matched this rule before the guard existed.
+    not: ["united states", "state or local", "state and local",
+          "state government"] },
   // "country code" sits next to a phone box and wants +1, not a
   // country name, so it is left for the user.
-  { answer: "Country", any: ["country"], not: ["code"] },
-  { answer: "Address", any: ["street", "address line", "address"] },
-  { answer: "Location",
-    any: ["current location", "where are you located", "location"] },
+  { answer: "Country", type: ACE_TEXT,
+    any: ["country"],
+    not: ["code", "embargo", "authorized to work", "authorised to work",
+          "legally authorized", "requisition is posted"] },
+  { answer: "Address", type: ACE_TEXT,
+    any: ["street", "address line", "address"] },
+  { answer: "Location", type: ACE_TEXT,
+    any: ["current location", "where are you located", "location"],
+    // Greenhouse labels a city box "Location (City)". The parenthetical
+    // says which of the two it wants, and "location" is the longer
+    // phrase, so without this it now outscores the city rule.
+    not: ["role", "position", "requisition", "city"] },
 
-  { answer: "University",
+  // ------------------------------------------------------------------
+  // Education and experience
+  // ------------------------------------------------------------------
+
+  { answer: "University", type: ACE_TEXT,
     any: ["university", "school", "college", "institution"] },
-  { answer: "Degree", any: ["degree", "qualification"] },
-  { answer: "Graduation date",
+  { answer: "Degree", type: ACE_TEXT,
+    any: ["degree", "qualification"],
+    not: ["recent graduate", "since you completed"] },
+  { answer: "Field of study", type: ACE_TEXT,
+    any: ["field of study", "major", "discipline", "course of study"] },
+  { answer: "GPA", type: ACE_TEXT, any: ["gpa", "grade point"] },
+  { answer: "Graduation date", type: ACE_TEXT,
     any: ["graduation", "grad date", "expected graduation"] },
-  { answer: "Years of experience",
-    any: ["years of experience", "years experience"] },
+  { answer: "Years of experience", type: ACE_TEXT,
+    any: ["years of experience", "years experience",
+          "years of relevant experience"] },
+  // Asked as a Yes/No on Dell and on most new-grad programmes, and it
+  // is not the graduation date restated.
+  { answer: "Recent graduate", type: ACE_YESNO,
+    any: ["recent graduate", "recently graduated", "new graduate",
+          "graduating within", "since you completed your most recent"] },
 
-  { answer: "Earliest start date",
+  // ------------------------------------------------------------------
+  // Logistics
+  // ------------------------------------------------------------------
+
+  { answer: "Earliest start date", type: ACE_TEXT,
     any: ["start date", "available to start", "earliest start",
-          "when can you start"] },
-  { answer: "Salary expectation",
+          "when can you start", "availability to start"] },
+  { answer: "Salary expectation", type: ACE_TEXT,
     any: ["salary", "desired compensation", "compensation expectation",
-          "expected pay"] },
-  { answer: "How did you hear about us",
-    any: ["how did you hear", "referral source", "how you found"] },
-
-  // Found on a real Handshake application form. Neither has a row in
-  // the bank yet; left unanswered until the user provides one, the
-  // same as any other question ACE cannot answer from a blank field.
-  { answer: "Willing to relocate",
-    any: ["willing to relocate", "open to relocat", "relocation required"] },
-  { answer: "Willing to work onsite",
+          "expected pay", "pay expectation"] },
+  { answer: "How did you hear about us", type: ACE_CHOICE,
+    any: ["how did you hear", "referral source", "how you found",
+          "how did you find", "where did you hear"] },
+  { answer: "Preferred contact method", type: ACE_CHOICE,
+    any: ["preferred method of communication", "method of communication",
+          "preferred contact method", "how would you like to be contacted"] },
+  { answer: "At least 18 years old", type: ACE_YESNO,
+    any: ["at least 18", "18 years of age", "18 years old", "over 18",
+          "age of 18", "legal working age"] },
+  { answer: "Role is located in the US", type: ACE_YESNO,
+    any: ["role you are applying for located", "role located in",
+          "position located in", "job located in"] },
+  { answer: "Willing to relocate", type: ACE_YESNO,
+    any: ["willing to relocate", "open to relocat", "relocation required",
+          "able to relocate"] },
+  { answer: "Willing to work onsite", type: ACE_YESNO,
     any: ["willing to work from", "local office", "onsite and in person",
-          "work in office", "work from the office"] },
+          "work in office", "work from the office", "commute to"] },
+  { answer: "Willing to travel", type: ACE_YESNO,
+    any: ["willing to travel", "able to travel", "travel requirement",
+          "percentage of travel"] },
+  { answer: "Driving licence", type: ACE_YESNO,
+    any: ["driver s license", "drivers license", "driving licence",
+          "valid license to drive"] },
 
-  // Transgender identity is asked separately and has no row in the
-  // bank, so it is left for the user rather than answered from Gender.
-  { answer: "Gender", any: ["gender"], not: ["transgender"] },
-  { answer: "Race or ethnicity",
-    any: ["race", "ethnicity", "hispanic", "latino"] },
-  { answer: "Veteran status", any: ["veteran", "military service"] },
-  { answer: "Disability status", any: ["disability", "disabled"] },
+  // ------------------------------------------------------------------
+  // Voluntary self-identification
+  //
+  // Answered from the bank because the user filled it in, never
+  // inferred. Transgender identity and sexual orientation are asked
+  // separately from gender and must not be answered from it.
+  // ------------------------------------------------------------------
 
-  { answer: "Why this company",
+  { answer: "Gender", type: ACE_CHOICE,
+    any: ["gender"], not: ["transgender"] },
+  { answer: "Transgender", type: ACE_CHOICE, any: ["transgender"] },
+  { answer: "Sexual orientation", type: ACE_CHOICE,
+    any: ["sexual orientation", "lgbtq"] },
+  { answer: "Race or ethnicity", type: ACE_CHOICE,
+    any: ["race", "ethnicity", "hispanic", "latino", "latinx"] },
+  { answer: "Veteran status", type: ACE_CHOICE,
+    any: ["veteran", "military service", "armed forces"] },
+  { answer: "Disability status", type: ACE_CHOICE,
+    any: ["disability", "disabled"],
+    not: ["accommodation"] },
+  { answer: "Needs an accommodation", type: ACE_YESNO,
+    any: ["accommodation", "accommodations to participate"] },
+
+  { answer: "Why this company", type: ACE_TEXT,
     any: ["why do you want", "why are you interested", "why this company",
           "why us", "why would you like to work"] }
 ];
 
-/* A control that offers a choice rather than free text: a radio, a
-   checkbox, or Ashby's own Yes/No widget, which is a pair of real
-   <button> elements with no name attribute linking them and a hidden,
-   unfocusable checkbox that is not the thing to click. Found on a
-   live Handshake application form; nothing in the earlier design
-   anticipated a choice rendered as buttons. */
+/* A control that offers a choice rather than free text.
+
+   Radios and checkboxes are the ordinary case. Ashby renders its Yes/No
+   as a pair of real <button> elements with no name attribute linking
+   them and a hidden, unfocusable checkbox that is not the thing to
+   click. Oracle's Candidate Experience, which Dell runs on, renders the
+   same shape again, so the declared accessibility state is checked as
+   well as Ashby's own attribute: a button carrying aria-pressed,
+   aria-checked or role=radio is a choice however it is styled. */
+function aceIsChoiceControl(field) {
+  if (field.type === "radio" || field.type === "checkbox") return true;
+  if (field.tagName !== "BUTTON") return false;
+
+  return (
+    field.hasAttribute("data-option") ||
+    field.hasAttribute("aria-pressed") ||
+    field.hasAttribute("aria-checked") ||
+    field.getAttribute("role") === "radio" ||
+    field.getAttribute("role") === "switch"
+  );
+}
+
 /* Ashby's "How did you hear about us" and similar fields are a
    controlled autocomplete: role="combobox", its real options rendered
    only once opened, and nothing to do with a native <select>. Typing
@@ -122,12 +334,44 @@ function aceIsAutocomplete(field) {
   );
 }
 
-function aceIsChoiceControl(field) {
-  return (
-    field.type === "radio" ||
-    field.type === "checkbox" ||
-    (field.tagName === "BUTTON" && field.hasAttribute("data-option"))
-  );
+/* What shape of answer this control can hold.
+
+   Only the strict case is worth naming: a group whose every option is
+   an unambiguous yes or no, with at least one of each, cannot hold
+   anything else. Everything else is left permissive. */
+function aceFieldKind(field, optionTexts) {
+  if (!aceIsChoiceControl(field)) {
+    if (field.tagName === "SELECT") return ACE_CHOICE;
+    return ACE_TEXT;
+  }
+
+  if (optionTexts && aceLooksYesNo(optionTexts)) return ACE_YESNO;
+
+  return ACE_CHOICE;
+}
+
+function aceLooksYesNo(texts) {
+  if (!texts || texts.length < 2) return false;
+
+  var yes = 0;
+  var no = 0;
+
+  for (var i = 0; i < texts.length; i++) {
+    var intent = aceIntent(texts[i]);
+    if (intent === "yes") yes += 1;
+    else if (intent === "no") no += 1;
+    else return false;
+  }
+
+  return yes >= 1 && no >= 1;
+}
+
+/* Whether an answer of this declared shape may fill a control of that
+   observed kind. Strict in one direction only. */
+function aceShapeFits(answerType, fieldKind) {
+  if (!fieldKind || fieldKind !== ACE_YESNO) return true;
+
+  return answerType === ACE_YESNO;
 }
 
 function aceNormalise(text) {
@@ -138,8 +382,11 @@ function aceNormalise(text) {
     // punctuation is replaced with a space rather than dropped, so
     // "future,require" cannot collapse into one word either.
     .replace(/[,;:]/g, " ")
+    // Dell writes "U.S. Government" and "driver's license". Splitting
+    // on the punctuation is what lets one written phrase match both
+    // "u s government" and "us government".
+    .replace(/[.'’`]/g, " ")
     .replace(/\s+/g, " ")
-    .replace(/[‘’]/g, "'")
     .toLowerCase()
     .trim();
 }
@@ -184,10 +431,17 @@ function aceGroupQuestion(field) {
   return "";
 }
 
+/* Real questions run long. Dell's consent and trade-embargo questions
+   are each over four hundred characters, and a limit of three hundred
+   discarded them and fell through to the field's generated name. The
+   cap is a guard against grabbing a whole page section, so it is
+   raised rather than removed. */
+var ACE_MAX_QUESTION = 520;
+
 /* The first heading inside a block that is not one of its options. */
 function aceHeadingIn(block, field) {
   var candidates = block.querySelectorAll(
-    "legend, label, [class*='heading'], [class*='label']"
+    "legend, label, [class*='heading'], [class*='label'], [class*='question']"
   );
 
   for (var i = 0; i < candidates.length; i++) {
@@ -200,7 +454,7 @@ function aceHeadingIn(block, field) {
     var text = aceNormalise(
       aceTextWithoutControls(candidates[i])
     );
-    if (text) return text.slice(0, 300);
+    if (text) return text.slice(0, ACE_MAX_QUESTION);
   }
 
   return "";
@@ -212,14 +466,14 @@ function aceHeadingIn(block, field) {
    Lever gender select reads "gender select male female decline to
    self-identify" and the question is lost in its own answers. */
 function aceTextWithoutControls(block) {
-  if (!block.querySelector("select, option, input, textarea")) {
+  if (!block.querySelector("select, option, input, textarea, button")) {
     return block.textContent;
   }
 
   var clone = block.cloneNode(true);
 
   Array.prototype.forEach.call(
-    clone.querySelectorAll("select, option, input, textarea"),
+    clone.querySelectorAll("select, option, input, textarea, button"),
     function (node) {
       node.remove();
     }
@@ -241,6 +495,12 @@ function aceOptionLabel(field) {
 }
 
 function aceOptionRaw(field) {
+  // A button carries its own option text and no wrapping label, and
+  // climbing to one would find the question instead.
+  if (field.tagName === "BUTTON") {
+    return field.textContent || field.value || "";
+  }
+
   var wrapping = field.closest("label");
   if (wrapping) return wrapping.textContent;
 
@@ -259,20 +519,7 @@ function aceOptionRaw(field) {
 
 /* What this one option says, for checking against the stored answer. */
 function aceOptionText(field) {
-  var wrapping = field.closest("label");
-  if (wrapping) return aceNormalise(wrapping.textContent);
-
-  if (field.id) {
-    var labelled = document.querySelector(
-      'label[for="' + CSS.escape(field.id) + '"]'
-    );
-    if (labelled) return aceNormalise(labelled.textContent);
-  }
-
-  var option = field.closest("[class*='option']");
-  if (option) return aceNormalise(option.textContent);
-
-  return aceNormalise(field.value);
+  return aceNormalise(aceOptionRaw(field));
 }
 
 function aceQuestionFor(field) {
@@ -318,7 +565,7 @@ function aceQuestionFor(field) {
 
   for (var i = 0; i < sources.length; i++) {
     var text = aceNormalise(sources[i]);
-    if (text && text.length <= 300) return text;
+    if (text && text.length <= ACE_MAX_QUESTION) return text;
   }
 
   return "";
@@ -375,30 +622,65 @@ function acePhraseIn(question, phrase) {
   ).test(question);
 }
 
-function aceAnswerNameFor(question) {
+/* The declared shape of one bank answer, for callers that hold a name
+   and need to know what can accept it. */
+function aceAnswerTypeFor(name) {
+  for (var i = 0; i < ACE_RULES.length; i++) {
+    if (ACE_RULES[i].answer === name) return ACE_RULES[i].type;
+  }
+
+  return null;
+}
+
+/* Which stored answer this question is asking for, or null.
+
+   `kind` is what the control can hold, from aceFieldKind. Passing it is
+   what stops a free-text answer reaching a Yes/No pair. Omitting it
+   matches on wording alone.
+
+   The best match wins rather than the first. Before scoring, a rule
+   listed earlier won on a phrase of any length, so "state" beat "role
+   you are applying for located" on a real Dell question about where the
+   role is. Ties keep list order, so the narrow rules still sit above
+   the broad ones they would otherwise be swallowed by. */
+function aceAnswerNameFor(question, kind) {
   if (!question) return null;
+
+  var best = null;
+  var bestScore = 0;
 
   for (var i = 0; i < ACE_RULES.length; i++) {
     var rule = ACE_RULES[i];
+
+    if (!aceShapeFits(rule.type, kind)) continue;
 
     if (rule.not && rule.not.some(function (word) {
       return acePhraseIn(question, word);
     })) continue;
 
-    var hit = (rule.any || []).some(function (phrase) {
-      return acePhraseIn(question, phrase);
+    var score = 0;
+
+    (rule.any || []).forEach(function (phrase) {
+      if (acePhraseIn(question, phrase) && phrase.length > score) {
+        score = phrase.length;
+      }
     });
 
-    if (!hit && rule.exact) {
-      hit = rule.exact.some(function (phrase) {
-        return question === phrase;
+    if (!score && rule.exact) {
+      rule.exact.forEach(function (phrase) {
+        if (question === phrase && phrase.length > score) {
+          score = phrase.length;
+        }
       });
     }
 
-    if (hit) return rule.answer;
+    if (score > bestScore) {
+      bestScore = score;
+      best = rule.answer;
+    }
   }
 
-  return null;
+  return best;
 }
 
 
@@ -415,8 +697,13 @@ function aceAnswerNameFor(question) {
    sponsorship answer inverted, is worse than a blank the user fills
    themselves. */
 
-var ACE_AFFIRMATIVE = /^(yes|y|true|i am|i do|i have|authorized|authorised)\b/;
-var ACE_NEGATIVE = /^(no|n|false|i am not|i do not|i don't|not |none|never)\b/;
+/* Consent controls say "I Agree" rather than "Yes", and Dell's decline
+   option is a paragraph beginning "I Do Not Agree". Both shapes have to
+   read as an intent or a consent question cannot be answered at all. */
+var ACE_AFFIRMATIVE =
+  /^(yes|y|true|i am|i do|i have|i agree|agree|i accept|accept|i consent|consent|i acknowledge|acknowledge|i certify|certify|confirm|authorized|authorised)\b/;
+var ACE_NEGATIVE =
+  /^(no|n|false|i am not|i do not|i don't|i dont|not |none|never|disagree|i disagree|decline|i decline)\b/;
 
 // Words carrying no distinguishing meaning, so overlap is scored on
 // what the options actually differ by.
@@ -444,7 +731,34 @@ function aceIntent(text) {
 /* Return the index of the option that answers, or -1.
 
    `options` is a list of the visible texts, in order. */
+/* One stored answer may offer several wordings, separated by "|".
+
+   Forms name the same thing differently and none of them is wrong:
+   a stored "Job Portal" matches nothing on a Dell form whose option
+   reads "Job Board (e.g., LinkedIn, Indeed, Glassdoor)". Rather than
+   guess that portal means board, the bank can hold
+   "LinkedIn | Job Board | Job Portal" and each is tried in turn. The
+   refusal to pick between two equally good options is unchanged, so
+   this widens what can be recognised without widening what can be
+   guessed. */
+function aceAlternatives(answer) {
+  return String(answer || "")
+    .split("|")
+    .map(function (part) { return part.trim(); })
+    .filter(function (part) { return part.length > 0; });
+}
+
 function aceChooseOption(options, answer) {
+  var alternatives = aceAlternatives(answer);
+
+  if (alternatives.length > 1) {
+    for (var a = 0; a < alternatives.length; a++) {
+      var found = aceChooseOption(options, alternatives[a]);
+      if (found >= 0) return found;
+    }
+    return -1;
+  }
+
   var wanted = aceNormalise(answer);
   if (!wanted) return -1;
 

@@ -54,8 +54,12 @@ var CASES = [
   ["i identify my ethnicity as...select all that apply",
    "Race or ethnicity"],
 
+  // Asked separately from gender, and must never be answered from it.
+  // It has its own row now, so it reaches that rather than nothing;
+  // an unfilled row still leaves the field alone and reports it.
+  ["do you identify as transgender?", "Transgender"],
+
   // Must stay empty.
-  ["do you identify as transgender?", null],
   ["would you like to receive communications via sms and email", null],
   ["have you worked at doordash?*", null],
   ["applicant privacy acknowledgement *", null],
@@ -74,6 +78,72 @@ var CASES = [
   // written as one contiguous string on the real form's own wording.
   ["will you now, or in the future, require sponsorship for "
    + "employment visa status?", "Need sponsorship in future"]
+];
+
+/* Every question on one real Dell application, which runs on Oracle's
+   Candidate Experience and asks twenty-two of them as Yes/No pairs.
+
+   Before these, the matcher recognised four and mis-routed five: the
+   "United States" in three separate questions matched the rule for a
+   postal state, and "are you a recent graduate (less than 3 years
+   since you completed your most recent degree)" matched the rule for a
+   degree. Both are the shape of bug that fills a box with something
+   the user never said.
+
+   The second element is the field kind, which is what the page's own
+   options say the control can hold. */
+var DELL_CASES = [
+  ["is your current employer a reseller of dell technologies "
+   + "(including dell, dell emc and affiliated companies), products, "
+   + "services or technologies?", "yesno",
+   "Employer relationship with this company"],
+  ["are you a recent graduate (less than 3 years since you completed "
+   + "your most recent degree)?", "yesno", "Recent graduate"],
+  ["as part of the candidate verification process, we may be taking "
+   + "screenshot(s) in between and/or at the start of the interview "
+   + "process. for this purpose, please confirm your acceptance to "
+   + "the following statement", "yesno", "Agree to the terms shown"],
+  ["are you a foreign national and / or citizen (or dual citizen) of "
+   + "a country with which the united states has a trade embargo",
+   "yesno", "Citizen of an embargoed country"],
+  ["i am currently or have been employed by the u.s. government?",
+   "yesno", "Employed by the federal government"],
+  ["are you legally authorized to work in the country where this "
+   + "requisition is posted?", "yesno", "Work authorisation"],
+  ["are you subject to a non-compete agreement with your current or "
+   + "previous employer", "yesno", "Bound by a non-compete"],
+  ["are you eligible to work and have the proper work authorization "
+   + "documentation for united states?", "yesno", "Work authorisation"],
+  ["are you on a temporary work visa?", "yesno",
+   "On a temporary work visa"],
+  ["do you now or in the future require immigration benefit "
+   + "sponsorship from dell in order to retain or extend your "
+   + "authorization to work in the united states?", "yesno",
+   "Need sponsorship in future"],
+  ["please confirm your preferred method of communication during the "
+   + "recruitment process", "choice", "Preferred contact method"],
+  ["is the role you are applying for located in the united states?",
+   "yesno", "Role is located in the US"],
+  ["i am currently or have been employed by state or local "
+   + "government?", "yesno", "Employed by state or local government"],
+  ["have you ever been involuntarily discharged or separated from a "
+   + "job?", "yesno", "Involuntarily discharged from a job"],
+  ["by selecting yes, you are granting dell technologies permission "
+   + "to retain your application information for subsequent job "
+   + "opportunities:", "yesno", "Consent to keep my application on file"],
+  ["are you at least 18 years old?", "yesno", "At least 18 years old"],
+  ["do you or your relative(s) own any technology related companies "
+   + "or any businesses that are trading with or in competition with "
+   + "dell's business?", "yesno", "Relative owns a competing business"],
+  ["are dell technologies personnel on site permanently or on a "
+   + "regular basis at your employer's facilities?", "yesno",
+   "Employer relationship with this company"],
+
+  // What the kind is for. The same wording offered as a Yes/No pair
+  // must not reach an answer that is free text, whatever it matches.
+  ["what is your current state?", "yesno", null],
+  ["highest degree completed", "yesno", null],
+  ["what is your current state?", "text", "State"]
 ];
 
 /* Choosing between the options a form offers. The stored answers are
@@ -127,6 +197,19 @@ OPTION_CASES.forEach(function (entry) {
   }
 });
 
+DELL_CASES.forEach(function (entry) {
+  var got = aceAnswerNameFor(aceNormalise(entry[0]), entry[1]);
+
+  if (got !== entry[2]) {
+    failures += 1;
+    console.log(
+      "FAIL  [" + entry[1] + "] " + JSON.stringify(entry[0].slice(0, 60)) +
+      "\n      got " + JSON.stringify(got) +
+      ", want " + JSON.stringify(entry[2])
+    );
+  }
+});
+
 CASES.forEach(function (pair) {
   // Through aceNormalise, matching how this is actually called: the
   // pinned wording is written as a person reads it on the page, not
@@ -144,7 +227,7 @@ CASES.forEach(function (pair) {
   }
 });
 
-var total = CASES.length + OPTION_CASES.length;
+var total = CASES.length + OPTION_CASES.length + DELL_CASES.length;
 
 console.log(
   failures
