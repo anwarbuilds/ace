@@ -24,6 +24,7 @@ from backend.app.api.marks import set_mark
 from backend.app.applications.matching import (
     AMBIGUOUS,
     MATCHED,
+    RECORDED,
     UNMATCHED,
     UNUSABLE,
     Candidate,
@@ -33,6 +34,7 @@ from backend.app.applications.matching import (
     normalize_url,
     tighten_company,
     title_tokens,
+    url_path_identity,
 )
 from backend.app.applications.parsing import (
     ApplicationRow,
@@ -61,6 +63,7 @@ class ImportPreview:
 
         tally = {
             MATCHED: 0,
+            RECORDED: 0,
             AMBIGUOUS: 0,
             UNMATCHED: 0,
             UNUSABLE: 0,
@@ -84,6 +87,7 @@ def _load_indexes(
     dict[str, Candidate],
     dict[str, list[Candidate]],
     dict[str, list[Candidate]],
+    dict[str, list[Candidate]],
 ]:
     """Index every stored job by URL and by company.
 
@@ -103,6 +107,16 @@ def _load_indexes(
 
     # Spaceless names, so "Open AI" reaches a stored "OpenAI".
     by_tight: dict[
+        str,
+        list[Candidate],
+    ] = defaultdict(
+        list
+    )
+
+    # Host and path with the query dropped. Only consulted where it
+    # names exactly one posting, so it stays a list rather than
+    # collapsing to whichever job was inserted last.
+    by_path: dict[
         str,
         list[Candidate],
     ] = defaultdict(
@@ -143,6 +157,15 @@ def _load_indexes(
         if key and key not in by_url:
             by_url[key] = candidate
 
+        path = url_path_identity(
+            url
+        )
+
+        if path:
+            by_path[path].append(
+                candidate
+            )
+
         by_company[
             normalize_company(
                 company
@@ -167,6 +190,9 @@ def _load_indexes(
         dict(
             by_tight
         ),
+        dict(
+            by_path
+        ),
     )
 
 
@@ -181,6 +207,7 @@ def preview_import(
         by_url,
         by_company,
         by_tight,
+        by_path,
     ) = _load_indexes(
         session
     )
@@ -202,13 +229,36 @@ def preview_import(
         ).all()
     )
 
+    # History ACE has already stored for a row it could not pin to a
+    # posting. The matcher is pure and knows only about jobs, so a row
+    # kept as history last time came back as an open question on the
+    # next upload, and the upload after that. On a real 171-row sheet
+    # every one of the 42 rows ACE asked about had already been
+    # answered and recorded. Re-uploading is meant to be the daily
+    # habit; answering the same 42 questions daily is not.
+    recorded_keys = frozenset(
+        session.scalars(
+            select(
+                ExternalApplicationRecord
+                .match_key
+            )
+        ).all()
+    )
+
     matches = tuple(
-        match_row(
-            row,
-            by_url=by_url,
-            by_company=by_company,
-            by_tight=by_tight,
-            already_applied=already_applied,
+        _settle_against_history(
+            match_row(
+                row,
+                by_url=by_url,
+                by_company=by_company,
+                by_tight=by_tight,
+                by_path=by_path,
+                already_applied=(
+                    already_applied
+                ),
+            ),
+            row=row,
+            recorded_keys=recorded_keys,
         )
         for row in rows
     )
@@ -218,6 +268,48 @@ def preview_import(
             rows
         ),
         matches=matches,
+    )
+
+
+def _settle_against_history(
+    match: RowMatch,
+    *,
+    row: ApplicationRow,
+    recorded_keys: frozenset[str],
+) -> RowMatch:
+    """Mark a row ACE already keeps as history as settled.
+
+    Only an open question is settled this way. A row that now matches a
+    real posting stays matched: attaching it to the posting carries more
+    than the placeholder does, and ``drop_external_duplicates`` removes
+    the placeholder afterwards.
+
+    The candidates are deliberately kept. The row needs no decision, but
+    the user may still want to attach it to a posting, and dropping them
+    would take that option away rather than merely stop demanding it.
+    """
+
+    if match.status not in (
+        AMBIGUOUS,
+        UNMATCHED,
+    ):
+        return match
+
+    key = external_match_key(
+        company=row.company,
+        title=row.title,
+    )
+
+    if key not in recorded_keys:
+        return match
+
+    return RowMatch(
+        row_number=match.row_number,
+        status=RECORDED,
+        method=(
+            "already kept as history"
+        ),
+        candidates=match.candidates,
     )
 
 

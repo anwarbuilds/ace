@@ -494,6 +494,9 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .imp{display:grid;grid-template-columns:104px 1fr 140px;gap:11px 15px;align-items:start;padding:11px 0;border-bottom:1px solid var(--border-subtle);font-size:13px}
 .imp-tag{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding-top:2px}
 .imp-matched{color:var(--success)} .imp-ambiguous{color:var(--warning)}
+/* Settled, not successful: a row ACE already holds should read as
+   quiet rather than as a second kind of win next to "matched". */
+.imp-recorded{color:var(--text-secondary)}
 .imp-unmatched,.imp-unusable{color:var(--text-muted)}
 .imp-sub{font-size:11.5px;color:var(--text-muted);margin-top:3px}
 .imp-r{text-align:right;font-family:var(--mono);font-size:12px;color:var(--text-secondary)}
@@ -1179,10 +1182,12 @@ function queuePage(){
       '<span class="spacer"></span>'+
       (state.page==="applied"
         ?'<a class="btn btn-secondary btn-sm" href="'+API+'/api/applications/export.csv" '+
-          'download title="Download your history as a spreadsheet">'+icon(I.download,14)+
-          'Export sheet</a>'+
-         '<button class="btn btn-secondary btn-sm" data-act="importapps">'+icon(I.upload,14)+
-         'Import sheet</button>':'')+
+          'download title="Every application ACE holds, in your sheet\'s columns: the ones you '+
+          'marked here and the ones you typed into the sheet yourself">'+icon(I.download,14)+
+          'Download sheet</a>'+
+         '<button class="btn btn-secondary btn-sm" data-act="importapps" '+
+         'title="Read an updated sheet back in. Rows ACE already holds are refreshed, not re-asked.">'+
+         icon(I.upload,14)+'Upload sheet</button>':'')+
       (state.newSinceVisit&&state.page==="queue"
         ?'<button class="since-btn" data-act="shownew">'+state.newSinceVisit+' new since '+clock(state.prevVisit)+'</button>':'')+
       liveChip()+'</div>'+
@@ -1923,12 +1928,23 @@ function pickApplications(){
 }
 function closeImport(){ var el=document.querySelector(".sheet-wrap"); if(el) el.remove(); state.importData=null; }
 function importCount(){ return Object.keys(state.importChoice||{}).filter(function(k){return state.importChoice[k];}).length; }
+function recordedRows(){
+  var d=state.importData; if(!d) return [];
+  // Rows ACE already holds as history. Sending them again is not a new
+  // decision, it is the refresh that makes a re-upload worth doing: the
+  // sheet's date and status move them forward. So they are never behind
+  // a checkbox, and never counted as something to answer.
+  return d.rows.filter(function(r){
+    return r.status==="recorded"&&r.company&&!state.importChoice[r.row_number];
+  });
+}
 function unplaceableRows(){
   var d=state.importData; if(!d) return [];
-  // Every row that will not become a job mark, so that no application
-  // can fall between the two buckets and be dropped. An ambiguous row
-  // belongs here until a posting is chosen for it, and a row with no
-  // title is still an application worth keeping.
+  // Every row that will not become a job mark and ACE does not already
+  // hold, so that no application can fall between the buckets and be
+  // dropped. An ambiguous row belongs here until a posting is chosen
+  // for it, and a row with no title is still an application worth
+  // keeping.
   return d.rows.filter(function(r){
     if(!r.company) return false;
     if(r.status==="ambiguous") return !state.importChoice[r.row_number];
@@ -1937,7 +1953,9 @@ function unplaceableRows(){
 }
 function importLabel(){
   var n=importCount(), ext=state.keepExternal?unplaceableRows().length:0;
-  return ext?("Import "+n+" and keep "+ext):("Import "+n);
+  var kept=recordedRows().length;
+  var label=ext?("Sync "+n+" and keep "+ext):("Sync "+n);
+  return kept?(label+", refresh "+kept):label;
 }
 function renderImport(){
   var d=state.importData; if(!d) return;
@@ -1947,9 +1965,13 @@ function renderImport(){
   var rows=d.rows.map(function(r){
     var chosen=state.importChoice[r.row_number];
     var pick="";
-    if(r.status==="ambiguous"){
+    // A recorded row needs no answer, but offering the postings that
+    // fit still lets it be upgraded from loose history to a real
+    // posting. The default option is the one already in force.
+    if(r.status==="ambiguous"||(r.status==="recorded"&&r.candidates.length)){
       pick='<div class="imp-pick"><select data-improw="'+r.row_number+'">'+
-        '<option value="">Keep as history, '+r.candidates.length+' possible matches</option>'+
+        '<option value="">'+(r.status==="recorded"?"Leave as history":"Keep as history")+', '+
+          r.candidates.length+' possible matches</option>'+
         r.candidates.map(function(cd){
           // Location first: these options are often identical apart
           // from where they are.
@@ -1957,6 +1979,8 @@ function renderImport(){
             (cd.location?esc(cd.location)+' \u00b7 ':'')+esc(clean(cd.title))+'</option>';}).join("")+'</select></div>';
     }
     var note=r.status==="matched"?("Matched by "+esc(r.method))
+      :r.status==="recorded"?("Already in ACE as history. Its date and status will be refreshed from this sheet."+
+        (r.candidates.length?" Attach it to a posting only if you want to.":""))
       :r.status==="ambiguous"?"Several postings fit. Choose one, or keep it as history."
       :r.status==="unusable"?"Needs a role title or a link."
       :"No stored posting matches this.";
@@ -1971,12 +1995,18 @@ function renderImport(){
   el.innerHTML='<div class="sheet" role="dialog" aria-modal="true" aria-label="Import applications">'+
     '<div class="sheet-head"><h3>Import applications</h3>'+
       '<div class="sum"><span><b>'+(c.matched||0)+'</b> matched</span>'+
+        (c.recorded?'<span><b>'+c.recorded+'</b> already yours</span>':'')+
         '<span><b>'+(c.ambiguous||0)+'</b> need a choice</span>'+
         '<span><b>'+(c.unmatched||0)+'</b> not found</span>'+
         (c.unusable?'<span><b>'+c.unusable+'</b> incomplete</span>':'')+
         '<span>of <b>'+d.total+'</b> rows</span></div>'+
       '<p class="imp-sub">Nothing is recorded until you confirm. A status column is read if your sheet has one, '+
         'and re-uploading an updated sheet moves existing rows forward rather than duplicating them.</p>'+
+      (c.recorded
+        ? '<p class="imp-sub" style="margin-top:7px">'+c.recorded+' of these ACE already holds from an earlier '+
+          'upload. They are listed so you can see them, but they need no answer: their date and status are '+
+          'refreshed from this sheet either way.</p>'
+        : '')+
       (unplaceable>0
         ? '<p class="imp-sub" style="margin-top:7px">'+unplaceable+
           ' will be kept as history rather than attached to a posting. ACE only stores postings it has seen since it '+
@@ -2018,17 +2048,25 @@ function runImport(){
     .map(function(k){ var r=byRow[k]||{};
       return {job_id:state.importChoice[k], applied_on:r.applied_on||null,
               status:r.application_status||null}; });
-  var external=state.keepExternal?unplaceableRows().map(function(r){
+  function asExternal(r){
     return {company:r.company, title:r.title, applied_on:r.applied_on||null,
             status:r.application_status||null, url:null};
-  }):[];
+  }
+  // Rows ACE already holds go through unconditionally: re-sending them
+  // is what carries the sheet's newer date and status back into ACE.
+  var external=recordedRows().map(asExternal)
+    .concat(state.keepExternal?unplaceableRows().map(asExternal):[]);
   if(!decisions.length&&!external.length){ showToast("Nothing selected to import"); render(); return; }
   fetch(API+"/api/applications/import",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({decisions:decisions,external:external})})
   .then(function(r){return r.json();}).then(function(res){
     closeImport();
-    showToast("Recorded "+res.marked+" applications"+
-      (res.recorded?" and kept "+res.recorded+" from your history":""));
+    // Says the other half out loud. The sheet is only back in sync once
+    // it has been downloaded again, and nothing else on this page says
+    // so, so an upload alone reads as "done" when it is half done.
+    showToast("Synced "+res.marked+" applications"+
+      (res.recorded?" and "+res.recorded+" from your history":"")+
+      ". Download the sheet to get ACE's own back into it.");
     // Land on Applied rather than staying on the Queue. Newly applied
     // jobs sink under the default sort, so from the Queue an import
     // looks like rows vanishing rather than statuses updating, and the

@@ -23,6 +23,7 @@ from sqlalchemy.orm import (
 from backend.app.applications.matching import (
     AMBIGUOUS,
     MATCHED,
+    RECORDED,
     UNMATCHED,
     UNUSABLE,
     normalize_company,
@@ -1390,3 +1391,557 @@ def test_a_row_without_a_company_is_refused(
             )
             == []
         )
+
+
+# --- history ACE already holds ---------------------------------------
+
+
+def test_a_row_already_kept_as_history_is_not_asked_again(
+    session_factory,
+) -> None:
+    """The bug that made re-uploading a chore rather than a habit.
+
+    A hand-typed row ACE cannot pin to one posting is kept as history.
+    On the next upload the matcher, which knows only about jobs, saw the
+    same unresolvable row and asked again -- and would have asked on
+    every upload after that. On one real 171-row sheet, all 42 rows ACE
+    presented as needing attention had already been answered.
+    """
+
+    with session_factory() as session:
+        add_job(
+            session,
+            index=1,
+            company="Stripe",
+            title="Software Engineer, New Grad",
+        )
+
+        add_job(
+            session,
+            index=2,
+            company="Stripe",
+            title="Software Engineer, New Grad",
+        )
+
+        rows = parse_applications(
+            payload=csv_bytes(
+                "Company,Job Title\n"
+                "Stripe,Software Engineer, "
+                "New Grad\n"
+            ),
+            filename="h.csv",
+        )
+
+        # First upload: genuinely a question.
+        assert (
+            preview_import(
+                session,
+                rows=rows,
+            )
+            .matches[0]
+            .status
+            == AMBIGUOUS
+        )
+
+        # Answered by keeping it as history.
+        record_external_applications(
+            session,
+            entries=[
+                {
+                    "company": "Stripe",
+                    "title": (
+                        "Software Engineer, "
+                        "New Grad"
+                    ),
+                    "applied_on": None,
+                    "status": None,
+                    "url": None,
+                },
+            ],
+        )
+
+        session.commit()
+
+        match = preview_import(
+            session,
+            rows=rows,
+        ).matches[0]
+
+        assert match.status == RECORDED
+
+        assert match.job_id is None
+
+
+def test_a_recorded_row_keeps_its_candidates(
+    session_factory,
+) -> None:
+    """Settled is not the same as closed.
+
+    The row needs no answer, but attaching it to a real posting is still
+    worth offering. Dropping the candidates would take the option away
+    rather than merely stop demanding it.
+    """
+
+    with session_factory() as session:
+        add_job(
+            session,
+            index=1,
+            company="Stripe",
+            title="Software Engineer, New Grad",
+        )
+
+        add_job(
+            session,
+            index=2,
+            company="Stripe",
+            title="Software Engineer, New Grad",
+        )
+
+        record_external_applications(
+            session,
+            entries=[
+                {
+                    "company": "Stripe",
+                    "title": (
+                        "Software Engineer, "
+                        "New Grad"
+                    ),
+                    "applied_on": None,
+                    "status": None,
+                    "url": None,
+                },
+            ],
+        )
+
+        session.commit()
+
+        rows = parse_applications(
+            payload=csv_bytes(
+                "Company,Job Title\n"
+                "Stripe,Software Engineer, "
+                "New Grad\n"
+            ),
+            filename="h.csv",
+        )
+
+        match = preview_import(
+            session,
+            rows=rows,
+        ).matches[0]
+
+        assert match.status == RECORDED
+
+        assert len(
+            match.candidates
+        ) == 2
+
+
+def test_history_does_not_override_a_real_match(
+    session_factory,
+) -> None:
+    """A posting carries more than a placeholder.
+
+    A row that now matches a stored posting must stay matched even when
+    history exists under the same company and title, or attaching it
+    would become impossible and the placeholder permanent.
+    """
+
+    with session_factory() as session:
+        job = add_job(
+            session,
+            index=1,
+            company="Stripe",
+            title="Backend Engineer",
+            url=(
+                "https://stripe.com/jobs/1"
+            ),
+        )
+
+        record_external_applications(
+            session,
+            entries=[
+                {
+                    "company": "Stripe",
+                    "title": (
+                        "Backend Engineer"
+                    ),
+                    "applied_on": None,
+                    "status": None,
+                    "url": None,
+                },
+            ],
+        )
+
+        session.commit()
+
+        rows = parse_applications(
+            payload=csv_bytes(
+                "Company,Job Title,Link\n"
+                "Stripe,Backend Engineer,"
+                "https://stripe.com/jobs/1\n"
+            ),
+            filename="h.csv",
+        )
+
+        match = preview_import(
+            session,
+            rows=rows,
+        ).matches[0]
+
+        assert match.status == MATCHED
+
+        assert match.job_id == job.id
+
+
+def test_an_unrecorded_row_is_still_a_question(
+    session_factory,
+) -> None:
+    """The settling is keyed on history, not applied blindly."""
+
+    with session_factory() as session:
+        add_job(
+            session,
+            index=1,
+            company="Amazon",
+            title="Software Development Engineer",
+        )
+
+        add_job(
+            session,
+            index=2,
+            company="Amazon",
+            title="Software Development Engineer",
+        )
+
+        record_external_applications(
+            session,
+            entries=[
+                {
+                    "company": "Stripe",
+                    "title": (
+                        "Backend Engineer"
+                    ),
+                    "applied_on": None,
+                    "status": None,
+                    "url": None,
+                },
+            ],
+        )
+
+        session.commit()
+
+        rows = parse_applications(
+            payload=csv_bytes(
+                "Company,Job Title\n"
+                "Amazon,Software Development "
+                "Engineer\n"
+            ),
+            filename="h.csv",
+        )
+
+        assert (
+            preview_import(
+                session,
+                rows=rows,
+            )
+            .matches[0]
+            .status
+            == AMBIGUOUS
+        )
+
+
+def test_a_recorded_row_refreshes_rather_than_duplicating(
+    session_factory,
+) -> None:
+    """The sync the RECORDED status exists to let happen silently.
+
+    A row ACE already holds is now sent back on every upload without
+    the user confirming it, so re-sending must move it forward and must
+    not leave a second copy behind. The sheet wins on status, which is
+    what makes typing an outcome into the sheet reach ACE.
+    """
+
+    with session_factory() as session:
+        record_external_applications(
+            session,
+            entries=[
+                {
+                    "company": "Google",
+                    "title": (
+                        "Software Engineer, "
+                        "Early Career"
+                    ),
+                    "applied_on": "2026-03-04",
+                    "status": "applied",
+                    "url": None,
+                },
+            ],
+            now=NOW,
+        )
+
+        session.commit()
+
+        record_external_applications(
+            session,
+            entries=[
+                {
+                    "company": "Google",
+                    "title": (
+                        "Software Engineer, "
+                        "Early Career"
+                    ),
+                    "applied_on": "2026-03-04",
+                    "status": "rejected",
+                    "url": None,
+                },
+            ],
+            now=NOW,
+        )
+
+        session.commit()
+
+        history = (
+            list_external_applications(
+                session
+            )
+        )
+
+        assert len(
+            history
+        ) == 1
+
+        assert (
+            history[0]
+            .application_status
+            == "rejected"
+        )
+
+
+def test_a_blank_status_does_not_erase_a_recorded_one(
+    session_factory,
+) -> None:
+    """Automatic re-sending must not cost information.
+
+    Recorded rows now go back on every upload without being confirmed.
+    A sheet whose status column is blank for a row must therefore leave
+    what ACE already knows alone, or the sync would quietly flatten
+    every outcome to "applied".
+    """
+
+    with session_factory() as session:
+        record_external_applications(
+            session,
+            entries=[
+                {
+                    "company": "Google",
+                    "title": (
+                        "Software Engineer, "
+                        "Early Career"
+                    ),
+                    "applied_on": "2026-03-04",
+                    "status": "rejected",
+                    "url": None,
+                },
+            ],
+            now=NOW,
+        )
+
+        session.commit()
+
+        record_external_applications(
+            session,
+            entries=[
+                {
+                    "company": "Google",
+                    "title": (
+                        "Software Engineer, "
+                        "Early Career"
+                    ),
+                    "applied_on": "2026-03-04",
+                    "status": None,
+                    "url": None,
+                },
+            ],
+            now=NOW,
+        )
+
+        session.commit()
+
+        assert (
+            list_external_applications(
+                session
+            )[0]
+            .application_status
+            == "rejected"
+        )
+
+
+def test_a_posting_id_in_the_query_string_is_kept(
+    session_factory,
+) -> None:
+    """Dropping the whole query produced confident wrong answers.
+
+    Greenhouse-hosted boards put the posting id in ``?gh_jid=`` over a
+    fixed path, so every Stripe posting reduced to one identity. The URL
+    index kept whichever was inserted last, and a sheet row carrying the
+    exact URL of one posting was matched to a different one and reported
+    as MATCHED by "url" -- the most confident method in the matcher, and
+    the one nothing downstream second-guesses.
+    """
+
+    with session_factory() as session:
+        wanted = add_job(
+            session,
+            index=1,
+            company="Stripe",
+            title="Abuse Investigator",
+            url=(
+                "https://stripe.com/jobs"
+                "/search?gh_jid=8172508"
+            ),
+        )
+
+        add_job(
+            session,
+            index=2,
+            company="Stripe",
+            title="Account Executive",
+            url=(
+                "https://stripe.com/jobs"
+                "/search?gh_jid=7532733"
+            ),
+        )
+
+        rows = parse_applications(
+            payload=csv_bytes(
+                "Company,Job Title,Link\n"
+                "Stripe,Abuse Investigator,"
+                "https://stripe.com/jobs"
+                "/search?gh_jid=8172508\n"
+            ),
+            filename="h.csv",
+        )
+
+        match = preview_import(
+            session,
+            rows=rows,
+        ).matches[0]
+
+        assert match.status == MATCHED
+
+        assert (
+            match.job_id
+            == wanted.id
+        )
+
+
+def test_tracking_parameters_are_still_ignored() -> None:
+    """The reason the query was dropped in the first place stands."""
+
+    assert normalize_url(
+        "https://x.com/j?gh_jid=5"
+        "&utm_source=linkedin&gh_src=x"
+    ) == normalize_url(
+        "https://x.com/j?gh_jid=5"
+    )
+
+
+def test_parameter_order_does_not_change_identity() -> None:
+    assert normalize_url(
+        "https://x.com/j?b=2&a=1"
+    ) == normalize_url(
+        "https://x.com/j?a=1&b=2"
+    )
+
+
+def test_an_unknown_parameter_still_matches_a_lone_posting(
+    session_factory,
+) -> None:
+    """The reason the query was dropped, kept working.
+
+    A saved copy can carry a parameter ACE's copy does not and that
+    nothing knows to be tracking. Where the path names one posting,
+    falling back to it recovers the match.
+    """
+
+    with session_factory() as session:
+        job = add_job(
+            session,
+            index=1,
+            company="Stripe",
+            title="Backend Engineer",
+            url="https://stripe.com/jobs/9",
+        )
+
+        rows = parse_applications(
+            payload=csv_bytes(
+                "Company,Job Title,Link\n"
+                "Stripe,Backend Engineer,"
+                "https://stripe.com/jobs/9"
+                "?campaignref=77\n"
+            ),
+            filename="h.csv",
+        )
+
+        match = preview_import(
+            session,
+            rows=rows,
+        ).matches[0]
+
+        assert match.status == MATCHED
+
+        assert match.job_id == job.id
+
+
+def test_the_path_fallback_refuses_a_shared_path(
+    session_factory,
+) -> None:
+    """Where the fallback would guess, it must decline.
+
+    A board that puts the id in the query has one path over hundreds of
+    postings. Falling back to it there is precisely the collapse that
+    matched a row to the wrong posting, so a shared path must not
+    produce a URL match at all.
+    """
+
+    with session_factory() as session:
+        add_job(
+            session,
+            index=1,
+            company="Stripe",
+            title="Abuse Investigator",
+            url=(
+                "https://stripe.com/jobs"
+                "/search?gh_jid=1"
+            ),
+        )
+
+        add_job(
+            session,
+            index=2,
+            company="Stripe",
+            title="Account Executive",
+            url=(
+                "https://stripe.com/jobs"
+                "/search?gh_jid=2"
+            ),
+        )
+
+        rows = parse_applications(
+            payload=csv_bytes(
+                "Company,Job Title,Link\n"
+                "Stripe,Totally Different Role,"
+                "https://stripe.com/jobs"
+                "/search?gh_jid=999\n"
+            ),
+            filename="h.csv",
+        )
+
+        match = preview_import(
+            session,
+            rows=rows,
+        ).matches[0]
+
+        assert match.method != "url"
+
+        assert match.job_id is None

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 
 # Below this share of shared title words, a same-company candidate is
@@ -120,15 +120,62 @@ UNMATCHED = "unmatched"
 
 UNUSABLE = "unusable"
 
+# Already held in ACE as standalone history, so there is nothing to
+# decide. Without this, a hand-typed row that ACE cannot pin to one
+# posting was presented as an open question on every single upload,
+# including the uploads where the previous answer had already been
+# recorded -- 42 of one real 171-row sheet, every time.
+RECORDED = "recorded"
+
+
+# Parameters that say where a click came from, never which posting it
+# points at. Everything outside this list is kept, because on several
+# large boards the identity of the posting lives in the query string
+# and nowhere else.
+TRACKING_PARAMETERS = frozenset(
+    {
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        "utm_id",
+        "gh_src",
+        "lever-source",
+        "lever-origin",
+        "source",
+        "src",
+        "ref",
+        "referrer",
+        "fbclid",
+        "gclid",
+        "msclkid",
+        "mc_cid",
+        "mc_eid",
+        "trk",
+        "trackingid",
+    }
+)
+
 
 def normalize_url(
     value: str | None,
 ) -> str | None:
     """Reduce a posting URL to a comparable identity.
 
-    Query strings carry tracking parameters that differ between the copy
-    a person saved and the copy ACE stored, so they are dropped. The
-    path is kept, because that is what identifies the posting.
+    Tracking parameters differ between the copy a person saved and the
+    copy ACE stored, so those are dropped by name. The rest of the query
+    string is kept.
+
+    Dropping the query wholesale was worse than losing precision, it
+    produced confident wrong answers. Greenhouse-hosted boards put the
+    posting id in ``?gh_jid=`` over a fixed path, so five Stripe
+    postings and three IXL ones all reduced to one key, ``by_url`` kept
+    whichever landed last, and a sheet row carrying the exact URL of one
+    posting matched a different one and reported it as MATCHED by "url",
+    the most confident method there is. Verified against the real
+    corpus: a row for "Abuse Investigator" was matched to an unrelated
+    posting 338 rows away.
     """
 
     if not value:
@@ -169,7 +216,56 @@ def normalize_url(
     if not host:
         return None
 
-    return f"{host}{path}"
+    # Sorted, so the same parameters written in a different order still
+    # compare equal.
+    kept = sorted(
+        (name, value)
+        for name, value in parse_qsl(
+            parts.query or "",
+            keep_blank_values=False,
+        )
+        if name.lower()
+        not in TRACKING_PARAMETERS
+    )
+
+    if not kept:
+        return f"{host}{path}"
+
+    query = "&".join(
+        f"{name.lower()}={value}"
+        for name, value in kept
+    )
+
+    return f"{host}{path}?{query}"
+
+
+def url_path_identity(
+    value: str | None,
+) -> str | None:
+    """Reduce a posting URL to host and path only.
+
+    The looser half of a two-step URL match. A saved copy can carry a
+    parameter ACE's copy does not and that nothing knows to be tracking,
+    which would leave two spellings of the same posting comparing
+    unequal under ``normalize_url``.
+
+    Only safe where the path names exactly one posting, so the caller
+    must check that before trusting it. On a board that puts the id in
+    the query, one path covers hundreds of postings and this says
+    nothing at all about which.
+    """
+
+    identity = normalize_url(
+        value
+    )
+
+    if identity is None:
+        return None
+
+    return identity.split(
+        "?",
+        1,
+    )[0]
 
 
 def normalize_company(
@@ -473,6 +569,7 @@ def match_row(
     by_url: dict[str, Candidate],
     by_company: dict[str, list[Candidate]],
     by_tight: dict[str, list[Candidate]] | None = None,
+    by_path: dict[str, list[Candidate]] | None = None,
     already_applied: frozenset[int] | None = None,
 ) -> RowMatch:
     """Decide which stored posting one application row refers to.
@@ -487,6 +584,12 @@ def match_row(
     by_tight = (
         by_tight
         if by_tight is not None
+        else {}
+    )
+
+    by_path = (
+        by_path
+        if by_path is not None
         else {}
     )
 
@@ -585,6 +688,33 @@ def match_row(
             method="url",
             job_id=by_url[key].job_id,
         )
+
+    # The saved copy may carry a parameter ACE's copy does not, and
+    # that nothing knows to be tracking. Falling back to the path alone
+    # recovers those, but only where the path names one posting: where
+    # it names several, it is exactly the collapse that produced
+    # confident wrong matches, so it is left to company and title.
+    path = url_path_identity(
+        row.url
+    )
+
+    if path:
+        on_path = by_path.get(
+            path,
+            (),
+        )
+
+        if len(on_path) == 1:
+            return RowMatch(
+                row_number=(
+                    row.row_number
+                ),
+                status=MATCHED,
+                method="url",
+                job_id=(
+                    on_path[0].job_id
+                ),
+            )
 
     company = normalize_company(
         row.company
