@@ -30,3 +30,27 @@ node_modules/
 Thumbs.db
 # Local scratch notes
 requiremnts1.txt
+
+# Personal data that must never reach a public repo.
+#
+# The exported application sheet, a resume, or a database dump landing
+# in this folder would otherwise be picked up by `git add -A` without
+# anyone noticing. Nothing here is a build artefact; these are ignored
+# because of what is in them. Use `git add -f` if a genuine fixture
+# ever needs one of these extensions.
+*.csv
+*.tsv
+*.xlsx
+*.xlsm
+*.xls
+*.pdf
+*.docx
+*.doc
+*.sql
+*.dump
+*.sqlite
+*.sqlite3
+*.db
+ace-applications*.csv
+*resume*
+*Resume*
