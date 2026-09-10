@@ -151,3 +151,98 @@ def test_overall_recall_weights_by_companies_listed(
         )
         < 1e-9
     )
+
+
+# ----------------------------------------------------------------------
+# The curated company list
+#
+# Discovery used to be entirely downstream of three community README
+# files, which made recall a function of whoever edits them. A real
+# Cursor posting the user found by hand was the proof: Cursor runs on
+# Ashby, find_board resolves it in one call, and none of the three
+# lists mentions it even once.
+# ----------------------------------------------------------------------
+
+
+def test_the_curated_list_has_no_duplicates() -> None:
+    """A duplicate would be probed twice and registered once, quietly."""
+
+    from backend.app.coverage.companies import (
+        TARGET_COMPANIES,
+    )
+
+    assert len(
+        set(
+            TARGET_COMPANIES
+        )
+    ) == len(
+        TARGET_COMPANIES
+    )
+
+
+def test_no_curated_name_normalises_to_nothing() -> None:
+    """A name that normalises away can never be matched or probed."""
+
+    from backend.app.coverage.benchmark import (
+        normalise_company,
+    )
+    from backend.app.coverage.companies import (
+        TARGET_COMPANIES,
+    )
+
+    for name in TARGET_COMPANIES:
+        assert normalise_company(
+            name
+        ), name
+
+
+def test_two_curated_names_never_collide() -> None:
+    """Distinct names normalising alike would register one board twice.
+
+    "Lambda" and "Lambda Labs" would be the same key, and whichever was
+    probed second would silently do nothing.
+    """
+
+    from backend.app.coverage.benchmark import (
+        normalise_company,
+    )
+    from backend.app.coverage.companies import (
+        TARGET_COMPANIES,
+    )
+
+    keys = [
+        normalise_company(
+            name
+        )
+        for name in TARGET_COMPANIES
+    ]
+
+    assert len(
+        set(
+            keys
+        )
+    ) == len(
+        keys
+    )
+
+
+def test_a_curated_company_is_recognised_as_curated() -> None:
+    """What decides the poll interval and the recorded provenance."""
+
+    from backend.scripts.discover_boards import (
+        curated_match,
+    )
+
+    assert curated_match(
+        "Cursor"
+    )
+
+    # Matched on the normalised form, so the tracker's spelling of a
+    # curated name still counts as curated.
+    assert curated_match(
+        "Cursor, Inc."
+    )
+
+    assert not curated_match(
+        "Some Company ACE Has Never Heard Of"
+    )

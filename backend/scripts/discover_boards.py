@@ -24,6 +24,10 @@ import urllib.request
 
 from sqlalchemy import select
 
+from backend.app.coverage.companies import (
+    CURATED_POLL_INTERVAL_SECONDS,
+    TARGET_COMPANIES,
+)
 from backend.app.coverage.benchmark import (
     HELD_OUT_LISTS,
     companies_in_markdown,
@@ -75,6 +79,13 @@ def unreached_companies() -> list[str]:
     """
 
     counts: dict[str, int] = {}
+
+    # The user's own list is probed before the trackers'. A name here
+    # was chosen deliberately; a name on a tracker happened to be
+    # published. Weighted above any real tracker count so it sorts
+    # first without needing a second code path.
+    for name in TARGET_COMPANIES:
+        counts[normalise_company(name)] = 1000
 
     for _, url in HELD_OUT_LISTS:
         for name in companies_in_markdown(
@@ -146,6 +157,25 @@ SOURCE_HOSTS = {
 }
 
 
+_CURATED_KEYS = frozenset(
+    normalise_company(name)
+    for name in TARGET_COMPANIES
+)
+
+
+def curated_match(
+    company: str,
+) -> bool:
+    """Whether this company came from the user's own list."""
+
+    return (
+        normalise_company(
+            company
+        )
+        in _CURATED_KEYS
+    )
+
+
 def register(
     candidates: list[BoardCandidate],
 ) -> int:
@@ -189,9 +219,23 @@ def register(
                     # The tail is polled daily. Every board on a
                     # five-minute cycle is neither possible nor polite
                     # once there are thousands of them.
-                    poll_interval_seconds=86400,
+                    #
+                    # A company on the user's own list is not the tail.
+                    # It was chosen deliberately, so it is polled often
+                    # enough to be worth having chosen.
+                    poll_interval_seconds=(
+                        CURATED_POLL_INTERVAL_SECONDS
+                        if curated_match(
+                            candidate.company
+                        )
+                        else 86400
+                    ),
                     discovery_source=(
-                        "board_probe"
+                        "curated_list"
+                        if curated_match(
+                            candidate.company
+                        )
+                        else "board_probe"
                     ),
                 )
             )
