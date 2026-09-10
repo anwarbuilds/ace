@@ -61,6 +61,12 @@ LOGGER = logging.getLogger(
 DEFAULT_CONCURRENCY = 6
 
 
+# A suspend shorter than this is not worth a line in the log: a
+# laptop lid closed for half a minute is not the hour-long gap that
+# makes a person ask whether the scheduler died.
+SUSPEND_REPORTING_SECONDS = 120
+
+
 class MonotonicClock(Protocol):
     """Monotonic scheduler clock."""
 
@@ -606,6 +612,57 @@ class SchedulerRuntime:
                 sleep_seconds,
             )
 
+            # Measured across the sleep, so a machine that suspends
+            # mid-sleep is reported rather than leaving an unexplained
+            # hole in the activity log.
+            #
+            # The user asked why there had been no checks for an hour.
+            # There was nothing wrong: the laptop had slept, and
+            # time.sleep does not advance while it is suspended, so the
+            # scheduler simply resumed and finished the remainder. But
+            # from the outside that is indistinguishable from a crash,
+            # and the healthcheck cannot tell them apart either --
+            # it was suspended too, so on waking it saw a fresh poll
+            # and reported healthy.
+            #
+            # CLOCK_MONOTONIC stops while suspended and CLOCK_BOOTTIME
+            # does not, so the difference between them is the time
+            # spent asleep, and no privileged log is needed to find it.
+            before_awake = time.clock_gettime(
+                time.CLOCK_MONOTONIC
+            )
+
+            before_elapsed = time.clock_gettime(
+                time.CLOCK_BOOTTIME
+            )
+
             self._sleeper(
                 sleep_seconds
             )
+
+            awake = (
+                time.clock_gettime(
+                    time.CLOCK_MONOTONIC
+                )
+                - before_awake
+            )
+
+            elapsed = (
+                time.clock_gettime(
+                    time.CLOCK_BOOTTIME
+                )
+                - before_elapsed
+            )
+
+            suspended = elapsed - awake
+
+            if suspended >= SUSPEND_REPORTING_SECONDS:
+                self._logger.warning(
+                    (
+                        "scheduler_resumed_after_suspend "
+                        "suspended_seconds=%.0f "
+                        "slept_seconds=%.0f"
+                    ),
+                    suspended,
+                    awake,
+                )

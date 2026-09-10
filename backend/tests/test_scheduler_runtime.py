@@ -7,6 +7,7 @@ from types import (
 from backend.app.scheduling.registry import (
     SourceRegistry,
 )
+from backend.app.scheduling import runtime as runtime_module
 from backend.app.scheduling.runtime import (
     SchedulerRuntime,
 )
@@ -691,4 +692,151 @@ def test_every_source_is_rescheduled_after_a_concurrent_cycle() -> None:
     assert (
         runtime.seconds_until_next_poll()
         > 0
+    )
+
+
+# ----------------------------------------------------------------------
+# A suspended machine is not a dead scheduler
+#
+# The user asked why there had been no checks for over an hour. Nothing
+# was wrong: the laptop had slept, and time.sleep does not advance while
+# suspended, so the scheduler resumed and finished the remainder of its
+# sleep. From outside, though, that is indistinguishable from a crash,
+# and the container healthcheck cannot tell them apart either -- it was
+# suspended too, so on waking it saw a fresh poll and said healthy.
+#
+# CLOCK_MONOTONIC stops while suspended and CLOCK_BOOTTIME does not, so
+# the gap between them is the time spent asleep.
+# ----------------------------------------------------------------------
+
+
+def _sleep_spanning_suspend(
+    monkeypatch,
+    *,
+    suspended_seconds: float,
+) -> None:
+    """Make the two clocks disagree across the sleep by that much."""
+
+    import time as real_time
+
+    state = {"awake": 0.0, "elapsed": 0.0}
+
+    def clock_gettime(which):
+        if which == real_time.CLOCK_BOOTTIME:
+            return state["elapsed"]
+
+        return state["awake"]
+
+    monkeypatch.setattr(
+        runtime_module.time,
+        "clock_gettime",
+        clock_gettime,
+    )
+
+    return state
+
+
+def test_a_suspended_machine_is_reported(
+    monkeypatch,
+    caplog,
+) -> None:
+    """An hour-long hole in the activity log gets a reason attached."""
+
+    source = make_source(
+        poll_interval_seconds=10
+    )
+
+    clock = FakeClock()
+
+    state = _sleep_spanning_suspend(
+        monkeypatch,
+        suspended_seconds=3600,
+    )
+
+    def sleeper(
+        seconds: float,
+    ) -> None:
+        # Both clocks advance by the sleep, and only BOOTTIME advances
+        # by the hour the machine spent suspended on top of it.
+        state["awake"] += seconds
+        state["elapsed"] += seconds + 3600
+
+        clock.advance(
+            seconds
+        )
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                source,
+            )
+        ),
+        poller=lambda _source: make_result(),
+        clock=clock,
+        sleeper=sleeper,
+    )
+
+    with caplog.at_level(
+        "WARNING"
+    ):
+        runtime.run_forever(
+            max_cycles=2
+        )
+
+    assert any(
+        "scheduler_resumed_after_suspend"
+        in record.getMessage()
+        for record in caplog.records
+    )
+
+
+def test_an_ordinary_sleep_is_not_reported(
+    monkeypatch,
+    caplog,
+) -> None:
+    """The common case must stay silent, or the warning means nothing."""
+
+    source = make_source(
+        poll_interval_seconds=10
+    )
+
+    clock = FakeClock()
+
+    state = _sleep_spanning_suspend(
+        monkeypatch,
+        suspended_seconds=0,
+    )
+
+    def sleeper(
+        seconds: float,
+    ) -> None:
+        state["awake"] += seconds
+        state["elapsed"] += seconds
+
+        clock.advance(
+            seconds
+        )
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                source,
+            )
+        ),
+        poller=lambda _source: make_result(),
+        clock=clock,
+        sleeper=sleeper,
+    )
+
+    with caplog.at_level(
+        "WARNING"
+    ):
+        runtime.run_forever(
+            max_cycles=2
+        )
+
+    assert not any(
+        "scheduler_resumed_after_suspend"
+        in record.getMessage()
+        for record in caplog.records
     )
