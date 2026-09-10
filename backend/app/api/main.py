@@ -17,6 +17,7 @@ from datetime import (
     timezone,
 )
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import (
     Depends,
@@ -42,6 +43,7 @@ from backend.app.api.marks import (
     mark_counts,
     set_mark,
 )
+from backend.app.config import get_settings
 from backend.app.applications.parsing import (
     ApplicationParseError,
     parse_applications,
@@ -390,12 +392,33 @@ def _sheet_date(
     Their sheet carries no year, so the export does not add one. An
     export that reformats the columns it is meant to slot into is a
     file they have to fix before using.
+
+    Rendered in the user's own zone, not UTC. Instants are stored in
+    UTC, correctly, but "which day was this" is a question about where
+    the person was standing. Formatting the UTC value directly reported
+    an application marked at 19:43 on the 9th in Seattle as the 10th,
+    because UTC had already rolled over -- so ACE's own screen and the
+    sheet ACE exported disagreed about the same application.
     """
 
     if moment is None:
         return ""
 
-    return moment.strftime(
+    if (
+        moment.tzinfo is None
+        or moment.utcoffset()
+        is None
+    ):
+        moment = moment.replace(
+            tzinfo=timezone.utc
+        )
+
+    return moment.astimezone(
+        ZoneInfo(
+            get_settings()
+            .display_timezone
+        )
+    ).strftime(
         "%-d %B"
     )
 
@@ -1175,16 +1198,20 @@ def create_app() -> FastAPI:
                 )
             )
 
-        # Most recent first, with undated history last: an application
-        # whose date was never recorded is the least useful row to lead
-        # a sheet with.
+        # Oldest first, matching the order the user's own sheet is kept
+        # in: they append each new application to the bottom. Exporting
+        # newest-first handed them a file that was upside down relative
+        # to the one it was meant to slot into.
+        #
+        # Undated history still sorts last rather than first, because an
+        # application whose date was never recorded is the least useful
+        # row to open a sheet with.
         dated.sort(
             key=lambda pair: (
-                pair[0] is not None,
+                pair[0] is None,
                 pair[0]
                 or datetime.min,
             ),
-            reverse=True,
         )
 
         buffer = io.StringIO()

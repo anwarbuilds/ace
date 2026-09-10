@@ -7,6 +7,11 @@ Secrets must never be hard-coded into application source code.
 """
 
 from functools import lru_cache
+from zoneinfo import (
+    ZoneInfo,
+    ZoneInfoNotFoundError,
+)
+
 from pydantic import field_validator
 from pydantic_settings import (
     BaseSettings,
@@ -54,6 +59,26 @@ class Settings(BaseSettings):
     adzuna_app_key: str | None = None
 
 
+    # ------------------------------------------------------------------
+    # How dates are written for a person to read
+    # ------------------------------------------------------------------
+    #
+    # Instants are stored in UTC and that does not change. This is only
+    # for rendering a calendar date server-side, which is a different
+    # question: "which day was this, where the user was standing".
+    #
+    # The web client never had this problem, because it formats from an
+    # ISO string in the browser and picks up the reader's own zone. The
+    # CSV export did: it wrote UTC directly, so an application marked at
+    # 19:43 on a Tuesday in Seattle exported as Wednesday, because UTC
+    # had already rolled over. The user saw one date in ACE and a
+    # different one in the sheet ACE handed them.
+
+    display_timezone: str = (
+        "America/Los_Angeles"
+    )
+
+
     @field_validator(
         "max_alert_posting_age_days"
     )
@@ -75,8 +100,39 @@ class Settings(BaseSettings):
         return value
 
 
+    @field_validator(
+        "display_timezone"
+    )
+    @classmethod
+    def _validate_display_timezone(
+        cls,
+        value: str,
+    ) -> str:
+        """Require a zone the system can actually resolve.
 
+        Refused at startup rather than at render time. A bad zone name
+        would otherwise surface as a stack trace midway through writing
+        a spreadsheet, or worse, be silently swallowed and fall back to
+        UTC -- which is the bug this setting exists to fix.
+        """
 
+        try:
+            ZoneInfo(
+                value
+            )
+        except (
+            ZoneInfoNotFoundError,
+            ValueError,
+        ) as error:
+            raise ValueError(
+                (
+                    "DISPLAY_TIMEZONE must be "
+                    "an IANA zone name such "
+                    "as America/Los_Angeles."
+                )
+            ) from error
+
+        return value
 
 
 @lru_cache
