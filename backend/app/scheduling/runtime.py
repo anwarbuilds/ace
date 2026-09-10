@@ -67,6 +67,15 @@ DEFAULT_CONCURRENCY = 6
 SUSPEND_REPORTING_SECONDS = 120
 
 
+class RegistryReloader(Protocol):
+    """Returns the current source registry, read fresh."""
+
+    def __call__(
+        self,
+    ) -> SourceRegistry:
+        """Return the registry as it stands now."""
+
+
 class MonotonicClock(Protocol):
     """Monotonic scheduler clock."""
 
@@ -217,9 +226,24 @@ class SchedulerRuntime:
         cycle_recorder: (
             CycleRecorder | None
         ) = None,
+        reload_registry: (
+            RegistryReloader | None
+        ) = None,
     ) -> None:
         self._sources = (
             registry.enabled_sources
+        )
+
+        # Re-read the source list between cycles, so a source
+        # registered while the scheduler is running is polled without
+        # anyone restarting it.
+        #
+        # The registry used to be a snapshot taken at startup. That was
+        # invisible until a source was added from the interface and
+        # nothing happened for hours: the row was there, the board was
+        # reachable, and it looked like a bug.
+        self._reload_registry = (
+            reload_registry
         )
 
         self._poller = poller
@@ -249,6 +273,76 @@ class SchedulerRuntime:
             source.identity: 0.0
             for source in self._sources
         }
+
+    def _refresh_sources(
+        self,
+    ) -> None:
+        """Pick up sources registered since the last cycle.
+
+        A source that is already known keeps its next-due time, so a
+        reload never resets the schedule and never causes a burst of
+        re-polling. A source that has gone is dropped.
+        """
+
+        if self._reload_registry is None:
+            return
+
+        try:
+            sources = (
+                self._reload_registry()
+                .enabled_sources
+            )
+        except Exception:
+            # A database hiccup must not stop the scheduler; it keeps
+            # the list it already has and tries again next cycle.
+            self._logger.exception(
+                "scheduler_registry_reload_failed"
+            )
+
+            return
+
+        known = {
+            source.identity
+            for source in self._sources
+        }
+
+        added = [
+            source
+            for source in sources
+            if source.identity not in known
+        ]
+
+        removed = known - {
+            source.identity
+            for source in sources
+        }
+
+        if not added and not removed:
+            return
+
+        self._sources = sources
+
+        with self._due_lock:
+            for source in added:
+                self._next_due_at[
+                    source.identity
+                ] = 0.0
+
+            for identity in removed:
+                self._next_due_at.pop(
+                    identity,
+                    None,
+                )
+
+        self._logger.info(
+            (
+                "scheduler_sources_reloaded "
+                "added=%d removed=%d total=%d"
+            ),
+            len(added),
+            len(removed),
+            len(sources),
+        )
 
     @property
     def source_count(
@@ -589,6 +683,8 @@ class SchedulerRuntime:
                 )
 
                 return
+
+            self._refresh_sources()
 
             sleep_seconds = (
                 self.seconds_until_next_poll()

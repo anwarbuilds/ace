@@ -43,6 +43,10 @@ from backend.app.api.marks import (
     mark_counts,
     set_mark,
 )
+from backend.app.coverage.service import (
+    add_source,
+    coverage as coverage_report,
+)
 from backend.app.answers.catalogue import (
     aliases_for,
     describe as describe_answer,
@@ -220,6 +224,12 @@ class HistoryList(BaseModel):
     """A whole history, in the order the blocks should be filled."""
 
     items: list[HistoryItem] = []
+
+
+class SourceRequest(BaseModel):
+    """A company to start watching, as a URL or a name."""
+
+    text: str = ""
 
 
 class MarkUpdate(BaseModel):
@@ -1550,6 +1560,75 @@ def create_app() -> FastAPI:
 
         return {
             "saved": written,
+        }
+
+    @app.get(
+        "/api/coverage"
+    )
+    def get_coverage(
+        session: Session = Depends(
+            get_session
+        ),
+    ) -> dict:
+        """Report which target companies ACE cannot currently reach.
+
+        The number that matters is the one nobody was being shown. A
+        posting was found by hand at a company ACE had never heard of,
+        and nothing anywhere said there were companies it could not
+        see.
+        """
+
+        return coverage_report(
+            session
+        )
+
+    @app.post(
+        "/api/sources"
+    )
+    def post_source(
+        payload: SourceRequest,
+        session: Session = Depends(
+            get_session
+        ),
+    ) -> dict:
+        """Start watching the company a URL or name refers to.
+
+        Slow by the standards of this API -- it makes real requests to
+        a third party -- and deliberately synchronous, because the
+        answer is the whole point: the user wants to know whether the
+        company is now covered, not that a job was queued.
+        """
+
+        text = payload.text.strip()
+
+        if not text:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Give a careers URL, a job "
+                    "link, or a company name."
+                ),
+            )
+
+        result = add_source(
+            session,
+            text=text,
+        )
+
+        return {
+            "status": result.status,
+            "company": result.company,
+            "source_type": (
+                result.source_type
+            ),
+            "source_account": (
+                result.source_account
+            ),
+            "job_count": (
+                result.job_count
+            ),
+            "evidence": result.evidence,
+            "detail": result.detail,
         }
 
     @app.get(

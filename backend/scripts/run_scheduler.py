@@ -350,10 +350,35 @@ def main(
                 run.qualifying_discovered,
             )
 
+    def reload_registry() -> SourceRegistry:
+        """Read the source list again, in its own short session.
+
+        Called between cycles so a company registered from the
+        interface starts being polled without a restart. Kept subject
+        to the same --source-type/--source-account selection as the
+        first load, or a diagnostic run narrowed to one source would
+        quietly widen to all of them.
+        """
+
+        with SessionLocal() as session:
+            return select_source_registry(
+                load_source_registry(
+                    session
+                ),
+                source_type=(
+                    args.source_type
+                ),
+                source_account=(
+                    args.source_account
+                ),
+                limit=args.limit,
+            )
+
     runtime = SchedulerRuntime(
         registry=registry,
         poller=poll_source,
         cycle_recorder=record_cycle,
+        reload_registry=reload_registry,
     )
 
     if runtime.source_count == 0:

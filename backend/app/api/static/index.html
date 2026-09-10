@@ -481,6 +481,16 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .pop-note{font-size:11px;color:var(--text-muted);padding:6px 9px}
 .ans-sec{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);padding:20px 0 7px;border-top:1px solid var(--border);margin-top:14px}
 .ans-sec:first-child{border-top:0;margin-top:0;padding-top:0}
+/* Coverage: the gap made visible, and the box that closes one. */
+.cov-add{display:flex;gap:8px;margin:14px 0 6px}
+.cov-add input{flex:1;background:var(--surface-2);color:var(--text);border:1px solid var(--border);
+  border-radius:8px;padding:10px 12px;font-size:13px;font-family:var(--sans)}
+.cov-add input:focus{border-color:var(--purple)}
+.cov-out{font-size:12.5px;margin-top:8px;line-height:1.5}
+.cov-out.ok{color:var(--success)} .cov-out.warn{color:var(--warning)}
+.cov-names{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.cov-name{background:var(--surface-2);border:1px solid var(--border);border-radius:999px;
+  padding:5px 11px;font-size:12px;color:var(--text-secondary)}
 /* A repeating block: a job or a degree. Bordered as one object,
    because that is what a form shows and what Remove removes. */
 .hist{border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;
@@ -806,6 +816,7 @@ function loadShell(){
     get("/api/resume").then(function(d){ state.resume=d.resume; state.gap=d.skills_gap||[]; }),
     get("/api/marks").then(function(d){ state.markCounts=d; }),
     get("/api/answers").then(function(d){ state.answers=d.items||[]; }),
+    get("/api/coverage").then(function(d){ state.coverage=d; }),
     get("/api/history/work").then(function(d){ state.work=d.items||[]; }),
     get("/api/history/education").then(function(d){ state.education=d.items||[]; }),
     loadExternal(),
@@ -938,6 +949,8 @@ function sidebar(){
       navItem("skills","Skills",null,I.grid)+
       navItem("answers","Answers",
         state.answers.filter(function(a){return a.value;}).length||null,I.copy)+
+      navItem("coverage","Coverage",
+        (state.coverage&&state.coverage.unreached.length)||null,I.grid)+
     '</div>'+
     '<div class="side-foot">'+
       '<button class="nav-item" data-act="live"><span class="dot'+(isStale()?" stale":"")+'"></span>'+
@@ -1820,6 +1833,76 @@ function collectHistory(kind){
   });
 }
 
+/* Coverage: what ACE cannot see, and the box that fixes one.
+
+   The two belong on the same page. A Cursor posting was found by hand
+   because nothing anywhere said "there are companies you cannot see",
+   and a number with no way to act on it would be only half the
+   lesson. */
+function coveragePage(){
+  var c=state.coverage;
+  if(!c) return '<div class="head"><div class="head-row"><h1 class="h1">Coverage</h1></div></div>'+
+    '<div class="page"><div class="wrap"><p class="why">Loading…</p></div></div>';
+  var pct=c.total?Math.round(100*c.reached/c.total):0;
+  return '<div class="head"><div class="head-row"><h1 class="h1">Coverage</h1>'+
+      '<span class="h1-count">'+c.reached+' of '+c.total+'</span>'+
+      '<span class="spacer"></span>'+liveChip()+'</div></div>'+
+    '<div class="page"><div class="wrap">'+
+      '<p class="why" style="max-width:74ch">ACE polls '+c.sources+' boards and reaches <b>'+
+        c.reached+' of '+c.total+'</b> companies on your list ('+pct+'%). '+
+        'The rest are listed below: ACE cannot read their boards, usually because they self-host, '+
+        'sit on Workday, or build their careers page in the browser. '+
+        'This page exists so a gap is a number you can see rather than something you find by '+
+        'clicking a job ACE never had.</p>'+
+      '<div class="ans-sec">Add a company</div>'+
+      '<p class="why" style="margin:0">Paste a job link, a careers page, or just a company name. '+
+        'ACE works out which board it is, checks the board really belongs to them, and starts '+
+        'polling. It never registers a board it cannot verify.</p>'+
+      '<div class="cov-add">'+
+        '<input id="cov-input" type="text" spellcheck="false" '+
+          'placeholder="https://company.com/careers  ·  or  ·  Cursor" '+
+          'value="'+esc(state.coverageInput||"")+'">'+
+        '<button class="btn btn-primary" data-act="addsource">Add</button>'+
+      '</div>'+
+      (state.coverageMsg
+        ? '<div class="cov-out '+esc(state.coverageMsgKind||"")+'">'+esc(state.coverageMsg)+'</div>'
+        : '')+
+      '<div class="ans-sec">Cannot reach ('+c.unreached.length+')</div>'+
+      '<div class="cov-names">'+
+        c.unreached.map(function(n){ return '<span class="cov-name">'+esc(n)+'</span>'; }).join("")+
+      '</div>'+
+    '</div></div>';
+}
+function addSource(){
+  var box=document.getElementById("cov-input");
+  var text=box?box.value.trim():"";
+  if(!text){ state.coverageMsg="Paste a link or a company name first."; state.coverageMsgKind="warn"; render(); return; }
+  state.coverageInput=text;
+  state.coverageMsg="Looking for a board at "+text+"…";
+  state.coverageMsgKind="";
+  render();
+  fetch(API+"/api/sources",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({text:text})})
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(d.status==="added"){
+      state.coverageMsg="Now watching "+d.company+" — "+d.source_type+"/"+d.source_account+
+        ", "+d.job_count+" postings. Verified: "+d.evidence+". Its jobs appear within a few minutes.";
+      state.coverageMsgKind="ok";
+      state.coverageInput="";
+    } else if(d.status==="already_known"){
+      state.coverageMsg="ACE already watches "+(d.company||d.source_account)+".";
+      state.coverageMsgKind="";
+      state.coverageInput="";
+    } else {
+      state.coverageMsg=d.detail||"No board ACE can read was found there.";
+      state.coverageMsgKind="warn";
+    }
+    return get("/api/coverage");
+  })
+  .then(function(d){ state.coverage=d; render(); })
+  .catch(function(){ state.coverageMsg="Could not reach ACE."; state.coverageMsgKind="warn"; render(); });
+}
 function answersPage(){
   var rows=state.answers.length?state.answers:[{id:"new0",label:"",value:""}];
   return '<div class="head"><div class="head-row"><h1 class="h1">Answers</h1>'+
@@ -1894,6 +1977,7 @@ function render(keepScroll){
   else if(state.page==="skills") main=skillsPage();
   else if(state.page==="settings") main=settingsPage();
   else if(state.page==="answers") main=answersPage();
+  else if(state.page==="coverage") main=coveragePage();
   else main=queuePage();
 
   app.innerHTML=sidebar()+
@@ -2445,6 +2529,7 @@ document.addEventListener("click",function(e){
       }
       return; }
     if(d.act==="delrow"){ var r=t.closest(".ans-edit"); if(r) r.remove(); return; }
+    if(d.act==="addsource"){ addSource(); return; }
     if(d.act==="delhist"){ var h=t.closest(".hist"); if(h) h.remove(); return; }
     if(d.act==="addhist"){
       // Appended to the live DOM rather than to state, so anything

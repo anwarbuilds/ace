@@ -840,3 +840,172 @@ def test_an_ordinary_sleep_is_not_reported(
         in record.getMessage()
         for record in caplog.records
     )
+
+
+# ----------------------------------------------------------------------
+# Picking up a source registered while running
+#
+# The registry used to be a snapshot taken at startup, so a company
+# added from the interface sat unpolled until someone restarted the
+# scheduler. The row was there and the board was reachable, which made
+# it look like a bug rather than a missing step.
+# ----------------------------------------------------------------------
+
+
+def test_a_source_added_while_running_is_picked_up() -> None:
+    """What makes adding a company from the interface actually work."""
+
+    first = make_source(
+        source_account="one",
+        poll_interval_seconds=10,
+    )
+
+    second = make_source(
+        source_account="two",
+        poll_interval_seconds=10,
+    )
+
+    clock = FakeClock()
+
+    polled: list[str] = []
+
+    def poller(
+        source: SourceDefinition,
+    ):
+        polled.append(
+            source.source_account
+        )
+
+        return make_result()
+
+    registries = [
+        SourceRegistry(
+            (
+                first,
+            )
+        ),
+        SourceRegistry(
+            (
+                first,
+                second,
+            )
+        ),
+    ]
+
+    def reload_registry():
+        # Grows by one between the first cycle and the second.
+        return registries[
+            min(
+                len(
+                    registries
+                )
+                - 1,
+                1,
+            )
+        ]
+
+    runtime = SchedulerRuntime(
+        registry=registries[0],
+        poller=poller,
+        clock=clock,
+        sleeper=clock.advance,
+        reload_registry=reload_registry,
+    )
+
+    runtime.run_forever(
+        max_cycles=2
+    )
+
+    assert "two" in polled
+
+
+def test_a_reload_does_not_reset_an_existing_schedule() -> None:
+    """A reload must not re-poll everything it already knew about.
+
+    Otherwise every added company would cause a burst across every
+    board, which is neither necessary nor polite.
+    """
+
+    source = make_source(
+        source_account="one",
+        poll_interval_seconds=600,
+    )
+
+    clock = FakeClock()
+
+    polled: list[str] = []
+
+    def poller(
+        definition: SourceDefinition,
+    ):
+        polled.append(
+            definition.source_account
+        )
+
+        return make_result()
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                source,
+            )
+        ),
+        poller=poller,
+        clock=clock,
+        sleeper=clock.advance,
+        reload_registry=lambda: SourceRegistry(
+            (
+                source,
+            )
+        ),
+    )
+
+    runtime.run_forever(
+        max_cycles=3
+    )
+
+    # Polled once per interval, not once per reload.
+    assert len(
+        polled
+    ) == 3
+
+
+def test_a_failing_reload_does_not_stop_the_scheduler() -> None:
+    """A database hiccup must not take the scheduler down with it."""
+
+    source = make_source(
+        source_account="one",
+        poll_interval_seconds=10,
+    )
+
+    clock = FakeClock()
+
+    polled: list[str] = []
+
+    def boom():
+        raise RuntimeError(
+            "database unavailable"
+        )
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                source,
+            )
+        ),
+        poller=lambda definition: (
+            polled.append(
+                definition.source_account
+            )
+            or make_result()
+        ),
+        clock=clock,
+        sleeper=clock.advance,
+        reload_registry=boom,
+    )
+
+    runtime.run_forever(
+        max_cycles=2
+    )
+
+    assert polled
