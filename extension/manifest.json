@@ -5,7 +5,8 @@
   "description": "Fills application forms from the answer bank in your local ACE instance. It never submits anything.",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "scripting"
   ],
   "host_permissions": [
     "http://localhost:8000/*",

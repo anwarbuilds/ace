@@ -186,7 +186,9 @@ var ACE_RULES = [
     any: ["portfolio", "personal website", "personal site", "website",
           "other website"] },
 
-  { answer: "Postcode", type: ACE_TEXT, any: ["zip", "postal code", "postcode"] },
+  { answer: "Postcode", type: ACE_TEXT,
+    // "postal" bare is what the name attribute and the placeholder say.
+    any: ["zip", "zipcode", "postal", "postal code", "postcode"] },
   { answer: "City", type: ACE_TEXT, any: ["city", "town"] },
   { answer: "State", type: ACE_TEXT,
     any: ["state", "province", "region"],
@@ -237,8 +239,9 @@ var ACE_RULES = [
   // ------------------------------------------------------------------
 
   { answer: "Earliest start date", type: ACE_TEXT,
-    any: ["start date", "available to start", "earliest start",
-          "when can you start", "availability to start"] },
+    any: ["start date", "startdate", "available to start",
+          "earliest start", "when can you start",
+          "availability to start"] },
   { answer: "Salary expectation", type: ACE_TEXT,
     any: ["salary", "desired compensation", "compensation expectation",
           "expected pay", "pay expectation"] },
@@ -255,8 +258,10 @@ var ACE_RULES = [
     any: ["role you are applying for located", "role located in",
           "position located in", "job located in"] },
   { answer: "Willing to relocate", type: ACE_YESNO,
+    // "relocate" bare is what a name attribute says, and a question
+    // containing the word is not plausibly about anything else.
     any: ["willing to relocate", "open to relocat", "relocation required",
-          "able to relocate"] },
+          "able to relocate", "relocate", "relocation"] },
   { answer: "Willing to work onsite", type: ACE_YESNO,
     any: ["willing to work from", "local office", "onsite and in person",
           "work in office", "work from the office", "commute to"] },
@@ -386,6 +391,13 @@ function aceNormalise(text) {
     // on the punctuation is what lets one written phrase match both
     // "u s government" and "us government".
     .replace(/[.'’`]/g, " ")
+    // A field whose label is not associated with it falls back to its
+    // name attribute, and those are written first_name, last_name,
+    // start_date. No rule phrase contains an underscore, so turning
+    // them into spaces costs nothing and recovers every such field.
+    // Hyphens are deliberately left alone: collapsing them would stop
+    // "e-mail" matching the email rule.
+    .replace(/_/g, " ")
     .replace(/\s+/g, " ")
     .toLowerCase()
     .trim();

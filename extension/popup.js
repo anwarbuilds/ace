@@ -14,6 +14,7 @@
 var base = document.getElementById("base");
 var answerLine = document.getElementById("answers");
 var pageLine = document.getElementById("page");
+var fillButton = document.getElementById("fill");
 
 chrome.storage.local.get({ base: "http://localhost:8000" }, function (config) {
   base.value = config.base;
@@ -43,6 +44,45 @@ function check() {
   // Asked of the page itself. The content script is the only thing
   // that knows whether it recognised any questions here, and a host
   // name never did.
+  withActiveTab(function (tab) {
+    ask(
+      tab,
+      { type: "status" },
+      function (reply, missing) {
+        if (missing) {
+          // Not "ACE does not work here". A content script only
+          // injects while a page is loading, so a tab that was already
+          // open when the extension was reloaded has none, whatever
+          // the manifest says. Telling the user to reload the page was
+          // a poor answer to that, and the Fill button below now
+          // injects on demand instead.
+          pageLine.className = "s warn";
+          pageLine.textContent =
+            "ACE has not loaded into this tab yet. " +
+            "Press Fill this page.";
+          return;
+        }
+
+        pageLine.className = reply.fields ? "s" : "s warn";
+        pageLine.textContent = reply.fields
+          ? "ACE recognises " + reply.fields +
+            " question" + (reply.fields === 1 ? "" : "s") + " here."
+          : "ACE recognises nothing to fill on this page.";
+      }
+    );
+  });
+}
+
+fillButton.addEventListener("click", fillActivePage);
+
+document.getElementById("save").addEventListener("click", function () {
+  chrome.storage.local.set(
+    { base: base.value.trim() || "http://localhost:8000" },
+    check
+  );
+});
+
+function withActiveTab(run) {
   chrome.tabs.query(
     { active: true, currentWindow: true },
     function (tabs) {
@@ -54,32 +94,84 @@ function check() {
         return;
       }
 
-      chrome.tabs.sendMessage(
-        tab.id,
-        { type: "status" },
-        function (reply) {
-          if (chrome.runtime.lastError || !reply) {
-            pageLine.className = "s warn";
-            pageLine.textContent =
-              "Not an application form, so ACE is staying quiet. " +
-              "Reload the page if you expected it here.";
-            return;
-          }
-
-          pageLine.className = reply.fields ? "s" : "s warn";
-          pageLine.textContent = reply.fields
-            ? "ACE recognises " + reply.fields +
-              " question" + (reply.fields === 1 ? "" : "s") + " here."
-            : "ACE recognises nothing to fill on this page.";
-        }
-      );
+      run(tab);
     }
   );
 }
 
-document.getElementById("save").addEventListener("click", function () {
-  chrome.storage.local.set(
-    { base: base.value.trim() || "http://localhost:8000" },
-    check
+/* Send a message to the page, reporting separately whether nobody was
+   listening. That case is not an answer of "no", it is "ACE is not in
+   this tab", and the two need different words and different remedies. */
+function ask(tab, message, done) {
+  chrome.tabs.sendMessage(
+    tab.id,
+    message,
+    function (reply) {
+      if (chrome.runtime.lastError || !reply) {
+        done(null, true);
+        return;
+      }
+
+      done(reply, false);
+    }
   );
-});
+}
+
+/* Put ACE into this tab, then run it.
+
+   The manifest injects on page load, which cannot help a tab that was
+   already open, or one opened before the extension was last reloaded.
+   Injecting here covers both, and the user clicking Fill is a better
+   signal than any heuristic about whether the page is an application
+   form -- so the wake message runs it either way.
+
+   content.js refuses to initialise twice, so injecting over a script
+   that is already there is harmless. */
+function fillActivePage() {
+  withActiveTab(function (tab) {
+    fillButton.disabled = true;
+    pageLine.className = "s";
+    pageLine.textContent = "Loading ACE into this page...";
+
+    chrome.scripting.insertCSS(
+      { target: { tabId: tab.id }, files: ["content.css"] },
+      function () {
+        chrome.scripting.executeScript(
+          {
+            target: { tabId: tab.id },
+            files: ["fields.js", "content.js"],
+          },
+          function () {
+            fillButton.disabled = false;
+
+            if (chrome.runtime.lastError) {
+              pageLine.className = "s warn";
+              pageLine.textContent =
+                "Chrome will not let ACE run on this page.";
+              return;
+            }
+
+            ask(
+              tab,
+              { type: "wake" },
+              function (_reply, missing) {
+                if (missing) {
+                  pageLine.className = "s warn";
+                  pageLine.textContent =
+                    "Injected, but the page did not answer.";
+                  return;
+                }
+
+                pageLine.className = "s";
+                pageLine.textContent =
+                  "ACE is on the page. Review it there, then Fill.";
+
+                window.close();
+              }
+            );
+          }
+        );
+      }
+    );
+  });
+}

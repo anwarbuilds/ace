@@ -6,6 +6,16 @@
    guessed at. */
 
 (function () {
+  /* Injected on demand as well as declared in the manifest, so this
+     runs twice on a page where both happen. Two copies means two
+     panels and two fills, so the second one leaves quietly.
+
+     A content script gets its own isolated world, but the same world
+     each time, so a flag on window is visible to the next injection
+     and invisible to the page. */
+  if (window.__aceLoaded) return;
+  window.__aceLoaded = true;
+
   var answers = {};
   var aliases = {};
   // Work and study history, most recent first. Kept apart from answers
@@ -81,7 +91,15 @@
     if (!option) return true;
     if (!option.value) return true;
 
-    return /^(select|choose|please select|-+|)\s*\.*$/.test(
+    // "No answer" is JazzHR's default for every dropdown, and it is a
+    // placeholder however it reads: treating it as an answer made ACE
+    // skip the relocation and felony questions on a real form and
+    // report them as already filled.
+    //
+    // Deliberately not including "none", which a person can mean.
+    // These are all wordings a form ships selected, never ones a
+    // person chooses.
+    return /^(select|choose|please select|please choose|select one|no answer|n\/a|-+|)\s*\.*$/.test(
       aceNormalise(option.textContent)
     );
   }
@@ -1162,6 +1180,23 @@
      host list used to be able to describe. */
   chrome.runtime.onMessage.addListener(
     function (message, sender, respond) {
+      if (message && message.type === "wake") {
+        // The user clicked Fill in the popup, which is a better signal
+        // than any heuristic: run whether or not the page looked like
+        // an application, and undo an earlier dismissal.
+        dismissed = false;
+
+        if (loaded) {
+          lastResult = null;
+          refresh();
+        } else {
+          start();
+        }
+
+        respond({ ok: true });
+        return;
+      }
+
       if (!message || message.type !== "status") return;
 
       var recognised = 0;

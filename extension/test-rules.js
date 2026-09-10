@@ -139,6 +139,20 @@ var DELL_CASES = [
    + "regular basis at your employer's facilities?", "yesno",
    "Employer relationship with this company"],
 
+  // A label not associated with its input leaves only the name
+  // attribute, and those are written with underscores or run together.
+  // A whole JazzHR form filled nothing but email and phone before
+  // aceNormalise split on the underscore.
+  ["first_name", "text", "First name"],
+  ["last_name", "text", "Last name"],
+  ["start_date", "text", "Earliest start date"],
+  ["startdate", "text", "Earliest start date"],
+  ["relocate", "yesno", "Willing to relocate"],
+  ["felony", "yesno", "Criminal conviction"],
+
+  // Hyphens stay, or "e-mail" stops reaching the email rule.
+  ["e-mail", "text", "Email"],
+
   // What the kind is for. The same wording offered as a Yes/No pair
   // must not reach an answer that is free text, whatever it matches.
   ["what is your current state?", "yesno", null],

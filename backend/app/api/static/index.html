@@ -835,9 +835,32 @@ function putMark(id,body){
   return fetch(API+"/api/marks/"+id,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
     .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); });
 }
+/* Every in-memory copy of one job, because there is more than one.
+
+   The same posting can sit in state.items, in a pull session's own
+   list, in state.detailJob and in state.heldRow at the same time.
+   jobById returns whichever it finds first, so marking a job from its
+   detail page updated the copy held by the pulls feed and left the one
+   the page was rendering from untouched: the mark saved server-side,
+   the toast fired, and the page still said "Not applied yet" with the
+   Applied button unlit until a reload. */
+function jobCopies(id){
+  var out=[];
+  for(var i=0;i<state.items.length;i++) if(state.items[i].id===id) out.push(state.items[i]);
+  for(var s=0;s<state.sessions.length;s++){
+    var js=state.sessions[s].jobs||[];
+    for(var k=0;k<js.length;k++) if(js[k].id===id) out.push(js[k]);
+  }
+  if(state.detailJob&&state.detailJob.id===id) out.push(state.detailJob);
+  if(state.heldRow&&state.heldRow.id===id) out.push(state.heldRow);
+  return out;
+}
 function applyMark(j,res){
-  j.is_saved=res.is_saved; j.review_state=res.review_state; j.applied_at=res.applied_at;
-  j.application_status=res.application_status; j.status_changed_at=res.status_changed_at;
+  jobCopies(j.id).concat(j).forEach(function(copy){
+    copy.is_saved=res.is_saved; copy.review_state=res.review_state;
+    copy.applied_at=res.applied_at; copy.application_status=res.application_status;
+    copy.status_changed_at=res.status_changed_at;
+  });
 }
 function mark(id,key,advance){
   var j=jobById(id);
