@@ -48,7 +48,6 @@ class SourceType(StrEnum):
     # A job-search aggregator, not one company's own board. Reads
     # broadly across employers ACE has no direct adapter for, rather
     # than one tenant's postings.
-    ADZUNA = "adzuna"
 
 
 def _require_non_empty(

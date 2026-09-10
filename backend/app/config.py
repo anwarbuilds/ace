@@ -47,17 +47,6 @@ class Settings(BaseSettings):
 
     alert_on_unknown_posting_age: bool = False
 
-    # ------------------------------------------------------------------
-    # Adzuna aggregator credentials
-    # ------------------------------------------------------------------
-    #
-    # Optional: the Adzuna source is simply unregistered without them.
-    # Free registration at developer.adzuna.com.
-
-    adzuna_app_id: str | None = None
-
-    adzuna_app_key: str | None = None
-
 
     # ------------------------------------------------------------------
     # How dates are written for a person to read
