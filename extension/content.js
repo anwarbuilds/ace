@@ -8,6 +8,14 @@
 (function () {
   var answers = {};
   var aliases = {};
+  // Work and study history, most recent first. Kept apart from answers
+  // because they are a list, not a value: the second block on a form
+  // asks the same questions as the first and must get a different job.
+  var histories = { work: [], education: [] };
+  // The fields the history pass owns on this page, so the flat pass
+  // leaves them alone. Without this the bank's single "University"
+  // would be typed into every school box of every education block.
+  var historyOwned = null;
   var lastFill = [];
   var loaded = false;
   // The element fillOne actually ticked, which for a group is not
@@ -249,6 +257,201 @@
     return true;
   }
 
+  /* Every history block on the page, in the order a person reads them.
+
+     The employer box is the anchor: one per block, present in every
+     block, and the thing the block is about. A block is then the
+     smallest ancestor holding that box and no other employer box --
+     the same climb aceOwnGroup does for a single question, widened to
+     a repeating unit. Every other history field is assigned to
+     whichever block contains it.
+
+     Returns a list of {node, fields:[{field, role}]}, or an empty list
+     on a page that has no such section, which is most of them. */
+  function historyBlocks(kind) {
+    var anchors = [];
+
+    fillable().forEach(function (field) {
+      var question = aceQuestionFor(field);
+      if (!question) return;
+
+      if (aceHistoryRole(field, question) === "employer") {
+        anchors.push(field);
+      }
+    });
+
+    if (anchors.length < 1) return [];
+
+    var blocks = anchors.map(function (field) {
+      return { node: blockAround(field, anchors), fields: [] };
+    }).filter(function (block) {
+      return !!block.node;
+    });
+
+    if (!blocks.length) return [];
+
+    // Assign every history field to its block. Done as a second pass
+    // rather than by querying inside each block, because a date
+    // dropdown's side depends on where it sits within the block and
+    // that is only knowable once the block is known.
+    fillable().forEach(function (field) {
+      var question = aceQuestionFor(field);
+      if (!question) return;
+
+      var role = aceHistoryRole(field, question);
+      if (!role) return;
+
+      for (var i = 0; i < blocks.length; i++) {
+        if (!blocks[i].node.contains(field)) continue;
+
+        if (role === "month" || role === "year") {
+          var side = aceDateSide(field, blocks[i].node);
+          if (!side) return;
+          role = side + (role === "month" ? "Month" : "Year");
+        }
+
+        blocks[i].fields.push({ field: field, role: role });
+        return;
+      }
+    });
+
+    return blocks;
+  }
+
+  /* The smallest ancestor holding this employer box and no other. */
+  function blockAround(field, anchors) {
+    var node = field.parentElement;
+    var best = null;
+
+    for (var depth = 0; node && depth < 12; depth++) {
+      var inside = anchors.filter(function (other) {
+        return node.contains(other);
+      });
+
+      if (inside.length > 1) break;
+
+      best = node;
+      node = node.parentElement;
+    }
+
+    return best;
+  }
+
+  /* Which fields the history pass will handle, so the flat pass skips
+     them. Recomputed per pass, because a Remove link changes it. */
+  function historyFieldSet() {
+    var owned = [];
+
+    ["work", "education"].forEach(function (kind) {
+      historyBlocks(kind).forEach(function (block) {
+        block.fields.forEach(function (entry) {
+          owned.push(entry.field);
+        });
+      });
+    });
+
+    return owned;
+  }
+
+  function ownedByHistory(field) {
+    if (historyOwned === null) historyOwned = historyFieldSet();
+
+    return historyOwned.indexOf(field) >= 0;
+  }
+
+  /* What the history pass would do, block by block.
+
+     A page's blocks are matched to stored entries by position: the
+     first block gets the most recent job, because that is the order
+     every one of these forms lists them in. A block with no entry
+     behind it is left entirely alone rather than half-filled.
+
+     `apply` false reports without touching the page, which is what
+     the preview needs. */
+  function runHistory(kind, apply) {
+    var entries = histories[kind] || [];
+    if (!entries.length) return [];
+
+    var done = [];
+
+    // A Yes/No group is two elements holding one answer, so without
+    // this the preview lists "Job 1 current: Yes" twice and reads like
+    // a mistake.
+    var reported = {};
+
+    historyBlocks(kind).forEach(function (block, index) {
+      var entry = entries[index];
+      if (!entry) return;
+
+      block.fields.forEach(function (slot) {
+        var value = aceHistoryValue(entry, slot.role);
+        if (!value) return;
+
+        var group = aceIsChoiceControl(slot.field)
+          ? groupMembers(slot.field)
+          : [slot.field];
+
+        if (!group.every(aceIsEmpty)) return;
+
+        var label = historyLabel(kind, index, slot.role);
+
+        if (!apply) {
+          if (reported[label]) return;
+          reported[label] = 1;
+
+          done.push([
+            label,
+            value
+          ]);
+          return;
+        }
+
+        lastPicked = null;
+
+        var previous = slot.field.value;
+
+        if (!fillOne(slot.field, value)) return;
+
+        var touched = lastPicked || slot.field;
+
+        touched.classList.add("ace-filled");
+
+        lastFill.push({
+          field: touched,
+          previous: previous,
+          ticked: aceIsChoiceControl(touched)
+        });
+
+        if (reported[label]) return;
+        reported[label] = 1;
+
+        done.push([
+          label,
+          value
+        ]);
+      });
+    });
+
+    return done;
+  }
+
+  var ACE_ROLE_LABELS = {
+    employer: "employer",
+    jobTitle: "title",
+    location: "location",
+    isCurrent: "current",
+    startMonth: "start month",
+    startYear: "start year",
+    endMonth: "end month",
+    endYear: "end year",
+    description: "description"
+  };
+
+  function historyLabel(kind, index, role) {
+    return (kind === "work" ? "Job " : "Study ") + (index + 1) +
+      " " + (ACE_ROLE_LABELS[role] || role);
+  }
+
   function plan() {
     var filled = [];
     var unknown = [];
@@ -258,7 +461,15 @@
     var unmatched = [];
     var already = 0;
 
+    historyOwned = null;
+
     fillable().forEach(function (field) {
+      // A repeating block's fields belong to the history pass below.
+      // The bank holds one value per question, so left to the flat
+      // pass its single "University" would be typed into every school
+      // box of every education block.
+      if (ownedByHistory(field)) return;
+
       var question = aceQuestionFor(field);
       if (!question) return;
 
@@ -317,6 +528,12 @@
     // other options reported on the way past.
     unmatched = unmatched.filter(function (name) {
       return filled.indexOf(name) < 0;
+    });
+
+    ["work", "education"].forEach(function (kind) {
+      runHistory(kind, true).forEach(function (pair) {
+        filled.push(pair[0]);
+      });
     });
 
     return {
@@ -507,6 +724,42 @@
     }).length >= 4;
   }
 
+  /* Whether this page is an application form worth waking up for.
+
+     The manifest used to name the boards ACE ran on, and that list
+     could not be made to hold: a substantial share of one real user's applications
+     went through 19 hosts it did not cover, because most companies
+     self-host on their own domain -- stripe.com, careers.roblox.com,
+     nuro.ai -- and Oracle hands each tenant a subdomain of its own.
+     Adding them one at a time is a game with no last move.
+
+     So the extension runs everywhere and decides for itself, and this
+     is the decision. Counting boxes is not enough on a page that could
+     be anything, so it also requires that ACE recognise a couple of the
+     questions. That costs nothing -- naming a question needs no
+     network and no answers -- and it is the honest test: a page where
+     ACE knows none of the questions is a page it has nothing to say
+     about, whatever the host. */
+  function looksLikeApplication() {
+    if (!looksLikeForm()) return false;
+
+    var recognised = 0;
+
+    var fields = fillable();
+
+    for (var i = 0; i < fields.length; i++) {
+      var question = aceQuestionFor(fields[i]);
+      if (!question) continue;
+
+      if (aceAnswerNameFor(question, kindOf(fields[i]))) {
+        recognised += 1;
+        if (recognised >= 2) return true;
+      }
+    }
+
+    return false;
+  }
+
   /* React reconciles the nodes it owns and drops the class ACE put on
      them, so on a React form the outline vanishes a moment after the
      fill and the user cannot see what was touched. */
@@ -568,7 +821,11 @@
     var noAnswer = [];
     var seen = {};
 
+    historyOwned = null;
+
     fillable().forEach(function (field) {
+      if (ownedByHistory(field)) return;
+
       var question = aceQuestionFor(field);
       if (!question) return;
 
@@ -640,6 +897,16 @@
 
       seen["a:" + name] = 1;
       willFill.push([name, tidy(shown)]);
+    });
+
+    // Reported per block and per field, because "Job 2 start month" is
+    // the only version of this the user can check at a glance. A count
+    // of eighteen filled fields tells them nothing about whether the
+    // second job went into the second block.
+    ["work", "education"].forEach(function (kind) {
+      runHistory(kind, false).forEach(function (pair) {
+        willFill.push([pair[0], tidy(pair[1])]);
+      });
     });
 
     return {
@@ -785,6 +1052,24 @@
 
       loaded = true;
       lastHref = location.href;
+
+      // Fetched after the answers rather than in parallel: a page with
+      // no repeating section is the common case, and the panel should
+      // not wait on a request it will not use. refresh() is called
+      // again once they land.
+      chrome.runtime.sendMessage(
+        { type: "history" },
+        function (reply) {
+          if (chrome.runtime.lastError) return;
+          if (!reply || !reply.ok) return;
+
+          histories.work = reply.work || [];
+          histories.education = reply.education || [];
+
+          refresh();
+        }
+      );
+
       refresh();
 
       var queued = null;
@@ -868,12 +1153,76 @@
   /* document_idle should guarantee a body, but the script also runs in
      every frame, and a frame can be that early. Without this the first
      appendChild throws and the extension dies silently. */
+  /* What the popup asks, so it can say why nothing happened.
+
+     Answered from the page rather than from its host, because the host
+     stopped meaning anything once ACE started running everywhere. A
+     page where the content script never loaded does not reply at all,
+     and the popup reports that separately -- which is the one case a
+     host list used to be able to describe. */
+  chrome.runtime.onMessage.addListener(
+    function (message, sender, respond) {
+      if (!message || message.type !== "status") return;
+
+      var recognised = 0;
+
+      fillable().forEach(function (field) {
+        var question = aceQuestionFor(field);
+        if (!question) return;
+
+        if (aceAnswerNameFor(question, kindOf(field))) {
+          recognised += 1;
+        }
+      });
+
+      respond({
+        ok: true,
+        fields: recognised
+      });
+    }
+  );
+
   (function boot() {
     if (!document.body) {
       setTimeout(boot, 50);
       return;
     }
 
-    start();
+    waitForApplication();
   })();
+
+  /* Start only once the page looks like an application.
+
+     Nothing is fetched before that. Running on every site means this
+     script loads on pages ACE has no business on, and reaching for
+     localhost on each of them would be both wasteful and a small
+     surprise. A form built after load still counts, so a page that is
+     not one yet is watched rather than given up on.
+
+     The watcher disconnects on the first start, and start() installs
+     its own. */
+  function waitForApplication() {
+    if (looksLikeApplication()) {
+      start();
+      return;
+    }
+
+    var queued = null;
+
+    var watcher = new MutationObserver(function () {
+      clearTimeout(queued);
+
+      queued = setTimeout(function () {
+        if (!looksLikeApplication()) return;
+
+        watcher.disconnect();
+        start();
+      }, 500);
+    });
+
+    watcher.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+  }
 })();

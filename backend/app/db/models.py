@@ -906,3 +906,116 @@ class ApplicationAnswerRecord(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+
+class HistoryEntryRecord(Base):
+    """One job or one degree, for the repeating blocks forms ask for.
+
+    The answer bank cannot hold these. It is one value per question,
+    and a work history is several of the same question over again:
+    employer, title, dates and description, then a Remove link and
+    another identical block underneath. Real Workday and Oracle forms
+    ask for three or four.
+
+    Work and study share a table because they share a shape. The
+    columns are named for the job case and reused for the degree case
+    (``employer`` holds the school, ``job_title`` the degree), which is
+    a small dishonesty in the names bought in exchange for one set of
+    date handling, one ordering rule and one extension code path. The
+    alternative was two tables differing only in two column names.
+
+    Dates are stored as a month and a year rather than a date. That is
+    what the forms ask for -- two dropdowns, never a day -- and storing
+    a real date would mean inventing a day that no form will ever show
+    and no user ever typed.
+    """
+
+    __tablename__ = "history_entries"
+
+    __table_args__ = (
+        Index(
+            "ix_history_entries_kind_order",
+            "kind",
+            "sort_order",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BIGINT_ID,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    # "work" or "education".
+    kind: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+    )
+
+    # Most recent first, which is the order every one of these forms
+    # lists its blocks in.
+    sort_order: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="0",
+    )
+
+    employer: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        server_default="",
+    )
+
+    job_title: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        server_default="",
+    )
+
+    location: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        server_default="",
+    )
+
+    # Whether this is the role or course the user is still in. Forms
+    # ask it as a Yes/No beside the dates, and answering it wrong is
+    # what makes an end date required or forbidden.
+    is_current: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
+
+    start_month: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    start_year: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    end_month: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    end_year: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    description: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default="",
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+

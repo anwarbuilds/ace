@@ -17,19 +17,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://job-boards.greenhouse.io/*",
-        "https://boards.greenhouse.io/*",
-        "https://*.greenhouse.io/*",
-        "https://jobs.ashbyhq.com/*",
-        "https://jobs.lever.co/*",
-        "https://jobs.smartrecruiters.com/*",
-        "https://*.smartrecruiters.com/*",
-        "https://explore.jobs.netflix.net/*",
-        "https://*.eightfold.ai/*",
-        "https://*.myworkdayjobs.com/*",
-        "https://*.myworkdaysite.com/*",
-        "https://www.amazon.jobs/*",
-        "https://ats.rippling.com/*"
+        "http://*/*",
+        "https://*/*"
       ],
       "js": [
         "fields.js",

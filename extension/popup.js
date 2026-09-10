@@ -2,16 +2,14 @@
    it, and a wrong address is otherwise indistinguishable from an
    extension that simply does nothing.
 
-   The same is true of an unsupported page. "Nothing to autofill" on a
-   site the extension was never loaded into looks identical to a broken
-   extension, so the popup says which of the two it is. */
-
-var COVERED = [
-  "greenhouse.io", "jobs.ashbyhq.com", "jobs.lever.co",
-  "smartrecruiters.com", "explore.jobs.netflix.net", "eightfold.ai",
-  "myworkdayjobs.com", "myworkdaysite.com", "www.amazon.jobs",
-  "ats.rippling.com"
-];
+   The same is true of a page ACE stays quiet on. "Nothing to autofill"
+   looks identical to a broken extension, so the popup says which of
+   the two it is -- and it asks the page rather than guessing from the
+   host. There is no host list any more: ACE runs everywhere and
+   decides per page, because the list could not be made to hold. Most
+   companies self-host their own board and Oracle gives every tenant a
+   subdomain, so a substantial share of one real user's applications went through 19
+   hosts the list did not name. */
 
 var base = document.getElementById("base");
 var answerLine = document.getElementById("answers");
@@ -42,19 +40,39 @@ function check() {
       : "Connected, but no answers are filled in yet.";
   });
 
+  // Asked of the page itself. The content script is the only thing
+  // that knows whether it recognised any questions here, and a host
+  // name never did.
   chrome.tabs.query(
     { active: true, currentWindow: true },
     function (tabs) {
-      var url = (tabs && tabs[0] && tabs[0].url) || "";
+      var tab = tabs && tabs[0];
 
-      var covered = COVERED.some(function (host) {
-        return url.indexOf(host) >= 0;
-      });
+      if (!tab || !tab.id) {
+        pageLine.className = "s warn";
+        pageLine.textContent = "No page to check.";
+        return;
+      }
 
-      pageLine.className = covered ? "s" : "s warn";
-      pageLine.textContent = covered
-        ? "This page is one ACE fills."
-        : "ACE does not fill this site. Tell it which one and it can be added.";
+      chrome.tabs.sendMessage(
+        tab.id,
+        { type: "status" },
+        function (reply) {
+          if (chrome.runtime.lastError || !reply) {
+            pageLine.className = "s warn";
+            pageLine.textContent =
+              "Not an application form, so ACE is staying quiet. " +
+              "Reload the page if you expected it here.";
+            return;
+          }
+
+          pageLine.className = reply.fields ? "s" : "s warn";
+          pageLine.textContent = reply.fields
+            ? "ACE recognises " + reply.fields +
+              " question" + (reply.fields === 1 ? "" : "s") + " here."
+            : "ACE recognises nothing to fill on this page.";
+        }
+      );
     }
   );
 }

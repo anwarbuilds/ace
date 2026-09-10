@@ -481,6 +481,22 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .pop-note{font-size:11px;color:var(--text-muted);padding:6px 9px}
 .ans-sec{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);padding:20px 0 7px;border-top:1px solid var(--border);margin-top:14px}
 .ans-sec:first-child{border-top:0;margin-top:0;padding-top:0}
+/* A repeating block: a job or a degree. Bordered as one object,
+   because that is what a form shows and what Remove removes. */
+.hist{border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;
+  background:var(--surface-2)}
+.hist-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.hist-grid label{display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px}
+.hist input,.hist select,.hist textarea{width:100%;background:var(--surface);color:var(--text);
+  border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:13px;font-family:var(--sans)}
+.hist textarea{min-height:76px;resize:vertical}
+.hist input:focus,.hist select:focus,.hist textarea:focus{border-color:var(--purple)}
+.hist-dates{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}
+.hist-wide{grid-column:1/-1;margin-top:10px}
+.hist-foot{display:flex;align-items:center;gap:12px;margin-top:10px}
+.hist-n{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--text-muted)}
+@media (max-width:720px){ .hist-grid{grid-template-columns:1fr} .hist-dates{grid-template-columns:repeat(2,1fr)} }
 .ab-sec{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);padding:12px 8px 4px}
 .ab-toggle .n{margin-left:6px;font-family:var(--mono);font-size:10.5px;color:var(--text-muted)}
 .ab-toggle.ab-empty{border-style:dashed}
@@ -790,6 +806,8 @@ function loadShell(){
     get("/api/resume").then(function(d){ state.resume=d.resume; state.gap=d.skills_gap||[]; }),
     get("/api/marks").then(function(d){ state.markCounts=d; }),
     get("/api/answers").then(function(d){ state.answers=d.items||[]; }),
+    get("/api/history/work").then(function(d){ state.work=d.items||[]; }),
+    get("/api/history/education").then(function(d){ state.education=d.items||[]; }),
     loadExternal(),
     refreshNewCount()
   ]).catch(function(){});
@@ -1685,6 +1703,91 @@ function answerRow(a){
     '<button class="iconbtn" data-act="delrow" aria-label="Remove this question">'+icon(I.x)+'</button>'+
   '</div>';
 }
+var ACE_MONTH_NAMES=["January","February","March","April","May","June",
+  "July","August","September","October","November","December"];
+
+/* One repeating block: a job or a degree.
+
+   These cannot live in the answer bank, and the reason is structural
+   rather than a missing question. The bank is one value per question,
+   so "what is your employer" has one answer; a form's second block
+   asks the same question and needs a different job. */
+function historyBlock(kind, entry, index){
+  var isWork=kind==="work";
+  function monthSelect(cls,val){
+    return '<select class="'+cls+'"><option value="">Month</option>'+
+      ACE_MONTH_NAMES.map(function(m,i){
+        return '<option value="'+(i+1)+'"'+(Number(val)===i+1?" selected":"")+'>'+m+'</option>';
+      }).join("")+'</select>';
+  }
+  function yearSelect(cls,val){
+    var out='<select class="'+cls+'"><option value="">Year</option>';
+    for(var y=2036;y>=1990;y--){
+      out+='<option value="'+y+'"'+(Number(val)===y?" selected":"")+'>'+y+'</option>';
+    }
+    return out+'</select>';
+  }
+  return '<div class="hist" data-hist="'+kind+'">'+
+    '<div class="hist-foot" style="margin:0 0 10px"><span class="hist-n">'+
+      (isWork?"Job ":"Study ")+(index+1)+'</span>'+
+      '<span class="spacer" style="flex:1"></span>'+
+      '<button class="iconbtn" data-act="delhist" aria-label="Remove this entry">'+icon(I.x)+'</button>'+
+    '</div>'+
+    '<div class="hist-grid">'+
+      '<div><label>'+(isWork?"Employer":"School")+'</label>'+
+        '<input class="h-employer" value="'+esc(entry.employer||"")+'"></div>'+
+      '<div><label>'+(isWork?"Job title":"Degree")+'</label>'+
+        '<input class="h-title" value="'+esc(entry.job_title||"")+'"></div>'+
+      '<div><label>Location</label>'+
+        '<input class="h-location" value="'+esc(entry.location||"")+'"></div>'+
+      '<div><label>'+(isWork?"Still working here":"Still studying here")+'</label>'+
+        '<div class="ans-yn" data-ansyn>'+
+          ["Yes","No"].map(function(opt){
+            var on=(opt==="Yes")===!!entry.is_current;
+            return '<button type="button" data-act="ansyn" data-val="'+opt+'" aria-pressed="'+
+              (on?"true":"false")+'">'+opt+'</button>';
+          }).join("")+
+          '<input type="hidden" class="h-current ans-value" value="'+
+            (entry.is_current?"Yes":"No")+'"></div></div>'+
+    '</div>'+
+    '<div class="hist-dates">'+
+      '<div><label>Start month</label>'+monthSelect("h-sm",entry.start_month)+'</div>'+
+      '<div><label>Start year</label>'+yearSelect("h-sy",entry.start_year)+'</div>'+
+      '<div><label>End month</label>'+monthSelect("h-em",entry.end_month)+'</div>'+
+      '<div><label>End year</label>'+yearSelect("h-ey",entry.end_year)+'</div>'+
+    '</div>'+
+    '<div class="hist-wide"><label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px">'+
+      'Description</label>'+
+      '<textarea class="h-description" placeholder="What you did there. Pasted once, filled every time.">'+
+      esc(entry.description||"")+'</textarea></div>'+
+  '</div>';
+}
+
+function historySection(kind){
+  var entries=(kind==="work"?state.work:state.education)||[];
+  var title=kind==="work"?"Work history":"Education";
+  return '<div class="ans-sec">'+title+'</div>'+
+    '<div id="hist-'+kind+'">'+
+      entries.map(function(e,i){ return historyBlock(kind,e,i); }).join("")+
+    '</div>'+
+    '<button class="btn btn-secondary btn-sm" data-act="addhist" data-kind="'+kind+'" '+
+      'style="margin-bottom:6px">Add '+(kind==="work"?"a job":"a degree")+'</button>';
+}
+
+function collectHistory(kind){
+  var box=document.getElementById("hist-"+kind);
+  if(!box) return [];
+  return Array.prototype.map.call(box.querySelectorAll(".hist"),function(row){
+    function val(cls){ var el=row.querySelector(cls); return el?el.value:""; }
+    function num(cls){ var v=val(cls); return v?parseInt(v,10):null; }
+    return {employer:val(".h-employer"), job_title:val(".h-title"),
+            location:val(".h-location"), is_current:val(".h-current")==="Yes",
+            start_month:num(".h-sm"), start_year:num(".h-sy"),
+            end_month:num(".h-em"), end_year:num(".h-ey"),
+            description:val(".h-description")};
+  });
+}
+
 function answersPage(){
   var rows=state.answers.length?state.answers:[{id:"new0",label:"",value:""}];
   return '<div class="head"><div class="head-row"><h1 class="h1">Answers</h1>'+
@@ -1705,9 +1808,11 @@ function answersPage(){
               sec[1].map(answerRow).join("");
           }).join("")
         : rows.map(answerRow).join(""))+'</div>'+
+      historySection("work")+
+      historySection("education")+
       '<div style="display:flex;gap:10px;margin-top:14px">'+
         '<button class="btn btn-secondary" data-act="addrow">Add a question</button>'+
-        '<button class="btn btn-primary" data-act="saveanswers">Save answers</button>'+
+        '<button class="btn btn-primary" data-act="saveanswers">Save everything</button>'+
       '</div>'+
     '</div></div>';
 }
@@ -1717,12 +1822,32 @@ function collectAnswers(){
             value:row.querySelector(".ans-value").value};
   }).filter(function(a){ return a.label.trim(); });
 }
+function putJson(path, body){
+  return fetch(API+path,{method:"PUT",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body)}).then(function(r){
+      if(!r.ok) throw new Error(path); return r.json();
+    });
+}
+/* One button for all three, because they are one page and a partial
+   save would leave the user guessing which half landed. */
 function saveAnswers(){
-  fetch(API+"/api/answers",{method:"PUT",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({items:collectAnswers()})})
-  .then(function(r){return r.json();})
-  .then(function(){ return get("/api/answers"); })
-  .then(function(d){ state.answers=d.items||[]; showToast("Answers saved"); render(); })
+  Promise.all([
+    putJson("/api/answers",{items:collectAnswers()}),
+    putJson("/api/history/work",{items:collectHistory("work")}),
+    putJson("/api/history/education",{items:collectHistory("education")})
+  ])
+  .then(function(){
+    return Promise.all([
+      get("/api/answers"), get("/api/history/work"), get("/api/history/education")
+    ]);
+  })
+  .then(function(all){
+    state.answers=all[0].items||[];
+    state.work=all[1].items||[];
+    state.education=all[2].items||[];
+    showToast("Saved");
+    render();
+  })
   .catch(function(){ showToast("Could not save"); render(); });
 }
 
@@ -2288,6 +2413,18 @@ document.addEventListener("click",function(e){
       }
       return; }
     if(d.act==="delrow"){ var r=t.closest(".ans-edit"); if(r) r.remove(); return; }
+    if(d.act==="delhist"){ var h=t.closest(".hist"); if(h) h.remove(); return; }
+    if(d.act==="addhist"){
+      // Appended to the live DOM rather than to state, so anything
+      // already typed into the other blocks is not thrown away by a
+      // re-render before the save.
+      var kind=t.getAttribute("data-kind");
+      var box=document.getElementById("hist-"+kind);
+      if(!box) return;
+      var n=box.querySelectorAll(".hist").length;
+      box.insertAdjacentHTML("beforeend", historyBlock(kind,{},n));
+      return;
+    }
     if(d.act==="ansyn"){
       // Pressed state and the hidden value move together, so what the
       // page shows and what a save reads cannot drift apart.

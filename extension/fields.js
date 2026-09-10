@@ -438,26 +438,58 @@ function aceGroupQuestion(field) {
    raised rather than removed. */
 var ACE_MAX_QUESTION = 520;
 
-/* The first heading inside a block that is not one of its options. */
+/* The heading nearest above this control that is not one of its options.
+
+   Nearest, not first. Taking the first was right only while a block
+   held one question: on a repeating work-history block it holds
+   several, and a "Current Employer" radio group read its question as
+   "Employer" -- the label of the employer box higher up the same
+   block. Every radio then looked like another employer field, and the
+   form came out as one block per radio.
+
+   Real headings are included as candidates too. A form writes "Current
+   Employer" and "Start Date" as an h4 or a bold div, not as a label,
+   because they name a group rather than one input. */
 function aceHeadingIn(block, field) {
-  var candidates = block.querySelectorAll(
-    "legend, label, [class*='heading'], [class*='label'], [class*='question']"
+  var candidates = Array.prototype.filter.call(
+    block.querySelectorAll(
+      "legend, label, h1, h2, h3, h4, h5, h6, " +
+      "[class*='heading'], [class*='label'], [class*='question']"
+    ),
+    function (node) {
+      // A heading that wraps a control is an option, not the question.
+      // Lever puts each choice in its own label, so without this the
+      // group's question reads as "he/him" or "female".
+      if (node.querySelector("input, select, textarea")) return false;
+      if (node.contains(field)) return false;
+
+      return !!aceNormalise(aceTextWithoutControls(node));
+    }
   );
 
-  for (var i = 0; i < candidates.length; i++) {
-    // A heading that wraps a control is an option, not the question.
-    // Lever puts each choice in its own label, so without this the
-    // group's question reads as "he/him" or "female".
-    if (candidates[i].querySelector("input, select, textarea")) continue;
-    if (candidates[i].contains(field)) continue;
+  if (!candidates.length) return "";
 
-    var text = aceNormalise(
-      aceTextWithoutControls(candidates[i])
-    );
-    if (text) return text.slice(0, ACE_MAX_QUESTION);
+  // Document order, so the last one before the control is the nearest
+  // above it. A label placed after its control still counts, but only
+  // when nothing precedes it.
+  var best = null;
+
+  for (var i = 0; i < candidates.length; i++) {
+    var where = candidates[i].compareDocumentPosition(field);
+
+    if (where & Node.DOCUMENT_POSITION_FOLLOWING) {
+      best = candidates[i];
+    } else if (best === null) {
+      best = candidates[i];
+      break;
+    }
   }
 
-  return "";
+  if (best === null) best = candidates[0];
+
+  return aceNormalise(
+    aceTextWithoutControls(best)
+  ).slice(0, ACE_MAX_QUESTION);
 }
 
 /* A block's wording with its own controls taken out.
@@ -842,4 +874,177 @@ function aceBestOverlap(texts, answer, candidates) {
   });
 
   return (!tied && bestScore >= 1) ? best : -1;
+}
+
+
+/* ----------------------------------------------------------------------
+   Repeating blocks: work history and education
+
+   A form asks these as one block repeated: employer, title, a Yes/No
+   for whether it is current, four date dropdowns, a description, then a
+   Remove link and another identical block underneath. Real Workday and
+   Oracle forms ask for three or four.
+
+   Nothing above can fill them, and the reason is structural rather than
+   a missing rule. The answer bank is one value per question, so "what is
+   your employer" has one answer, and a second block asking the same
+   question would get the same answer again. These need the Nth block to
+   be filled from the Nth job.
+
+   So the fields are identified by role within a block, the blocks are
+   found and put in document order, and the entries are handed out one
+   per block.
+   ---------------------------------------------------------------------- */
+
+/* What one field is, inside a history block. Deliberately separate from
+   ACE_RULES: "employer" and "job title" are broad enough to swallow
+   unrelated questions, and they are only trustworthy once a block has
+   already been established around them. */
+var ACE_HISTORY_ROLES = [
+  { role: "employer",
+    any: ["employer", "company name", "company", "organisation",
+          "organization", "school", "university", "institution"] },
+  { role: "jobTitle",
+    any: ["job title", "title", "position title", "your role", "degree",
+          "qualification"] },
+  { role: "isCurrent",
+    any: ["current employer", "currently work", "current position",
+          "is this your current", "currently attend", "current school"] },
+  { role: "startMonth",
+    any: ["start date month", "from month", "start month"] },
+  { role: "startYear",
+    any: ["start date year", "from year", "start year"] },
+  { role: "endMonth",
+    any: ["end date month", "to month", "end month"] },
+  { role: "endYear",
+    any: ["end date year", "to year", "end year"] },
+  { role: "description",
+    any: ["job description", "description", "responsibilities",
+          "what did you do", "achievements"] },
+  { role: "location",
+    any: ["employer location", "company location", "job location",
+          "work location"] }
+];
+
+var ACE_MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
+/* The role of one field inside a block, or null.
+
+   Dates are the awkward part. A form labels the four dropdowns "Month"
+   and "Year" twice over, and which pair is the start and which the end
+   is said once, in a heading above them, that no label associates with
+   any control. So the heading is looked for first, and the plain
+   "Month" or "Year" is then resolved by which half of the block it sits
+   in rather than by its own words. */
+function aceHistoryRole(field, question) {
+  // Longest matched phrase wins, for the same reason the answer rules
+  // score rather than take the first hit: "Current Employer" contains
+  // "employer", so a first-match rule read the Yes/No beside the dates
+  // as another employer box. That made every radio its own block, and
+  // the form came out as four blocks of one field each.
+  var best = null;
+  var bestScore = 0;
+
+  for (var i = 0; i < ACE_HISTORY_ROLES.length; i++) {
+    var rule = ACE_HISTORY_ROLES[i];
+
+    rule.any.forEach(function (phrase) {
+      if (acePhraseIn(question, phrase) && phrase.length > bestScore) {
+        bestScore = phrase.length;
+        best = rule.role;
+      }
+    });
+  }
+
+  if (best) return best;
+
+  // A bare "Month" or "Year", which is what these actually say.
+  if (acePhraseIn(question, "month")) return "month";
+  if (acePhraseIn(question, "year")) return "year";
+
+  return null;
+}
+
+/* Whether a bare Month/Year dropdown belongs to the start or the end.
+
+   Read off the nearest preceding text that says one or the other,
+   because that is where the form says it: a "Start Date" heading over
+   the first pair and "End Date" over the second. Falls back to document
+   order within the block, where the first pair is the start. */
+function aceDateSide(field, block) {
+  // Read backwards through the block in document order, which is how a
+  // person reads it: the nearest heading above a dropdown is the one
+  // that names it.
+  //
+  // Climbing the ancestors instead found nothing, because on a real
+  // form the four dropdowns and both headings are siblings. Every
+  // ancestor holds "Start Date" and "End Date" together and so says
+  // neither, and the dates were left unassigned on every block.
+  var nodes = Array.prototype.slice.call(
+    block.querySelectorAll("*")
+  );
+
+  var at = nodes.indexOf(field);
+  if (at < 0) return null;
+
+  for (var i = at - 1; i >= 0; i--) {
+    var node = nodes[i];
+    var tag = node.tagName;
+
+    // A control is not a heading, and an option's text would otherwise
+    // be read as one.
+    if (
+      tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" ||
+      tag === "BUTTON" || tag === "OPTION"
+    ) continue;
+
+    // A container holds both headings and so names neither. Only a
+    // short piece of text can be the one that names this dropdown.
+    if (node.querySelector("input, select, textarea, button")) continue;
+
+    var text = aceNormalise(node.textContent || "");
+    if (!text || text.length > 40) continue;
+
+    if (acePhraseIn(text, "end date") || text === "to") return "end";
+    if (acePhraseIn(text, "start date") || text === "from") return "start";
+  }
+
+  return null;
+}
+
+/* The month a stored number names, as a form writes it. */
+function aceMonthName(month) {
+  var index = Number(month) - 1;
+
+  return (index >= 0 && index < 12) ? ACE_MONTHS[index] : "";
+}
+
+/* What to put in each field of a block, given one stored entry.
+
+   Returns null where the entry says nothing, so the field is left alone
+   rather than filled with a blank. */
+function aceHistoryValue(entry, role) {
+  if (!entry) return null;
+
+  if (role === "employer") return entry.employer || null;
+  if (role === "jobTitle") return entry.job_title || null;
+  if (role === "location") return entry.location || null;
+  if (role === "description") return entry.description || null;
+  if (role === "isCurrent") return entry.is_current ? "Yes" : "No";
+
+  if (role === "startMonth") return aceMonthName(entry.start_month) || null;
+  if (role === "endMonth") return aceMonthName(entry.end_month) || null;
+
+  if (role === "startYear") {
+    return entry.start_year ? String(entry.start_year) : null;
+  }
+
+  if (role === "endYear") {
+    return entry.end_year ? String(entry.end_year) : null;
+  }
+
+  return null;
 }

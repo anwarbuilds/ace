@@ -74,6 +74,7 @@ from backend.app.api.queries import (
 )
 from backend.app.db.models import (
     ApplicationAnswerRecord,
+    HistoryEntryRecord,
     JobRecord,
 )
 from backend.app.db.session import SessionLocal
@@ -119,6 +120,16 @@ def _split_csv(
         )
         if item.strip()
     )
+
+
+# The two repeating sections forms ask for. Both share one table and
+# one extension code path, because they share a shape.
+HISTORY_KINDS = frozenset(
+    {
+        "work",
+        "education",
+    }
+)
 
 
 # Accepted values for the mark filter on /api/jobs.
@@ -181,6 +192,34 @@ class AnswerBank(BaseModel):
     """The whole answer bank, as submitted by the editor."""
 
     items: list[AnswerItem] = []
+
+
+class HistoryItem(BaseModel):
+    """One job or degree, as submitted by the editor."""
+
+    employer: str = ""
+
+    job_title: str = ""
+
+    location: str = ""
+
+    is_current: bool = False
+
+    start_month: int | None = None
+
+    start_year: int | None = None
+
+    end_month: int | None = None
+
+    end_year: int | None = None
+
+    description: str = ""
+
+
+class HistoryList(BaseModel):
+    """A whole history, in the order the blocks should be filled."""
+
+    items: list[HistoryItem] = []
 
 
 class MarkUpdate(BaseModel):
@@ -1350,6 +1389,167 @@ def create_app() -> FastAPI:
 
         return {
             "saved": kept,
+        }
+
+    @app.get(
+        "/api/history/{kind}"
+    )
+    def get_history(
+        kind: str,
+        session: Session = Depends(
+            get_session
+        ),
+    ) -> dict:
+        """Return the work or study history, most recent first."""
+
+        if kind not in HISTORY_KINDS:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "History kind must be "
+                    "work or education."
+                ),
+            )
+
+        rows = session.scalars(
+            select(
+                HistoryEntryRecord
+            ).where(
+                HistoryEntryRecord.kind
+                == kind
+            ).order_by(
+                HistoryEntryRecord
+                .sort_order,
+                HistoryEntryRecord.id,
+            )
+        ).all()
+
+        return {
+            "items": [
+                {
+                    "id": row.id,
+                    "employer": row.employer,
+                    "job_title": row.job_title,
+                    "location": row.location,
+                    "is_current": (
+                        row.is_current
+                    ),
+                    "start_month": (
+                        row.start_month
+                    ),
+                    "start_year": (
+                        row.start_year
+                    ),
+                    "end_month": (
+                        row.end_month
+                    ),
+                    "end_year": (
+                        row.end_year
+                    ),
+                    "description": (
+                        row.description
+                    ),
+                }
+                for row in rows
+            ],
+        }
+
+    @app.put(
+        "/api/history/{kind}"
+    )
+    def put_history(
+        kind: str,
+        payload: HistoryList,
+        session: Session = Depends(
+            get_session
+        ),
+    ) -> dict:
+        """Replace one history with what the editor submitted.
+
+        A whole-list replace, for the same reason the answer bank does
+        it: the editor reorders and removes blocks in one pass, and
+        reconciling that entry by entry would be a worse API for no
+        benefit at this size.
+
+        An entry naming neither an employer nor a title is dropped. A
+        blank block is what an editor leaves behind when a row is added
+        and not used, and storing it would put an empty block on the
+        next form.
+        """
+
+        if kind not in HISTORY_KINDS:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "History kind must be "
+                    "work or education."
+                ),
+            )
+
+        session.execute(
+            delete(
+                HistoryEntryRecord
+            ).where(
+                HistoryEntryRecord.kind
+                == kind
+            )
+        )
+
+        written = 0
+
+        for order, item in enumerate(
+            payload.items
+        ):
+            if not (
+                item.employer.strip()
+                or item.job_title.strip()
+            ):
+                continue
+
+            session.add(
+                HistoryEntryRecord(
+                    kind=kind,
+                    sort_order=order,
+                    employer=(
+                        item.employer
+                        .strip()
+                    ),
+                    job_title=(
+                        item.job_title
+                        .strip()
+                    ),
+                    location=(
+                        item.location
+                        .strip()
+                    ),
+                    is_current=(
+                        item.is_current
+                    ),
+                    start_month=(
+                        item.start_month
+                    ),
+                    start_year=(
+                        item.start_year
+                    ),
+                    end_month=(
+                        item.end_month
+                    ),
+                    end_year=(
+                        item.end_year
+                    ),
+                    description=(
+                        item.description
+                        .strip()
+                    ),
+                )
+            )
+
+            written += 1
+
+        session.commit()
+
+        return {
+            "saved": written,
         }
 
     @app.get(
