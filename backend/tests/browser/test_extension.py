@@ -320,6 +320,99 @@ def test_the_panel_survives_a_hostile_stylesheet(
     )
 
 
+def test_a_menu_belonging_to_another_field_is_never_read(
+    filler,
+) -> None:
+    """The bug that left a whole DoorDash form blank.
+
+    The option lookup was ``document.querySelector("[role=listbox]")``
+    -- the first listbox in the document, whatever it belonged to.
+    That form keeps a phone country-code list of 244 options mounted
+    at all times, so every combobox question on it was answered
+    against a list of countries, matched nothing, and was left empty.
+
+    A near-match was the worse outcome available: a stored country of
+    "United States Of America" against an option reading "United
+    States +1" would have clicked inside the phone widget instead.
+    """
+
+    filler.eval(
+        """
+        (function(){
+          document.body.insertAdjacentHTML('beforeend',
+            '<div id="stranger" role="listbox">'+
+            '<div role="option">Afghanistan +93</div>'+
+            '<div role="option">United States +1</div></div>'+
+            '<div id="mine"><input id="combo" role="combobox"></div>');
+          return 1;
+        })()
+        """
+    )
+
+    assert filler.eval(
+        "window.__aceInternals.comboboxOptions("
+        "document.getElementById('combo')).length"
+    ) == 0, (
+        "ACE read a listbox belonging to another field"
+    )
+
+
+def test_a_field_s_own_menu_is_found_without_aria_controls(
+    filler,
+) -> None:
+    """react-select points at nothing and nests the menu instead.
+
+    Greenhouse renders react-select, so the menu is a sibling inside
+    the field's own container rather than something the input names by
+    id. Climbing to it is what makes the fill work at all; stopping
+    the climb at a second combobox is what keeps it honest.
+    """
+
+    filler.eval(
+        """
+        (function(){
+          document.body.insertAdjacentHTML('beforeend',
+            '<div id="wrap"><div class="select__control">'+
+            '<input id="own" role="combobox"></div>'+
+            '<div role="listbox"><div role="option">Yes</div>'+
+            '<div role="option">No</div></div></div>');
+          return 1;
+        })()
+        """
+    )
+
+    assert filler.eval(
+        "window.__aceInternals.comboboxOptions("
+        "document.getElementById('own')).map("
+        "function(o){return o.textContent;}).join(',')"
+    ) == "Yes,No"
+
+
+def test_the_climb_stops_at_a_neighbouring_combobox(
+    filler,
+) -> None:
+    """Two questions in one container must not share a menu."""
+
+    filler.eval(
+        """
+        (function(){
+          document.body.insertAdjacentHTML('beforeend',
+            '<div id="pair">'+
+            '<div><input id="a" role="combobox"></div>'+
+            '<div><input id="b" role="combobox"></div>'+
+            '<div role="listbox"><div role="option">Yes</div></div>'+
+            '</div>');
+          return 1;
+        })()
+        """
+    )
+
+    assert filler.eval(
+        "window.__aceInternals.comboboxOptions("
+        "document.getElementById('a')).length"
+    ) == 0, "a menu shared with a neighbour was claimed as this field's"
+
+
 def test_the_extension_ships_no_fill_marker() -> None:
     """Pinned in the source, because the marker was three things.
 
