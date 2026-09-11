@@ -837,6 +837,38 @@ function aceChooseOption(options, answer, aliases) {
   });
   if (contained.length === 1) return contained[0];
 
+  // A phone widget prints the dial code beside the country: "United
+  // States +1". The code is not part of the name, and while it is
+  // attached a stored "United States Of America" matches nothing --
+  // which is what left MongoDB's required country field empty and its
+  // phone number rejected with it.
+  //
+  // Only options the stripping actually changed are considered, so a
+  // form with no dial codes in it cannot reach this at all.
+  var bare = options.map(function (option) {
+    return aceNormalise(
+      String(option == null ? "" : option).replace(/\+\s*\d{1,4}/g, " ")
+    );
+  });
+
+  var dialled = [];
+
+  bare.forEach(function (text, index) {
+    if (!text || text === texts[index]) return;
+    if (acePhraseIn(text, wanted) || acePhraseIn(wanted, text)) {
+      dialled.push(index);
+    }
+  });
+
+  if (dialled.length === 1) return dialled[0];
+
+  if (dialled.length > 1) {
+    // "United States" and "United States Minor Outlying Islands" both
+    // sit in that list, so the closest one wins rather than the first.
+    var byOverlap = aceBestOverlap(bare, answer, dialled);
+    if (byOverlap >= 0) return byOverlap;
+  }
+
   // "I do not have any disability" against "No, I don't have a
   // disability, or have not had one in the past": the shape of the
   // answer decides, then the words settle which of the negatives.
