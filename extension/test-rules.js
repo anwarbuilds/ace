@@ -164,6 +164,20 @@ var DELL_CASES = [
    short and real options are sentences, so every one of these was a
    miss or a misfire before the matcher scored intent and overlap. */
 var OPTION_CASES = [
+  // A phone widget prints the dial code beside the country name. With
+  // it attached nothing matched, so MongoDB's required Country stayed
+  // empty and took the phone number down with it.
+  [["United States +1", "United Kingdom +44", "India +91"],
+   "United States Of America", 0],
+  // The long name must not be dragged off by the short one sharing
+  // its opening words.
+  [["United States Minor Outlying Islands +1", "United States +1"],
+   "United States Of America", 1],
+  [["India +91", "United States +1"], "India", 0],
+  // Nothing here carries a dial code, so the stripping must not fire
+  // and must not invent a match.
+  [["Yes", "No"], "United States Of America", -1],
+
   [["Yes", "No"], "Yes", 0],
   [["Yes, I am authorized to work in the United States",
     "No, I am not authorized"], "Yes", 0],
