@@ -218,14 +218,16 @@ def test_a_filled_field_is_focused_and_then_blurred(
     ), "the field never blurred, so validation never ran"
 
 
-def test_the_fill_marker_takes_itself_off_again(
+def test_nothing_on_the_page_is_highlighted(
     filler,
 ) -> None:
-    """It marks what ACE just touched, and the panel lists all of it.
+    """The user asked for no marker at all.
 
-    Left on permanently it was read as a validation error, because a
-    ring around a filled box is what a form uses to say something is
-    wrong with it.
+    It had been a gold ring, then a purple one that cleared itself.
+    Both were ACE announcing itself on a form the user is about to
+    send to an employer, and the comparison they made was a browser's
+    own autofill, which simply fills and says nothing. The panel is
+    the record of what was done; the page is left alone.
     """
 
     _make_field(
@@ -234,46 +236,111 @@ def test_the_fill_marker_takes_itself_off_again(
     )
 
     filler.eval(
-        "window.__aceInternals.markFilled("
-        "document.getElementById('ace-probe'));1"
+        "window.__aceInternals.setNatively("
+        "document.getElementById('ace-probe'),"
+        "'Sohail');1"
     )
 
     assert filler.eval(
         "document.getElementById('ace-probe')"
-        ".classList.contains('ace-filled')"
-    ), "nothing marked the field at all"
+        ".getAttribute('class')"
+    ) in (
+        None,
+        "",
+    ), "a filled field was left carrying a marker class"
 
-    filler.wait_for(
-        "!document.getElementById('ace-probe')"
-        ".classList.contains('ace-filled')",
-        timeout=12,
+
+def test_the_panel_survives_a_hostile_stylesheet(
+    filler,
+) -> None:
+    """The bug the user photographed: every line drawn over the last.
+
+    The panel was a plain div under document.body, so an employer's
+    stylesheet reached straight into it. On Ashby the title, subtitle
+    and every listed field were painted on top of each other and none
+    of it could be read. Defensive CSS does not settle that argument,
+    because the next board resets something else; a shadow root does,
+    because nothing the page declares crosses the boundary.
+    """
+
+    filler.eval(
+        """
+        (function(){
+          var s=document.createElement('style');
+          s.textContent=
+            'div,span,button{line-height:0 !important;'+
+            'font-size:0 !important;margin:0 !important}';
+          document.head.appendChild(s);
+          return 1;
+        })()
+        """
+    )
+
+    filler.eval(
+        "(function(){"
+        "var p=window.__aceInternals.panel();"
+        "p.innerHTML=window.__aceInternals.shell("
+        "'Fill 7 fields','Review before filling.','','');"
+        "return 1;})()"
+    )
+
+    measured = filler.eval(
+        """
+        (function(){
+          var host=document.querySelector('.ace-root');
+          if(!host||!host.shadowRoot) return null;
+          var t=host.shadowRoot.querySelector('.ace-title');
+          if(!t) return null;
+          var s=getComputedStyle(t);
+          return {
+            line: parseFloat(s.lineHeight),
+            size: parseFloat(s.fontSize),
+            height: t.getBoundingClientRect().height
+          };
+        })()
+        """
+    )
+
+    assert measured, "the panel did not mount in a shadow root"
+
+    assert measured["size"] >= 10, (
+        "the page flattened the panel's text to "
+        + str(
+            measured["size"]
+        )
+        + "px"
+    )
+
+    assert measured["height"] >= 10, (
+        "the panel's title collapsed to "
+        + str(
+            measured["height"]
+        )
+        + "px, which is the overlap the user saw"
     )
 
 
-def test_the_marker_is_not_the_colour_of_a_warning() -> None:
-    """Gold is ACE's signal colour and a form's warning colour.
+def test_the_extension_ships_no_fill_marker() -> None:
+    """Pinned in the source, because the marker was three things.
 
-    Pinned in the stylesheet rather than by rendering, because the
-    fill marker is one declaration and the thing that went wrong was
-    the value in it.
+    A class on the field, a rule in a stylesheet, and a repaint that
+    put it back after React dropped it. Removing one and leaving the
+    others is how a marker comes back.
     """
 
-    css = (
+    assert not (
         EXTENSION / "content.css"
+    ).exists(), (
+        "content.css is back; the panel styles belong in the "
+        "shadow root and the fill marker is gone"
+    )
+
+    source = (
+        EXTENSION / "content.js"
     ).read_text(
         encoding="utf-8"
     )
 
-    marker = [
-        line
-        for line in css.splitlines()
-        if line.startswith(
-            ".ace-filled{"
-        )
-    ]
-
-    assert marker, "the fill marker rule is gone"
-
     assert (
-        "#c9a227" not in marker[0]
-    ), "the fill marker is gold again"
+        "ace-filled" not in source
+    ), "the fill marker is back in content.js"

@@ -133,42 +133,40 @@ function fillActivePage() {
     pageLine.className = "s";
     pageLine.textContent = "Loading ACE into this page...";
 
-    chrome.scripting.insertCSS(
-      { target: { tabId: tab.id }, files: ["content.css"] },
+    // No stylesheet to inject: the panel carries its own inside a
+    // shadow root, so the page cannot restyle it and nothing has to
+    // be placed in the page for it to look right.
+    chrome.scripting.executeScript(
+      {
+        target: { tabId: tab.id },
+        files: ["fields.js", "content.js"],
+      },
       function () {
-        chrome.scripting.executeScript(
-          {
-            target: { tabId: tab.id },
-            files: ["fields.js", "content.js"],
-          },
-          function () {
-            fillButton.disabled = false;
+        fillButton.disabled = false;
 
-            if (chrome.runtime.lastError) {
+        if (chrome.runtime.lastError) {
+          pageLine.className = "s warn";
+          pageLine.textContent =
+            "Chrome will not let ACE run on this page.";
+          return;
+        }
+
+        ask(
+          tab,
+          { type: "wake" },
+          function (_reply, missing) {
+            if (missing) {
               pageLine.className = "s warn";
               pageLine.textContent =
-                "Chrome will not let ACE run on this page.";
+                "Injected, but the page did not answer.";
               return;
             }
 
-            ask(
-              tab,
-              { type: "wake" },
-              function (_reply, missing) {
-                if (missing) {
-                  pageLine.className = "s warn";
-                  pageLine.textContent =
-                    "Injected, but the page did not answer.";
-                  return;
-                }
+            pageLine.className = "s";
+            pageLine.textContent =
+              "ACE is on the page. Review it there, then Fill.";
 
-                pageLine.className = "s";
-                pageLine.textContent =
-                  "ACE is on the page. Review it there, then Fill.";
-
-                window.close();
-              }
-            );
+            window.close();
           }
         );
       }
