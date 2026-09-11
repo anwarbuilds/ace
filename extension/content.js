@@ -57,10 +57,67 @@
 
     var setter = Object.getOwnPropertyDescriptor(prototype, "value").set;
 
+    // Focused first. Some widgets only accept input into the focused
+    // control, and the blur at the end is what a validation library
+    // waits for. preventScroll because filling a long form otherwise
+    // jumps the page to each field in turn.
+    try {
+      field.focus({ preventScroll: true });
+    } catch (error) {
+      /* a detached or disabled field cannot take focus; fill anyway */
+    }
+
+    // React records the last value it saw in a tracker on the node and
+    // compares against it when the input event arrives. Assigning
+    // through the prototype deliberately bypasses that tracker, which
+    // is what makes the event look like a real edit. When the value
+    // being written is one React already has recorded, the comparison
+    // matches and React discards the event as "nothing changed", so
+    // the tracker is rewound to guarantee it disagrees.
+    var tracker = field._valueTracker;
+
+    if (tracker && typeof tracker.setValue === "function") {
+      tracker.setValue(value === field.value ? "" : field.value);
+    }
+
     setter.call(field, value);
 
     field.dispatchEvent(new Event("input", { bubbles: true }));
     field.dispatchEvent(new Event("change", { bubbles: true }));
+
+    // Blurred last. Formik and React Hook Form mark a field touched,
+    // and run its validator, on blur and not before: without this a
+    // box with the right answer visibly in it still submits as "this
+    // field is required", which is what the user was hitting.
+    try {
+      field.blur();
+    } catch (error) {
+      /* nothing to restore if it never took focus */
+    }
+  }
+
+  /* The outline says "ACE put this here", then gets out of the way.
+     It used to be permanent and gold, so every filled field kept a
+     ring in almost exactly the colour forms use for a warning, and
+     the user read correctly-filled boxes as errors. */
+  var FILL_MARK_MS = 3500;
+
+  var faded = new WeakSet();
+
+  function markFilled(field) {
+    if (faded.has(field)) return;
+
+    field.classList.add("ace-filled");
+
+    setTimeout(function () {
+      faded.add(field);
+      field.classList.add("ace-fading");
+
+      setTimeout(function () {
+        field.classList.remove("ace-filled");
+        field.classList.remove("ace-fading");
+      }, 600);
+    }, FILL_MARK_MS);
   }
 
   /* A select showing "Select ..." is empty, whatever its value says.
@@ -432,7 +489,7 @@
 
         var touched = lastPicked || slot.field;
 
-        touched.classList.add("ace-filled");
+        markFilled(touched);
 
         lastFill.push({
           field: touched,
@@ -531,7 +588,7 @@
 
       var touched = lastPicked || field;
 
-      touched.classList.add("ace-filled");
+      markFilled(touched);
 
       lastFill.push({
         field: touched,
@@ -674,7 +731,7 @@
               return;
             }
 
-            field.classList.add("ace-filled");
+            markFilled(field);
 
             lastFill.push({
               field: field,
@@ -783,8 +840,8 @@
      fill and the user cannot see what was touched. */
   function paint() {
     lastFill.forEach(function (record) {
-      if (record.field.isConnected) {
-        record.field.classList.add("ace-filled");
+      if (record.field.isConnected && !faded.has(record.field)) {
+        markFilled(record.field);
       }
     });
   }
@@ -1260,4 +1317,14 @@
       subtree: true
     });
   }
+
+  /* A seam for the DOM-level tests. content.js is one IIFE, so without
+     it the only testable surface is fields.js, and every value-commit
+     bug lives on this side of that line. A content script has its own
+     isolated world, so this is invisible to the page itself. */
+  window.__aceInternals = {
+    setNatively: setNatively,
+    markFilled: markFilled,
+    fillMarkMs: FILL_MARK_MS
+  };
 })();

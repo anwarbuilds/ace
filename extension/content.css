@@ -44,8 +44,17 @@
 .ace-note.warn{color:#e8b84b}
 
 /* Outline rather than background, so a form's own validation colours
-   still read through. */
-.ace-filled{outline:2px solid #c9a227 !important;outline-offset:1px}
+   still read through, and purple rather than gold: a permanent gold
+   ring on every filled box sat in the same colour range as a form's
+   own warnings, and correctly-filled fields read as errors.
+
+   It also clears itself a few seconds after the fill (see markFilled).
+   The marker exists to show what ACE just touched, and the panel
+   already lists all of it, so there is nothing for it to keep saying
+   once the user has looked. */
+.ace-filled{outline:2px solid #8b6fc7 !important;outline-offset:1px;
+  transition:outline-color .55s ease}
+.ace-filled.ace-fading{outline-color:transparent !important}
 
 @media (prefers-reduced-motion:no-preference){
   .ace-panel{animation:ace-in .16s ease-out}
