@@ -1454,3 +1454,67 @@ def test_pressing_a_toggle_is_what_gets_saved(
           return 'missing';
         })()"""
     ) == "No"
+
+
+# --- the Coverage page, now that a gap has a reason --------------------
+
+
+def test_the_coverage_page_groups_the_gap_by_cause(
+    page,
+) -> None:
+    """The list of names became a list of reasons.
+
+    154 companies with nothing to act on was a wall. Grouped by what
+    is actually in the way -- an ATS ACE cannot read, a site that
+    points nowhere, a board with nothing on it -- the same list is a
+    queue, and it says which gaps are the companies' doing and which
+    are ACE's.
+    """
+
+    page.eval(
+        "state.page='coverage';render();"
+    )
+
+    assert page.eval(
+        "(function(){try{render();return 'ok';}"
+        "catch(e){return String(e);}})()"
+    ) == "ok"
+
+    assert page.eval(
+        "document.getElementById('app')"
+        ".innerHTML.indexOf('Coverage')"
+    ) >= 0
+
+    # Every unreached company carries its reason, and the reason is
+    # what the name's tooltip shows.
+    assert page.eval(
+        "(state.coverage&&state.coverage"
+        ".unreached||[]).every(function(r){"
+        "return r&&typeof r.company==="
+        "'string'&&typeof r.outcome==="
+        "'string';})"
+    )
+
+
+def test_the_coverage_groups_survive_an_unknown_outcome(
+    page,
+) -> None:
+    """A new outcome must appear rather than vanish.
+
+    The groups are declared in the client and the outcomes come from
+    the server, so the two can drift. Dropping the ones the client has
+    never heard of would hide exactly the gap this page exists to
+    show.
+    """
+
+    rendered = page.eval(
+        "coverageGaps(["
+        "{company:'Acme',outcome:'brand_new',"
+        "detail:'something new'},"
+        "{company:'Beta',outcome:'other_ats',"
+        "detail:'on iCIMS'}])"
+    )
+
+    assert "Acme" in rendered
+
+    assert "Beta" in rendered

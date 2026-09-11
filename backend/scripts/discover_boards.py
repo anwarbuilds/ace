@@ -155,6 +155,9 @@ SOURCE_HOSTS = {
     "greenhouse": (
         "job-boards.greenhouse.io"
     ),
+    "smartrecruiters": (
+        "jobs.smartrecruiters.com"
+    ),
 }
 
 
@@ -242,8 +245,16 @@ def register(
                     company_name=(
                         candidate.company
                     ),
-                    source_host=SOURCE_HOSTS.get(
-                        candidate.source_type
+                    # Workday's host is per tenant and per data
+                    # centre -- Zendesk on wd1, BigCommerce on wd12 --
+                    # so discovery carries it rather than looking it
+                    # up from the source type. Registering one without
+                    # it produces a source that can never poll.
+                    source_host=(
+                        candidate.source_host
+                        or SOURCE_HOSTS.get(
+                            candidate.source_type
+                        )
                     ),
                     enabled=True,
                     # The tail is polled daily. Every board on a

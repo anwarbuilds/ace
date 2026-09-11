@@ -492,3 +492,50 @@ TARGET_COMPANIES: tuple[str, ...] = (
 # often once registered, because they are the user's own picks rather
 # than a list someone else happened to publish.
 CURATED_POLL_INTERVAL_SECONDS = 900
+
+
+# Boards that pass every check ACE can make and belong to somebody
+# else anyway.
+#
+# Two real companies can share a name, and when they do, no automated
+# check separates them. The board declares "Glean"; the list says
+# "Glean"; the names match because they *are* the same name. Only
+# reading what the company does tells them apart, and that is a
+# judgement, not a rule -- which is why discovery proposes and a human
+# confirms, and why the confirmation has somewhere to be written down.
+#
+# Each entry here is a board that was proposed, looked at, and found
+# to be a different employer. Without this they would be proposed
+# again on the next sweep, and the reason they were rejected would
+# live only in whoever remembered rejecting them.
+NAMESAKE_BOARDS: frozenset[tuple[str, str]] = frozenset(
+    {
+        # Glean AI, an expense-management fintech founded by Howard
+        # Katzenberg. The Glean on this list is the enterprise search
+        # company at glean.com.
+        (
+            "smartrecruiters",
+            "glean",
+        ),
+        # The Astera Institute, a private research foundation in
+        # Emeryville. The Astera Labs on this list designs
+        # semiconductor connectivity.
+        (
+            "ashby",
+            "astera",
+        ),
+    }
+)
+
+
+def is_namesake(
+    source_type: str,
+    source_account: str,
+) -> bool:
+    """Whether this board was checked by hand and found to be
+    another company of the same name."""
+
+    return (
+        source_type,
+        source_account,
+    ) in NAMESAKE_BOARDS

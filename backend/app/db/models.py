@@ -1019,3 +1019,84 @@ class HistoryEntryRecord(Base):
         server_default=func.now(),
     )
 
+
+
+class SourceProbeRecord(Base):
+    """The last attempt ACE made to find one company's job board.
+
+    Coverage could say which companies ACE cannot reach and never why.
+    That made the gap a wall rather than a queue: a hundred and
+    fifty-four names with nothing to act on, no way to tell a company
+    that had moved to an ATS ACE cannot read from one whose careers
+    page had simply grown past a buffer size, and no way to notice
+    that a name on the list had stopped being a company at all.
+
+    Most of those turned out to be ACE's own failures, and they were
+    found by hand, one at a time. This table exists so the next round
+    does not have to be.
+
+    One row per company, overwritten on each probe. The history of how
+    a company was unreachable is not worth keeping; what it is
+    unreachable *for*, today, is.
+    """
+
+    __tablename__ = "source_probes"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "company_key",
+            name=(
+                "uq_source_probes_company"
+            ),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BIGINT_ID,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    # The normalised form, so a probe matches the company however the
+    # list happens to spell it.
+    company_key: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    company_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    # What happened, as one of a small set of outcomes the coverage
+    # page groups by. Free text would be unreadable in aggregate and
+    # an enum would need a migration every time a new ATS turns up.
+    outcome: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+    )
+
+    # The sentence a person reads. Says what is in the way, in the
+    # terms they would use to fix it.
+    detail: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default="",
+    )
+
+    source_type: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    source_account: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    checked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )

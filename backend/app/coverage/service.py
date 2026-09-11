@@ -39,22 +39,29 @@ from backend.app.coverage.companies import (
 )
 from backend.app.coverage.probing import (
     BoardCandidate,
+    BoardRef,
     board_belongs_to,
-    board_endpoints,
+    board_jobs,
     careers_page_token,
     find_board,
     find_board_via_careers_page,
+    workday_belongs_to,
     _fetch_json,
     _fetch_text,
-    _jobs_from,
+    _post_json,
 )
-from backend.app.db.models import JobRecord, JobSourceRecord
+from backend.app.db.models import (
+    JobRecord,
+    JobSourceRecord,
+    SourceProbeRecord,
+)
 
 
 SOURCE_HOSTS = {
     "greenhouse": "job-boards.greenhouse.io",
     "lever": "jobs.lever.co",
     "ashby": "jobs.ashbyhq.com",
+    "smartrecruiters": "jobs.smartrecruiters.com",
 }
 
 
@@ -116,11 +123,70 @@ def _name_from_url(
     return parts[-1] if parts else host
 
 
+def _verify(
+    ref: BoardRef,
+    company: str,
+    *,
+    fetch,
+    fetch_text,
+    post,
+    default_evidence: str = "",
+) -> BoardCandidate | None:
+    """Turn a board a page pointed at into one ACE will poll.
+
+    Every route into this module ends here, because every route has
+    the same way of going wrong: the link is real, the board is real,
+    and the board is somebody else's.
+    """
+
+    jobs = board_jobs(
+        ref,
+        fetch=fetch,
+        post=post,
+    )
+
+    if not jobs:
+        return None
+
+    if ref.source_type == "workday":
+        evidence = workday_belongs_to(
+            company=company,
+            token=ref.token,
+        )
+    else:
+        evidence = board_belongs_to(
+            company=company,
+            source_type=ref.source_type,
+            token=ref.token,
+            jobs=jobs,
+            fetch=fetch,
+            fetch_text=fetch_text,
+        )
+
+    if evidence is None and not default_evidence:
+        return None
+
+    return BoardCandidate(
+        company=company,
+        source_type=ref.source_type,
+        source_account=ref.token,
+        job_count=len(
+            jobs
+        ),
+        evidence=(
+            evidence
+            or default_evidence
+        ),
+        source_host=ref.source_host,
+    )
+
+
 def _from_board_url(
     url: str,
     *,
     fetch,
     fetch_text,
+    post=_post_json,
 ) -> BoardCandidate | None:
     """Read a board straight out of a URL that already names one.
 
@@ -129,58 +195,26 @@ def _from_board_url(
     says which board and not whose.
     """
 
-    found = careers_page_token(
+    ref = careers_page_token(
         url
     )
 
-    if found is None:
+    if ref is None:
         return None
 
-    source_type, token = found
-
-    endpoints = dict(
-        board_endpoints(
-            token
-        )
-    )
-
-    if source_type not in endpoints:
-        return None
-
-    jobs = _jobs_from(
-        fetch(
-            endpoints[
-                source_type
-            ]
-        )
-    )
-
-    if not jobs:
-        return None
-
-    company = _name_from_url(
-        url
-    )
-
-    evidence = board_belongs_to(
-        company=company,
-        source_type=source_type,
-        token=token,
-        jobs=jobs,
+    return _verify(
+        ref,
+        _name_from_url(
+            url
+        ),
         fetch=fetch,
         fetch_text=fetch_text,
-    )
-
-    return BoardCandidate(
-        company=company,
-        source_type=source_type,
-        source_account=token,
-        job_count=len(
-            jobs
-        ),
-        evidence=(
-            evidence
-            or "named directly by the link given"
+        post=post,
+        # The user handed over this exact board. Confirming whose it
+        # is stays worth doing and is reported when it succeeds, but a
+        # board that names nobody is still the one that was asked for.
+        default_evidence=(
+            "named directly by the link given"
         ),
     )
 
@@ -190,6 +224,7 @@ def resolve(
     *,
     fetch=_fetch_json,
     fetch_text=_fetch_text,
+    post=_post_json,
 ) -> BoardCandidate | None:
     """Find the board a URL or company name refers to.
 
@@ -210,6 +245,7 @@ def resolve(
             text,
             fetch=fetch,
             fetch_text=fetch_text,
+            post=post,
         )
 
         if direct is not None:
@@ -220,51 +256,26 @@ def resolve(
         )
 
         if html:
-            found = careers_page_token(
+            ref = careers_page_token(
                 html
             )
 
-            if found is not None:
-                source_type, token = found
-
-                endpoints = dict(
-                    board_endpoints(
-                        token
-                    )
+            if ref is not None:
+                # No default evidence here. The link was to a careers
+                # page, not to a board, so which board it points at is
+                # the page's claim and has to be checked.
+                found = _verify(
+                    ref,
+                    _name_from_url(
+                        text
+                    ),
+                    fetch=fetch,
+                    fetch_text=fetch_text,
+                    post=post,
                 )
 
-                jobs = _jobs_from(
-                    fetch(
-                        endpoints.get(
-                            source_type
-                        )
-                    )
-                )
-
-                company = _name_from_url(
-                    text
-                )
-
-                if jobs:
-                    evidence = board_belongs_to(
-                        company=company,
-                        source_type=source_type,
-                        token=token,
-                        jobs=jobs,
-                        fetch=fetch,
-                        fetch_text=fetch_text,
-                    )
-
-                    if evidence is not None:
-                        return BoardCandidate(
-                            company=company,
-                            source_type=source_type,
-                            source_account=token,
-                            job_count=len(
-                                jobs
-                            ),
-                            evidence=evidence,
-                        )
+                if found is not None:
+                    return found
 
         return None
 
@@ -281,6 +292,7 @@ def resolve(
         text,
         fetch=fetch,
         fetch_text=fetch_text,
+        post=post,
     )
 
 
@@ -290,6 +302,7 @@ def add_source(
     text: str,
     fetch=_fetch_json,
     fetch_text=_fetch_text,
+    post=_post_json,
 ) -> AddResult:
     """Register the board a URL or name refers to."""
 
@@ -297,6 +310,7 @@ def add_source(
         text,
         fetch=fetch,
         fetch_text=fetch_text,
+        post=post,
     )
 
     if candidate is None:
@@ -344,8 +358,11 @@ def add_source(
             company_name=(
                 candidate.company
             ),
-            source_host=SOURCE_HOSTS.get(
-                candidate.source_type
+            source_host=(
+                candidate.source_host
+                or SOURCE_HOSTS.get(
+                    candidate.source_type
+                )
             ),
             enabled=True,
             poll_interval_seconds=(
@@ -409,18 +426,61 @@ def coverage(
             )
         )
 
-    unreached = sorted(
-        name
-        for name in TARGET_COMPANIES
-        if not (
-            set(
-                company_keys(
-                    name
-                )
+    # What the last probe found in the way of each company. Without
+    # it the gap is a list of names and nothing more: no way to tell a
+    # company that has moved to an ATS ACE cannot read from one whose
+    # careers page merely outgrew the buffer that read it. Both were
+    # in this list, and both were found by hand.
+    probes = {
+        row.company_key: row
+        for row in session.scalars(
+            sa.select(
+                SourceProbeRecord
             )
-            & reachable
         )
-    )
+    }
+
+    unreached = []
+
+    for name in sorted(
+        TARGET_COMPANIES
+    ):
+        if set(
+            company_keys(
+                name
+            )
+        ) & reachable:
+            continue
+
+        probe = probes.get(
+            normalise_company(
+                name
+            )
+        )
+
+        unreached.append(
+            {
+                "company": name,
+                "outcome": (
+                    probe.outcome
+                    if probe
+                    else "unprobed"
+                ),
+                "detail": (
+                    probe.detail
+                    if probe
+                    else (
+                        "Not looked at yet."
+                    )
+                ),
+                "checked_at": (
+                    probe.checked_at.isoformat()
+                    if probe
+                    and probe.checked_at
+                    else None
+                ),
+            }
+        )
 
     return {
         "total": len(

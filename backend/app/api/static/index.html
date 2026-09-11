@@ -490,7 +490,15 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .cov-out.ok{color:var(--success)} .cov-out.warn{color:var(--warning)}
 .cov-names{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
 .cov-name{background:var(--surface-2);border:1px solid var(--border);border-radius:999px;
-  padding:5px 11px;font-size:12px;color:var(--text-secondary)}
+  padding:5px 11px;font-size:12px;color:var(--text-secondary);cursor:help}
+/* One cause, with the companies it accounts for. Grouped rather than
+   listed, because "154 unreachable" is a wall and "31 are on iCIMS" is
+   a decision waiting to be made. */
+.cov-group{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+.cov-group-h{font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:6px}
+.cov-group-n{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;
+  background:var(--surface-2);border:1px solid var(--border);
+  font-size:11px;font-weight:600;color:var(--text-secondary);font-variant-numeric:tabular-nums}
 /* A repeating block: a job or a degree. Bordered as one object,
    because that is what a form shows and what Remove removes. */
 .hist{border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;
@@ -1850,10 +1858,10 @@ function coveragePage(){
     '<div class="page"><div class="wrap">'+
       '<p class="why" style="max-width:74ch">ACE polls '+c.sources+' boards and reaches <b>'+
         c.reached+' of '+c.total+'</b> companies on your list ('+pct+'%). '+
-        'The rest are listed below: ACE cannot read their boards, usually because they self-host, '+
-        'sit on Workday, or build their careers page in the browser. '+
+        'The rest are below, grouped by what is actually in the way. Hover a name for the detail. '+
         'This page exists so a gap is a number you can see rather than something you find by '+
-        'clicking a job ACE never had.</p>'+
+        'clicking a job ACE never had &mdash; and the grouping exists because a bare list of names '+
+        'told you nothing about which gaps were the companies&rsquo; doing and which were ACE&rsquo;s.</p>'+
       '<div class="ans-sec">Add a company</div>'+
       '<p class="why" style="margin:0">Paste a job link, a careers page, or just a company name. '+
         'ACE works out which board it is, checks the board really belongs to them, and starts '+
@@ -1867,11 +1875,51 @@ function coveragePage(){
       (state.coverageMsg
         ? '<div class="cov-out '+esc(state.coverageMsgKind||"")+'">'+esc(state.coverageMsg)+'</div>'
         : '')+
-      '<div class="ans-sec">Cannot reach ('+c.unreached.length+')</div>'+
-      '<div class="cov-names">'+
-        c.unreached.map(function(n){ return '<span class="cov-name">'+esc(n)+'</span>'; }).join("")+
-      '</div>'+
+      coverageGaps(c.unreached)+
     '</div></div>';
+}
+/* What is in the way, grouped by what would fix it.
+   A flat list of names was a wall: 154 of them, nothing to act on, and
+   no way to tell a company that has genuinely moved somewhere ACE
+   cannot read from one ACE was failing to look for properly. Most of
+   that list turned out to be the second kind. */
+var COV_GROUPS=[
+  ["other_ats","Hire through an ATS ACE cannot read yet",
+   "Each needs an adapter. The name says which one, so the work is countable rather than open-ended."],
+  ["no_board_found","Publish no board ACE recognises",
+   "Usually a careers page that builds itself in the browser, or hiring software run in-house."],
+  ["no_postings","Readable, but nothing posted right now",
+   "ACE found and checked the board. There is simply nothing on it today."],
+  ["refused","Found a board, refused to trust it",
+   "The board named a different company. A board under the wrong name is harder to notice than a gap, so it was left alone."],
+  ["site_unreachable","No website answered",
+   "The company may trade under another name. Pasting their careers link above fixes these outright."],
+  ["unprobed","Not looked at yet",
+   "Run the coverage probe to find out."]
+];
+function coverageGaps(rows){
+  if(!rows||!rows.length) return '<div class="ans-sec">Cannot reach (0)</div>'+
+    '<p class="why">ACE reaches every company on your list.</p>';
+  var by={};
+  rows.forEach(function(r){ (by[r.outcome]=by[r.outcome]||[]).push(r); });
+  var out='<div class="ans-sec">Cannot reach ('+rows.length+')</div>';
+  COV_GROUPS.forEach(function(g){
+    var group=by[g[0]]; if(!group) return;
+    delete by[g[0]];
+    out+='<div class="cov-group"><div class="cov-group-h">'+esc(g[1])+
+      ' <span class="cov-group-n">'+group.length+'</span></div>'+
+      '<p class="why" style="margin:0 0 8px">'+esc(g[2])+'</p>'+
+      '<div class="cov-names">'+group.map(covName).join("")+'</div></div>';
+  });
+  Object.keys(by).forEach(function(k){
+    out+='<div class="cov-group"><div class="cov-group-h">'+esc(k)+
+      ' <span class="cov-group-n">'+by[k].length+'</span></div>'+
+      '<div class="cov-names">'+by[k].map(covName).join("")+'</div></div>';
+  });
+  return out;
+}
+function covName(r){
+  return '<span class="cov-name" title="'+esc(r.detail||"")+'">'+esc(r.company)+'</span>';
 }
 function addSource(){
   var box=document.getElementById("cov-input");
