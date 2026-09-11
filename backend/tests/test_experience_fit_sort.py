@@ -80,6 +80,7 @@ def add_job(
     early_career: bool = False,
     years: int | None = None,
     verified: bool = True,
+    new_grad: bool = False,
 ) -> JobRecord:
     """Insert one qualifying job with a given experience profile."""
 
@@ -125,6 +126,7 @@ def add_job(
             content_hash=f"hash-{index}",
             requirements_verified=verified,
             is_early_career=early_career,
+            is_new_grad=new_grad,
             required_experience_years=years,
             evaluated_at=NOW,
         )
@@ -393,3 +395,116 @@ def test_the_chip_and_the_sort_agree(
         )[0]
 
         assert leading in kept
+
+
+def test_new_grad_is_narrower_than_early_career(
+    session_factory,
+) -> None:
+    """The user asks the two separately, so ACE stores them separately.
+
+    is_early_career is deliberately wide: junior, associate, entry
+    level, rotational and "Engineer I" all set it and none of them
+    says new grad. Before this flag existed the narrower question
+    could not be asked at all.
+    """
+
+    with session_factory() as session:
+        add_job(
+            session,
+            index=1,
+            title="Software Engineer, New Grad 2026",
+            early_career=True,
+            new_grad=True,
+        )
+
+        add_job(
+            session,
+            index=2,
+            title="Junior Software Engineer",
+            early_career=True,
+        )
+
+        page = list_jobs(
+            session,
+            filters=JobFilters(
+                new_grad_only=True,
+            ),
+            now=NOW,
+        )
+
+        assert [
+            item.title
+            for item in page.items
+        ] == [
+            "Software Engineer, New Grad 2026",
+        ]
+
+
+def test_the_new_grad_sort_leads_with_the_flag(
+    session_factory,
+) -> None:
+    """A chip and a sort both named "New grad" must mean one thing.
+
+    The sort ranked on is_early_career, so with the chip beside it the
+    two would have selected and ordered different sets. The company
+    tier work already had to fix that class of disagreement once.
+    """
+
+    with session_factory() as session:
+        add_job(
+            session,
+            index=1,
+            title="Junior Engineer",
+            early_career=True,
+        )
+
+        add_job(
+            session,
+            index=2,
+            title="New Grad Engineer",
+            early_career=True,
+            new_grad=True,
+        )
+
+        assert titles(
+            session,
+            sort="new_grad_first",
+        )[0] == "New Grad Engineer"
+
+
+def test_the_gate_sets_the_flag_from_the_title() -> None:
+    """One definition of new grad, in Python, beside the other rules.
+
+    The alternative was a second copy of the patterns as a Postgres
+    regex. The company tier work records why that is a trap, and the
+    SQLite test database cannot run one at all.
+    """
+
+    from backend.app.intelligence.eligibility import (
+        is_new_grad_title,
+    )
+
+    for title in (
+        "Software Engineer, New Grad 2026",
+        "New Graduate Software Engineer",
+        "University Graduate, Backend",
+        "Campus Hire, Software",
+        "2026 Graduate Software Engineer",
+        "Recent Graduate Engineer",
+    ):
+        assert is_new_grad_title(
+            title
+        ), title
+
+    # Early career, every one of them, and not one says new grad.
+    for title in (
+        "Junior Software Engineer",
+        "Associate Software Engineer",
+        "Software Engineer I",
+        "Entry-Level Developer",
+        "Rotational Engineer",
+        "Senior Software Engineer",
+    ):
+        assert not is_new_grad_title(
+            title
+        ), title

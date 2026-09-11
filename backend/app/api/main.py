@@ -637,6 +637,14 @@ def create_app() -> FastAPI:
                 "the gate admitted."
             ),
         ),
+        new_grad_only: bool = Query(
+            default=False,
+            description=(
+                "Only postings whose "
+                "title announces a "
+                "new-graduate role."
+            ),
+        ),
         verified_only: bool = Query(
             default=False,
             description=(
@@ -762,6 +770,9 @@ def create_app() -> FastAPI:
                 ),
                 experience_fit_only=(
                     experience_fit_only
+                ),
+                new_grad_only=(
+                    new_grad_only
                 ),
                 verified_only=verified_only,
                 resume_id=resume_id,
@@ -896,6 +907,14 @@ def create_app() -> FastAPI:
                 "the gate admitted."
             ),
         ),
+        new_grad_only: bool = Query(
+            default=False,
+            description=(
+                "Only postings whose "
+                "title announces a "
+                "new-graduate role."
+            ),
+        ),
         verified_only: bool = Query(
             default=False,
         ),
@@ -950,6 +969,9 @@ def create_app() -> FastAPI:
                 ),
                 experience_fit_only=(
                     experience_fit_only
+                ),
+                new_grad_only=(
+                    new_grad_only
                 ),
                 verified_only=verified_only,
             ),
@@ -1993,6 +2015,14 @@ def create_app() -> FastAPI:
                 "the gate admitted."
             ),
         ),
+        new_grad_only: bool = Query(
+            default=False,
+            description=(
+                "Only postings whose "
+                "title announces a "
+                "new-graduate role."
+            ),
+        ),
         verified_only: bool = Query(
             default=False,
         ),
@@ -2054,6 +2084,9 @@ def create_app() -> FastAPI:
                 ),
                 experience_fit_only=(
                     experience_fit_only
+                ),
+                new_grad_only=(
+                    new_grad_only
                 ),
                 verified_only=(
                     verified_only
