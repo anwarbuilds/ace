@@ -470,6 +470,7 @@
           lastFill.push({
           field: touched,
           previous: previous,
+          wrote: value,
           ticked: aceIsChoiceControl(touched)
         });
 
@@ -567,6 +568,7 @@
       lastFill.push({
         field: touched,
         previous: previous,
+        wrote: value,
         ticked: aceIsChoiceControl(touched)
       });
 
@@ -895,6 +897,58 @@
       .then(function () {
         return { filled: filled, unmatched: unmatched };
       });
+  }
+
+  /* Put back anything the page overwrote after ACE wrote it.
+
+     Comboboxes are filled in a second pass, because each one has to be
+     opened and waited on, and a widget can rewrite a field that the
+     first pass already filled. A phone box is the case that showed it:
+     ACE filled the number, then chose the country beside it, and the
+     phone widget reset the field to its dial code. The user was left
+     looking at a Phone reading "+1".
+
+     Only fields ACE wrote itself are touched, and only when the value
+     is no longer the one it wrote, so this can never overwrite the
+     user or fight a widget that legitimately reformats what it was
+     given. Reformatting is why the comparison is on the digits and
+     letters alone: a phone box that renders "+1 425 568 6378" as
+     "(425) 568-6378" has kept the number, and rewriting it would
+     start a loop.  */
+  function restoreClobbered() {
+    lastFill.forEach(function (record) {
+      if (record.ticked) return;
+      if (!record.wrote) return;
+      if (!record.field.isConnected) return;
+
+      var now = aceNormalise(String(record.field.value || ""));
+      var meant = aceNormalise(String(record.wrote));
+
+      if (!meant) return;
+      if (now === meant) return;
+
+      // Same content, differently punctuated, is not a clobbering. A
+      // phone box that renders "+1 425 568 6378" as "(425) 568-6378"
+      // has kept the number, and rewriting it would start a loop.
+      var bareNow = now.replace(/[^a-z0-9]/g, "");
+      var bareMeant = meant.replace(/[^a-z0-9]/g, "");
+
+      if (bareNow === bareMeant) return;
+
+      var shorter = bareNow.length <= bareMeant.length
+        ? bareNow
+        : bareMeant;
+
+      var longer = bareNow.length <= bareMeant.length
+        ? bareMeant
+        : bareNow;
+
+      // Long enough to be the content rather than a fragment of it:
+      // the field this exists for came back holding "1".
+      if (shorter.length >= 5 && longer.indexOf(shorter) >= 0) return;
+
+      setNatively(record.field, record.wrote);
+    });
   }
 
   function undo() {
@@ -1513,6 +1567,7 @@
     fillComboboxes().then(function (comboResult) {
       result.filled = result.filled.concat(comboResult.filled);
       result.unmatched = result.unmatched.concat(comboResult.unmatched);
+      restoreClobbered();
       filling = false;
       lastResult = result;
       showResult(host, result);
@@ -1672,6 +1727,8 @@
     openCombobox: openCombobox,
     searchTerms: searchTerms,
     fillOneCombobox: fillOneCombobox,
+    restoreClobbered: restoreClobbered,
+    recordFill: function (record) { lastFill.push(record); },
     panel: panel,
     shell: shell,
     onAceClick: onAceClick

@@ -705,6 +705,121 @@ def test_a_search_that_finds_nothing_leaves_the_box_empty(
     ) == "", "ACE left its search text in the field"
 
 
+def _fill_then_clobber(
+    page,
+    wrote: str,
+    clobbered_to: str,
+) -> str:
+    """Fill a box, record it the way plan() does, then let the page
+    overwrite it, and run the real check. Returns the final value."""
+
+    page.eval(
+        "(function(){document.body.insertAdjacentHTML("
+        "'beforeend','<input id=\"probe\">');return 1;})()"
+    )
+
+    page.eval(
+        "(function(){var I=window.__aceInternals,"
+        "f=document.getElementById('probe');"
+        "I.setNatively(f," + repr(
+            wrote
+        ).replace(
+            "'",
+            '"',
+        ) + ");"
+        "I.recordFill({field:f,previous:'',wrote:" + repr(
+            wrote
+        ).replace(
+            "'",
+            '"',
+        ) + ",ticked:false});"
+        "I.setNatively(f," + repr(
+            clobbered_to
+        ).replace(
+            "'",
+            '"',
+        ) + ");"
+        "I.restoreClobbered();return 1;})()"
+    )
+
+    return page.eval(
+        "document.getElementById('probe').value"
+    )
+
+
+def test_a_field_the_page_overwrote_is_put_back(
+    filler,
+) -> None:
+    """The Jump Trading form: Phone came back reading "+1".
+
+    Comboboxes are filled in a second pass, because each has to be
+    opened and waited on. A phone widget rewrites the number box when
+    its country is chosen, so ACE filled the number, then chose the
+    country beside it, and the number it had just written was gone.
+
+    Exposed by making the country fillable at all: before that it was
+    never chosen and the number always survived.
+    """
+
+    assert _fill_then_clobber(
+        filler,
+        "+ 425 568 6378",
+        "+1",
+    ) == "+ 425 568 6378", (
+        "the number ACE wrote was not put back"
+    )
+
+
+def test_a_reformatted_value_is_left_alone(
+    filler,
+) -> None:
+    """A widget that renders the number differently has kept it.
+
+    Rewriting it would fight the page and never settle, so the
+    comparison is on the digits alone and a long enough overlap counts
+    as the same content.
+    """
+
+    assert _fill_then_clobber(
+        filler,
+        "+1 425 568 6378",
+        "(425) 568-6378",
+    ) == "(425) 568-6378", (
+        "a reformatted number was rewritten, which is a fight "
+        "with the page that never settles"
+    )
+
+
+def test_only_fields_ace_wrote_are_considered(
+    filler,
+) -> None:
+    """The check walks ACE's own record, not the form.
+
+    A field ACE never filled is never looked at, whatever is in it.
+    Within the record, anything that is not the value ACE wrote is
+    restored, and that is deliberately blunt: the check runs once,
+    seconds after the fill, in the gap the combobox pass occupies. In
+    that window a changed value is a widget, not a person. If the user
+    edits afterwards, nothing runs again to undo them.
+    """
+
+    assert _fill_then_clobber(
+        filler,
+        "+ 425 568 6378",
+        "replaced by the widget",
+    ) == "+ 425 568 6378"
+
+    filler.eval(
+        "(function(){document.body.insertAdjacentHTML("
+        "'beforeend','<input id=\"untouched\" value=\"mine\">');"
+        "window.__aceInternals.restoreClobbered();return 1;})()"
+    )
+
+    assert filler.eval(
+        "document.getElementById('untouched').value"
+    ) == "mine"
+
+
 def test_the_extension_ships_no_fill_marker() -> None:
     """Pinned in the source, because the marker was three things.
 
