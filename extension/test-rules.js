@@ -164,6 +164,21 @@ var DELL_CASES = [
    short and real options are sentences, so every one of these was a
    miss or a misfire before the matcher scored intent and overlap. */
 var OPTION_CASES = [
+  // A city written shorter than the list writes it.
+  [["Seattle, Washington, United States", "Boston, Massachusetts, United States"],
+   "Seattle WA", 0],
+  [["Bothell, Washington, United States", "Boston, Massachusetts, United States"],
+   "Bothell", 0],
+  // "bothell" does not start "boston", so nothing is chosen.
+  [["Boston, Massachusetts, United States"], "Bothell", -1],
+  // A shortened form that fits two options has chosen neither.
+  [["San Francisco, California, United States",
+    "San Fransisco de Macoris, Dominican Republic"], "San Fr", -1],
+  // Still matched outright when the answer is a whole leading word:
+  // "No" is the first word of the option, which is containment, not
+  // a shortening, and that tier runs first.
+  [["No, I do not have a disability", "Not applicable"], "No", 0],
+
   // A phone widget prints the dial code beside the country name. With
   // it attached nothing matched, so MongoDB's required Country stayed
   // empty and took the phone number down with it.

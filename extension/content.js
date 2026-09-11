@@ -749,11 +749,80 @@
     field.blur();
   }
 
+  /* Type into a combobox without closing it.
+
+     Deliberately not setNatively: that blurs at the end, and blurring
+     a combobox closes the menu the typing just opened. Everything
+     else about committing a value to a framework is the same.  */
+  function typeIntoCombobox(field, text) {
+    var setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value"
+    ).set;
+
+    try {
+      field.focus({ preventScroll: true });
+    } catch (error) {
+      /* an unfocusable field still gets the value and the event */
+    }
+
+    var tracker = field._valueTracker;
+
+    if (tracker && typeof tracker.setValue === "function") {
+      tracker.setValue(text === field.value ? "" : field.value);
+    }
+
+    setter.call(field, text);
+
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  /* The queries to try, longest first.
+
+     Some lists hold every city on earth and every university, and
+     offer nothing at all until something is typed, which is why ACE
+     left them empty on every Greenhouse form the user filled. The
+     whole answer is tried first, because "University of Washington"
+     is written the way the list writes it. A city is not: the answer
+     says "Bothell" or "Seattle WA" and the list says "Bothell,
+     Washington, United States", so the first word is tried after it.  */
+  function searchTerms(value) {
+    var whole = String(value == null ? "" : value).trim();
+    if (!whole) return [];
+
+    var first = whole.split(/\s+/)[0];
+
+    return first && first !== whole ? [whole, first] : [whole];
+  }
+
+  function optionsByTyping(field, value) {
+    var terms = searchTerms(value);
+
+    return terms.reduce(function (chain, term) {
+      return chain.then(function (found) {
+        if (found && found.length) return found;
+
+        typeIntoCombobox(field, term);
+
+        return waitForComboboxOptions(field, 1200);
+      });
+    }, Promise.resolve([]));
+  }
+
   function fillOneCombobox(field, value, alts) {
+    var typed = false;
+
     openCombobox(field);
 
-    return waitForComboboxOptions(field, 1500).then(function (options) {
+    return waitForComboboxOptions(field, 900).then(function (options) {
+      if (options.length) return options;
+
+      typed = true;
+
+      return optionsByTyping(field, value);
+    }).then(function (options) {
       if (!options.length) {
+        if (typed) typeIntoCombobox(field, "");
         closeCombobox(field);
         return { matched: false };
       }
@@ -766,9 +835,11 @@
 
       if (index < 0) {
         // No option fits. Closed rather than left open with nothing
-        // chosen, and nothing is typed into the input either -- a
-        // wrong option is worse than this question staying blank for
-        // the user to answer themselves.
+        // chosen, and the search text is taken back out -- a wrong
+        // option is worse than this question staying blank for the
+        // user to answer themselves, and a half-typed city left
+        // sitting in the box is worse than either.
+        if (typed) typeIntoCombobox(field, "");
         closeCombobox(field);
         return { matched: false };
       }
@@ -1599,6 +1670,8 @@
     diagnostics: diagnostics,
     formSignature: formSignature,
     openCombobox: openCombobox,
+    searchTerms: searchTerms,
+    fillOneCombobox: fillOneCombobox,
     panel: panel,
     shell: shell,
     onAceClick: onAceClick

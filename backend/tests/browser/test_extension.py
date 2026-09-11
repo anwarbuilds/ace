@@ -586,6 +586,125 @@ def test_the_next_page_of_a_form_is_filled_too(
     )
 
 
+TYPE_AHEAD = """
+(function(){
+  document.body.insertAdjacentHTML('beforeend',
+    '<div id="wrap"><div class="select__control">'+
+    '<input id="city" role="combobox"></div><div id="menu"></div></div>');
+  var input=document.getElementById('city');
+  var menu=document.getElementById('menu');
+  window.__picked=null;
+  var ALL=['Bothell, Washington, United States',
+           'Seattle, Washington, United States',
+           'Boston, Massachusetts, United States'];
+  // Offers nothing at all until something is typed, which is what
+  // every city and university list on Greenhouse does.
+  input.addEventListener('input',function(){
+    var q=input.value.trim().toLowerCase();
+    if(!q){ menu.innerHTML=''; return; }
+    var hits=ALL.filter(function(c){return c.toLowerCase().indexOf(q)===0;});
+    menu.innerHTML='<div role="listbox">'+hits.map(function(c){
+      return '<div role="option">'+c+'</div>';}).join('')+'</div>';
+    [].slice.call(menu.querySelectorAll('[role=option]')).forEach(function(o){
+      o.addEventListener('click',function(){ window.__picked=o.textContent; });});
+  });
+  return 1;})()
+"""
+
+
+def test_a_list_that_shows_nothing_until_you_type(
+    filler,
+) -> None:
+    """City, school and degree were empty on every Greenhouse form.
+
+    Those lists hold every city on earth and every university, so they
+    offer no options at all until something is typed. ACE opened them,
+    saw an empty menu and gave up, and the user filled them by hand
+    every time.
+    """
+
+    filler.eval(
+        TYPE_AHEAD
+    )
+
+    filler.eval(
+        "window.__done=window.__aceInternals"
+        ".fillOneCombobox("
+        "document.getElementById('city'),"
+        "'Bothell',[]);1"
+    )
+
+    filler.wait_for(
+        "!!window.__picked",
+        timeout=12,
+    )
+
+    assert filler.eval(
+        "window.__picked"
+    ) == "Bothell, Washington, United States"
+
+
+def test_a_city_written_shorter_than_the_list_writes_it(
+    filler,
+) -> None:
+    """"Seattle WA" against "Seattle, Washington, United States".
+
+    Typing the whole answer finds nothing, because the widget matches
+    what it was handed. The first word is tried after it, which is the
+    difference between a match and a blank field.
+    """
+
+    filler.eval(
+        TYPE_AHEAD
+    )
+
+    filler.eval(
+        "window.__aceInternals.fillOneCombobox("
+        "document.getElementById('city'),"
+        "'Seattle WA',[]);1"
+    )
+
+    filler.wait_for(
+        "!!window.__picked",
+        timeout=12,
+    )
+
+    assert filler.eval(
+        "window.__picked"
+    ) == "Seattle, Washington, United States"
+
+
+def test_a_search_that_finds_nothing_leaves_the_box_empty(
+    filler,
+) -> None:
+    """Half a typed city left sitting in a required field is worse
+    than the blank it replaced, and worse than saying so."""
+
+    filler.eval(
+        TYPE_AHEAD
+    )
+
+    filler.eval(
+        "window.__aceInternals.fillOneCombobox("
+        "document.getElementById('city'),"
+        "'Hyderabad',[]).then(function(r){"
+        "window.__outcome=r;});1"
+    )
+
+    filler.wait_for(
+        "!!window.__outcome",
+        timeout=12,
+    )
+
+    assert filler.eval(
+        "window.__outcome.matched"
+    ) is False
+
+    assert filler.eval(
+        "document.getElementById('city').value"
+    ) == "", "ACE left its search text in the field"
+
+
 def test_the_extension_ships_no_fill_marker() -> None:
     """Pinned in the source, because the marker was three things.
 

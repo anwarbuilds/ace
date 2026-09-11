@@ -869,6 +869,23 @@ function aceChooseOption(options, answer, aliases) {
     if (byOverlap >= 0) return byOverlap;
   }
 
+  // "Seattle WA" against "Seattle, Washington, United States".
+  //
+  // Containment cannot see that, because "wa" is not the word
+  // "washington". Every word of the answer being the start of a word
+  // in the option, in order, can: it reads a shortened form without
+  // inventing one. "Bothell" still fails against "Boston", because
+  // "bothell" is not the start of "boston".
+  //
+  // Unique or nothing, like everything else here. A "No" that is the
+  // start of both "No, I do not" and "Not applicable" has not chosen
+  // between them.
+  var prefixed = indices(function (text) {
+    return aceWordsPrefix(wanted, text);
+  });
+
+  if (prefixed.length === 1) return prefixed[0];
+
   // "I do not have any disability" against "No, I don't have a
   // disability, or have not had one in the past": the shape of the
   // answer decides, then the words settle which of the negatives.
@@ -1097,4 +1114,42 @@ function aceHistoryValue(entry, role) {
   }
 
   return null;
+}
+
+
+/* Whether every word of `wanted` starts a word of `text`, in order.
+
+   A shortened form read rather than guessed at: "seattle wa" against
+   "seattle washington united states" holds, and "bothell" against
+   "boston" does not. Anchored at the first word so an answer cannot
+   match something that merely mentions it late. */
+function aceWordsPrefix(wanted, text) {
+  var want = String(wanted || "").split(" ").filter(Boolean);
+  var have = String(text || "").split(" ").filter(Boolean);
+
+  if (!want.length || want.length > have.length) return false;
+
+  var at = 0;
+
+  for (var i = 0; i < want.length; i++) {
+    // Every word after the first may skip over words it does not
+    // match; the first may not, or "states" alone would match
+    // "united states" and mean nothing.
+    var found = -1;
+
+    for (var j = at; j < have.length; j++) {
+      if (have[j].indexOf(want[i]) === 0) {
+        found = j;
+        break;
+      }
+
+      if (i === 0) return false;
+    }
+
+    if (found < 0) return false;
+
+    at = found + 1;
+  }
+
+  return true;
 }
