@@ -599,20 +599,131 @@
      opens it finds nothing. Everything else in this file runs
      synchronously; this is deliberately kept separate rather than
      making the whole pipeline async for one widget type. */
-  function comboboxOptions() {
-    var box = document.querySelector("[role=listbox]");
+  /* The menu belonging to one field, never just any menu on the page.
+
+     This was `document.querySelector("[role=listbox]")`, which is the
+     first listbox in the document regardless of what it belongs to.
+     DoorDash's Greenhouse form keeps a phone country-code list of 244
+     options permanently mounted, so every combobox question on that
+     form was answered against a list of countries: "Yes" matched none
+     of them and the field was left blank, which is what the user saw.
+
+     Worse than blank was possible. A stored country of "United States
+     Of America" against a phone list containing "United States+1" is
+     exactly the kind of near-match aceChooseOption accepts, and the
+     click would have landed in the phone widget: a wrong answer on a
+     form about to be sent to an employer, which is the one outcome
+     this extension is built to avoid. */
+  function comboboxOptions(field) {
+    var box = null;
+
+    // What the field itself says its menu is. The explicit answer,
+    // when the widget bothers to give one.
+    var id =
+      field.getAttribute("aria-controls") ||
+      field.getAttribute("aria-owns");
+
+    if (id) box = document.getElementById(id);
+
+    // react-select, which is what Greenhouse renders, points at
+    // nothing and simply puts the menu inside the field's own
+    // container. Climb until a listbox turns up, and stop climbing the
+    // moment the subtree holds a second combobox: past that point any
+    // listbox found could belong to the neighbour rather than to this
+    // field, which is the mistake this whole function exists to not
+    // make again.
+    if (!box) {
+      var scope = field.parentElement;
+
+      // Bounded deliberately. On Greenhouse the menu sits four levels
+      // above the input, as a sibling of the control; anything beyond
+      // that is the page, not the widget. An unbounded climb reaches
+      // <body> and finds the first listbox in the document, which is
+      // the bug this replaced.
+      for (var depth = 0; depth < 5 && scope; depth++) {
+        if (scope === document.body) break;
+        if (scope.tagName === "FORM") break;
+
+        // Past a second combobox the subtree covers a neighbour too,
+        // and a menu found here could be theirs.
+        if (scope.querySelectorAll("[role=combobox]").length > 1) break;
+
+        box = scope.querySelector("[role=listbox]");
+        if (box) break;
+
+        scope = scope.parentElement;
+      }
+    }
 
     return box
       ? Array.prototype.slice.call(box.querySelectorAll("[role=option]"))
       : [];
   }
 
-  function waitForComboboxOptions(timeoutMs) {
+  /* Get the menu open.
+
+     A plain .click() is enough for a widget with a real toggle button,
+     which is what Ashby renders and what this used to assume. It is
+     not enough for react-select: that opens on mousedown, and
+     dispatching a click sends no mousedown at all, so the menu stayed
+     shut and ACE went on to read whatever listbox it could find. */
+  function openCombobox(field) {
+    var toggle =
+      field.parentElement &&
+      field.parentElement.querySelector("button");
+
+    if (toggle) {
+      toggle.click();
+      return;
+    }
+
+    try {
+      field.focus({ preventScroll: true });
+    } catch (error) {
+      /* a field that cannot take focus can still be tried below */
+    }
+
+    var control =
+      field.closest('[class*="control"]') ||
+      field.parentElement ||
+      field;
+
+    [
+      "pointerdown",
+      "mousedown",
+      "mouseup",
+      "click"
+    ].forEach(function (type) {
+      control.dispatchEvent(
+        new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          button: 0,
+          detail: 1
+        })
+      );
+    });
+
+    // ARIA's own way to open a combobox, for anything that ignores a
+    // pointer sequence it did not receive from a person.
+    field.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowDown",
+        code: "ArrowDown",
+        keyCode: 40,
+        which: 40,
+        bubbles: true
+      })
+    );
+  }
+
+  function waitForComboboxOptions(field, timeoutMs) {
     return new Promise(function (resolve) {
       var start = Date.now();
 
       (function poll() {
-        var options = comboboxOptions();
+        var options = comboboxOptions(field);
 
         if (options.length || Date.now() - start > timeoutMs) {
           resolve(options);
@@ -638,14 +749,9 @@
   }
 
   function fillOneCombobox(field, value, alts) {
-    var toggle =
-      field.parentElement &&
-      field.parentElement.querySelector("button");
+    openCombobox(field);
 
-    if (toggle) toggle.click();
-    else field.click();
-
-    return waitForComboboxOptions(1500).then(function (options) {
+    return waitForComboboxOptions(field, 1500).then(function (options) {
       if (!options.length) {
         closeCombobox(field);
         return { matched: false };
@@ -1356,6 +1462,8 @@
      isolated world, so this is invisible to the page itself. */
   window.__aceInternals = {
     setNatively: setNatively,
+    comboboxOptions: comboboxOptions,
+    openCombobox: openCombobox,
     panel: panel,
     shell: shell,
     onAceClick: onAceClick

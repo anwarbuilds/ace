@@ -177,7 +177,13 @@ var ACE_RULES = [
           "marketing", "sms", "preferred method", "method of communication"] },
   { answer: "Phone", type: ACE_TEXT,
     any: ["phone", "mobile number", "telephone", "cell"],
-    not: ["country"] },
+    // DoorDash asks whether you want SMS and WhatsApp updates, and
+    // explains that otherwise "we will only communicate with you via
+    // email and/or telephone calls". That is a yes/no about consent,
+    // and it matched the phone rule on the word buried in the
+    // explanation. A phone number typed into it answers nothing.
+    not: ["country", "receive communications", "sms", "whatsapp",
+          "data rates", "opt out", "opt-out"] },
   { answer: "Pronouns", type: ACE_CHOICE, any: ["pronoun"] },
 
   { answer: "LinkedIn", type: ACE_TEXT, any: ["linkedin"] },
