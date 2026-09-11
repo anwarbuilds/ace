@@ -137,6 +137,8 @@ class JobFilters:
 
     experience_fit_only: bool = False
 
+    new_grad_only: bool = False
+
     verified_only: bool = False
 
     resume_id: int | None = None
@@ -229,6 +231,8 @@ class JobListing:
     first_seen_session_id: int | None = None
 
     is_early_career: bool = False
+
+    is_new_grad: bool = False
 
     requirements_verified: bool = True
 
@@ -686,6 +690,15 @@ def _apply_filters(
             _experience_in_band()
         )
 
+    # Narrower than the chip above and asked separately, because the
+    # user asks it separately. Reads the stored flag rather than
+    # matching titles here, so the patterns stay in one place.
+    if filters.new_grad_only:
+        statement = statement.where(
+            JobEvaluationRecord
+            .is_new_grad.is_(True)
+        )
+
     if filters.max_age_days is not None:
         cutoff = now - timedelta(
             days=filters.max_age_days
@@ -809,9 +822,18 @@ def _sort_keys(
         ]
 
     if sort == "new_grad_first":
-        # Verified postings lead, then labelled new-grad. An unverified
-        # posting is a lead to check, not a result.
+        # Titles that announce a new-grad role lead, then verified
+        # postings, then the wider early-career signal. The flag came
+        # first once the filter beside it existed: a sort and a chip
+        # both named "New grad" that ranked and selected different
+        # sets is the kind of quiet disagreement the tier work already
+        # had to fix once.
+        #
+        # An unverified posting is still a lead to check rather than a
+        # result, so verification stays ahead of the softer signal.
         return [
+            JobEvaluationRecord
+            .is_new_grad.desc(),
             JobEvaluationRecord
             .requirements_verified.desc(),
             JobEvaluationRecord
@@ -1161,6 +1183,9 @@ def list_jobs(
             ),
             is_early_career=bool(
                 evaluation.is_early_career
+            ),
+            is_new_grad=bool(
+                evaluation.is_new_grad
             ),
             requirements_verified=bool(
                 evaluation

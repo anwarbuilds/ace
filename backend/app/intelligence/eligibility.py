@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-09-v28"
+    "2026-09-11-v29"
 )
 
 
@@ -130,6 +130,10 @@ class EligibilityReasonCode(
 
     EARLY_CAREER_SIGNAL = (
         "EARLY_CAREER_SIGNAL"
+    )
+
+    NEW_GRAD_TITLE = (
+        "NEW_GRAD_TITLE"
     )
 
     REQUIREMENTS_NOT_VERIFIED = (
@@ -764,6 +768,43 @@ EARLY_CAREER_TITLE_PATTERNS = (
     r"\b(?:software\s+engineer|sde|swe|engineer|developer)\s*"
     r"(?:i|1)\b(?![iv\d])",
 )
+
+
+# The subset of the above that actually means "written for someone
+# leaving university". EARLY_CAREER_TITLE_PATTERNS is deliberately
+# wider: junior, associate, entry level, rotational and "Engineer I"
+# are all early career, and none of them says new grad. The user asks
+# the two questions separately, so ACE has to be able to answer them
+# separately.
+#
+# Title only. A description mentioning that new grads are welcome is a
+# weaker claim than a title announcing it, and this exists to be a
+# filter the user can trust without reading the posting.
+NEW_GRAD_TITLE_PATTERNS = (
+    r"\bnew\s?grad(?:uate)?\b",
+    r"\brecent\s+graduate\b",
+    r"\buniversity\s+(?:graduate|hire|program|recruiting)\b",
+    r"\bcollege\s+(?:grad|graduate|hire)\b",
+    r"\bcampus\b",
+    r"\bgraduate\s+(?:software|engineer|program|scheme)\b",
+    r"\b20\d\d\s+(?:grad|start|graduate)\b",
+)
+
+
+def is_new_grad_title(
+    title: str,
+) -> bool:
+    """Whether a title announces itself as a new-graduate role."""
+
+    text = (title or "").lower()
+
+    return any(
+        re.search(
+            pattern,
+            text,
+        )
+        for pattern in NEW_GRAD_TITLE_PATTERNS
+    )
 
 
 # A role stating two years or less is an early-career role even when it
@@ -2220,6 +2261,26 @@ def evaluate_job(
                 "Posting is explicitly a "
                 "new-grad or early-career "
                 "role."
+            )
+        )
+
+    # Narrower than the signal above, and asked separately because the
+    # user asks it separately. Junior, associate, entry level and
+    # "Engineer I" are all early career and none of them says new
+    # grad; this is only the titles written for someone leaving
+    # university.
+    if is_new_grad_title(
+        job.title
+    ):
+        note_codes.append(
+            EligibilityReasonCode
+            .NEW_GRAD_TITLE
+        )
+
+        note_reasons.append(
+            (
+                "Title announces a "
+                "new-graduate role."
             )
         )
 

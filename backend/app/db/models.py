@@ -427,6 +427,13 @@ class JobEvaluationRecord(Base):
         Index(
             (
                 "ix_job_evaluations_"
+                "new_grad"
+            ),
+            "is_new_grad",
+        ),
+        Index(
+            (
+                "ix_job_evaluations_"
                 "verified"
             ),
             "requirements_verified",
@@ -487,6 +494,19 @@ class JobEvaluationRecord(Base):
     # early-career role. Informational: it orders the queue, it never
     # excludes, because unlabelled roles are frequently open to grads.
     is_early_career: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
+
+    # True when the title itself announces a new-graduate role. A
+    # narrower question than is_early_career, which also covers junior,
+    # associate, entry level and "Engineer I", and asked separately
+    # because the user asks it separately. Title only: a description
+    # mentioning that new grads are welcome is a weaker claim than a
+    # title announcing it, and this exists to be trusted without
+    # reading the posting.
+    is_new_grad: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         server_default="false",

@@ -76,6 +76,11 @@ def _values_from_decision(
             .EARLY_CAREER_SIGNAL
             in decision.reason_codes
         ),
+        "is_new_grad": (
+            EligibilityReasonCode
+            .NEW_GRAD_TITLE
+            in decision.reason_codes
+        ),
         "requirements_verified": (
             EligibilityReasonCode
             .REQUIREMENTS_NOT_VERIFIED

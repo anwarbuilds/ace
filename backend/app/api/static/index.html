@@ -1083,6 +1083,11 @@ function controls(){
           'title="Roles labelled early career, plus any stating three years or less. '+
           'Postings that state no requirement at all are hidden while this is on.">'+
           'Early career</button>'+
+        '<button class="chip'+(state.filters.new_grad_only?" on":"")+'" data-act="togglenewgrad" '+
+          'title="Only postings whose title says new grad, recent graduate, campus or '+
+          'university hire. Narrower than Early career, which also covers junior, '+
+          'associate and Engineer I.">'+
+          'New grad</button>'+
         '<button class="chip" data-act="filters">'+icon(I.plus)+'Add filter</button></div>'+
     '</div>'+
     // Offered whenever anything is narrowing the list, including a
@@ -2544,6 +2549,10 @@ var PALETTE=[
       if(state.filters.experience_fit_only) delete state.filters.experience_fit_only;
       else state.filters.experience_fit_only={param:"experience_fit_only",type:"flag",label:"Early career",pinned:true};
       goTo("queue"); }},
+  {label:"Toggle new grad only",run:function(){
+      if(state.filters.new_grad_only) delete state.filters.new_grad_only;
+      else state.filters.new_grad_only={param:"new_grad_only",type:"flag",label:"New grad",pinned:true};
+      goTo("queue"); }},
   {label:"Toggle last 15 days only",run:function(){ state.recentOnly=!state.recentOnly; goTo("queue"); }},
   {label:"Clear all filters",run:function(){ state.filters={}; state.tiers=[]; state.excluded=[]; state.q=""; goTo("queue"); }},
   {label:"Show every company again",run:function(){ state.excluded=[]; goTo("queue"); }},
@@ -2629,6 +2638,12 @@ document.addEventListener("click",function(e){
     if(d.act==="sortmore"){ sortMorePop(t); return; }
     if(d.act==="sortreset"){ state.sorts=DEFAULT_SORTS.slice(); loadJobs(); return; }
     if(d.act==="filters"){ filterPop(t); return; }
+    if(d.act==="togglenewgrad"){
+      if(state.filters.new_grad_only) delete state.filters.new_grad_only;
+      else state.filters.new_grad_only={param:"new_grad_only",type:"flag",label:"New grad",pinned:true};
+      loadShell().then(function(){ loadJobs(); });
+      return;
+    }
     if(d.act==="toggleearly"){
       if(state.filters.experience_fit_only) delete state.filters.experience_fit_only;
       else state.filters.experience_fit_only={param:"experience_fit_only",type:"flag",label:"Early career",pinned:true};
