@@ -1028,7 +1028,10 @@ function sortLine(){
   if(!names.length) return "";
   // "first" belongs to the leading key, not to the end of the list:
   // "A, B, then C first" reads as though C led.
-  var txt=names[0]+" first"+names.slice(1).map(function(x){
+  // Some phrases already end in "first" ("newest first"), and
+  // appending another produced "Showing newest first first."
+  var lead=/first$/.test(names[0])?names[0]:names[0]+" first";
+  var txt=lead+names.slice(1).map(function(x){
     return ", then "+x; }).join("");
   var changed=state.sorts.join(",")!==DEFAULT_SORTS.join(",");
   return '<div class="ctl-row ctl-sortline"><span class="sort-says">'+
@@ -1076,10 +1079,10 @@ function controls(){
     '<div class="ctl-row">'+
       '<div class="ctl-grp"><span class="ctl-label">Company tier</span>'+tierChips+'</div>'+
       '<div class="ctl-grp"><span class="ctl-label">Show only</span>'+
-        '<button class="chip'+(state.filters.early_career_only?" on":"")+'" data-act="toggleearly" '+
-          'title="Narrows to postings labelled early career. Roles stating a one to three year '+
-          'ceiling are hidden while this is on, so it is a narrower list than the sort.">'+
-          'Labelled early career only</button>'+
+        '<button class="chip'+(state.filters.experience_fit_only?" on":"")+'" data-act="toggleearly" '+
+          'title="Roles labelled early career, plus any stating three years or less. '+
+          'Postings that state no requirement at all are hidden while this is on.">'+
+          'Early career</button>'+
         '<button class="chip" data-act="filters">'+icon(I.plus)+'Add filter</button></div>'+
     '</div>'+
     // Offered whenever anything is narrowing the list, including a
@@ -2538,8 +2541,8 @@ var PALETTE=[
     state.sorts=["experience_fit_first","unapplied_first","best_match"]; goTo("queue"); }},
   {label:"Sort big tech first, then best match",run:function(){ state.sorts=["big_tech_first","best_match"]; goTo("queue"); }},
   {label:"Toggle early career only",run:function(){
-      if(state.filters.early_career_only) delete state.filters.early_career_only;
-      else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Labelled early career only",pinned:true};
+      if(state.filters.experience_fit_only) delete state.filters.experience_fit_only;
+      else state.filters.experience_fit_only={param:"experience_fit_only",type:"flag",label:"Early career",pinned:true};
       goTo("queue"); }},
   {label:"Toggle last 15 days only",run:function(){ state.recentOnly=!state.recentOnly; goTo("queue"); }},
   {label:"Clear all filters",run:function(){ state.filters={}; state.tiers=[]; state.excluded=[]; state.q=""; goTo("queue"); }},
@@ -2627,8 +2630,8 @@ document.addEventListener("click",function(e){
     if(d.act==="sortreset"){ state.sorts=DEFAULT_SORTS.slice(); loadJobs(); return; }
     if(d.act==="filters"){ filterPop(t); return; }
     if(d.act==="toggleearly"){
-      if(state.filters.early_career_only) delete state.filters.early_career_only;
-      else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Labelled early career only",pinned:true};
+      if(state.filters.experience_fit_only) delete state.filters.experience_fit_only;
+      else state.filters.experience_fit_only={param:"experience_fit_only",type:"flag",label:"Early career",pinned:true};
       loadShell().then(function(){ loadJobs(); }); return; }
     if(d.act==="clearfilters"){
       state.filters={}; state.excluded=[]; state.tiers=[]; state.q="";

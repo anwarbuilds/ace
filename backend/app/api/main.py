@@ -626,6 +626,17 @@ def create_app() -> FastAPI:
                 "new-grad roles."
             ),
         ),
+        experience_fit_only: bool = Query(
+            default=False,
+            description=(
+                "Only postings whose "
+                "experience requirement "
+                "is known to fit: "
+                "labelled early career, "
+                "or stating a ceiling "
+                "the gate admitted."
+            ),
+        ),
         verified_only: bool = Query(
             default=False,
             description=(
@@ -749,6 +760,9 @@ def create_app() -> FastAPI:
                 early_career_only=(
                     early_career_only
                 ),
+                experience_fit_only=(
+                    experience_fit_only
+                ),
                 verified_only=verified_only,
                 resume_id=resume_id,
                 session_id=session_id,
@@ -871,6 +885,17 @@ def create_app() -> FastAPI:
         early_career_only: bool = Query(
             default=False,
         ),
+        experience_fit_only: bool = Query(
+            default=False,
+            description=(
+                "Only postings whose "
+                "experience requirement "
+                "is known to fit: "
+                "labelled early career, "
+                "or stating a ceiling "
+                "the gate admitted."
+            ),
+        ),
         verified_only: bool = Query(
             default=False,
         ),
@@ -922,6 +947,9 @@ def create_app() -> FastAPI:
                 active_only=active_only,
                 early_career_only=(
                     early_career_only
+                ),
+                experience_fit_only=(
+                    experience_fit_only
                 ),
                 verified_only=verified_only,
             ),
@@ -1954,6 +1982,17 @@ def create_app() -> FastAPI:
         early_career_only: bool = Query(
             default=False,
         ),
+        experience_fit_only: bool = Query(
+            default=False,
+            description=(
+                "Only postings whose "
+                "experience requirement "
+                "is known to fit: "
+                "labelled early career, "
+                "or stating a ceiling "
+                "the gate admitted."
+            ),
+        ),
         verified_only: bool = Query(
             default=False,
         ),
@@ -2012,6 +2051,9 @@ def create_app() -> FastAPI:
                 search=q,
                 early_career_only=(
                     early_career_only
+                ),
+                experience_fit_only=(
+                    experience_fit_only
                 ),
                 verified_only=(
                     verified_only

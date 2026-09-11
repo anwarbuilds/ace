@@ -302,3 +302,94 @@ def test_four_years_is_the_gate_s_job_not_this_sort_s(
             "Three years",
             "Four years",
         ]
+
+
+def test_the_early_career_chip_keeps_a_three_year_role(
+    session_factory,
+) -> None:
+    """The chip is what the user reaches for most, and it lied.
+
+    It filtered on the early-career label alone, so of 986 qualifying
+    postings it showed 385 and hid 52 stating one to three years,
+    including every one of the 33 three-year roles. The band the user
+    was using the chip to find was the band it removed.
+    """
+
+    with session_factory() as session:
+        add_job(
+            session,
+            index=1,
+            title="Labelled",
+            early_career=True,
+        )
+
+        add_job(
+            session,
+            index=2,
+            title="Three years",
+            years=3,
+        )
+
+        add_job(
+            session,
+            index=3,
+            title="Silent",
+        )
+
+        page = list_jobs(
+            session,
+            filters=JobFilters(
+                experience_fit_only=True,
+            ),
+            now=NOW,
+        )
+
+        assert sorted(
+            item.title
+            for item in page.items
+        ) == [
+            "Labelled",
+            "Three years",
+        ]
+
+
+def test_the_chip_and_the_sort_agree(
+    session_factory,
+) -> None:
+    """Both ask the same question, so both read one definition.
+
+    A chip filtering to a different set than the sort orders by would
+    be worse than having neither: the rows that led the list would
+    vanish when the user narrowed to them.
+    """
+
+    with session_factory() as session:
+        add_job(
+            session,
+            index=1,
+            title="Three years",
+            years=3,
+        )
+
+        add_job(
+            session,
+            index=2,
+            title="Silent",
+        )
+
+        kept = {
+            item.title
+            for item in list_jobs(
+                session,
+                filters=JobFilters(
+                    experience_fit_only=True,
+                ),
+                now=NOW,
+            ).items
+        }
+
+        leading = titles(
+            session
+        )[0]
+
+        assert leading in kept

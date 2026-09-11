@@ -135,6 +135,8 @@ class JobFilters:
 
     early_career_only: bool = False
 
+    experience_fit_only: bool = False
+
     verified_only: bool = False
 
     resume_id: int | None = None
@@ -673,6 +675,17 @@ def _apply_filters(
             .is_early_career.is_(True)
         )
 
+    # What the "Early career" chip now means. It used to be
+    # early_career_only, which filtered on the label alone and so hid
+    # 52 postings stating one to three years, including every one of
+    # the 33 three-year roles -- the exact band the user was using the
+    # chip to find. Same question as the experience sort, asked as a
+    # filter.
+    if filters.experience_fit_only:
+        statement = statement.where(
+            _experience_in_band()
+        )
+
     if filters.max_age_days is not None:
         cutoff = now - timedelta(
             days=filters.max_age_days
@@ -761,6 +774,26 @@ def company_tier_rank():
     )
 
 
+def _experience_in_band():
+    """Postings whose experience requirement is known to fit.
+
+    Either labelled early career, or stating a ceiling the gate has
+    already admitted. Defined once because both the "Early career"
+    chip and the experience sort ask this same question, and a chip
+    that filtered to a different set than the sort ordered by would be
+    worse than having neither.
+    """
+
+    return or_(
+        JobEvaluationRecord
+        .is_early_career
+        .is_(True),
+        JobEvaluationRecord
+        .required_experience_years
+        < MAX_REQUIRED_EXPERIENCE_YEARS,
+    )
+
+
 def _sort_keys(
     sort: str,
 ) -> list:
@@ -813,14 +846,7 @@ def _sort_keys(
         # open to a new grad, which is why the gate keeps them, and
         # dropping them here would quietly undo that decision at the
         # point the user is actually reading the queue.
-        in_band = or_(
-            JobEvaluationRecord
-            .is_early_career
-            .is_(True),
-            JobEvaluationRecord
-            .required_experience_years
-            < MAX_REQUIRED_EXPERIENCE_YEARS,
-        )
+        in_band = _experience_in_band()
 
         # Three levels, not two. 128 in-band postings are unverified:
         # Lane B carries no description, so the only evidence is a
