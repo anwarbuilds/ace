@@ -15,6 +15,7 @@ the real ``content.js`` into a real page instead. That remains a gap
 and is recorded as one in the knowledge base rather than papered over.
 """
 
+import json
 import pathlib
 
 import pytest
@@ -411,6 +412,178 @@ def test_the_climb_stops_at_a_neighbouring_combobox(
         "window.__aceInternals.comboboxOptions("
         "document.getElementById('a')).length"
     ) == 0, "a menu shared with a neighbour was claimed as this field's"
+
+
+PAGE_ONE = (
+    '<form>'
+    '<label for="a">LinkedIn Profile</label>'
+    '<input id="a">'
+    '<label for="b">GitHub</label><input id="b">'
+    '<label for="c">First Name</label><input id="c">'
+    '<label for="d">Last Name</label><input id="d">'
+    '</form>'
+)
+
+PAGE_TWO = (
+    '<form>'
+    '<label for="e">Phone</label><input id="e">'
+    '<label for="f">Email</label><input id="f">'
+    '<label for="g">City</label><input id="g">'
+    '<label for="h">Country</label><input id="h">'
+    '</form>'
+)
+
+BANK = [
+    {"label": "LinkedIn", "value": "https://linkedin.com/in/x",
+     "aliases": []},
+    {"label": "GitHub", "value": "https://github.com/x", "aliases": []},
+    {"label": "First name", "value": "Sohail", "aliases": []},
+    {"label": "Last name", "value": "Shaik", "aliases": []},
+    {"label": "Phone", "value": "+1 425 000 0000", "aliases": []},
+    {"label": "Email", "value": "x@example.com", "aliases": []},
+    {"label": "City", "value": "Bothell", "aliases": []},
+    {"label": "Country", "value": "United States", "aliases": []},
+]
+
+
+def _boot_form(
+    page,
+    markup: str,
+):
+    """Put a form on the page, then load the real content script."""
+
+    page.eval(
+        "document.body.innerHTML="
+        + json.dumps(
+            markup
+        )
+        + ";1"
+    )
+
+    page.eval(
+        "window.__items="
+        + json.dumps(
+            BANK
+        )
+        + ";1"
+    )
+
+    page.eval(
+        """window.chrome={runtime:{
+          onMessage:{addListener:function(){}},
+          getURL:function(p){return p;},
+          getManifest:function(){return{version:'test'};},
+          sendMessage:function(msg,cb){
+            if(msg.type==='answers') cb({ok:true,items:window.__items});
+            else cb({ok:true,work:[],education:[]});
+          }}};1"""
+    )
+
+    source = "\n;\n".join(
+        (
+            EXTENSION / name
+        ).read_text(
+            encoding="utf-8"
+        )
+        for name in (
+            "fields.js",
+            "content.js",
+        )
+    )
+
+    page.eval(
+        source + "\n;1"
+    )
+
+
+def _panel_title(
+    page,
+) -> str:
+    return page.eval(
+        """(function(){
+          var h=document.querySelector('.ace-root');
+          if(!h||!h.shadowRoot) return '';
+          var t=h.shadowRoot.querySelector('.ace-title');
+          return t?t.textContent:'';})()"""
+    )
+
+
+def test_the_next_page_of_a_form_is_filled_too(
+    page,
+) -> None:
+    """An application is often several pages, and ACE saw only one.
+
+    Workday's is a wizard that swaps the whole step without touching
+    location.href. lastResult was cleared only on a URL change, so
+    after the first page was filled every later step returned early
+    from refresh(): the panel never came back and nothing was filled
+    again. The user reported exactly this, and it is invisible on any
+    single-page form, which is every form tested until now.
+    """
+
+    _boot_form(
+        page,
+        PAGE_ONE,
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.ace-root')",
+        timeout=12,
+    )
+
+    assert "Fill" in _panel_title(
+        page
+    ), "no preview on the first page"
+
+    page.eval(
+        "document.dispatchEvent(new KeyboardEvent("
+        "'keydown',{key:'a',altKey:true,bubbles:true}));1"
+    )
+
+    page.wait_for(
+        "/^Filled/.test("
+        "document.querySelector('.ace-root')"
+        ".shadowRoot.querySelector('.ace-title')"
+        ".textContent)",
+        timeout=12,
+    )
+
+    assert page.eval(
+        "document.getElementById('a').value"
+    ), "the first page was not filled"
+
+    # The wizard advances: same URL, entirely new questions.
+    page.eval(
+        "document.body.innerHTML="
+        + json.dumps(
+            PAGE_TWO
+        )
+        + ";1"
+    )
+
+    page.wait_for(
+        "/^Fill/.test("
+        "document.querySelector('.ace-root')"
+        ".shadowRoot.querySelector('.ace-title')"
+        ".textContent)",
+        timeout=12,
+    )
+
+    page.eval(
+        "document.dispatchEvent(new KeyboardEvent("
+        "'keydown',{key:'a',altKey:true,bubbles:true}));1"
+    )
+
+    page.wait_for(
+        "!!document.getElementById('e').value",
+        timeout=12,
+    )
+
+    assert page.eval(
+        "document.getElementById('f').value"
+    ) == "x@example.com", (
+        "the second page of the form was never filled"
+    )
 
 
 def test_the_extension_ships_no_fill_marker() -> None:

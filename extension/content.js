@@ -42,6 +42,7 @@
   // was no way to get it out of the way to click through.
   var dismissed = false;
   var lastHref = "";
+  var lastSignature = "";
   var filling = false;
 
   function setNatively(field, value) {
@@ -1260,6 +1261,49 @@
     ));
   }
 
+  /* The questions on screen, as one string.
+
+     Used only to notice a page that replaced its questions without
+     replacing its URL. Truncated per question because a label that
+     re-renders with a changed count would otherwise read as a whole
+     new page. */
+  function formSignature() {
+    return fillable()
+      .map(function (field) {
+        var question = aceQuestionFor(field);
+        return question ? question.slice(0, 40) : "";
+      })
+      .join("|");
+  }
+
+  /* Whether this is a new page of the form.
+
+     An application is often several pages, and Workday's is a wizard
+     that swaps the whole step without touching location.href. ACE
+     filled the first page, set lastResult, and then refresh() returned
+     early on every step after it: the panel never came back and
+     nothing was filled again, which is exactly what the user hit.
+
+     The reliable evidence is the fields themselves. ACE holds the
+     nodes it filled, and a step that has been replaced has taken all
+     of them out of the document. That is narrow on purpose: a
+     conditional question appearing in answer to something ACE just
+     filled leaves those fields connected, so the result panel stays up
+     rather than being replaced by a fresh preview the moment it
+     reports.
+
+     With nothing filled there are no nodes to ask, so the questions
+     themselves are compared instead. */
+  function movedOn() {
+    if (lastFill.length) {
+      return lastFill.every(function (record) {
+        return !record.field.isConnected;
+      });
+    }
+
+    return formSignature() !== lastSignature;
+  }
+
   function refresh() {
     if (!loaded) return;
 
@@ -1268,11 +1312,18 @@
     // also fires on that navigation. Treat a URL change as a genuinely
     // new page: an earlier dismissal was about the posting the user
     // was just looking at, not this one.
-    if (location.href !== lastHref) {
+    if (location.href !== lastHref || movedOn()) {
       lastHref = location.href;
       dismissed = false;
       lastResult = null;
+
+      // The previous page's undo cannot apply to fields that are no
+      // longer in the document, and keeping them would make movedOn()
+      // answer about a page that is gone.
+      lastFill = [];
     }
+
+    lastSignature = formSignature();
 
     if (filling) return;
     if (lastResult) return;
@@ -1546,6 +1597,7 @@
     setNatively: setNatively,
     comboboxOptions: comboboxOptions,
     diagnostics: diagnostics,
+    formSignature: formSignature,
     openCombobox: openCombobox,
     panel: panel,
     shell: shell,
