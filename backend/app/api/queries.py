@@ -34,6 +34,9 @@ from backend.app.intelligence.companies import (
     classify_company,
     names_for_tier,
 )
+from backend.app.intelligence.eligibility import (
+    MAX_REQUIRED_EXPERIENCE_YEARS,
+)
 from backend.app.matching.skills import (
     related_skills,
 )
@@ -70,6 +73,7 @@ QUALIFYING_STATUSES = (
 SORT_OPTIONS = (
     "unapplied_first",
     "best_match",
+    "experience_fit_first",
     "new_grad_first",
     "big_tech_first",
     "newest",
@@ -795,6 +799,50 @@ def _sort_keys(
                     1,
                 ),
                 else_=0,
+            ).asc(),
+        ]
+
+    if sort == "experience_fit_first":
+        # The user applies to anything asking three years or less. Two
+        # kinds of posting qualify: one labelled early career, and one
+        # stating a ceiling the gate already admitted. Both are "in
+        # band" and lead.
+        #
+        # Postings stating nothing at all follow rather than being
+        # hidden. A terse posting with no experience bar is frequently
+        # open to a new grad, which is why the gate keeps them, and
+        # dropping them here would quietly undo that decision at the
+        # point the user is actually reading the queue.
+        in_band = or_(
+            JobEvaluationRecord
+            .is_early_career
+            .is_(True),
+            JobEvaluationRecord
+            .required_experience_years
+            < MAX_REQUIRED_EXPERIENCE_YEARS,
+        )
+
+        # Three levels, not two. 128 in-band postings are unverified:
+        # Lane B carries no description, so the only evidence is a
+        # title reading "New Grad". That is real evidence about
+        # experience and outranks a posting ACE read in full that
+        # simply never mentions experience, because silence is not
+        # information. It is still weaker than a description ACE
+        # actually checked, so it sits between the two.
+        return [
+            case(
+                (
+                    in_band
+                    & JobEvaluationRecord
+                    .requirements_verified
+                    .is_(True),
+                    0,
+                ),
+                (
+                    in_band,
+                    1,
+                ),
+                else_=2,
             ).asc(),
         ]
 

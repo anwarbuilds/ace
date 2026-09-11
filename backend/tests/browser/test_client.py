@@ -744,6 +744,147 @@ def test_a_just_applied_row_survives_a_reload(
         )
 
 
+def test_a_held_row_is_released_after_one_load(
+    page,
+) -> None:
+    """The hold lasts one load, which is what it always claimed.
+
+    It was cleared only on navigation, so an applied row stayed pinned
+    at position one through every later load. Toggling "Not applied
+    first" redrew the queue with an applied job still at the top and
+    the sort read as broken when it had in fact worked: the row was
+    being re-inserted after the ordering, by the client.
+    """
+
+    job_id = _first_unapplied(
+        page,
+    )
+
+    try:
+        _mark_applied(
+            page,
+            job_id,
+        )
+
+        # The load the row is held for.
+        page.eval(
+            "loadJobs()"
+        )
+
+        page.wait_for(
+            "!state.loading"
+        )
+
+        assert page.eval(
+            "state.pinned===null"
+        ), "the hold outlived the load it was for"
+
+        # Anything after it sorts the row wherever it belongs.
+        page.eval(
+            "loadJobs()"
+        )
+
+        page.wait_for(
+            "!state.loading"
+        )
+
+        assert not page.eval(
+            "state.items.length>0 && "
+            "!!state.items[0].applied_at"
+        ), (
+            "an applied job was still pinned to the "
+            "top of the queue"
+        )
+    finally:
+        _clear_applied(
+            page,
+            job_id,
+        )
+
+
+def test_the_queue_marks_where_the_experience_band_ends(
+    page,
+) -> None:
+    """Nothing is hidden, so the boundary has to be visible instead.
+
+    Postings stating no experience requirement are kept, because a
+    terse posting with no bar is frequently open to a new grad. They
+    sort below the user's band, and this line is what tells them the
+    rows they are now reading are the ones ACE knows least about.
+    """
+
+    page.eval(
+        "state.sorts=['experience_fit_first'];"
+        "loadJobs()"
+    )
+
+    page.wait_for(
+        "!state.loading"
+    )
+
+    # Page in until the first posting that states nothing arrives.
+    for _ in range(
+        14
+    ):
+        if page.eval(
+            "state.items.some(function(j){"
+            "return !inBand(j);})"
+        ):
+            break
+
+        if not page.eval(
+            "state.hasMore"
+        ):
+            break
+
+        page.eval(
+            "loadJobs(true)"
+        )
+
+        page.wait_for(
+            "!state.loadingMore"
+        )
+
+    if not page.eval(
+        "state.items.some(function(j){"
+        "return !inBand(j);})"
+    ):
+        pytest.skip(
+            "every loaded posting states its experience"
+        )
+
+    assert "experience not stated" in page.text(
+        ".bandline"
+    ).lower(), "the band boundary is not drawn"
+
+    # And it is drawn once, at the change, not per row.
+    assert page.eval(
+        "document.querySelectorAll("
+        "'tr.bandline').length"
+    ) == 1
+
+
+def test_the_sort_order_is_stated_in_words(
+    page,
+) -> None:
+    """The numbered badges were read as decoration.
+
+    A user who could not tell 1 from 2 from 3 toggled the primary sort
+    off while trying to turn it on, so the order is now also spelled
+    out underneath the chips.
+    """
+
+    assert "Showing" in page.text(
+        ".ctl-sortline"
+    ), "the sort order is not stated anywhere in words"
+
+    said = page.text(
+        ".ctl-sortline"
+    )
+
+    assert "experience" in said.lower(), said
+
+
 def test_the_exported_sheet_keeps_its_columns(
     page,
 ) -> None:

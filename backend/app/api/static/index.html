@@ -176,6 +176,12 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
   text-decoration:line-through;text-decoration-thickness:1px}
 .chip.excluded:hover{background:var(--danger);color:#fff;text-decoration:none}
 .chip-n{font-family:var(--mono);font-size:11px;opacity:.8}
+.ctl-sortline{gap:8px;align-items:baseline}
+.sort-says{font-size:12px;color:var(--ink-3)}
+tr.bandline td{padding:0}
+tr.bandline span{display:block;padding:7px 14px;font-size:11px;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-3);border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);background:var(--bg-2)}
 .chip-x{font-size:14px;line-height:1;opacity:.7;margin-right:-3px}
 .chip-x:hover{opacity:1}
 .ctl-label{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-left:4px}
@@ -631,6 +637,7 @@ var CLOSED=["rejected","withdrawn","ghosted","accepted"];
 /* Sorts combine. Order is the order you picked them in. */
 var SORTS=[
   ["unapplied_first","Not applied first"],
+  ["experience_fit_first","Fits my experience"],
   ["new_grad_first","New grad first"],
   ["best_match","Best match"],
   ["big_tech_first","Big tech first"],
@@ -639,9 +646,27 @@ var SORTS=[
   ["company","Company"]
 ];
 
+/* The chips say what they are; this says what the combination does.
+   The numbered badges were read as decoration, so the order they
+   encode is now also spelled out in words underneath. */
+var SORT_PHRASE={
+  unapplied_first:"the ones you have not applied to",
+  experience_fit_first:"roles that fit your experience",
+  new_grad_first:"new grad roles",
+  best_match:"best match",
+  big_tech_first:"big tech",
+  newest:"newest first",
+  oldest:"oldest first",
+  recently_posted:"recently posted",
+  company:"company name",
+  title:"job title"
+};
+var ORDINAL=["1st","2nd","3rd"];
+var DEFAULT_SORTS=["unapplied_first","experience_fit_first","best_match"];
+
 var state={
   page:"queue", view:"all", jobId:null,
-  q:"", sorts:["unapplied_first","new_grad_first","best_match"],
+  q:"", sorts:DEFAULT_SORTS.slice(),
   filters:{}, tiers:[], excluded:[], recentOnly:false, openPull:null, expandedGroups:{},
   sessionsExhausted:false, loadingOlder:false,
   pinned:null, heldRow:null,
@@ -803,6 +828,13 @@ function loadJobs(append){
       if(held && !state.items.some(function(x){return x.id===held.id;})){
         state.items.unshift(held);
       }
+      // Released after the one load it was held for. It used to be
+      // cleared only on navigation, so the row stayed pinned to the
+      // top of every later load: toggling "Not applied first" redrew
+      // the queue with an applied job still sitting at position one,
+      // and the sort read as broken when it had worked correctly.
+      // The row is in state.items now, so every lookup still finds it.
+      state.pinned=null; state.heldRow=null;
     }
     state.offset=state.offset+d.items.length;
     state.hasMore=d.has_more; state.total=d.total;
@@ -988,6 +1020,22 @@ function tabsBar(){
       (d[2]!=null?'<span class="tab-n">'+d[2]+'</span>':'')+'</button>';
   }).join("")+'</div>';
 }
+/* Reading the badges as "1st, 2nd, 3rd" still leaves the user to
+   assemble what the combination means. This states it outright, and
+   offers the way back when the order has been changed. */
+function sortLine(){
+  var names=state.sorts.map(function(k){ return SORT_PHRASE[k]||k; });
+  if(!names.length) return "";
+  // "first" belongs to the leading key, not to the end of the list:
+  // "A, B, then C first" reads as though C led.
+  var txt=names[0]+" first"+names.slice(1).map(function(x){
+    return ", then "+x; }).join("");
+  var changed=state.sorts.join(",")!==DEFAULT_SORTS.join(",");
+  return '<div class="ctl-row ctl-sortline"><span class="sort-says">'+
+    'Showing '+esc(txt)+'.</span>'+
+    (changed?'<button class="link-btn" data-act="sortreset">Reset to default</button>':'')+
+    '</div>';
+}
 function controls(){
   var chips=Object.keys(state.filters).filter(function(k){return !state.filters[k].pinned;}).map(function(k){
     var f=state.filters[k];
@@ -1016,15 +1064,22 @@ function controls(){
       '<div class="ctl-grp"><span class="ctl-label">Sort</span>'+
         SORTS.slice(0,4).map(function(o){
           var i=state.sorts.indexOf(o[0]);
-          return '<button class="chip'+(i>=0?" on":"")+'" data-sort="'+o[0]+'" title="Sorts combine, in the order you pick them">'+
-            esc(o[1])+(i>=0?'<span class="chip-n">'+(i+1)+'</span>':'')+'</button>';
+          var on=i>=0;
+          return '<button class="chip'+(on?" on":"")+'" data-sort="'+o[0]+'" aria-pressed="'+on+'" title="'+
+            (on?"Sorted by this "+ORDINAL[i]+". Click to turn it off."
+               :"Off. Click to sort by this first.")+'">'+
+            esc(o[1])+(on?'<span class="chip-n">'+ORDINAL[i]+'</span>':'')+'</button>';
         }).join("")+
         '<button class="link-btn" data-act="sortmore">More</button></div>'+
     '</div>'+
+    sortLine()+
     '<div class="ctl-row">'+
       '<div class="ctl-grp"><span class="ctl-label">Company tier</span>'+tierChips+'</div>'+
       '<div class="ctl-grp"><span class="ctl-label">Show only</span>'+
-        '<button class="chip'+(state.filters.early_career_only?" on":"")+'" data-act="toggleearly">Early career</button>'+
+        '<button class="chip'+(state.filters.early_career_only?" on":"")+'" data-act="toggleearly" '+
+          'title="Narrows to postings labelled early career. Roles stating a one to three year '+
+          'ceiling are hidden while this is on, so it is a narrower list than the sort.">'+
+          'Labelled early career only</button>'+
         '<button class="chip" data-act="filters">'+icon(I.plus)+'Add filter</button></div>'+
     '</div>'+
     // Offered whenever anything is narrowing the list, including a
@@ -1155,6 +1210,19 @@ function skeleton(){
     '<div class="sk-b" style="width:'+(40+i*5)+'%"></div></td></tr>';
   return out;
 }
+/* Everything here is applicable: the gate already refuses anything
+   asking four years or more. The split is between postings that say
+   they suit the user and postings that say nothing at all, and the
+   second group is shown, not hidden, because a terse posting with no
+   experience bar is frequently open to a new grad. */
+function inBand(j){
+  return !!(j.is_early_career ||
+    (j.required_experience_years!=null && j.required_experience_years<4));
+}
+function bandRow(n){
+  return '<tr class="bandline"><td colspan="9"><span>'+
+    'Below here, experience not stated'+(n?" · "+n+" more":"")+'</span></td></tr>';
+}
 function readRow(){
   return '<tr class="readline"><td colspan="9"><span>Last visit, '+clock(state.prevVisit)+'</span></td></tr>';
 }
@@ -1172,8 +1240,18 @@ function queueTable(){
   // vertical they specifically kept or applied to.
   var groups=state.page==="queue"?jobGroups():{};
   var rendered={};
+  // Only meaningful while the experience sort is actually grouping
+  // them; under any other order the two kinds are interleaved and one
+  // line would be drawn in an arbitrary place.
+  var bandAt=-1;
+  if(state.sorts.indexOf("experience_fit_first")>=0){
+    for(var b=1;b<state.items.length;b++){
+      if(inBand(state.items[b-1])&&!inBand(state.items[b])){ bandAt=b; break; }
+    }
+  }
+  var bandRest=bandAt<0?0:state.total-bandAt;
   var body=state.items.map(function(j,i){
-    var pre=(i===readAt?readRow():"");
+    var pre=(i===readAt?readRow():"")+(i===bandAt?bandRow(bandRest):"");
     var key=jobGroupKey(j);
     var members=groups[key];
     if(!members||members.length<GROUP_MIN) return pre+jobRow(j);
@@ -2455,11 +2533,13 @@ var PALETTE=[
   {label:"Clear tier filter",run:function(){ state.tiers=[]; goTo("queue"); }},
   {label:"Sort by best match",run:function(){ state.sorts=["best_match"]; goTo("queue"); }},
   {label:"Sort new grad first, then best match",run:function(){ state.sorts=["new_grad_first","best_match"]; goTo("queue"); }},
-  {label:"Sort not applied first",run:function(){ state.sorts=["unapplied_first","new_grad_first","best_match"]; goTo("queue"); }},
+  {label:"Sort not applied first",run:function(){ state.sorts=DEFAULT_SORTS.slice(); goTo("queue"); }},
+  {label:"Sort roles that fit my experience first",run:function(){
+    state.sorts=["experience_fit_first","unapplied_first","best_match"]; goTo("queue"); }},
   {label:"Sort big tech first, then best match",run:function(){ state.sorts=["big_tech_first","best_match"]; goTo("queue"); }},
   {label:"Toggle early career only",run:function(){
       if(state.filters.early_career_only) delete state.filters.early_career_only;
-      else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Early career",pinned:true};
+      else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Labelled early career only",pinned:true};
       goTo("queue"); }},
   {label:"Toggle last 15 days only",run:function(){ state.recentOnly=!state.recentOnly; goTo("queue"); }},
   {label:"Clear all filters",run:function(){ state.filters={}; state.tiers=[]; state.excluded=[]; state.q=""; goTo("queue"); }},
@@ -2544,10 +2624,11 @@ document.addEventListener("click",function(e){
     if(d.act==="live"){ livePop(t); return; }
     if(d.act==="scoreinfo"){ scorePop(t); return; }
     if(d.act==="sortmore"){ sortMorePop(t); return; }
+    if(d.act==="sortreset"){ state.sorts=DEFAULT_SORTS.slice(); loadJobs(); return; }
     if(d.act==="filters"){ filterPop(t); return; }
     if(d.act==="toggleearly"){
       if(state.filters.early_career_only) delete state.filters.early_career_only;
-      else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Early career",pinned:true};
+      else state.filters.early_career_only={param:"early_career_only",type:"flag",label:"Labelled early career only",pinned:true};
       loadShell().then(function(){ loadJobs(); }); return; }
     if(d.act==="clearfilters"){
       state.filters={}; state.excluded=[]; state.tiers=[]; state.q="";
