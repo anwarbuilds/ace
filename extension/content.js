@@ -817,7 +817,7 @@
      argument reliably, because the next board will reset something
      else. A shadow root ends it: nothing the page declares crosses
      the boundary, in either direction. */
-  var PANEL_CSS = "/* Deliberately narrow selectors and a high stacking context: this\n   panel lives inside somebody else's stylesheet and must neither\n   inherit from it nor be painted over by it. */\n/* Anchored top-right, not bottom-right: a form's own Submit control\n   is almost always at the bottom of the page, and a fixed panel\n   sitting on top of it blocks the one click the user needs most. */\n.ace-panel{\n  position:fixed;right:18px;top:18px;z-index:2147483647;\n  width:330px;max-height:min(70vh,560px);display:flex;flex-direction:column;\n  background:#1c1229;color:#f4f0fa;border:1px solid #4a3468;border-radius:12px;\n  box-shadow:0 16px 48px rgba(0,0,0,.42);\n  font:13px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif;\n  overflow:hidden}\n.ace-panel *{box-sizing:border-box;font-family:inherit}\n\n.ace-head{display:flex;align-items:center;gap:9px;padding:12px 14px;border-bottom:1px solid #33244a}\n.ace-mark{width:20px;height:20px;border-radius:5px;background:#c9a227;color:#231633;\n  font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}\n.ace-title{font-weight:600;font-size:13px}\n.ace-sub{font-size:11px;color:#b3a3cd;margin-top:1px}\n.ace-x{margin-left:auto;background:none;border:0;color:#8d7ca8;cursor:pointer;\n  font-size:17px;line-height:1;padding:2px 4px;border-radius:4px}\n.ace-x:hover{background:#2a1b3d;color:#f4f0fa}\n\n.ace-body{overflow-y:auto;padding:6px 0;flex:1 1 auto}\n.ace-body::-webkit-scrollbar{width:8px}\n.ace-body::-webkit-scrollbar-thumb{background:#3d2b58;border-radius:4px}\n\n.ace-group{font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;\n  color:#8d7ca8;padding:10px 14px 4px}\n.ace-item{display:flex;gap:9px;align-items:flex-start;padding:5px 14px}\n.ace-item .k{color:#b3a3cd;font-size:11.5px;flex:0 0 40%;word-break:break-word}\n.ace-item .v{color:#f4f0fa;font-size:11.5px;flex:1 1 auto;word-break:break-word}\n.ace-item.miss .v{color:#e8b84b}\n.ace-item.skip .v{color:#8d7ca8}\n\n.ace-foot{padding:11px 14px;border-top:1px solid #33244a;display:flex;gap:8px;align-items:center}\n.ace-btn{background:#c9a227;color:#231633;border:0;padding:8px 14px;border-radius:7px;\n  font-weight:600;font-size:12.5px;cursor:pointer}\n.ace-btn:hover{background:#dcb534}\n.ace-btn.ghost{background:transparent;color:#b3a3cd;border:1px solid #4a3468}\n.ace-btn.ghost:hover{background:#2a1b3d;color:#f4f0fa}\n.ace-note{font-size:11px;color:#b3a3cd}\n.ace-note.warn{color:#e8b84b}\n\n\n@media (prefers-reduced-motion:no-preference){\n  .ace-panel{animation:ace-in .16s ease-out}\n  @keyframes ace-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}\n}";
+  var PANEL_CSS = "/* Deliberately narrow selectors and a high stacking context: this\n   panel lives inside somebody else's stylesheet and must neither\n   inherit from it nor be painted over by it. */\n/* Anchored top-right, not bottom-right: a form's own Submit control\n   is almost always at the bottom of the page, and a fixed panel\n   sitting on top of it blocks the one click the user needs most. */\n.ace-panel{\n  position:fixed;right:18px;top:18px;z-index:2147483647;\n  width:330px;max-height:min(70vh,560px);display:flex;flex-direction:column;\n  background:#1c1229;color:#f4f0fa;border:1px solid #4a3468;border-radius:12px;\n  box-shadow:0 16px 48px rgba(0,0,0,.42);\n  font:13px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif;\n  overflow:hidden}\n.ace-panel *{box-sizing:border-box;font-family:inherit}\n\n.ace-head{display:flex;align-items:center;gap:9px;padding:12px 14px;border-bottom:1px solid #33244a}\n.ace-mark{width:20px;height:20px;border-radius:5px;background:#c9a227;color:#231633;\n  font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}\n.ace-title{font-weight:600;font-size:13px}\n.ace-sub{font-size:11px;color:#b3a3cd;margin-top:1px}\n.ace-ver{margin-left:auto;font-size:10px;color:#6f6090;letter-spacing:.04em;flex:0 0 auto}\n.ace-x{margin-left:6px;background:none;border:0;color:#8d7ca8;cursor:pointer;\n  font-size:17px;line-height:1;padding:2px 4px;border-radius:4px}\n.ace-x:hover{background:#2a1b3d;color:#f4f0fa}\n\n.ace-body{overflow-y:auto;padding:6px 0;flex:1 1 auto}\n.ace-body::-webkit-scrollbar{width:8px}\n.ace-body::-webkit-scrollbar-thumb{background:#3d2b58;border-radius:4px}\n\n.ace-group{font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;\n  color:#8d7ca8;padding:10px 14px 4px}\n.ace-item{display:flex;gap:9px;align-items:flex-start;padding:5px 14px}\n.ace-item .k{color:#b3a3cd;font-size:11.5px;flex:0 0 40%;word-break:break-word}\n.ace-item .v{color:#f4f0fa;font-size:11.5px;flex:1 1 auto;word-break:break-word}\n.ace-item.miss .v{color:#e8b84b}\n.ace-item.skip .v{color:#8d7ca8}\n\n.ace-foot{padding:11px 14px;border-top:1px solid #33244a;display:flex;gap:8px;align-items:center}\n.ace-btn{background:#c9a227;color:#231633;border:0;padding:8px 14px;border-radius:7px;\n  font-weight:600;font-size:12.5px;cursor:pointer}\n.ace-btn:hover{background:#dcb534}\n.ace-btn.ghost{background:transparent;color:#b3a3cd;border:1px solid #4a3468}\n.ace-btn.ghost:hover{background:#2a1b3d;color:#f4f0fa}\n.ace-note{font-size:11px;color:#b3a3cd}\n.ace-note.warn{color:#e8b84b}\n\n\n@media (prefers-reduced-motion:no-preference){\n  .ace-panel{animation:ace-in .16s ease-out}\n  @keyframes ace-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}\n}";
 
   function panel() {
     var existing = document.querySelector(".ace-root");
@@ -857,12 +857,30 @@
     if (existing) existing.remove();
   }
 
+  /* Which build is on the page, said out loud.
+
+     A content script only injects while a page loads, so reloading the
+     extension leaves every already-open tab running the previous one.
+     Twice now a bug has been reported from a screenshot of a build
+     that had already been fixed, and nothing on screen could tell the
+     two apart. */
+  function version() {
+    try {
+      return chrome.runtime.getManifest().version;
+    } catch (error) {
+      return "";
+    }
+  }
+
   function shell(title, subtitle, body, footer) {
+    var tag = version();
+
     return '<div class="ace-head">' +
         '<div class="ace-mark">A</div>' +
         '<div><div class="ace-title">' + esc(title) + '</div>' +
         (subtitle ? '<div class="ace-sub">' + esc(subtitle) + '</div>' : "") +
         '</div>' +
+        (tag ? '<span class="ace-ver">' + esc(tag) + '</span>' : "") +
         '<button class="ace-x" data-ace="close" title="Close">&times;</button>' +
       '</div>' +
       (body ? '<div class="ace-body">' + body + '</div>' : "") +
