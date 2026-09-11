@@ -42,6 +42,7 @@
   // was no way to get it out of the way to click through.
   var dismissed = false;
   var lastHref = "";
+  var filling = false;
 
   function setNatively(field, value) {
     // React tracks its own value on the node and ignores a plain
@@ -94,30 +95,6 @@
     } catch (error) {
       /* nothing to restore if it never took focus */
     }
-  }
-
-  /* The outline says "ACE put this here", then gets out of the way.
-     It used to be permanent and gold, so every filled field kept a
-     ring in almost exactly the colour forms use for a warning, and
-     the user read correctly-filled boxes as errors. */
-  var FILL_MARK_MS = 3500;
-
-  var faded = new WeakSet();
-
-  function markFilled(field) {
-    if (faded.has(field)) return;
-
-    field.classList.add("ace-filled");
-
-    setTimeout(function () {
-      faded.add(field);
-      field.classList.add("ace-fading");
-
-      setTimeout(function () {
-        field.classList.remove("ace-filled");
-        field.classList.remove("ace-fading");
-      }, 600);
-    }, FILL_MARK_MS);
   }
 
   /* A select showing "Select ..." is empty, whatever its value says.
@@ -489,9 +466,7 @@
 
         var touched = lastPicked || slot.field;
 
-        markFilled(touched);
-
-        lastFill.push({
+          lastFill.push({
           field: touched,
           previous: previous,
           ticked: aceIsChoiceControl(touched)
@@ -587,8 +562,6 @@
       }
 
       var touched = lastPicked || field;
-
-      markFilled(touched);
 
       lastFill.push({
         field: touched,
@@ -731,8 +704,6 @@
               return;
             }
 
-            markFilled(field);
-
             lastFill.push({
               field: field,
               previous: previous,
@@ -761,7 +732,6 @@
       } else {
         setNatively(record.field, record.previous);
       }
-      record.field.classList.remove("ace-filled");
     });
     lastFill = [];
   }
@@ -835,30 +805,55 @@
     return false;
   }
 
-  /* React reconciles the nodes it owns and drops the class ACE put on
-     them, so on a React form the outline vanishes a moment after the
-     fill and the user cannot see what was touched. */
-  function paint() {
-    lastFill.forEach(function (record) {
-      if (record.field.isConnected && !faded.has(record.field)) {
-        markFilled(record.field);
-      }
-    });
-  }
+  /* The panel's own stylesheet, carried here rather than injected into
+     the page, because it is mounted in a shadow root and the page's
+     stylesheet cannot reach inside one.
+
+     It used to be a plain div under document.body with content.css
+     injected alongside it. That put ACE's markup at the mercy of
+     whatever the employer's site does to a bare div: on Ashby the
+     panel's own lines were drawn on top of each other and the whole
+     thing was unreadable. No amount of defensive CSS wins that
+     argument reliably, because the next board will reset something
+     else. A shadow root ends it: nothing the page declares crosses
+     the boundary, in either direction. */
+  var PANEL_CSS = "/* Deliberately narrow selectors and a high stacking context: this\n   panel lives inside somebody else's stylesheet and must neither\n   inherit from it nor be painted over by it. */\n/* Anchored top-right, not bottom-right: a form's own Submit control\n   is almost always at the bottom of the page, and a fixed panel\n   sitting on top of it blocks the one click the user needs most. */\n.ace-panel{\n  position:fixed;right:18px;top:18px;z-index:2147483647;\n  width:330px;max-height:min(70vh,560px);display:flex;flex-direction:column;\n  background:#1c1229;color:#f4f0fa;border:1px solid #4a3468;border-radius:12px;\n  box-shadow:0 16px 48px rgba(0,0,0,.42);\n  font:13px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif;\n  overflow:hidden}\n.ace-panel *{box-sizing:border-box;font-family:inherit}\n\n.ace-head{display:flex;align-items:center;gap:9px;padding:12px 14px;border-bottom:1px solid #33244a}\n.ace-mark{width:20px;height:20px;border-radius:5px;background:#c9a227;color:#231633;\n  font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}\n.ace-title{font-weight:600;font-size:13px}\n.ace-sub{font-size:11px;color:#b3a3cd;margin-top:1px}\n.ace-x{margin-left:auto;background:none;border:0;color:#8d7ca8;cursor:pointer;\n  font-size:17px;line-height:1;padding:2px 4px;border-radius:4px}\n.ace-x:hover{background:#2a1b3d;color:#f4f0fa}\n\n.ace-body{overflow-y:auto;padding:6px 0;flex:1 1 auto}\n.ace-body::-webkit-scrollbar{width:8px}\n.ace-body::-webkit-scrollbar-thumb{background:#3d2b58;border-radius:4px}\n\n.ace-group{font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;\n  color:#8d7ca8;padding:10px 14px 4px}\n.ace-item{display:flex;gap:9px;align-items:flex-start;padding:5px 14px}\n.ace-item .k{color:#b3a3cd;font-size:11.5px;flex:0 0 40%;word-break:break-word}\n.ace-item .v{color:#f4f0fa;font-size:11.5px;flex:1 1 auto;word-break:break-word}\n.ace-item.miss .v{color:#e8b84b}\n.ace-item.skip .v{color:#8d7ca8}\n\n.ace-foot{padding:11px 14px;border-top:1px solid #33244a;display:flex;gap:8px;align-items:center}\n.ace-btn{background:#c9a227;color:#231633;border:0;padding:8px 14px;border-radius:7px;\n  font-weight:600;font-size:12.5px;cursor:pointer}\n.ace-btn:hover{background:#dcb534}\n.ace-btn.ghost{background:transparent;color:#b3a3cd;border:1px solid #4a3468}\n.ace-btn.ghost:hover{background:#2a1b3d;color:#f4f0fa}\n.ace-note{font-size:11px;color:#b3a3cd}\n.ace-note.warn{color:#e8b84b}\n\n\n@media (prefers-reduced-motion:no-preference){\n  .ace-panel{animation:ace-in .16s ease-out}\n  @keyframes ace-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}\n}";
 
   function panel() {
-    var existing = document.querySelector(".ace-panel");
-    if (existing) return existing;
+    var existing = document.querySelector(".ace-root");
+
+    if (existing && existing.shadowRoot) {
+      return existing.shadowRoot.querySelector(".ace-panel");
+    }
 
     var host = document.createElement("div");
-    host.className = "ace-panel";
+    host.className = "ace-root";
+
+    // The host itself is the one node the page can see, so it carries
+    // nothing for a stylesheet to act on beyond taking it out of flow.
+    host.style.cssText =
+      "all:initial;position:fixed;top:0;left:0;width:0;height:0;" +
+      "z-index:2147483647";
+
+    var root = host.attachShadow({ mode: "open" });
+
+    root.innerHTML =
+      "<style>" + PANEL_CSS + "</style>" +
+      '<div class="ace-panel"></div>';
+
+    // Listened for in here rather than on the document: an event that
+    // crosses a shadow boundary is retargeted to the host, so a
+    // document-level closest("[data-ace]") would find nothing.
+    root.addEventListener("click", onAceClick, true);
+
     document.body.appendChild(host);
-    return host;
+
+    return root.querySelector(".ace-panel");
   }
 
   function close() {
     dismissed = true;
-    var existing = document.querySelector(".ace-panel");
+    var existing = document.querySelector(".ace-root");
     if (existing) existing.remove();
   }
 
@@ -1078,8 +1073,7 @@
       lastResult = null;
     }
 
-    paint();
-
+    if (filling) return;
     if (lastResult) return;
     if (dismissed) return;
 
@@ -1157,12 +1151,25 @@
   }
 
   function runFill() {
+    // A combobox pass takes seconds, and filling the plain fields
+    // mutates the page, which wakes the observer, which called
+    // refresh() and drew the preview back over the "Filling..." panel
+    // -- Fill button and all. Clicking it again ran a second pass that
+    // found its own work already done and reported "Filled 0 fields, 7
+    // already had a value" over a form ACE had in fact just filled
+    // correctly. lastResult was not set until the combobox pass
+    // finished, so nothing held the panel still in between.
+    if (filling) return;
+
+    filling = true;
+
     var host = panel();
     var result = plan();
 
     var comboFields = fillable().filter(aceIsAutocomplete);
 
     if (!comboFields.length) {
+      filling = false;
       lastResult = result;
       showResult(host, result);
       return;
@@ -1183,12 +1190,19 @@
     fillComboboxes().then(function (comboResult) {
       result.filled = result.filled.concat(comboResult.filled);
       result.unmatched = result.unmatched.concat(comboResult.unmatched);
+      filling = false;
+      lastResult = result;
+      showResult(host, result);
+    }, function () {
+      // A combobox that never offered options should not strand the
+      // panel on "Filling..." forever.
+      filling = false;
       lastResult = result;
       showResult(host, result);
     });
   }
 
-  document.addEventListener("click", function (event) {
+  function onAceClick(event) {
     var button = event.target.closest("[data-ace]");
     if (!button) return;
 
@@ -1212,7 +1226,7 @@
       lastResult = null;
       close();
     }
-  }, true);
+  }
 
   // Alt+A rather than a bare letter: a form is full of text boxes and
   // a plain shortcut would type into them.
@@ -1324,7 +1338,8 @@
      isolated world, so this is invisible to the page itself. */
   window.__aceInternals = {
     setNatively: setNatively,
-    markFilled: markFilled,
-    fillMarkMs: FILL_MARK_MS
+    panel: panel,
+    shell: shell,
+    onAceClick: onAceClick
   };
 })();

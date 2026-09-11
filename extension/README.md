@@ -47,11 +47,13 @@ left alone because there was already a value, and which questions it
 had no answer for, so you know exactly what is left to do by hand.
 **Undo** puts everything back.
 
-Each field it fills carries a purple outline for a few seconds and
-then clears. It is a marker for what just happened, not a status: the
-panel is what lists everything it did. It is deliberately not gold,
-because a permanent gold ring sat in the same colour range as a form's
-own warnings and made correctly filled fields read as errors.
+**Nothing on the page is marked.** Fields it fills look exactly like
+fields you typed, the way a browser's own autofill behaves. The panel
+is the record of what was done; the form is left alone.
+
+The panel itself is mounted in a shadow root, so the employer's
+stylesheet cannot reach it and its own styles cannot leak out onto
+their form.
 
 Matching is on the question text a person reads, not on the field's
 `name` attribute, because those are generated and differ between
