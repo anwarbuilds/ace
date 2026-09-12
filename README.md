@@ -1,1367 +1,589 @@
+<div align="center">
+
 # ACE
 
-ACE is a personal real-time career-intelligence platform for discovering, normalizing, persisting, evaluating, and notifying on relevant engineering opportunities.
+### Automated Career Engine
 
-The project is being built from scratch as an end-to-end backend, data, systems, reliability, and full-stack engineering project.
+**A personal career-intelligence pipeline that reads 472 job boards every five minutes, decides what you can actually apply to, and fills in the form when you get there.**
 
-ACE currently has a working pipeline from a live Greenhouse job board through PostgreSQL lifecycle tracking, deterministic eligibility evaluation, durable notification queuing, and real Gmail delivery.
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.121-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-D71F00?style=flat-square)](https://www.sqlalchemy.org/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![Tests](https://img.shields.io/badge/tests-706%20passing-2ea44f?style=flat-square)](#testing)
+[![Chrome Extension](https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#the-chrome-extension)
 
-Continuous scheduling is not implemented yet, so source checks still need to be triggered manually or by a future scheduler.
-
----
-
-# Product Goal
-
-ACE reduces the manual job-search workflow:
-
-```text
-Search company career pages
-    ↓
-Open many irrelevant postings
-    ↓
-Check role
-    ↓
-Check location
-    ↓
-Check seniority
-    ↓
-Check experience
-    ↓
-Check work-authorization language
-    ↓
-Find official application link
-    ↓
-Apply
-```
-
-into:
-
-```text
-ACE polls employer ATS
-    ↓
-ACE normalizes jobs
-    ↓
-ACE persists complete source snapshots
-    ↓
-ACE detects NEW / UPDATED / REOPENED / CLOSED jobs
-    ↓
-ACE evaluates only meaningful changes
-    ↓
-ACE identifies target roles
-    ↓
-ACE evaluates deterministic eligibility
-    ↓
-PASS / STRETCH become alert candidates
-    ↓
-ACE renders notification details
-    ↓
-ACE durably stores the notification in PostgreSQL
-    ↓
-ACE delivers through email
-    ↓
-User opens the official employer application link
-```
-
-The objective is to spend less time repeatedly searching and sorting job boards and more time applying quickly to relevant opportunities.
+</div>
 
 ---
 
-# Target Opportunity Profile
+## Contents
 
-## Geography
-
-ACE targets:
-
-- United States
-- Remote-US opportunities
-
-A generic `Remote` posting without explicit geography is retained conservatively rather than automatically rejected.
-
-Explicitly non-US opportunities remain excluded.
-
----
-
-## Primary Role Families
-
-### Software Engineering
-
-Examples include:
-
-- Software Engineer
-- Software Development Engineer
-- Backend Engineer
-- Platform Engineer
-- Infrastructure Engineer
-- Full-Stack Engineer
-- Systems Software Engineer
-- Distributed Systems Engineer
-- Product Engineer
-- Founding Engineer when clearly engineering-focused
-- Software Engineer I
-- New Grad Software Engineer
-
-Role family:
-
-```text
-SOFTWARE_ENGINEERING
-```
-
-Priority:
-
-```text
-PRIMARY
-```
-
-### AI / Machine Learning Engineering
-
-Examples include:
-
-- AI Engineer
-- Machine Learning Engineer
-- ML Engineer
-- Applied AI Engineer
-- Generative AI Engineer
-- LLM Engineer
-- AI Software Engineer
-- Machine Learning Software Engineer
-- AI Infrastructure Engineer
-- ML Infrastructure Engineer
-- AI Platform Engineer
-- ML Platform Engineer
-- AI Research Engineer
-- Machine Learning Research Engineer
-
-Role family:
-
-```text
-AI_ML_ENGINEERING
-```
-
-Priority:
-
-```text
-PRIMARY
-```
+- [Why this exists](#why-this-exists)
+- [At a glance](#at-a-glance)
+- [How it works](#how-it-works)
+- [Anatomy of a single poll](#anatomy-of-a-single-poll)
+- [The eligibility gate](#the-eligibility-gate)
+- [Job lifecycle](#job-lifecycle)
+- [Where the jobs come from](#where-the-jobs-come-from)
+- [Resume matching](#resume-matching)
+- [Data model](#data-model)
+- [The interface](#the-interface)
+- [The Chrome extension](#the-chrome-extension)
+- [Principles that shaped the code](#principles-that-shaped-the-code)
+- [Getting started](#getting-started)
+- [Testing](#testing)
+- [Project layout](#project-layout)
+- [Status](#status)
 
 ---
 
-## Secondary Role Family
+## Why this exists
 
-### Forward Deployed Engineering
+Job hunting at scale is mostly an information problem wearing a motivation problem's clothes. The work is not deciding whether to apply. The work is finding the handful of postings worth deciding about, buried under thousands that are senior, out of country, closed, or a duplicate of one seen yesterday.
 
-Examples include:
+ACE replaces the loop on the left with the one on the right.
 
-- Forward Deployed Engineer
-- Forward Deployed Software Engineer
-- Forward Deployed AI Engineer
+<table>
+<tr>
+<th align="left" width="50%">By hand</th>
+<th align="left" width="50%">With ACE</th>
+</tr>
+<tr valign="top">
+<td>
 
-Role family:
+1. Open a company's careers page
+2. Scan for engineering roles
+3. Open a posting
+4. Check seniority
+5. Check location
+6. Check years of experience
+7. Hunt for sponsorship language
+8. Realise it closed last week
+9. Repeat, per company, per day
 
-```text
-FORWARD_DEPLOYED_ENGINEERING
-```
+</td>
+<td>
 
-Priority:
+1. Open one queue, already ordered by fit
+2. Apply
 
-```text
-SECONDARY
-```
+</td>
+</tr>
+</table>
 
----
-
-# Eligibility Philosophy
-
-ACE uses a recall-oriented filtering strategy.
-
-The system should aggressively reject deterministic blockers while avoiding rejection when important information is simply missing.
-
-Core rule:
-
-```text
-unknown
-!=
-negative
-```
-
-Examples:
-
-```text
-no sponsorship statement
-→ do not reject
-
-explicitly no sponsorship
-→ reject
-```
-
-```text
-generic Remote
-→ retain conservatively
-
-Remote Europe
-→ reject
-```
-
-```text
-PhD preferred
-→ do not reject solely for that reason
-
-PhD-targeted / PhD-required role
-→ reject
-```
+Everything between those two lists is what this repository contains.
 
 ---
 
-# Current Hard Exclusions
+## At a glance
 
-ACE currently rejects opportunities that are clearly:
-
-- outside US / Remote-US scope
-- outside configured target role families
-- senior, staff, principal, lead, manager, director, or equivalent level
-- explicitly targeted toward PhD candidates
-- explicitly requiring a PhD or doctoral degree
-- beyond the configured early-career experience range
-- restricted by explicit US-citizenship or US-person requirements
-- restricted by explicit security-clearance requirements
-- explicitly unavailable for current or future sponsorship
-
-A PhD that is merely preferred is not itself a rejection reason.
-
-Missing sponsorship information is treated as unknown rather than negative evidence.
+| | |
+|---|---|
+| **Live sources polled** | 472 accounts across 9 ATS integrations |
+| **Postings tracked** | 61,711 seen, 56,302 currently open |
+| **Employers** | 1,015 |
+| **Passing the gate right now** | 989 |
+| **Curated target companies** | 411, of which 283 are reachable |
+| **Poll cadence** | 5 minutes, 6 sources concurrently |
+| **Tests** | 706 Python, 89 matcher cases, real-Chrome browser suite |
+| **Continuously running since** | 2026-08-29 |
 
 ---
 
-# Experience Policy
+## How it works
 
-Current deterministic experience policy:
+Five stages, each with one job and a hard boundary around it. Network I/O never happens inside a database transaction. Eligibility rules never appear inside provider code. The web application never talks to an ATS.
 
-```text
-0–2 required years
-→ PASS
+```mermaid
+flowchart TB
+    subgraph SRC["472 source accounts across 9 ATS integrations"]
+        direction LR
+        S1["Greenhouse<br/>200"] ~~~ S2["Ashby<br/>197"] ~~~ S3["Lever<br/>38"] ~~~ S4["Workday<br/>17"] ~~~ S5["SmartRecruiters<br/>15"] ~~~ S6["Eightfold, Amazon,<br/>curated feed"]
+    end
 
-3 required years
-→ STRETCH
+    SRC ==> PIPE
 
-4 required years
-→ REJECT
+    subgraph PIPE["Scheduler process"]
+        direction LR
+        POLL["Poll<br/>conditional HTTP,<br/>304 skips the work"] --> NORM["Normalise<br/>provider payload<br/>to CanonicalJob"] --> DIFF["Diff and persist<br/>SHA-256 hash decides<br/>NEW / UPDATED /<br/>REOPENED / CLOSED"] --> GATE["Evaluate<br/>deterministic<br/>eligibility gate"] --> SCORE["Score<br/>resume match,<br/>lexical + skill graph"]
+    end
 
-4 required years + explicit early-career signal
-→ STRETCH
+    PIPE ==> DB[("PostgreSQL<br/>jobs, evaluations, scores, marks")]
 
-5+ required years
-→ REJECT
+    DB --> WEB["Web application<br/>FastAPI + single-file client"]
+    DB --> EXT["Chrome extension<br/>reads the answer bank"]
+
+    WEB --> USER(["You"])
+    EXT --> FORM(["The application form"])
+
+    style DB fill:#4169E1,color:#fff,stroke:#2a4bb5
+    style GATE fill:#c9a227,color:#231633,stroke:#a8851f
+    style USER fill:#2ea44f,color:#fff,stroke:#1f7a37
+    style FORM fill:#2ea44f,color:#fff,stroke:#1f7a37
 ```
 
-Preferred experience is not automatically treated as a hard requirement.
+The database is the only thing the two surfaces share. The scheduler is the sole writer of postings and evaluations; the web application writes only what *you* decide, so it can never become a second, divergent account of what exists out there.
 
 ---
 
-# Core Architectural Invariants
+## Anatomy of a single poll
 
-## Canonical Data Before Intelligence
+The interesting engineering is in what ACE avoids doing. A five-minute cadence across 472 sources is roughly 136,000 requests a day, and a naive implementation would download 75 MB per cycle, almost all of it byte-identical to the last one.
 
-Provider-specific ATS payloads become `CanonicalJob` before persistence or eligibility logic.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as Scheduler
+    participant A as Adapter
+    participant ATS as Employer ATS
+    participant P as Persistence
+    participant G as Eligibility gate
+    participant DB as PostgreSQL
 
-```text
-Greenhouse
-    ↓
-Greenhouse Adapter
-    ↓
-CanonicalJob
+    S->>A: poll(source, last ETag)
+    A->>ATS: GET /jobs (If-None-Match)
+
+    alt Nothing changed
+        ATS-->>A: 304 Not Modified
+        A-->>S: unchanged
+        Note over S,DB: No body, no diff, no writes.<br/>452 sources replay a validator.<br/>449 answered 304 in the last two hours.
+    else Listing changed
+        ATS-->>A: 200, full listing
+        A->>A: normalise to CanonicalJob
+
+        loop Only titles the gate would keep
+            A->>ATS: GET /jobs/{id} for the description
+        end
+
+        Note over A,ATS: Predicated detail fetching.<br/>One SmartRecruiters source:<br/>1,631 requests to 91, 949s to 18s.
+
+        A-->>S: full snapshot, including skipped postings
+        S->>P: reconcile(snapshot)
+
+        alt Snapshot is empty
+            P-->>S: refuse, treat as upstream failure
+            Note over P: An empty response is never<br/>read as "everything closed".
+        else Snapshot is authoritative
+            P->>DB: diff by (source, account, external_id)
+            P->>DB: write NEW / UPDATED / REOPENED / CLOSED
+            P->>G: evaluate changed postings only
+            G->>DB: store decision + rule_version + content_hash
+        end
+    end
 ```
 
-Future ATS adapters should emit the same canonical representation.
-
----
-
-## Persistence Before Eligibility
-
-ACE stores the complete normalized employer snapshot before eligibility filtering.
-
-```text
-ATS
-    ↓
-CanonicalJob
-    ↓
-Persistence
-    ↓
-Evaluation
-```
-
-This lets ACE remember jobs independently from current policy.
-
-A rejected job may later:
-
-- change
-- reopen
-- become relevant
-- be re-evaluated under updated rules
-
----
-
-## Persistence Answers What Changed
-
-Persistence emits:
-
-```text
-NEW
-UPDATED
-REOPENED
-UNCHANGED
-CLOSED
-```
-
-Persistence does not decide notification eligibility.
-
----
-
-## Evaluation Answers Whether a Change Continues
-
-Normal evaluation receives:
-
-```text
-NEW
-UPDATED
-REOPENED
-```
-
-and currently maps:
-
-```text
-PASS
-→ ALERT
-
-STRETCH
-→ ALERT
-
-REJECT
-→ SUPPRESS
-```
-
-`UNCHANGED` jobs are not repeatedly re-evaluated.
-
-`CLOSED` jobs do not enter normal application-alert evaluation.
-
----
-
-## Baselines Must Not Spam Alerts
-
-The first complete source snapshot establishes historical state.
-
-Baseline is **lifecycle metadata, not an evaluation filter**. ACE
-deliberately does *not* suppress evaluation on a source's first
-snapshot:
-
-```text
-first successful poll
-    ↓
-persist all current jobs
-    ↓
-baseline = true
-    ↓
-NEW jobs ARE evaluated
-    ↓
-freshness policy decides which may alert
-```
-
-Blanket baseline suppression was removed on purpose. If ACE discovers a
-company today and that company posted an excellent role yesterday, ACE
-must still alert.
-
-The cost of that decision is that a first snapshot also reports every
-long-open posting as `NEW` — because `NEW` means *new to ACE*, not
-*recently opened*.
-
-Freshness resolves this without reintroducing suppression:
-
-| Observation | Baseline | Rule |
-| --- | --- | --- |
-| `NEW` | yes | must also be posted within `MAX_ALERT_POSTING_AGE_DAYS` |
-| `NEW` | no | always alertable — it appeared after an established snapshot |
-| `REOPENED` | any | always alertable — reopening is current evidence |
-| `UPDATED` | any | must be posted within the freshness window |
-
-A posting with **no stated date** on a baseline snapshot does not alert,
-unless `ALERT_ON_UNKNOWN_POSTING_AGE=true`. This is safe rather than
-lossy: a source is baseline exactly once, so every genuinely new posting
-from that source afterwards alerts unconditionally.
-
-A job held back by freshness is **still persisted, still active, and
-still searchable**. Freshness controls notification volume, never
-inclusion.
-
----
-
-## Empty Snapshots Are Not Trusted
-
-An unexpectedly empty ATS response could represent an upstream failure.
-
-ACE does not interpret it as:
-
-```text
-all jobs closed
-```
-
-without trustworthy source evidence.
-
----
-
-## Exact Time Is Durable
-
-ACE stores exact timestamps such as:
-
-- employer `posted_at`
-- employer `updated_at`
-- ACE observation timestamps
-- outbox creation time
-- delivery attempt time
-- successful delivery time
-
-Relative values such as:
-
-```text
-15 minutes ago
-3 hours ago
-2 days ago
-```
-
-are computed when rendering.
-
----
-
-
-
-
-
-
-
-# Workday
-
-Workday hosts each employer on its own tenant, which is why a single
-adapter unlocks a large share of the enterprise market rather than one
-company at a time.
-
-```text
-https://{tenant}.{wd}.myworkdayjobs.com/{site}
-
-POST /wday/cxs/{tenant}/{site}/jobs      list, 20 per page
-GET  /wday/cxs/{tenant}/{site}{path}     one posting, with description
-```
-
-Configuration needs both halves of the identity and the host, because
-the data-centre number differs per tenant and cannot be derived:
-
-```text
-source_account   nvidia/NVIDIAExternalCareerSite
-source_host      nvidia.wd5.myworkdayjobs.com
-```
-
-## Listing is expensive, detail is not
-
-Workday caps a page at twenty postings regardless of the requested
-limit, so a 2,000-posting tenant costs 100 list requests before any
-description is read.
-
-Server-side `searchText` cannot narrow this. It behaves as a fuzzy OR:
-searching "software engineer" against a 2,000-posting tenant still
-returns 1,719 results, so filtering there would be both ineffective and
-lossy.
-
-Two measures make it viable:
+Three measures make the cadence sustainable:
 
 | Measure | Effect |
-| --- | --- |
-| Concurrent page fetching | Intel: 173s to 11s |
-| Detail fetched only for titles the gate would keep | NVIDIA: 72 detail requests instead of 2,000 |
+|---|---|
+| **Conditional HTTP**, live on 452 sources | An unchanged board returns 304 with no body. The download and the diff are both skipped entirely. |
+| **Predicated detail fetching** on Workday, SmartRecruiters and Eightfold | Descriptions are fetched only for titles the real gate would keep. One source went from 1,631 requests to 91, and from 949 seconds to 18. |
+| **Bounded concurrency**, 6 sources at a time | One slow employer stops blocking every source queued behind it. The cap is a politeness limit, not a throughput target. |
 
-Offsets are known once the first response reports the total, so every
-remaining page is independent. Concurrency is capped at 4 — a courtesy
-limit on someone else's careers site, not a throughput target.
-
-Workday sources poll every 30 minutes rather than 5. Enterprise
-employers do not post often enough to need more, and it keeps a
-scheduler cycle sane.
-
-## Shallow postings
-
-Every listed posting is emitted, including those whose detail was
-skipped, because the snapshot is authoritative for lifecycle: omitting
-them would mark hundreds of live jobs closed on every poll.
-
-Skipped postings carry an empty description. That is safe because the
-predicate only skips what the gate already rejects on title alone, and
-it self-heals: if the rules later change so the title qualifies, the
-next poll fetches the detail, the content hash changes, and the job is
-re-evaluated in full.
-
-The predicate asks the real eligibility gate rather than reimplementing
-a second heuristic that could drift from it. Only title rules apply at
-list time, since Workday reports list-level location as prose such as
-"2 Locations".
+A stale validator is the one failure this design cannot notice on its own, because silence produces no error. Every source is therefore fetched unconditionally at least once every six hours, which bounds how long a bad ETag can hide real changes.
 
 ---
 
-# Reaching Employers Without a Supported ATS
+## The eligibility gate
 
-Direct polling reaches an employer only if ACE has an adapter for their
-board. Some of the most wanted employers publish nowhere ACE can poll.
+The gate is a pure function: no clock reads, no network, no randomness. That is what makes the entire 61,711-posting corpus re-evaluable after a rule change, and it is why decisions are cached with the `rule_version` that produced them.
 
-Three lanes close that gap, in decreasing order of confidence.
+Its governing principle is that **silence is not rejection**. Only an explicit blocker rejects. This is not a philosophical preference, it is measured: of 437 sampled postings, exactly 3 stated sponsorship availability positively. A gate requiring proof of sponsorship would return an empty list forever.
 
-## Lane A: direct adapters
+```mermaid
+flowchart LR
+    START(["CanonicalJob"]) --> C1{"Target role family?<br/>Software · AI/ML ·<br/>Forward Deployed"}
 
-Greenhouse, Lever, Ashby, SmartRecruiters, Workday, Amazon. Full
-description, whole gate applies.
+    C1 -->|no| REJ
+    C1 -->|yes| C2{"Location<br/>explicitly<br/>non-US?"}
 
-Amazon is a search index rather than a board, so the adapter walks
-`sort=recent` newest-first and stops once a page predates the horizon: a
-routine poll costs a handful of requests instead of the full ten
-thousand. Its requirements live in `basic_qualifications` and
-`preferred_qualifications` rather than the description, so all three
-fields are joined before evaluation.
+    C2 -->|yes| REJ
+    C2 -->|"no, or<br/>unstated"| C3{"Senior title?<br/>Staff, Lead,<br/>Manager, L4+"}
 
-## Lane B: curated feed
+    C3 -->|yes| REJ
+    C3 -->|no| C4{"Requires<br/>4+ years?"}
 
-SimplifyJobs publishes two openly-licensed GitHub lists of new-graduate
-and internship postings. They cover exactly what Lane A cannot reach:
+    C4 -->|yes| REJ
+    C4 -->|"no, or<br/>unstated"| C5{"Explicit blocker?<br/>citizenship · clearance<br/>no sponsorship · PhD<br/>security · hardware<br/>C/C++ only · internship"}
 
-```text
-lifeattiktok.com   jobs.bytedance.com   www.tesla.com
-jobs.apple.com     oraclecloud.com      careers.amd.com
+    C5 -->|yes| REJ["REJECT<br/>retained,<br/>never deleted"]
+    C5 -->|no| PASS(["PASS"])
+
+    PASS --> SIG["Signals attached, never filters:<br/>is_early_career · is_new_grad<br/>requirements_verified"]
+
+    style REJ fill:#c0392b,color:#fff,stroke:#8e2a1f
+    style PASS fill:#2ea44f,color:#fff,stroke:#1f7a37
+    style SIG fill:#6b4fa0,color:#fff,stroke:#8b6fc7
 ```
 
-**Apple is deliberately not adapted.** Its own API answers automated
-requests with bot-protection responses, so the curated public list is
-the appropriate route rather than a workaround.
+Everything after `PASS` is **signal, not exclusion**. Early-career and new-grad flags order the queue; they never remove a posting from it. A terse startup posting that states no experience bar at all is frequently open to a new graduate, so excluding it would cost real opportunities to gain a tidier list.
 
-The feed carries no description, so rules that read requirement text
-cannot fire. Two things keep that honest rather than merely lax:
+Two flags exist where one would be simpler, because they answer different questions:
 
-1. The feed is already curated to new-grad and internship roles, so the
-   population is pre-narrowed to ACE's target.
-2. Structured fields the feed *does* carry are rendered into the
-   description as plain sentences, so the existing deterministic gate
-   evaluates them through its normal rules rather than through a second
-   code path that could drift. A posting marked "Does Not Offer
-   Sponsorship" becomes a sentence the sponsorship rule already
-   recognises.
-
-The lane is scoped to postings ACE cannot reach directly: an entry whose
-URL resolves to a supported ATS is skipped, because that employer
-belongs in the source catalog where the full description is available.
-This prevents both duplication and under-vetting.
-
-## Lane C: catalog discovery
-
-The same feed is a map of the ATS landscape. Resolving its URLs through
-the source detector finds **1,167 distinct ATS accounts**, of which 481
-are Workday tenants.
-
-Discovery expands the catalog so those employers move from Lane B to
-Lane A, gaining full descriptions. Growth is deliberately incremental:
-the scheduler polls sequentially, so adding a thousand sources at once
-would starve the cycle.
+| Flag | Set by | Live count |
+|---|---|---|
+| `is_early_career` | New grad, junior, associate, entry level, rotational, "Engineer I", or 2 years or fewer | 388 |
+| `is_new_grad` | Title alone: new grad, recent graduate, university hire, campus, graduate programme | 103 |
 
 ---
 
-# Role Scope Rules
+## Job lifecycle
 
-Two exclusions reflect explicit user preference rather than a hard
-blocker in the posting.
+Identity is `(source, source_account, external_id)` and never changes. Content is a SHA-256 hash of the normalised posting. Separating the two is what makes a retitled posting an `UPDATED` rather than a new job plus a false closure.
 
-## Hardware-oriented embedded roles
+```mermaid
+stateDiagram-v2
+    direction LR
 
-Roles whose work is fundamentally about hardware are out of scope:
-firmware, boards, silicon, and bare-metal targets.
+    [*] --> NEW: first seen in a snapshot
+    NEW --> UNCHANGED: hash matches
+    NEW --> UPDATED: hash differs
 
-```text
-hardware title      -> reject   (decisive)
-3+ hardware markers -> reject   (description-only path)
-1-2 mentions        -> keep     (a passing mention is not the job)
+    UNCHANGED --> UPDATED: hash differs
+    UPDATED --> UNCHANGED: hash matches
+
+    UNCHANGED --> CLOSED: absent from snapshot
+    UPDATED --> CLOSED: absent from snapshot
+
+    CLOSED --> REOPENED: present again
+    REOPENED --> UNCHANGED: hash matches
+    REOPENED --> UPDATED: hash differs
+
+    note right of CLOSED
+        Only from a snapshot
+        ACE trusts. An empty
+        response is refused.
+    end note
+
+    note right of NEW
+        first_seen_at is written
+        once and never touched
+        again by re-observation.
+    end note
 ```
 
-Title signals are decisive because a hardware title reliably states what
-the job is. The description-only path deliberately requires several
-distinct signals, so an ML or platform role that merely mentions
-embedded targets stays in scope.
-
-Markers are matched on word boundaries, including simple plurals. Naive
-substring matching would read "uart" inside "Stuart".
-
-## C / C++ only roles
-
-```text
-C or C++ stated, nothing else   -> reject
-C or C++ plus any other language -> keep
-no language stated               -> keep (silence is not rejection)
-```
-
-A posting requiring "C++ and Python" is in scope. A posting requiring
-only C++ is not. The rule reads the stated requirement, not the job
-title: a role titled "Software Engineer, C++" that asks for C++ *and*
-Python remains in scope.
-
-Detection of "other" languages is deliberately generous, because a false
-positive there keeps a job, which matches ACE's recall-first stance.
-Short ambiguous tokens (`Go`, `R`) are matched case-sensitively so
-ordinary prose does not register as a language.
-
-## Ambiguous country codes
-
-`CA` is California in a US address and Canada in an international one.
-Explicit non-US country signals are therefore checked *before* the
-US-state match, so "Ottawa, ON, CA" is correctly excluded while
-"Ontario, California" is not.
+Nothing is ever deleted. A rejected posting is retained in full so that a rule change can be replayed across history, which is exactly what happens: bumping `ELIGIBILITY_RULE_VERSION` and re-running the backfill re-evaluated 50,795 stored postings in a single pass.
 
 ---
 
-# Web Application
+## Where the jobs come from
 
-A read-only surface over the same PostgreSQL database the scheduler
-writes.
+Direct polling only reaches an employer if ACE has an adapter for their board. Two lanes close the gap, and they are deliberately unequal in confidence.
 
-```text
-scheduler  -> writes jobs, lifecycle, evaluations
-web app    -> reads them
+```mermaid
+flowchart TB
+    A["Lane A: direct adapters<br/><br/>Greenhouse · Ashby · Lever<br/>SmartRecruiters · Workday<br/>Eightfold · Amazon<br/><br/>Full description available<br/>Entire gate applies"]
+    B["Lane B: curated feed<br/><br/>Employers with no readable board:<br/>TikTok · Apple · Tesla · Oracle<br/><br/>No description available<br/>Marked UNVERIFIED, sorted<br/>below verified postings"]
+
+    A ==> Q(["The queue"])
+    B ==> Q
+
+    style A fill:#1e4620,color:#fff,stroke:#2ea44f
+    style B fill:#4a3a10,color:#fff,stroke:#c9a227
+    style Q fill:#6b4fa0,color:#fff,stroke:#8b6fc7
 ```
 
-It never fetches from an ATS, never evaluates eligibility inline, and
-never sends email, so it cannot become a second, divergent source of
-truth.
+**Lane B is browse-only, and that is a finding rather than a shortcut.** Tesla answers automated requests with 403. Apple and TikTok render their listings inside the browser, so the HTML a server returns contains no posting text to read. Apple's own API replies to automation with bot-protection responses, and working around an access control was rejected as an approach, so Apple is covered through the public curated feed instead.
 
-## Why evaluations are materialized
+### Coverage, measured honestly
 
-Eligibility is a pure function of a job's normalized content, so the
-decision is cached in `job_evaluations` rather than recomputed per
-request. That lets the web app filter and sort in SQL instead of loading
-the whole corpus into Python.
+ACE owns its target list rather than inheriting it from community-maintained files, because that made recall a function of whoever last edited someone else's README. The curated list holds 411 companies. Every one that cannot be reached is recorded with the reason:
 
-The table stores `content_hash` and `rule_version`, so a stale decision
-is *detectable* rather than silently wrong:
+| Outcome | Companies | Meaning |
+|---|---|---|
+| Reachable | 283 | Board found, verified, and polling |
+| `no_board_found` | 94 | Careers page renders client-side; needs a headless render step |
+| `site_unreachable` | 18 | Nothing answers for the name |
+| `other_ats` | 10 | Hires through an ATS with no adapter yet |
+| `no_postings` | 5 | Readable board, nothing open today |
+| `refused` | 1 | Name resolves to a different company |
+
+Verification is a floor, not a formality. A board is only registered if its own metadata or page text confirms the employer, because two companies can share a name and a wrong subscription fills the queue with somebody else's jobs under a name you recognise, which is harder to notice than a gap. An audit of 26 proposed boards caught four wrong ones that had passed every automated check.
+
+---
+
+## Resume matching
+
+Matching is lexical over a curated 96-skill vocabulary with an alias table, chosen over embeddings deliberately: it is explainable, deterministic, and free. A ranking that cannot tell you *why* it ranked something is not actionable when the output is "spend an hour writing a cover letter".
+
+```mermaid
+flowchart LR
+    R["Resume PDF"] --> X["Extract skills<br/>96-term vocabulary"]
+    J["Posting text"] --> Y["Extract requirements"]
+
+    X --> M{"Compare"}
+    Y --> M
+
+    M -->|"Named outright"| FULL["Full credit"]
+    M -->|"One hop in the<br/>relatedness graph"| PART["Partial credit, 0.5"]
+    M -->|"Neither"| MISS["Counted as missing"]
+
+    FULL --> S["Score 0 to 100<br/>+ matched / related / missing lists"]
+    PART --> S
+    MISS --> S
+
+    style S fill:#c9a227,color:#231633
+```
+
+`RELATED_SKILL_PAIRS` is a hand-curated graph of 79 pairs, read **one hop only**. Transitivity would make pandas evidence of FastAPI by way of Python. Four properties keep partial credit honest, each pinned by a test:
+
+- Matched and related lists are disjoint, so one requirement cannot be credited twice.
+- Adjacency never outranks naming the skill outright.
+- The graph is symmetric and validated at import: a pair naming an unknown skill raises rather than silently never matching.
+- Re-scoring re-extracts resume skills from stored raw text, because a resume parsed under an older vocabulary under-reports what it evidences.
+
+Scores carry an `algorithm_version` for the same reason evaluations carry a `rule_version`: derived data with no staleness signal looks authoritative forever.
+
+---
+
+## Data model
+
+```mermaid
+erDiagram
+    JOB_SOURCES ||--o{ JOBS : "produces"
+    JOB_SOURCES ||--|| SOURCE_STATES : "poll state, ETag"
+    JOBS ||--|| JOB_EVALUATIONS : "derived, rebuildable"
+    JOBS ||--o{ JOB_RESUME_SCORES : "derived, rebuildable"
+    JOBS ||--o| JOB_MARKS : "yours, authoritative"
+    RESUMES ||--o{ JOB_RESUME_SCORES : "scored against"
+    POLL_SESSIONS ||--o{ JOBS : "discovered in"
+
+    JOB_SOURCES {
+        string source_type
+        string source_account
+        string company_name
+        int poll_interval_seconds
+    }
+    JOBS {
+        string source "identity"
+        string external_id "identity"
+        string content_hash "SHA-256"
+        timestamp first_seen_at "written once"
+        bool is_active
+    }
+    JOB_EVALUATIONS {
+        string eligibility_status
+        string rule_version "staleness signal"
+        bool is_early_career
+        bool is_new_grad
+        int required_experience_years
+    }
+    JOB_MARKS {
+        bool is_saved
+        string review_state
+        timestamp applied_at
+        string application_status
+    }
+```
+
+The division that matters is **derived versus authoritative**. `job_evaluations` and `job_resume_scores` can be dropped and rebuilt from `jobs` plus the rules at any time. `job_marks` cannot: saved, reviewed, dismissed and applied are entered by hand, so a re-score must never touch them.
 
 ```bash
-# report what needs rebuilding
+# Report what has gone stale, write nothing
 python -m backend.scripts.backfill_job_evaluations
 
-# rebuild it
+# Rebuild it
 python -m backend.scripts.backfill_job_evaluations --apply
-
-# force a full rebuild
-python -m backend.scripts.backfill_job_evaluations --apply --all
-```
-
-The table is derived data. Dropping it costs nothing but a rebuild,
-which is why eligibility deliberately does not live on `JobRecord`.
-
-## Endpoints
-
-| Route | Purpose |
-| --- | --- |
-| `GET /` | Single-page UI |
-| `GET /api/jobs` | Filtered, sorted, paginated listing |
-| `GET /api/stats` | Headline counts |
-| `GET /api/facets` | Available filter options |
-| `GET /healthz` | Service and database health |
-| `GET /docs` | Generated OpenAPI documentation |
-
-`/api/jobs` accepts `status`, `family`, `priority`, `company`, `source`,
-`q`, `max_age_days`, `active_only`, `sort`, `limit`, `offset`.
-
-Page size is capped server-side so a hostile `limit` cannot request the
-whole corpus.
-
-## Running it
-
-```bash
-docker compose up -d web
-# then open http://localhost:8000
-```
-
-The UI has no build step and no `node_modules`: it is one static HTML
-file with vanilla JavaScript, served by FastAPI.
-
----
-
-# Current Architecture
-
-```text
-Greenhouse
-    ↓
-Greenhouse Adapter
-    ↓
-CanonicalJob
-    ↓
-PostgreSQL Persistence
-    ↓
-NEW / UPDATED / REOPENED / UNCHANGED / CLOSED
-    ↓
-Evaluation Candidates
-    ↓
-Evaluation Workflow
-    ↓
-Role Classification
-    ↓
-Eligibility Gate
-    ↓
-PASS / STRETCH / REJECT
-    ↓
-ALERT / SUPPRESS
-    ↓
-Notification Renderer
-    ↓
-PostgreSQL Notification Outbox
-    ↓
-PENDING
-    ↓
-Delivery Worker
-    ↓
-SMTP / Gmail
-    ↓
-SENT / retry / DEAD
-```
-
-Continuous automatic polling is the next infrastructure stage.
-
----
-
-# Implemented Modules
-
-## Module 0 — Project Foundation
-
-Implemented:
-
-- Python 3.12 environment
-- `pyenv`
-- project-local `.venv`
-- Git
-- GitHub
-- dependency isolation
-- `.gitignore`
-- project documentation structure
-
-Status:
-
-```text
-COMPLETE
 ```
 
 ---
 
-## Module 1 — Greenhouse Job Ingestion
+## The interface
 
-Implemented:
+One surface, built as a triage instrument rather than a dashboard. A queue implies an end, and a finishable list is the point.
 
-- public Greenhouse Job Board API integration
-- explicit HTTP timeout
-- descriptive User-Agent
-- complete job-description retrieval
-- HTML-to-text normalization
-- canonical job normalization
-- live API smoke testing
+<div align="center">
+<img src="docs/images/queue.png" alt="The ACE queue, filtered to new-grad roles, showing company tier, experience fit and resume match per row" width="100%">
+<br/><em>The queue. Sorts combine and say what they do in words; filters narrow without hiding.</em>
+</div>
 
-`CanonicalJob` includes:
+<br/>
 
-- source
-- company
-- external ID
-- requisition ID
-- title
-- location
-- description
-- official application URL
-- publication timestamp
-- update timestamp
+<div align="center">
+<img src="docs/images/job-detail.png" alt="A job detail page showing an 83 resume match, skills matched, skills credited by adjacency, and the reason the posting qualified" width="100%">
+<br/><em>Every score is explainable: what matched, what earned partial credit and why, what is missing, and the reason the posting passed the gate.</em>
+</div>
 
-Status:
+A few decisions worth calling out, because each one replaced something that was quietly wrong:
 
-```text
-COMPLETE
+- **Unscored is a designed state, not an absence.** Postings ACE could never read say "Not scored, description unavailable" against a dotted rail. Rendering that as `0` or a dash would read as "bad match", which is a lie about what the system knows.
+- **Experience fit appears on every row** in one of three honest states: labelled early career, an extracted ceiling such as "3 yrs max", or "Experience not stated". The last must read as neutral, because unlabelled roles are deliberately kept.
+- **Filters exclude as well as include.** "Every big-tech early-career role except Amazon's" is a real question, and it needs both halves.
+- **Facet counts are taken inside the active filters**, so a number in the menu is the number of rows choosing it will show. A filter promising 69 results and delivering an empty screen is indistinguishable from a broken tap.
+
+---
+
+## The Chrome extension
+
+A Manifest V3 extension that fills application forms from an answer bank stored in your local ACE instance. It fills and stops: it never submits, and it never overwrites a field that already has a value.
+
+```mermaid
+flowchart TB
+    PAGE["Application form<br/>any host"] --> Q["Read the question<br/>a person would read"]
+
+    Q --> RULES{"Match against<br/>ACE_RULES"}
+    RULES -->|"No rule"| SKIP["Leave it. Report it."]
+    RULES -->|"Matched"| KIND{"Control type"}
+
+    KIND -->|"Text"| SET["Native setter + input/change<br/>+ focus and blur"]
+    KIND -->|"Radio, checkbox"| GROUP["Decide across the whole group"]
+    KIND -->|"Combobox"| OPEN["Open it, type to load options,<br/>match, or leave blank"]
+
+    SET --> PANEL
+    GROUP --> PANEL
+    OPEN --> PANEL
+    SKIP --> PANEL
+
+    PANEL["Shadow-root panel:<br/>what it filled, what matched<br/>no option, what is left for you"]
+
+    style SKIP fill:#4a3a10,color:#fff
+    style PANEL fill:#6b4fa0,color:#fff
+```
+
+Every rule in the matcher was written blind, failed against a real form, and was corrected. Testing against fixtures would have shipped all of them. A sample of what live forms taught it:
+
+| Lesson | The bug it fixed |
+|---|---|
+| Match the **question text**, never the `name` attribute | Those are generated per tenant and carry nothing |
+| A radio's own label is the **option**, not the question | A "LinkedIn" option in "how did you hear about us" was ticked by a stored profile URL |
+| Whole words, with an optional plural | "ethnicity" contains "city", so a stored city was typed into an ethnicity question |
+| A checkbox reports `value` of `"on"` whether ticked or not | 19 empty fields on one form were reported as already filled |
+| Read the field's **own** dropdown, never the first on the page | A permanently-mounted phone country list of 244 options was answering every question on the form |
+| Verify your own writes survived | Choosing a country made the phone widget wipe the number ACE had just typed |
+
+The matcher's rules are pinned by 89 cases, **half of which are questions that must stay empty**, because a wrong answer on a form about to reach an employer is worse than a blank one.
+
+---
+
+## Principles that shaped the code
+
+These are not aspirations. Each one exists because violating it caused a real, traced failure.
+
+> **1. The gate decides inclusion. Nothing else does.**
+> Freshness, verification status and match score affect ordering and alerting only. No score may hide a qualifying job.
+
+> **2. Silence is not rejection.**
+> Missing sponsorship, experience or location information is *unknown*, never disqualifying.
+
+> **3. Identity and content are separate.**
+> A retitled posting is an update, not a death and a birth.
+
+> **4. Never mass-close from one bad response.**
+> An empty snapshot is refused as authoritative. Nine pages of a twenty-page walk would mark hundreds of live jobs closed.
+
+> **5. Evaluation is reproducible.**
+> No wall-clock reads, no network, no randomness inside the gate.
+
+> **6. The apply link is always the employer's own posting.**
+> Never an aggregator, never a redirect. An aggregator lane was built and then removed for failing exactly this test.
+
+> **7. Store everything, show little.**
+> Rejected postings are retained so a rule change can be replayed over history.
+
+---
+
+## Getting started
+
+**Requirements:** Docker, Docker Compose, and Python 3.12 if you want to run the tests outside a container.
+
+```bash
+git clone https://github.com/anwarbuilds/ace.git
+cd ace
+cp .env.example .env          # then edit it
+
+docker compose up -d          # postgres, migrations, scheduler, web
+```
+
+The web application is then on **http://localhost:8000**, and PostgreSQL is on host port **5433** to stay out of a local install's way.
+
+```bash
+docker compose ps             # scheduler reports healthy once it has polled
+docker compose logs -f scheduler
+```
+
+> [!IMPORTANT]
+> `docker compose build` on its own restarts nothing. After a build, run
+> `docker compose up -d --force-recreate <service>` or the container keeps
+> serving the old image. The `migrate` service has its own image off the same
+> Dockerfile, so rebuilding only `web` leaves migrations on disk unapplied.
+
+**Loading the extension:** open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select the `extension/` folder. Reloading the extension does not reload the content script in tabs that are already open; reload the tab, or use **Fill this page** from the toolbar popup, which injects on demand.
+
+---
+
+## Testing
+
+```bash
+python -m pytest backend/tests -q        # 706 tests, about 40 seconds
+python -m pytest backend/tests -m browser # real Chrome, over DevTools protocol
+cd extension && node test-rules.js        # 89 matcher cases
+```
+
+The browser suite drives a real Chrome instance against a running ACE, and skips rather than fails when Chrome or the server is absent, so a plain checkout stays green.
+
+It exists because every interface bug in this project's history was found by a person looking at the page, never by the unit tests: a primary action pushed below the fold, a list stuck on skeletons, a sort that silently did nothing, and a deletion that removed unrelated functions and left the app blank. Each browser test covers a defect that actually shipped.
+
+Two rules the suite enforces on itself, both learned the hard way:
+
+- **Assert on the server, not the DOM, for anything that persists.** Waiting on rendered text confirms a click was handled, not that the write completed.
+- **Confirm a new test fails against the bug it describes.** A test written for a fixed bug once passed against the reintroduced bug, and only a deliberate mutation run caught it.
+
+---
+
+## Project layout
+
+```
+backend/
+  app/
+    adapters/       Provider-specific fetch to CanonicalJob. No eligibility knowledge.
+    runners/        Composition: injects gate-derived predicates into adapters
+    scheduling/     Cadence, dispatch, one transaction per poll
+    persistence/    Lifecycle diff and content hashing. Never commits; callers own transactions
+    intelligence/   The eligibility gate and role classifier. Pure functions
+    evaluation/     Applies gate and freshness to a snapshot
+    matching/       Resume parsing, skill extraction, scoring
+    discovery/      Finds new ATS accounts from public sources
+    coverage/       The owned company list and the recall benchmark
+    applications/   Reads a tracker sheet, matches rows to stored postings
+    answers/        What each application question is, and the wordings forms use
+    api/            FastAPI + a single-file vanilla-JS client
+  tests/            706 tests, including a real-Chrome browser suite
+  migrations/       Alembic, currently at 0028
+
+extension/          Manifest V3 autofill. fields.js is pure matching logic and
+                    is unit-tested standalone; content.js touches the DOM
+
+docs/
+  ACE-KNOWLEDGE.md  Why the system is the way it is. Read first.
+  overview.md       Architecture and module map
+  learning-log.md   Implementation history and trade-offs
 ```
 
 ---
 
-## Module 2 — Role Classification and Eligibility
+## Status
 
-Implemented deterministic role and eligibility intelligence.
+Running continuously against live employer boards since **2026-08-29**.
 
-Role families:
+| Capability | State |
+|---|---|
+| Continuous polling, 472 sources | Shipped |
+| Deterministic eligibility gate, rule `v29` | Shipped |
+| Lifecycle diffing and re-evaluation | Shipped |
+| Resume matching with partial credit | Shipped |
+| Web application and triage queue | Shipped |
+| Application tracking, import and export | Shipped |
+| Chrome autofill extension | Shipped |
+| Coverage benchmark and board discovery | Shipped |
+| Production deployment, auth, backups | Planned |
+| Mobile client | Future |
 
-```text
-SOFTWARE_ENGINEERING
-AI_ML_ENGINEERING
-FORWARD_DEPLOYED_ENGINEERING
-OTHER
-```
-
-Priorities:
-
-```text
-PRIMARY
-├── SOFTWARE_ENGINEERING
-└── AI_ML_ENGINEERING
-
-SECONDARY
-└── FORWARD_DEPLOYED_ENGINEERING
-```
-
-Eligibility:
-
-```text
-PASS
-STRETCH
-REJECT
-```
-
-Checks include:
-
-- role family
-- geography
-- seniority
-- experience
-- PhD targeting
-- citizenship
-- clearance
-- explicit sponsorship blockers
-
-Status:
-
-```text
-COMPLETE
-```
+**Known limits, stated plainly:** Google and Meta render their boards client-side with no structured data and are not covered. Microsoft is blocked by a certificate hostname mismatch on their own careers API, and disabling verification to work around it was refused. 94 curated companies need a headless render step in discovery before they can be reached, which is new surface area in the scheduler path and has not been built.
 
 ---
 
-## Module 2.1 — Recall Hardening
-
-Module 2.1 hardened discovery behavior for startup and ambiguous postings.
-
-Validated behavior includes:
-
-```text
-Software Engineer I + generic Remote
-→ STRETCH
-→ retained
-```
-
-```text
-Founding Engineer + US location
-→ PASS
-```
-
-```text
-Product Engineer + generic Remote
-→ STRETCH
-→ retained
-```
-
-```text
-Software Engineer - New Grad + US location
-→ PASS
-```
-
-```text
-explicit sponsorship unavailable
-→ REJECT
-```
-
-```text
-Remote Europe
-→ REJECT
-```
-
-The important policy is:
-
-```text
-absence of evidence
-!=
-evidence of ineligibility
-```
-
-Status:
-
-```text
-COMPLETE
-```
-
----
-
-## Module 3 — PostgreSQL Persistence and Job Lifecycle
-
-Implemented:
-
-- PostgreSQL 16
-- Docker Compose
-- persistent Docker volume
-- host port `5433`
-- psycopg 3
-- SQLAlchemy 2.x
-- Alembic
-- environment-based configuration
-- durable source identity
-- SHA-256 content hashing
-- baseline protection
-- snapshot deduplication
-- N+1 query avoidance
-- atomic source transactions
-- empty-snapshot protection
-- lifecycle detection
-
-Lifecycle:
-
-```text
-NEW
-UPDATED
-REOPENED
-UNCHANGED
-CLOSED
-```
-
-Durable identity:
-
-```text
-source
-+
-source_account
-+
-external_id
-```
-
-Status:
-
-```text
-COMPLETE
-```
-
----
-
-## Module 4 — Evaluation Pipeline and Source-Snapshot Workflow
-
-Module 4 connects lifecycle changes to deterministic intelligence.
-
-```text
-Persistence
-    ↓
-Evaluation Candidates
-    ↓
-Evaluation Workflow
-    ↓
-Role Classification
-    ↓
-Eligibility
-    ↓
-ALERT / SUPPRESS
-```
-
-Evaluation types:
-
-- `AlertDisposition`
-- `EvaluatedJob`
-- `EvaluationBatchResult`
-
-Normal evaluation processes:
-
-```text
-NEW
-UPDATED
-REOPENED
-```
-
-and ignores unchanged jobs.
-
-The application workflow keeps transaction ownership with its caller.
-
-Status:
-
-```text
-COMPLETE
-```
-
----
-
-## Module 5 — Durable Notification Pipeline
-
-Module 5 turns alert candidates into real, failure-resistant email notifications.
-
-Implemented:
-
-- notification domain types
-- deterministic notification renderer
-- employer posting timestamps
-- relative posting age
-- official application links
-- SMTP transport
-- Gmail STARTTLS support
-- Gmail App Password authentication
-- runtime transport configuration
-- PostgreSQL notification outbox
-- migration `0002`
-- deterministic notification deduplication
-- PENDING / SENT / DEAD lifecycle
-- retry scheduling
-- exponential retry backoff
-- multiple-worker-safe PostgreSQL claiming with `FOR UPDATE SKIP LOCKED`
-- manual pending-notification worker
-- live Greenhouse runner integration
-- real Gmail smoke tests
-- real failure/recovery smoke test
-
-Validated retry lifecycle:
-
-```text
-PENDING
-attempt_count = 0
-    ↓
-forced SMTP failure
-    ↓
-PENDING
-attempt_count = 1
-last_error populated
-    ↓
-retry
-    ↓
-SENT
-attempt_count = 2
-last_error cleared
-```
-
-Status:
-
-```text
-COMPLETE
-```
-
----
-
-# Database Schema
-
-Current durable tables:
-
-```text
-jobs
-source_states
-job_sources
-job_evaluations
-resumes
-job_resume_scores
-```
-
-Email delivery was removed on 2026-09-06; the web application is the
-only surface. The `notification_outbox` and `notification_digests`
-tables remain in the database as history but have no code behind them.
-
-`notification_outbox` additionally carries:
-
-```text
-payload    JSONB  -- structured alert content captured at enqueue time
-digest_id  BIGINT -- the digest that owns this candidate
-```
-
-`status` domain:
-
-```text
-PENDING | SENT | DEAD | SUPPRESSED
-```
-
-`SUPPRESSED` is terminal and auditable. It marks a candidate retired by
-policy rather than delivered, so the historical backlog is preserved
-instead of deleted.
-
-Current Alembic revision:
-
-```text
-0009
-```
-
----
-
-# Testing
-
-Current backend regression suite:
-
-```text
-332 tests passing
-```
-
-The suite covers:
-
-- canonical job creation
-- Greenhouse normalization
-- target-role classification
-- classification precedence
-- role priority
-- startup-role recall
-- geography
-- ambiguous Remote handling
-- seniority
-- experience rules
-- PhD rules
-- sponsorship rules
-- citizenship restrictions
-- clearance restrictions
-- database model structure
-- persistent identity
-- content hashing
-- snapshot lifecycle
-- baseline lifecycle metadata
-- alert freshness policy
-- digest window scheduling
-- digest grouping and ordering
-- NEW detection
-- UPDATED detection
-- REOPENED detection
-- CLOSED reporting
-- empty snapshot protection
-- evaluation policy
-- alert/suppression policy
-- source workflow behavior
-- notification rendering
-- SMTP transport behavior
-- notification outbox deduplication
-- notification delivery state transitions
-- digest restart safety
-- digest retry and dead-letter behavior
-- pending-backlog classification
-- retry scheduling
-- DEAD-state behavior
-- live Greenhouse runner behavior
-
-Integration validation includes:
-
-- live Greenhouse API
-- real PostgreSQL
-- lifecycle smoke tests
-- evaluation workflow smoke tests
-- real Gmail SMTP delivery
-- real durable outbox delivery
-- intentional SMTP failure
-- successful PostgreSQL-backed recovery
-
----
-
-# Development
-
-Activate the environment:
-
-```bash
-source .venv/bin/activate
-```
-
-Start PostgreSQL:
-
-```bash
-docker compose up -d postgres
-```
-
-Check PostgreSQL:
-
-```bash
-docker compose ps
-```
-
-Apply migrations:
-
-```bash
-alembic upgrade head
-```
-
-Check migration revision:
-
-```bash
-alembic current
-```
-
-Run all tests:
-
-```bash
-python -m pytest backend/tests -q
-```
-
-Run Greenhouse ingestion audit:
-
-```bash
-python -m backend.scripts.greenhouse_smoke
-```
-
-Run persistence audit:
-
-```bash
-python -m backend.scripts.persistence_smoke
-```
-
-Run persistence lifecycle smoke test:
-
-```bash
-python -m backend.scripts.persistence_state_smoke
-```
-
-Run source-snapshot workflow smoke test:
-
-```bash
-python -m backend.scripts.source_snapshot_workflow_smoke
-```
-
-Run notification-outbox PostgreSQL smoke test:
-
-```bash
-python -m backend.scripts.outbox_smoke
-```
-
-Run real durable email-delivery smoke test:
-
-```bash
-python -m backend.scripts.outbox_delivery_smoke
-```
-
-Run one live Databricks Greenhouse poll:
-
-```bash
-python -m backend.scripts.run_greenhouse
-```
-
-Retry currently due notification rows:
-
-```bash
-python -m backend.scripts.send_pending_notifications
-```
-
-Send a simple SMTP configuration test:
-
-```bash
-python -m backend.scripts.send_test_email
-```
-
-Stop PostgreSQL:
-
-```bash
-docker compose down
-```
-
-Do not run:
-
-```bash
-docker compose down -v
-```
-
-unless the local PostgreSQL volume should intentionally be destroyed.
-
----
-
-# Secrets
-
-Real runtime credentials belong in:
-
-```text
-.env
-```
-
-`.env` must remain ignored by Git.
-
-Safe placeholders belong in:
-
-```text
-.env.example
-```
-
-Never commit:
-
-- Gmail passwords
-- Gmail App Passwords
-- API keys
-- tokens
-- production database credentials
-
----
-
-# Documentation
-
-ACE maintains three documentation layers:
-
-- `README.md` — project-facing capabilities and development commands
-- `docs/overview.md` — architecture and module map
-- `docs/learning-log.md` — implementation history, debugging, trade-offs, and lessons learned
-
----
-
-# Current Status
-
-```text
-Module 0 — Project Foundation
-✅
-
-Module 1 — Greenhouse Job Ingestion
-✅
-
-Module 2 — Role Classification + Eligibility
-✅
-
-Module 2.1 — Recall Hardening
-✅
-
-Module 3 — PostgreSQL Persistence + Job Lifecycle
-✅
-
-Module 4 — Evaluation Pipeline + Workflow
-✅
-
-Module 5 — Durable Notification Pipeline
-✅
-
-Automated Tests
-101 passing
-✅
-
-Live Greenhouse Validation
-✅
-
-Live PostgreSQL Validation
-✅
-
-Real Gmail Delivery
-✅
-
-Durable Outbox Validation
-✅
-
-SMTP Failure + Retry Recovery
-✅
-
-Alembic
-0002 (head)
-✅
-```
-
----
-
-# Next Architecture Stage
-
-ACE can now detect and durably notify when a source poll runs.
-
-The next major capability is automatic repeated source execution:
-
-```text
-Scheduler
-    ↓
-source registry
-    ↓
-periodic employer polling
-    ↓
-Greenhouse / future ATS adapters
-    ↓
-existing ACE pipeline
-    ↓
-durable notifications
-```
-
-After scheduling, major future intelligence stages include:
-
-```text
-additional ATS adapters
-startup/company coverage expansion
-work-authorization intelligence
-resume ingestion
-resume relevance
-freshness-aware ranking
-notification preferences
-web UI
-operational monitoring
-```
+<div align="center">
+<sub>Built by <a href="https://github.com/anwarbuilds">@anwarbuilds</a></sub>
+</div>
