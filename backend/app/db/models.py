@@ -1303,3 +1303,60 @@ class AuthSessionRecord(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+
+class PasswordResetRecord(Base):
+    """One outstanding password-reset link.
+
+    Single use and short lived. The token is never stored, only its
+    SHA-256, for the same reason as a session: a stolen database must
+    not hand over the ability to take over the account it describes.
+
+    Rows are kept after use rather than deleted, so a link that is
+    clicked twice can say "already used" instead of "invalid", which is
+    the difference between a clear message and a confusing one when a
+    mail client prefetches the link.
+    """
+
+    __tablename__ = "password_resets"
+
+    __table_args__ = (
+        Index(
+            "ix_password_resets_user",
+            "user_id",
+        ),
+        Index(
+            "ix_password_resets_expires",
+            "expires_at",
+        ),
+    )
+
+    token_fingerprint: Mapped[str] = mapped_column(
+        String(64),
+        primary_key=True,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        BIGINT_ID,
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
