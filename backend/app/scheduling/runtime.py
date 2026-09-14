@@ -30,6 +30,7 @@ to the existing scheduling service.
 """
 
 import logging
+from collections.abc import Callable
 import threading
 import time
 from datetime import (
@@ -229,6 +230,9 @@ class SchedulerRuntime:
         reload_registry: (
             RegistryReloader | None
         ) = None,
+        alert_sender: (
+            Callable[[], None] | None
+        ) = None,
     ) -> None:
         self._sources = (
             registry.enabled_sources
@@ -245,6 +249,11 @@ class SchedulerRuntime:
         self._reload_registry = (
             reload_registry
         )
+
+        # Injected rather than reached for, so this module keeps no
+        # database import and an alert failure stays the caller's
+        # problem rather than the scheduler's.
+        self._alert_sender = alert_sender
 
         self._poller = poller
         self._clock = clock
@@ -273,6 +282,32 @@ class SchedulerRuntime:
             source.identity: 0.0
             for source in self._sources
         }
+
+    def _send_due_alerts(
+        self,
+    ) -> None:
+        """Email any pull that has finished and not been alerted.
+
+        Called every cycle, which sounds expensive and is not: the
+        query asks for pulls with no `notified_at`, which is almost
+        always empty, and a pull is only ever consumed once.
+
+        Wrapped the same way as the source reload: a mail provider
+        being down, or the database hiccuping, must not stop ACE
+        polling. The jobs are in the queue either way; an alert is a
+        nudge, and losing a nudge is survivable in a way that losing
+        the scheduler is not.
+        """
+
+        if self._alert_sender is None:
+            return
+
+        try:
+            self._alert_sender()
+        except Exception:
+            self._logger.exception(
+                "scheduler_alerts_failed",
+            )
 
     def _refresh_sources(
         self,
@@ -685,6 +720,8 @@ class SchedulerRuntime:
                 return
 
             self._refresh_sources()
+
+            self._send_due_alerts()
 
             sleep_seconds = (
                 self.seconds_until_next_poll()

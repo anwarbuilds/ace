@@ -29,6 +29,9 @@ from backend.app.db.session import (
 from backend.app.evaluation.freshness import (
     FreshnessPolicy,
 )
+from backend.app.alerts.service import (
+    send_pending,
+)
 from backend.app.persistence.sessions import (
     record_check,
     record_discoveries,
@@ -318,6 +321,24 @@ def main(
             ),
         )
 
+    def send_alerts() -> None:
+        """Email any pull that has finished and not been alerted yet.
+
+        Runs every cycle, which is cheap: the query asks for pulls with
+        no notified_at, which is almost always empty.
+        """
+
+        with SessionLocal.begin() as session:
+            sent = send_pending(
+                session,
+            )
+
+        if sent:
+            LOGGER.info(
+                "alerts_sent count=%d",
+                sent,
+            )
+
     def record_cycle(
         *,
         started_at,
@@ -378,6 +399,7 @@ def main(
         registry=registry,
         poller=poll_source,
         cycle_recorder=record_cycle,
+        alert_sender=send_alerts,
         reload_registry=reload_registry,
     )
 

@@ -63,6 +63,30 @@ class Settings(BaseSettings):
     # had already rolled over. The user saw one date in ACE and a
     # different one in the sheet ACE handed them.
 
+    # Outbound mail for job alerts. ACE deleted its whole email
+    # subsystem on 2026-09-06 because the web application was the only
+    # surface being watched. This does not restore that: there is no
+    # outbox, no delivery worker and no retries. It is one HTTPS call
+    # per pull, because the reason changed -- alerts now exist so an
+    # application can be started from a phone, away from the laptop.
+    #
+    # HTTPS rather than SMTP because cloud providers routinely block
+    # outbound 25 and 587, which is where self-hosted SMTP dies.
+    resend_api_key: str = ""
+
+    # Must be an address on a domain verified with the provider.
+    # Resend's onboarding@resend.dev works for testing and can only
+    # deliver to the account owner's own address.
+    mail_from: str = "ACE <onboarding@resend.dev>"
+
+    # Where alerts go. Blank disables sending entirely.
+    alert_email: str = ""
+
+    # How ACE refers to itself in links inside an email. Without this
+    # a link would have to be built from a request, and an alert is
+    # sent by the scheduler where there is no request to build from.
+    public_base_url: str = "http://localhost:8000"
+
     display_timezone: str = (
         "America/Los_Angeles"
     )
