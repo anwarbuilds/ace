@@ -28,6 +28,7 @@ from backend.app.auth.credentials import (
     token_fingerprint,
     verify_password,
 )
+from backend.app.auth import reset as reset_service
 from backend.app.auth.service import (
     ABSOLUTE_LIFETIME,
     authenticate,
@@ -35,9 +36,13 @@ from backend.app.auth.service import (
     resolve_session,
     start_session,
 )
-from sqlalchemy import select
+from sqlalchemy import (
+    select,
+    text,
+)
 
 from backend.app.config import get_settings
+from backend.app.mail.sender import send as send_mail
 from backend.app.db.models import (
     AuthSessionRecord,
     UserRecord,
@@ -106,6 +111,9 @@ PUBLIC_PATHS = frozenset(
         "/healthz",
         "/login",
         "/logout",
+        "/register",
+        "/forgot",
+        "/reset",
     }
 )
 
@@ -115,19 +123,15 @@ PUBLIC_PREFIXES = (
 )
 
 
-LOGIN_PAGE = """<!doctype html>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ACE</title>
-<style>
+PAGE_CSS = """
   :root{color-scheme:dark}
   body{margin:0;min-height:100vh;display:flex;align-items:center;
     justify-content:center;background:#0f0a17;color:#f4f0fa;
     font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-  form{width:min(360px,90vw);background:#1c1229;border:1px solid #33244a;
+  form,.card{width:min(380px,92vw);background:#1c1229;border:1px solid #33244a;
     border-radius:14px;padding:28px}
   h1{margin:0 0 4px;font-size:19px;letter-spacing:.14em}
-  p{margin:0 0 22px;font-size:12px;color:#b3a3cd}
+  .sub{margin:0 0 22px;font-size:12px;color:#b3a3cd}
   label{display:block;font-size:11px;letter-spacing:.06em;
     text-transform:uppercase;color:#b3a3cd;margin:14px 0 6px}
   input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;
@@ -138,22 +142,77 @@ LOGIN_PAGE = """<!doctype html>
     background:#c9a227;color:#231633;font-weight:600;font-size:14px;
     cursor:pointer;font-family:inherit}
   button:hover{background:#dcb534}
-  .err{margin-top:16px;padding:9px 12px;border-radius:8px;
-    background:#3a1720;border:1px solid #7d2b3a;color:#ffb4c0;font-size:12.5px}
-</style>
-<form method="post" action="/login">
-  <h1>ACE</h1>
-  <p>Automated Career Engine</p>
-  <label for="email">Email</label>
-  <input id="email" name="email" type="email" autocomplete="username"
-         required autofocus>
-  <label for="password">Password</label>
-  <input id="password" name="password" type="password"
-         autocomplete="current-password" required>
-  <button type="submit">Sign in</button>
-  __ERROR__
-</form>
+  .msg{margin-top:16px;padding:9px 12px;border-radius:8px;font-size:12.5px}
+  .msg.bad{background:#3a1720;border:1px solid #7d2b3a;color:#ffb4c0}
+  .msg.ok{background:#14301d;border:1px solid #2c6b40;color:#a6e7bd}
+  .links{margin-top:18px;display:flex;gap:14px;justify-content:space-between;
+    font-size:12px}
+  .links a{color:#b3a3cd}
+  .links a:hover{color:#f4f0fa}
 """
+
+
+def _shell(
+    title: str,
+    subtitle: str,
+    body: str,
+    *,
+    status: int = 200,
+) -> HTMLResponse:
+    """One page shell, so every auth screen looks like the same app."""
+
+    return HTMLResponse(
+        "<!doctype html>"
+        '<meta charset="utf-8">'
+        '<meta name="viewport" '
+        'content="width=device-width,initial-scale=1">'
+        "<title>ACE</title>"
+        "<style>" + PAGE_CSS + "</style>"
+        + body.replace(
+            "__TITLE__",
+            title,
+        ).replace(
+            "__SUBTITLE__",
+            subtitle,
+        ),
+        headers={
+            "Cache-Control": "no-store",
+        },
+        status_code=status,
+    )
+
+
+def _message(
+    text: str,
+    kind: str = "bad",
+) -> str:
+    if not text:
+        return ""
+
+    return (
+        f'<div class="msg {kind}">'
+        + text
+        + "</div>"
+    )
+
+
+def _registration_open(
+) -> bool:
+    """Whether an account can still be created.
+
+    True only while none exists. A deployment needs a way to make its
+    first account without shell access; it does not need a way for a
+    stranger to make the second one.
+    """
+
+    with SessionLocal() as session:
+        return session.scalar(
+            select(
+                UserRecord.id,
+            ).limit(
+                1,
+            )
+        ) is None
 
 
 def _is_public(
@@ -175,25 +234,39 @@ def _is_public(
 def _render_login(
     error: str = "",
 ) -> HTMLResponse:
-    block = (
-        f'<div class="err">{error}</div>'
-        if error
-        else ""
-    )
+    """The sign-in page, with the ways out of it."""
 
-    return HTMLResponse(
-        LOGIN_PAGE.replace(
-            "__ERROR__",
-            block,
-        ),
-        # A failed attempt must not be cached, and neither must the
-        # form, or a back button can serve it after signing out.
-        headers={
-            "Cache-Control": (
-                "no-store"
-            ),
-        },
-        status_code=200 if not error else 401,
+    links = ['<a href="/forgot">Forgot password?</a>']
+
+    # Only offered when it can actually do something. A register link
+    # that answers "registration is closed" is furniture.
+    if _registration_open():
+        links.append(
+            '<a href="/register">Create account</a>',
+        )
+
+    return _shell(
+        "",
+        "",
+        '<form method="post" action="/login">'
+        '<h1>ACE</h1>'
+        '<p class="sub">Automated Career Engine</p>'
+        '<label for="email">Email</label>'
+        '<input id="email" name="email" type="email" '
+        'autocomplete="username" required autofocus>'
+        '<label for="password">Password</label>'
+        '<input id="password" name="password" type="password" '
+        'autocomplete="current-password" required>'
+        '<button type="submit">Sign in</button>'
+        + _message(
+            error,
+        )
+        + '<div class="links">'
+        + "".join(
+            links,
+        )
+        + "</div></form>",
+        status=200 if not error else 401,
     )
 
 
@@ -592,6 +665,354 @@ def install(
                 "ok": True,
                 "email": wanted,
             },
+        )
+
+    def _open_session_cookie(
+        response: Response,
+        token: str,
+    ) -> Response:
+        response.set_cookie(
+            SESSION_COOKIE,
+            token,
+            max_age=int(
+                ABSOLUTE_LIFETIME.total_seconds(),
+            ),
+            httponly=True,
+            secure=settings.session_cookie_secure,
+            samesite="lax",
+            path="/",
+        )
+
+        return response
+
+    @app.get(
+        "/register",
+    )
+    def register_form() -> HTMLResponse:
+        """Create the first account, if there is not one yet."""
+
+        if not _registration_open():
+            return _shell(
+                "",
+                "",
+                '<div class="card"><h1>ACE</h1>'
+                '<p class="sub">Registration is closed</p>'
+                "<p style=\"font-size:12.5px;color:#b3a3cd\">"
+                "This instance already has an account. "
+                "Additional accounts are created from the "
+                "server, deliberately."
+                "</p>"
+                '<div class="links">'
+                '<a href="/login">Back to sign in</a>'
+                "</div></div>",
+                status=403,
+            )
+
+        return _shell(
+            "",
+            "",
+            '<form method="post" action="/register">'
+            "<h1>ACE</h1>"
+            '<p class="sub">Create the account for this '
+            "instance</p>"
+            '<label for="email">Email</label>'
+            '<input id="email" name="email" type="email" '
+            'autocomplete="username" required autofocus>'
+            '<label for="password">Password</label>'
+            '<input id="password" name="password" '
+            'type="password" autocomplete="new-password" '
+            f'required minlength="{MIN_PASSWORD_LENGTH}" '
+            f'placeholder="{MIN_PASSWORD_LENGTH} characters '
+            'or more">'
+            "<button type=\"submit\">Create account</button>"
+            '<div class="links">'
+            '<a href="/login">Already have one? Sign in</a>'
+            "</div></form>",
+        )
+
+    @app.post(
+        "/register",
+    )
+    def register_submit(
+        email: str = Form(...),
+        password: str = Form(...),
+    ) -> Response:
+        """Create the first account and sign it in."""
+
+        # Re-checked here, not only when rendering the form. A form
+        # left open in a tab must not be able to create the second
+        # account after the first one exists.
+        if not _registration_open():
+            return RedirectResponse(
+                "/register",
+                status_code=303,
+            )
+
+        if len(password) < MIN_PASSWORD_LENGTH:
+            return _shell(
+                "",
+                "",
+                '<div class="card"><h1>ACE</h1>'
+                '<p class="sub">Create the account for this '
+                "instance</p>"
+                + _message(
+                    "Password must be at least "
+                    f"{MIN_PASSWORD_LENGTH} characters.",
+                )
+                + '<div class="links">'
+                '<a href="/register">Try again</a>'
+                "</div></div>",
+                status=400,
+            )
+
+        with SessionLocal() as session:
+            user = UserRecord(
+                email=email.strip().lower(),
+                password_hash=hash_password(
+                    password,
+                ),
+            )
+
+            session.add(
+                user,
+            )
+
+            session.flush()
+
+            # Anything already in the database from before accounts
+            # existed belongs to whoever registers first, which on a
+            # fresh deployment is the person restoring a backup.
+            for table in (
+                "resumes",
+                "job_marks",
+                "external_applications",
+                "application_answers",
+                "history_entries",
+            ):
+                session.execute(
+                    text(
+                        f"UPDATE {table} SET owner_id = :owner "
+                        "WHERE owner_id IS NULL"
+                    ),
+                    {
+                        "owner": user.id,
+                    },
+                )
+
+            token = start_session(
+                session,
+                user,
+            )
+
+            session.commit()
+
+        return _open_session_cookie(
+            RedirectResponse(
+                "/",
+                status_code=303,
+            ),
+            token,
+        )
+
+    @app.get(
+        "/forgot",
+    )
+    def forgot_form() -> HTMLResponse:
+        """Ask for a reset link."""
+
+        return _shell(
+            "",
+            "",
+            '<form method="post" action="/forgot">'
+            "<h1>ACE</h1>"
+            '<p class="sub">Send a password reset link</p>'
+            '<label for="email">Email</label>'
+            '<input id="email" name="email" type="email" '
+            'autocomplete="username" required autofocus>'
+            "<button type=\"submit\">Send link</button>"
+            '<div class="links">'
+            '<a href="/login">Back to sign in</a>'
+            "</div></form>",
+        )
+
+    @app.post(
+        "/forgot",
+    )
+    def forgot_submit(
+        email: str = Form(...),
+    ) -> HTMLResponse:
+        """Issue a link, and say nothing about whether one was sent.
+
+        The answer is identical for a known and an unknown address.
+        Anything else turns this form into a way to ask which addresses
+        have accounts here.
+        """
+
+        with SessionLocal() as session:
+            issued = reset_service.issue(
+                session,
+                email,
+            )
+
+            if issued is not None:
+                user, token = issued
+
+                link = (
+                    settings.public_base_url.rstrip(
+                        "/",
+                    )
+                    + "/reset?token="
+                    + token
+                )
+
+                send_mail(
+                    to=user.email,
+                    subject="Reset your ACE password",
+                    text=(
+                        "Someone asked to reset the "
+                        "password on your ACE account.\n\n"
+                        + link
+                        + "\n\nThe link works once and "
+                        "expires in an hour. If this was "
+                        "not you, nothing has changed and "
+                        "you can ignore this."
+                    ),
+                )
+
+            session.commit()
+
+        return _shell(
+            "",
+            "",
+            '<div class="card"><h1>ACE</h1>'
+            '<p class="sub">Check your email</p>'
+            + _message(
+                "If that address has an account, a reset "
+                "link is on its way. It works once and "
+                "expires in an hour.",
+                "ok",
+            )
+            + '<div class="links">'
+            '<a href="/login">Back to sign in</a>'
+            "</div></div>",
+        )
+
+    @app.get(
+        "/reset",
+    )
+    def reset_form(
+        token: str = "",
+    ) -> HTMLResponse:
+        """Set a new password, given a live link."""
+
+        with SessionLocal() as session:
+            record, why = reset_service.check(
+                session,
+                token,
+            )
+
+            session.commit()
+
+        if record is None:
+            return _shell(
+                "",
+                "",
+                '<div class="card"><h1>ACE</h1>'
+                '<p class="sub">That link cannot be used</p>'
+                + _message(
+                    {
+                        "used": (
+                            "This link has already been "
+                            "used. Request another if you "
+                            "still need one."
+                        ),
+                        "expired": (
+                            "This link has expired. They "
+                            "last an hour."
+                        ),
+                    }.get(
+                        why,
+                        "This link is not valid.",
+                    ),
+                )
+                + '<div class="links">'
+                '<a href="/forgot">Request a new link</a>'
+                '<a href="/login">Sign in</a>'
+                "</div></div>",
+                status=400,
+            )
+
+        return _shell(
+            "",
+            "",
+            '<form method="post" action="/reset">'
+            "<h1>ACE</h1>"
+            '<p class="sub">Choose a new password</p>'
+            '<input type="hidden" name="token" value="'
+            + token
+            + '">'
+            '<label for="password">New password</label>'
+            '<input id="password" name="password" '
+            'type="password" autocomplete="new-password" '
+            f'required minlength="{MIN_PASSWORD_LENGTH}" '
+            'autofocus '
+            f'placeholder="{MIN_PASSWORD_LENGTH} characters '
+            'or more">'
+            "<button type=\"submit\">Set password</button>"
+            "</form>",
+        )
+
+    @app.post(
+        "/reset",
+    )
+    def reset_submit(
+        token: str = Form(...),
+        password: str = Form(...),
+    ) -> Response:
+        """Spend the link and sign in."""
+
+        if len(password) < MIN_PASSWORD_LENGTH:
+            return RedirectResponse(
+                "/reset?token=" + token,
+                status_code=303,
+            )
+
+        with SessionLocal() as session:
+            record, _ = reset_service.check(
+                session,
+                token,
+            )
+
+            if record is None:
+                session.commit()
+
+                return RedirectResponse(
+                    "/reset?token=" + token,
+                    status_code=303,
+                )
+
+            user = reset_service.spend(
+                session,
+                record,
+                password,
+            )
+
+            # Signed straight in. The alternative is bouncing someone
+            # who has just proved control of the address back to a
+            # login form to type the password they set one second ago.
+            fresh = start_session(
+                session,
+                user,
+            )
+
+            session.commit()
+
+        return _open_session_cookie(
+            RedirectResponse(
+                "/",
+                status_code=303,
+            ),
+            fresh,
         )
 
     @app.get(
