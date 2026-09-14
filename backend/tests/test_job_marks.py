@@ -29,7 +29,6 @@ from backend.app.api.queries import (
 )
 from backend.app.db.base import Base
 from backend.app.db.models import (
-    UserRecord,
     JobEvaluationRecord,
     JobRecord,
 )
@@ -43,12 +42,6 @@ NOW = datetime(
     0,
     tzinfo=timezone.utc,
 )
-
-
-# Marks belong to an account, and the queries that read them scope by
-# it, so these tests create one rather than writing orphan rows that no
-# query would ever match.
-OWNER_ID = 1
 
 
 @pytest.fixture(name="session_factory")
@@ -66,27 +59,11 @@ def fixture_session_factory():
         engine
     )
 
-    factory = sessionmaker(
+    return sessionmaker(
         bind=engine,
         class_=Session,
         expire_on_commit=False,
     )
-
-    # The account the marks below belong to. Without it the rows are
-    # orphans and the scoped queries correctly return nothing, which
-    # is what these tests would otherwise be asserting against.
-    with factory() as setup:
-        setup.add(
-            UserRecord(
-                id=OWNER_ID,
-                email="owner@example.com",
-                password_hash="x",
-            )
-        )
-
-        setup.commit()
-
-    return factory
 
 
 def add_job(
@@ -172,7 +149,6 @@ def test_saved_job_is_found_anywhere_in_the_corpus(
 
         set_mark(
             session,
-            owner_id=OWNER_ID,
             job_id=deep.id,
             saved=True,
             now=NOW,
@@ -181,7 +157,6 @@ def test_saved_job_is_found_anywhere_in_the_corpus(
         page = list_jobs(
             session,
             filters=JobFilters(
-                owner_id=OWNER_ID,
                 mark="saved",
                 limit=60,
             ),
@@ -211,7 +186,6 @@ def test_saving_does_not_clear_a_review_state(
 
         set_mark(
             session,
-            owner_id=OWNER_ID,
             job_id=job.id,
             review_state="reviewed",
             now=NOW,
@@ -245,7 +219,6 @@ def test_review_states_are_mutually_exclusive(
 
         set_mark(
             session,
-            owner_id=OWNER_ID,
             job_id=job.id,
             review_state="reviewed",
             now=NOW,
@@ -281,7 +254,6 @@ def test_unknown_review_state_is_refused(
         ):
             set_mark(
                 session,
-                owner_id=OWNER_ID,
                 job_id=job.id,
                 review_state="archived",
                 now=NOW,
@@ -301,7 +273,6 @@ def test_clearing_a_review_differs_from_leaving_it_alone(
 
         set_mark(
             session,
-            owner_id=OWNER_ID,
             job_id=job.id,
             review_state="dismissed",
             now=NOW,
@@ -353,7 +324,6 @@ def test_archive_covers_both_handled_states(
 
         set_mark(
             session,
-            owner_id=OWNER_ID,
             job_id=reviewed.id,
             review_state="reviewed",
             now=NOW,
@@ -361,7 +331,6 @@ def test_archive_covers_both_handled_states(
 
         set_mark(
             session,
-            owner_id=OWNER_ID,
             job_id=dismissed.id,
             review_state="dismissed",
             now=NOW,
@@ -370,7 +339,6 @@ def test_archive_covers_both_handled_states(
         page = list_jobs(
             session,
             filters=JobFilters(
-                owner_id=OWNER_ID,
                 mark="archived",
             ),
             now=NOW,
@@ -395,7 +363,6 @@ def test_counts_describe_the_whole_corpus(
 
         set_mark(
             session,
-            owner_id=OWNER_ID,
             job_id=jobs[0].id,
             saved=True,
             now=NOW,
@@ -403,7 +370,6 @@ def test_counts_describe_the_whole_corpus(
 
         set_mark(
             session,
-            owner_id=OWNER_ID,
             job_id=jobs[1].id,
             saved=True,
             review_state="reviewed",
@@ -412,7 +378,6 @@ def test_counts_describe_the_whole_corpus(
 
         set_mark(
             session,
-            owner_id=OWNER_ID,
             job_id=jobs[2].id,
             applied=True,
             now=NOW,
@@ -459,7 +424,6 @@ def test_marks_do_not_multiply_the_listing(
 
             set_mark(
                 session,
-                owner_id=OWNER_ID,
                 job_id=job.id,
                 saved=True,
                 now=NOW,
@@ -525,7 +489,6 @@ def test_a_rejection_does_not_overwrite_the_applied_date(
 
         set_mark(
             session,
-            owner_id=OWNER_ID,
             job_id=job.id,
             applied=True,
             applied_at=applied_on,
@@ -597,7 +560,6 @@ def test_unapplying_clears_the_status_too(
 
         set_mark(
             session,
-            owner_id=OWNER_ID,
             job_id=job.id,
             application_status="rejected",
             now=NOW,
@@ -633,7 +595,6 @@ def test_unknown_application_status_is_refused(
         ):
             set_mark(
                 session,
-                owner_id=OWNER_ID,
                 job_id=job.id,
                 application_status="maybe",
                 now=NOW,
@@ -658,7 +619,6 @@ def test_closed_applications_are_not_counted_as_open(
 
         set_mark(
             session,
-            owner_id=OWNER_ID,
             job_id=live.id,
             application_status=(
                 "interviewing"
@@ -668,7 +628,6 @@ def test_closed_applications_are_not_counted_as_open(
 
         set_mark(
             session,
-            owner_id=OWNER_ID,
             job_id=dead.id,
             application_status="rejected",
             now=NOW,
@@ -720,7 +679,6 @@ def test_marked_pages_ignore_the_eligibility_gate(
         ):
             set_mark(
                 session,
-                owner_id=OWNER_ID,
                 job_id=job.id,
                 applied=True,
                 now=NOW,
@@ -729,7 +687,6 @@ def test_marked_pages_ignore_the_eligibility_gate(
         page = list_jobs(
             session,
             filters=JobFilters(
-                owner_id=OWNER_ID,
                 mark="applied",
             ),
             now=NOW,
@@ -755,7 +712,6 @@ def test_marked_pages_still_show_closed_postings(
 
         set_mark(
             session,
-            owner_id=OWNER_ID,
             job_id=job.id,
             applied=True,
             now=NOW,
@@ -764,7 +720,6 @@ def test_marked_pages_still_show_closed_postings(
         page = list_jobs(
             session,
             filters=JobFilters(
-                owner_id=OWNER_ID,
                 mark="applied",
             ),
             now=NOW,

@@ -588,21 +588,6 @@ class ResumeRecord(Base):
         server_default=func.now(),
     )
 
-    # Which account this belongs to. Nullable only so the column could
-    # be added to a live table; the bootstrap claims every existing row
-    # and nothing writes a NULL after that.
-    #
-    # Hand-entered data is the only data in ACE that cannot be
-    # recomputed, which is exactly why it is the data that needs an
-    # owner. Postings and evaluations are shared facts about the world.
-    owner_id: Mapped[int | None] = mapped_column(
-        BIGINT_ID,
-        ForeignKey(
-            "users.id",
-            ondelete="CASCADE",
-        ),
-        nullable=True,
-    )
 
 class JobResumeScoreRecord(Base):
     """One posting scored against one resume.
@@ -817,21 +802,6 @@ class JobMarkRecord(Base):
         server_default=func.now(),
     )
 
-    # Which account this belongs to. Nullable only so the column could
-    # be added to a live table; the bootstrap claims every existing row
-    # and nothing writes a NULL after that.
-    #
-    # Hand-entered data is the only data in ACE that cannot be
-    # recomputed, which is exactly why it is the data that needs an
-    # owner. Postings and evaluations are shared facts about the world.
-    owner_id: Mapped[int | None] = mapped_column(
-        BIGINT_ID,
-        ForeignKey(
-            "users.id",
-            ondelete="CASCADE",
-        ),
-        nullable=True,
-    )
 
 class ExternalApplicationRecord(Base):
     """An application to a posting ACE never stored.
@@ -917,21 +887,6 @@ class ExternalApplicationRecord(Base):
         server_default=func.now(),
     )
 
-    # Which account this belongs to. Nullable only so the column could
-    # be added to a live table; the bootstrap claims every existing row
-    # and nothing writes a NULL after that.
-    #
-    # Hand-entered data is the only data in ACE that cannot be
-    # recomputed, which is exactly why it is the data that needs an
-    # owner. Postings and evaluations are shared facts about the world.
-    owner_id: Mapped[int | None] = mapped_column(
-        BIGINT_ID,
-        ForeignKey(
-            "users.id",
-            ondelete="CASCADE",
-        ),
-        nullable=True,
-    )
 
 class ApplicationAnswerRecord(Base):
     """One answer the user gives on most application forms.
@@ -972,21 +927,6 @@ class ApplicationAnswerRecord(Base):
         server_default=func.now(),
     )
 
-    # Which account this belongs to. Nullable only so the column could
-    # be added to a live table; the bootstrap claims every existing row
-    # and nothing writes a NULL after that.
-    #
-    # Hand-entered data is the only data in ACE that cannot be
-    # recomputed, which is exactly why it is the data that needs an
-    # owner. Postings and evaluations are shared facts about the world.
-    owner_id: Mapped[int | None] = mapped_column(
-        BIGINT_ID,
-        ForeignKey(
-            "users.id",
-            ondelete="CASCADE",
-        ),
-        nullable=True,
-    )
 
 class HistoryEntryRecord(Base):
     """One job or one degree, for the repeating blocks forms ask for.
@@ -1099,21 +1039,7 @@ class HistoryEntryRecord(Base):
         server_default=func.now(),
     )
 
-    # Which account this belongs to. Nullable only so the column could
-    # be added to a live table; the bootstrap claims every existing row
-    # and nothing writes a NULL after that.
-    #
-    # Hand-entered data is the only data in ACE that cannot be
-    # recomputed, which is exactly why it is the data that needs an
-    # owner. Postings and evaluations are shared facts about the world.
-    owner_id: Mapped[int | None] = mapped_column(
-        BIGINT_ID,
-        ForeignKey(
-            "users.id",
-            ondelete="CASCADE",
-        ),
-        nullable=True,
-    )
+
 
 class SourceProbeRecord(Base):
     """The last attempt ACE made to find one company's job board.
@@ -1193,170 +1119,4 @@ class SourceProbeRecord(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
-    )
-
-
-class UserRecord(Base):
-    """One person who may sign in.
-
-    ACE is a single-owner system, so this table is expected to hold one
-    row. It exists as a table rather than a pair of environment
-    variables because every piece of hand-entered data now has to point
-    at an owner, and pointing at a row is the only version of that
-    which survives the password being changed.
-    """
-
-    __tablename__ = "users"
-
-    __table_args__ = (
-        UniqueConstraint(
-            "email",
-            name="uq_users_email",
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(
-        BIGINT_ID,
-        primary_key=True,
-        autoincrement=True,
-    )
-
-    email: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-    )
-
-    # Self-describing: algorithm, cost, salt and digest, so raising the
-    # cost later does not invalidate the existing password.
-    password_hash: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-
-    last_login_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-
-
-class AuthSessionRecord(Base):
-    """One signed-in browser.
-
-    The token itself is never stored, only its SHA-256. A stolen
-    database should not hand over live sessions as well as password
-    hashes.
-
-    Sessions live in the database rather than in a signed cookie so
-    that signing out, or losing a laptop, can actually end them. A
-    self-contained cookie cannot be revoked without keeping a list of
-    the ones you have revoked, which is this table with extra steps.
-    """
-
-    __tablename__ = "auth_sessions"
-
-    __table_args__ = (
-        Index(
-            "ix_auth_sessions_user",
-            "user_id",
-        ),
-        Index(
-            "ix_auth_sessions_expires",
-            "expires_at",
-        ),
-    )
-
-    token_fingerprint: Mapped[str] = mapped_column(
-        String(64),
-        primary_key=True,
-    )
-
-    user_id: Mapped[int] = mapped_column(
-        BIGINT_ID,
-        ForeignKey(
-            "users.id",
-            ondelete="CASCADE",
-        ),
-        nullable=False,
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-    )
-
-    # Rolled forward as the session is used, so an idle session can be
-    # expired separately from an absolute lifetime.
-    last_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-
-
-class PasswordResetRecord(Base):
-    """One outstanding password-reset link.
-
-    Single use and short lived. The token is never stored, only its
-    SHA-256, for the same reason as a session: a stolen database must
-    not hand over the ability to take over the account it describes.
-
-    Rows are kept after use rather than deleted, so a link that is
-    clicked twice can say "already used" instead of "invalid", which is
-    the difference between a clear message and a confusing one when a
-    mail client prefetches the link.
-    """
-
-    __tablename__ = "password_resets"
-
-    __table_args__ = (
-        Index(
-            "ix_password_resets_user",
-            "user_id",
-        ),
-        Index(
-            "ix_password_resets_expires",
-            "expires_at",
-        ),
-    )
-
-    token_fingerprint: Mapped[str] = mapped_column(
-        String(64),
-        primary_key=True,
-    )
-
-    user_id: Mapped[int] = mapped_column(
-        BIGINT_ID,
-        ForeignKey(
-            "users.id",
-            ondelete="CASCADE",
-        ),
-        nullable=False,
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-    )
-
-    used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
     )

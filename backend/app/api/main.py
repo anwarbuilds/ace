@@ -63,7 +63,6 @@ from backend.app.applications.service import (
     record_external_applications,
 )
 from backend.app.api.queries import (
-    sole_owner_id,
     DEFAULT_PAGE_SIZE,
     get_job,
     MAX_PAGE_SIZE,
@@ -81,9 +80,6 @@ from backend.app.db.models import (
     ApplicationAnswerRecord,
     HistoryEntryRecord,
     JobRecord,
-)
-from backend.app.api.auth_web import (
-    install as install_auth,
 )
 from backend.app.db.session import SessionLocal
 from backend.app.matching.parsing import (
@@ -293,9 +289,6 @@ def _with_session_jobs(
             page = list_jobs(
                 session,
                 filters=JobFilters(
-                owner_id=sole_owner_id(
-                    session,
-                ),
                     session_id=run["id"],
                     resume_id=(
                         None
@@ -510,13 +503,6 @@ def create_app() -> FastAPI:
             "read model."
         ),
         version="1.0.0",
-    )
-
-    # Installed before the routes so nothing can be registered outside
-    # it. Middleware runs outermost-last in Starlette, so this sits
-    # closest to the request and answers before any handler is reached.
-    install_auth(
-        app,
     )
 
     @app.middleware("http")
@@ -754,9 +740,6 @@ def create_app() -> FastAPI:
         page = list_jobs(
             session,
             filters=JobFilters(
-                owner_id=sole_owner_id(
-                    session,
-                ),
                 statuses=_split_csv(
                     status
                 ),
@@ -951,9 +934,6 @@ def create_app() -> FastAPI:
         stats = build_stats(
             session,
             filters=JobFilters(
-                owner_id=sole_owner_id(
-                    session,
-                ),
                 resume_id=(
                     None
                     if active_resume is None
@@ -1255,9 +1235,6 @@ def create_app() -> FastAPI:
         page = list_jobs(
             session,
             filters=JobFilters(
-                owner_id=sole_owner_id(
-                    session,
-                ),
                 mark="applied",
                 statuses=(),
                 active_only=False,
@@ -1777,9 +1754,6 @@ def create_app() -> FastAPI:
         record = set_mark(
             session,
             job_id=job_id,
-            owner_id=sole_owner_id(
-                session,
-            ),
             saved=payload.saved,
             review_state=(
                 payload.review_state
@@ -1974,9 +1948,6 @@ def create_app() -> FastAPI:
 
         marked = apply_import(
             session,
-            owner_id=sole_owner_id(
-                session,
-            ),
             decisions=[
                 {
                     "job_id": (
@@ -2090,9 +2061,6 @@ def create_app() -> FastAPI:
         return build_facets(
             session,
             filters=JobFilters(
-                owner_id=sole_owner_id(
-                    session,
-                ),
                 families=_split_csv(
                     family
                 ),

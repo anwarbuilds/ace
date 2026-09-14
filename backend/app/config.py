@@ -67,38 +67,6 @@ class Settings(BaseSettings):
         "America/Los_Angeles"
     )
 
-    # Whether the session cookie may only travel over HTTPS. True in
-    # any real deployment. It defaults to False so local development
-    # over plain http still works, which means the deployment has to
-    # set it deliberately -- so the compose file for production does,
-    # and it is checked at startup.
-    session_cookie_secure: bool = False
-
-    # Outbound mail, used only for password resets. ACE deleted its
-    # whole email subsystem on 2026-09-06 and this does not bring it
-    # back: it is one HTTPS call, not an outbox with a delivery worker.
-    #
-    # Left blank the reset link is written to the log instead of sent,
-    # which is how this is developed and how a self-hosted instance
-    # with no mail provider can still recover an account.
-    resend_api_key: str = ""
-
-    # Must be an address on a domain verified with the provider.
-    # Resend's onboarding@resend.dev works for testing and can only
-    # deliver to the account owner's own address.
-    mail_from: str = "ACE <onboarding@resend.dev>"
-
-    # How ACE refers to itself in a reset link. Without this the link
-    # would point at whatever Host header the request carried, which an
-    # attacker controls, so a reset mail could be made to point at
-    # their site. Set it to the real origin in production.
-    public_base_url: str = "http://localhost:8000"
-
-    # Refuses to serve if a deployment is reachable over the network
-    # with no owner account, which would leave every route open. Set
-    # false only for a throwaway local instance.
-    require_authentication: bool = True
-
 
     @field_validator(
         "max_alert_posting_age_days"
