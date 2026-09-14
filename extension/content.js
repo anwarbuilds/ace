@@ -276,6 +276,24 @@
 
       if (members[0] !== field) return false;
 
+      // A lone checkbox is a yes/no, not a list to choose between. Its
+      // label is the statement it asserts -- "I currently work here" --
+      // and no affirmative answer will ever match that as option text,
+      // so it was reported as "your answer matched no option" and left
+      // unticked on every work-history block.
+      if (
+        members.length === 1 &&
+        members[0].type === "checkbox"
+      ) {
+        if (aceIntent(value) !== "yes") return false;
+        if (aceIsChosen(members[0])) return false;
+
+        members[0].click();
+        lastPicked = members[0];
+
+        return true;
+      }
+
       var chosen = aceChooseOption(
         members.map(aceOptionText),
         value,
@@ -437,7 +455,7 @@
       if (!entry) return;
 
       block.fields.forEach(function (slot) {
-        var value = aceHistoryValue(entry, slot.role);
+        var value = aceHistoryValue(entry, slot.role, slot.field);
         if (!value) return;
 
         var group = aceIsChoiceControl(slot.field)
@@ -496,6 +514,8 @@
     startYear: "start year",
     endMonth: "end month",
     endYear: "end year",
+    startDate: "start date",
+    endDate: "end date",
     description: "description"
   };
 
@@ -1727,6 +1747,7 @@
     openCombobox: openCombobox,
     searchTerms: searchTerms,
     fillOneCombobox: fillOneCombobox,
+    fillOne: fillOne,
     restoreClobbered: restoreClobbered,
     recordFill: function (record) { lastFill.push(record); },
     panel: panel,

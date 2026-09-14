@@ -820,6 +820,69 @@ def test_only_fields_ace_wrote_are_considered(
     ) == "mine"
 
 
+def test_a_lone_checkbox_is_a_yes_no_not_an_option_list(
+    filler,
+) -> None:
+    """"I currently work here" was never ticked on any form.
+
+    A checkbox reaches the choice path, which matches the stored answer
+    against the option text of the group. For a lone checkbox that text
+    is the statement it asserts, so an answer of "Yes" matched nothing
+    and the box was reported as "your answer matched no option".
+
+    A single checkbox carries no choice. It is the answer.
+    """
+
+    filler.eval(
+        """
+        (function(){
+          document.body.insertAdjacentHTML('beforeend',
+            '<label for="cur">I currently work here</label>'+
+            '<input type="checkbox" id="cur">');
+          return 1;})()
+        """
+    )
+
+    assert filler.eval(
+        "window.__aceInternals.fillOne("
+        "document.getElementById('cur'),'Yes')"
+    ) is True
+
+    assert filler.eval(
+        "document.getElementById('cur').checked"
+    ), "the box was not ticked"
+
+
+def test_a_lone_checkbox_stays_clear_on_no(
+    filler,
+) -> None:
+    """A past role must not be marked as the current one.
+
+    The asymmetry matters: a missed tick is a box you notice and click,
+    while a wrong tick tells an employer you still work somewhere you
+    left in 2024.
+    """
+
+    filler.eval(
+        """
+        (function(){
+          document.body.insertAdjacentHTML('beforeend',
+            '<label for="past">I currently work here</label>'+
+            '<input type="checkbox" id="past">');
+          return 1;})()
+        """
+    )
+
+    filler.eval(
+        "window.__aceInternals.fillOne("
+        "document.getElementById('past'),'No');1"
+    )
+
+    assert not filler.eval(
+        "document.getElementById('past').checked"
+    ), "a past role was ticked as current"
+
+
 def test_the_extension_ships_no_fill_marker() -> None:
     """Pinned in the source, because the marker was three things.
 

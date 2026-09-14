@@ -985,6 +985,18 @@ var ACE_HISTORY_ROLES = [
     any: ["end date month", "to month", "end month"] },
   { role: "endYear",
     any: ["end date year", "to year", "end year"] },
+  // A single box holding the whole date, which is what a form labels
+  // "From" and "To" with an MM/YYYY placeholder. Kept below the
+  // month/year rules because longest-match wins, so "from month" still
+  // resolves to startMonth rather than to this.
+  //
+  // Bare "from" and "to" are only safe because these rules apply inside
+  // an established history block. In ACE_RULES they would swallow half
+  // the form.
+  { role: "startDate",
+    any: ["start date", "from", "started", "date from"] },
+  { role: "endDate",
+    any: ["end date", "to", "ended", "date to"] },
   { role: "description",
     any: ["job description", "description", "responsibilities",
           "what did you do", "achievements"] },
@@ -1093,7 +1105,38 @@ function aceMonthName(month) {
 
    Returns null where the entry says nothing, so the field is left alone
    rather than filled with a blank. */
-function aceHistoryValue(entry, role) {
+/* One date, written the way this particular box asks for it.
+
+   Forms disagree: MM/YYYY, MM/DD/YYYY, YYYY-MM. The box says which in
+   its placeholder, so that is read rather than one format being picked
+   and hoped for. An unrecognised hint falls back to MM/YYYY, which is
+   what every form seen so far uses for a work-history date. */
+function aceFormatHistoryDate(month, year, field) {
+  if (!year) return null;
+
+  var mm = String(month || 1);
+  if (mm.length < 2) mm = "0" + mm;
+
+  var hint = "";
+
+  if (field) {
+    hint = (
+      (field.getAttribute("placeholder") || "") + " " +
+      (field.getAttribute("aria-label") || "")
+    ).toUpperCase();
+  }
+
+  if (hint.indexOf("YYYY-MM-DD") >= 0) return year + "-" + mm + "-01";
+  if (hint.indexOf("YYYY-MM") >= 0) return year + "-" + mm;
+  if (hint.indexOf("MM/DD/YYYY") >= 0) return mm + "/01/" + year;
+  if (hint.indexOf("MM/YY") >= 0 && hint.indexOf("MM/YYYY") < 0) {
+    return mm + "/" + String(year).slice(-2);
+  }
+
+  return mm + "/" + year;
+}
+
+function aceHistoryValue(entry, role, field) {
   if (!entry) return null;
 
   if (role === "employer") return entry.employer || null;
@@ -1111,6 +1154,26 @@ function aceHistoryValue(entry, role) {
 
   if (role === "endYear") {
     return entry.end_year ? String(entry.end_year) : null;
+  }
+
+  if (role === "startDate") {
+    return aceFormatHistoryDate(
+      entry.start_month,
+      entry.start_year,
+      field
+    );
+  }
+
+  // A role still running has no end date, and writing one would be a
+  // lie about the entry. The "currently work here" box carries that.
+  if (role === "endDate") {
+    if (entry.is_current) return null;
+
+    return aceFormatHistoryDate(
+      entry.end_month,
+      entry.end_year,
+      field
+    );
   }
 
   return null;
