@@ -68,6 +68,7 @@ def set_mark(
     session: Session,
     *,
     job_id: int,
+    owner_id: int | None = None,
     saved: bool | None = None,
     review_state: str | None = None,
     clear_review: bool = False,
@@ -78,6 +79,12 @@ def set_mark(
     now: datetime | None = None,
 ) -> JobMarkRecord:
     """Create or update one job's mark.
+
+    ``owner_id`` is what makes the row visible: the queries that read
+    marks scope by it and treat a missing owner as no match, so a mark
+    written without one is saved successfully and then never seen
+    again. That is deliberate -- failing closed turns a silent leak
+    into a visible bug -- but it means every caller has to pass it.
 
     Only the fields passed are changed, so toggling "saved" never
     silently clears a review state set earlier.
@@ -128,11 +135,20 @@ def set_mark(
         record = JobMarkRecord(
             job_id=job_id,
             is_saved=False,
+            owner_id=owner_id,
         )
 
         session.add(
             record
         )
+    elif (
+        record.owner_id is None
+        and owner_id is not None
+    ):
+        # A row from before ownership existed, or one written by a
+        # caller that did not know about it. Claim it rather than
+        # leaving an orphan that no query will ever match again.
+        record.owner_id = owner_id
 
     if saved is not None:
         record.is_saved = saved
