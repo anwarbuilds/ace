@@ -19,6 +19,9 @@ from sqlalchemy.orm import (
 )
 
 from backend.app.alerts.service import (
+    CANVAS,
+    CARD,
+    GOLD,
     MAX_AGE,
     MAX_LISTED,
     render_html,
@@ -602,3 +605,106 @@ def test_the_html_and_text_agree_on_the_count(
     assert "2 new opportunities" in subject
     assert "2 new roles" in text
     assert "2 new opportunities" in html
+
+
+def test_the_background_survives_a_client_stripping_the_body(
+    session,
+) -> None:
+    """Gmail drops <head> and the <body> tag's attributes.
+
+    If the dark canvas lived only on <body> it would be discarded and
+    the mail would render light text on Gmail's white page, which is
+    the difference between a designed email and an unreadable one.
+    """
+
+    body = _one_job_html(
+        session,
+    )
+
+    after_body = body.split(
+        "<body",
+        1,
+    )[1]
+
+    opening_tag, rest = after_body.split(
+        ">",
+        1,
+    )
+
+    # Specifically as a background on something that survives, not
+    # merely present somewhere in the markup: the preheader also
+    # mentions the canvas colour, as its text colour, which made the
+    # first version of this test pass against the very bug it
+    # describes.
+    assert (
+        f'bgcolor="{CANVAS}"' in rest
+        or f"background:{CANVAS}" in rest
+    )
+
+
+def test_the_apply_button_is_not_a_bare_anchor(
+    session,
+) -> None:
+    """Outlook renders through Word, which ignores padding on an
+    anchor, so a styled <a> collapses into plain text. A table cell
+    with a bgcolor is the shape that survives everywhere."""
+
+    body = _one_job_html(
+        session,
+    )
+
+    assert f'bgcolor="{GOLD}"' in body
+
+
+def test_cards_carry_a_bgcolor_attribute(
+    session,
+) -> None:
+    """Outlook honours the attribute where it ignores the property, and
+    a card with no background is light text on white."""
+
+    body = _one_job_html(
+        session,
+    )
+
+    assert f'bgcolor="{CARD}"' in body
+
+
+def test_the_inbox_preview_names_roles_not_the_wordmark(
+    session,
+) -> None:
+    """Without a preheader a client scrapes the first text in the body,
+    so every alert would preview as "A C E"."""
+
+    pull = make_pull(
+        session,
+        started_at=NOW - timedelta(hours=1),
+    )
+
+    add_job(
+        session,
+        pull,
+        index=1,
+        company="Stripe",
+    )
+
+    body = render_html(
+        pull,
+        qualifying_jobs(
+            session,
+            pull,
+        ),
+    )
+
+    preview = body.split(
+        "mso-hide:all",
+        1,
+    )[1].split(
+        ">",
+        1,
+    )[1].split(
+        "<",
+        1,
+    )[0].strip()
+
+    assert "Stripe" in preview
+    assert preview != "A C E"

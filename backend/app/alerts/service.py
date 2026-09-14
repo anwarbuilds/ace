@@ -411,6 +411,16 @@ def render_html(
         "/",
     )
 
+    # What the inbox shows beside the subject line, before the mail is
+    # opened. Left out, a client scrapes the first text in the body,
+    # which is the wordmark, so every alert previews as "A C E".
+    preheader = _escape(
+        ", ".join(
+            f"{job.company} {job.title}"[:48]
+            for job, _evaluation, _score in jobs[:3]
+        )
+    )
+
     cards = []
 
     for job, evaluation, score in jobs[:MAX_LISTED]:
@@ -431,6 +441,7 @@ def render_html(
             f"""
 <tr><td style="padding:0 0 12px 0;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+         bgcolor="{CARD}"
          style="background:{CARD};border:1px solid {LINE};border-radius:12px;">
     <tr><td style="padding:18px 20px;">
       <div style="font-size:13px;font-weight:600;color:{MUTED};
@@ -453,10 +464,17 @@ def render_html(
             {_score_chip(score)}
           </td>
           <td align="right">
-            <a href="{_escape(job.official_url)}"
-               style="display:inline-block;background:{GOLD};color:#231633;
-                      font-size:13px;font-weight:700;text-decoration:none;
-                      padding:9px 18px;border-radius:7px;">Apply</a>
+            <table role="presentation" cellpadding="0" cellspacing="0"
+                   border="0" style="display:inline-block;">
+              <tr><td bgcolor="{GOLD}" align="center"
+                      style="background:{GOLD};border-radius:7px;">
+                <a href="{_escape(job.official_url)}"
+                   style="display:block;color:#231633;font-size:13px;
+                          font-weight:700;text-decoration:none;
+                          padding:10px 20px;font-family:Arial,Helvetica,
+                          sans-serif;">Apply</a>
+              </td></tr>
+            </table>
           </td>
         </tr>
       </table>
@@ -492,12 +510,18 @@ def render_html(
 </head>
 <body style="margin:0;padding:0;background:{CANVAS};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+       bgcolor="{CANVAS}"
        style="background:{CANVAS};padding:28px 12px;">
 <tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0"
        style="width:100%;max-width:600px;
               font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',
                           Roboto,Helvetica,Arial,sans-serif;">
+
+  <tr><td style="font-size:0;line-height:0;max-height:0;
+                 mso-hide:all;overflow:hidden;color:{CANVAS};">
+    {preheader}
+  </td></tr>
 
   <tr><td style="padding:0 0 22px 0;">
     <div style="font-size:15px;font-weight:700;letter-spacing:.18em;
