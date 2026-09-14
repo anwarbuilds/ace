@@ -719,6 +719,16 @@ class PollSessionRecord(Base):
         server_default="0",
     )
 
+    # When this pull's alert was sent. The guard against sending the
+    # same pull twice, which matters because the scheduler decides what
+    # to send on every cycle and a cycle runs every few seconds.
+    #
+    # A timestamp rather than a boolean so a silent failure is
+    # distinguishable from a send that never happened.
+    notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
 class JobMarkRecord(Base):
     """One person's standing judgement about one job.
