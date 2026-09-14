@@ -21,6 +21,7 @@ from sqlalchemy.orm import (
 from backend.app.alerts.service import (
     MAX_AGE,
     MAX_LISTED,
+    render_html,
     pending_pulls,
     qualifying_jobs,
     render,
@@ -337,7 +338,7 @@ def test_only_gate_passing_jobs_are_listed(
 
     assert [
         job.company
-        for job, _ in listed
+        for job, _, _ in listed
     ] == [
         "Kept",
     ]
@@ -468,3 +469,136 @@ def test_the_subject_says_how_many(
     )
 
     assert subject == "ACE: 1 new opportunity"
+
+
+# --- the HTML part -------------------------------------------------
+
+
+def _one_job_html(
+    session,
+    **kwargs,
+) -> str:
+    pull = make_pull(
+        session,
+        started_at=NOW - timedelta(hours=1),
+    )
+
+    add_job(
+        session,
+        pull,
+        index=7,
+        **kwargs,
+    )
+
+    return render_html(
+        pull,
+        qualifying_jobs(
+            session,
+            pull,
+        ),
+    )
+
+
+def test_the_html_declares_a_viewport(
+    session,
+) -> None:
+    """Without it a phone lays the mail out at ~980px and zooms out.
+
+    The alert exists so a role can be applied to from a phone, so an
+    email that is unreadable on one has failed at its only job. Caught
+    by rendering it at 390px and finding a 980px layout.
+    """
+
+    body = _one_job_html(
+        session,
+    )
+
+    assert 'name="viewport"' in body
+    assert "width=device-width" in body
+
+
+def test_the_html_links_to_the_employer(
+    session,
+) -> None:
+    """The standing invariant, and the point of the email."""
+
+    body = _one_job_html(
+        session,
+    )
+
+    assert "https://employer.example/7" in body
+
+
+def test_an_unscored_job_never_renders_as_zero(
+    session,
+) -> None:
+    """Unscored means the posting was never readable, which is not a
+    bad match. Printing a 0 would be a lie about what ACE knows."""
+
+    body = _one_job_html(
+        session,
+    )
+
+    assert "Not scored" in body
+    assert "MINIMAL 0" not in body
+
+
+def test_employer_text_is_escaped(
+    session,
+) -> None:
+    """Titles arrive from employers and go straight into markup.
+
+    A stray ampersand is the common case and would break the layout
+    rather than anything worse, but the rule is the same either way.
+    """
+
+    body = _one_job_html(
+        session,
+        company="Tom & Jerry <script>",
+    )
+
+    assert "Tom &amp; Jerry &lt;script&gt;" in body
+    assert "<script>" not in body
+
+
+def test_the_html_and_text_agree_on_the_count(
+    session,
+) -> None:
+    """Both parts are sent, and a client may show either."""
+
+    pull = make_pull(
+        session,
+        started_at=NOW - timedelta(hours=1),
+        qualifying=2,
+    )
+
+    add_job(
+        session,
+        pull,
+        index=1,
+    )
+
+    add_job(
+        session,
+        pull,
+        index=2,
+    )
+
+    jobs = qualifying_jobs(
+        session,
+        pull,
+    )
+
+    subject, text = render(
+        pull,
+        jobs,
+    )
+
+    html = render_html(
+        pull,
+        jobs,
+    )
+
+    assert "2 new opportunities" in subject
+    assert "2 new roles" in text
+    assert "2 new opportunities" in html

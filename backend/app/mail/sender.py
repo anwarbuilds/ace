@@ -35,6 +35,7 @@ def send(
     to: str,
     subject: str,
     text: str,
+    html: str | None = None,
 ) -> bool:
     """Send one message. Returns whether it actually left.
 
@@ -73,7 +74,18 @@ def send(
                     to,
                 ],
                 "subject": subject,
+                # Both parts, always. A client that refuses HTML, a
+                # screen reader, and a plain-text preview all fall back
+                # to the text version, and a mail with only HTML in it
+                # is more likely to be treated as spam.
                 "text": text,
+                **(
+                    {
+                        "html": html,
+                    }
+                    if html
+                    else {}
+                ),
             },
             timeout=TIMEOUT_SECONDS,
         )
