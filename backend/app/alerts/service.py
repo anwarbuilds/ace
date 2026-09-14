@@ -41,10 +41,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.config import get_settings
+from backend.app.intelligence.companies import (
+    CompanyTier,
+    classify_company,
+)
 from backend.app.db.models import (
     JobEvaluationRecord,
     JobRecord,
+    JobResumeScoreRecord,
     PollSessionRecord,
+    ResumeRecord,
 )
 from backend.app.mail.sender import send as send_mail
 from backend.app.persistence.sessions import (
@@ -122,24 +128,47 @@ def pending_pulls(
 def qualifying_jobs(
     session: Session,
     pull: PollSessionRecord,
-) -> list[tuple[JobRecord, JobEvaluationRecord]]:
-    """The gate-passing jobs this pull discovered, best signal first."""
+) -> list[tuple[JobRecord, JobEvaluationRecord, int | None]]:
+    """The gate-passing jobs this pull discovered, best signal first.
+
+    Carries the resume match where there is one. Unscored is common and
+    is not a low score: it means the posting was never readable, and
+    the email says so rather than printing a zero.
+    """
+
+    active_resume = session.scalar(
+        select(
+            ResumeRecord.id,
+        ).where(
+            ResumeRecord.is_active.is_(True),
+        )
+    )
 
     rows = session.execute(
         select(
             JobRecord,
             JobEvaluationRecord,
+            JobResumeScoreRecord.score,
         ).join(
             JobEvaluationRecord,
             JobEvaluationRecord.job_id == JobRecord.id,
+        ).outerjoin(
+            JobResumeScoreRecord,
+            (
+                JobResumeScoreRecord.job_id == JobRecord.id
+            )
+            & (
+                JobResumeScoreRecord.resume_id == active_resume
+            ),
         ).where(
             JobRecord.first_seen_session_id == pull.id,
             JobEvaluationRecord.eligibility_status == "PASS",
         ).order_by(
             # The same order the queue leads with: roles that announce
-            # themselves as new grad, then the ones ACE could actually
-            # read, then everything else.
+            # themselves as new grad, then the strongest resume match,
+            # then the ones ACE could actually read.
             JobEvaluationRecord.is_new_grad.desc(),
+            JobResumeScoreRecord.score.desc().nullslast(),
             JobEvaluationRecord.requirements_verified.desc(),
             JobRecord.company,
         )
@@ -149,6 +178,7 @@ def qualifying_jobs(
         (
             row[0],
             row[1],
+            row[2],
         )
         for row in rows
     ]
@@ -200,7 +230,7 @@ def render(
         "",
     ]
 
-    for job, evaluation in jobs[:MAX_LISTED]:
+    for job, evaluation, _score in jobs[:MAX_LISTED]:
         lines.append(
             f"{job.company} - {job.title}",
         )
@@ -252,6 +282,249 @@ def render(
     return subject, "\n".join(
         lines,
     )
+
+
+def _escape(
+    value: str,
+) -> str:
+    """Minimal HTML escaping for values that came from an employer."""
+
+    return (
+        str(
+            value or "",
+        )
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+# ACE's own palette. Stated as hex rather than variables because email
+# clients do not support custom properties, and repeated inline rather
+# than in a stylesheet because Gmail strips <style> in some contexts.
+INK = "#f4f0fa"
+MUTED = "#b3a3cd"
+CANVAS = "#0f0a17"
+CARD = "#1c1229"
+LINE = "#33244a"
+GOLD = "#c9a227"
+PURPLE = "#8b6fc7"
+
+
+def _tier_badge(
+    company: str,
+) -> str:
+    """The employer tier chip, or nothing for an unclassified name."""
+
+    tier = classify_company(
+        company,
+    )
+
+    label = {
+        CompanyTier.BIG_TECH: "BIG TECH",
+        CompanyTier.TOP_TIER: "TOP TIER",
+        CompanyTier.ESTABLISHED: "ESTABLISHED",
+    }.get(
+        tier,
+    )
+
+    if not label:
+        return ""
+
+    colour = (
+        GOLD
+        if tier is CompanyTier.BIG_TECH
+        else PURPLE
+    )
+
+    return (
+        '<span style="display:inline-block;margin-left:8px;'
+        "padding:2px 7px;border-radius:4px;font-size:10px;"
+        "letter-spacing:.08em;font-weight:700;"
+        f'color:{colour};border:1px solid {colour};">'
+        f"{label}</span>"
+    )
+
+
+def _score_chip(
+    score: int | None,
+) -> str:
+    """The resume match, or an honest statement that there is none.
+
+    Unscored is not a low score: it means the posting was never
+    readable. Printing a zero would be a lie about what ACE knows.
+    """
+
+    if score is None:
+        return (
+            f'<span style="color:{MUTED};font-size:12px;'
+            'font-style:italic;">Not scored</span>'
+        )
+
+    tier = (
+        "HIGH"
+        if score >= 70
+        else "MEDIUM"
+        if score >= 45
+        else "MINIMAL"
+    )
+
+    colour = (
+        GOLD
+        if score >= 70
+        else INK
+        if score >= 45
+        else MUTED
+    )
+
+    return (
+        f'<span style="color:{colour};font-size:12px;'
+        'font-weight:700;letter-spacing:.06em;">'
+        f"{tier} {score}</span>"
+    )
+
+
+def render_html(
+    pull: PollSessionRecord,
+    jobs: list,
+) -> str:
+    """The alert as HTML.
+
+    Tables and inline styles throughout, because email clients are not
+    browsers: Gmail strips much of a <style> block, Outlook renders
+    through Word, and neither supports flexbox or grid. A 600px table
+    is the layout that has worked everywhere for twenty years.
+
+    Every colour is stated explicitly, including on the outermost
+    wrapper, because a client that assumes a white page behind
+    transparent content turns light text invisible.
+    """
+
+    count = len(
+        jobs,
+    )
+
+    settings = get_settings()
+
+    base = settings.public_base_url.rstrip(
+        "/",
+    )
+
+    cards = []
+
+    for job, evaluation, score in jobs[:MAX_LISTED]:
+        facts = " &middot; ".join(
+            _escape(
+                part,
+            )
+            for part in (
+                job.location,
+                _experience(
+                    evaluation,
+                ),
+            )
+            if part
+        )
+
+        cards.append(
+            f"""
+<tr><td style="padding:0 0 12px 0;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+         style="background:{CARD};border:1px solid {LINE};border-radius:12px;">
+    <tr><td style="padding:18px 20px;">
+      <div style="font-size:13px;font-weight:600;color:{MUTED};
+                  padding-bottom:6px;">
+        {_escape(job.company)}{_tier_badge(job.company)}
+      </div>
+      <div style="padding-bottom:10px;">
+        <a href="{_escape(job.official_url)}"
+           style="color:{INK};font-size:17px;font-weight:600;
+                  text-decoration:none;line-height:1.35;">
+          {_escape(job.title)}
+        </a>
+      </div>
+      <div style="font-size:12.5px;color:{MUTED};padding-bottom:14px;">
+        {facts}
+      </div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        <tr>
+          <td align="left" style="vertical-align:middle;">
+            {_score_chip(score)}
+          </td>
+          <td align="right">
+            <a href="{_escape(job.official_url)}"
+               style="display:inline-block;background:{GOLD};color:#231633;
+                      font-size:13px;font-weight:700;text-decoration:none;
+                      padding:9px 18px;border-radius:7px;">Apply</a>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</td></tr>"""
+        )
+
+    more = ""
+
+    if count > MAX_LISTED:
+        more = (
+            f'<tr><td style="padding:4px 0 16px 0;color:{MUTED};'
+            'font-size:13px;text-align:center;">'
+            f"and {count - MAX_LISTED} more in the queue"
+            "</td></tr>"
+        )
+
+    return f"""<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- Without this a phone lays the mail out at ~980px and zooms out,
+     which is how an email becomes unreadable on the device it was
+     written for. The whole point of alerting is applying from a
+     phone. -->
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Tells a client the mail is designed dark, so it does not invert
+     the palette and leave light text on a light card. -->
+<meta name="color-scheme" content="dark light">
+<meta name="supported-color-schemes" content="dark light">
+<title>ACE</title>
+</head>
+<body style="margin:0;padding:0;background:{CANVAS};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+       style="background:{CANVAS};padding:28px 12px;">
+<tr><td align="center">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0"
+       style="width:100%;max-width:600px;
+              font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',
+                          Roboto,Helvetica,Arial,sans-serif;">
+
+  <tr><td style="padding:0 0 22px 0;">
+    <div style="font-size:15px;font-weight:700;letter-spacing:.18em;
+                color:{INK};">A C E</div>
+    <div style="font-size:22px;font-weight:600;color:{INK};
+                padding-top:12px;">
+      {count} new {"opportunity" if count == 1 else "opportunities"}
+    </div>
+    <div style="font-size:13px;color:{MUTED};padding-top:4px;">
+      Passed your filters in this pull.
+    </div>
+  </td></tr>
+
+  {"".join(cards)}
+  {more}
+
+  <tr><td style="padding:10px 0 0 0;border-top:1px solid {LINE};">
+    <div style="padding-top:16px;font-size:12px;color:{MUTED};">
+      <a href="{base}/" style="color:{PURPLE};text-decoration:none;">
+        Open the full queue
+      </a>
+    </div>
+  </td></tr>
+
+</table>
+</td></tr></table>
+</body></html>"""
 
 
 def send_pending(
@@ -309,6 +582,10 @@ def send_pending(
             to=settings.alert_email,
             subject=subject,
             text=body,
+            html=render_html(
+                pull,
+                jobs,
+            ),
         )
 
         pull.notified_at = moment
