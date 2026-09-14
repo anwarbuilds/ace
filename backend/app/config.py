@@ -67,6 +67,18 @@ class Settings(BaseSettings):
         "America/Los_Angeles"
     )
 
+    # Whether the session cookie may only travel over HTTPS. True in
+    # any real deployment. It defaults to False so local development
+    # over plain http still works, which means the deployment has to
+    # set it deliberately -- so the compose file for production does,
+    # and it is checked at startup.
+    session_cookie_secure: bool = False
+
+    # Refuses to serve if a deployment is reachable over the network
+    # with no owner account, which would leave every route open. Set
+    # false only for a throwaway local instance.
+    require_authentication: bool = True
+
 
     @field_validator(
         "max_alert_posting_age_days"
