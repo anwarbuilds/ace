@@ -308,8 +308,86 @@ CASES.forEach(function (pair) {
   }
 });
 
+/* Work-history dates.
+
+   A form labels one box "From" with an MM/YYYY placeholder, not a
+   separate month and a separate year. Those had roles; the combined
+   box did not, so the two required date fields on every work-history
+   block were left empty. */
+var HISTORY_ROLE_CASES = [
+  ["from", "startDate"],
+  ["to", "endDate"],
+  ["start date", "startDate"],
+  ["end date", "endDate"],
+  // Longest match still wins, so the split fields keep their own roles.
+  ["from month", "startMonth"],
+  ["start date year", "startYear"],
+  ["to year", "endYear"],
+  // And the rest of the block is unchanged.
+  ["job title", "jobTitle"],
+  ["company", "employer"],
+  ["i currently work here", "isCurrent"]
+];
+
+HISTORY_ROLE_CASES.forEach(function (pair) {
+  var got = aceHistoryRole(null, aceNormalise(pair[0]));
+
+  if (got !== pair[1]) {
+    failures += 1;
+    console.log(
+      "FAIL  history role " + JSON.stringify(pair[0]) +
+      "\n      got " + JSON.stringify(got) +
+      ", want " + JSON.stringify(pair[1])
+    );
+  }
+});
+
+/* The date is written the way the box asks for it. Forms disagree, and
+   the placeholder is where they say so. */
+var CURRENT = {
+  employer: "Northwind", job_title: "GRA", is_current: true,
+  start_month: 1, start_year: 2026, end_month: null, end_year: null
+};
+
+var PAST = {
+  employer: "Contoso", job_title: "SDE", is_current: false,
+  start_month: 5, start_year: 2021, end_month: 12, end_year: 2024
+};
+
+function fakeField(placeholder) {
+  return { getAttribute: function (n) {
+    return n === "placeholder" ? placeholder : null; } };
+}
+
+var DATE_CASES = [
+  [CURRENT, "startDate", "MM/YYYY", "01/2026"],
+  [PAST, "startDate", "MM/YYYY", "05/2021"],
+  [PAST, "endDate", "MM/YYYY", "12/2024"],
+  [PAST, "startDate", "YYYY-MM", "2021-05"],
+  [PAST, "startDate", "MM/DD/YYYY", "05/01/2021"],
+  // No placeholder at all: the shape every form seen so far uses.
+  [PAST, "endDate", null, "12/2024"],
+  // A role still running has no end date, and writing one would be a
+  // lie about the entry. The "currently work here" box carries that.
+  [CURRENT, "endDate", "MM/YYYY", null]
+];
+
+DATE_CASES.forEach(function (c) {
+  var got = aceHistoryValue(c[0], c[1], fakeField(c[2]));
+
+  if (got !== c[3]) {
+    failures += 1;
+    console.log(
+      "FAIL  history date " + c[1] + " placeholder " +
+      JSON.stringify(c[2]) +
+      "\n      got " + JSON.stringify(got) +
+      ", want " + JSON.stringify(c[3])
+    );
+  }
+});
+
 var total = CASES.length + OPTION_CASES.length + DELL_CASES.length +
-  ALIAS_CASES.length;
+  ALIAS_CASES.length + HISTORY_ROLE_CASES.length + DATE_CASES.length;
 
 console.log(
   failures
