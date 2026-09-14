@@ -177,6 +177,19 @@ button.live:hover{background:var(--hover);border-color:var(--border)}
 .chip.excluded:hover{background:var(--danger);color:#fff;text-decoration:none}
 .chip-n{font-family:var(--mono);font-size:11px;opacity:.8}
 .ctl-sortline{gap:8px;align-items:baseline}
+.acct-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:12px}
+@media(max-width:860px){.acct-grid{grid-template-columns:1fr}}
+.acct-in{display:block;width:100%;max-width:340px;box-sizing:border-box;margin:8px 0;
+  padding:9px 11px;border-radius:var(--r-md);border:1px solid var(--border-strong);
+  background:var(--surface-2);color:var(--text);font:inherit;font-size:13px}
+.acct-in::placeholder{color:var(--text-muted)}
+.acct-in:focus{outline:2px solid var(--purple);outline-offset:1px;
+  border-color:var(--purple)}
+.acct-msg{margin-top:12px;padding:9px 12px;border-radius:var(--r-md);font-size:12.5px}
+.acct-msg.ok{background:var(--purple-surface);color:var(--text);
+  border:1px solid var(--purple-rail)}
+.acct-msg.bad{background:rgba(192,57,43,.14);color:#ffb4c0;
+  border:1px solid rgba(192,57,43,.45)}
 .sort-says{font-size:12px;color:var(--ink-3)}
 tr.bandline td{padding:0}
 tr.bandline span{display:block;padding:7px 14px;font-size:11px;letter-spacing:.04em;
@@ -682,7 +695,8 @@ var state={
   palHits:null, palIndex:0,
   // Apply Mode: one posting at a time over whatever the Queue is
   // currently filtered to, driven entirely from the keyboard.
-  answers:[], answersOpen:false
+  answers:[], answersOpen:false,
+  account:null, accountMsg:null
 };
 
 /* ---------------- storage ---------------- */
@@ -857,6 +871,7 @@ function loadShell(){
     get("/api/marks").then(function(d){ state.markCounts=d; }),
     get("/api/answers").then(function(d){ state.answers=d.items||[]; }),
     get("/api/coverage").then(function(d){ state.coverage=d; }),
+    get("/api/account").then(function(d){ state.account=d; }).catch(function(){}),
     get("/api/history/work").then(function(d){ state.work=d.items||[]; }),
     get("/api/history/education").then(function(d){ state.education=d.items||[]; }),
     loadExternal(),
@@ -1688,8 +1703,45 @@ function settingsPage(){
     '<div class="sect"><p class="eyebrow">Sources, '+(f.sources||[]).length+' reporting</p><dl class="kv">'+
       (f.sources||[]).map(function(o){return '<dt>'+esc(o.value)+'</dt><dd>'+o.count+'</dd>';}).join("")+
       '</dl><p class="why" style="margin-top:10px">Counts are qualifying opportunities currently open.</p></div>'+
+    accountSection()+
     '<div class="note">Press Ctrl or Command plus K for the command palette.</div>'+
     '</div></div>';
+}
+
+/* Account management lives here rather than only in a shell command,
+   so a password can be changed on a deployed instance without SSH and
+   without it travelling through anyone else's terminal. */
+function accountSection(){
+  var a=state.account||{};
+  var m=state.accountMsg;
+  return '<div class="sect"><p class="eyebrow">Account</p>'+
+    '<div class="gaprow"><span>'+esc(a.email||"Loading")+'</span>'+
+      '<span class="gap-n">'+(a.active_sessions||0)+' signed in</span>'+
+      '<a class="link-btn" href="/logout">Sign out</a></div>'+
+    (m?'<div class="acct-msg '+(m.ok?"ok":"bad")+'">'+esc(m.text)+'</div>':'')+
+    '<div class="acct-grid">'+
+      '<div><p class="why">Change password. Every other signed-in browser is signed out, which is the point of changing it.</p>'+
+        '<input class="acct-in" id="pw-cur" type="password" placeholder="Current password" autocomplete="current-password">'+
+        '<input class="acct-in" id="pw-new" type="password" placeholder="New password, 12 or more characters" autocomplete="new-password">'+
+        '<button class="btn btn-secondary" data-act="changepw">Change password</button></div>'+
+      '<div><p class="why">Change the address you sign in with. It is also where a password reset would be sent, so it needs your password too.</p>'+
+        '<input class="acct-in" id="em-cur" type="password" placeholder="Current password" autocomplete="current-password">'+
+        '<input class="acct-in" id="em-new" type="email" placeholder="New email address">'+
+        '<button class="btn btn-secondary" data-act="changeemail">Change email</button></div>'+
+    '</div></div>';
+}
+
+function accountPost(path, body, done){
+  fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body),cache:"no-store"})
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
+    .then(function(res){ done(res.ok,res.d); })
+    .catch(function(){ done(false,{detail:"Could not reach ACE."}); });
+}
+
+function loadAccount(){
+  return get("/api/account").then(function(d){ state.account=d; })
+    .catch(function(){ state.account={}; });
 }
 
 /* ---------------- answer bank ---------------- */
@@ -2635,6 +2687,32 @@ document.addEventListener("click",function(e){
     if(d.act==="theme"){ cycleTheme(); return; }
     if(d.act==="live"){ livePop(t); return; }
     if(d.act==="scoreinfo"){ scorePop(t); return; }
+    if(d.act==="changepw"){
+      var cur=document.getElementById("pw-cur"), nw=document.getElementById("pw-new");
+      accountPost("/api/account/password",
+        {current_password:cur.value,new_password:nw.value},
+        function(ok,data){
+          state.accountMsg=ok
+            ?{ok:true,text:"Password changed. "+(data.sessions_ended||0)+" other session(s) signed out."}
+            :{ok:false,text:data.detail||"Could not change the password."};
+          if(ok){ cur.value=""; nw.value=""; }
+          loadAccount().then(render);
+        });
+      return;
+    }
+    if(d.act==="changeemail"){
+      var ec=document.getElementById("em-cur"), en=document.getElementById("em-new");
+      accountPost("/api/account/email",
+        {current_password:ec.value,new_email:en.value},
+        function(ok,data){
+          state.accountMsg=ok
+            ?{ok:true,text:"Email changed to "+data.email+"."}
+            :{ok:false,text:data.detail||"Could not change the email."};
+          if(ok){ ec.value=""; en.value=""; }
+          loadAccount().then(render);
+        });
+      return;
+    }
     if(d.act==="sortmore"){ sortMorePop(t); return; }
     if(d.act==="sortreset"){ state.sorts=DEFAULT_SORTS.slice(); loadJobs(); return; }
     if(d.act==="filters"){ filterPop(t); return; }

@@ -556,6 +556,7 @@ def apply_import(
     session: Session,
     *,
     decisions: list[dict],
+    owner_id: int | None = None,
     now: datetime | None = None,
 ) -> int:
     """Record applications for the confirmed rows.
@@ -650,6 +651,7 @@ def apply_import(
         set_mark(
             session,
             job_id=job_id,
+            owner_id=owner_id,
             applied=True,
             applied_at=when,
             application_status=status,

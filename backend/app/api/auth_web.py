@@ -13,6 +13,7 @@ from __future__ import annotations
 from fastapi import (
     FastAPI,
     Form,
+    HTTPException,
     Request,
 )
 from fastapi.responses import (
@@ -22,6 +23,11 @@ from fastapi.responses import (
     Response,
 )
 
+from backend.app.auth.credentials import (
+    hash_password,
+    token_fingerprint,
+    verify_password,
+)
 from backend.app.auth.service import (
     ABSOLUTE_LIFETIME,
     authenticate,
@@ -29,11 +35,68 @@ from backend.app.auth.service import (
     resolve_session,
     start_session,
 )
+from sqlalchemy import select
+
 from backend.app.config import get_settings
+from backend.app.db.models import (
+    AuthSessionRecord,
+    UserRecord,
+)
 from backend.app.db.session import SessionLocal
 
 
 SESSION_COOKIE = "ace_session"
+
+# Length is the only rule. Composition rules push people toward
+# "Passw0rd!" and buy nothing.
+MIN_PASSWORD_LENGTH = 12
+
+
+def current_owner_id(
+    request: Request,
+) -> int:
+    """The signed-in account, for routes that read or write its data.
+
+    The middleware has already resolved the session and refused the
+    request if it could not, so reaching here without a user means
+    authentication is switched off for local development. In that case
+    the oldest account stands in, which keeps a single-user checkout
+    working without giving an unauthenticated request a way to pick
+    whose data it sees.
+    """
+
+    owner_id = getattr(
+        request.state,
+        "user_id",
+        None,
+    )
+
+    if owner_id is not None:
+        return int(
+            owner_id,
+        )
+
+    with SessionLocal() as session:
+        fallback = session.scalar(
+            select(
+                UserRecord.id,
+            ).order_by(
+                UserRecord.id,
+            )
+        )
+
+    if fallback is None:
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "No account exists. Run "
+                "backend.scripts.create_owner."
+            ),
+        )
+
+    return int(
+        fallback,
+    )
 
 
 # Everything reachable without signing in. Deliberately short, and
@@ -261,6 +324,275 @@ def install(
         )
 
         return response
+
+    def _signed_in(
+        request: Request,
+    ) -> tuple[int, str] | None:
+        """Return (user id, session token) or None."""
+
+        token = request.cookies.get(
+            SESSION_COOKIE,
+        )
+
+        with SessionLocal() as session:
+            user = resolve_session(
+                session,
+                token,
+            )
+
+            session.commit()
+
+            if user is None:
+                return None
+
+            return user.id, token or ""
+
+    @app.get(
+        "/api/account",
+    )
+    def read_account(
+        request: Request,
+    ) -> JSONResponse:
+        """Who is signed in, for the settings page to show."""
+
+        signed = _signed_in(
+            request,
+        )
+
+        if signed is None:
+            return JSONResponse(
+                {
+                    "detail": "Not signed in.",
+                },
+                status_code=401,
+            )
+
+        with SessionLocal() as session:
+            user = session.get(
+                UserRecord,
+                signed[0],
+            )
+
+            sessions = session.query(
+                AuthSessionRecord,
+            ).filter(
+                AuthSessionRecord.user_id == user.id,
+            ).count()
+
+            return JSONResponse(
+                {
+                    "email": user.email,
+                    "created_at": (
+                        user.created_at.isoformat()
+                        if user.created_at
+                        else None
+                    ),
+                    "active_sessions": sessions,
+                },
+            )
+
+    @app.post(
+        "/api/account/password",
+    )
+    def change_password(
+        request: Request,
+        payload: dict,
+    ) -> JSONResponse:
+        """Change the password from inside the app.
+
+        The current password is required even though the caller is
+        already signed in. A session is not proof of knowing the
+        password -- a borrowed laptop is enough -- and without this,
+        anyone reaching an open browser could lock the owner out.
+        """
+
+        signed = _signed_in(
+            request,
+        )
+
+        if signed is None:
+            return JSONResponse(
+                {
+                    "detail": "Not signed in.",
+                },
+                status_code=401,
+            )
+
+        owner_id, token = signed
+
+        replacement = str(
+            payload.get(
+                "new_password",
+            )
+            or ""
+        )
+
+        if len(replacement) < MIN_PASSWORD_LENGTH:
+            return JSONResponse(
+                {
+                    "detail": (
+                        "New password must be at "
+                        f"least {MIN_PASSWORD_LENGTH} "
+                        "characters."
+                    ),
+                },
+                status_code=400,
+            )
+
+        with SessionLocal() as session:
+            user = session.get(
+                UserRecord,
+                owner_id,
+            )
+
+            if not verify_password(
+                str(
+                    payload.get(
+                        "current_password",
+                    )
+                    or ""
+                ),
+                user.password_hash,
+            ):
+                return JSONResponse(
+                    {
+                        "detail": (
+                            "Current password is "
+                            "incorrect."
+                        ),
+                    },
+                    status_code=403,
+                )
+
+            user.password_hash = hash_password(
+                replacement,
+            )
+
+            # Every other session ends. A password change that left old
+            # cookies alive would revoke nothing, which is the main
+            # reason to change one. This session is kept so the user is
+            # not signed out of the page they are standing on.
+            ended = session.query(
+                AuthSessionRecord,
+            ).filter(
+                AuthSessionRecord.user_id == user.id,
+                AuthSessionRecord.token_fingerprint
+                != token_fingerprint(
+                    token,
+                ),
+            ).delete(
+                synchronize_session=False,
+            )
+
+            session.commit()
+
+        return JSONResponse(
+            {
+                "ok": True,
+                "sessions_ended": int(
+                    ended or 0
+                ),
+            },
+        )
+
+    @app.post(
+        "/api/account/email",
+    )
+    def change_email(
+        request: Request,
+        payload: dict,
+    ) -> JSONResponse:
+        """Change the sign-in address.
+
+        Also requires the current password: an address is how a
+        password gets reset, so changing it is a credential change.
+        """
+
+        signed = _signed_in(
+            request,
+        )
+
+        if signed is None:
+            return JSONResponse(
+                {
+                    "detail": "Not signed in.",
+                },
+                status_code=401,
+            )
+
+        wanted = str(
+            payload.get(
+                "new_email",
+            )
+            or ""
+        ).strip().lower()
+
+        if "@" not in wanted or len(wanted) < 5:
+            return JSONResponse(
+                {
+                    "detail": (
+                        "That does not look like "
+                        "an email address."
+                    ),
+                },
+                status_code=400,
+            )
+
+        with SessionLocal() as session:
+            user = session.get(
+                UserRecord,
+                signed[0],
+            )
+
+            if not verify_password(
+                str(
+                    payload.get(
+                        "current_password",
+                    )
+                    or ""
+                ),
+                user.password_hash,
+            ):
+                return JSONResponse(
+                    {
+                        "detail": (
+                            "Current password is "
+                            "incorrect."
+                        ),
+                    },
+                    status_code=403,
+                )
+
+            clash = session.scalar(
+                select(
+                    UserRecord.id,
+                ).where(
+                    UserRecord.email == wanted,
+                    UserRecord.id != user.id,
+                )
+            )
+
+            if clash is not None:
+                return JSONResponse(
+                    {
+                        "detail": (
+                            "That address is already "
+                            "in use."
+                        ),
+                    },
+                    status_code=409,
+                )
+
+            user.email = wanted
+
+            session.commit()
+
+        return JSONResponse(
+            {
+                "ok": True,
+                "email": wanted,
+            },
+        )
 
     @app.get(
         "/logout",

@@ -23,6 +23,7 @@ from datetime import (
 from sqlalchemy import (
     Select,
     case,
+    false,
     func,
     or_,
     select,
@@ -42,6 +43,7 @@ from backend.app.matching.skills import (
 )
 from backend.app.db.models import (
     JobEvaluationRecord,
+    UserRecord,
     JobMarkRecord,
     JobRecord,
     JobResumeScoreRecord,
@@ -132,6 +134,16 @@ class JobFilters:
     max_age_days: int | None = None
 
     active_only: bool = True
+
+    # Whose marks and scores these results carry. A posting is a shared
+    # fact about the world; what you did about it is not.
+    #
+    # None is not "everyone". It renders as a false join condition, so
+    # a caller that forgets to pass an owner sees no marks at all
+    # rather than everybody's. Fail closed: the cost of the mistake is
+    # a missing star, not one person reading another's application
+    # history.
+    owner_id: int | None = None
 
     early_career_only: bool = False
 
@@ -407,6 +419,66 @@ def _evidence_for(
     )
 
 
+def sole_owner_id(
+    session: Session,
+) -> int | None:
+    """The account whose marks these results should carry.
+
+    ACE is single-owner, so this is unambiguous and the callers do not
+    have to thread a user id through five layers to say something the
+    database already knows.
+
+    If a second account ever exists this raises rather than picking
+    one. Guessing would mean one person's applications rendering on
+    another person's queue, which is the failure this whole scoping
+    exercise exists to prevent, and a crash is a much better way to
+    find out than a support question.
+    """
+
+    found = session.scalars(
+        select(
+            UserRecord.id,
+        ).order_by(
+            UserRecord.id,
+        ).limit(
+            2,
+        )
+    ).all()
+
+    if not found:
+        return None
+
+    if len(found) > 1:
+        raise RuntimeError(
+            "More than one account exists, "
+            "so results can no longer be "
+            "attributed without being told "
+            "whose they are. Pass owner_id "
+            "explicitly.",
+        )
+
+    return int(
+        found[0],
+    )
+
+
+def _owner_match(
+    owner_id: int | None,
+):
+    """The ON-clause condition restricting marks to one account.
+
+    Written as an explicit false rather than relying on ``== None``,
+    which SQLAlchemy renders as ``IS NULL`` and would match any row
+    whose owner was never set. That would be safe only by accident,
+    and only until a row with a null owner existed.
+    """
+
+    if owner_id is None:
+        return false()
+
+    return JobMarkRecord.owner_id == owner_id
+
+
 def _join_scores(
     statement: Select,
     filters: JobFilters,
@@ -440,8 +512,13 @@ def _join_scores(
         )
         .outerjoin(
             JobMarkRecord,
-            JobMarkRecord.job_id
-            == JobRecord.id,
+            (
+                JobMarkRecord.job_id
+                == JobRecord.id
+            )
+            & _owner_match(
+                filters.owner_id,
+            ),
         )
     )
 
@@ -999,6 +1076,7 @@ def get_job(
     *,
     job_id: int,
     resume_id: int | None = None,
+    owner_id: int | None = None,
     now: datetime | None = None,
 ) -> JobListing | None:
     """Return one job by id, shaped exactly like a listing row.
@@ -1016,6 +1094,16 @@ def get_job(
             statuses=(),
             active_only=False,
             resume_id=resume_id,
+            # Without this the page opens with no mark on it, so a job
+            # you applied to reads as untouched when reached directly
+            # from a link rather than from the list.
+            owner_id=(
+                owner_id
+                if owner_id is not None
+                else sole_owner_id(
+                    session,
+                )
+            ),
             limit=1,
         ),
         now=now,
