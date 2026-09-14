@@ -348,91 +348,6 @@ class Browser:
             )
 
 
-def _sign_in() -> str | None:
-    """Sign in over HTTP and return the session cookie value.
-
-    The app requires authentication, and these tests drive the real app
-    rather than a version of it with the wall switched off, because a
-    suite that only ever runs unauthenticated stops being evidence that
-    the deployed thing works.
-
-    Credentials come from the environment so none is committed. Without
-    them the browser suite skips, the same way it already skips when
-    Chrome or the server is missing, so a plain checkout stays green.
-    """
-
-    email = os.environ.get(
-        "ACE_TEST_EMAIL",
-    )
-
-    password = os.environ.get(
-        "ACE_TEST_PASSWORD",
-    )
-
-    if not email or not password:
-        return None
-
-    body = urllib.parse.urlencode(
-        {
-            "email": email,
-            "password": password,
-        }
-    ).encode()
-
-    request = urllib.request.Request(
-        APP_URL + "/login",
-        data=body,
-        method="POST",
-    )
-
-    # Deliberately does not follow the redirect. A successful login
-    # answers 303 and carries Set-Cookie on *that* response; following
-    # it reads the headers of the page it lands on, where the cookie is
-    # not, and the sign-in silently looks like a failure.
-    class _NoRedirect(
-        urllib.request.HTTPRedirectHandler,
-    ):
-        def redirect_request(
-            self,
-            *args,
-            **kwargs,
-        ):
-            return None
-
-    opener = urllib.request.build_opener(
-        _NoRedirect(),
-    )
-
-    try:
-        with opener.open(
-            request,
-            timeout=10,
-        ) as response:
-            cookies = response.headers.get_all(
-                "Set-Cookie",
-            ) or []
-    except urllib.error.HTTPError as error:
-        cookies = error.headers.get_all(
-            "Set-Cookie",
-        ) or []
-    except Exception:
-        return None
-
-    for raw in cookies:
-        if raw.startswith(
-            "ace_session=",
-        ):
-            return raw.split(
-                ";",
-                1,
-            )[0].split(
-                "=",
-                1,
-            )[1]
-
-    return None
-
-
 @pytest.fixture(scope="session")
 def browser():
     """Start headless Chrome pointed at the running app."""
@@ -536,31 +451,6 @@ def browser():
 
         client._send(
             "Runtime.enable"
-        )
-
-        token = _sign_in()
-
-        if token is None:
-            pytest.skip(
-                "browser tests need "
-                "ACE_TEST_EMAIL and "
-                "ACE_TEST_PASSWORD for an "
-                "account on the running ACE"
-            )
-
-        host = urllib.parse.urlparse(
-            APP_URL,
-        ).hostname or "localhost"
-
-        client._send(
-            "Network.setCookie",
-            {
-                "name": "ace_session",
-                "value": token,
-                "domain": host,
-                "path": "/",
-                "httpOnly": True,
-            },
         )
 
         yield client
