@@ -52,6 +52,7 @@ class SourceType(StrEnum):
     # RippleMatch's rather than the employer's, which is a weaker link
     # than every other source and should stay visible as one.
     RIPPLEMATCH = "ripplematch"
+    AVATURE = "avature"
 
 
 def _require_non_empty(

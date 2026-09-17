@@ -38,6 +38,9 @@ from backend.app.coverage.benchmark import (
 from backend.app.adapters.amazon import (
     fetch_amazon_jobs,
 )
+from backend.app.adapters.avature import (
+    fetch_avature_jobs,
+)
 from backend.app.adapters.ripplematch import (
     fetch_ripplematch_jobs,
 )
@@ -749,6 +752,67 @@ class RippleMatchSourceFetcher:
         )
 
 
+class AvatureSourceFetcher:
+    """Dispatch adapter for Avature-hosted employer boards.
+
+    ``source_account`` is the portal base URL rather than a tenant
+    slug. Avature portals are served from the employer's own domain --
+    Two Sigma's is ``careers.twosigma.com/careers`` -- and carry no
+    slug to key on, so the URL is the only stable identifier there is.
+
+    ``company_name`` is used, unlike the multi-employer lanes: one
+    portal is one employer, and the postings do not name them.
+
+    Unconditional: the listing is served ``no-store, no-cache`` and its
+    ``Last-Modified`` is the moment of the request, so there is no
+    validator worth replaying.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher=fetch_avature_jobs,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch every public posting on one Avature portal."""
+
+        if (
+            source.source_type
+            != SourceType.AVATURE
+        ):
+            raise ValueError(
+                (
+                    "AvatureSourceFetcher "
+                    "requires an AVATURE "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            source_account=(
+                source.source_account
+            ),
+            company_name=(
+                source.company_name
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
 class EightfoldSourceFetcher:
     """Dispatch adapter for Eightfold-hosted career sites.
 
@@ -1166,6 +1230,9 @@ def build_default_source_dispatcher() -> (
             ),
             SourceType.RIPPLEMATCH: (
                 RippleMatchSourceFetcher()
+            ),
+            SourceType.AVATURE: (
+                AvatureSourceFetcher()
             ),
             SourceType.SIMPLIFY: (
                 SimplifySourceFetcher(
