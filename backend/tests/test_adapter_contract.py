@@ -31,6 +31,9 @@ from backend.app.adapters.http_cache import (
 from backend.app.adapters.lever import (
     fetch_lever_jobs,
 )
+from backend.app.adapters.ripplematch import (
+    fetch_ripplematch_jobs,
+)
 from backend.app.adapters.simplify import (
     fetch_simplify_jobs,
 )
@@ -48,8 +51,9 @@ from backend.app.scheduling.types import (
 )
 
 
-# Adapters that replay HTTP validators. Workday lists via POST and
-# Amazon generates its search per request, so neither can.
+# Adapters that replay HTTP validators. Workday lists via POST, Amazon
+# generates its search per request, and RippleMatch's sitemap sends no
+# validator at all, so none of the three can.
 CONDITIONAL_ADAPTERS = (
     fetch_greenhouse_jobs,
     fetch_ashby_jobs,
@@ -62,6 +66,9 @@ CONDITIONAL_ADAPTERS = (
 UNCONDITIONAL_ADAPTERS = (
     fetch_workday_jobs,
     fetch_amazon_jobs,
+    # RippleMatch's sitemap is served cache-control: no-cache with no
+    # ETag, so there is no validator to replay.
+    fetch_ripplematch_jobs,
 )
 
 

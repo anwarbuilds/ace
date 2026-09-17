@@ -479,6 +479,7 @@ def test_default_dispatcher_supports_all_implemented_sources() -> None:
                 SourceType.SIMPLIFY,
                 SourceType.EIGHTFOLD,
                 SourceType.EIGHTFOLD_PCSX,
+                SourceType.RIPPLEMATCH,
             }
         )
     )

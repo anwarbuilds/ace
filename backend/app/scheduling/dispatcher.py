@@ -38,6 +38,9 @@ from backend.app.coverage.benchmark import (
 from backend.app.adapters.amazon import (
     fetch_amazon_jobs,
 )
+from backend.app.adapters.ripplematch import (
+    fetch_ripplematch_jobs,
+)
 from backend.app.adapters.simplify import (
     fetch_simplify_jobs,
 )
@@ -688,6 +691,64 @@ class AmazonSourceFetcher:
         )
 
 
+class RippleMatchSourceFetcher:
+    """Dispatch adapter for RippleMatch's public postings.
+
+    Like the curated feed, this source spans many employers rather than
+    one tenant, so ``source_account`` exists only to give the catalog a
+    stable key and ``company_name`` is ignored -- each posting carries
+    its own employer.
+
+    Unconditional: the sitemap is served ``cache-control: no-cache``
+    with no validator to replay, so there is nothing to send back and
+    claiming otherwise would add a contract the source does not honour.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher=fetch_ripplematch_jobs,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch every public RippleMatch posting."""
+
+        if (
+            source.source_type
+            != SourceType.RIPPLEMATCH
+        ):
+            raise ValueError(
+                (
+                    "RippleMatchSourceFetcher "
+                    "requires a RIPPLEMATCH "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            source_account=(
+                source.source_account
+            ),
+            company_name=(
+                source.company_name
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
 class EightfoldSourceFetcher:
     """Dispatch adapter for Eightfold-hosted career sites.
 
@@ -1102,6 +1163,9 @@ def build_default_source_dispatcher() -> (
                         build_detail_predicate
                     )
                 )
+            ),
+            SourceType.RIPPLEMATCH: (
+                RippleMatchSourceFetcher()
             ),
             SourceType.SIMPLIFY: (
                 SimplifySourceFetcher(

@@ -45,9 +45,13 @@ class SourceType(StrEnum):
     # because the response shapes genuinely differ: different routes,
     # different field names, no shared parsing to fork on.
     EIGHTFOLD_PCSX = "eightfold_pcsx"
-    # A job-search aggregator, not one company's own board. Reads
-    # broadly across employers ACE has no direct adapter for, rather
-    # than one tenant's postings.
+    # A university-recruiting platform, not one company's own board.
+    # Employers post early-career roles to it *instead of* their own
+    # ATS, so these postings exist nowhere an employer-board adapter
+    # can reach. Kept as its own type because the apply link is
+    # RippleMatch's rather than the employer's, which is a weaker link
+    # than every other source and should stay visible as one.
+    RIPPLEMATCH = "ripplematch"
 
 
 def _require_non_empty(
