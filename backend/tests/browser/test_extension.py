@@ -1105,6 +1105,113 @@ def test_a_country_code_box_with_no_options_is_still_the_user_s(
     ) == "Country"
 
 
+DIAGNOSTIC_FORM = (
+    '<form>'
+    '<label for="fn">First Name</label><input id="fn">'
+    '<label for="ln">Last Name</label><input id="ln">'
+    '<label for="em">Email</label><input id="em">'
+    '<label for="ph">Phone</label><input id="ph">'
+    # What a Workday date section looks like: no label, no text near it,
+    # nothing aceQuestionFor can read. These were dropped from the
+    # report entirely, which is why a form full of them looked fine in
+    # a diagnostic and empty on the page.
+    '<div><input data-automation-id="dateSectionMonth-input"></div>'
+    # One of them already holding something, so the privacy test below
+    # has an unnamed field with a value in it to catch. Without that it
+    # passes whatever the unnamed-field lines print, because every
+    # unnamed field on the page is empty.
+    '<div><input data-automation-id="dateSectionYear-input" '
+    'value="x@example.com"></div>'
+    '</form>'
+)
+
+
+def test_a_field_ace_cannot_name_is_reported_not_dropped(
+    page,
+) -> None:
+    """The report existed for exactly this failure and hid it.
+
+    A control ACE cannot read a question for is why a box stays empty,
+    so it is the most useful line in the report -- and it was the one
+    line that was skipped. A form whose date widgets ACE could not name
+    produced a diagnostic that listed only the fields that worked.
+    """
+
+    _boot_form(
+        page,
+        DIAGNOSTIC_FORM,
+    )
+
+    page.wait_for(
+        "!!window.__aceInternals",
+        timeout=12,
+    )
+
+    report = page.eval(
+        "window.__aceInternals.diagnostics()"
+    )
+
+    assert "could not read a question for (2)" in report, (
+        "the unnamed date sections were dropped from the report"
+    )
+
+    assert "dateSectionMonth-input" in report, (
+        "the report does not say what the unreadable field calls "
+        "itself, which is the only thing that identifies it"
+    )
+
+
+def test_the_diagnostic_carries_no_answers(
+    page,
+) -> None:
+    """It goes on a clipboard and into a conversation.
+
+    The bank behind it holds a home address and the EEO answers, so the
+    report names questions and control shapes and never values. The new
+    unnamed-field lines print attribute *names*; an attribute value
+    could itself be an answer.
+    """
+
+    _boot_form(
+        page,
+        DIAGNOSTIC_FORM,
+    )
+
+    page.wait_for(
+        "!!window.__aceInternals",
+        timeout=12,
+    )
+
+    page.eval(
+        "document.dispatchEvent(new KeyboardEvent("
+        "'keydown',{key:'a',altKey:true,bubbles:true}));1"
+    )
+
+    page.wait_for(
+        "!!document.getElementById('em').value",
+        timeout=12,
+    )
+
+    report = page.eval(
+        "window.__aceInternals.diagnostics()"
+    )
+
+    # Every value in the test bank, including the ones now sitting in
+    # the boxes the report is describing.
+    for secret in (
+        "Alex",
+        "Rivera",
+        "x@example.com",
+        "+1 555 010 0000",
+        "425 000 0000",
+        "linkedin.com/in/x",
+        "Ashfield",
+    ):
+        assert secret not in report, (
+            "the diagnostic leaked a stored answer: " + secret
+        )
+
+
 def test_the_extension_ships_no_fill_marker() -> None:
     """Pinned in the source, because the marker was three things.
 

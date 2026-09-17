@@ -1350,15 +1350,59 @@
      ACE matched and what the page offered, never what the user would
      have answered: this text is going to be pasted somewhere, and the
      bank holds a home address and demographic answers. */
+  /* What a field calls itself when ACE cannot read a question for it.
+
+     Attribute names only, never values: this goes on a clipboard and
+     into a conversation, and the bank behind it holds a home address
+     and EEO answers. An attribute *name* describes the control; an
+     attribute value could be an answer. */
+  function fieldSignature(field) {
+    var parts = [];
+
+    [
+      "aria-label",
+      "data-automation-id",
+      "name",
+      "id",
+      "placeholder",
+      "role",
+      "type"
+    ].forEach(function (attribute) {
+      var value = field.getAttribute(attribute);
+
+      if (value) parts.push(attribute + "=" + tidy(value).slice(0, 40));
+    });
+
+    return parts.length ? parts.join(" ") : "no identifying attributes";
+  }
+
   function diagnostics() {
     var lines = [
       "ACE " + version() + " on " + location.host,
       ""
     ];
 
+    // Counted rather than listed one by one: a page can hold a lot of
+    // these and the useful signal is the shape, not the census.
+    var unnamed = [];
+
     fillable().forEach(function (field) {
       var question = aceQuestionFor(field);
-      if (!question) return;
+
+      // A field ACE cannot name was silently dropped from this report,
+      // which made the report useless for the failure it is most often
+      // opened for. A control ACE cannot read a question for is the
+      // most important line here, not the one to leave out: it is why
+      // the box stayed empty.
+      if (!question) {
+        unnamed.push(
+          "- (no question found) " + field.tagName.toLowerCase() +
+          ": " + fieldSignature(field) +
+          ", " + (aceIsEmpty(field) ? "empty" : "has a value")
+        );
+
+        return;
+      }
 
       var name = aceAnswerNameFor(question, kindOf(field));
 
@@ -1370,11 +1414,23 @@
             ? "choice"
             : field.tagName.toLowerCase();
 
+      // A work or education block answers its own questions, and its
+      // fields deliberately reach none of the rules above -- the bank's
+      // single "University" must not be typed into every school box on
+      // the page. Without saying so, those fields read here as
+      // "matched: nothing", which looks like the bug rather than the
+      // design.
+      var owned = ownedByHistory(field);
+
       var line =
         "- " + question.slice(0, 90) +
         "\n    " + shape +
         ", " + (aceIsEmpty(field) ? "empty" : "has a value") +
-        ", matched: " + (name || "nothing");
+        ", matched: " + (
+          owned
+            ? "history:" + (aceHistoryRole(field, question) || "unassigned")
+            : (name || "nothing")
+        );
 
       if (aceIsAutocomplete(field)) {
         var options = comboboxOptions(field);
@@ -1388,6 +1444,22 @@
 
       lines.push(line);
     });
+
+    if (unnamed.length) {
+      lines.push(
+        "",
+        "Fields ACE could not read a question for (" +
+          unnamed.length + "):"
+      );
+
+      // Capped, because a wizard page can carry dozens of these and a
+      // clipboard note nobody reads to the end helps nobody.
+      lines.push.apply(lines, unnamed.slice(0, 25));
+
+      if (unnamed.length > 25) {
+        lines.push("- ... and " + (unnamed.length - 25) + " more");
+      }
+    }
 
     return lines.join("\n");
   }
