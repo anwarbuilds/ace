@@ -130,22 +130,39 @@ AI_ML_PATTERNS = (
 )
 
 
+# The trailing "(?:ing)?" is the difference between reading a title and
+# reading only half of them. University recruiting routinely titles a
+# req by discipline rather than by role -- "Software Engineering, New
+# Grad", "Software Engineering AMTS (College Grad)", "Associate
+# Software Engineering" -- and \bsoftware engineer\b does not match
+# "engineering", because the word boundary is not there.
+#
+# Found from a Plaid "Software Engineering, New Grad" posting the user
+# reached by hand. It had been fetched, stored and then rejected as
+# NON_TARGET_ROLE: not a coverage gap, a reading gap, and one that hit
+# exactly the early-career titles this user is looking for.
+#
+# It admits some noise ("Admin Assistant, Ads Platform Engineering"),
+# which is the recall-first trade ACE already makes elsewhere: a false
+# positive keeps a job the user can dismiss, a false negative hides one
+# they never learn existed. Most of what it newly matches is senior or
+# managerial and is still rejected, just for the accurate reason.
 SOFTWARE_ENGINEERING_PATTERNS = (
-    r"\bsoftware engineer\b",
-    r"\bsoftware development engineer\b",
+    r"\bsoftware engineer(?:ing)?\b",
+    r"\bsoftware development engineer(?:ing)?\b",
     r"\bsoftware developer\b",
-    r"\bsystems software engineer\b",
-    r"\bbackend software engineer\b",
-    r"\bbackend engineer\b",
+    r"\bsystems software engineer(?:ing)?\b",
+    r"\bbackend software engineer(?:ing)?\b",
+    r"\bbackend engineer(?:ing)?\b",
     r"\bbackend developer\b",
-    r"\bfull[- ]?stack software engineer\b",
-    r"\bfull[- ]?stack engineer\b",
+    r"\bfull[- ]?stack software engineer(?:ing)?\b",
+    r"\bfull[- ]?stack engineer(?:ing)?\b",
     r"\bfull[- ]?stack developer\b",
-    r"\bplatform software engineer\b",
-    r"\bplatform engineer\b",
-    r"\binfrastructure software engineer\b",
-    r"\binfrastructure engineer\b",
-    r"\bdistributed systems engineer\b",
+    r"\bplatform software engineer(?:ing)?\b",
+    r"\bplatform engineer(?:ing)?\b",
+    r"\binfrastructure software engineer(?:ing)?\b",
+    r"\binfrastructure engineer(?:ing)?\b",
+    r"\bdistributed systems engineer(?:ing)?\b",
 
     # Common startup titles.
     r"\bfounding engineer\b",

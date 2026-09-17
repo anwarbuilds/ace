@@ -224,3 +224,66 @@ def test_account_executive_is_other() -> None:
         result.family
         == RoleFamily.OTHER
     )
+
+
+# --- titles written as a discipline rather than a role --------------
+
+
+def test_engineering_as_a_discipline_is_still_the_role() -> None:
+    """University recruiting titles the req by discipline.
+
+    Found from a Plaid "Software Engineering, New Grad" posting the
+    user reached by hand. ACE had fetched and stored it, then rejected
+    it as NON_TARGET_ROLE, because the pattern was written
+    \bsoftware engineer\b and there is no word boundary inside
+    "engineering". The titles it silently dropped were exactly the
+    early-career ones.
+    """
+
+    for title in (
+        "Software Engineering, New Grad",
+        "Software Engineering AMTS (College Grad)",
+        "Associate Software Engineering",
+        "Software Engineering - Associate",
+        "Backend Engineering, New Grad",
+        "Platform Engineering",
+        "Full Stack Engineering",
+    ):
+        assert classify_role(
+            title
+        ).family is RoleFamily.SOFTWARE_ENGINEERING, title
+
+
+def test_the_engineer_form_still_classifies() -> None:
+    """The change must widen the rule, not move it."""
+
+    for title in (
+        "Software Engineer",
+        "Software Engineer, New Grad",
+        "Software Development Engineer",
+        "Backend Engineer",
+        "Full-Stack Engineer",
+    ):
+        assert classify_role(
+            title
+        ).family is RoleFamily.SOFTWARE_ENGINEERING, title
+
+
+def test_a_discipline_named_inside_another_role_is_not_claimed() -> None:
+    """"Engineering" often names the team, not the job.
+
+    An analyst sitting in a data-engineering group is an analyst, and
+    a sales engineer is not in scope however the title is spelled.
+    """
+
+    for title in (
+        "Data Engineering Analyst",
+        "Specialist Solutions Architect - Data Engineering",
+        "Sales Engineer",
+        "Support Engineer",
+        "Field Engineer",
+        "Hardware Engineer",
+    ):
+        assert classify_role(
+            title
+        ).family is not RoleFamily.SOFTWARE_ENGINEERING, title
