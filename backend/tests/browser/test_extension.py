@@ -140,18 +140,18 @@ def test_the_page_s_own_framework_is_told_the_value_changed(
     filler.eval(
         "window.__aceInternals.setNatively("
         "document.getElementById('ace-probe'),"
-        "'sohail@example.com');1"
+        "'alex@example.com');1"
     )
 
     assert filler.eval(
         "document.getElementById('ace-probe').value"
-    ) == "sohail@example.com"
+    ) == "alex@example.com"
 
     assert filler.eval(
         "window.__seen.events.join('|')"
     ) == (
-        "input:sohail@example.com"
-        "|change:sohail@example.com"
+        "input:alex@example.com"
+        "|change:alex@example.com"
     )
 
 
