@@ -157,7 +157,21 @@ var DELL_CASES = [
   // must not reach an answer that is free text, whatever it matches.
   ["what is your current state?", "yesno", null],
   ["highest degree completed", "yesno", null],
-  ["what is your current state?", "text", "State"]
+  ["what is your current state?", "text", "State"],
+
+  // A phone widget's country control is two questions in one wording.
+  // As a bare box it wants "+1" and a country name would be wrong, so
+  // it stays the user's. As a dropdown its options read "United
+  // States +1" and the stored country matches one, so ACE answers it
+  // -- and has to, because leaving it for the user is what let the
+  // widget wipe the number box once they got to it.
+  ["country code", "text", null],
+  ["country code", "choice", "Country"],
+  ["phone country code", "choice", "Country"],
+  ["country calling code", "choice", "Country"],
+  // Still not the country of employment, whatever shape it is in.
+  ["are you legally authorized to work in the country where this "
+   + "requisition is posted?", "choice", "Work authorisation"]
 ];
 
 /* Choosing between the options a form offers. The stored answers are

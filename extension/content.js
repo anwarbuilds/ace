@@ -120,7 +120,22 @@
       return !aceIsChosen(field);
     }
 
-    if (field.tagName !== "SELECT") return !field.value;
+    if (field.tagName !== "SELECT") {
+      // A phone widget writes its country's dial code into the number
+      // box the moment a country is chosen. "+1" on its own is that
+      // widget's placeholder, not a number anybody typed, and reading
+      // it as an answer is what made ACE skip the phone field and
+      // report it as already filled -- leaving the user looking at a
+      // Phone containing "+1" and a panel claiming success.
+      //
+      // Bounded to a bare code and nothing else, so a real number that
+      // happens to start "+1" is untouched.
+      if (/^\+\s*\d{1,4}$/.test(String(field.value || "").trim())) {
+        return true;
+      }
+
+      return !field.value;
+    }
 
     var option = field.options[field.selectedIndex];
     if (!option) return true;
@@ -872,14 +887,33 @@
     });
   }
 
+  /* A combobox that has to be answered before the plain fields rather
+     than after them, because a plain field's value depends on it.
+
+     Only the phone widget's country qualifies: it rewrites the number
+     box beside it whenever it changes. restoreClobbered() puts the
+     number back when that happens, and still does, but a number that
+     was never wiped needs no putting back -- and a widget told which
+     country it is formatting for before the number arrives is far
+     likelier to keep the number as written. */
+  function gatesAPlainField(field) {
+    var question = aceQuestionFor(field);
+
+    return !!question && aceIsPhoneCountry(question);
+  }
+
   /* Every autocomplete on the page, filled one at a time -- two open
      listboxes at once would make comboboxOptions() ambiguous about
-     which one it is reading. */
-  function fillComboboxes() {
+     which one it is reading.
+
+     `only` narrows that to one pass's share of them. */
+  function fillComboboxes(only) {
     var filled = [];
     var unmatched = [];
 
     var fields = fillable().filter(aceIsAutocomplete);
+
+    if (only) fields = fields.filter(only);
 
     return fields
       .reduce(function (chain, field) {
@@ -1561,14 +1595,14 @@
     filling = true;
 
     var host = panel();
-    var result = plan();
 
     var comboFields = fillable().filter(aceIsAutocomplete);
 
     if (!comboFields.length) {
+      var flat = plan();
       filling = false;
-      lastResult = result;
-      showResult(host, result);
+      lastResult = flat;
+      showResult(host, flat);
       return;
     }
 
@@ -1584,20 +1618,34 @@
       ""
     ));
 
-    fillComboboxes().then(function (comboResult) {
-      result.filled = result.filled.concat(comboResult.filled);
-      result.unmatched = result.unmatched.concat(comboResult.unmatched);
+    var result = null;
+
+    // A combobox that never offered options should not strand the
+    // panel on "Filling..." forever, and must not cost the user the
+    // plain fields either: if the first pass rejects, plan() has not
+    // run yet, so it runs here.
+    function finish() {
       restoreClobbered();
       filling = false;
-      lastResult = result;
-      showResult(host, result);
-    }, function () {
-      // A combobox that never offered options should not strand the
-      // panel on "Filling..." forever.
-      filling = false;
-      lastResult = result;
-      showResult(host, result);
-    });
+      lastResult = result || plan();
+      showResult(host, lastResult);
+    }
+
+    // Three passes, in this order for one reason: the phone widget's
+    // country has to be chosen before the number is written beside it.
+    fillComboboxes(gatesAPlainField).then(function (gate) {
+      result = plan();
+      result.filled = gate.filled.concat(result.filled);
+      result.unmatched = gate.unmatched.concat(result.unmatched);
+
+      return fillComboboxes(function (field) {
+        return !gatesAPlainField(field);
+      });
+    }).then(function (rest) {
+      result.filled = result.filled.concat(rest.filled);
+      result.unmatched = result.unmatched.concat(rest.unmatched);
+      finish();
+    }, finish);
   }
 
   function onAceClick(event) {
@@ -1747,6 +1795,8 @@
     openCombobox: openCombobox,
     searchTerms: searchTerms,
     fillOneCombobox: fillOneCombobox,
+    fillComboboxes: fillComboboxes,
+    gatesAPlainField: gatesAPlainField,
     fillOne: fillOne,
     restoreClobbered: restoreClobbered,
     recordFill: function (record) { lastFill.push(record); },

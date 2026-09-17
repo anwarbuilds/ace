@@ -883,6 +883,228 @@ def test_a_lone_checkbox_stays_clear_on_no(
     ), "a past role was ticked as current"
 
 
+# Padded to four fields, which is what makes a page read as an
+# application form at all rather than a search box with a label.
+PHONE_WIDGET = (
+    '<form>'
+    '<label for="fn">First Name</label><input id="fn">'
+    '<label for="ln">Last Name</label><input id="ln">'
+    '<label for="cc">Country code</label>'
+    '<div id="ccouter"><div id="ccwrap" class="select__control">'
+    '<input id="cc" role="combobox"></div>'
+    '<div id="ccmenu"></div></div>'
+    '<label for="ph">Phone</label><input id="ph">'
+    '</form>'
+)
+
+# A real international phone widget: choosing the country resets the
+# number box to that country's dial code. That is not a bug in the
+# widget -- a number typed for one country does not mean the same thing
+# under another -- which is exactly why the country has to be settled
+# before the number goes in.
+PHONE_WIDGET_BEHAVIOUR = """
+(function(){
+  var input=document.getElementById('cc');
+  var menu=document.getElementById('ccmenu');
+  var phone=document.getElementById('ph');
+  window.__wipes=0;
+  function show(){
+    if(menu.innerHTML) return;
+    menu.innerHTML='<div role="listbox">'+
+      ['United States +1','United Kingdom +44','India +91']
+        .map(function(c){return '<div role="option">'+c+'</div>';}).join('')+
+      '</div>';
+    [].slice.call(menu.querySelectorAll('[role=option]')).forEach(function(o){
+      o.addEventListener('click',function(){
+        input.value=o.textContent;
+        window.__wipes+=1;
+        phone.value='+'+(/\\+(\\d+)/.exec(o.textContent)||[0,''])[1];
+      });});
+  }
+  input.addEventListener('focus',show);
+  document.getElementById('ccwrap').addEventListener('click',show);
+  return 1;})()
+"""
+
+
+def test_the_phone_country_is_chosen_before_the_number(
+    page,
+) -> None:
+    """Reported from a live form: Phone came out holding just "+1".
+
+    The country box beside it was left empty, because "country code"
+    was ruled out of the country rule -- true of a bare box, which
+    wants "+1" and not a country name, and wrong of a dropdown, whose
+    options read "United States +1".
+
+    Left empty, the user picked the country themselves, after ACE had
+    finished. The widget did what it always does and reset the number
+    to the dial code, and nothing was still running to put it back.
+
+    So the country is answered, and answered in the pass *before* the
+    plain fields rather than the one after them. restoreClobbered()
+    still covers a widget that rewrites the number anyway; this is
+    what stops it having to.
+    """
+
+    _boot_form(
+        page,
+        PHONE_WIDGET,
+    )
+
+    page.eval(
+        PHONE_WIDGET_BEHAVIOUR
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.ace-root')",
+        timeout=12,
+    )
+
+    page.eval(
+        "document.dispatchEvent(new KeyboardEvent("
+        "'keydown',{key:'a',altKey:true,bubbles:true}));1"
+    )
+
+    page.wait_for(
+        "/^Filled/.test("
+        "document.querySelector('.ace-root')"
+        ".shadowRoot.querySelector('.ace-title')"
+        ".textContent)",
+        timeout=15,
+    )
+
+    assert page.eval(
+        "document.getElementById('cc').value"
+    ) == "United States +1", (
+        "the phone widget's country was left for the user, which is "
+        "what let it wipe the number once they answered it"
+    )
+
+    assert page.eval(
+        "window.__wipes"
+    ) == 1, "the country was never actually chosen"
+
+    assert page.eval(
+        "document.getElementById('ph').value"
+    ) == "+1 555 010 0000", (
+        "the number was written before the country and did not "
+        "survive it"
+    )
+
+
+# The same widget, reformatting instead of resetting. Until it knows
+# which country it is formatting for, it cannot read a leading dial
+# code, and drops the digit -- which is what the user's screenshot
+# showed: a Phone box holding "+5550100100".
+#
+# This is the case restoreClobbered() cannot rescue. It writes the
+# number back, the widget reformats it again on the input event, and
+# the check runs once. Only filling the country first avoids it.
+PHONE_WIDGET_REFORMATS = """
+(function(){
+  var input=document.getElementById('cc');
+  var menu=document.getElementById('ccmenu');
+  var phone=document.getElementById('ph');
+  var code='';
+  function show(){
+    if(menu.innerHTML) return;
+    menu.innerHTML='<div role="listbox">'+
+      ['United States +1','India +91']
+        .map(function(c){return '<div role="option">'+c+'</div>';}).join('')+
+      '</div>';
+    [].slice.call(menu.querySelectorAll('[role=option]')).forEach(function(o){
+      o.addEventListener('click',function(){
+        input.value=o.textContent;
+        code=(/\\+(\\d+)/.exec(o.textContent)||[0,''])[1];
+      });});
+  }
+  input.addEventListener('focus',show);
+  document.getElementById('ccwrap').addEventListener('click',show);
+  phone.addEventListener('input',function(){
+    var raw=phone.value;
+    if(raw.charAt(0)!=='+') return;
+    var digits=raw.slice(1).replace(/\\D/g,'');
+    // Knows its country: the code is understood and the number kept.
+    if(code && digits.indexOf(code)===0) return;
+    // Does not: the leading digit is eaten.
+    phone.value='+'+digits.slice(1);
+  });
+  return 1;})()
+"""
+
+
+def test_a_number_typed_before_the_country_is_mangled_by_the_widget(
+    page,
+) -> None:
+    """What the user actually saw first: Phone reading "+5550100100".
+
+    A phone widget cannot read a leading dial code until it knows which
+    country it is formatting for. Written to before the country is
+    chosen, it eats the code and leaves a number that is wrong rather
+    than merely missing -- and wrong is what gets sent to the employer.
+
+    restoreClobbered() cannot reach this one. It writes the number back
+    and the widget reformats it again on the input event, and the check
+    runs once, seconds after the fill. Ordering is the whole fix here,
+    which is why this test exists alongside the reset one: that case
+    passes either way, this one does not.
+    """
+
+    _boot_form(
+        page,
+        PHONE_WIDGET,
+    )
+
+    page.eval(
+        PHONE_WIDGET_REFORMATS
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.ace-root')",
+        timeout=12,
+    )
+
+    page.eval(
+        "document.dispatchEvent(new KeyboardEvent("
+        "'keydown',{key:'a',altKey:true,bubbles:true}));1"
+    )
+
+    page.wait_for(
+        "/^Filled/.test("
+        "document.querySelector('.ace-root')"
+        ".shadowRoot.querySelector('.ace-title')"
+        ".textContent)",
+        timeout=15,
+    )
+
+    assert page.eval(
+        "document.getElementById('ph').value"
+    ) == "+1 555 010 0000", (
+        "the number went in before the widget knew its country, so "
+        "the widget ate the dial code"
+    )
+
+
+def test_a_country_code_box_with_no_options_is_still_the_user_s(
+    filler,
+) -> None:
+    """The other half of the same rule.
+
+    A bare text box labelled "country code" wants +1. Answering it
+    with "United States" would be a wrong answer on a form about to be
+    sent to an employer, which is worse than the blank.
+    """
+
+    assert filler.eval(
+        "aceAnswerNameFor(aceNormalise('Country code'),'text')"
+    ) is None
+
+    assert filler.eval(
+        "aceAnswerNameFor(aceNormalise('Country code'),'choice')"
+    ) == "Country"
+
+
 def test_the_extension_ships_no_fill_marker() -> None:
     """Pinned in the source, because the marker was three things.
 

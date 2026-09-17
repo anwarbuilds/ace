@@ -35,6 +35,23 @@ var ACE_YESNO = "yesno";
 var ACE_CHOICE = "choice";
 var ACE_TEXT = "text";
 
+/* How a phone widget names its own country control.
+
+   Kept as a named list rather than written inline in the rule, because
+   the fill *order* depends on recognising it too: this is the one
+   question that has to be answered before the plain fields rather than
+   after them, and the two must not drift apart. */
+var ACE_PHONE_COUNTRY = [
+  "country code", "phone country", "dial code", "country calling code"
+];
+
+/* Whether this question is a phone widget's own country control. */
+function aceIsPhoneCountry(question) {
+  return ACE_PHONE_COUNTRY.some(function (phrase) {
+    return acePhraseIn(question, phrase);
+  });
+}
+
 var ACE_RULES = [
   // ------------------------------------------------------------------
   // Work authorisation and immigration
@@ -202,12 +219,22 @@ var ACE_RULES = [
     // country matched this rule before the guard existed.
     not: ["united states", "state or local", "state and local",
           "state government"] },
-  // "country code" sits next to a phone box and wants +1, not a
-  // country name, so it is left for the user.
+  // "country code" sits next to a phone box. Typed into a bare text
+  // box it wants +1, not a country name, so that shape is still left
+  // for the user.
   { answer: "Country", type: ACE_TEXT,
     any: ["country"],
     not: ["code", "embargo", "authorized to work", "authorised to work",
           "legally authorized", "requisition is posted"] },
+  // The same control as a dropdown is a different question. Its
+  // options are written "United States +1", which the stored country
+  // matches -- aceChooseOption strips the dial code for exactly this
+  // -- so there is no reason to leave it blank, and leaving it blank
+  // was never neutral. The phone number goes in beside it, and it is
+  // choosing the country *afterwards* that makes the widget wipe the
+  // number back to its dial code. The user saw a Phone reading "+1".
+  { answer: "Country", type: ACE_CHOICE, needs: ACE_CHOICE,
+    any: ACE_PHONE_COUNTRY },
   { answer: "Address", type: ACE_TEXT,
     any: ["street", "address line", "address"] },
   { answer: "Location", type: ACE_TEXT,
@@ -353,6 +380,12 @@ function aceIsAutocomplete(field) {
 function aceFieldKind(field, optionTexts) {
   if (!aceIsChoiceControl(field)) {
     if (field.tagName === "SELECT") return ACE_CHOICE;
+    // An autocomplete is typed into, but what it accepts is its own
+    // list, not free text. It reports as a choice for the same reason
+    // a <select> does. Nothing existing changes shape from this --
+    // aceShapeFits only ever refuses on yes/no -- but a rule may now
+    // ask to see options before it will answer.
+    if (aceIsAutocomplete(field)) return ACE_CHOICE;
     return ACE_TEXT;
   }
 
@@ -703,6 +736,12 @@ function aceAnswerNameFor(question, kind) {
     var rule = ACE_RULES[i];
 
     if (!aceShapeFits(rule.type, kind)) continue;
+
+    // A rule that only makes sense against a control offering options.
+    // "Country code" is the case: as a dropdown the stored country
+    // matches one of its options, as a text box it wants "+1" and a
+    // country name would be wrong.
+    if (rule.needs && rule.needs !== kind) continue;
 
     if (rule.not && rule.not.some(function (word) {
       return acePhraseIn(question, word);
