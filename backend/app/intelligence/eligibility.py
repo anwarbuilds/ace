@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-17-v30"
+    "2026-09-17-v31"
 )
 
 
@@ -819,9 +819,17 @@ INCLUDE_INTERNSHIPS = False
 
 
 INTERNSHIP_TITLE_PATTERNS = (
-    r"\bintern\b",
-    r"\binterns\b",
-    r"\binternship\b",
+    # One pattern for all four forms. Written as three -- intern,
+    # interns, internship -- it covered every plural but the one that
+    # mattered: "internships" ends in an "s" that \b refuses to sit
+    # before, so "Software Development Engineer Internships" and
+    # "NVIDIA 2027 Internships: Software Engineering" were both in the
+    # queue as full-time roles.
+    #
+    # "international", "internal" and "internationalization" still do
+    # not match: after "intern" the optional groups match nothing and
+    # \b then has to hold between two word characters.
+    r"\bintern(?:ship)?s?\b",
     r"\bco-?op\b",
     r"\bsummer\s+analyst\b",
     r"\bindustrial\s+placement\b",

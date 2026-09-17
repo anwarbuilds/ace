@@ -9,6 +9,7 @@ from backend.app.intelligence.eligibility import (
     EligibilityStatus,
     _is_clearly_senior,
     evaluate_job,
+    is_internship,
 )
 from backend.app.intelligence.roles import (
     RoleFamily,
@@ -1793,4 +1794,51 @@ def test_a_duration_is_not_a_career_level() -> None:
     ):
         assert not _is_clearly_senior(
             title
+        ), title
+
+
+def test_every_way_a_title_says_internship_is_caught() -> None:
+    """Both live leaks were the plural of the longer word.
+
+    The patterns covered "intern", "interns" and "internship" -- every
+    plural but the one that mattered. "internships" ends in an "s" that
+    \\b will not sit before, so two internships were sitting in the
+    queue as full-time roles: Esri's "Software Development Engineer
+    Internships" and "NVIDIA 2027 Internships: Software Engineering".
+
+    The NVIDIA one had been invisible until the classifier learned to
+    read "Software Engineering", which is the argument for checking
+    what a fix newly admits rather than only what it newly matches.
+    """
+
+    for title in (
+        "Software Engineering Intern, Summer 2027",
+        "Software Engineering Interns",
+        "Software Engineering Internship",
+        "Software Development Engineer Internships",
+        "NVIDIA 2027 Internships: Software Engineering",
+    ):
+        assert is_internship(
+            make_job(
+                title=title,
+            )
+        ), title
+
+
+def test_a_word_that_merely_starts_with_intern_is_not_one() -> None:
+    """The reason the boundaries are there at all.
+
+    Widening the pattern must not start rejecting full-time roles for
+    the first six letters of an unrelated word.
+    """
+
+    for title in (
+        "Internal Tools Engineer",
+        "International Payments Engineer",
+        "Internationalization Engineer",
+    ):
+        assert not is_internship(
+            make_job(
+                title=title,
+            )
         ), title
