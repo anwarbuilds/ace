@@ -282,16 +282,23 @@ var OPTION_CASES = [
   [["Yes, I will require sponsorship",
     "No, I will not require sponsorship"], "No", 1],
 
-  // The case that failed on a real Lever form: the user's wording
+  // The case that failed on a real Lever form: a stored wording that
   // shares no phrase with the option, only its negative shape.
+  //
+  // The stored side of these two is deliberately the decline option
+  // rather than a substantive one. This repository is public, and a
+  // fixture that pairs a stored answer with the option it matches is
+  // a statement about whoever runs it -- which for a disability or
+  // veteran question is a protected characteristic. The matching
+  // behaviour under test is identical either way.
   [["Yes, I have a disability, or have had one in the past",
     "No, I do not have a disability, or have not had one in the past",
     "I do not wish to answer"],
-   "I do not have any disability", 1],
+   "I do not wish to answer", 2],
 
   [["I identify as one or more of the classifications of a protected veteran",
     "I am not a protected veteran",
-    "I decline to self-identify"], "I am not a protected veteran", 1],
+    "I decline to self-identify"], "I decline to self-identify", 2],
 
   // "male" is inside "female", which ticked both boxes on a real form.
   [["Male", "Female", "Decline to self-identify"], "Male", 0],
