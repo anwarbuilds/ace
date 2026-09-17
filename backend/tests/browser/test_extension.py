@@ -995,8 +995,8 @@ def test_the_phone_country_is_chosen_before_the_number(
 
 # The same widget, reformatting instead of resetting. Until it knows
 # which country it is formatting for, it cannot read a leading dial
-# code, and drops the digit -- which is what the user's screenshot
-# showed: a Phone box holding "+5550100100".
+# code, and drops the digit, leaving a number that is wrong rather than
+# merely missing.
 #
 # This is the case restoreClobbered() cannot rescue. It writes the
 # number back, the widget reformats it again on the input event, and
@@ -1037,12 +1037,12 @@ PHONE_WIDGET_REFORMATS = """
 def test_a_number_typed_before_the_country_is_mangled_by_the_widget(
     page,
 ) -> None:
-    """What the user actually saw first: Phone reading "+5550100100".
+    """A number that is wrong, rather than merely missing.
 
     A phone widget cannot read a leading dial code until it knows which
     country it is formatting for. Written to before the country is
-    chosen, it eats the code and leaves a number that is wrong rather
-    than merely missing -- and wrong is what gets sent to the employer.
+    chosen, it eats the code -- and wrong is what gets sent to the
+    employer.
 
     restoreClobbered() cannot reach this one. It writes the number back
     and the widget reformats it again on the input event, and the check

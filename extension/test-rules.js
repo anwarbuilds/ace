@@ -355,8 +355,12 @@ var ALIAS_CASES = [
    "Fluent", ["fluent", "4 fluent", "advanced",
               "full professional proficiency"], 2],
 
+  // Deliberately not the value this instance stores. A fixture in a
+  // public repository that pairs a stored answer with the option it
+  // matches is a statement about whoever runs it, and an immigration
+  // status is not a thing to state in passing.
   [["F-1 CPT", "F-1 OPT", "H-1B", "Other"],
-   "F-1 CPT", ["f 1 cpt", "f1 cpt", "cpt"], 0]
+   "H-1B", ["h 1b", "h1b", "h 1 b"], 2]
 ];
 
 var failures = 0;
