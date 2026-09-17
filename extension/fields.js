@@ -136,11 +136,6 @@ var ACE_RULES = [
     any: ["previously worked for", "previously been employed by",
           "ever worked for", "former employee", "worked here before",
           "previously applied"] },
-  { answer: "Related to an employee here", type: ACE_YESNO,
-    any: ["relatives employed", "family member employed",
-          "related to any employee", "relative who works",
-          "know anyone who works"] },
-
   // ------------------------------------------------------------------
   // Conflict of interest
   //
@@ -159,7 +154,43 @@ var ACE_RULES = [
   { answer: "Relative owns a competing business", type: ACE_YESNO,
     any: ["relative s own", "relatives own", "own any technology related",
           "in competition with", "competing business",
-          "trading with or in competition"] },
+          "trading with or in competition",
+          // PayPal asks it about the applicant and their spouse rather
+          // than a relative, and never uses the word "competition".
+          "that competes", "could be perceived to compete",
+          "perceived to compete", "business interest in a company"] },
+
+  // PayPal asks all four of these before it will let you off the page,
+  // and ACE had a rule for none of them, so all four were left blank on
+  // a form that required every one.
+  //
+  // The two family-relationship questions are the reason these are
+  // written as long phrases. Both open with the same forty words --
+  // "do you have a family relationship (including spouse, partner,
+  // parent, ...)" -- and differ only at the end, in who the relation is
+  // to. Matching on "family relationship" would answer whichever rule
+  // happened to sit first in this list, for both of them.
+  { answer: "Related to an employee here", type: ACE_YESNO,
+    any: ["relatives employed", "family member employed",
+          "related to any employee", "relative who works",
+          "know anyone who works",
+          "with an employee of", "relationship with an employee"] },
+  { answer: "Government official", type: ACE_YESNO,
+    any: ["are you a current government official",
+          "are you a government official"],
+    // The longer questions are about a relationship *with* one, or
+    // about being a referral of one, and are answered by their own
+    // rules below.
+    not: ["family relationship", "close personal relationship",
+          "referral of"] },
+  { answer: "Related to a government official", type: ACE_YESNO,
+    any: ["with a government official",
+          "relationship with a government official"],
+    not: ["referral of"] },
+  { answer: "Referred by a merchant or third party", type: ACE_YESNO,
+    any: ["are you a referral of", "referral of a",
+          "existing or potential third party",
+          "potential known merchant"] },
 
   // ------------------------------------------------------------------
   // Consent and acknowledgement
@@ -173,6 +204,13 @@ var ACE_RULES = [
     any: ["screenshot", "please confirm your acceptance",
           "confirm your acceptance", "hereby provide my consent",
           "acknowledge and agree", "i agree and hereby"] },
+  // Deliberately narrow. Every date box on a form would take a date,
+  // and only this one wants *today's*: a start date, a graduation date
+  // and a work-history date are all wrong answers here. The phrase has
+  // to say today.
+  { answer: "Today's date", type: ACE_TEXT,
+    any: ["today s date", "enter today s date", "date of signature",
+          "date signed", "current date"] },
 
   // ------------------------------------------------------------------
   // Identity and contact
@@ -256,6 +294,34 @@ var ACE_RULES = [
   { answer: "Field of study", type: ACE_TEXT,
     any: ["field of study", "major", "discipline", "course of study"] },
   { answer: "GPA", type: ACE_TEXT, any: ["gpa", "grade point"] },
+
+  // ------------------------------------------------------------------
+  // Languages
+  //
+  // A language block asks the same question five times -- comprehension,
+  // overall, reading, speaking, writing -- and one stored level answers
+  // all five. Every one of them was left on "Select One" on a required
+  // page.
+  //
+  // "Overall" is the dangerous one: "Overall Result (GPA)" sits two
+  // sections above it and contains the word. The GPA rule wins there on
+  // length ("grade point" and "gpa" both match that box), but the guard
+  // is written down rather than left to arithmetic.
+  // ------------------------------------------------------------------
+
+  { answer: "Language fluency", type: ACE_CHOICE,
+    any: ["comprehension", "reading", "speaking", "writing", "overall",
+          "proficiency", "fluency level"],
+    not: ["gpa", "grade point", "result", "overall result"] },
+  { answer: "Fluent in this language", type: ACE_YESNO,
+    any: ["fluent in this language", "i am fluent"] },
+  { answer: "Language", type: ACE_TEXT,
+    any: ["language"],
+    // "the specific language or tech stack for this role" is a question
+    // about experience, not a language dropdown, and it is answered by
+    // its own rule.
+    not: ["tech stack", "programming", "fluent in this language",
+          "language or tech"] },
   { answer: "Graduation date", type: ACE_TEXT,
     any: ["graduation", "grad date", "expected graduation"] },
   { answer: "Years of experience", type: ACE_TEXT,
@@ -297,7 +363,20 @@ var ACE_RULES = [
           "able to relocate", "relocate", "relocation"] },
   { answer: "Willing to work onsite", type: ACE_YESNO,
     any: ["willing to work from", "local office", "onsite and in person",
-          "work in office", "work from the office", "commute to"] },
+          "work in office", "work from the office", "commute to",
+          // A hybrid schedule is the same question for someone willing
+          // to be in an office, and it is how most of these are now
+          // worded.
+          "hybrid schedule", "work a hybrid", "hybrid work"] },
+  { answer: "Experience with this tech stack", type: ACE_YESNO,
+    any: ["specific language or tech stack", "tech stack for this role",
+          "tech stack", "language or tech stack"] },
+  { answer: "Enterprise software experience", type: ACE_YESNO,
+    any: ["enterprise software environment", "enterprise software",
+          "enterprise environment"] },
+  { answer: "Visa type", type: ACE_CHOICE,
+    any: ["visa type", "confirm your visa", "type of visa",
+          "visa status", "which visa"] },
   { answer: "Willing to travel", type: ACE_YESNO,
     any: ["willing to travel", "able to travel", "travel requirement",
           "percentage of travel"] },
@@ -1150,6 +1229,24 @@ function aceMonthName(month) {
    its placeholder, so that is read rather than one format being picked
    and hoped for. An unrecognised hint falls back to MM/YYYY, which is
    what every form seen so far uses for a work-history date. */
+/* Today, written MM/DD/YYYY.
+
+   Read from the browser's own clock rather than from ACE, because the
+   user is signing the declaration where the browser is. Padded, because
+   a date box that shows MM/DD/YYYY wants two digits and "9/16/2026"
+   fails its own mask. */
+function aceTodayUS() {
+  var now = new Date();
+
+  function pad(value) {
+    return String(value).length < 2 ? "0" + value : String(value);
+  }
+
+  return pad(now.getMonth() + 1) + "/" +
+    pad(now.getDate()) + "/" +
+    now.getFullYear();
+}
+
 function aceFormatHistoryDate(month, year, field) {
   if (!year) return null;
 

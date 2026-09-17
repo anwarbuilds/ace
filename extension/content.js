@@ -1540,6 +1540,19 @@
         }
       });
 
+      // Today is not something the bank can hold. A form asking you to
+      // date your own acknowledgement wants the day you are signing it,
+      // and a stored answer would be right once and wrong every day
+      // after -- on a declaration the user is attesting to, which is
+      // the worst place for a stale value.
+      //
+      // Written the way US forms print it, MM/DD/YYYY, which is what
+      // these acknowledgements are: the date beside a US legal
+      // declaration on a US application.
+      answers["Today's date"] = aceTodayUS();
+
+      aliases["Today's date"] = [];
+
       if (!known) {
         render(panel(), shell(
           "No answers saved yet",

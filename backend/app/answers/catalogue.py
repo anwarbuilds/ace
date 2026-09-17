@@ -240,6 +240,175 @@ PRONOUNS = (
 )
 
 
+# A degree dropdown asks for the *level*, never the subject. The bank
+# held "Masters in Computer Science", which is a level and a field run
+# together, and it matched no option on a form offering "Masters Degree
+# or Equivalent" -- the required Degree box on a real PayPal application
+# was left empty and blocked the page. The subject lives in Field of
+# study, which is where a form asks for it separately.
+DEGREE = (
+    Option(
+        "Masters",
+        (
+            "masters",
+            "master s",
+            "masters degree",
+            "master s degree",
+            "masters degree or equivalent",
+            "master s degree or equivalent",
+            "ms",
+            "m s",
+            "msc",
+            "m sc",
+            "graduate degree",
+            "postgraduate degree",
+            "post graduate degree",
+        ),
+    ),
+    Option(
+        "Bachelors",
+        (
+            "bachelors",
+            "bachelor s",
+            "bachelors degree",
+            "bachelor s degree",
+            "bachelors degree or equivalent",
+            "bachelor s degree or equivalent",
+            "bs",
+            "b s",
+            "ba",
+            "b a",
+            "bsc",
+            "b sc",
+            "undergraduate degree",
+        ),
+    ),
+    Option(
+        "Doctorate",
+        (
+            "doctorate",
+            "doctoral degree",
+            "phd",
+            "ph d",
+            "doctorate or equivalent",
+        ),
+    ),
+    Option(
+        "Associate",
+        (
+            "associate",
+            "associates",
+            "associate degree",
+            "associates degree",
+            "associate s degree",
+        ),
+    ),
+    Option(
+        "High school",
+        (
+            "high school",
+            "high school or equivalent",
+            "secondary school",
+            "ged",
+        ),
+    ),
+)
+
+
+# A language block asks the same question five times over --
+# comprehension, overall, reading, speaking, writing -- and every form
+# numbers its scale differently. One stored level answers all five.
+FLUENCY = (
+    Option(
+        "Fluent",
+        (
+            "fluent",
+            "4 fluent",
+            "fluent bilingual",
+            "advanced",
+            "full professional proficiency",
+            "professional working proficiency",
+        ),
+    ),
+    Option(
+        "Native",
+        (
+            "native",
+            "5 native",
+            "native or bilingual",
+            "native speaker",
+            "mother tongue",
+        ),
+    ),
+    Option(
+        "Intermediate",
+        (
+            "intermediate",
+            "3 intermediate",
+            "conversational",
+            "limited working proficiency",
+        ),
+    ),
+    Option(
+        "Basic",
+        (
+            "basic",
+            "1 basic",
+            "beginner",
+            "elementary",
+            "elementary proficiency",
+        ),
+    ),
+)
+
+
+# Which authorisation the user is actually working under. This one goes
+# stale: it is CPT while studying and OPT after graduating, so the hint
+# says so rather than letting a form be answered with last year's
+# status.
+VISA_TYPE = (
+    Option(
+        "F-1 CPT",
+        (
+            "f 1 cpt",
+            "f1 cpt",
+            "cpt",
+            "f 1 student cpt",
+            "curricular practical training",
+        ),
+    ),
+    Option(
+        "F-1 OPT",
+        (
+            "f 1 opt",
+            "f1 opt",
+            "opt",
+            "f 1 student opt",
+            "optional practical training",
+        ),
+    ),
+    Option(
+        "F-1 STEM OPT",
+        (
+            "f 1 stem opt",
+            "stem opt",
+            "stem opt extension",
+        ),
+    ),
+    Option(
+        "F-1",
+        (
+            "f 1",
+            "f1",
+            "f 1 student",
+            "student visa",
+        ),
+    ),
+    Option("H-1B", ("h 1b", "h1b", "h 1 b")),
+    Option("Other", ("other", "none of the above")),
+)
+
+
 # The question that made the case for this whole module. Every one of
 # these is the same concept under a different name, and which name a
 # form uses is not something the user should have to predict.
@@ -389,6 +558,23 @@ QUESTIONS: tuple[Question, ...] = (
         "company you are applying to.",
     ),
     _yes_no("Relative owns a competing business"),
+    # A real PayPal application asks all four of these before it will
+    # let you past the page, and ACE had a rule for none of them.
+    _yes_no(
+        "Government official",
+        hint="Whether you yourself hold public office or work for a "
+        "government or state-owned entity.",
+    ),
+    _yes_no(
+        "Related to a government official",
+        hint="Asked separately from whether you are one, so it is "
+        "stored separately.",
+    ),
+    _yes_no(
+        "Referred by a merchant or third party",
+        hint="Whether a customer, vendor or partner of the company put "
+        "you forward. A recruiting agency does not count.",
+    ),
     # --- Consent ---
     _yes_no(
         "Consent to keep my application on file",
@@ -400,12 +586,31 @@ QUESTIONS: tuple[Question, ...] = (
     ),
     # --- Education ---
     Question("University"),
-    Question("Degree"),
+    Question(
+        "Degree",
+        kind=CHOICE,
+        options=DEGREE,
+        hint="The level only. The subject belongs in Field of study, "
+        "which is where a form asks for it separately.",
+    ),
     Question("Field of study"),
     Question("GPA"),
     Question("Graduation date"),
     Question("Years of experience"),
     _yes_no("Recent graduate"),
+    # --- Languages ---
+    Question(
+        "Language",
+        hint="The language a form's proficiency block is about.",
+    ),
+    Question(
+        "Language fluency",
+        kind=CHOICE,
+        options=FLUENCY,
+        hint="Answers comprehension, reading, speaking, writing and "
+        "overall, which forms ask as five separate dropdowns.",
+    ),
+    _yes_no("Fluent in this language"),
     # --- Logistics ---
     Question("Earliest start date"),
     Question("Salary expectation"),
@@ -426,6 +631,19 @@ QUESTIONS: tuple[Question, ...] = (
     _yes_no("Willing to travel"),
     _yes_no("Driving licence"),
     _yes_no("Needs an accommodation"),
+    Question(
+        "Visa type",
+        kind=CHOICE,
+        options=VISA_TYPE,
+        hint="Goes stale on purpose: CPT while you are studying, OPT "
+        "once you have graduated. Change it when that changes.",
+    ),
+    _yes_no(
+        "Experience with this tech stack",
+        hint="Asked as \"do you have professional experience with the "
+        "language or stack for this role\".",
+    ),
+    _yes_no("Enterprise software experience"),
     # --- Voluntary disclosures ---
     Question("Gender", kind=CHOICE, options=GENDER),
     Question("Race or ethnicity", kind=CHOICE, options=RACE),

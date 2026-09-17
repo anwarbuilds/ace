@@ -171,7 +171,76 @@ var DELL_CASES = [
   ["country calling code", "choice", "Country"],
   // Still not the country of employment, whatever shape it is in.
   ["are you legally authorized to work in the country where this "
-   + "requisition is posted?", "choice", "Work authorisation"]
+   + "requisition is posted?", "choice", "Work authorisation"],
+
+  // ---------------------------------------------------------------
+  // A real PayPal application, every question of which ACE left blank.
+  // ---------------------------------------------------------------
+
+  // The pair that makes these rules long. Both open with the same
+  // forty words and differ only in who the relation is to, so matching
+  // on "family relationship" would answer whichever rule sat first.
+  ["do you have a family relationship (including spouse, partner, "
+   + "parent, grandparent, child, sibling, in-law, aunt, uncle) or "
+   + "close personal relationship (close friendship or relationship) "
+   + "with an employee of the paypal group of companies?", "choice",
+   "Related to an employee here"],
+  ["do you have a family relationship (including spouse, partner, "
+   + "parent, grandparent, child, sibling, in-law, aunt, uncle) or "
+   + "close personal relationship (close friendship or relationship) "
+   + "with a government official?", "choice",
+   "Related to a government official"],
+  // And being one is a third, separate fact from knowing one.
+  ["are you a current government official?", "choice",
+   "Government official"],
+  ["to the best of your knowledge, are you a referral of a) an "
+   + "existing /potential known merchant, or b) an existing or "
+   + "potential third party, or c) a current government official?",
+   "choice", "Referred by a merchant or third party"],
+  // Asked about the applicant and their spouse, and never using the
+  // word "competition", which is all the old rule knew.
+  ["do you or your spouse have, or plan to have, a role on a board, "
+   + "advisory group, management team, or any business interest in a "
+   + "company or organization that competes, or could be perceived to "
+   + "compete, with paypal?", "choice",
+   "Relative owns a competing business"],
+
+  ["please confirm your visa type?", "choice", "Visa type"],
+  ["are you able to work a hybrid schedule in office?", "choice",
+   "Willing to work onsite"],
+  ["have you worked in an enterprise software environment before?",
+   "choice", "Enterprise software experience"],
+  ["do you have professional experience working with the specific "
+   + "language or tech stack for this role (e.g., python, java, "
+   + "react)? by clicking yes, you are confirming you have necessary "
+   + "requirements for this position.", "choice",
+   "Experience with this tech stack"],
+
+  // A language block asks the same question five times over.
+  ["comprehension", "choice", "Language fluency"],
+  ["reading", "choice", "Language fluency"],
+  ["speaking", "choice", "Language fluency"],
+  ["writing", "choice", "Language fluency"],
+  ["overall", "choice", "Language fluency"],
+  ["language", "choice", "Language"],
+  ["i am fluent in this language.", "yesno", "Fluent in this language"],
+
+  // "Overall Result (GPA)" sits in the section above the language
+  // block and contains "overall". Answering it with "Fluent" would put
+  // a proficiency level in the GPA box.
+  ["overall result (gpa)", "text", "GPA"],
+  // And the tech-stack question contains "language". Answering it with
+  // "English" would be a wrong answer to a question about Python.
+  ["do you have professional experience working with the specific "
+   + "language or tech stack for this role", "choice",
+   "Experience with this tech stack"],
+
+  // Only a box that says *today* gets today. Every other date box on a
+  // form takes a date, and none of them takes this one.
+  ["please enter today's date on your acknowledgement.", "text",
+   "Today's date"],
+  ["earliest start date", "text", "Earliest start date"],
+  ["expected graduation date", "text", "Graduation date"]
 ];
 
 /* Choosing between the options a form offers. The stored answers are
@@ -261,7 +330,33 @@ var ALIAS_CASES = [
   // Aliases widen what is recognised, never what is guessed: nothing
   // here means this thing, so it stays blank.
   [["Carrier pigeon", "Smoke signal"],
-   "Job board", ["job board", "job portal", "indeed"], -1]
+   "Job board", ["job board", "job portal", "indeed"], -1],
+
+  // A degree dropdown asks for the level, never the subject. The bank
+  // held "Masters in Computer Science" -- the two run together -- and
+  // it matched nothing on PayPal's form, so a *required* Degree box
+  // stayed empty and blocked the page with "The field Degree is
+  // required and must have a value."
+  [["Bachelors Degree or Equivalent", "Masters Degree or Equivalent",
+    "Doctorate or Equivalent"],
+   "Masters", ["masters", "master s", "masters degree",
+               "masters degree or equivalent", "ms", "graduate degree"], 1],
+  // The old value, against the same list, to show why it had to change.
+  [["Bachelors Degree or Equivalent", "Masters Degree or Equivalent",
+    "Doctorate or Equivalent"],
+   "Masters in Computer Science", [], -1],
+
+  // One stored level answers all five proficiency dropdowns, however
+  // the form numbers its scale.
+  [["1 - Basic", "2 - Limited", "3 - Intermediate", "4 - Fluent",
+    "5 - Native"],
+   "Fluent", ["fluent", "4 fluent", "advanced"], 3],
+  [["Basic", "Conversational", "Professional", "Native or Bilingual"],
+   "Fluent", ["fluent", "4 fluent", "advanced",
+              "full professional proficiency"], 2],
+
+  [["F-1 CPT", "F-1 OPT", "H-1B", "Other"],
+   "F-1 CPT", ["f 1 cpt", "f1 cpt", "cpt"], 0]
 ];
 
 var failures = 0;
