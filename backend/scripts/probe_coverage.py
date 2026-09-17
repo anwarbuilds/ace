@@ -34,6 +34,7 @@ from backend.app.coverage.benchmark import (
 )
 from backend.app.coverage.companies import (
     CURATED_POLL_INTERVAL_SECONDS,
+    MULTI_EMPLOYER_SOURCES,
     TARGET_COMPANIES,
 )
 from backend.app.coverage.diagnosis import (
@@ -64,7 +65,22 @@ SOURCE_HOSTS = {
 def reachable_keys(
     session,
 ) -> set[str]:
-    """Return every company ACE already polls or holds jobs from."""
+    """Return every company whose own board ACE can already read.
+
+    "Reachable" used to mean "polls **or holds jobs from**", and that
+    second half was wrong in a way that silently capped coverage. A job
+    arriving through a multi-employer feed proves only that the feed
+    listed it; it says nothing about whether ACE can read the employer.
+    Counting it made the company look covered, so it was dropped from
+    the probe list and its own board was never looked for.
+
+    Two Sigma is what that cost. Five of its roles came through the
+    curated feed, so it never appeared in a single probe -- while its
+    own board carried 55, including the campus software engineering
+    posts the user found by hand. Every company in this position is in
+    it permanently: reaching them once through a feed is exactly what
+    stops ACE ever reaching them properly.
+    """
 
     keys: set[str] = set()
 
@@ -84,7 +100,10 @@ def reachable_keys(
         .where(
             JobRecord.is_active.is_(
                 True
-            )
+            ),
+            JobRecord.source.not_in(
+                MULTI_EMPLOYER_SOURCES
+            ),
         )
         .distinct()
     ):

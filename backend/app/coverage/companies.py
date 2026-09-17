@@ -494,6 +494,26 @@ TARGET_COMPANIES: tuple[str, ...] = (
 CURATED_POLL_INTERVAL_SECONDS = 900
 
 
+# Lanes that carry many employers under one source, rather than one
+# employer's own board.
+#
+# Holding a job from one of these says nothing about whether ACE can
+# read that employer. It is the aggregator that ACE can read, and what
+# arrives is whatever slice the aggregator chose to list.
+#
+# This distinction is load-bearing for coverage. Treating a feed job as
+# proof of reach is what let Two Sigma sit unprobed: five of its roles
+# arrived through the curated feed, the company counted as reached, and
+# its own board -- 55 live roles, including the campus software
+# engineering posts in Houston and New York -- was never looked for.
+MULTI_EMPLOYER_SOURCES: frozenset[str] = frozenset(
+    {
+        "simplify",
+        "ripplematch",
+    }
+)
+
+
 # Boards that pass every check ACE can make and belong to somebody
 # else anyway.
 #
