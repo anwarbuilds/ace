@@ -2249,9 +2249,10 @@ function sortMorePop(a){
         (i>=0?'<span class="n">'+(i+1)+'</span>':'')+'</button>';
     }).join("")+'</div>');
 }
-// Shown per group before searching. The corpus carries 169 companies,
-// so a flat list is unreadable and a truncated one hides the company
-// you are actually looking for. Search is what makes the rest reachable.
+// Shown per group before searching. The corpus carries several hundred
+// companies and keeps growing, so a flat list is unreadable and a
+// truncated one hides the company you are actually looking for. Search
+// is what makes the rest reachable.
 var FILTER_PREVIEW=8;
 function filterPopBody(){
   var f=state.facets, q=(state.filterQuery||"").trim().toLowerCase();
@@ -2264,8 +2265,15 @@ function filterPopBody(){
       ? '<button class="pop-more" data-expand="'+key+'">Show '+n+' more</button>'
       : "";
   }
+  // Expanding a group, or searching it, asks for the whole thing, so
+  // the whole thing is what renders. This used to cap at 300, which is
+  // the .pop-list max-height in *pixels* and never was a count of
+  // anything. Once the corpus passed 303 companies the last three --
+  // alphabetically last, so exactly the ones you scroll to find --
+  // vanished from a list headed "Show 303 more". The list scrolls
+  // inside a fixed-height box, so its length costs nothing to bound.
   function cut(key,list){
-    if(q||state.filterOpen[key]) return list.slice(0,300);
+    if(q||state.filterOpen[key]) return list;
     return list.slice(0,FILTER_PREVIEW);
   }
   function rest(key,list){
