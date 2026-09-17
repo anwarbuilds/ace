@@ -814,9 +814,17 @@ function get(path,p){
                {cache:"no-store"}).then(function(r){
     if(!r.ok) throw new Error(r.status); return r.json(); });
 }
-function loadJobs(append){
+// `quiet` keeps what is on screen while the next answer is fetched.
+// Searching is a refinement of the list you are already looking at, and
+// blanking it on every keystroke made the page flash empty between each
+// letter. A list that disappears while you are still typing reads as
+// the search being broken rather than as it working.
+function loadJobs(append,quiet){
   if(append){ if(state.loadingMore||!state.hasMore) return Promise.resolve(); state.loadingMore=true; }
-  else { state.offset=0; state.loading=true; state.items=[]; state.reqToken++; render(); }
+  else {
+    state.offset=0; state.loading=true; state.reqToken++;
+    if(!quiet){ state.items=[]; render(); }
+  }
   var token=state.reqToken;
   return get("/api/jobs",params(viewParams())).then(function(d){
     if(token!==state.reqToken) return;
@@ -2104,6 +2112,22 @@ function saveAnswers(){
 function render(keepScroll){
   var app=document.getElementById("app");
   var prior=keepScroll?(document.querySelector(".scroll")||{}).scrollTop:null;
+  // The search box is the one control that can be mid-word when a
+  // render lands on it, and this redraw is innerHTML: it destroys the
+  // element the user is typing into.
+  //
+  // Focus used to be put back a whole network round-trip later, from a
+  // caret position captured before the request went out. Type one more
+  // letter while that request is in flight and the caret is restored
+  // behind it, into the middle of the word -- which is what "it will
+  // not let me finish the word" was. Anything typed in the gap landed
+  // on <body> and was lost outright.
+  //
+  // Captured live, here, and put back in the same tick as the write.
+  var focused=document.activeElement;
+  var caret=focused&&focused.id==="q"
+    ? {value:focused.value,start:focused.selectionStart,end:focused.selectionEnd}
+    : null;
   var main;
   if(state.page==="job") main=jobPage();
   else if(state.page==="pulls") main=pullsPage();
@@ -2122,6 +2146,15 @@ function render(keepScroll){
     (state.menuOpen?'<div class="scrim" data-act="closemenu"></div>':"")+
     answerToggle()+answerPanel()+
     (state.toast||"");
+
+  if(caret){
+    var box=document.getElementById("q");
+    if(box){
+      box.value=caret.value;
+      box.focus({preventScroll:true});
+      try{ box.setSelectionRange(caret.start,caret.end); }catch(err){}
+    }
+  }
 
   var sc=document.querySelector(".scroll");
   if(sc){
@@ -2732,13 +2765,14 @@ document.addEventListener("input",function(e){
   if(e.target.id==="q"){
     state.q=e.target.value;
     clearTimeout(state.qt);
-    state.qt=setTimeout(function(){
-      var c=document.getElementById("q"), pos=c&&c.selectionStart;
-      loadJobs().then(function(){
-        var n=document.getElementById("q");
-        if(n){ n.focus(); if(pos!=null) n.setSelectionRange(pos,pos); }
-      });
-    },260);
+    // render() now carries the caret across the redraw, so there is
+    // nothing to capture here and nothing to put back afterwards.
+    // Doing it from out here was the bug: by the time the response
+    // landed, the position was already stale.
+    //
+    // 350ms rather than 260: long enough that typing a word straight
+    // through costs one request instead of one per pause inside it.
+    state.qt=setTimeout(function(){ loadJobs(false,true); },350);
   }
 });
 

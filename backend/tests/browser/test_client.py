@@ -1659,3 +1659,96 @@ def test_the_coverage_groups_survive_an_unknown_outcome(
     assert "Acme" in rendered
 
     assert "Beta" in rendered
+
+
+# --- the search box ---------------------------------------------------
+
+
+def test_the_caret_survives_a_redraw(
+    page,
+) -> None:
+    """Reported as "it will not let me finish the word".
+
+    render() is innerHTML, so it destroys the box being typed into.
+    Focus was put back a whole network round-trip later, from a caret
+    position captured before the request went out -- so a letter typed
+    while the request was in flight sent the caret backwards into the
+    middle of the word, and the next letter landed there.
+
+    The value is set here without going through state.q on purpose:
+    the redraw rebuilds the input from state, so if the caret and the
+    text are not carried across explicitly, both are gone.
+    """
+
+    page.eval(
+        """(function(){
+          var q=document.getElementById('q');
+          q.focus();
+          q.value='discord';
+          q.setSelectionRange(7,7);
+          render();
+          return 1;})()"""
+    )
+
+    assert page.eval(
+        "document.activeElement"
+        "&&document.activeElement.id"
+    ) == "q", "the redraw dropped focus, so the next letter is lost"
+
+    assert page.eval(
+        "document.getElementById('q').value"
+    ) == "discord", "the redraw threw away what had been typed"
+
+    assert page.eval(
+        "document.getElementById('q')"
+        ".selectionStart"
+    ) == 7, (
+        "the caret came back somewhere other than where it was, "
+        "which puts the next letter inside the word"
+    )
+
+
+def test_searching_does_not_blank_the_list_it_is_filtering(
+    page,
+) -> None:
+    """The page flashed empty between every letter.
+
+    A search refines the list already on screen, so the rows stay until
+    the next answer arrives. Changing page or filters still clears,
+    because there the old rows are genuinely the wrong rows.
+
+    Both paths are asserted, or this passes against a loadJobs that
+    never clears anything.
+    """
+
+    page.eval(
+        """(function(){
+          window.__had=state.items.length;
+          loadJobs(false,true);
+          window.__quiet=state.items.length;
+          return 1;})()"""
+    )
+
+    assert page.eval(
+        "window.__had"
+    ) > 0, "no rows to begin with, so this proves nothing"
+
+    assert page.eval(
+        "window.__quiet"
+    ) == page.eval(
+        "window.__had"
+    ), "searching emptied the list it was filtering"
+
+    page.eval(
+        """(function(){
+          loadJobs(false);
+          window.__loud=state.items.length;
+          return 1;})()"""
+    )
+
+    assert page.eval(
+        "window.__loud"
+    ) == 0, (
+        "the ordinary reload no longer clears, so the quiet path "
+        "above is not actually doing anything"
+    )
