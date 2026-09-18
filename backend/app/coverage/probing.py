@@ -314,6 +314,55 @@ def board_metadata_name(
     )
 
 
+# Statuses that mean "this site answered, and refused". A refusal is a
+# permanent, deliberate state and reads nothing like a domain that does
+# not resolve -- but both arrive here as an empty string, so the two
+# were reported identically. A company that blocks automated access was
+# told to go look for a different domain, which does not exist.
+REFUSAL_STATUSES = frozenset(
+    {
+        401,
+        403,
+        429,
+    }
+)
+
+
+def refuses_automation(
+    url: str,
+) -> bool:
+    """Whether this URL answers, and answers with a refusal.
+
+    Called only on the failure path, where the alternative is telling
+    the user nothing answered at all. One extra request buys the
+    difference between "look harder" and "this will never work".
+    """
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": USER_AGENT,
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(
+            request,
+            timeout=TIMEOUT_SECONDS,
+        ) as response:
+            return (
+                response.status
+                in REFUSAL_STATUSES
+            )
+    except urllib.error.HTTPError as error:
+        return (
+            error.code
+            in REFUSAL_STATUSES
+        )
+    except Exception:
+        return False
+
+
 def _fetch_text(
     url: str,
 ) -> str:

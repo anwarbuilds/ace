@@ -38,6 +38,7 @@ from backend.app.coverage.probing import (
     domain_candidates,
     find_board,
     linked_board_belongs_to,
+    refuses_automation,
     page_claims_another_company,
     looks_like_a_parked_domain,
     page_names_company,
@@ -112,6 +113,13 @@ NO_BOARD_FOUND = "no_board_found"
 
 SITE_UNREACHABLE = "site_unreachable"
 
+# The site answered and refused. Distinct from SITE_UNREACHABLE on
+# purpose: that one means "nothing answered, go and find the real
+# domain", and this one means "the real domain is right here and will
+# not serve a machine". Told the first way, the user goes looking for
+# something that does not exist.
+BLOCKED = "blocked"
+
 
 @dataclass(
     frozen=True,
@@ -179,6 +187,10 @@ def diagnose(
     # failure can say which kind of failure it was.
     saw_site = False
 
+    # Kept so a failure can ask whether the site refused rather than
+    # simply never answered.
+    tried_hosts: list[str] = []
+
     saw_empty_board = ""
 
     saw_unverified = ""
@@ -194,6 +206,10 @@ def diagnose(
             break
 
         root = f"https://{host}"
+
+        tried_hosts.append(
+            host,
+        )
 
         budget -= 1
 
@@ -420,6 +436,35 @@ def diagnose(
                 "Usually a careers page that "
                 "builds itself in the browser, "
                 "or a board hosted in-house."
+            ),
+        )
+
+    # Nothing was read, which so far has meant "no site answered". It
+    # can also mean the site answered with a refusal, and the two need
+    # different things from the user, so the difference is worth one
+    # extra request on a path that has already failed.
+    refused_host = next(
+        (
+            host
+            for host in tried_hosts
+            if refuses_automation(
+                f"https://{host}"
+            )
+        ),
+        "",
+    )
+
+    if refused_host:
+        return Diagnosis(
+            company=company,
+            outcome=BLOCKED,
+            detail=(
+                f"{refused_host} answered and "
+                "refused automated access. This "
+                "is deliberate on their side and "
+                "is respected rather than worked "
+                "around, so their postings have "
+                "to be found by hand."
             ),
         )
 

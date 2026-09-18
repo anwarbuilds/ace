@@ -222,6 +222,12 @@ INFRASTRUCTURE = (
 
 # Product companies with large engineering organisations.
 PRODUCT = (
+    # Their own product is the job board, and it refuses automated
+    # access -- robots.txt disallows the posting pages and the careers
+    # site answers 403. Tracked anyway: a company ACE cannot reach
+    # should be visible as a known gap rather than absent from the
+    # list, which is indistinguishable from never having considered it.
+    "Indeed",
     "Linear",
     "Retool",
     "Airtable",
