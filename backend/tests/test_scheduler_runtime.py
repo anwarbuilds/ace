@@ -1009,3 +1009,115 @@ def test_a_failing_reload_does_not_stop_the_scheduler() -> None:
     )
 
     assert polled
+
+
+def test_an_edited_source_is_picked_up_without_a_restart() -> None:
+    """Editing a source changes no identity, so nothing noticed it.
+
+    The reload compared only which sources existed, not what they
+    said. A corrected company name, a changed poll interval, a fixed
+    host: all were read once and then ignored for the life of the
+    process.
+
+    That is how 793 Visa postings kept being written under the
+    employer name "myworkdayjobs" after the catalog had been
+    corrected. Every poll re-applied the stale definition, so fixing
+    the rows by hand did not hold either.
+    """
+
+    stale = make_source(
+        source_account="visa/Visa",
+        company_name="myworkdayjobs",
+    )
+
+    corrected = make_source(
+        source_account="visa/Visa",
+        company_name="Visa",
+    )
+
+    clock = FakeClock()
+
+    seen: list[str] = []
+
+    def poller(
+        definition: SourceDefinition,
+    ):
+        seen.append(
+            definition.company_name
+        )
+
+        return make_result()
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                stale,
+            )
+        ),
+        poller=poller,
+        clock=clock,
+        sleeper=clock.advance,
+        reload_registry=lambda: SourceRegistry(
+            (
+                corrected,
+            )
+        ),
+    )
+
+    runtime.run_forever(
+        max_cycles=3
+    )
+
+    assert seen, "the source was never polled at all"
+
+    assert seen[-1] == "Visa", (
+        "the scheduler kept polling under the name it first read, "
+        f"so the correction never took effect: {seen}"
+    )
+
+
+def test_an_unchanged_registry_is_not_reloaded() -> None:
+    """The early return still has to earn its place.
+
+    Treating every cycle as a change would rebuild the source list
+    forever and reset nothing usefully, so a reload that returns the
+    same definitions must still be a no-op.
+    """
+
+    source = make_source(
+        source_account="one",
+        poll_interval_seconds=600,
+    )
+
+    clock = FakeClock()
+
+    polled: list[str] = []
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                source,
+            )
+        ),
+        poller=lambda definition: (
+            polled.append(
+                definition.source_account
+            )
+            or make_result()
+        ),
+        clock=clock,
+        sleeper=clock.advance,
+        reload_registry=lambda: SourceRegistry(
+            (
+                source,
+            )
+        ),
+    )
+
+    runtime.run_forever(
+        max_cycles=3
+    )
+
+    assert len(
+        polled
+    ) == 3, "an unchanged reload disturbed the schedule"

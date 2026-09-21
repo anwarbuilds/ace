@@ -488,6 +488,14 @@ tr.bandline span{display:block;padding:7px 14px;font-size:11px;letter-spacing:.0
 .ans-sec{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);padding:20px 0 7px;border-top:1px solid var(--border);margin-top:14px}
 .ans-sec:first-child{border-top:0;margin-top:0;padding-top:0}
 /* Coverage: the gap made visible, and the box that closes one. */
+.cov-grid{display:flex;flex-direction:column;gap:1px;margin:8px 0 18px}
+.cov-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:var(--r-sm);
+  background:var(--surface-2);font-size:12.5px}
+.cov-row-all{border-left:2px solid var(--purple)}
+.cov-name{flex:1 1 auto;word-break:break-word}
+.cov-n{font-family:var(--mono);font-size:11px;color:var(--text-muted);flex:0 0 auto}
+.cov-pct{font-family:var(--mono);font-size:11px;color:var(--text-secondary);flex:0 0 auto;
+  min-width:38px;text-align:right}
 .cov-add{display:flex;gap:8px;margin:14px 0 6px}
 .cov-add input{flex:1;background:var(--surface-2);color:var(--text);border:1px solid var(--border);
   border-radius:8px;padding:10px 12px;font-size:13px;font-family:var(--sans)}
@@ -1941,6 +1949,41 @@ function collectHistory(kind){
    because nothing anywhere said "there are companies you cannot see",
    and a number with no way to act on it would be only half the
    lesson. */
+/* Employers whose own postings refuse sponsorship.
+
+   Not a gap in what ACE can see -- these boards are read perfectly --
+   but a gap in what the user can apply to, and it was invisible. The
+   rule runs per posting, so the same refusal was found again on every
+   job of every poll and never once stated: 793 Visa postings rejected
+   one at a time, with nothing anywhere saying "Visa does not sponsor".
+
+   Shown as a ratio, never as a verdict. "Every one of 58" and "212 of
+   443" are different facts and only the first is a policy; claiming a
+   blanket refusal from a half-and-half board would talk the user out
+   of jobs they could actually take. */
+function coverageSponsorship(rows){
+  if(!rows||!rows.length) return "";
+  var total=rows.reduce(function(n,r){ return n+r.refusing; },0);
+  var all=rows.filter(function(r){ return r.share>=1; });
+  return '<div class="ans-sec">Will not sponsor ('+rows.length+')</div>'+
+    '<p class="why" style="max-width:74ch">These employers state on their own postings that '+
+      'they will not sponsor a work visa, which rules you out. ACE already rejects each of '+
+      'these jobs; this is the same fact said once instead of '+total+' times. '+
+      (all.length
+        ? '<b>'+all.length+'</b> refuse on every readable posting, so nothing they open is worth '+
+          'your time unless the policy changes.'
+        : '')+'</p>'+
+    '<div class="cov-grid">'+
+      rows.map(function(r){
+        var pct=Math.round(r.share*100);
+        return '<div class="cov-row'+(r.share>=1?" cov-row-all":"")+'" title="'+
+          esc(r.refusing+' of '+r.readable+' readable postings say no sponsorship')+'">'+
+          '<span class="cov-name">'+esc(r.company)+'</span>'+
+          '<span class="cov-n">'+r.refusing+' of '+r.readable+'</span>'+
+          '<span class="cov-pct">'+pct+'%</span></div>';
+      }).join("")+
+    '</div>';
+}
 function coveragePage(){
   var c=state.coverage;
   if(!c) return '<div class="head"><div class="head-row"><h1 class="h1">Coverage</h1></div></div>'+
@@ -1970,6 +2013,7 @@ function coveragePage(){
         ? '<div class="cov-out '+esc(state.coverageMsgKind||"")+'">'+esc(state.coverageMsg)+'</div>'
         : '')+
       coverageGaps(c.unreached)+
+      coverageSponsorship(c.sponsorship)+
     '</div></div>';
 }
 /* What is in the way, grouped by what would fix it.

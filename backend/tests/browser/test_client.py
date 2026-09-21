@@ -1752,3 +1752,48 @@ def test_searching_does_not_blank_the_list_it_is_filtering(
         "the ordinary reload no longer clears, so the quiet path "
         "above is not actually doing anything"
     )
+
+
+def test_the_coverage_page_names_who_will_not_sponsor(
+    page,
+) -> None:
+    """The fact ACE knew and never said.
+
+    The sponsorship rule runs per posting, so the same refusal was
+    re-derived on every job of every poll and stated nowhere. A user
+    could watch a company's jobs never appear and have no way to learn
+    why. 793 Visa postings were rejected one at a time.
+
+    Shown as a ratio rather than a verdict: "every one of 58" and "212
+    of 443" are different facts, and only the first is a policy.
+    """
+
+    page.eval(
+        "state.page='coverage';"
+        "fetch('/api/coverage')"
+        ".then(function(r){return r.json();})"
+        ".then(function(d){state.coverage=d;render();});1"
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.cov-grid')",
+        timeout=15,
+    )
+
+    rows = page.eval(
+        "document.querySelectorAll('.cov-row').length"
+    )
+
+    assert rows > 0, "no employer was named"
+
+    assert page.eval(
+        "document.querySelectorAll('.cov-row')[0]"
+        ".textContent"
+    ).strip(), "the row rendered empty"
+
+    # The ratio, not just a percentage: "58 of 58" is the evidence,
+    # and a bare 100% hides how much it rests on.
+    assert page.eval(
+        "/\\d+ of \\d+/.test("
+        "document.querySelectorAll('.cov-row')[0].textContent)"
+    ), "the row does not show what the share is out of"

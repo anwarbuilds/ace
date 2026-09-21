@@ -51,6 +51,7 @@ from backend.app.coverage.probing import (
     _post_json,
 )
 from backend.app.db.models import (
+    JobEvaluationRecord,
     JobRecord,
     JobSourceRecord,
     SourceProbeRecord,
@@ -412,6 +413,103 @@ def add_source(
     )
 
 
+# An employer that will not sponsor is not a gap in what ACE can see;
+# it is a gap in what the user can apply to, and until now it was
+# invisible. The rule is per posting, so the same refusal was
+# re-derived on every job of every poll and never once stated: 793
+# Visa postings rejected one at a time, with nothing anywhere saying
+# "Visa does not sponsor".
+#
+# Below this many readable postings the ratio is noise -- one refusal
+# out of one posting says nothing about an employer.
+MIN_POSTINGS_TO_JUDGE = 5
+
+
+def sponsorship_refusals(
+    session: Session,
+) -> list[dict]:
+    """Employers whose own postings say they will not sponsor.
+
+    Counted only over postings whose requirement text ACE could
+    actually read. A description it never saw cannot have stated
+    anything, and including those would quietly deflate every ratio
+    toward "mostly fine".
+    """
+
+    rows = session.execute(
+        sa.select(
+            # Grouped case-insensitively. Boards write the same
+            # employer both ways -- "Esri" and "esri" both appear --
+            # and split rows halve each ratio and read as two
+            # companies.
+            sa.func.min(
+                JobRecord.company
+            ).label(
+                "company"
+            ),
+            sa.func.count().label(
+                "readable"
+            ),
+            sa.func.count()
+            .filter(
+                JobEvaluationRecord.reason_codes.cast(
+                    sa.Text
+                ).like(
+                    "%SPONSORSHIP_BLOCKER%"
+                )
+            )
+            .label(
+                "refusing"
+            ),
+        )
+        .join(
+            JobEvaluationRecord,
+            JobEvaluationRecord.job_id
+            == JobRecord.id,
+        )
+        .where(
+            JobRecord.is_active.is_(
+                True
+            ),
+            JobEvaluationRecord.requirements_verified.is_(
+                True
+            ),
+        )
+        .group_by(
+            sa.func.lower(
+                JobRecord.company
+            )
+        )
+    ).all()
+
+    refusals = [
+        {
+            "company": row.company,
+            "readable": row.readable,
+            "refusing": row.refusing,
+            "share": round(
+                row.refusing
+                / row.readable,
+                3,
+            ),
+        }
+        for row in rows
+        if row.refusing
+        and row.readable
+        >= MIN_POSTINGS_TO_JUDGE
+    ]
+
+    refusals.sort(
+        key=lambda entry: (
+            -entry["share"],
+            -entry["refusing"],
+            entry["company"],
+        )
+    )
+
+    return refusals
+
+
 def coverage(
     session: Session,
 ) -> dict:
@@ -525,5 +623,8 @@ def coverage(
             ).select_from(
                 JobSourceRecord
             )
+        ),
+        "sponsorship": sponsorship_refusals(
+            session
         ),
     }

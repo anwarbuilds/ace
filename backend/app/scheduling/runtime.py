@@ -336,23 +336,46 @@ class SchedulerRuntime:
 
             return
 
-        known = {
-            source.identity
+        current = {
+            source.identity: source
             for source in self._sources
         }
 
         added = [
             source
             for source in sources
-            if source.identity not in known
+            if source.identity not in current
         ]
 
-        removed = known - {
+        removed = set(
+            current
+        ) - {
             source.identity
             for source in sources
         }
 
-        if not added and not removed:
+        # An edit to a source already known changes no identity: a
+        # corrected company name, a changed poll interval, a fixed
+        # host. Comparing only identities meant the scheduler kept
+        # running on whichever definition it happened to read first,
+        # for as long as the process lived.
+        #
+        # That is how 793 Visa postings kept being written under the
+        # employer name "myworkdayjobs" after the name had been
+        # corrected in the catalog: every poll re-applied the stale
+        # definition, so fixing the rows by hand did not hold either.
+        changed = [
+            source
+            for source in sources
+            if source.identity in current
+            and source != current[source.identity]
+        ]
+
+        if (
+            not added
+            and not removed
+            and not changed
+        ):
             return
 
         self._sources = sources
@@ -372,10 +395,12 @@ class SchedulerRuntime:
         self._logger.info(
             (
                 "scheduler_sources_reloaded "
-                "added=%d removed=%d total=%d"
+                "added=%d removed=%d changed=%d "
+                "total=%d"
             ),
             len(added),
             len(removed),
+            len(changed),
             len(sources),
         )
 
