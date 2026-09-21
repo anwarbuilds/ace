@@ -102,6 +102,32 @@ def _name_from_url(
         "www."
     )
 
+    # On an ATS-hosted board the employer is the *first* label and the
+    # vendor is the last, which is the opposite way round from a
+    # company's own domain. Taking the last label turned
+    # "visa.wd5.myworkdayjobs.com" into "myworkdayjobs", and every one
+    # of Visa's 793 postings was filed under that name.
+    #
+    # Only the tenant-per-subdomain vendors are listed. Boards that put
+    # the employer in the path rather than the host --
+    # jobs.lever.co/<employer> -- are read by careers_page_token
+    # instead, and never reach this.
+    for vendor in (
+        "myworkdayjobs.com",
+        "icims.com",
+        "avature.net",
+        "jobvite.com",
+        "applytojob.com",
+    ):
+        if host.endswith(
+            vendor
+        ):
+            label = host.split(
+                "."
+            )[0]
+
+            return label or host
+
     parts = [
         part
         for part in host.split(
