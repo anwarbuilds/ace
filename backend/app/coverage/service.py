@@ -35,6 +35,7 @@ from backend.app.coverage.benchmark import (
 )
 from backend.app.coverage.companies import (
     CURATED_POLL_INTERVAL_SECONDS,
+    MULTI_EMPLOYER_SOURCES,
     TARGET_COMPANIES,
 )
 from backend.app.coverage.probing import (
@@ -516,8 +517,20 @@ def coverage(
     """Report which curated companies ACE can and cannot reach.
 
     Reachable means ACE polls a board for them or holds an active
-    posting from them. Anything else is a company on the list that ACE
-    is currently blind to, which is the number worth watching.
+    posting from them **taken directly** -- not one that arrived
+    through a multi-employer feed. Anything else is a company on the
+    list that ACE is currently blind to, which is the number worth
+    watching.
+
+    This is the same distinction reachable_keys() in probe_coverage.py
+    makes, and it has to be made twice: this function renders the
+    Coverage page a person reads, that one decides which companies get
+    probed, and they drifted. Qualcomm was still shown as reached here
+    after the probing fix already went in, because eight of its
+    postings arrive through the curated feed and this function had
+    never stopped counting that as reach. Its own board -- Eightfold,
+    blocked at the API a probe confirmed -- was invisible on the one
+    page that exists to show a gap like that.
     """
 
     reachable: set[str] = set()
@@ -540,7 +553,10 @@ def coverage(
         .where(
             JobRecord.is_active.is_(
                 True
-            )
+            ),
+            JobRecord.source.not_in(
+                MULTI_EMPLOYER_SOURCES
+            ),
         )
         .distinct()
     ):

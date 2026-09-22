@@ -36,6 +36,9 @@ from backend.app.db.models import (
     JobRecord,
     JobSourceRecord,
 )
+from backend.app.coverage.service import (
+    coverage,
+)
 from backend.scripts.probe_coverage import (
     reachable_keys,
 )
@@ -197,3 +200,64 @@ def test_a_registered_source_is_reach_with_no_jobs_yet(
         assert reachable_keys(
             session
         ), "a registered board is reach"
+
+
+def test_the_coverage_page_makes_the_same_distinction(
+    session_factory,
+) -> None:
+    """reachable_keys() decides what gets probed; coverage() renders
+    the page a person reads. They drifted, and only one of them was
+    fixed.
+
+    Qualcomm stayed "reached" on the Coverage page after the probing
+    fix already shipped, because eight of its postings arrive through
+    the curated feed and this function had never stopped counting that
+    as reach -- so its own blocked board never showed up as a gap on
+    the one page that exists to show a gap like that.
+    """
+
+    with session_factory() as session:
+        add_job(
+            session,
+            company="Two Sigma",
+            source="simplify",
+        )
+
+        report = coverage(
+            session
+        )
+
+        names = {
+            row["company"]
+            for row in report["unreached"]
+        }
+
+        assert "Two Sigma" in names, (
+            "a feed job counted as reaching the company on the "
+            "Coverage page, the same bug reachable_keys() was fixed "
+            "for"
+        )
+
+
+def test_the_coverage_page_still_recognises_a_real_board(
+    session_factory,
+) -> None:
+    """The other direction, on the same function this time."""
+
+    with session_factory() as session:
+        add_job(
+            session,
+            company="Two Sigma",
+            source="greenhouse",
+        )
+
+        report = coverage(
+            session
+        )
+
+        names = {
+            row["company"]
+            for row in report["unreached"]
+        }
+
+        assert "Two Sigma" not in names
