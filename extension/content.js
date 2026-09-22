@@ -573,6 +573,16 @@
       var value = answers[name];
       if (!value) return;
 
+      // The country selector beside a split phone widget already shows
+      // the dial code, so the number box next to it takes the national
+      // number alone. Writing the stored value whole put "+1" in both
+      // halves, and the two are one bound value to the widget: editing
+      // the duplicate out of the number reset the selector as well, so
+      // there was no way to correct one side by hand.
+      if (name === "Phone" && hasPairedCountrySelector(field)) {
+        value = acePhoneLocalNumber(value);
+      }
+
       // A group with any box ticked is answered, whichever box it is.
       // Testing only the element in hand treated every unticked option
       // of an answered question as still needing an answer.
@@ -887,6 +897,53 @@
     });
   }
 
+  /* Whether `field` sits immediately next to a field that answers
+     `wantedName`, in the order fillable() reads the page.
+
+     One hop each direction, not a search: this is a test of one
+     widget's own two adjacent boxes, and a field three questions away
+     answering the same name proves nothing about either of them. */
+  function aceNeighbours(field, wantedName) {
+    var fields = fillable();
+    var index = fields.indexOf(field);
+
+    if (index < 0) return false;
+
+    return [index - 1, index + 1].some(function (i) {
+      var neighbour = fields[i];
+      if (!neighbour) return false;
+
+      var question = aceQuestionFor(neighbour);
+      if (!question) return false;
+
+      return aceAnswerNameFor(question, kindOf(neighbour)) === wantedName;
+    });
+  }
+
+  /* Whether this combobox is the country half of a split phone widget
+     -- a dial-code selector paired with a plain number box -- rather
+     than a single field carrying the whole number, or an unrelated
+     mailing-address Country.
+
+     Two signals, because wording alone cannot always tell them apart.
+     The question may say so outright ("country code", "dial code",
+     ...), which is the common case. Greenhouse's own widget does not:
+     it labels the selector bare "Country", identical to the mailing-
+     address question, and no wording rule can tell those two apart --
+     they are the same three words. What can is the shape: this one is
+     a combobox sitting immediately next to Phone, which is the layout
+     this widget always uses and a mailing address never does. */
+  function acePhoneCountryField(field) {
+    var question = aceQuestionFor(field);
+
+    if (question && aceIsPhoneCountry(question)) return true;
+
+    if (!aceIsAutocomplete(field) || !question) return false;
+
+    return aceAnswerNameFor(question, kindOf(field)) === "Country" &&
+      aceNeighbours(field, "Phone");
+  }
+
   /* A combobox that has to be answered before the plain fields rather
      than after them, because a plain field's value depends on it.
 
@@ -897,9 +954,29 @@
      country it is formatting for before the number arrives is far
      likelier to keep the number as written. */
   function gatesAPlainField(field) {
-    var question = aceQuestionFor(field);
+    return acePhoneCountryField(field);
+  }
 
-    return !!question && aceIsPhoneCountry(question);
+  /* Whether Phone sits beside a country selector that already carries
+     the dial code, so the number written there should not repeat it.
+
+     Reported directly: the stored "+1 425 568 6378" went into the
+     number box next to a selector already reading "+1", and editing
+     out the duplicate by hand reset the selector too -- the two read
+     as one bound value to the widget, not two independent fields, so
+     there was no way to fix just one side. The fix is not writing the
+     duplicate in the first place. */
+  function hasPairedCountrySelector(field) {
+    var fields = fillable();
+    var index = fields.indexOf(field);
+
+    if (index < 0) return false;
+
+    return [index - 1, index + 1].some(function (i) {
+      var neighbour = fields[i];
+
+      return !!neighbour && acePhoneCountryField(neighbour);
+    });
   }
 
   /* Every autocomplete on the page, filled one at a time -- two open

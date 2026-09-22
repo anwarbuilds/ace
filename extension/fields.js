@@ -1229,6 +1229,35 @@ function aceMonthName(month) {
    its placeholder, so that is read rather than one format being picked
    and hoped for. An unrecognised hint falls back to MM/YYYY, which is
    what every form seen so far uses for a work-history date. */
+/* A stored phone number with its country code taken off the front.
+
+   "+1 425 568 6378" becomes "425 568 6378". Only for the split phone
+   widget, where a separate selector already carries the dial code and
+   the number box beside it holds the national number alone -- writing
+   the stored value whole there duplicates the code the selector is
+   already showing.
+
+   Any code, not just +1: the user's own may not stay +1, and a rule
+   that only knew one country would break silently rather than loudly
+   the day it changed. A value with no leading code is returned
+   untouched, which is what a number box without a selector beside it
+   should still receive.
+
+   Digits only after the "+", bounded to four, so a number that merely
+   begins with a plus is not cut at some arbitrary point. */
+function acePhoneLocalNumber(value) {
+  var text = String(value == null ? "" : value).trim();
+
+  var local = text.replace(/^\+\s*\d{1,4}[\s-]*/, "").trim();
+
+  // Nothing recognisable left means this was not the shape assumed --
+  // a bare "+1" with no number after it, say. The stored value goes in
+  // unchanged rather than a blank, because an unexpected format is a
+  // reason to leave a thing alone, not to throw it away.
+  return /\d/.test(local) ? local : text;
+}
+
+
 /* Today, written MM/DD/YYYY.
 
    Read from the browser's own clock rather than from ACE, because the

@@ -985,9 +985,14 @@ def test_the_phone_country_is_chosen_before_the_number(
         "window.__wipes"
     ) == 1, "the country was never actually chosen"
 
+    # The national number, not the stored value whole: the selector
+    # beside this box already carries the dial code, and writing it
+    # twice is what the duplicate-"+1" report was about. What this
+    # test is for is that the number *survived* the country being
+    # chosen, which is a separate thing from what shape it takes.
     assert page.eval(
         "document.getElementById('ph').value"
-    ) == "+1 555 010 0000", (
+    ) == "555 010 0000", (
         "the number was written before the country and did not "
         "survive it"
     )
@@ -1080,7 +1085,7 @@ def test_a_number_typed_before_the_country_is_mangled_by_the_widget(
 
     assert page.eval(
         "document.getElementById('ph').value"
-    ) == "+1 555 010 0000", (
+    ) == "555 010 0000", (
         "the number went in before the widget knew its country, so "
         "the widget ate the dial code"
     )
@@ -1236,3 +1241,186 @@ def test_the_extension_ships_no_fill_marker() -> None:
     assert (
         "ace-filled" not in source
     ), "the fill marker is back in content.js"
+
+
+# Greenhouse's own phone widget, which labels its dial-code selector
+# bare "Country" -- the same three words the mailing-address question
+# uses. No wording rule can separate those two, so the shape has to:
+# this one is a combobox sitting immediately beside Phone.
+GREENHOUSE_PHONE_WIDGET = (
+    '<form>'
+    '<label for="fn">First Name</label><input id="fn">'
+    '<label for="ln">Last Name</label><input id="ln">'
+    '<label for="cc">Country</label>'
+    '<div id="ccouter"><div id="ccwrap" class="select__control">'
+    '<input id="cc" role="combobox"></div>'
+    '<div id="ccmenu"></div></div>'
+    '<label for="ph">Phone</label><input id="ph">'
+    '</form>'
+)
+
+
+def test_a_bare_country_label_beside_phone_is_the_dial_code_selector(
+    page,
+) -> None:
+    """Reported from a live Greenhouse form.
+
+    The selector is labelled "Country", not "Country code", so the
+    wording list that recognises a phone widget's own country did not
+    match it and the ordering fix never applied. Nothing in the words
+    could have matched: a mailing address asks "Country" too.
+
+    What separates them is the shape. This one is a combobox sitting
+    immediately next to Phone, which is the layout the widget always
+    uses and an address never does.
+    """
+
+    _boot_form(
+        page,
+        GREENHOUSE_PHONE_WIDGET,
+    )
+
+    page.wait_for(
+        "!!window.__aceInternals",
+        timeout=12,
+    )
+
+    assert page.eval(
+        "window.__aceInternals.gatesAPlainField("
+        "document.getElementById('cc'))"
+    ), (
+        "a bare 'Country' combobox beside Phone was not recognised "
+        "as the phone widget's own selector, so the number still "
+        "goes in before the country"
+    )
+
+
+def test_a_country_selector_far_from_phone_is_left_alone(
+    page,
+) -> None:
+    """The guard on the shape test, and the reason it is one hop.
+
+    A mailing-address Country is the same word and can be the same
+    kind of control. What it is not is the box next to Phone, so a
+    Country with other questions between it and the number must not be
+    treated as a dial-code selector -- mis-reading one strips the
+    country code off a number that needed it.
+    """
+
+    _boot_form(
+        page,
+        '<form>'
+        '<label for="fn">First Name</label><input id="fn">'
+        '<label for="cc">Country</label>'
+        '<div id="ccouter"><div id="ccwrap" class="select__control">'
+        '<input id="cc" role="combobox"></div>'
+        '<div id="ccmenu"></div></div>'
+        '<label for="ci">City</label><input id="ci">'
+        '<label for="pc">Postcode</label><input id="pc">'
+        '<label for="ph">Phone</label><input id="ph">'
+        '</form>',
+    )
+
+    page.wait_for(
+        "!!window.__aceInternals",
+        timeout=12,
+    )
+
+    assert not page.eval(
+        "window.__aceInternals.gatesAPlainField("
+        "document.getElementById('cc'))"
+    ), (
+        "a mailing-address Country two questions away from Phone was "
+        "read as a dial-code selector"
+    )
+
+
+def test_the_number_does_not_repeat_the_dial_code_beside_it(
+    page,
+) -> None:
+    """Reported with a screenshot: Country showing "+1" and Phone
+    reading "+1 425-568-6378" right next to it.
+
+    The selector already carries the code, so the box beside it takes
+    the national number alone. The duplicate was not merely untidy --
+    the widget treats the pair as one value, so editing the extra "+1"
+    out of the number reset the selector too, and there was no way to
+    correct one side by hand.
+    """
+
+    _boot_form(
+        page,
+        GREENHOUSE_PHONE_WIDGET,
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.ace-root')",
+        timeout=12,
+    )
+
+    page.eval(
+        "document.dispatchEvent(new KeyboardEvent("
+        "'keydown',{key:'a',altKey:true,bubbles:true}));1"
+    )
+
+    page.wait_for(
+        "!!document.getElementById('ph').value",
+        timeout=15,
+    )
+
+    written = page.eval(
+        "document.getElementById('ph').value"
+    )
+
+    assert "+" not in written, (
+        "the number repeated the dial code the selector already "
+        f"shows: {written!r}"
+    )
+
+    # The number itself still has to arrive whole. Stripping the code
+    # must not take digits with it.
+    assert "".join(
+        c for c in written if c.isdigit()
+    ) == "5550100000", written
+
+
+def test_a_lone_number_box_still_gets_the_whole_number(
+    page,
+) -> None:
+    """The other direction, and the reason the strip is conditional.
+
+    With no selector beside it, the number box is the only place the
+    country code can go. Taking it off there would submit a number
+    missing its country code to every ordinary form.
+    """
+
+    _boot_form(
+        page,
+        '<form>'
+        '<label for="fn">First Name</label><input id="fn">'
+        '<label for="ln">Last Name</label><input id="ln">'
+        '<label for="em">Email</label><input id="em">'
+        '<label for="ph">Phone</label><input id="ph">'
+        '</form>',
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.ace-root')",
+        timeout=12,
+    )
+
+    page.eval(
+        "document.dispatchEvent(new KeyboardEvent("
+        "'keydown',{key:'a',altKey:true,bubbles:true}));1"
+    )
+
+    page.wait_for(
+        "!!document.getElementById('ph').value",
+        timeout=15,
+    )
+
+    assert page.eval(
+        "document.getElementById('ph').value"
+    ) == "+1 555 010 0000", (
+        "an ordinary phone box lost its country code"
+    )
