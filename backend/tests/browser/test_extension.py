@@ -894,6 +894,10 @@ PHONE_WIDGET = (
     '<input id="cc" role="combobox"></div>'
     '<div id="ccmenu"></div></div>'
     '<label for="ph">Phone</label><input id="ph">'
+    # A CV box, which is what makes a form of name, email and
+    # phone read as an application rather than a checkout.
+    '<label for="cv">Resume/CV</label>'
+    '<input id="cv" type="file">'
     '</form>'
 )
 
@@ -1127,6 +1131,10 @@ DIAGNOSTIC_FORM = (
     # unnamed field on the page is empty.
     '<div><input data-automation-id="dateSectionYear-input" '
     'value="x@example.com"></div>'
+    # A CV box, which is what makes a form of name, email and
+    # phone read as an application rather than a checkout.
+    '<label for="cv">Resume/CV</label>'
+    '<input id="cv" type="file">'
     '</form>'
 )
 
@@ -1256,6 +1264,10 @@ GREENHOUSE_PHONE_WIDGET = (
     '<input id="cc" role="combobox"></div>'
     '<div id="ccmenu"></div></div>'
     '<label for="ph">Phone</label><input id="ph">'
+    # A CV box, which is what makes a form of name, email and
+    # phone read as an application rather than a checkout.
+    '<label for="cv">Resume/CV</label>'
+    '<input id="cv" type="file">'
     '</form>'
 )
 
@@ -1401,6 +1413,8 @@ def test_a_lone_number_box_still_gets_the_whole_number(
         '<label for="ln">Last Name</label><input id="ln">'
         '<label for="em">Email</label><input id="em">'
         '<label for="ph">Phone</label><input id="ph">'
+        '<label for="cv">Resume/CV</label>'
+        '<input id="cv" type="file">'
         '</form>',
     )
 
@@ -1424,3 +1438,138 @@ def test_a_lone_number_box_still_gets_the_whole_number(
     ) == "+1 555 010 0000", (
         "an ordinary phone box lost its country code"
     )
+
+
+# An IKEA delivery page, reduced to the parts ACE was reading: a name,
+# an email and a postcode. ACE recognised three questions, decided that
+# was an application, and opened the panel over somebody's shopping.
+CHECKOUT_FORM = (
+    '<form>'
+    '<label for="fn">First Name</label><input id="fn">'
+    '<label for="em">Email</label><input id="em">'
+    '<label for="zip">ZIP code</label><input id="zip">'
+    '<label for="ci">City</label><input id="ci">'
+    '<label for="ad">Address</label><input id="ad">'
+    '</form>'
+)
+
+
+def test_a_checkout_is_not_an_application(
+    page,
+) -> None:
+    """Reported with a screenshot of an IKEA delivery page.
+
+    Two recognised questions was the whole test, and two is what a
+    shipping form is made of. A name and an address are evidence of
+    nothing; the bank's other answers -- work authorisation, a degree,
+    an EEO question, a LinkedIn URL -- are evidence of an application.
+    """
+
+    _boot_form(
+        page,
+        CHECKOUT_FORM,
+    )
+
+    page.wait_for(
+        "!!window.__aceInternals",
+        timeout=12,
+    )
+
+    assert page.eval(
+        "document.querySelectorAll("
+        "'input, select, textarea').length >= 4"
+    ), "the fixture is too small to be testing the right thing"
+
+    assert not page.eval(
+        "!!document.querySelector('.ace-root')"
+    ), "ACE opened its panel on a checkout"
+
+
+def test_a_bare_application_still_opens(
+    page,
+) -> None:
+    """The guard, and the reason a CV box counts on its own.
+
+    The barest real application is a name, an email, a phone and a
+    resume upload -- every recognised question on it is one a shop
+    asks too. Requiring evidence must not lose that form, because
+    failing to open on a real application costs the whole form while
+    opening on a shop costs one click.
+    """
+
+    _boot_form(
+        page,
+        '<form>'
+        '<label for="fn">First Name</label><input id="fn">'
+        '<label for="ln">Last Name</label><input id="ln">'
+        '<label for="em">Email</label><input id="em">'
+        '<label for="ph">Phone</label><input id="ph">'
+        '<label for="cv">Resume/CV</label>'
+        '<input id="cv" type="file">'
+        '</form>',
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.ace-root')",
+        timeout=12,
+    )
+
+
+def test_closing_the_panel_holds_while_the_page_changes(
+    page,
+) -> None:
+    """Reported as the panel coming back after being crossed off.
+
+    A dismissal was cleared by movedOn(), which compares the shape of
+    the form rather than the address of the page. On a checkout that
+    recalculates itself, every change read as a new page and reopened
+    the panel that had just been closed.
+    """
+
+    _boot_form(
+        page,
+        PAGE_ONE,
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.ace-root')",
+        timeout=12,
+    )
+
+    page.eval(
+        """(function(){
+          var host=document.querySelector('.ace-root');
+          host.shadowRoot.querySelector('[data-ace="close"]').click();
+          return 1;})()"""
+    )
+
+    assert not page.eval(
+        "!!document.querySelector('.ace-root')"
+    ), "the close button did not close the panel"
+
+    # The page rearranges itself the way a live checkout does: same
+    # URL, different form.
+    page.eval(
+        """(function(){
+          document.body.insertAdjacentHTML('beforeend',
+            '<label for="x9">LinkedIn Profile</label><input id="x9">');
+          return 1;})()"""
+    )
+
+    # The panel is redrawn by a MutationObserver on a delay, so the
+    # wait has to be real. Waiting on "true" returns at once and the
+    # assertion below then passes against the bug it is meant to
+    # catch -- checked by restoring the bug and watching it pass.
+    page.eval(
+        "window.__waited=false;"
+        "setTimeout(function(){window.__waited=true;},1500);1"
+    )
+
+    page.wait_for(
+        "window.__waited",
+        timeout=8,
+    )
+
+    assert not page.eval(
+        "!!document.querySelector('.ace-root')"
+    ), "the panel came back after the user closed it"

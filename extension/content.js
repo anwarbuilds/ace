@@ -1148,10 +1148,63 @@
      network and no answers -- and it is the honest test: a page where
      ACE knows none of the questions is a page it has nothing to say
      about, whatever the host. */
+  /* The questions a shop asks too.
+
+     Recognising two questions was the whole test, and two of these is
+     what a delivery form is made of: an IKEA checkout asks a name, an
+     email and a postcode, ACE recognised three of them, and the panel
+     opened over somebody's shopping.
+
+     Everything else in the bank is evidence of an application --
+     work authorisation, a degree, an EEO question, a LinkedIn URL. A
+     name and an address are evidence of nothing.
+
+     An answer not listed here counts as evidence, so a new one added
+     later counts by default. That is the right way round: failing to
+     open on a real application costs the user the whole form, and
+     opening on a shop costs them one click -- a click that now
+     sticks. */
+  var GENERIC_QUESTIONS = [
+    "First name",
+    "Last name",
+    "Full name",
+    "Email",
+    "Phone",
+    "Address",
+    "City",
+    "State",
+    "Postcode",
+    "Country",
+    "Location",
+    "Today's date"
+  ];
+
+  /* A resume or cover-letter box, which no shop has.
+
+     File inputs are excluded from fillable(), because ACE cannot fill
+     one, so this asks the page directly. It is what keeps the barest
+     real application working: a form of name, email, phone and a CV
+     upload has nothing else in it to go on. */
+  function asksForAResume() {
+    var inputs = document.querySelectorAll('input[type="file"]');
+
+    for (var i = 0; i < inputs.length; i++) {
+      var question = aceQuestionFor(inputs[i]);
+
+      if (question && /resume|cv|cover letter/i.test(question)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   function looksLikeApplication() {
     if (!looksLikeForm()) return false;
 
     var recognised = 0;
+
+    var distinctive = false;
 
     var fields = fillable();
 
@@ -1159,13 +1212,17 @@
       var question = aceQuestionFor(fields[i]);
       if (!question) continue;
 
-      if (aceAnswerNameFor(question, kindOf(fields[i]))) {
-        recognised += 1;
-        if (recognised >= 2) return true;
-      }
+      var name = aceAnswerNameFor(question, kindOf(fields[i]));
+      if (!name) continue;
+
+      recognised += 1;
+
+      if (GENERIC_QUESTIONS.indexOf(name) < 0) distinctive = true;
     }
 
-    return false;
+    if (recognised < 2) return false;
+
+    return distinctive || asksForAResume();
   }
 
   /* The panel's own stylesheet, carried here rather than injected into
@@ -1637,18 +1694,29 @@
 
     // Many boards route client-side between postings without a full
     // reload -- the same DOM-mutation signal that re-triggers refresh()
-    // also fires on that navigation. Treat a URL change as a genuinely
-    // new page: an earlier dismissal was about the posting the user
-    // was just looking at, not this one.
+    // also fires on that navigation. A new set of questions gets a new
+    // preview, and the previous page's undo cannot apply to fields that
+    // are no longer in the document.
     if (location.href !== lastHref || movedOn()) {
+      lastResult = null;
+      lastFill = [];
+    }
+
+    // A dismissal, though, survives anything short of leaving the page.
+    //
+    // It used to be cleared by movedOn() as well, and movedOn() is a
+    // form-shape comparison, not a navigation: on a page whose form
+    // legitimately changes while the user works -- a checkout
+    // recalculating a delivery option, say -- every change read as a
+    // new page and reopened the panel that had just been closed. An
+    // IKEA delivery page reopened it repeatedly, which is what made
+    // this worth reporting.
+    //
+    // Closing the panel is the clearest instruction the user can give,
+    // so the only thing that overrides it is going somewhere else.
+    if (location.href !== lastHref) {
       lastHref = location.href;
       dismissed = false;
-      lastResult = null;
-
-      // The previous page's undo cannot apply to fields that are no
-      // longer in the document, and keeping them would make movedOn()
-      // answer about a page that is gone.
-      lastFill = [];
     }
 
     lastSignature = formSignature();
