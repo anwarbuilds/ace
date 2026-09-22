@@ -989,6 +989,130 @@ def test_ambiguous_remote_does_not_override_no_sponsorship_blocker() -> None:
     )
 
 
+def test_not_eligible_for_sponsorship_is_rejected() -> None:
+    """A Qualcomm posting read "not eligible for Qualcomm immigration
+    sponsorship" and passed the gate, because none of the literal
+    SPONSORSHIP_BLOCKERS phrases contain "not eligible for" -- that
+    construction reads nothing like "will not sponsor" or "no
+    sponsorship available", the phrases the list already covered.
+
+    Measured against the live corpus before this existed: 104 postings
+    used this construction and not one was caught. Five of them were
+    sitting in the queue as PASS.
+    """
+
+    decision = evaluate_job(
+        make_job(
+            description=(
+                "This position is not "
+                "eligible for Qualcomm "
+                "immigration sponsorship."
+            ),
+        )
+    )
+
+    assert (
+        decision.status
+        == EligibilityStatus.REJECT
+    )
+
+    assert (
+        EligibilityReasonCode
+        .SPONSORSHIP_BLOCKER
+        in decision.reason_codes
+    )
+
+
+def test_every_real_wording_of_not_eligible_is_caught() -> None:
+    """Every distinct wording found in the live corpus, so a future
+    edit cannot narrow the pattern back down to the one case above
+    without this file noticing."""
+
+    for description in (
+        "This position is not eligible for visa sponsorship.",
+        "This role is generally not eligible for new visa sponsorship.",
+        "Remote roles are not eligible for U.S. visa sponsorship.",
+        "Please note this role is not eligible for sponsorship.",
+        "This position is not eligible for Intel immigration "
+        "sponsorship.",
+        "This role is not eligible for visa or immigration "
+        "sponsorship.",
+        "Applicants are ineligible for visa sponsorship.",
+    ):
+        decision = evaluate_job(
+            make_job(
+                description=description,
+            )
+        )
+
+        assert (
+            decision.status
+            == EligibilityStatus.REJECT
+        ), description
+
+        assert (
+            EligibilityReasonCode
+            .SPONSORSHIP_BLOCKER
+            in decision.reason_codes
+        ), description
+
+
+def test_the_positive_form_is_not_mistaken_for_a_refusal() -> None:
+    """"Eligible for sponsorship" without "not" is the opposite claim,
+    and the pattern must not fire on it. This is the real trap: the
+    two differ by one word."""
+
+    decision = evaluate_job(
+        make_job(
+            description=(
+                VERIFIABLE_PAD
+                + " Must hold existing US work "
+                "authorization or be eligible "
+                "for available sponsorship "
+                "routes."
+            ),
+        )
+    )
+
+    assert (
+        EligibilityReasonCode
+        .SPONSORSHIP_BLOCKER
+        not in decision.reason_codes
+    )
+
+
+def test_a_refusal_does_not_bleed_into_the_next_sentence() -> None:
+    """The gap between "for" and "sponsorship" is bounded and cannot
+    cross a paragraph break, which is where this file's own text
+    flattening already puts a boundary between one claim and the
+    next.
+
+    Without the bound, "not eligible for the referral bonus" followed
+    much later by an unrelated mention of "sponsorship" would read as
+    a refusal that was never made.
+    """
+
+    decision = evaluate_job(
+        make_job(
+            description=(
+                VERIFIABLE_PAD
+                + " This role is not eligible "
+                "for the annual refresher "
+                "bonus.\n\nSponsorship: this "
+                "team sponsors an annual "
+                "hackathon that the whole "
+                "org is welcome to attend."
+            ),
+        )
+    )
+
+    assert (
+        EligibilityReasonCode
+        .SPONSORSHIP_BLOCKER
+        not in decision.reason_codes
+    )
+
+
 def test_citizenship_requirement_rejected() -> None:
     decision = evaluate_job(
         make_job(

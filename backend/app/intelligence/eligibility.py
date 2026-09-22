@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-17-v31"
+    "2026-09-22-v32"
 )
 
 
@@ -640,6 +640,38 @@ SPONSORSHIP_BLOCKERS = (
     "no visa sponsorship",
     "no sponsorship available",
     "sponsorship is not available",
+)
+
+
+# "Not eligible for sponsorship" is a distinct construction from every
+# phrase above, and none of them touch it: a Qualcomm posting reading
+# "This position is not eligible for Qualcomm immigration sponsorship"
+# passed the gate, because the substring list has nothing that reads
+# "not eligible for". The company name sitting in the middle of the
+# phrase is also why this could not simply be added as another literal
+# string -- "not eligible for X immigration sponsorship" has to allow
+# whatever X is, so it is a regex rather than a fourth kind of exact
+# match.
+#
+# Measured against the live corpus before shipping: 104 postings carry
+# this construction and none were caught by SPONSORSHIP_BLOCKERS. Every
+# match was a genuine refusal -- "not eligible for visa sponsorship",
+# "...for U.S. visa sponsorship", "...for new visa sponsorship",
+# "...for Intel immigration sponsorship" -- and five of the 104 were
+# sitting in the live queue as PASS: Render, Intel, and three eBay
+# postings.
+#
+# The gap between "for" and "sponsorship" is bounded to 40 characters
+# and forbidden from crossing a line break, which is where this file's
+# own paragraph-flattening already puts a boundary between one claim
+# and the next. That is what stops "not eligible for the referral
+# bonus. Sponsorship, separately, is available" from being misread as
+# a refusal -- the period sits inside the 40-character budget, but the
+# text on the far side of it is a different sentence, one paragraph
+# break away in every posting actually seen.
+SPONSORSHIP_BLOCKER_PATTERNS = (
+    r"\bnot\s+eligible\s+for\b[^\n]{0,40}?\bsponsorship\b",
+    r"\bineligible\s+for\b[^\n]{0,40}?\bsponsorship\b",
 )
 
 
@@ -2431,6 +2463,9 @@ def evaluate_job(
     if _contains_any(
         blocker_text,
         SPONSORSHIP_BLOCKERS,
+    ) or _matches_any_regex(
+        blocker_text,
+        SPONSORSHIP_BLOCKER_PATTERNS,
     ):
         reject_codes.append(
             EligibilityReasonCode
