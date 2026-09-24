@@ -238,16 +238,32 @@ def targets(
                     name,
                 )
 
-    return [
-        name
-        for name in pool
-        if not (
-            company_keys(
-                name
-            )
-            & reachable
+    # One company, one probe. The corpus writes an employer several
+    # ways -- "Medpace" and "Medpace, Inc." -- and probing each
+    # spelling is the same network work for the same answer.
+    chosen: dict[str, str] = {}
+
+    for name in pool:
+        if company_keys(
+            name
+        ) & reachable:
+            continue
+
+        key = normalise_company(
+            name
         )
-    ]
+
+        # The first spelling wins, which puts the curated name ahead of
+        # whatever a board happened to write, because the curated names
+        # are added to the pool first.
+        chosen.setdefault(
+            key,
+            name,
+        )
+
+    return list(
+        chosen.values()
+    )
 
 
 def record(
@@ -264,20 +280,38 @@ def record(
     renamed = 0
 
     with SessionLocal() as session:
+        # Rows created earlier in this same batch. The session does not
+        # autoflush, so a row added a moment ago is invisible to the
+        # query below -- it is neither in the database yet nor returned
+        # by a SELECT. Two names that normalise to one key therefore
+        # each created a row, and the second INSERT hit the unique
+        # constraint at commit and took the whole transaction with it.
+        #
+        # That cost a 699-company run: every probe completed, and the
+        # single write at the end rolled all of them back. "Medpace"
+        # and "Medpace, Inc." are one company, which the curated list
+        # never contained twice and the corpus does.
+        pending: dict[str, SourceProbeRecord] = {}
+
         for result in results:
             key = normalise_company(
                 result.company
             )
 
-            row = session.scalar(
-                sa.select(
-                    SourceProbeRecord
-                ).where(
-                    SourceProbeRecord
-                    .company_key
-                    == key
-                )
+            row = pending.get(
+                key
             )
+
+            if row is None:
+                row = session.scalar(
+                    sa.select(
+                        SourceProbeRecord
+                    ).where(
+                        SourceProbeRecord
+                        .company_key
+                        == key
+                    )
+                )
 
             if row is None:
                 row = SourceProbeRecord(
@@ -287,6 +321,8 @@ def record(
                 session.add(
                     row
                 )
+
+            pending[key] = row
 
             row.company_name = (
                 result.company

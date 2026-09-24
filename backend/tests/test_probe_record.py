@@ -1,0 +1,59 @@
+"""One batch must not fail on two names that share a key."""
+
+from __future__ import annotations
+
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from backend.app.db.base import Base
+from backend.app.db.models import SourceProbeRecord
+from backend.app.coverage.diagnosis import Diagnosis, SITE_UNREACHABLE
+import backend.scripts.probe_coverage as pc
+
+
+@pytest.fixture(name="patched_session")
+def fixture_patched_session(monkeypatch):
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+    )
+    Base.metadata.create_all(engine)
+
+    # autoflush=False is what production uses, and is the whole reason
+    # the batch failed: a row added a moment ago is invisible to the
+    # next query, so both names created one.
+    factory = sessionmaker(
+        bind=engine, class_=Session, autoflush=False, expire_on_commit=False
+    )
+    monkeypatch.setattr(pc, "SessionLocal", factory)
+    return factory
+
+
+def test_two_names_sharing_a_key_write_one_row(patched_session):
+    """The bug that rolled back a 699-company run.
+
+    Every probe completed and the single write at the end threw all of
+    them away, because "Medpace" and "Medpace, Inc." normalise to one
+    key and each created a row.
+    """
+
+    pc.record(
+        [
+            Diagnosis(
+                company="Medpace",
+                outcome=SITE_UNREACHABLE,
+                detail="first",
+            ),
+            Diagnosis(
+                company="Medpace, Inc.",
+                outcome=SITE_UNREACHABLE,
+                detail="second",
+            ),
+        ]
+    )
+
+    with patched_session() as session:
+        rows = session.query(SourceProbeRecord).all()
+
+    assert len(rows) == 1, [r.company_key for r in rows]

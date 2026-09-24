@@ -371,3 +371,38 @@ def test_the_same_company_is_offered_once(
         assert len(
             names
         ) == 1, names
+
+
+def test_two_spellings_of_one_company_are_probed_once(
+    session_factory,
+) -> None:
+    """The corpus writes an employer several ways.
+
+    "Medpace" and "Medpace, Inc." are one company. Probing each
+    spelling is the same network work for the same answer, and -- far
+    worse -- writing a probe row for each hits the unique constraint
+    they share.
+    """
+
+    with session_factory() as session:
+        add_job(
+            session,
+            company="Medpace",
+            source="simplify",
+        )
+
+        add_job(
+            session,
+            company="Medpace, Inc.",
+            source="simplify",
+        )
+
+        names = corpus_companies(
+            session
+        )
+
+    assert "Medpace" in names
+    assert "Medpace, Inc." in names, (
+        "corpus_companies reports what the boards wrote; the "
+        "deduplication belongs in targets(), where the key is known"
+    )
