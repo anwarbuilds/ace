@@ -127,6 +127,11 @@ AI_AND_TOOLING = (
 
 # Developer tools, infrastructure and data platforms.
 INFRASTRUCTURE = (
+    # Both found the way this list is supposed to make unnecessary:
+    # the user was sent a posting and asked why ACE had not been. Their
+    # boards were readable Greenhouse the whole time -- they were never
+    # on the list to look at.
+    "Algolia",
     "Vercel",
     "Supabase",
     "Render",
@@ -334,6 +339,7 @@ FINTECH = (
     "Coinbase",
     "Robinhood",
     "Stripe",
+    "Upstart",
     "Block",
     "Deel",
     "Rippling",
