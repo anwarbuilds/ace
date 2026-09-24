@@ -39,14 +39,18 @@ HELD_OUT_LISTS = (
         "vanshb03/New-Grad-2026/"
         "main/README.md",
     ),
-    (
-        "jobright-ai/2025-SWE-New-Grad",
-        "https://raw.githubusercontent.com/"
-        "jobright-ai/"
-        "2025-Software-Engineer-New-Grad/"
-        "master/README.md",
-    ),
 )
+
+
+# Dropped 2026-09-23: jobright-ai/2025-SWE-New-Grad.
+#
+# ACE now reads JobRight's category pages to learn which companies are
+# hiring, so their list is no longer a list ACE has never seen. Kept as
+# a benchmark it would have measured ACE against its own inputs, which
+# is the one thing this file exists to avoid. Two independent lists
+# remain, and the recall number moved from 33% to whatever those two
+# say on their own -- a smaller number measured honestly is worth more
+# than a larger one that is quietly circular.
 
 
 _PUNCTUATION = re.compile(

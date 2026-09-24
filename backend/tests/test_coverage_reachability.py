@@ -40,6 +40,7 @@ from backend.app.coverage.service import (
     coverage,
 )
 from backend.scripts.probe_coverage import (
+    corpus_companies,
     reachable_keys,
 )
 
@@ -261,3 +262,112 @@ def test_the_coverage_page_still_recognises_a_real_board(
         }
 
         assert "Two Sigma" not in names
+
+
+def test_the_corpus_offers_more_names_than_the_curated_list(
+    session_factory,
+) -> None:
+    """Where the next 500 companies come from.
+
+    The curated list is the user's own 412 picks. The corpus is every
+    employer any feed has ever listed a job for -- names ACE learned
+    for free and then mostly never looked at again. 574 of them had no
+    board being polled and 563 had never been probed once, and two
+    that were finally checked turned out to be plain Greenhouse boards
+    with 33 and 93 postings on them.
+    """
+
+    with session_factory() as session:
+        add_job(
+            session,
+            company="Algolia",
+            source="simplify",
+        )
+
+        add_job(
+            session,
+            company="Upstart",
+            source="greenhouse",
+        )
+
+        names = corpus_companies(
+            session
+        )
+
+        assert "Algolia" in names, (
+            "a company known only through a feed was not offered as "
+            "somewhere to look for a real board"
+        )
+
+        assert "Upstart" in names
+
+
+def test_the_corpus_ignores_closed_postings(
+    session_factory,
+) -> None:
+    """A company whose last posting closed is not currently hiring,
+    and probing it on that basis would be work done for nothing."""
+
+    moment = datetime(
+        2026,
+        9,
+        23,
+        tzinfo=timezone.utc,
+    )
+
+    with session_factory() as session:
+        session.add(
+            JobRecord(
+                source="simplify",
+                source_account="acct",
+                external_id="gone-1",
+                company="Departed Corp",
+                title="Software Engineer",
+                location="Remote",
+                description="",
+                official_url="https://example.com/gone",
+                content_hash="hash-gone",
+                first_seen_at=moment,
+                last_seen_at=moment,
+                is_active=False,
+            )
+        )
+
+        session.commit()
+
+        assert "Departed Corp" not in corpus_companies(
+            session
+        )
+
+
+def test_the_same_company_is_offered_once(
+    session_factory,
+) -> None:
+    """Boards write an employer both ways -- "Esri" and "esri" both
+    appear -- and probing each spelling separately is the same work
+    twice for the same answer."""
+
+    with session_factory() as session:
+        add_job(
+            session,
+            company="Algolia",
+            source="simplify",
+        )
+
+        add_job(
+            session,
+            company="algolia",
+            source="ripplematch",
+        )
+
+        names = [
+            name
+            for name in corpus_companies(
+                session
+            )
+            if name.casefold() == "algolia"
+        ]
+
+        assert len(
+            names
+        ) == 1, names

@@ -48,6 +48,9 @@ from backend.app.db.models import (
     SourceProbeRecord,
 )
 from backend.app.db.session import SessionLocal
+from backend.app.discovery.watchlist import (
+    fetch_watchlist,
+)
 
 
 SOURCE_HOSTS = {
@@ -114,11 +117,74 @@ def reachable_keys(
     return keys
 
 
+def corpus_companies(
+    session,
+) -> list[str]:
+    """Employers ACE already holds live postings from.
+
+    The curated list is the user's own picks, and it is 412 names long.
+    The corpus is far wider: every employer any feed has ever listed a
+    job for, which is a name ACE learned for free and mostly never
+    looked at again. 574 of them have no board being polled, and 563
+    had never been probed once.
+
+    Two of those turned out to be plain Greenhouse boards with 33 and
+    93 postings on them, found only because the user was sent a link
+    and asked why ACE had not been. That is the whole argument for
+    this: the names were already here.
+
+    Drawn from ACE's own corpus and never from the held-out lists,
+    which would make the recall benchmark measure ACE against its own
+    inputs.
+    """
+
+    rows = session.scalars(
+        sa.select(
+            JobRecord.company
+        )
+        .where(
+            JobRecord.is_active.is_(
+                True
+            )
+        )
+        .distinct()
+    ).all()
+
+    seen: set[str] = set()
+
+    names: list[str] = []
+
+    for name in rows:
+        cleaned = (name or "").strip()
+
+        if not cleaned:
+            continue
+
+        key = cleaned.casefold()
+
+        if key in seen:
+            continue
+
+        seen.add(
+            key
+        )
+
+        names.append(
+            cleaned
+        )
+
+    return sorted(
+        names
+    )
+
+
 def targets(
     *,
     everything: bool,
+    corpus: bool = False,
+    watchlist: bool = False,
 ) -> list[str]:
-    """Return the curated companies worth probing."""
+    """Return the companies worth probing."""
 
     if everything:
         return list(
@@ -130,9 +196,51 @@ def targets(
             session
         )
 
+        pool = list(
+            TARGET_COMPANIES
+        )
+
+        if corpus:
+            # The curated names first: they are the user's own picks
+            # and deserve the earlier attempt when a run is limited.
+            curated = {
+                name.casefold()
+                for name in TARGET_COMPANIES
+            }
+
+            pool += [
+                name
+                for name in corpus_companies(
+                    session
+                )
+                if name.casefold()
+                not in curated
+            ]
+
+        if watchlist:
+            # Names only, from an aggregator. Each is still verified
+            # against the employer's own board before it becomes a
+            # source, exactly like every other candidate here.
+            seen = {
+                name.casefold()
+                for name in pool
+            }
+
+            for name in fetch_watchlist():
+                if name.casefold() in seen:
+                    continue
+
+                seen.add(
+                    name.casefold(),
+                )
+
+                pool.append(
+                    name,
+                )
+
     return [
         name
-        for name in TARGET_COMPANIES
+        for name in pool
         if not (
             company_keys(
                 name
@@ -311,6 +419,28 @@ def main() -> int:
     )
 
     parser.add_argument(
+        "--corpus",
+        action="store_true",
+        help=(
+            "also probe every employer ACE "
+            "already holds a live posting "
+            "from, not only the curated list."
+        ),
+    )
+
+    parser.add_argument(
+        "--watchlist",
+        action="store_true",
+        help=(
+            "also probe the employers an "
+            "aggregator currently lists as "
+            "hiring. Names only; the board "
+            "found is always the employer's "
+            "own."
+        ),
+    )
+
+    parser.add_argument(
         "--apply",
         action="store_true",
         help=(
@@ -324,6 +454,8 @@ def main() -> int:
 
     companies = targets(
         everything=args.all,
+        corpus=args.corpus,
+        watchlist=args.watchlist,
     )
 
     if args.limit:
