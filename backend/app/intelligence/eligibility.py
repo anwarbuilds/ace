@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-04-v34"
+    "2026-10-04-v36"
 )
 
 
@@ -501,6 +501,35 @@ NON_US_LOCATION_PATTERNS = (
     r"\bsweden\b",
     r"\bnorway\b",
     r"\bdenmark\b",
+    # Added when the Eightfold PCSX adapter began writing country names
+    # in place of ISO codes, so every name it can write is one this
+    # list recognises. Each of these appears on a live Eightfold board.
+    r"\bcosta\s+rica\b",
+    r"\bczechia\b",
+    r"\bczech\s+republic\b",
+    r"\bhungary\b",
+    r"\bunited\s+arab\s+emirates\b",
+    r"\bchile\b",
+    r"\bbelgium\b",
+    r"\baustria\b",
+    r"\bgreece\b",
+    r"\bbulgaria\b",
+    r"\bslovakia\b",
+    r"\bslovenia\b",
+    r"\blithuania\b",
+    r"\bestonia\b",
+    r"\blatvia\b",
+    r"\bsaudi\s+arabia\b",
+    r"\bqatar\b",
+    r"\bpakistan\b",
+    r"\bbangladesh\b",
+    r"\bsri\s+lanka\b",
+    r"\bmorocco\b",
+    r"\btunisia\b",
+    r"\bluxembourg\b",
+    r"\bperu\b",
+    r"\bcyprus\b",
+    r"\bmacao\b",
     r"\bfinland\b",
     r"\bitaly\b",
     r"\bcroatia\b",
@@ -898,6 +927,14 @@ INTERNSHIP_TITLE_PATTERNS = (
     r"\bplacement\s+year\b",
     r"\bworking\s+student\b",
     r"\bwerkstudent\b",
+    # Student roles by other names, each of which was in the queue as
+    # full-time: John Deere's "Software Engineer Part-Time Student"
+    # (four ways round) and Zoox's "Contract Student Worker".
+    r"\bpart[-\s]?time\s+student\b",
+    r"\bstudent\s+worker\b",
+    # A misspelling, but the role is what it says: Microsoft's
+    # "Software Engineer: Intership Opportunities, Azure Databases".
+    r"\binterships?\b",
     r"\bapprentice(?:ship)?\b",
     r"\bpraktikum\b",
 )

@@ -349,6 +349,141 @@ def _unwrap(
     )
 
 
+# The country at the end of a PCSX standardized location is an ISO
+# 3166 code -- "Bengaluru, KA, IN" -- and seven of the codes that occur on
+# live boards are also US postal codes: IN is India and Indiana, IL is
+# Israel and Illinois, CA is Canada and California, and DE, ID, CO and MO
+# collide the same way. The gate reads ", IN" as Indiana, so four
+# Qualcomm roles in Bengaluru and Hyderabad were in the queue as US jobs.
+# The region codes collide too -- TN is Tamil Nadu and Tennessee, GA is
+# Goa and Georgia -- which is why the country has to be written out in
+# full: the gate checks for a named foreign country before it reads any
+# postal code, so a name settles what a code cannot.
+#
+# Every code seen on a live board is here, plus close neighbours. Each
+# name is one the gate recognises as foreign, which is pinned.
+ISO_COUNTRY_NAMES: dict[str, str] = {
+    "US": "United States",
+    # A US territory, and US work authorisation covers it.
+    "PR": "Puerto Rico, United States",
+    "IN": "India",
+    "GB": "United Kingdom",
+    "UK": "United Kingdom",
+    "CA": "Canada",
+    "TW": "Taiwan",
+    "DE": "Germany",
+    "CN": "China",
+    "BR": "Brazil",
+    "MX": "Mexico",
+    "IE": "Ireland",
+    "AU": "Australia",
+    "JP": "Japan",
+    "NL": "Netherlands",
+    "PH": "Philippines",
+    "RO": "Romania",
+    "FR": "France",
+    "IL": "Israel",
+    "KR": "South Korea",
+    "MY": "Malaysia",
+    "BE": "Belgium",
+    "ES": "Spain",
+    "IT": "Italy",
+    "PL": "Poland",
+    "SG": "Singapore",
+    "VN": "Vietnam",
+    "FI": "Finland",
+    "DK": "Denmark",
+    "ID": "Indonesia",
+    "AE": "United Arab Emirates",
+    "HK": "Hong Kong",
+    "TH": "Thailand",
+    "PE": "Peru",
+    "SE": "Sweden",
+    "CZ": "Czechia",
+    "CL": "Chile",
+    "NZ": "New Zealand",
+    "CY": "Cyprus",
+    "GR": "Greece",
+    "CH": "Switzerland",
+    "NO": "Norway",
+    "QA": "Qatar",
+    "ZA": "South Africa",
+    "EG": "Egypt",
+    "TR": "Turkey",
+    "LU": "Luxembourg",
+    "SK": "Slovakia",
+    "SA": "Saudi Arabia",
+    "MO": "Macao",
+    "PT": "Portugal",
+    "CR": "Costa Rica",
+    "RS": "Serbia",
+    "CO": "Colombia",
+    "AT": "Austria",
+    "LV": "Latvia",
+    "LT": "Lithuania",
+    "EE": "Estonia",
+    "HU": "Hungary",
+    "BG": "Bulgaria",
+    "HR": "Croatia",
+    "SI": "Slovenia",
+    "UA": "Ukraine",
+    "AR": "Argentina",
+    "PK": "Pakistan",
+    "BD": "Bangladesh",
+    "LK": "Sri Lanka",
+    "MA": "Morocco",
+    "TN": "Tunisia",
+}
+
+
+def _spell_country(
+    location: str,
+) -> str:
+    """Write a standardized location's trailing country code out in full.
+
+    "Bengaluru, KA, IN" becomes "Bengaluru, KA, India". A code missing
+    from the table is not left in place, because it may be a US postal
+    code too; the region goes with it, since that may collide as well,
+    and what is left carries no US signal at all. A posting from an
+    unlisted country is outside the US by definition -- US and PR are
+    listed -- so being read that way is the right answer.
+    """
+
+    parts = [
+        part.strip()
+        for part in str(
+            location
+        ).split(
+            ","
+        )
+    ]
+
+    if len(parts) < 2:
+        return location.strip()
+
+    code = parts[-1].upper()
+
+    if len(code) != 2 or not code.isalpha():
+        return location.strip()
+
+    name = ISO_COUNTRY_NAMES.get(
+        code
+    )
+
+    if name is None:
+        # Not "outside the United States": the gate takes the words
+        # "United States" as the strongest US signal there is, and would
+        # have read exactly the opposite of what was meant.
+        return f"{parts[0]} ({code})"
+
+    return ", ".join(
+        parts[:-1]
+        + [
+            name,
+        ]
+    )
+
+
 def _location_of(
     posting: dict,
     detail: dict,
@@ -382,9 +517,14 @@ def _location_of(
             standardized,
             list,
         ) and standardized:
-            return ", ".join(
-                str(
-                    item
+            # "; " between locations, not ", ": joined with commas, a
+            # posting in Redmond and Hyderabad ran together as one
+            # six-part place.
+            return "; ".join(
+                _spell_country(
+                    str(
+                        item
+                    )
                 )
                 for item in standardized
                 if item

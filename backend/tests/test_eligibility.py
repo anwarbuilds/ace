@@ -1949,6 +1949,41 @@ def test_every_way_a_title_says_internship_is_caught() -> None:
         ), title
 
 
+def test_a_student_role_by_another_name_is_not_full_time() -> None:
+    """Each of these was in the queue as a full-time role. The user is
+    scoped to full-time early-career work, and a part-time student
+    position is a placement whatever its title calls it."""
+
+    for title in (
+        "Software Engineer Part-Time Student",
+        "IT Software Engineer Part-Time Student - Technology",
+        "Part-Time Student IT - Infrastructure Engineer - Dubuque, IA",
+        "Part-Time Student - IT Software Engineer - Chicago, IL",
+        "Part Time Student Software Developer",
+        "Contract Student Worker Software Engineer "
+        "(6-month Contract) (20/hrs week)",
+        "Software Engineer: Intership Opportunities, Azure Databases",
+    ):
+        assert is_internship(
+            make_job(
+                title=title,
+            )
+        ), title
+
+    # A new-grad programme is full-time, and a team named after the
+    # people it serves is not a student role.
+    for title in (
+        "Software Engineer \u2013 2027 Graduate Program (August Start)",
+        "Software Engineer, Student Success Platform",
+        "Software Engineer, Student Loans",
+    ):
+        assert not is_internship(
+            make_job(
+                title=title,
+            )
+        ), title
+
+
 def test_a_word_that_merely_starts_with_intern_is_not_one() -> None:
     """The reason the boundaries are there at all.
 

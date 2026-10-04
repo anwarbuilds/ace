@@ -226,7 +226,7 @@ def test_standardized_location_is_preferred() -> None:
                 "Plano, TX, US",
             ],
         },
-    ) == "Plano, TX, US"
+    ) == "Plano, TX, United States"
 
 
 def test_falls_back_to_the_raw_location_with_no_detail() -> None:
@@ -293,7 +293,7 @@ def test_a_posting_with_detail_carries_its_description_and_url() -> (
 
     assert (
         canonical.location
-        == "Plano, TX, US"
+        == "Plano, TX, United States"
     )
 
     assert "Build software." in (
@@ -496,7 +496,7 @@ def test_a_search_hit_s_own_standardized_location_is_used() -> None:
             ],
         },
         {},
-    ) == "Redmond, WA, US"
+    ) == "Redmond, WA, United States"
 
 
 def test_the_plural_raw_location_is_read_too() -> None:
@@ -529,4 +529,117 @@ def test_the_detail_still_wins_when_it_was_fetched() -> None:
                 "Plano, TX, US",
             ],
         },
-    ) == "Plano, TX, US"
+    ) == "Plano, TX, United States"
+
+
+# --- country codes ---------------------------------------------------
+
+
+def test_every_country_this_adapter_can_write_is_read_correctly() -> None:
+    """The adapter writes country names so the gate cannot mistake an
+    ISO code for a US postal code. That only works if every name it can
+    write is one the gate recognises -- so every entry is checked, not a
+    sample. US and Puerto Rico are US; everything else is not."""
+
+    from backend.app.adapters.eightfold_pcsx import (
+        ISO_COUNTRY_NAMES,
+        _spell_country,
+    )
+    from backend.app.intelligence.eligibility import (
+        _is_us_location,
+    )
+
+    for code in ISO_COUNTRY_NAMES:
+        # A region code that is itself a US postal code, the worst case.
+        location = _spell_country(
+            f"Somewhere, GA, {code}"
+        )
+
+        assert _is_us_location(
+            location
+        ) is (
+            code in ("US", "PR")
+        ), (
+            code,
+            location,
+        )
+
+
+def test_the_codes_that_collide_with_us_states() -> None:
+    """IN is India and Indiana; four Qualcomm roles in Bengaluru and
+    Hyderabad were in the queue as US jobs because of it. The region
+    codes collide too: TN is Tamil Nadu and Tennessee."""
+
+    from backend.app.adapters.eightfold_pcsx import (
+        _spell_country,
+    )
+    from backend.app.intelligence.eligibility import (
+        _is_us_location,
+    )
+
+    for raw in (
+        "Bengaluru, KA, IN",
+        "Chennai, TN, IN",
+        "Herzliya, Tel Aviv District, IL",
+        "Toronto, ON, CA",
+        "Munich, BY, DE",
+        "Jakarta, JK, ID",
+        "Bogota, DC, CO",
+        "Macao, MO, MO",
+    ):
+        assert not _is_us_location(
+            _spell_country(
+                raw
+            )
+        ), raw
+
+    # And the real US postal codes still read as the US.
+    for raw in (
+        "Boise, ID, US",
+        "Chicago, IL, US",
+        "Atlanta, GA, US",
+    ):
+        assert _is_us_location(
+            _spell_country(
+                raw
+            )
+        ), raw
+
+
+def test_an_unknown_code_carries_no_us_signal() -> None:
+    """A code missing from the table may be a US postal code, and so may
+    its region, so neither is kept. The first version of this wrote
+    "outside the United States" -- which the gate reads as the strongest
+    US signal there is."""
+
+    from backend.app.adapters.eightfold_pcsx import (
+        _spell_country,
+    )
+    from backend.app.intelligence.eligibility import (
+        _is_us_location,
+    )
+
+    written = _spell_country(
+        "Somewhere, AZ, ZZ"
+    )
+
+    assert "united states" not in written.lower()
+
+    assert not _is_us_location(
+        written
+    )
+
+
+def test_two_locations_stay_two_locations() -> None:
+    """Joined with commas, Redmond and Hyderabad ran together as one
+    six-part place."""
+
+    assert _location_of(
+        {
+            "standardizedLocations": [
+                "Redmond, WA, US",
+                "Hyderabad, TS, IN",
+            ],
+        },
+        {},
+    ) == "Redmond, WA, United States; Hyderabad, TS, India"
