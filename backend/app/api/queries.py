@@ -23,11 +23,19 @@ from datetime import (
 from sqlalchemy import (
     Select,
     case,
+    exists,
     func,
     or_,
     select,
 )
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import (
+    Session,
+    aliased,
+)
+
+from backend.app.coverage.companies import (
+    MULTI_EMPLOYER_SOURCES,
+)
 
 from backend.app.intelligence.companies import (
     CompanyTier,
@@ -458,6 +466,58 @@ def _apply_filters(
         statement = statement.where(
             JobRecord.is_active.is_(
                 True
+            )
+        )
+
+        # A feed's copy of a role ACE already reads from the employer's
+        # own board. Adding direct boards for companies a feed already
+        # listed -- Microsoft among them -- put the same role in the
+        # queue twice, and the feed's copy is the worse of the two: its
+        # description is a placeholder, so the gate cannot read it, which
+        # is exactly how clearance roles were getting through.
+        #
+        # Exact matches only, on company and title. A feed role whose
+        # wording differs from anything on the direct board stays:
+        # measured before applying, 14 rows were true duplicates and 56
+        # were not, and hiding those would hide roles the user may not
+        # see anywhere else. Never applied to marks, which are history.
+        direct = aliased(
+            JobRecord
+        )
+
+        statement = statement.where(
+            ~(
+                JobRecord.source.in_(
+                    MULTI_EMPLOYER_SOURCES
+                )
+                & exists().where(
+                    direct.is_active.is_(
+                        True
+                    ),
+                    direct.source.not_in(
+                        MULTI_EMPLOYER_SOURCES
+                    ),
+                    func.lower(
+                        func.trim(
+                            direct.company
+                        )
+                    )
+                    == func.lower(
+                        func.trim(
+                            JobRecord.company
+                        )
+                    ),
+                    func.lower(
+                        func.trim(
+                            direct.title
+                        )
+                    )
+                    == func.lower(
+                        func.trim(
+                            JobRecord.title
+                        )
+                    ),
+                )
             )
         )
 
