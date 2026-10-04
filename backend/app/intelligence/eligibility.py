@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-04-v33"
+    "2026-10-04-v34"
 )
 
 
@@ -491,7 +491,10 @@ NON_US_LOCATION_PATTERNS = (
     r"\bjapan\b",
     r"\bchina\b",
     r"\bbrazil\b",
-    r"\bmexico\b",
+    # Not preceded by "new": every New Mexico posting -- Albuquerque,
+    # Santa Fe, Los Lunas -- was being read as the country and
+    # rejected as outside the US.
+    r"(?<!new )\bmexico\b",
     r"\bargentina\b",
     r"\bcolombia\b",
     r"\bswitzerland\b",
@@ -1261,6 +1264,25 @@ def _is_explicitly_non_us_location(
     )
 
 
+# The words that name the US outright, matched as whole words.
+#
+# US_LOCATION_MARKERS is tested as a raw substring, and "usa" sits inside
+# foreign place names: b-USA-n, jer-USA-lem, l-USA-ka. A bare "Busan" or
+# "Jerusalem" was counted as a US location.
+UNAMBIGUOUS_US_PATTERN = re.compile(
+    r"\bunited states\b"
+    r"|\busa\b"
+    r"|(?<![a-z])u\.s\.(?:a\.?)?(?![a-z])",
+)
+
+US_MARKER_PATTERN = re.compile(
+    r"\bunited states\b"
+    r"|\busa\b"
+    r"|(?<![a-z])u\.s\.(?:a\.?)?(?![a-z])"
+    r"|\bremote\s*[-,/(]?\s*us\b",
+)
+
+
 def _is_us_location(
     location: str,
 ) -> bool:
@@ -1273,15 +1295,30 @@ def _is_us_location(
     if not normalized:
         return False
 
+    # A posting that names the US outright is open to the US, whatever
+    # else it names. The foreign-country check below used to run first
+    # and win, so "Remote, Canada; Remote, United States" and "Austin,
+    # Texas, United States; Toronto, Ontario, Canada" were rejected as
+    # outside the US for mentioning Canada. Measured across the live
+    # corpus: 58 distinct locations like that.
+    #
+    # The override that check exists for is still intact. It was written
+    # for ambiguous signals -- "Ottawa, ON, CA", where CA is Canada and
+    # not California -- and only the words "United States", "USA" and
+    # "U.S." jump ahead of it. A US city name does not: San Jose is also
+    # the capital of Costa Rica.
+    if UNAMBIGUOUS_US_PATTERN.search(
+        normalized
+    ):
+        return True
+
     if _is_explicitly_non_us_location(
         location
     ):
         return False
 
-    if any(
-        marker in normalized
-        for marker
-        in US_LOCATION_MARKERS
+    if US_MARKER_PATTERN.search(
+        normalized
     ):
         return True
 

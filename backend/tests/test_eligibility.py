@@ -2041,3 +2041,71 @@ def test_a_word_that_only_starts_with_poly_is_not_a_polygraph() -> None:
             .CLEARANCE_BLOCKER
             not in decision.reason_codes
         ), title
+
+
+def test_a_posting_that_names_the_us_is_open_to_the_us() -> None:
+    """The foreign-country check ran first and won, so a posting open
+    in the US *and* elsewhere was rejected for mentioning elsewhere.
+    Nine live software roles -- GitLab, Mercury, Cerebras -- were being
+    hidden this way."""
+
+    for location in (
+        "Remote, Canada; Remote, United States",
+        "United States and Canada",
+        "Austin, Texas, United States; Toronto, Ontario, Canada",
+        "Remote in the United States or Canada",
+        "Canada; United Kingdom; United States",
+        "Los Angeles, USA; Sydney, Australia",
+        "Remote U.S. or Canada",
+    ):
+        assert _is_us_location(
+            location
+        ), location
+
+
+def test_new_mexico_is_a_state_not_a_country() -> None:
+    """"\\bmexico\\b" matched inside "New Mexico", so Albuquerque, Santa
+    Fe and Los Lunas were all rejected as outside the US."""
+
+    for location in (
+        "Santa Fe, New Mexico",
+        "Albuquerque, New Mexico",
+        "Albuquerque, New Mexico, USA",
+    ):
+        assert _is_us_location(
+            location
+        ), location
+
+    # The country is still the country.
+    assert not _is_us_location(
+        "Mexico City, Mexico"
+    )
+
+
+def test_usa_inside_a_foreign_place_name_is_not_the_usa() -> None:
+    """The markers were raw substrings, and "usa" sits inside b-USA-n,
+    jer-USA-lem and l-USA-ka."""
+
+    for location in (
+        "Busan",
+        "Busan, Busan, KR",
+        "Jerusalem",
+        "Lusaka, Zambia",
+    ):
+        assert not _is_us_location(
+            location
+        ), location
+
+
+def test_the_ambiguous_code_override_still_holds() -> None:
+    """What the foreign-country check was written for, and still does:
+    in "Ottawa, ON, CA" the CA is Canada, not California. Only the words
+    "United States", "USA" and "U.S." jump ahead of it."""
+
+    assert not _is_us_location(
+        "Ottawa, ON, CA"
+    )
+
+    assert not _is_us_location(
+        "Toronto, ON, Canada"
+    )
