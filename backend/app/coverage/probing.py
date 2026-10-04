@@ -32,6 +32,7 @@ import json
 import re
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 
 from backend.app.coverage.benchmark import normalise_company
 from backend.app.coverage.companies import is_namesake
@@ -219,6 +220,242 @@ def board_endpoints(
     ]
 
 
+# ----------------------------------------------------------------------
+# robots.txt
+# ----------------------------------------------------------------------
+#
+# Eightfold tenants live on the company's own careers domain, which is
+# the company's to permit or refuse, so nothing is registered there
+# without asking robots.txt first.
+#
+# Python's own urllib.robotparser cannot be used for this. It applies the
+# first rule that matches, and every Eightfold tenant publishes the same
+# template -- "Disallow: /" followed by "Allow: /api/pcsx" -- so the
+# standard library answers "disallowed" for the one route the company has
+# explicitly opened, and would have blocked Microsoft along with every
+# other tenant. RFC 9309 is the other way round: the longest matching
+# rule wins, and an Allow wins a tie.
+
+
+def _fetch_robots(
+    host: str,
+    *,
+    opener=urllib.request.urlopen,
+) -> str | None:
+    """Return a host's robots.txt, "" when it has none, None when
+    unreachable.
+
+    The three answers mean different things under RFC 9309. A 4xx means
+    there are no rules, so everything is allowed ("" here). A 5xx or a
+    network failure means the rules could not be read, and a crawler
+    must then assume complete disallow (None here).
+    """
+
+    request = urllib.request.Request(
+        f"https://{host}/robots.txt",
+        headers={
+            "User-Agent": USER_AGENT,
+        },
+    )
+
+    try:
+        with opener(
+            request,
+            timeout=TIMEOUT_SECONDS,
+        ) as response:
+            if response.status == 200:
+                return response.read(
+                    PAGE_READ_BYTES
+                ).decode(
+                    "utf-8",
+                    "replace",
+                )
+
+            if 400 <= response.status < 500:
+                return ""
+
+            return None
+    except urllib.error.HTTPError as error:
+        if 400 <= error.code < 500:
+            return ""
+
+        return None
+    except Exception:
+        return None
+
+
+def _robots_groups(
+    text: str,
+) -> dict[str, list[tuple[bool, str]]]:
+    """Parse robots.txt into user-agent -> [(allowed, pattern), ...].
+
+    Consecutive user-agent lines share the rules that follow them; a
+    user-agent line after a rule starts a new group.
+    """
+
+    groups: dict[str, list[tuple[bool, str]]] = {}
+
+    agents: list[str] = []
+
+    in_rules = False
+
+    for raw in text.splitlines():
+        line = raw.split(
+            "#",
+            1,
+        )[0].strip()
+
+        if ":" not in line:
+            continue
+
+        key, value = line.split(
+            ":",
+            1,
+        )
+
+        key = key.strip().lower()
+
+        value = value.strip()
+
+        if key == "user-agent":
+            if in_rules:
+                agents = []
+                in_rules = False
+
+            agents.append(
+                value.lower()
+            )
+
+            groups.setdefault(
+                value.lower(),
+                [],
+            )
+        elif key in (
+            "allow",
+            "disallow",
+        ):
+            in_rules = True
+
+            for agent in agents:
+                groups[agent].append(
+                    (
+                        key == "allow",
+                        value,
+                    )
+                )
+
+    return groups
+
+
+def _robots_match(
+    pattern: str,
+    target: str,
+) -> bool:
+    """Whether a robots.txt path pattern matches a path, per RFC 9309:
+    "*" is any run of characters and a trailing "$" anchors the end."""
+
+    anchored = pattern.endswith(
+        "$"
+    )
+
+    body = (
+        pattern[:-1]
+        if anchored
+        else pattern
+    )
+
+    regex = "^" + "".join(
+        ".*"
+        if character == "*"
+        else re.escape(
+            character
+        )
+        for character in body
+    ) + (
+        "$"
+        if anchored
+        else ""
+    )
+
+    return re.match(
+        regex,
+        target,
+    ) is not None
+
+
+def robots_allows(
+    robots_text: str | None,
+    url: str,
+    *,
+    user_agent: str = USER_AGENT,
+) -> bool:
+    """Whether robots.txt lets this user agent fetch this URL.
+
+    None -- robots.txt could not be read -- is a refusal, as RFC 9309
+    requires. "" is a host with no rules. Otherwise the group naming
+    this agent's product token is used if there is one, else "*", and
+    within it the longest matching rule decides, an Allow winning a tie.
+    """
+
+    if robots_text is None:
+        return False
+
+    groups = _robots_groups(
+        robots_text
+    )
+
+    token = user_agent.split(
+        "/",
+        1,
+    )[0].strip().lower()
+
+    if token in groups:
+        rules = groups[token]
+    else:
+        rules = groups.get(
+            "*",
+            [],
+        )
+
+    parts = urlsplit(
+        url
+    )
+
+    target = (parts.path or "/") + (
+        f"?{parts.query}"
+        if parts.query
+        else ""
+    )
+
+    best_length = -1
+
+    best_allowed = True
+
+    for allowed, pattern in rules:
+        # An empty Disallow is the old way of saying "nothing is off
+        # limits"; it is not a rule that matches everything.
+        if not pattern:
+            continue
+
+        if not _robots_match(
+            pattern,
+            target,
+        ):
+            continue
+
+        if len(pattern) > best_length or (
+            len(pattern) == best_length
+            and allowed
+        ):
+            best_length = len(
+                pattern
+            )
+
+            best_allowed = allowed
+
+    return best_allowed
+
+
 # Eightfold serves each tenant from a host the company chooses --
 # apply.careers.microsoft.com, jobs.amdocs.com -- or from a subdomain of
 # eightfold.ai. There is no token in a URL to guess from, which is why
@@ -249,6 +486,7 @@ def find_eightfold_board(
     domains: list[str],
     *,
     fetch=_fetch_json,
+    fetch_robots=_fetch_robots,
 ) -> BoardCandidate | None:
     """Look for this company's Eightfold board, PCSX or classic.
 
@@ -273,9 +511,31 @@ def find_eightfold_board(
                 slug=slug,
             )
 
-            payload = fetch(
+            # Asked once per host, before either route. A host whose
+            # robots.txt cannot be read at all is skipped outright,
+            # which also spares the two API requests on the many guessed
+            # hosts that do not exist.
+            robots = fetch_robots(
+                host
+            )
+
+            if robots is None:
+                continue
+
+            search_url = (
                 f"https://{host}/api/pcsx/search"
                 f"?domain={domain}&query=&start=0"
+            )
+
+            payload = (
+                fetch(
+                    search_url
+                )
+                if robots_allows(
+                    robots,
+                    search_url,
+                )
+                else None
             )
 
             data = (
@@ -306,9 +566,20 @@ def find_eightfold_board(
                     source_host=host,
                 )
 
-            payload = fetch(
+            classic_url = (
                 f"https://{host}/api/apply/v2/jobs"
                 f"?domain={domain}&start=0&num=10"
+            )
+
+            payload = (
+                fetch(
+                    classic_url
+                )
+                if robots_allows(
+                    robots,
+                    classic_url,
+                )
+                else None
             )
 
             positions = (

@@ -28,6 +28,7 @@ from backend.app.coverage.probing import (
     MAX_PAGES_PER_COMPANY,
     BoardCandidate,
     _fetch_json,
+    _fetch_robots,
     _fetch_text,
     _pages_to_read,
     _post_json,
@@ -422,6 +423,13 @@ def diagnose(
     # came back "no board found". Tried last, because it costs several
     # requests per company and the token boards above are far more
     # common.
+    # robots.txt comes through the same door as every other page this
+    # function reads. In production that is the status-aware fetcher,
+    # which can tell "no robots.txt" from "could not ask"; when a caller
+    # has injected its own page fetcher -- every test does -- robots.txt
+    # is read through that instead, so the probe never reaches the
+    # network behind a caller's back. An injected fetcher returning ""
+    # reads as "no rules", which is what an unanswered test URL means.
     eightfold = find_eightfold_board(
         company,
         list(
@@ -430,6 +438,16 @@ def diagnose(
             )
         ),
         fetch=fetch,
+        fetch_robots=(
+            _fetch_robots
+            if fetch_text is _fetch_text
+            else (
+                lambda host: fetch_text(
+                    f"https://{host}/robots.txt"
+                )
+                or ""
+            )
+        ),
     )
 
     if eightfold is not None:
