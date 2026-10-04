@@ -1966,3 +1966,78 @@ def test_a_word_that_merely_starts_with_intern_is_not_one() -> None:
                 title=title,
             )
         ), title
+
+
+def test_clearance_shorthand_in_a_title_is_rejected() -> None:
+    """The user named clearance roles as noise, and five sat in the
+    queue anyway. Each came through the curated feed with a placeholder
+    description, so the requirement lived only in the title -- written
+    in shorthand the description patterns were never built for."""
+
+    placeholder = (
+        "Sourced from a curated new-graduate listing. Full "
+        "requirements are on the employer's posting."
+    )
+
+    for title in (
+        "Software Engineer - Cleared",
+        "Software Engineer - Ctj - Poly",
+        "AI/ML Engineer - Multiple levels - Cleared",
+        "JavaScript Software Engineer 1 - TS/SCI with Poly",
+        "Software Engineer - TS-SCI",
+        "Software Engineer (Secret Clearance Required)",
+    ):
+        decision = evaluate_job(
+            make_job(
+                title=title,
+                description=placeholder,
+            )
+        )
+
+        assert (
+            EligibilityReasonCode
+            .CLEARANCE_BLOCKER
+            in decision.reason_codes
+        ), title
+
+
+def test_cleared_in_a_description_is_not_a_clearance_role() -> None:
+    """Why the shorthand is title-only. In prose "cleared" also means a
+    background check that has come back, which every ordinary job runs,
+    and rejecting on it would cost the user roles they can take."""
+
+    decision = evaluate_job(
+        make_job(
+            description=(
+                VERIFIABLE_PAD
+                + " Once your background check has cleared, "
+                "you will join the platform team."
+            ),
+        )
+    )
+
+    assert (
+        EligibilityReasonCode
+        .CLEARANCE_BLOCKER
+        not in decision.reason_codes
+    )
+
+
+def test_a_word_that_only_starts_with_poly_is_not_a_polygraph() -> None:
+    """Polyglot, Polymer, Polygon: none of them is a clearance."""
+
+    for title in (
+        "Software Engineer, Polyglot Persistence",
+        "Software Engineer - Polygon Integrations",
+    ):
+        decision = evaluate_job(
+            make_job(
+                title=title,
+            )
+        )
+
+        assert (
+            EligibilityReasonCode
+            .CLEARANCE_BLOCKER
+            not in decision.reason_codes
+        ), title

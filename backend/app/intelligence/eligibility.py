@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-09-22-v32"
+    "2026-10-04-v33"
 )
 
 
@@ -763,7 +763,9 @@ CLEARANCE_BLOCKERS = (
 CLEARANCE_BLOCKER_PATTERNS = (
     r"\bsecurity\s+clearance\b",
     r"\bsecret\s+clearance\b",
-    r"\bts\s*/\s*sci\b",
+    # Hyphen and space as well as slash: "TS-SCI" and "TS SCI" are the
+    # same requirement written by a different recruiter.
+    r"\bts\s*[/-]?\s*sci\b",
     # Bare "TS clearance" — the SCI half is often dropped even though
     # the requirement is identical to "TS/SCI".
     r"\bts\s+clearance\b",
@@ -772,6 +774,31 @@ CLEARANCE_BLOCKER_PATTERNS = (
     r"\bdod\s+clearance\b",
     r"\bclearable\b",
     r"\bq\s+clearance\b",
+)
+
+
+# Clearance shorthand that is unambiguous in a title and not in prose.
+#
+# The user named clearance roles as noise outright, and five were
+# sitting in the queue anyway: "Software Engineer - Cleared", "Software
+# Engineer - Ctj - Poly". Every one came through the curated feed, whose
+# description is a placeholder, so the requirement existed only in the
+# title -- and the title said it in shorthand the description patterns
+# above were never written for. Clicking through, the employer's own
+# page said Top Secret.
+#
+# Title only, deliberately. In a description "cleared" also means "once
+# your background check has cleared", which is an ordinary job, and
+# rejecting on that would cost the user roles they can take. In a title
+# none of these mean anything else: measured across the corpus, every
+# title carrying "cleared", "poly" or "ctj" -- Microsoft's marker, which
+# always sits beside Top Secret, TS/SCI or Poly -- is a clearance role.
+CLEARANCE_TITLE_PATTERNS = (
+    r"\bcleared\b",
+    r"\bpoly\b",
+    r"\bctj\b",
+    r"\bclearance\b",
+    r"\bsecret\b",
 )
 
 
@@ -2446,6 +2473,9 @@ def evaluate_job(
     ) or _matches_any_regex(
         blocker_text,
         CLEARANCE_BLOCKER_PATTERNS,
+    ) or _matches_any_regex(
+        job.title,
+        CLEARANCE_TITLE_PATTERNS,
     ):
         reject_codes.append(
             EligibilityReasonCode
