@@ -1121,3 +1121,583 @@ def test_an_unchanged_registry_is_not_reloaded() -> None:
     assert len(
         polled
     ) == 3, "an unchanged reload disturbed the schedule"
+
+
+# --- resuming the schedule after a restart -------------------------
+
+from datetime import (  # noqa: E402
+    datetime,
+    timedelta,
+    timezone,
+)
+
+import httpx  # noqa: E402
+
+
+RESTARTED_AT = datetime(
+    2026,
+    10,
+    4,
+    17,
+    45,
+    tzinfo=timezone.utc,
+)
+
+
+def _runtime_resuming(
+    source: SourceDefinition,
+    last_polled,
+    clock: FakeClock,
+    poller=None,
+) -> SchedulerRuntime:
+    return SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                source,
+            )
+        ),
+        poller=poller
+        or (
+            lambda _source: make_result()
+        ),
+        clock=clock,
+        sleeper=lambda _seconds: None,
+        last_polled=last_polled,
+        wall_clock=lambda: RESTARTED_AT,
+    )
+
+
+def test_a_restart_waits_out_a_recent_poll() -> None:
+    """A deploy used to re-poll every board at once; three in twenty
+    minutes got ACE refused by Eightfold on every tenant."""
+
+    source = make_source(
+        poll_interval_seconds=900,
+    )
+
+    clock = FakeClock()
+
+    runtime = _runtime_resuming(
+        source,
+        lambda: {
+            (
+                "greenhouse",
+                "databricks",
+            ): RESTARTED_AT
+            - timedelta(
+                seconds=180,
+            ),
+        },
+        clock,
+    )
+
+    assert (
+        runtime.run_due_sources().attempted_count
+        == 0
+    )
+
+    assert (
+        runtime.seconds_until_next_poll()
+        == 720
+    )
+
+    clock.advance(
+        720
+    )
+
+    assert (
+        runtime.run_due_sources().succeeded_count
+        == 1
+    )
+
+
+def test_a_source_the_machine_slept_through_goes_first() -> None:
+    """Overdue is overdue: eight hours with the lid shut must not wait
+    another interval."""
+
+    source = make_source(
+        poll_interval_seconds=900,
+    )
+
+    runtime = _runtime_resuming(
+        source,
+        lambda: {
+            (
+                "greenhouse",
+                "databricks",
+            ): RESTARTED_AT
+            - timedelta(
+                hours=8,
+            ),
+        },
+        FakeClock(),
+    )
+
+    assert (
+        runtime.run_due_sources().succeeded_count
+        == 1
+    )
+
+
+def test_a_source_never_polled_goes_first() -> None:
+    runtime = _runtime_resuming(
+        make_source(),
+        lambda: {},
+        FakeClock(),
+    )
+
+    assert (
+        runtime.run_due_sources().succeeded_count
+        == 1
+    )
+
+
+def test_an_unreadable_history_means_everything_is_due() -> None:
+    """Not knowing when a source last polled costs a burst, never a
+    gap."""
+
+    def unreadable():
+        raise RuntimeError(
+            "database unavailable"
+        )
+
+    runtime = _runtime_resuming(
+        make_source(),
+        unreadable,
+        FakeClock(),
+    )
+
+    assert (
+        runtime.run_due_sources().succeeded_count
+        == 1
+    )
+
+
+def test_a_poll_stamped_in_the_future_waits_one_interval() -> None:
+    source = make_source(
+        poll_interval_seconds=900,
+    )
+
+    runtime = _runtime_resuming(
+        source,
+        lambda: {
+            (
+                "greenhouse",
+                "databricks",
+            ): RESTARTED_AT
+            + timedelta(
+                hours=5,
+            ),
+        },
+        FakeClock(),
+    )
+
+    assert (
+        runtime.seconds_until_next_poll()
+        == 900
+    )
+
+
+# --- backing off a source that refuses ACE -------------------------
+
+
+def _refusal(
+    status: int,
+) -> httpx.HTTPStatusError:
+    request = httpx.Request(
+        "GET",
+        "https://jobs.example.com/api/pcsx/search",
+    )
+
+    return httpx.HTTPStatusError(
+        f"{status}",
+        request=request,
+        response=httpx.Response(
+            status,
+            request=request,
+        ),
+    )
+
+
+def test_a_refused_source_is_asked_less_often_until_it_answers() -> None:
+    """Eightfold answered 405 on every tenant at once. Asking again on
+    the usual schedule keeps knocking on a door just shut."""
+
+    source = make_source(
+        poll_interval_seconds=900,
+    )
+
+    clock = FakeClock()
+
+    answers = [
+        _refusal(405),
+        _refusal(405),
+        None,
+        _refusal(429),
+    ]
+
+    def poller(
+        _source: SourceDefinition,
+    ):
+        answer = answers.pop(
+            0
+        )
+
+        if answer is not None:
+            raise answer
+
+        return make_result()
+
+    runtime = _runtime_resuming(
+        source,
+        lambda: {},
+        clock,
+        poller,
+    )
+
+    # Refused: twice the interval.
+    assert (
+        runtime.run_due_sources().failed_count
+        == 1
+    )
+
+    assert (
+        runtime.seconds_until_next_poll()
+        == 1800
+    )
+
+    clock.advance(
+        1800
+    )
+
+    # Refused again: four times.
+    runtime.run_due_sources()
+
+    assert (
+        runtime.seconds_until_next_poll()
+        == 3600
+    )
+
+    clock.advance(
+        3600
+    )
+
+    # Answered: back to the interval, and the count starts over.
+    assert (
+        runtime.run_due_sources().succeeded_count
+        == 1
+    )
+
+    assert (
+        runtime.seconds_until_next_poll()
+        == 900
+    )
+
+    clock.advance(
+        900
+    )
+
+    runtime.run_due_sources()
+
+    assert (
+        runtime.seconds_until_next_poll()
+        == 1800
+    )
+
+
+def test_the_backoff_stops_growing_at_the_cap() -> None:
+    source = make_source(
+        poll_interval_seconds=900,
+    )
+
+    clock = FakeClock()
+
+    def poller(
+        _source: SourceDefinition,
+    ):
+        raise _refusal(403)
+
+    runtime = _runtime_resuming(
+        source,
+        lambda: {},
+        clock,
+        poller,
+    )
+
+    for _ in range(12):
+        runtime.run_due_sources()
+
+        clock.advance(
+            runtime.seconds_until_next_poll()
+        )
+
+    runtime.run_due_sources()
+
+    assert (
+        runtime.seconds_until_next_poll()
+        == runtime_module.REFUSAL_BACKOFF_CAP_SECONDS
+    )
+
+
+def test_a_wrapped_refusal_is_still_a_refusal() -> None:
+    """An adapter that raises its own error from the HTTP one is still
+    being refused."""
+
+    source = make_source(
+        poll_interval_seconds=900,
+    )
+
+    class AdapterError(Exception):
+        pass
+
+    def poller(
+        _source: SourceDefinition,
+    ):
+        try:
+            raise _refusal(405)
+        except httpx.HTTPStatusError as exc:
+            raise AdapterError(
+                "board unavailable"
+            ) from exc
+
+    runtime = _runtime_resuming(
+        source,
+        lambda: {},
+        FakeClock(),
+        poller,
+    )
+
+    runtime.run_due_sources()
+
+    assert (
+        runtime.seconds_until_next_poll()
+        == 1800
+    )
+
+
+def test_an_ordinary_failure_keeps_its_interval() -> None:
+    """A 500 or a timeout is "not now", not "not you"."""
+
+    source = make_source(
+        poll_interval_seconds=900,
+    )
+
+    def poller(
+        _source: SourceDefinition,
+    ):
+        raise _refusal(503)
+
+    runtime = _runtime_resuming(
+        source,
+        lambda: {},
+        FakeClock(),
+        poller,
+    )
+
+    runtime.run_due_sources()
+
+    assert (
+        runtime.seconds_until_next_poll()
+        == 900
+    )
+
+
+# --- maintenance between cycles --------------------------------------
+
+import threading  # noqa: E402
+
+
+def _runtime_with_maintenance(
+    maintenance,
+    clock: FakeClock,
+    *,
+    interval: float = 3600,
+) -> SchedulerRuntime:
+    def sleeper(
+        seconds: float,
+    ) -> None:
+        clock.advance(
+            seconds
+        )
+
+    return SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                make_source(
+                    poll_interval_seconds=600,
+                ),
+            )
+        ),
+        poller=lambda _source: make_result(),
+        clock=clock,
+        sleeper=sleeper,
+        maintenance=maintenance,
+        maintenance_interval_seconds=interval,
+    )
+
+
+def test_maintenance_runs_on_its_own_schedule() -> None:
+    """Once at the start, then once per interval -- not per cycle."""
+
+    clock = FakeClock()
+
+    finished = threading.Semaphore(0)
+
+    def maintenance() -> None:
+        finished.release()
+
+    # Nine cycles, 600 s apart, span 4800 s: maintenance every 3600 s
+    # runs twice, where once per cycle would be eight times.
+    runtime = _runtime_with_maintenance(
+        maintenance,
+        clock,
+    )
+
+    runtime.run_forever(
+        max_cycles=9,
+    )
+
+    assert finished.acquire(
+        timeout=5,
+    )
+
+    assert finished.acquire(
+        timeout=5,
+    )
+
+    assert not finished.acquire(
+        timeout=0.3,
+    )
+
+
+def test_slow_maintenance_does_not_hold_up_polling() -> None:
+    """It reads other people's websites. One slow site must not delay
+    the five-minute sources behind it."""
+
+    clock = FakeClock()
+
+    release = threading.Event()
+
+    started = threading.Event()
+
+    def maintenance() -> None:
+        started.set()
+
+        release.wait(
+            timeout=10,
+        )
+
+    runtime = _runtime_with_maintenance(
+        maintenance,
+        clock,
+        interval=600,
+    )
+
+    done = threading.Event()
+
+    def run() -> None:
+        runtime.run_forever(
+            max_cycles=4,
+        )
+
+        done.set()
+
+    threading.Thread(
+        target=run,
+        daemon=True,
+    ).start()
+
+    try:
+        assert started.wait(
+            timeout=5,
+        )
+
+        # Every cycle completes while maintenance is still stuck.
+        assert done.wait(
+            timeout=5,
+        )
+
+    finally:
+        release.set()
+
+
+def test_maintenance_still_running_is_not_started_again() -> None:
+    clock = FakeClock()
+
+    release = threading.Event()
+
+    starts: list[float] = []
+
+    def maintenance() -> None:
+        starts.append(
+            clock.now
+        )
+
+        release.wait(
+            timeout=10,
+        )
+
+    # Due every cycle, but the first never finishes during the run.
+    runtime = _runtime_with_maintenance(
+        maintenance,
+        clock,
+        interval=1,
+    )
+
+    try:
+        runtime.run_forever(
+            max_cycles=5,
+        )
+
+        assert len(starts) == 1
+
+    finally:
+        release.set()
+
+
+def test_failing_maintenance_does_not_stop_the_scheduler() -> None:
+    clock = FakeClock()
+
+    polls = 0
+
+    def poller(
+        _source: SourceDefinition,
+    ):
+        nonlocal polls
+
+        polls += 1
+
+        return make_result()
+
+    def maintenance() -> None:
+        raise RuntimeError(
+            "diagnosis failed"
+        )
+
+    def sleeper(
+        seconds: float,
+    ) -> None:
+        clock.advance(
+            seconds
+        )
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                make_source(
+                    poll_interval_seconds=600,
+                ),
+            )
+        ),
+        poller=poller,
+        clock=clock,
+        sleeper=sleeper,
+        maintenance=maintenance,
+        maintenance_interval_seconds=1,
+    )
+
+    runtime.run_forever(
+        max_cycles=4,
+    )
+
+    assert polls == 4

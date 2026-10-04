@@ -51,6 +51,9 @@ from backend.app.coverage.probing import (
     _fetch_text,
     _post_json,
 )
+from backend.app.coverage.recovery import (
+    dark_sources,
+)
 from backend.app.db.models import (
     JobEvaluationRecord,
     JobRecord,
@@ -643,4 +646,26 @@ def coverage(
         "sponsorship": sponsorship_refusals(
             session
         ),
+        # Boards ACE polls that have stopped answering. Kept apart from
+        # "unreached" because these are ACE's to fix, not the
+        # company's -- and because their old postings still look
+        # active, these companies would otherwise count as reached.
+        "dark": [
+            {
+                "company": dark.company_name,
+                "source_type": dark.source_type,
+                "source_account": dark.source_account,
+                "last_success_at": (
+                    dark.last_success_at.isoformat()
+                    if dark.last_success_at
+                    else None
+                ),
+                "dark_since": (
+                    dark.dark_since.isoformat()
+                ),
+            }
+            for dark in dark_sources(
+                session
+            )
+        ],
     }

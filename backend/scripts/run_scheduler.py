@@ -19,9 +19,18 @@ import logging
 from collections.abc import (
     Sequence,
 )
+from datetime import datetime
+
+from sqlalchemy import select
 
 from backend.app.config import (
     get_settings,
+)
+from backend.app.coverage.recovery import (
+    recover_dark_sources,
+)
+from backend.app.db.models import (
+    SourceState,
 )
 from backend.app.db.session import (
     SessionLocal,
@@ -395,12 +404,89 @@ def main(
                 limit=args.limit,
             )
 
+    def last_polled() -> dict[
+        tuple[str, str],
+        datetime,
+    ]:
+        """When each source last polled successfully, from source_states."""
+
+        with SessionLocal() as session:
+            return {
+                (
+                    source,
+                    source_account,
+                ): last_success_at
+                for (
+                    source,
+                    source_account,
+                    last_success_at,
+                ) in session.execute(
+                    select(
+                        SourceState.source,
+                        SourceState.source_account,
+                        SourceState.last_success_at,
+                    )
+                ).all()
+            }
+
+    def recover_dark() -> None:
+        """Follow companies whose boards stopped answering.
+
+        Logged at warning either way: a board found dark is exactly the
+        thing that went unnoticed for seventeen days.
+        """
+
+        with SessionLocal.begin() as session:
+            recoveries = recover_dark_sources(
+                session
+            )
+
+        for recovery in recoveries:
+            dark = recovery.dark
+
+            if recovery.replaced_by is not None:
+                LOGGER.warning(
+                    (
+                        "source_replaced "
+                        "company=%r old=%s/%s new=%s/%s "
+                        "closed_jobs=%d"
+                    ),
+                    dark.company_name,
+                    dark.source_type,
+                    dark.source_account,
+                    *recovery.replaced_by,
+                    recovery.closed_jobs,
+                )
+
+                continue
+
+            LOGGER.warning(
+                (
+                    "source_dark "
+                    "company=%r source=%s/%s "
+                    "dark_since=%s outcome=%s"
+                ),
+                dark.company_name,
+                dark.source_type,
+                dark.source_account,
+                dark.dark_since.isoformat(),
+                recovery.diagnosis.outcome,
+            )
+
     runtime = SchedulerRuntime(
         registry=registry,
         poller=poll_source,
         cycle_recorder=record_cycle,
         alert_sender=send_alerts,
         reload_registry=reload_registry,
+        maintenance=recover_dark,
+        # --once is how a person asks for everything now, so it does
+        # not wait out anyone's interval.
+        last_polled=(
+            None
+            if args.once
+            else last_polled
+        ),
     )
 
     if runtime.source_count == 0:

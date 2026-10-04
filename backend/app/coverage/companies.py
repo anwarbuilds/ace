@@ -506,6 +506,21 @@ TARGET_COMPANIES: tuple[str, ...] = (
 CURATED_POLL_INTERVAL_SECONDS = 900
 
 
+# Where each provider's boards are polled from, for the providers whose
+# account alone does not say. Workday and Eightfold carry their own
+# host from discovery, because theirs is per tenant.
+SOURCE_HOSTS = {
+    "lever": "jobs.lever.co",
+    "ashby": "jobs.ashbyhq.com",
+    "greenhouse": (
+        "job-boards.greenhouse.io"
+    ),
+    "smartrecruiters": (
+        "jobs.smartrecruiters.com"
+    ),
+}
+
+
 # Lanes that carry many employers under one source, rather than one
 # employer's own board.
 #

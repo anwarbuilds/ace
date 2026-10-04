@@ -1984,6 +1984,30 @@ function coverageSponsorship(rows){
       }).join("")+
     '</div>';
 }
+/* Boards ACE polls that have stopped answering. Postman's had been gone
+   seventeen days, and three companies had moved to Ashby, before anyone
+   noticed -- their old postings still looked active, so they counted as
+   reached. Every six hours ACE looks for where each company went and
+   switches over by itself; what is listed here is what it could not
+   resolve. */
+function coverageDark(rows){
+  if(!rows||!rows.length) return "";
+  return '<div class="ans-sec">Stopped answering ('+rows.length+')</div>'+
+    '<p class="why" style="max-width:74ch">ACE polls these boards but has had no answer for a day '+
+      'or more, so anything new they post is not reaching you. Every six hours ACE looks for where '+
+      'each company has moved and switches over by itself when it finds the new board; these are '+
+      'the ones it has not found yet.</p>'+
+    '<div class="cov-grid">'+
+      rows.map(function(r){
+        return '<div class="cov-row" title="'+esc(r.source_type+" / "+r.source_account)+'">'+
+          '<span class="cov-name">'+esc(r.company)+'</span>'+
+          '<span class="cov-n">'+esc(r.source_type)+'</span>'+
+          '<span class="cov-pct">'+(r.last_success_at
+            ? 'since '+esc(shortDate(r.last_success_at))
+            : 'never answered')+'</span></div>';
+      }).join("")+
+    '</div>';
+}
 function coveragePage(){
   var c=state.coverage;
   if(!c) return '<div class="head"><div class="head-row"><h1 class="h1">Coverage</h1></div></div>'+
@@ -2012,6 +2036,7 @@ function coveragePage(){
       (state.coverageMsg
         ? '<div class="cov-out '+esc(state.coverageMsgKind||"")+'">'+esc(state.coverageMsg)+'</div>'
         : '')+
+      coverageDark(c.dark)+
       coverageGaps(c.unreached)+
       coverageSponsorship(c.sponsorship)+
     '</div></div>';

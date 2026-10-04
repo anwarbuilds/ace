@@ -30,7 +30,10 @@ to the existing scheduling service.
 """
 
 import logging
-from collections.abc import Callable
+from collections.abc import (
+    Callable,
+    Mapping,
+)
 import threading
 import time
 from datetime import (
@@ -68,6 +71,69 @@ DEFAULT_CONCURRENCY = 6
 SUSPEND_REPORTING_SECONDS = 120
 
 
+# Statuses a provider uses to say "not you", as opposed to "not now".
+# 405 is here because that is what Eightfold's edge answered, on every
+# tenant at once, minutes after ACE swept all of its boards three times
+# in twenty minutes -- the same GET that had returned 200 moments
+# before.
+REFUSAL_STATUSES = frozenset(
+    {
+        401,
+        403,
+        405,
+        429,
+    }
+)
+
+
+# A refused source is asked again at twice its interval, then four
+# times, and so on up to this. Asking on the usual schedule would keep
+# knocking on a door that has just been shut, and can keep it shut.
+REFUSAL_BACKOFF_CAP_SECONDS = 6 * 60 * 60
+
+
+# How often the injected maintenance runs -- looking for boards that
+# have stopped answering. Their companies are diagnosed again, a few
+# requests each, so this is not a sweep of anything.
+MAINTENANCE_INTERVAL_SECONDS = 6 * 60 * 60
+
+
+def _refusal_status(
+    exc: BaseException,
+) -> int | None:
+    """The refusal status behind a failed poll, if a refusal caused it.
+
+    Read off any exception carrying an HTTP response, so an adapter
+    that wraps the HTTP error in its own is still recognised.
+    """
+
+    current: BaseException | None = exc
+
+    for _ in range(5):
+        if current is None:
+            return None
+
+        status = getattr(
+            getattr(
+                current,
+                "response",
+                None,
+            ),
+            "status_code",
+            None,
+        )
+
+        if status in REFUSAL_STATUSES:
+            return status
+
+        current = (
+            current.__cause__
+            or current.__context__
+        )
+
+    return None
+
+
 class RegistryReloader(Protocol):
     """Returns the current source registry, read fresh."""
 
@@ -75,6 +141,23 @@ class RegistryReloader(Protocol):
         self,
     ) -> SourceRegistry:
         """Return the registry as it stands now."""
+
+
+class LastPolledReader(Protocol):
+    """Returns when each source last polled successfully.
+
+    Keyed by source type value and source account, the way
+    source_states stores them. Injected so this module keeps no
+    database import.
+    """
+
+    def __call__(
+        self,
+    ) -> Mapping[
+        tuple[str, str],
+        datetime,
+    ]:
+        """Return the last successful poll of every source known."""
 
 
 class MonotonicClock(Protocol):
@@ -233,6 +316,23 @@ class SchedulerRuntime:
         alert_sender: (
             Callable[[], None] | None
         ) = None,
+        last_polled: (
+            LastPolledReader | None
+        ) = None,
+        wall_clock: Callable[
+            [],
+            datetime,
+        ] = (
+            lambda: datetime.now(
+                timezone.utc
+            )
+        ),
+        maintenance: (
+            Callable[[], None] | None
+        ) = None,
+        maintenance_interval_seconds: float = (
+            MAINTENANCE_INTERVAL_SECONDS
+        ),
     ) -> None:
         self._sources = (
             registry.enabled_sources
@@ -282,6 +382,174 @@ class SchedulerRuntime:
             source.identity: 0.0
             for source in self._sources
         }
+
+        # Consecutive refusals per source; cleared by a success.
+        self._refusals: dict[
+            tuple[
+                object,
+                str,
+            ],
+            int,
+        ] = {}
+
+        self._maintenance = maintenance
+
+        self._maintenance_interval = (
+            maintenance_interval_seconds
+        )
+
+        self._maintenance_due_at = 0.0
+
+        self._maintenance_thread: (
+            threading.Thread | None
+        ) = None
+
+        self._resume_schedule(
+            last_polled,
+            wall_clock,
+        )
+
+    def _resume_schedule(
+        self,
+        last_polled: (
+            LastPolledReader | None
+        ),
+        wall_clock: Callable[
+            [],
+            datetime,
+        ],
+    ) -> None:
+        """Start each source where its last successful poll left it.
+
+        Every source used to be due the moment the scheduler started,
+        so each deploy re-polled all of them at once. Three restarts in
+        twenty minutes swept every Eightfold board in full three times,
+        and Eightfold then refused ACE on every tenant. A source polled
+        three minutes before a restart is not stale: it waits out the
+        rest of its interval. One the machine slept through is overdue
+        and goes in the first cycle, as before.
+        """
+
+        if last_polled is None:
+            return
+
+        try:
+            polled = last_polled()
+
+            now = wall_clock()
+
+        except Exception:
+            # Not knowing means overdue: the old behaviour, which costs
+            # a burst but never a gap.
+            self._logger.exception(
+                "scheduler_last_polled_unavailable"
+            )
+
+            return
+
+        clock_now = self._clock()
+
+        waiting = 0
+
+        with self._due_lock:
+            for source in self._sources:
+                polled_at = polled.get(
+                    (
+                        source.source_type.value,
+                        source.source_account,
+                    )
+                )
+
+                if polled_at is None:
+                    continue
+
+                if polled_at.tzinfo is None:
+                    polled_at = polled_at.replace(
+                        tzinfo=timezone.utc,
+                    )
+
+                interval = (
+                    source.poll_interval_seconds
+                )
+
+                # A poll stamped in the future -- a clock that moved --
+                # waits one interval, never longer.
+                remaining = min(
+                    interval,
+                    interval
+                    - (
+                        now - polled_at
+                    ).total_seconds(),
+                )
+
+                if remaining <= 0:
+                    continue
+
+                self._next_due_at[
+                    source.identity
+                ] = (
+                    clock_now
+                    + remaining
+                )
+
+                waiting += 1
+
+        self._logger.info(
+            (
+                "scheduler_schedule_resumed "
+                "due_now=%d waiting=%d"
+            ),
+            len(self._sources) - waiting,
+            waiting,
+        )
+
+    def _start_due_maintenance(
+        self,
+    ) -> None:
+        """Start the maintenance in the background, if it is due.
+
+        In the background because it reads other people's websites,
+        and one slow site must not hold back the five-minute sources
+        behind it. Never two at once.
+        """
+
+        if self._maintenance is None:
+            return
+
+        now = self._clock()
+
+        if now < self._maintenance_due_at:
+            return
+
+        if (
+            self._maintenance_thread is not None
+            and self._maintenance_thread.is_alive()
+        ):
+            return
+
+        self._maintenance_due_at = (
+            now
+            + self._maintenance_interval
+        )
+
+        maintenance = self._maintenance
+
+        def run() -> None:
+            try:
+                maintenance()
+
+            except Exception:
+                self._logger.exception(
+                    "scheduler_maintenance_failed"
+                )
+
+        self._maintenance_thread = threading.Thread(
+            target=run,
+            name="ace-maintenance",
+            daemon=True,
+        )
+
+        self._maintenance_thread.start()
 
     def _send_due_alerts(
         self,
@@ -493,12 +761,44 @@ class SchedulerRuntime:
                     finished_at - started_at,
                 )
 
+                refused_with = _refusal_status(
+                    exc
+                )
+
                 with self._due_lock:
+                    delay = (
+                        source.poll_interval_seconds
+                    )
+
+                    if refused_with is not None:
+                        refusals = (
+                            self._refusals.get(
+                                source.identity,
+                                0,
+                            )
+                            + 1
+                        )
+
+                        self._refusals[
+                            source.identity
+                        ] = refusals
+
+                        # Never sooner than the source's own interval,
+                        # even where that is longer than the cap.
+                        delay = max(
+                            delay,
+                            min(
+                                delay
+                                * 2**refusals,
+                                REFUSAL_BACKOFF_CAP_SECONDS,
+                            ),
+                        )
+
                     self._next_due_at[
                         source.identity
                     ] = (
                         finished_at
-                        + source.poll_interval_seconds
+                        + delay
                     )
 
                 with results_lock:
@@ -517,6 +817,31 @@ class SchedulerRuntime:
                         )
                     )
 
+                if refused_with is not None:
+                    # Expected, and its cause is in the status: a
+                    # traceback per refusal would bury the log.
+                    self._logger.warning(
+                        (
+                            "source_poll_refused "
+                            "source_type=%s "
+                            "source_account=%s "
+                            "company=%r "
+                            "status=%d "
+                            "refusals=%d "
+                            "duration_seconds=%.3f "
+                            "next_poll_seconds=%d"
+                        ),
+                        source.source_type.value,
+                        source.source_account,
+                        source.company_name,
+                        refused_with,
+                        refusals,
+                        duration_seconds,
+                        delay,
+                    )
+
+                    return
+
                 self._logger.exception(
                     (
                         "source_poll_failed "
@@ -530,7 +855,7 @@ class SchedulerRuntime:
                     source.source_account,
                     source.company_name,
                     duration_seconds,
-                    source.poll_interval_seconds,
+                    delay,
                 )
 
                 return
@@ -548,6 +873,11 @@ class SchedulerRuntime:
                 ] = (
                     finished_at
                     + source.poll_interval_seconds
+                )
+
+                self._refusals.pop(
+                    source.identity,
+                    None,
                 )
 
             with results_lock:
@@ -743,6 +1073,10 @@ class SchedulerRuntime:
                 )
 
                 return
+
+            # Before the refresh, so a board it registered on an
+            # earlier run is picked up here rather than a cycle later.
+            self._start_due_maintenance()
 
             self._refresh_sources()
 

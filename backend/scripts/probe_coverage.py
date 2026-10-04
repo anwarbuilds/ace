@@ -35,6 +35,7 @@ from backend.app.coverage.benchmark import (
 from backend.app.coverage.companies import (
     CURATED_POLL_INTERVAL_SECONDS,
     MULTI_EMPLOYER_SOURCES,
+    SOURCE_HOSTS,
     TARGET_COMPANIES,
 )
 from backend.app.coverage.diagnosis import (
@@ -51,18 +52,6 @@ from backend.app.db.session import SessionLocal
 from backend.app.discovery.watchlist import (
     fetch_watchlist,
 )
-
-
-SOURCE_HOSTS = {
-    "lever": "jobs.lever.co",
-    "ashby": "jobs.ashbyhq.com",
-    "greenhouse": (
-        "job-boards.greenhouse.io"
-    ),
-    "smartrecruiters": (
-        "jobs.smartrecruiters.com"
-    ),
-}
 
 
 def reachable_keys(
