@@ -1132,6 +1132,7 @@ from datetime import (  # noqa: E402
 )
 
 import httpx  # noqa: E402
+import time  # noqa: E402
 
 
 RESTARTED_AT = datetime(
@@ -1701,3 +1702,582 @@ def test_failing_maintenance_does_not_stop_the_scheduler() -> None:
     )
 
     assert polls == 4
+
+
+# --- a slow source must not hold up the rest -------------------------
+#
+# Accenture's poll takes six minutes every fifteen. The loop used to
+# wait for every source it started before starting any more, so for
+# those six minutes the five-minute sources -- the ones that exist to
+# catch a posting early -- were not polled at all.
+
+
+def _blocking_poller(
+    release: threading.Event,
+    calls: dict[str, int],
+    *,
+    slow_account: str = "accenture",
+    started: threading.Event | None = None,
+    started_at: list[datetime] | None = None,
+):
+    def poller(
+        source: SourceDefinition,
+    ):
+        calls[source.source_account] = (
+            calls.get(
+                source.source_account,
+                0,
+            )
+            + 1
+        )
+
+        if source.source_account == slow_account:
+            if started_at is not None:
+                started_at.append(
+                    datetime.now(
+                        timezone.utc
+                    )
+                )
+
+            if started is not None:
+                started.set()
+
+            assert release.wait(
+                timeout=10,
+            )
+
+        return make_result()
+
+    return poller
+
+
+def _sources_fast_and_slow(
+    *,
+    slow_interval: int = 900,
+) -> SourceRegistry:
+    return SourceRegistry(
+        (
+            make_source(
+                source_account="accenture",
+                company_name="Accenture",
+                poll_interval_seconds=slow_interval,
+            ),
+            make_source(
+                source_account="cursor",
+                company_name="Cursor",
+                poll_interval_seconds=300,
+            ),
+        )
+    )
+
+
+def _advancing(
+    clock: FakeClock,
+):
+    def sleeper(
+        seconds: float,
+    ) -> None:
+        clock.advance(
+            seconds
+        )
+
+    return sleeper
+
+
+def test_a_slow_source_does_not_hold_up_the_others() -> None:
+    clock = FakeClock()
+
+    release = threading.Event()
+
+    calls: dict[str, int] = {}
+
+    runtime = SchedulerRuntime(
+        registry=_sources_fast_and_slow(),
+        poller=_blocking_poller(
+            release,
+            calls,
+        ),
+        clock=clock,
+        sleeper=_advancing(
+            clock
+        ),
+        cycle_budget_seconds=0.05,
+    )
+
+    try:
+        # Well over 300 s of scheduler time with Accenture stuck.
+        runtime.run_forever(
+            max_cycles=40,
+        )
+
+        assert calls["cursor"] >= 2
+
+        # And the stuck one is not started a second time meanwhile.
+        assert calls["accenture"] == 1
+
+    finally:
+        release.set()
+
+
+def test_a_single_run_still_waits_for_everything() -> None:
+    """--once exits when it returns; a poll left running would be cut
+    off mid-transaction."""
+
+    release = threading.Event()
+
+    started = threading.Event()
+
+    calls: dict[str, int] = {}
+
+    runtime = SchedulerRuntime(
+        registry=_sources_fast_and_slow(),
+        poller=_blocking_poller(
+            release,
+            calls,
+            started=started,
+        ),
+        clock=FakeClock(),
+        sleeper=lambda _seconds: None,
+    )
+
+    finished = threading.Event()
+
+    def run() -> None:
+        result = runtime.run_due_sources()
+
+        assert result.succeeded_count == 2
+
+        finished.set()
+
+    threading.Thread(
+        target=run,
+        daemon=True,
+    ).start()
+
+    try:
+        assert started.wait(
+            timeout=5,
+        )
+
+        assert not finished.wait(
+            timeout=0.3,
+        )
+
+    finally:
+        release.set()
+
+    assert finished.wait(
+        timeout=5,
+    )
+
+
+def test_what_a_late_finisher_found_is_grouped_from_when_it_started() -> None:
+    """Discoveries are grouped into a pull from a start time. A poll
+    that began cycles ago and finished in this one must still have its
+    jobs grouped, or they never reach an alert."""
+
+    clock = FakeClock()
+
+    release = threading.Event()
+
+    calls: dict[str, int] = {}
+
+    slow_started: list[datetime] = []
+
+    recorded: list[datetime] = []
+
+    finished = threading.Event()
+
+    def poller(
+        source: SourceDefinition,
+    ):
+        result = _blocking_poller(
+            release,
+            calls,
+            started_at=slow_started,
+        )(
+            source
+        )
+
+        if source.source_account == "accenture":
+            finished.set()
+
+        return result
+
+    sleeps = 0
+
+    def sleeper(
+        seconds: float,
+    ) -> None:
+        nonlocal sleeps
+
+        sleeps += 1
+
+        if sleeps == 3:
+            release.set()
+
+            assert finished.wait(
+                timeout=5,
+            )
+
+            # Let the worker leave its finally block.
+            time.sleep(
+                0.2
+            )
+
+        clock.advance(
+            seconds
+        )
+
+    runtime = SchedulerRuntime(
+        registry=_sources_fast_and_slow(),
+        poller=poller,
+        clock=clock,
+        sleeper=sleeper,
+        cycle_budget_seconds=0.05,
+        cycle_recorder=lambda *, started_at: recorded.append(
+            started_at
+        ),
+    )
+
+    try:
+        runtime.run_forever(
+            max_cycles=6,
+        )
+
+    finally:
+        release.set()
+
+    [started] = slow_started
+
+    # The first cycle records from its own start; the one after the
+    # release must reach back to when Accenture began.
+    assert any(
+        moment <= started
+        for moment in recorded[1:]
+    )
+
+
+def test_the_loop_keeps_going_while_everything_is_running() -> None:
+    """With every source running there is no next due time -- which
+    must not read as "no sources", the signal to stop."""
+
+    release = threading.Event()
+
+    calls: dict[str, int] = {}
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                make_source(
+                    source_account="accenture",
+                ),
+            )
+        ),
+        poller=_blocking_poller(
+            release,
+            calls,
+        ),
+        clock=FakeClock(),
+        sleeper=lambda _seconds: None,
+    )
+
+    try:
+        result = runtime.run_due_sources(
+            budget_seconds=0.05,
+        )
+
+        assert result.still_running == 1
+
+        assert (
+            runtime.seconds_until_next_poll()
+            == runtime_module.IN_FLIGHT_RECHECK_SECONDS
+        )
+
+    finally:
+        release.set()
+
+
+def test_a_source_removed_while_running_is_not_brought_back() -> None:
+    """Its due time, put back after removal, would belong to no source.
+    Nothing would ever poll it forward again, so once it passed it
+    would stay in the past -- and the loop would wake for it, without
+    sleeping, forever."""
+
+    clock = FakeClock()
+
+    release = threading.Event()
+
+    finished = threading.Event()
+
+    calls: dict[str, int] = {}
+
+    def poller(
+        source: SourceDefinition,
+    ):
+        result = _blocking_poller(
+            release,
+            calls,
+        )(
+            source
+        )
+
+        if source.source_account == "accenture":
+            finished.set()
+
+        return result
+
+    registries = [
+        _sources_fast_and_slow(),
+        SourceRegistry(
+            (
+                make_source(
+                    source_account="cursor",
+                    company_name="Cursor",
+                    poll_interval_seconds=300,
+                ),
+            )
+        ),
+    ]
+
+    runtime = SchedulerRuntime(
+        registry=registries[0],
+        poller=poller,
+        clock=clock,
+        sleeper=lambda _seconds: None,
+        reload_registry=lambda: registries[1],
+    )
+
+    try:
+        runtime.run_due_sources(
+            budget_seconds=0.05,
+        )
+
+        # Accenture is removed from the catalog while still running.
+        runtime._refresh_sources()
+
+    finally:
+        release.set()
+
+    assert finished.wait(
+        timeout=5,
+    )
+
+    time.sleep(
+        0.2
+    )
+
+    # Long past when Accenture would have been due again.
+    clock.advance(
+        1000
+    )
+
+    runtime.run_due_sources(
+        budget_seconds=5,
+    )
+
+    # Only Cursor is left, polled just now and due in 300 s -- not a
+    # ghost overdue for ever.
+    assert (
+        runtime.seconds_until_next_poll()
+        == 300
+    )
+
+
+def test_a_worker_that_breaks_unexpectedly_still_reschedules() -> None:
+    """A source stuck as "running" would never be polled again, which
+    is worse than any single failed poll."""
+
+    class BrokenLogger:
+        def info(
+            self,
+            message: str,
+            *args,
+        ) -> None:
+            if message.startswith(
+                "source_poll_succeeded"
+            ):
+                raise RuntimeError(
+                    "log handler failed"
+                )
+
+        def warning(self, *args, **kwargs) -> None:
+            pass
+
+        def error(self, *args, **kwargs) -> None:
+            pass
+
+        def exception(self, *args, **kwargs) -> None:
+            pass
+
+    source = make_source(
+        poll_interval_seconds=300,
+    )
+
+    clock = FakeClock()
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                source,
+            )
+        ),
+        poller=lambda _source: make_result(),
+        clock=clock,
+        sleeper=lambda _seconds: None,
+        logger=BrokenLogger(),
+        concurrency=2,
+    )
+
+    runtime.run_due_sources(
+        budget_seconds=5,
+    )
+
+    assert (
+        runtime.seconds_until_next_poll()
+        == 300
+    )
+
+    clock.advance(
+        300
+    )
+
+    # Polled again on schedule, not stuck as running.
+    assert (
+        runtime.run_due_sources(
+            budget_seconds=5,
+        ).still_running
+        == 0
+    )
+
+
+# --- one board at a time behind a shared edge ------------------------
+
+
+def _eightfold(
+    account: str,
+) -> SourceDefinition:
+    return SourceDefinition(
+        source_type=SourceType.EIGHTFOLD_PCSX,
+        source_account=account,
+        company_name=account,
+        enabled=True,
+        poll_interval_seconds=3600,
+        source_host=f"careers.{account}",
+    )
+
+
+def test_eightfold_boards_are_polled_one_at_a_time() -> None:
+    """Eightfold answered 405 on every tenant at once after its boards
+    were swept together. Other providers are not held back."""
+
+    release = threading.Event()
+
+    started: list[str] = []
+
+    lock = threading.Lock()
+
+    def poller(
+        source: SourceDefinition,
+    ):
+        with lock:
+            started.append(
+                source.source_account
+            )
+
+        if source.source_account == "qualcomm.com":
+            assert release.wait(
+                timeout=10,
+            )
+
+        return make_result()
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                _eightfold("qualcomm.com"),
+                _eightfold("microsoft.com"),
+                make_source(
+                    source_account="cursor",
+                ),
+            )
+        ),
+        poller=poller,
+        clock=FakeClock(),
+        sleeper=lambda _seconds: None,
+    )
+
+    try:
+        first = runtime.run_due_sources(
+            budget_seconds=0.2,
+        )
+
+        # Qualcomm and Cursor went; Microsoft waits its turn.
+        assert sorted(started) == [
+            "cursor",
+            "qualcomm.com",
+        ]
+
+        assert first.still_running == 1
+
+        # Still waiting while Qualcomm runs.
+        runtime.run_due_sources(
+            budget_seconds=0.2,
+        )
+
+        assert "microsoft.com" not in started
+
+    finally:
+        release.set()
+
+    time.sleep(
+        0.2
+    )
+
+    runtime.run_due_sources(
+        budget_seconds=1,
+    )
+
+    assert "microsoft.com" in started
+
+
+def test_a_board_held_behind_its_edge_does_not_spin_the_loop() -> None:
+    """It is due but cannot go. Counting it as due would wake the loop
+    at once, over and over, until the edge was free."""
+
+    release = threading.Event()
+
+    def poller(
+        source: SourceDefinition,
+    ):
+        if source.source_account == "qualcomm.com":
+            assert release.wait(
+                timeout=10,
+            )
+
+        return make_result()
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                _eightfold("qualcomm.com"),
+                _eightfold("microsoft.com"),
+            )
+        ),
+        poller=poller,
+        clock=FakeClock(),
+        sleeper=lambda _seconds: None,
+    )
+
+    try:
+        runtime.run_due_sources(
+            budget_seconds=0.1,
+        )
+
+        assert (
+            runtime.seconds_until_next_poll()
+            == runtime_module.IN_FLIGHT_RECHECK_SECONDS
+        )
+
+    finally:
+        release.set()
