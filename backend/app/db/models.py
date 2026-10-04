@@ -142,8 +142,11 @@ class JobRecord(Base):
         nullable=False,
     )
 
+    # Eightfold lists every site a role is open in. Arcadis passed 500
+    # characters and failed a whole poll at the old limit; cutting the
+    # list instead could drop its only US site. See migration 0032.
     location: Mapped[str] = mapped_column(
-        String(500),
+        Text,
         nullable=False,
     )
 

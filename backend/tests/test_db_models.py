@@ -217,3 +217,21 @@ def test_job_source_poll_interval_must_be_positive() -> None:
     ) == 1
 
 
+
+
+def test_a_job_location_has_no_length_limit() -> None:
+    """Eightfold lists every site a role is open in. At 500 characters
+    one Arcadis row failed the whole poll, and every Arcadis role went
+    unread; cutting the list instead could drop its only US site. The
+    tests run on SQLite, which ignores lengths, so only this catches a
+    limit coming back."""
+
+    location = Base.metadata.tables[
+        "jobs"
+    ].c.location
+
+    assert getattr(
+        location.type,
+        "length",
+        None,
+    ) is None
