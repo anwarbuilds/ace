@@ -478,3 +478,55 @@ def test_an_empty_company_is_refused() -> None:
             "example.com",
             "  ",
         )
+
+
+def test_a_search_hit_s_own_standardized_location_is_used() -> None:
+    """Microsoft's search response carries standardizedLocations on
+    every hit. Reading it only from the detail call meant every posting
+    whose detail was skipped -- most of them, by design -- had no
+    location, and a blank location is "unknown" to the gate, which lets
+    it through. 2,314 postings from every country would have reached
+    the queue as if each might be in the US.
+    """
+
+    assert _location_of(
+        {
+            "standardizedLocations": [
+                "Redmond, WA, US",
+            ],
+        },
+        {},
+    ) == "Redmond, WA, US"
+
+
+def test_the_plural_raw_location_is_read_too() -> None:
+    """Amdocs writes the raw line as "location" and Microsoft as a list
+    called "locations". Only the singular was read, which is why this
+    stayed hidden until a second tenant arrived."""
+
+    assert _location_of(
+        {
+            "locations": [
+                "Israel, Tel Aviv, Herzliya",
+            ],
+        },
+        {},
+    ) == "Israel, Tel Aviv, Herzliya"
+
+
+def test_the_detail_still_wins_when_it_was_fetched() -> None:
+    """The order matters: the detail is fetched only for postings worth
+    the request, and it is the better record of the two."""
+
+    assert _location_of(
+        {
+            "standardizedLocations": [
+                "Somewhere, XX, US",
+            ],
+        },
+        {
+            "standardizedLocations": [
+                "Plano, TX, US",
+            ],
+        },
+    ) == "Plano, TX, US"

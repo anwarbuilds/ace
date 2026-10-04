@@ -363,21 +363,32 @@ def _location_of(
     rules look for real place names rather than a specific format.
     """
 
-    standardized = detail.get(
-        "standardizedLocations"
-    )
-
-    if isinstance(
-        standardized,
-        list,
-    ) and standardized:
-        return ", ".join(
-            str(
-                item
-            )
-            for item in standardized
-            if item
+    # Read from the detail first and the search hit second. Microsoft's
+    # search response already carries standardizedLocations on every
+    # hit, and reading it only from the detail meant a posting whose
+    # detail was skipped -- most of them, by design -- came out with no
+    # location at all. A blank location is "unknown" to the gate, which
+    # lets it through, so 2,314 Microsoft postings from every country
+    # would have reached the queue as if they might be in the US.
+    for source in (
+        detail,
+        posting,
+    ):
+        standardized = source.get(
+            "standardizedLocations"
         )
+
+        if isinstance(
+            standardized,
+            list,
+        ) and standardized:
+            return ", ".join(
+                str(
+                    item
+                )
+                for item in standardized
+                if item
+            )
 
     raw = (
         detail.get(
@@ -388,6 +399,31 @@ def _location_of(
         )
         or ""
     )
+
+    if not raw:
+        # The same raw line, written as a list: "locations" rather than
+        # "location". Amdocs sends the singular and Microsoft the plural,
+        # which is why this never showed until Microsoft was read.
+        listed = (
+            detail.get(
+                "locations"
+            )
+            or posting.get(
+                "locations"
+            )
+        )
+
+        if isinstance(
+            listed,
+            list,
+        ):
+            raw = "; ".join(
+                str(
+                    item
+                )
+                for item in listed
+                if item
+            )
 
     return str(
         raw
