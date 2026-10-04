@@ -509,6 +509,11 @@ CURATED_POLL_INTERVAL_SECONDS = 900
 # Where each provider's boards are polled from, for the providers whose
 # account alone does not say. Workday and Eightfold carry their own
 # host from discovery, because theirs is per tenant.
+#
+# Greenhouse and Ashby default it themselves, but Lever refuses without
+# one, and every board the prober registered failed with "Lever
+# source_host is required" before this was set. Found by auditing which
+# sources had never polled.
 SOURCE_HOSTS = {
     "lever": "jobs.lever.co",
     "ashby": "jobs.ashbyhq.com",
@@ -519,6 +524,28 @@ SOURCE_HOSTS = {
         "jobs.smartrecruiters.com"
     ),
 }
+
+
+# Eightfold answers ten postings a page whatever is asked for, so a
+# large board costs two or three hundred requests a poll, all to one
+# shared edge -- and it refused ACE on every tenant after its boards
+# were swept together. Its boards are registered hourly; one that turns
+# out to matter can be polled more often by hand.
+REGISTRATION_POLL_INTERVAL_SECONDS = {
+    "eightfold": 3600,
+    "eightfold_pcsx": 3600,
+}
+
+
+def registration_interval(
+    source_type: str,
+) -> int:
+    """How often a newly registered board of this type is polled."""
+
+    return REGISTRATION_POLL_INTERVAL_SECONDS.get(
+        source_type,
+        CURATED_POLL_INTERVAL_SECONDS,
+    )
 
 
 # Lanes that carry many employers under one source, rather than one

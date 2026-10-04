@@ -25,8 +25,9 @@ import urllib.request
 from sqlalchemy import select
 
 from backend.app.coverage.companies import (
-    CURATED_POLL_INTERVAL_SECONDS,
+    SOURCE_HOSTS,
     TARGET_COMPANIES,
+    registration_interval,
 )
 from backend.app.coverage.benchmark import (
     HELD_OUT_LISTS,
@@ -145,22 +146,6 @@ def unreached_companies() -> list[str]:
     )
 
 
-# The host a source is fetched from. Greenhouse and Ashby default it
-# themselves, but Lever refuses without one and every board the prober
-# registered failed with "Lever source_host is required" before this
-# was set. Found by auditing which sources had never polled.
-SOURCE_HOSTS = {
-    "lever": "jobs.lever.co",
-    "ashby": "jobs.ashbyhq.com",
-    "greenhouse": (
-        "job-boards.greenhouse.io"
-    ),
-    "smartrecruiters": (
-        "jobs.smartrecruiters.com"
-    ),
-}
-
-
 _CURATED_KEYS = frozenset(
     normalise_company(name)
     for name in TARGET_COMPANIES
@@ -265,7 +250,9 @@ def register(
                     # It was chosen deliberately, so it is polled often
                     # enough to be worth having chosen.
                     poll_interval_seconds=(
-                        CURATED_POLL_INTERVAL_SECONDS
+                        registration_interval(
+                            candidate.source_type
+                        )
                         if curated_match(
                             candidate.company
                         )

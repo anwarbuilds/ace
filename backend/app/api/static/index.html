@@ -1973,7 +1973,7 @@ function coverageSponsorship(rows){
         ? '<b>'+all.length+'</b> refuse on every readable posting, so nothing they open is worth '+
           'your time unless the policy changes.'
         : '')+'</p>'+
-    '<div class="cov-grid">'+
+    '<div class="cov-grid cov-sponsor">'+
       rows.map(function(r){
         var pct=Math.round(r.share*100);
         return '<div class="cov-row'+(r.share>=1?" cov-row-all":"")+'" title="'+
@@ -1997,7 +1997,7 @@ function coverageDark(rows){
       'or more, so anything new they post is not reaching you. Every six hours ACE looks for where '+
       'each company has moved and switches over by itself when it finds the new board; these are '+
       'the ones it has not found yet.</p>'+
-    '<div class="cov-grid">'+
+    '<div class="cov-grid cov-dark">'+
       rows.map(function(r){
         return '<div class="cov-row" title="'+esc(r.source_type+" / "+r.source_account)+'">'+
           '<span class="cov-name">'+esc(r.company)+'</span>'+

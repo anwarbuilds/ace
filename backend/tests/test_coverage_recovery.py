@@ -460,3 +460,21 @@ def test_coverage_lists_what_stopped_answering(
     )
 
     assert dark["Starbucks"]["last_success_at"] is None
+
+
+def test_a_company_that_moved_to_eightfold_is_polled_as_eightfold_is(
+    session: Session,
+) -> None:
+    add_source(session)
+
+    recover_dark_sources(
+        session,
+        now=NOW,
+        diagnose=moved_to("eightfold_pcsx", "amplitude.com"),
+    )
+
+    assert source(
+        session,
+        "eightfold_pcsx",
+        "amplitude.com",
+    ).poll_interval_seconds == 3600

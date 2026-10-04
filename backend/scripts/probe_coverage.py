@@ -33,10 +33,10 @@ from backend.app.coverage.benchmark import (
     normalise_company,
 )
 from backend.app.coverage.companies import (
-    CURATED_POLL_INTERVAL_SECONDS,
     MULTI_EMPLOYER_SOURCES,
     SOURCE_HOSTS,
     TARGET_COMPANIES,
+    registration_interval,
 )
 from backend.app.coverage.diagnosis import (
     Diagnosis,
@@ -396,7 +396,9 @@ def record(
                     ),
                     enabled=True,
                     poll_interval_seconds=(
-                        CURATED_POLL_INTERVAL_SECONDS
+                        registration_interval(
+                            candidate.source_type
+                        )
                     ),
                     discovery_source=(
                         "curated_list"

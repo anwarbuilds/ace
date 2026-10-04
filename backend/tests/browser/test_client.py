@@ -1776,18 +1776,18 @@ def test_the_coverage_page_names_who_will_not_sponsor(
     )
 
     page.wait_for(
-        "!!document.querySelector('.cov-grid')",
+        "!!document.querySelector('.cov-sponsor')",
         timeout=15,
     )
 
     rows = page.eval(
-        "document.querySelectorAll('.cov-row').length"
+        "document.querySelectorAll('.cov-sponsor .cov-row').length"
     )
 
     assert rows > 0, "no employer was named"
 
     assert page.eval(
-        "document.querySelectorAll('.cov-row')[0]"
+        "document.querySelectorAll('.cov-sponsor .cov-row')[0]"
         ".textContent"
     ).strip(), "the row rendered empty"
 
@@ -1795,5 +1795,50 @@ def test_the_coverage_page_names_who_will_not_sponsor(
     # and a bare 100% hides how much it rests on.
     assert page.eval(
         "/\\d+ of \\d+/.test("
-        "document.querySelectorAll('.cov-row')[0].textContent)"
+        "document.querySelectorAll('.cov-sponsor .cov-row')[0].textContent)"
     ), "the row does not show what the share is out of"
+
+
+def test_the_coverage_page_lists_boards_that_stopped_answering(
+    page,
+) -> None:
+    """Postman's board had been gone seventeen days, and three
+    companies had moved to Ashby, before anyone noticed: the old
+    postings still looked active. A dark board is listed by name with
+    the date it last answered."""
+
+    page.eval(
+        "state.page='coverage';"
+        "state.coverage={total:1,reached:1,unreached:[],sources:2,"
+        "sponsorship:[],dark:["
+        "{company:'Northwind',source_type:'greenhouse',"
+        "source_account:'northwind',"
+        # Midday UTC, so it is the 16th in nearly any timezone.
+        "last_success_at:'2026-09-16T12:00:00+00:00',"
+        "dark_since:'2026-09-16T12:00:00+00:00'},"
+        "{company:'Contoso',source_type:'eightfold_pcsx',"
+        "source_account:'contoso.com',last_success_at:null,"
+        "dark_since:'2026-10-01T00:00:00+00:00'}]};"
+        "render();1"
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.cov-dark')",
+        timeout=15,
+    )
+
+    text = page.eval(
+        "document.querySelector('.cov-dark').textContent"
+    )
+
+    assert "Northwind" in text
+
+    assert "since Sep 16" in text
+
+    # A board that has never once answered says so, rather than
+    # showing a date it does not have.
+    assert "never answered" in text
+
+    assert "Stopped answering (2)" in page.eval(
+        "document.body.textContent"
+    )

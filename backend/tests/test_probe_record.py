@@ -57,3 +57,47 @@ def test_two_names_sharing_a_key_write_one_row(patched_session):
         rows = session.query(SourceProbeRecord).all()
 
     assert len(rows) == 1, [r.company_key for r in rows]
+
+
+def test_an_eightfold_board_is_registered_hourly(patched_session):
+    """Eightfold pages ten postings at a time, so a large board is two
+    or three hundred requests a poll, all to one shared edge. Registered
+    at the usual fifteen minutes, its boards together drew a refusal on
+    every tenant."""
+
+    from backend.app.coverage.diagnosis import REACHED
+    from backend.app.coverage.probing import BoardCandidate
+    from backend.app.db.models import JobSourceRecord
+
+    def reached(company, source_type, account):
+        return Diagnosis(
+            company=company,
+            outcome=REACHED,
+            detail="board found",
+            candidate=BoardCandidate(
+                company=company,
+                source_type=source_type,
+                source_account=account,
+                job_count=2000,
+                evidence="board found",
+                source_host=f"careers.{account}",
+            ),
+        )
+
+    pc.record(
+        [
+            reached("Qualcomm", "eightfold_pcsx", "qualcomm.com"),
+            reached("Cursor", "ashby", "cursor"),
+        ]
+    )
+
+    with patched_session() as session:
+        intervals = {
+            row.source_account: row.poll_interval_seconds
+            for row in session.query(JobSourceRecord).all()
+        }
+
+    assert intervals == {
+        "qualcomm.com": 3600,
+        "cursor": 900,
+    }

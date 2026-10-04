@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.coverage.companies import (
     SOURCE_HOSTS,
+    registration_interval,
 )
 from backend.app.coverage.diagnosis import (
     Diagnosis,
@@ -286,8 +287,14 @@ def recover_dark_sources(
                         )
                     ),
                     enabled=True,
-                    poll_interval_seconds=(
-                        retired.poll_interval_seconds
+                    # The old board's cadence, unless the new board's
+                    # provider asks for less: a company that moved to
+                    # Eightfold is polled as Eightfold boards are.
+                    poll_interval_seconds=max(
+                        retired.poll_interval_seconds,
+                        registration_interval(
+                            candidate.source_type
+                        ),
                     ),
                     discovery_source=(
                         "dark_source_recovery"
