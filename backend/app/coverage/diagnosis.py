@@ -36,6 +36,7 @@ from backend.app.coverage.probing import (
     candidate_for_token,
     careers_page_token,
     domain_candidates,
+    find_eightfold_board,
     find_board,
     linked_board_belongs_to,
     refuses_automation,
@@ -413,6 +414,30 @@ def diagnose(
                 "wrong name is harder to notice "
                 "than a gap."
             ),
+        )
+
+    # Before concluding there is no board: Eightfold. Its boards live on
+    # a host rather than behind a token, so the search above could never
+    # have found one, and every company on it -- Microsoft among them --
+    # came back "no board found". Tried last, because it costs several
+    # requests per company and the token boards above are far more
+    # common.
+    eightfold = find_eightfold_board(
+        company,
+        list(
+            domain_candidates(
+                company
+            )
+        ),
+        fetch=fetch,
+    )
+
+    if eightfold is not None:
+        return Diagnosis(
+            company=company,
+            outcome=REACHED,
+            detail=eightfold.evidence,
+            candidate=eightfold,
         )
 
     if saw_empty_board:

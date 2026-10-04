@@ -219,6 +219,123 @@ def board_endpoints(
     ]
 
 
+# Eightfold serves each tenant from a host the company chooses --
+# apply.careers.microsoft.com, jobs.amdocs.com -- or from a subdomain of
+# eightfold.ai. There is no token in a URL to guess from, which is why
+# the token-based search above never found one: every company on
+# Eightfold came back "no board found", indistinguishable from a
+# careers page ACE genuinely cannot read.
+#
+# Microsoft was one. Its board is readable by the PCSX adapter ACE
+# already had, and robots.txt allows /api/pcsx outright, but nothing
+# ever asked. A Software Engineering II role it posted on 15 September
+# reached the queue on 4 October, nineteen days late, and only then
+# because a curated feed had got round to listing it.
+EIGHTFOLD_HOSTS = (
+    "apply.careers.{domain}",
+    "careers.{domain}",
+    "jobs.{domain}",
+    "{slug}.eightfold.ai",
+)
+
+# Only the first couple of domain guesses. The rest are TLD variations
+# that almost never host a careers subdomain, and each costs a request
+# per host per route.
+EIGHTFOLD_DOMAIN_GUESSES = 2
+
+
+def find_eightfold_board(
+    company: str,
+    domains: list[str],
+    *,
+    fetch=_fetch_json,
+) -> BoardCandidate | None:
+    """Look for this company's Eightfold board, PCSX or classic.
+
+    A hit needs real postings, not just a 200: a tenant that answers
+    with an empty list has told ACE nothing about whose board it is.
+    The host sitting on the company's own domain is the evidence of
+    ownership for the first three patterns; for the eightfold.ai
+    subdomain it is that the tenant answers a search scoped to that
+    company's domain.
+    """
+
+    for domain in list(
+        domains
+    )[:EIGHTFOLD_DOMAIN_GUESSES]:
+        slug = domain.split(
+            "."
+        )[0]
+
+        for pattern in EIGHTFOLD_HOSTS:
+            host = pattern.format(
+                domain=domain,
+                slug=slug,
+            )
+
+            payload = fetch(
+                f"https://{host}/api/pcsx/search"
+                f"?domain={domain}&query=&start=0"
+            )
+
+            data = (
+                payload.get("data")
+                if isinstance(payload, dict)
+                else None
+            )
+
+            positions = (
+                data.get("positions")
+                if isinstance(data, dict)
+                else None
+            )
+
+            if positions:
+                return BoardCandidate(
+                    company=company,
+                    source_type="eightfold_pcsx",
+                    source_account=domain,
+                    job_count=int(
+                        data.get("count")
+                        or len(positions)
+                    ),
+                    evidence=(
+                        f"Eightfold board at {host} "
+                        f"answers for {domain}"
+                    ),
+                    source_host=host,
+                )
+
+            payload = fetch(
+                f"https://{host}/api/apply/v2/jobs"
+                f"?domain={domain}&start=0&num=10"
+            )
+
+            positions = (
+                payload.get("positions")
+                if isinstance(payload, dict)
+                else None
+            )
+
+            if positions:
+                return BoardCandidate(
+                    company=company,
+                    source_type="eightfold",
+                    source_account=domain,
+                    job_count=int(
+                        payload.get("count")
+                        or len(positions)
+                    ),
+                    evidence=(
+                        f"Eightfold board at {host} "
+                        f"answers for {domain}"
+                    ),
+                    source_host=host,
+                )
+
+    return None
+
+
 def _jobs_from(
     payload,
 ) -> list[dict]:
