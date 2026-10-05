@@ -454,6 +454,29 @@ def _join_scores(
     )
 
 
+def posting_link_key(
+    url,
+):
+    """A posting link compared without case, scheme or "www.".
+
+    The feed writes "amazon.jobs/...", the employer "www.amazon.jobs/...".
+    Built from replace() and lower(), which both Postgres and SQLite
+    have; migration 0034 indexes exactly this expression.
+    """
+
+    return func.replace(
+        func.replace(
+            func.lower(
+                url
+            ),
+            "://www.",
+            "://",
+        ),
+        "http://",
+        "https://",
+    )
+
+
 def _apply_filters(
     statement: Select,
     filters: JobFilters,
@@ -476,12 +499,23 @@ def _apply_filters(
         # description is a placeholder, so the gate cannot read it, which
         # is exactly how clearance roles were getting through.
         #
-        # Exact matches only, on company and title. A feed role whose
-        # wording differs from anything on the direct board stays:
-        # measured before applying, 14 rows were true duplicates and 56
-        # were not, and hiding those would hide roles the user may not
-        # see anywhere else. Never applied to marks, which are history.
+        # Exact matches only: the same company and title, or the same
+        # posting link. A feed role whose wording differs from anything
+        # on the direct board stays: measured before applying, 14 rows
+        # were true duplicates and 56 were not, and hiding those would
+        # hide roles the user may not see anywhere else.
+        #
+        # The link was added once TikTok, ByteDance and fifteen Oracle
+        # employers were read directly: 183 feed rows pointed at the
+        # very posting a direct row already held, under a title the
+        # feed had reworded, and every one showed twice. A link is the
+        # posting's identity, so it is the stronger evidence of the two.
+        # Never applied to marks, which are history.
         direct = aliased(
+            JobRecord
+        )
+
+        direct_by_link = aliased(
             JobRecord
         )
 
@@ -516,6 +550,28 @@ def _apply_filters(
                         func.trim(
                             JobRecord.title
                         )
+                    ),
+                )
+            )
+        )
+
+        statement = statement.where(
+            ~(
+                JobRecord.source.in_(
+                    MULTI_EMPLOYER_SOURCES
+                )
+                & exists().where(
+                    direct_by_link.is_active.is_(
+                        True
+                    ),
+                    direct_by_link.source.not_in(
+                        MULTI_EMPLOYER_SOURCES
+                    ),
+                    posting_link_key(
+                        direct_by_link.official_url
+                    )
+                    == posting_link_key(
+                        JobRecord.official_url
                     ),
                 )
             )

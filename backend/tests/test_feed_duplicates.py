@@ -75,6 +75,7 @@ def add_job(
     title: str,
     company: str = "Microsoft",
     active: bool = True,
+    url: str | None = None,
 ) -> JobRecord:
     job = JobRecord(
         source=source,
@@ -85,7 +86,7 @@ def add_job(
         title=title,
         location="Redmond, WA, US",
         description="Build software.",
-        official_url=f"https://example.com/{key}",
+        official_url=url or f"https://example.com/{key}",
         posted_at=NOW,
         content_hash=f"hash-{key}",
         first_seen_at=NOW,
@@ -253,3 +254,133 @@ def test_the_same_title_at_another_company_is_not_a_duplicate(
                 session
             )
         ) == 2
+
+
+def test_the_same_posting_under_a_reworded_title_is_hidden(
+    session_factory,
+) -> None:
+    """183 feed rows pointed at the very posting a direct row held,
+    under a title the feed had reworded -- every one shown twice."""
+
+    link = "https://lifeattiktok.com/search/7685552743586826549"
+
+    with session_factory() as session:
+        add_job(
+            session,
+            key="direct",
+            source="bytedance",
+            company="TikTok",
+            title=(
+                "Machine Learning Engineer Graduate "
+                "(E-Commerce Content Recommendation) - 2027 Start"
+            ),
+            url=link,
+        )
+
+        add_job(
+            session,
+            key="feed",
+            source="simplify",
+            company="TikTok",
+            title="Machine Learning Engineer Graduate - E-Commerce Content",
+            url=link,
+        )
+
+        assert [
+            source
+            for source, _title in queue(
+                session
+            )
+        ] == ["bytedance"]
+
+
+def test_a_link_differing_only_in_www_or_scheme_is_the_same_posting(
+    session_factory,
+) -> None:
+    with session_factory() as session:
+        add_job(
+            session,
+            key="direct",
+            source="amazon",
+            company="Amazon",
+            title="Software Development Engineer, Robotics, Early Career",
+            url="https://www.amazon.jobs/en/jobs/10567489/sde-robotics",
+        )
+
+        add_job(
+            session,
+            key="feed",
+            source="simplify",
+            company="Amazon",
+            title="Software Development Engineer - Robotics",
+            url="http://amazon.jobs/en/jobs/10567489/sde-robotics",
+        )
+
+        assert [
+            source
+            for source, _title in queue(
+                session
+            )
+        ] == ["amazon"]
+
+
+def test_a_different_link_with_a_different_title_is_kept(
+    session_factory,
+) -> None:
+    with session_factory() as session:
+        add_job(
+            session,
+            key="direct",
+            source="bytedance",
+            company="TikTok",
+            title="Backend Software Engineer Graduate - 2027 Start",
+            url="https://lifeattiktok.com/search/1",
+        )
+
+        add_job(
+            session,
+            key="feed",
+            source="simplify",
+            company="TikTok",
+            title="Frontend Software Engineer Graduate",
+            url="https://lifeattiktok.com/search/2",
+        )
+
+        assert len(
+            queue(
+                session
+            )
+        ) == 2
+
+
+def test_a_closed_direct_posting_does_not_hide_by_link_either(
+    session_factory,
+) -> None:
+    link = "https://lifeattiktok.com/search/3"
+
+    with session_factory() as session:
+        add_job(
+            session,
+            key="direct",
+            source="bytedance",
+            company="TikTok",
+            title="Software Engineer Graduate (Backend)",
+            url=link,
+            active=False,
+        )
+
+        add_job(
+            session,
+            key="feed",
+            source="simplify",
+            company="TikTok",
+            title="Software Engineer Graduate",
+            url=link,
+        )
+
+        assert [
+            source
+            for source, _title in queue(
+                session
+            )
+        ] == ["simplify"]
