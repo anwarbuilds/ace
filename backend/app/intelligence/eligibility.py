@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-04-v36"
+    "2026-10-05-v37"
 )
 
 
@@ -735,6 +735,14 @@ CITIZENSHIP_BLOCKERS = (
 # ITAR and EAR require "US person" status. A candidate needing visa
 # sponsorship is not a
 # US person, so these roles are closed regardless of sponsorship policy.
+# Work permits named right after a citizenship shorthand widen it to
+# people who are not citizens.
+_NO_WORK_PERMIT_FOLLOWS = (
+    r"(?![^.\n]{0,25}?\b(?:opt|cpt|ead|h-?1b?|h-?4|tn|"
+    r"stem|work\s+permit)\b)"
+)
+
+
 CITIZENSHIP_BLOCKER_PATTERNS = (
     r"\bitar\s+requirements?\b",
     r"\bitar[-\s]controlled\b",
@@ -777,6 +785,16 @@ CITIZENSHIP_BLOCKER_PATTERNS = (
     # Bulleted eligibility: "US citizen or permanent resident"
     r"\b(?:u\.?\s?s\.?|united\s+states)\s+citizen\s+or\s+"
     r"(?:lawful\s+)?permanent\s+resident\b",
+
+    # Staffing shorthand for the same restriction: "GC/CITIZEN can
+    # apply", "USC/GC only", "US Citizens or GC holders". "GC" alone is
+    # not read -- in a Java posting it is garbage collection -- only
+    # when paired with citizenship. Not when work permits follow:
+    # "Only GC/Citizen, OPT, EAD, H4" admits an F-1 student on OPT.
+    r"\b(?:usc|(?:u\.?\s?s\.?\s+)?citizens?)\s*(?:/|\bor\b|&|\band\b)\s*"
+    r"(?:gc|green\s*card)s?(?:\s+holders?)?\b" + _NO_WORK_PERMIT_FOLLOWS,
+    r"\b(?:gc|green\s*card)s?(?:\s+holders?)?\s*(?:/|\bor\b|&|\band\b)\s*"
+    r"(?:usc|(?:u\.?\s?s\.?\s+)?citizens?)\b" + _NO_WORK_PERMIT_FOLLOWS,
 )
 
 
@@ -1162,17 +1180,23 @@ EXPERIENCE_CONTEXT = (
 )
 
 
+# The plus after a figure: "5+" and, from staffing postings, "5 (+)".
+# "5 (+) years of java based software development experience" passed
+# as stating no requirement because only the bare "+" was read.
+PLUS = r"(?:\+|\(\s*\+\s*\))"
+
+
 # "2-5+ years of experience" states a minimum of two, not five.
 EXPERIENCE_RANGE_PATTERN = re.compile(
     rf"(?P<low>\d{{1,2}})\s*(?:-|\u2013|\u2014|\s+to\s+)\s*"
-    rf"(?P<high>\d{{1,2}})\s*\+?\s*(?:years?|yrs?)\s+"
+    rf"(?P<high>\d{{1,2}})\s*{PLUS}?\s*(?:years?|yrs?)\s+"
     rf"{EXPERIENCE_CONTEXT}",
     re.IGNORECASE,
 )
 
 
 EXPERIENCE_PATTERN = re.compile(
-    rf"(?P<years>\d{{1,2}})\s*\+?\s*(?:years?|yrs?)\s+"
+    rf"(?P<years>\d{{1,2}})\s*{PLUS}?\s*(?:years?|yrs?)\s+"
     rf"{EXPERIENCE_CONTEXT}",
     re.IGNORECASE,
 )
@@ -1185,7 +1209,7 @@ EXPERIENCE_PATTERN = re.compile(
 # A figure with no experience noun after it. Only trusted inside a
 # qualifications section, where it is unambiguous.
 EXPERIENCE_BARE_PATTERN = re.compile(
-    r"(?P<years>\d{1,2})\s*\+\s*"
+    rf"(?P<years>\d{{1,2}})\s*{PLUS}\s*"
     r"(?:years?|yrs?)\b",
     re.IGNORECASE,
 )
@@ -1194,7 +1218,7 @@ EXPERIENCE_BARE_PATTERN = re.compile(
 EXPERIENCE_TRAILING_PATTERN = re.compile(
     r"(?:experience|expertise|background)"
     r"[\s:]*[\(\[]?\s*(?:of\s+|at\s+least\s+)?"
-    r"(?P<years>\d{1,2})\s*\+?\s*(?:years?|yrs?)",
+    rf"(?P<years>\d{{1,2}})\s*{PLUS}?\s*(?:years?|yrs?)",
     re.IGNORECASE,
 )
 

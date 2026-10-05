@@ -2144,3 +2144,66 @@ def test_the_ambiguous_code_override_still_holds() -> None:
     assert not _is_us_location(
         "Toronto, ON, Canada"
     )
+
+
+def test_a_parenthesised_plus_still_states_a_minimum() -> None:
+    """"5 (+) years of java based software development experience"
+    passed as stating no requirement: only the bare "+" was read."""
+
+    for description, years in (
+        ("5 (+) years of java based software development experience", 5),
+        ("6 ( + ) years of software engineering experience", 6),
+        ("2-3 (+) years of software engineering experience", 2),
+    ):
+        decision = evaluate_job(
+            make_job(
+                description=description,
+            )
+        )
+
+        assert decision.required_experience_years == years, description
+
+
+def test_citizenship_shorthand_is_a_citizenship_requirement() -> None:
+    """Staffing postings say it in shorthand the spelled-out patterns
+    never matched."""
+
+    for description in (
+        "GC/CITIZEN can apply. Responsibilities: develop apps.",
+        "USC/GC only.",
+        "US Citizens or GC holders.",
+        "Multiple Openings for GC/Citizen.",
+        "Green Card / Citizen.",
+    ):
+        decision = evaluate_job(
+            make_job(
+                description=description,
+            )
+        )
+
+        assert (
+            EligibilityReasonCode.CITIZENSHIP_BLOCKER
+            in decision.reason_codes
+        ), description
+
+
+def test_shorthand_that_admits_work_permits_is_not_a_blocker() -> None:
+    """"Only GC/Citizen, OPT, EAD, H4" admits an F-1 student on OPT --
+    and "GC" alone, in a Java posting, is garbage collection."""
+
+    for description in (
+        "Only GC/Citizen, OPT, EAD, H4 can apply.",
+        "Only GC OR Citizen/OPT/EAD.",
+        "Experience with JVM GC tuning and Java concurrency.",
+        "We hire citizens of every country and sponsor visas.",
+    ):
+        decision = evaluate_job(
+            make_job(
+                description=description,
+            )
+        )
+
+        assert (
+            EligibilityReasonCode.CITIZENSHIP_BLOCKER
+            not in decision.reason_codes
+        ), description
