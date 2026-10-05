@@ -116,3 +116,54 @@ def test_employment_type_change_changes_hash() -> None:
     )
 
     assert first != second
+
+
+def test_the_same_instant_hashes_the_same_in_any_offset() -> None:
+    """Greenhouse gives "-04:00"; the database returns UTC. Hashing the
+    literal text made every stored Greenhouse job look changed."""
+
+    from datetime import (
+        datetime,
+        timedelta,
+        timezone,
+    )
+
+    from backend.app.models.job import CanonicalJob
+    from backend.app.persistence.hashing import (
+        compute_job_content_hash,
+    )
+
+    def job(posted_at):
+        return CanonicalJob(
+            source="greenhouse",
+            company="Northwind",
+            external_id="1",
+            title="Software Engineer",
+            location="New York, NY",
+            description="Build software.",
+            official_url="https://example.com/1",
+            posted_at=posted_at,
+        )
+
+    eastern = datetime(
+        2026,
+        8,
+        19,
+        15,
+        20,
+        tzinfo=timezone(
+            timedelta(
+                hours=-4,
+            )
+        ),
+    )
+
+    assert compute_job_content_hash(
+        job(eastern)
+    ) == compute_job_content_hash(
+        job(
+            eastern.astimezone(
+                timezone.utc
+            )
+        )
+    )
