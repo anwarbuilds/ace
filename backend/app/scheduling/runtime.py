@@ -732,6 +732,35 @@ class SchedulerRuntime:
                     source.identity
                 ] = 0.0
 
+            # A new interval counts from the last poll, not the next
+            # one already booked. Amazon, moved from daily to fifteen
+            # minutes, would otherwise have waited out the rest of its
+            # day first. A longer interval leaves the booking alone.
+            for source in changed:
+                previous = current[
+                    source.identity
+                ]
+
+                due_at = self._next_due_at.get(
+                    source.identity
+                )
+
+                if (
+                    due_at is None
+                    or source.poll_interval_seconds
+                    >= previous.poll_interval_seconds
+                ):
+                    continue
+
+                self._next_due_at[
+                    source.identity
+                ] = min(
+                    due_at,
+                    due_at
+                    - previous.poll_interval_seconds
+                    + source.poll_interval_seconds,
+                )
+
             for identity in removed:
                 self._next_due_at.pop(
                     identity,

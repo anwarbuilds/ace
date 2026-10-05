@@ -2281,3 +2281,60 @@ def test_a_board_held_behind_its_edge_does_not_spin_the_loop() -> None:
 
     finally:
         release.set()
+
+
+def test_a_shorter_interval_takes_effect_from_the_last_poll() -> None:
+    """Amazon moved from daily to fifteen minutes would otherwise have
+    waited out the rest of its day first."""
+
+    daily = make_source(
+        source_account="amazon-us",
+        poll_interval_seconds=86400,
+    )
+
+    faster = make_source(
+        source_account="amazon-us",
+        poll_interval_seconds=900,
+    )
+
+    slower = make_source(
+        source_account="amazon-us",
+        poll_interval_seconds=172800,
+    )
+
+    clock = FakeClock()
+
+    registries = [
+        SourceRegistry((faster,)),
+    ]
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                daily,
+            )
+        ),
+        poller=lambda _source: make_result(),
+        clock=clock,
+        sleeper=lambda _seconds: None,
+        reload_registry=lambda: registries[0],
+    )
+
+    runtime.run_due_sources()
+
+    clock.advance(
+        300
+    )
+
+    runtime._refresh_sources()
+
+    # Polled 300 s ago at the new 900 s interval: due in 600 s, not in
+    # the rest of a day.
+    assert runtime.seconds_until_next_poll() == 600
+
+    # Slowing a source down leaves the booked poll where it was.
+    registries[0] = SourceRegistry((slower,))
+
+    runtime._refresh_sources()
+
+    assert runtime.seconds_until_next_poll() == 600

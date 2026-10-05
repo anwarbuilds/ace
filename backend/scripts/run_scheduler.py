@@ -26,6 +26,9 @@ from sqlalchemy import select
 from backend.app.config import (
     get_settings,
 )
+from backend.app.coverage.cadence import (
+    promote_productive_sources,
+)
 from backend.app.coverage.recovery import (
     recover_dark_sources,
 )
@@ -429,12 +432,34 @@ def main(
                 ).all()
             }
 
-    def recover_dark() -> None:
-        """Follow companies whose boards stopped answering.
+    def maintain() -> None:
+        """Speed up productive boards; follow ones that stopped answering.
 
-        Logged at warning either way: a board found dark is exactly the
-        thing that went unnoticed for seventeen days.
+        Dark boards are logged at warning either way: a board found
+        dark is exactly the thing that went unnoticed for seventeen
+        days.
         """
+
+        with SessionLocal.begin() as session:
+            promotions = promote_productive_sources(
+                session
+            )
+
+        for promotion in promotions:
+            LOGGER.info(
+                (
+                    "source_promoted "
+                    "company=%r source=%s/%s "
+                    "passing_roles=%d "
+                    "interval_seconds=%d->%d"
+                ),
+                promotion.company_name,
+                promotion.source_type,
+                promotion.source_account,
+                promotion.passing_roles,
+                promotion.old_interval,
+                promotion.new_interval,
+            )
 
         with SessionLocal.begin() as session:
             recoveries = recover_dark_sources(
@@ -479,7 +504,7 @@ def main(
         cycle_recorder=record_cycle,
         alert_sender=send_alerts,
         reload_registry=reload_registry,
-        maintenance=recover_dark,
+        maintenance=maintain,
         # --once is how a person asks for everything now, so it does
         # not wait out anyone's interval.
         last_polled=(
