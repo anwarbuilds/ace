@@ -69,6 +69,7 @@ def run_source_snapshot_workflow(
     jobs: Sequence[CanonicalJob],
     observed_at: datetime | None = None,
     freshness_policy: FreshnessPolicy | None = None,
+    close_missing: bool = True,
 ) -> SourceSnapshotWorkflowResult:
     """Persist and evaluate one complete source snapshot.
 
@@ -100,6 +101,7 @@ def run_source_snapshot_workflow(
         source_account=source_account,
         jobs=jobs,
         observed_at=observed_at,
+        close_missing=close_missing,
     )
 
     evaluation = evaluate_snapshot(

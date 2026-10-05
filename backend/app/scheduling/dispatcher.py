@@ -10,6 +10,7 @@ work. Those responsibilities belong to later orchestration layers.
 from collections.abc import (
     Callable,
     Mapping,
+    Sequence,
 )
 from datetime import timedelta
 from typing import Protocol
@@ -40,6 +41,15 @@ from backend.app.adapters.amazon import (
 )
 from backend.app.adapters.avature import (
     fetch_avature_jobs,
+)
+from backend.app.adapters.bytedance import (
+    fetch_bytedance_jobs,
+)
+from backend.app.adapters.oracle_recruiting import (
+    fetch_oracle_recruiting_jobs,
+)
+from backend.app.verification.employer_page import (
+    EmployerPageVerifier,
 )
 from backend.app.adapters.ripplematch import (
     fetch_ripplematch_jobs,
@@ -639,6 +649,13 @@ class WorkdaySourceFetcher:
             jobs=tuple(
                 jobs
             ),
+            # A tenant too large for Workday's search to return whole,
+            # and with no facet to split it by, is read in part.
+            complete=getattr(
+                jobs,
+                "complete",
+                True,
+            ),
         )
 
 
@@ -740,6 +757,120 @@ class RippleMatchSourceFetcher:
             ),
             company_name=(
                 source.company_name
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
+class ByteDanceSourceFetcher:
+    """Dispatch adapter for ByteDance's and TikTok's own careers sites.
+
+    ``source_account`` names the portal -- "bytedance" or "tiktok" --
+    and the adapter knows each portal's API host and posting URL.
+    Unconditional: the API is a POST search with no validators.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher=fetch_bytedance_jobs,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch every posting on one portal."""
+
+        if (
+            source.source_type
+            != SourceType.BYTEDANCE
+        ):
+            raise ValueError(
+                (
+                    "ByteDanceSourceFetcher "
+                    "requires a BYTEDANCE "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            source_account=(
+                source.source_account
+            ),
+            company_name=(
+                source.company_name
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
+class OracleRecruitingSourceFetcher:
+    """Dispatch adapter for Oracle Recruiting Cloud career sites.
+
+    ``source_account`` is ``{host}/{siteNumber}``. Descriptions are
+    fetched only for titles the gate could pass, and kept between polls
+    in the shared reading store.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher=fetch_oracle_recruiting_jobs,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch every posting on one career site."""
+
+        if (
+            source.source_type
+            != SourceType.ORACLE_RECRUITING
+        ):
+            raise ValueError(
+                (
+                    "OracleRecruitingSourceFetcher "
+                    "requires an ORACLE_RECRUITING "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            source_account=(
+                source.source_account
+            ),
+            company_name=(
+                source.company_name
+            ),
+            should_fetch_detail=(
+                build_detail_predicate(
+                    source="oracle_recruiting",
+                    company_name=(
+                        source.company_name
+                    ),
+                )
             ),
         )
 
@@ -984,12 +1115,23 @@ class SimplifySourceFetcher:
         validator_lookup: (
             ValidatorLookup | None
         ) = None,
+        verifier: (
+            Callable[
+                [Sequence[CanonicalJob]],
+                list[CanonicalJob],
+            ]
+            | None
+        ) = None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
         self._validator_lookup = (
             validator_lookup
         )
+
+        # Reads each posting's employer page so the gate judges it on
+        # what the employer says, not on the feed's placeholder.
+        self._verifier = verifier
 
     def _validators(
         self,
@@ -1041,6 +1183,15 @@ class SimplifySourceFetcher:
                 ),
             )
         )
+
+        if (
+            not unchanged
+            and jobs
+            and self._verifier is not None
+        ):
+            jobs = self._verifier(
+                jobs
+            )
 
         return FetchedSourceSnapshot(
             source_definition=source,
@@ -1126,6 +1277,23 @@ class SourceDispatcher:
 FULL_REFETCH_INTERVAL = timedelta(
     hours=6
 )
+
+
+def _title_could_pass(
+    job: CanonicalJob,
+) -> bool:
+    """Whether a feed posting's page is worth reading at all.
+
+    The same title test the Workday detail fetch uses: a posting the
+    gate rejects on its title alone is rejected whatever its page says.
+    """
+
+    return build_detail_predicate(
+        source=job.source,
+        company_name=job.company,
+    )(
+        job.title
+    )
 
 
 def _stored_validators(
@@ -1234,11 +1402,22 @@ def build_default_source_dispatcher() -> (
             SourceType.AVATURE: (
                 AvatureSourceFetcher()
             ),
+            SourceType.BYTEDANCE: (
+                ByteDanceSourceFetcher()
+            ),
+            SourceType.ORACLE_RECRUITING: (
+                OracleRecruitingSourceFetcher()
+            ),
             SourceType.SIMPLIFY: (
                 SimplifySourceFetcher(
                     validator_lookup=(
                         _stored_validators
-                    )
+                    ),
+                    verifier=EmployerPageVerifier(
+                        worth_reading=(
+                            _title_could_pass
+                        ),
+                    ),
                 )
             ),
         }

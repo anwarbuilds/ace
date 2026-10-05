@@ -528,3 +528,215 @@ def test_empty_tenant_returns_no_jobs() -> None:
     assert fetch(
         []
     ) == []
+
+
+# ----------------------------------------------------------------------
+# Tenants larger than Workday's search returns
+#
+# Workday's search stops at 2,000 results and reports 2,000 as the total
+# however many the tenant has. NVIDIA's job families came to 2,679, so
+# ACE saw an arbitrary 2,000 -- and closed whichever open postings fell
+# outside them on each poll.
+# ----------------------------------------------------------------------
+
+
+def capped_transport(
+    families: dict[str, int],
+    *,
+    requests: list[dict] | None = None,
+    nested_only: bool = False,
+) -> httpx.MockTransport:
+    """A tenant whose postings are split across job families."""
+
+    import json as _json
+
+    postings = {
+        family: [
+            listing(
+                title=f"Analyst {family} {index}",
+                path=f"/job/{family}-{index}",
+            )
+            for index in range(count)
+        ]
+        for family, count in families.items()
+    }
+
+    everyone = [
+        posting
+        for family_postings in postings.values()
+        for posting in family_postings
+    ]
+
+    facet = {
+        "facetParameter": "jobFamilyGroup",
+        "values": [
+            {
+                "id": family,
+                "descriptor": family,
+                "count": count,
+            }
+            for family, count in families.items()
+        ],
+    }
+
+    if nested_only:
+        facet = {
+            "facetParameter": "locationMainGroup",
+            "values": [
+                {
+                    "facetParameter": "locations",
+                    "values": [],
+                },
+            ],
+        }
+
+    def handler(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        body = _json.loads(
+            request.content
+        )
+
+        if requests is not None:
+            requests.append(
+                body
+            )
+
+        chosen = body["appliedFacets"].get(
+            "jobFamilyGroup"
+        )
+
+        pool = (
+            postings[chosen[0]]
+            if chosen
+            else everyone
+        )
+
+        visible = pool[:2000]
+
+        offset = body["offset"]
+
+        return httpx.Response(
+            200,
+            json={
+                "total": len(visible),
+                "jobPostings": visible[
+                    offset:offset + WORKDAY_PAGE_SIZE
+                ],
+                "facets": [facet],
+            },
+        )
+
+    return httpx.MockTransport(
+        handler
+    )
+
+
+def fetch_capped(
+    transport: httpx.MockTransport,
+    **kwargs,
+):
+    with httpx.Client(
+        transport=transport
+    ) as client:
+        return fetch_workday_jobs(
+            source_account=ACCOUNT,
+            company_name="Acme",
+            source_host=HOST,
+            client=client,
+            now=REFERENCE,
+            should_fetch_detail=lambda _title: False,
+            **kwargs,
+        )
+
+
+def test_a_tenant_past_the_cap_is_read_whole_in_slices() -> None:
+    requests: list[dict] = []
+
+    jobs = fetch_capped(
+        capped_transport(
+            {
+                "engineering": 1735,
+                "sales": 600,
+                "operations": 344,
+            },
+            requests=requests,
+        )
+    )
+
+    assert len(jobs) == 2679
+
+    assert jobs.complete is True
+
+    # The capped, unfiltered search is not read past its first page:
+    # every other request names a family.
+    unfiltered = [
+        request
+        for request in requests
+        if not request["appliedFacets"]
+    ]
+
+    assert len(unfiltered) == 1
+
+
+def test_a_tenant_that_cannot_be_split_is_read_in_part() -> None:
+    """Nothing missing from part of a board may be closed for it."""
+
+    jobs = fetch_capped(
+        capped_transport(
+            {
+                "stores": 13501,
+                "technology": 466,
+            },
+        )
+    )
+
+    assert len(jobs) == 2000
+
+    assert jobs.complete is False
+
+
+def test_a_tenant_with_only_overlapping_facets_is_read_in_part() -> None:
+    """Location hierarchies overlap -- a posting sits in a city and in
+    its state -- so they cannot partition a board."""
+
+    jobs = fetch_capped(
+        capped_transport(
+            {
+                "engineering": 1500,
+                "sales": 900,
+            },
+            nested_only=True,
+        )
+    )
+
+    assert jobs.complete is False
+
+
+def test_a_tenant_under_the_cap_is_complete() -> None:
+    jobs = fetch_capped(
+        capped_transport(
+            {
+                "engineering": 150,
+            },
+        )
+    )
+
+    assert len(jobs) == 150
+
+    assert jobs.complete is True
+
+
+def test_a_budget_too_small_for_the_slices_reads_in_part() -> None:
+    jobs = fetch_capped(
+        capped_transport(
+            {
+                "engineering": 1735,
+                "sales": 600,
+                "operations": 344,
+            },
+        ),
+        max_pages=50,
+    )
+
+    assert jobs.complete is False

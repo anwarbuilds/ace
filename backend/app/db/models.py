@@ -1133,3 +1133,42 @@ class SourceProbeRecord(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+
+class EmployerPageReading(Base):
+    """What one employer posting page said, when ACE last read it.
+
+    Feed postings carry no description, so they are judged on the
+    employer's own page. Kept per URL so a page is read once a week at
+    most, and so the next feed poll does not restore the placeholder.
+    """
+
+    __tablename__ = "employer_page_readings"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    url: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        unique=True,
+    )
+
+    # read | no_description | disallowed | unreachable
+    status: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+    )
+
+    description: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    checked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )

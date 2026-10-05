@@ -63,7 +63,10 @@ from backend.app.adapters.html_text import (
 from backend.app.adapters.retry import (
     request_with_retry,
 )
-from backend.app.models.job import CanonicalJob
+from backend.app.models.job import (
+    CanonicalJob,
+    JobList,
+)
 
 
 WORKDAY_SOURCE = "workday"
@@ -74,8 +77,13 @@ WORKDAY_PAGE_SIZE = 20
 
 REQUEST_TIMEOUT_SECONDS = 25.0
 
-# Bounds so one pathological tenant cannot hang a scheduler cycle.
-DEFAULT_MAX_PAGES = 150
+# Workday's search returns at most this many results, and reports this
+# as its total, however many postings the tenant has.
+WORKDAY_RESULT_CAP = 2000
+
+# List pages per poll, all searches together. Bounds one pathological
+# tenant; NVIDIA read whole in slices is about 150.
+DEFAULT_MAX_PAGES = 400
 
 DEFAULT_MAX_DETAIL_FETCHES = 400
 
@@ -92,6 +100,146 @@ USER_AGENT = (
     "ACE/0.1 "
     "(personal career-intelligence project)"
 )
+
+
+def _postings(
+    body: dict[str, Any],
+) -> list[dict[str, Any]]:
+    postings = body.get(
+        "jobPostings"
+    )
+
+    if not isinstance(
+        postings,
+        list,
+    ):
+        return []
+
+    return [
+        posting
+        for posting in postings
+        if isinstance(
+            posting,
+            dict,
+        )
+    ]
+
+
+def _total(
+    body: dict[str, Any],
+) -> int:
+    total = body.get(
+        "total"
+    )
+
+    return (
+        total
+        if isinstance(
+            total,
+            int,
+        )
+        else 0
+    )
+
+
+# Facets tried first when splitting a capped tenant. Job family is a
+# true partition -- every posting has exactly one -- and usually the
+# finest one that is.
+PREFERRED_PARTITIONS = (
+    "jobFamilyGroup",
+    "Location_Country",
+    "workerSubType",
+    "timeType",
+)
+
+
+def _partition(
+    body: dict[str, Any],
+) -> tuple[str, list[str]] | None:
+    """A facet whose every value fits under the cap, and its values.
+
+    It must account for at least as many postings as the capped total,
+    or some postings carry no value of it and would be missed. Nested
+    facets (location hierarchies) are not used: their values overlap.
+    """
+
+    candidates: dict[str, tuple[int, int, list[str]]] = {}
+
+    for facet in body.get(
+        "facets"
+    ) or []:
+        if not isinstance(
+            facet,
+            dict,
+        ):
+            continue
+
+        parameter = facet.get(
+            "facetParameter"
+        )
+
+        values = facet.get(
+            "values"
+        ) or []
+
+        if not parameter or not values or any(
+            "facetParameter" in value
+            for value in values
+            if isinstance(
+                value,
+                dict,
+            )
+        ):
+            continue
+
+        counts = [
+            value.get("count") or 0
+            for value in values
+            if isinstance(
+                value,
+                dict,
+            )
+        ]
+
+        ids = [
+            str(value.get("id"))
+            for value in values
+            if isinstance(
+                value,
+                dict,
+            )
+            and value.get("id")
+        ]
+
+        if len(ids) != len(counts):
+            continue
+
+        candidates[parameter] = (
+            sum(counts),
+            max(counts),
+            ids,
+        )
+
+    ordered = [
+        name
+        for name in PREFERRED_PARTITIONS
+        if name in candidates
+    ] + sorted(
+        name
+        for name in candidates
+        if name not in PREFERRED_PARTITIONS
+    )
+
+    for name in ordered:
+        covered, largest, ids = candidates[name]
+
+        if (
+            largest < WORKDAY_RESULT_CAP
+            and covered >= WORKDAY_RESULT_CAP
+        ):
+            return name, ids
+
+    return None
 
 
 class WorkdaySourceError(RuntimeError):
@@ -480,14 +628,15 @@ def fetch_workday_jobs(
 
     def fetch_page(
         offset: int,
-    ) -> list[dict[str, Any]]:
-        """Fetch one page of listings."""
+        facets: dict[str, list[str]] | None = None,
+    ) -> dict[str, Any]:
+        """Fetch one page of listings, as the whole response body."""
 
         response = request_with_retry(
             lambda: http.post(
                 list_url,
                 json={
-                    "appliedFacets": {},
+                    "appliedFacets": facets or {},
                     "limit": (
                         WORKDAY_PAGE_SIZE
                     ),
@@ -499,24 +648,87 @@ def fetch_workday_jobs(
 
         response.raise_for_status()
 
-        postings = response.json().get(
-            "jobPostings"
-        )
+        body = response.json()
 
-        if not isinstance(
-            postings,
-            list,
-        ):
-            return []
-
-        return [
-            posting
-            for posting in postings
+        return (
+            body
             if isinstance(
-                posting,
+                body,
                 dict,
             )
+            else {}
+        )
+
+    def read_search(
+        facets: dict[str, list[str]] | None,
+        first: dict[str, Any],
+        budget: list[int],
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """Every posting one search returns, and whether that was all.
+
+        ``first`` is the search's first page, already fetched; the rest
+        are requested concurrently once its total is known. Pages past
+        what is left of ``budget`` are not requested, and the search is
+        then reported as read in part.
+        """
+
+        total = _total(
+            first
+        )
+
+        page_count = max(
+            1,
+            -(-min(total, WORKDAY_RESULT_CAP) // WORKDAY_PAGE_SIZE),
+        )
+
+        allowed = max(
+            1,
+            min(
+                page_count,
+                budget[0],
+            ),
+        )
+
+        budget[0] -= allowed
+
+        pages = [
+            _postings(
+                first
+            ),
         ]
+
+        offsets = [
+            index * WORKDAY_PAGE_SIZE
+            for index in range(
+                1,
+                allowed,
+            )
+        ]
+
+        if offsets:
+            with ThreadPoolExecutor(
+                max_workers=concurrency
+            ) as pool:
+                pages.extend(
+                    pool.map(
+                        lambda offset: _postings(
+                            fetch_page(
+                                offset,
+                                facets,
+                            )
+                        ),
+                        offsets,
+                    )
+                )
+
+        return (
+            [
+                posting
+                for page in pages
+                for posting in page
+            ],
+            allowed == page_count,
+        )
 
     def fetch_detail(
         external_path: str,
@@ -548,96 +760,105 @@ def fetch_workday_jobs(
         )
 
     try:
-        first_page = fetch_page(
+        first = fetch_page(
             0
         )
 
-        if not first_page:
+        if not _postings(
+            first
+        ):
             return []
 
-        # The first response carries the total, so every remaining page
-        # offset is known up front and can be fetched concurrently.
-        total = 0
-
-        probe = http.post(
-            list_url,
-            json={
-                "appliedFacets": {},
-                "limit": WORKDAY_PAGE_SIZE,
-                "offset": 0,
-                "searchText": "",
-            },
-        )
-
-        if probe.status_code == 200:
-            raw_total = probe.json().get(
-                "total"
-            )
-
-            if isinstance(
-                raw_total,
-                int,
-            ):
-                total = raw_total
-
-        page_count = min(
+        budget = [
             max_pages,
-            max(
-                1,
-                -(-total // WORKDAY_PAGE_SIZE)
-                if total
-                else 1,
-            ),
+        ]
+
+        everything: list[dict[str, Any]] | None = None
+
+        complete = True
+
+        # Workday's search stops at 2,000 results however many the
+        # tenant has: NVIDIA reported a total of 2,000 while its own
+        # job-family counts came to 2,679. Such a tenant is read in
+        # slices that each fit -- one per value of a facet that
+        # partitions the board -- and the slices together are the
+        # whole board.
+        capped = _total(
+            first
+        ) >= WORKDAY_RESULT_CAP
+
+        partition = (
+            _partition(
+                first
+            )
+            if capped
+            else None
         )
 
-        pages: list[
-            list[dict[str, Any]]
-        ] = [
-            first_page,
-        ]
+        if partition is not None:
+            parameter, values = partition
 
-        remaining_offsets = [
-            index * WORKDAY_PAGE_SIZE
-            for index in range(
-                1,
-                page_count,
-            )
-        ]
+            everything = []
 
-        if remaining_offsets:
-            with ThreadPoolExecutor(
-                max_workers=concurrency
-            ) as pool:
-                pages.extend(
-                    pool.map(
-                        fetch_page,
-                        remaining_offsets,
-                    )
+            for value_id in values:
+                facets = {
+                    parameter: [
+                        value_id,
+                    ],
+                }
+
+                part, whole = read_search(
+                    facets,
+                    fetch_page(
+                        0,
+                        facets,
+                    ),
+                    budget,
                 )
+
+                if not whole:
+                    everything = None
+
+                    break
+
+                everything.extend(
+                    part
+                )
+
+        if everything is None:
+            # Not capped, or capped with no facet that splits it.
+            everything, whole = read_search(
+                None,
+                first,
+                budget,
+            )
+
+            # Part of a board is still worth reading, but it is not
+            # evidence that anything left it.
+            complete = whole and not capped
 
         listings: list[
             dict[str, Any]
         ] = []
 
-        for page in pages:
-            for posting in page:
-                path = _external_id(
-                    posting
-                )
+        for posting in everything:
+            path = _external_id(
+                posting
+            )
 
-                if (
-                    path is None
-                    or path in seen_paths
-                ):
-                    continue
+            if (
+                path is None
+                or path in seen_paths
+            ):
+                continue
 
-                seen_paths.add(
-                    path
-                )
+            seen_paths.add(
+                path
+            )
 
-                listings.append(
-                    posting
-                )
+            listings.append(
+                posting
+            )
 
         # Decide which postings deserve the expensive detail request
         # before making any of them.
@@ -820,4 +1041,7 @@ def fetch_workday_jobs(
         if owns_client:
             http.close()
 
-    return jobs
+    return JobList(
+        jobs,
+        complete=complete,
+    )

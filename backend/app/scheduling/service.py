@@ -243,6 +243,10 @@ def poll_source_once(
                 freshness_policy=(
                     freshness_policy
                 ),
+                close_missing=(
+                    fetched_snapshot
+                    .complete
+                ),
             )
         )
 

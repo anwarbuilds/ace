@@ -77,8 +77,17 @@ def process_snapshot(
     source_account: str,
     jobs: Sequence[CanonicalJob],
     observed_at: datetime | None = None,
+    close_missing: bool = True,
 ) -> SnapshotResult:
-    """Process one complete ATS source snapshot.
+    """Process one ATS source snapshot.
+
+    ``close_missing`` is False for a snapshot the provider could not
+    give in full. Its jobs are stored and evaluated as usual, but none
+    is closed for being absent -- absence from part of a board is not
+    evidence of anything.
+
+    Otherwise the snapshot is complete and authoritative: whatever it
+    lacks is closed.
 
     The first successful source snapshot establishes a baseline.
 
@@ -256,6 +265,8 @@ def process_snapshot(
             ],
             observed_at=observed_at,
         )
+        if close_missing
+        else 0
     )
 
     repository.record_source_success(

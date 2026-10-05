@@ -296,6 +296,37 @@ def test_missing_jobs_are_reported_as_closed() -> None:
     assert result.closed_count == 2
 
 
+def test_a_board_read_in_part_closes_nothing() -> None:
+    """A Workday tenant too large for its search to return whole is
+    read in part. A posting missing from part of a board is not evidence
+    it closed; closing it would hide open roles on every poll."""
+
+    repository = FakeRepository(
+        initialized=True,
+        statuses={
+            "1": JobObservationStatus.UNCHANGED,
+        },
+        closed_count=2,
+    )
+
+    result = process_snapshot(
+        repository,
+        source="workday",
+        source_account="example",
+        jobs=[
+            make_job("1", source="workday"),
+        ],
+        observed_at=OBSERVED_AT,
+        close_missing=False,
+    )
+
+    assert result.closed_count == 0
+
+    # Never asked to close anything: a call would have recorded the
+    # observed identifiers.
+    assert repository.observed_external_ids == ()
+
+
 def test_empty_snapshot_is_rejected() -> None:
     repository = FakeRepository(
         initialized=True,

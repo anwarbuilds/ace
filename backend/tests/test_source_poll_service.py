@@ -259,6 +259,7 @@ def test_fetch_happens_before_database_transaction(
         jobs,
         observed_at,
         freshness_policy=None,
+        close_missing=True,
     ):
         del (
             repository,
@@ -266,6 +267,7 @@ def test_fetch_happens_before_database_transaction(
             source_account,
             jobs,
             observed_at,
+            close_missing,
         )
 
         events.append(
@@ -339,9 +341,11 @@ def test_workflow_receives_provider_neutral_snapshot_identity(
         jobs,
         observed_at,
         freshness_policy=None,
+        close_missing=True,
     ):
         observed.update(
             {
+                "close_missing": close_missing,
                 "repository": (
                     passed_repository
                 ),
@@ -383,6 +387,8 @@ def test_workflow_receives_provider_neutral_snapshot_identity(
         "source_account": "databricks",
         "jobs": (),
         "observed_at": DETECTED_AT,
+        # A snapshot read whole is authoritative.
+        "close_missing": True,
     }
 
 
@@ -537,3 +543,68 @@ def test_unchanged_snapshot_skips_the_whole_diff(
     assert result.workflow is None
 
     assert result.evaluated_count == 0
+
+
+def test_a_snapshot_read_in_part_is_not_allowed_to_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fetcher's word that it read only part of a board must reach
+    persistence, or every posting outside that part is closed."""
+
+    from dataclasses import replace
+
+    events: list[str] = []
+
+    source = make_source()
+
+    snapshot = replace(
+        make_snapshot(
+            source
+        ),
+        complete=False,
+    )
+
+    monkeypatch.setattr(
+        service_module,
+        "JobRepository",
+        lambda _session: _StubRepository(),
+    )
+
+    seen: dict = {}
+
+    def fake_workflow(
+        repository,
+        *,
+        source,
+        source_account,
+        jobs,
+        observed_at,
+        freshness_policy=None,
+        close_missing=True,
+    ):
+        seen["close_missing"] = close_missing
+
+        return make_workflow_result()
+
+    monkeypatch.setattr(
+        service_module,
+        "run_source_snapshot_workflow",
+        fake_workflow,
+    )
+
+    poll_source_once(
+        source=source,
+        fetcher=FakeFetcher(
+            snapshot=snapshot,
+            events=events,
+        ),
+        transaction_factory=(
+            FakeTransactionFactory(
+                events=events
+            )
+        ),
+    )
+
+    assert seen == {
+        "close_missing": False,
+    }

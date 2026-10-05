@@ -33,3 +33,24 @@ class CanonicalJob(BaseModel):
     # "contract_type"; most ATS boards never surface an equivalent
     # field and this stays None for them.
     employment_type: str | None = None
+
+class JobList(list):
+    """Jobs read from one source, and whether that was all of them.
+
+    An adapter that cannot read a board in full -- a Workday tenant
+    whose search stops at 2,000 postings and cannot be split below
+    that -- returns what it read with ``complete=False``. It is stored
+    and evaluated, but nothing is closed for being absent from it.
+    """
+
+    def __init__(
+        self,
+        jobs=(),
+        *,
+        complete: bool = True,
+    ) -> None:
+        super().__init__(
+            jobs
+        )
+
+        self.complete = complete

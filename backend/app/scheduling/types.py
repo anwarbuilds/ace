@@ -53,6 +53,12 @@ class SourceType(StrEnum):
     # than every other source and should stay visible as one.
     RIPPLEMATCH = "ripplematch"
     AVATURE = "avature"
+    # ByteDance's own careers API, behind both jobs.bytedance.com and
+    # lifeattiktok.com. The account names the portal: "bytedance" or
+    # "tiktok".
+    BYTEDANCE = "bytedance"
+    # Oracle's HCM cloud. The account is "{host}/{siteNumber}".
+    ORACLE_RECRUITING = "oracle_recruiting"
 
 
 def _require_non_empty(
@@ -252,6 +258,13 @@ class FetchedSourceSnapshot:
     etag: str | None = None
 
     last_modified: str | None = None
+
+    # False when the provider could not be read in full -- a Workday
+    # tenant whose search stops at 2,000 postings and cannot be split
+    # below that. What was read is stored and evaluated, but nothing is
+    # closed: a posting missing from part of a board says nothing about
+    # whether it is still open.
+    complete: bool = True
 
     def __post_init__(self) -> None:
         """Validate cross-provider snapshot invariants."""
