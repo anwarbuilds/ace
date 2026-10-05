@@ -537,6 +537,22 @@ REGISTRATION_POLL_INTERVAL_SECONDS = {
 }
 
 
+# Providers whose public API returns a whole board in one request, so
+# polling one every fifteen minutes costs four requests an hour. Their
+# boards are never left on a daily cadence, whatever they have produced:
+# Cloudflare, Affirm, Airtable and Duolingo were among 72 boards still
+# polled daily on 2026-10-05, and Duolingo's roles reached the feed a
+# day before ACE saw them on Duolingo's own board.
+SINGLE_REQUEST_PROVIDERS = frozenset(
+    {
+        "greenhouse",
+        "ashby",
+        "lever",
+        "smartrecruiters",
+    }
+)
+
+
 def registration_interval(
     source_type: str,
 ) -> int:

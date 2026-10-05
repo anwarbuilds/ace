@@ -25,6 +25,7 @@ import urllib.request
 from sqlalchemy import select
 
 from backend.app.coverage.companies import (
+    SINGLE_REQUEST_PROVIDERS,
     SOURCE_HOSTS,
     TARGET_COMPANIES,
     registration_interval,
@@ -248,12 +249,17 @@ def register(
                     #
                     # A company on the user's own list is not the tail.
                     # It was chosen deliberately, so it is polled often
-                    # enough to be worth having chosen.
+                    # enough to be worth having chosen. Nor is a board
+                    # read in one request: fifteen minutes costs four
+                    # requests an hour, and daily cost Duolingo's roles
+                    # a day.
                     poll_interval_seconds=(
                         registration_interval(
                             candidate.source_type
                         )
-                        if curated_match(
+                        if candidate.source_type
+                        in SINGLE_REQUEST_PROVIDERS
+                        or curated_match(
                             candidate.company
                         )
                         else 86400

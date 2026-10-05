@@ -158,17 +158,49 @@ def test_a_daily_board_that_produced_a_passing_role_is_sped_up(
     assert interval(session, "greenhouse", "nuro") == 900
 
 
-def test_a_board_that_produced_nothing_wanted_stays_daily(
+def test_an_expensive_board_that_produced_nothing_wanted_stays_slow(
     session: Session,
 ) -> None:
-    add_source(session, "greenhouse", "tail", 86400)
-    add_job(session, "greenhouse", "tail", "REJECT", "1")
+    """A Workday tenant is a hundred requests a poll; it earns a faster
+    cadence by producing something."""
+
+    add_source(session, "workday", "tail/External", 86400)
+    add_job(session, "workday", "tail/External", "REJECT", "1")
 
     assert promote_productive_sources(
         session
     ) == []
 
-    assert interval(session, "greenhouse", "tail") == 86400
+    assert interval(session, "workday", "tail/External") == 86400
+
+
+def test_a_board_read_in_one_request_is_never_left_daily(
+    session: Session,
+) -> None:
+    """Fifteen minutes costs four requests an hour there, and daily cost
+    Duolingo's roles a day: the feed listed them first."""
+
+    add_source(session, "greenhouse", "duolingo", 86400)
+    add_job(session, "greenhouse", "duolingo", "REJECT", "1")
+
+    # Never produced anything at all, not even a rejection.
+    add_source(session, "ashby", "cloudflare", 86400)
+
+    promoted = {
+        promotion.source_account: promotion.passing_roles
+        for promotion in promote_productive_sources(
+            session
+        )
+    }
+
+    assert promoted == {
+        "duolingo": 0,
+        "cloudflare": 0,
+    }
+
+    assert interval(session, "greenhouse", "duolingo") == 900
+
+    assert interval(session, "ashby", "cloudflare") == 900
 
 
 def test_a_faster_cadence_set_by_hand_is_never_slowed(

@@ -11,8 +11,16 @@ IMC and Jump Trading. A role opened at any of them could wait a day.
 
 A board that has ever produced a role passing the gate is polled at its
 provider's registration cadence -- fifteen minutes, or an hour for
-Eightfold -- from then on. Promotion only: a board is never slowed down
-here, so a cadence someone set by hand is never undone.
+Eightfold -- from then on. So is every board on a provider that returns
+a whole board in one request (Greenhouse, Ashby, Lever,
+SmartRecruiters), productive or not: there a fifteen-minute poll costs
+four requests an hour, and waiting for a first passing role meant that
+first role waited a day. Duolingo's reached the feed a day before ACE
+read it on Duolingo's own board.
+
+Promotion only: a board is never slowed down here, so a cadence someone
+set by hand -- Starbucks and Arcadis on Eightfold, every six hours -- is
+never undone.
 """
 
 from __future__ import annotations
@@ -24,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.coverage.companies import (
     MULTI_EMPLOYER_SOURCES,
+    SINGLE_REQUEST_PROVIDERS,
     registration_interval,
 )
 from backend.app.db.models import (
@@ -86,7 +95,7 @@ def promote_productive_sources(
             JobSourceRecord,
             productive.c.passing,
         )
-        .join(
+        .outerjoin(
             productive,
             sa.and_(
                 productive.c.source
@@ -114,6 +123,13 @@ def promote_productive_sources(
         if record.poll_interval_seconds <= target:
             continue
 
+        if (
+            not passing
+            and record.source_type
+            not in SINGLE_REQUEST_PROVIDERS
+        ):
+            continue
+
         promotions.append(
             Promotion(
                 source_type=record.source_type,
@@ -121,7 +137,7 @@ def promote_productive_sources(
                 company_name=record.company_name,
                 old_interval=record.poll_interval_seconds,
                 new_interval=target,
-                passing_roles=int(passing),
+                passing_roles=int(passing or 0),
             )
         )
 
