@@ -5,20 +5,28 @@ Amazon publishes a public JSON search endpoint behind amazon.jobs:
     GET https://www.amazon.jobs/search.json
 
 Unlike an ATS board it is a search index over roughly ten thousand US
-postings, so fetching everything would be both slow and pointless.
+postings, most of them warehouse, retail and corporate roles.
 
-Recency paging
---------------
+What is read, and why all of it
+-------------------------------
 
-The endpoint supports ``sort=recent``. Because ACE only alerts on
-postings inside its freshness window, the adapter walks pages newest
-first and stops as soon as a page is entirely older than the configured
-horizon. A ten-day horizon typically costs two or three requests
-instead of one hundred.
+The adapter used to walk the whole US index newest first and stop at a
+45-day horizon or 25 pages, whichever came first. Both limits lost
+roles the user wants. Amazon keeps its new-graduate postings open for
+months -- "Software Development Engineer - 2026 (US)" was posted in
+February -- so the horizon hid them; and 2,500 postings cover only a
+few weeks of the whole index, so everything older fell out of each
+snapshot and was marked closed while still open.
 
-The horizon is deliberately wider than the alert freshness window so
-that lifecycle tracking still sees a job for a while after it stops
-being alert-worthy.
+It now reads a few job categories in full, with no horizon: software
+development, machine learning science, and systems/quality/security
+engineering. Every Amazon role that has ever passed the gate was in the
+first. Software development was 1,701 US postings on 2026-10-04 --
+eighteen requests.
+
+A snapshot is authoritative: whatever it lacks is closed. So a category
+that does not finish inside its page budget raises rather than return
+part of itself.
 
 Description assembly
 --------------------
@@ -33,7 +41,6 @@ from __future__ import annotations
 
 from datetime import (
     datetime,
-    timedelta,
     timezone,
 )
 import html
@@ -63,11 +70,24 @@ AMAZON_PAGE_SIZE = 100
 
 REQUEST_TIMEOUT_SECONDS = 30.0
 
-# Wider than the alert freshness window so lifecycle tracking still sees
-# a posting after it stops being alert-worthy.
-DEFAULT_HORIZON_DAYS = 45
+# The categories read, by amazon.jobs's own slugs.
+AMAZON_CATEGORIES = (
+    "software-development",
+    "machine-learning-science",
+    "systems-quality-security-engineering",
+)
 
-DEFAULT_MAX_PAGES = 25
+# Pages per category before giving up on it. Software development, the
+# largest, needed eighteen on 2026-10-04.
+MAX_PAGES_PER_CATEGORY = 60
+
+
+class IncompleteAmazonRead(RuntimeError):
+    """A category did not finish inside its page budget.
+
+    Raised rather than returning part of it, because a snapshot is
+    authoritative and everything it lacks would be marked closed.
+    """
 
 USER_AGENT = (
     "ACE/0.1 "
@@ -251,33 +271,97 @@ def _external_id(
     return None
 
 
+def _canonical_job(
+    posting: Any,
+    *,
+    company_name: str,
+    seen_ids: set[str],
+) -> CanonicalJob | None:
+    """One search result as a canonical job, or None to skip it.
+
+    Skipped: anything malformed, untitled, or already seen -- the same
+    posting can be filed under two of the categories read.
+    """
+
+    if not isinstance(
+        posting,
+        dict,
+    ):
+        return None
+
+    external_id = _external_id(
+        posting
+    )
+
+    if (
+        external_id is None
+        or external_id in seen_ids
+    ):
+        return None
+
+    title = str(
+        posting.get(
+            "title"
+        )
+        or ""
+    ).strip()
+
+    if not title:
+        return None
+
+    seen_ids.add(
+        external_id
+    )
+
+    job_path = str(
+        posting.get(
+            "job_path"
+        )
+        or ""
+    ).strip()
+
+    official_url = (
+        f"{AMAZON_JOB_BASE_URL}"
+        f"{job_path}"
+        if job_path.startswith(
+            "/"
+        )
+        else AMAZON_JOB_BASE_URL
+    )
+
+    return CanonicalJob(
+        source=AMAZON_SOURCE,
+        company=company_name,
+        external_id=external_id,
+        requisition_id=external_id,
+        title=title,
+        location=build_location(
+            posting
+        ),
+        description=build_description(
+            posting
+        ),
+        official_url=official_url,
+        posted_at=parse_posted_date(
+            posting.get(
+                "posted_date"
+            )
+        ),
+        updated_at=None,
+    )
+
+
 def fetch_amazon_jobs(
     *,
     company_name: str = "Amazon",
     client: httpx.Client | None = None,
-    now: datetime | None = None,
-    horizon_days: int = DEFAULT_HORIZON_DAYS,
-    max_pages: int = DEFAULT_MAX_PAGES,
+    categories: tuple[str, ...] = AMAZON_CATEGORIES,
+    max_pages_per_category: int = (
+        MAX_PAGES_PER_CATEGORY
+    ),
     country_code: str = "USA",
 ) -> list[CanonicalJob]:
-    """Fetch recent US Amazon postings.
-
-    Pages are walked newest first and stop as soon as an entire page
-    predates the horizon, so a routine poll costs a handful of requests
-    rather than the full index.
-    """
-
-    reference = (
-        now
-        if now is not None
-        else datetime.now(
-            timezone.utc
-        )
-    )
-
-    cutoff = reference - timedelta(
-        days=horizon_days
-    )
+    """Fetch every US Amazon posting in the categories ACE reads."""
 
     owns_client = client is None
 
@@ -303,146 +387,86 @@ def fetch_amazon_jobs(
     seen_ids: set[str] = set()
 
     try:
-        for page in range(
-            max_pages
-        ):
-            response = request_with_retry(
-                lambda offset=(
-                    page * AMAZON_PAGE_SIZE
-                ): http.get(
-                AMAZON_SEARCH_URL,
-                params={
-                    "base_query": "",
-                    "offset": offset,
-                    "result_limit": (
-                        AMAZON_PAGE_SIZE
-                    ),
-                    "sort": "recent",
-                    "normalized_country_code[]": (
-                        country_code
-                    ),
-                },
+        for category in categories:
+            offset = 0
+
+            for _ in range(
+                max_pages_per_category
+            ):
+                response = request_with_retry(
+                    lambda offset=offset: http.get(
+                        AMAZON_SEARCH_URL,
+                        params={
+                            "base_query": "",
+                            "offset": offset,
+                            "result_limit": (
+                                AMAZON_PAGE_SIZE
+                            ),
+                            # A stable order, so paging neither repeats
+                            # nor skips while the walk is under way.
+                            "sort": "recent",
+                            "normalized_country_code[]": (
+                                country_code
+                            ),
+                            "category[]": category,
+                        },
+                    )
                 )
-            )
 
-            response.raise_for_status()
+                response.raise_for_status()
 
-            postings = response.json().get(
-                "jobs"
-            )
+                body = response.json()
 
-            if not isinstance(
-                postings,
-                list,
-            ) or not postings:
-                break
+                postings = body.get(
+                    "jobs"
+                )
 
-            page_had_recent = False
-
-            for posting in postings:
                 if not isinstance(
-                    posting,
-                    dict,
+                    postings,
+                    list,
+                ) or not postings:
+                    break
+
+                for posting in postings:
+                    job = _canonical_job(
+                        posting,
+                        company_name=company_name,
+                        seen_ids=seen_ids,
+                    )
+
+                    if job is not None:
+                        jobs.append(
+                            job
+                        )
+
+                offset += len(
+                    postings
+                )
+
+                hits = body.get(
+                    "hits"
+                )
+
+                if len(
+                    postings
+                ) < AMAZON_PAGE_SIZE or (
+                    isinstance(
+                        hits,
+                        int,
+                    )
+                    and offset >= hits
                 ):
-                    continue
+                    break
 
-                external_id = _external_id(
-                    posting
-                )
-
-                if external_id is None:
-                    continue
-
-                if external_id in seen_ids:
-                    continue
-
-                title = str(
-                    posting.get(
-                        "title"
-                    )
-                    or ""
-                ).strip()
-
-                if not title:
-                    continue
-
-                posted_at = parse_posted_date(
-                    posting.get(
-                        "posted_date"
+            else:
+                raise IncompleteAmazonRead(
+                    (
+                        f"Amazon category {category!r} did not "
+                        f"finish in {max_pages_per_category} "
+                        "pages; refusing to treat part of it as "
+                        "the whole."
                     )
                 )
-
-                if (
-                    posted_at is not None
-                    and posted_at >= cutoff
-                ):
-                    page_had_recent = True
-
-                elif posted_at is None:
-                    # An unparseable date is unknown, not old.
-                    page_had_recent = True
-
-                else:
-                    continue
-
-                seen_ids.add(
-                    external_id
-                )
-
-                job_path = str(
-                    posting.get(
-                        "job_path"
-                    )
-                    or ""
-                ).strip()
-
-                official_url = (
-                    f"{AMAZON_JOB_BASE_URL}"
-                    f"{job_path}"
-                    if job_path.startswith(
-                        "/"
-                    )
-                    else AMAZON_JOB_BASE_URL
-                )
-
-                jobs.append(
-                    CanonicalJob(
-                        source=AMAZON_SOURCE,
-                        company=company_name,
-                        external_id=(
-                            external_id
-                        ),
-                        requisition_id=(
-                            external_id
-                        ),
-                        title=title,
-                        location=(
-                            build_location(
-                                posting
-                            )
-                        ),
-                        description=(
-                            build_description(
-                                posting
-                            )
-                        ),
-                        official_url=(
-                            official_url
-                        ),
-                        posted_at=posted_at,
-                        updated_at=None,
-                    )
-                )
-
-            # Results are newest first, so a page with nothing inside
-            # the horizon means every later page is older still.
-            if not page_had_recent:
-                break
-
-            if len(
-                postings
-            ) < AMAZON_PAGE_SIZE:
-                break
 
     finally:
         if owns_client:
