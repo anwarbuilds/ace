@@ -238,8 +238,16 @@ class CycleRecorder(Protocol):
         self,
         *,
         started_at: datetime,
+        checks_since: Callable[
+            [datetime],
+            tuple[int, int],
+        ],
     ) -> None:
-        """Record the discoveries made during one cycle."""
+        """Record the discoveries made during one cycle.
+
+        ``checks_since(moment)`` answers how many distinct boards were
+        read since then, and how many postings they held.
+        """
 
 
 class SourcePoller(Protocol):
@@ -481,6 +489,19 @@ class SchedulerRuntime:
         self._pool: (
             ThreadPoolExecutor | None
         ) = None
+
+        self._wall_clock = wall_clock
+
+        # Each board's latest successful read: when, and how many
+        # postings it held. What a pull reports as checked, alongside
+        # what was new. Guarded by _due_lock.
+        self._last_checked: dict[
+            tuple[
+                object,
+                str,
+            ],
+            tuple[datetime, int],
+        ] = {}
 
         self._resume_schedule(
             last_polled,
@@ -1040,6 +1061,24 @@ class SchedulerRuntime:
                         None,
                     )
 
+                    self._last_checked[
+                        source.identity
+                    ] = (
+                        self._wall_clock(),
+                        int(
+                            getattr(
+                                result,
+                                "checked_count",
+                                getattr(
+                                    result,
+                                    "fetched_count",
+                                    0,
+                                ),
+                            )
+                            or 0
+                        ),
+                    )
+
                 with results_lock:
                     successes.append(
                         SourcePollSuccess(
@@ -1226,7 +1265,8 @@ class SchedulerRuntime:
 
         try:
             self._cycle_recorder(
-                started_at=since
+                started_at=since,
+                checks_since=self.checks_since,
             )
 
         except Exception:
@@ -1235,6 +1275,35 @@ class SchedulerRuntime:
             self._logger.exception(
                 "cycle_recording_failed"
             )
+
+    def checks_since(
+        self,
+        moment: datetime,
+    ) -> tuple[int, int]:
+        """Distinct boards read since ``moment``, and postings they held.
+
+        Each board counts once, at its latest read: a five-minute board
+        read three times in a quarter hour is one board, not three.
+        """
+
+        if moment.tzinfo is None:
+            moment = moment.replace(
+                tzinfo=timezone.utc,
+            )
+
+        with self._due_lock:
+            recent = [
+                count
+                for checked_at, count in (
+                    self._last_checked.values()
+                )
+                if checked_at >= moment
+            ]
+
+        return (
+            len(recent),
+            sum(recent),
+        )
 
     def seconds_until_next_poll(
         self,

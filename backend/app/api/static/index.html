@@ -1493,6 +1493,18 @@ function pullsPage(){
   // this is a log, and a log that hides its quiet entries cannot be
   // used to answer "was ACE running at 3am". The jobs a check found
   // sit behind a click, so a day of checks stays one screen.
+  // What a pull read as well as what was new in it. "31 postings seen"
+  // was read as ACE having looked at 31 postings; it had read 483 boards
+  // holding about 63,000, and 31 of those postings were new. Pulls from
+  // before the check counts were recorded say only what was new.
+  function pullChecked(s){
+    var n=s.jobs_discovered||0;
+    var fresh=n.toLocaleString()+" new";
+    if(!s.boards_checked)
+      return n?n.toLocaleString()+" new posting"+(n===1?"":"s"):"nothing new to read";
+    return fresh+" \u00b7 "+s.boards_checked.toLocaleString()+" board"+(s.boards_checked===1?"":"s")+
+      ", "+(s.postings_checked||0).toLocaleString()+" postings checked";
+  }
   function runRow(s){
     var open=state.openPull===s.id;
     var jobs=s.jobs||[];
@@ -1523,9 +1535,7 @@ function pullsPage(){
         '<span class="pl-caret">'+(hit?(open?"\u25be":"\u25b8"):"\u00b7")+'</span>'+
         '<span class="pl-time">'+span+'</span>'+
         '<span class="pl-badge'+(counted?" hit":"")+'">'+label+'</span>'+
-        '<span class="pl-seen">'+(sawNothing?"nothing to read"
-          :s.jobs_discovered.toLocaleString()+
-            ' posting'+(s.jobs_discovered===1?"":"s")+' seen')+'</span>'+
+        '<span class="pl-seen">'+pullChecked(s)+'</span>'+
         '<span class="pl-ago">'+ago(s.finished_at||s.started_at)+'</span>'+
       '</button>'+
       (open?'<div class="pl-jobs">'+
@@ -1545,7 +1555,7 @@ function pullsPage(){
         '<header class="pl-day-h">'+
           '<h2 class="pl-day-t">'+esc(g.day)+'</h2>'+
           '<span class="pl-day-m">'+g.rows.length+' check'+(g.rows.length===1?"":"s")+'</span>'+
-          '<span class="pl-day-m">'+seen.toLocaleString()+' seen</span>'+
+          '<span class="pl-day-m">'+seen.toLocaleString()+' new postings</span>'+
           '<span class="pl-day-m strong">'+qual+' passed your filters</span>'+
         '</header>'+
         '<div class="pl-runs">'+g.rows.map(runRow).join("")+'</div>'+

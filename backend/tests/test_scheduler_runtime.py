@@ -1935,7 +1935,7 @@ def test_what_a_late_finisher_found_is_grouped_from_when_it_started() -> None:
         clock=clock,
         sleeper=sleeper,
         cycle_budget_seconds=0.05,
-        cycle_recorder=lambda *, started_at: recorded.append(
+        cycle_recorder=lambda *, started_at, **_: recorded.append(
             started_at
         ),
     )
@@ -2338,3 +2338,79 @@ def test_a_shorter_interval_takes_effect_from_the_last_poll() -> None:
     runtime._refresh_sources()
 
     assert runtime.seconds_until_next_poll() == 600
+
+
+# --- what a pull checked ------------------------------------------------
+
+
+def test_a_pull_reports_distinct_boards_and_the_postings_they_held() -> None:
+    """"31 postings seen" was read as ACE having looked at 31 postings.
+    It had read 483 boards holding about 63,000; 31 were new."""
+
+    moments = [
+        datetime(2026, 10, 5, 16, 14, tzinfo=timezone.utc),
+    ]
+
+    clock = FakeClock()
+
+    counts = {
+        "cursor": 40,
+        "stripe": 500,
+    }
+
+    def poller(
+        source: SourceDefinition,
+    ):
+        return SimpleNamespace(
+            fetched_count=counts[source.source_account],
+            checked_count=counts[source.source_account],
+            evaluated_count=0,
+            alert_candidate_count=0,
+            stale_suppressed_count=0,
+            queued_notification_count=0,
+        )
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                make_source(
+                    source_account="cursor",
+                    poll_interval_seconds=300,
+                ),
+                make_source(
+                    source_account="stripe",
+                    poll_interval_seconds=900,
+                ),
+            )
+        ),
+        poller=poller,
+        clock=clock,
+        sleeper=lambda _seconds: None,
+        wall_clock=lambda: moments[0],
+    )
+
+    # 16:14 -- both read, before the 16:15 pull began.
+    runtime.run_due_sources()
+
+    window = datetime(2026, 10, 5, 16, 15, tzinfo=timezone.utc)
+
+    assert runtime.checks_since(window) == (0, 0)
+
+    # 16:20 and 16:25 -- Cursor twice more inside the window.
+    for minute in (20, 25):
+        moments[0] = datetime(2026, 10, 5, 16, minute, tzinfo=timezone.utc)
+
+        clock.advance(300)
+
+        runtime.run_due_sources()
+
+    # Cursor once, not twice; Stripe was not read in the window.
+    assert runtime.checks_since(window) == (1, 40)
+
+    moments[0] = datetime(2026, 10, 5, 16, 29, tzinfo=timezone.utc)
+
+    clock.advance(600)
+
+    runtime.run_due_sources()
+
+    assert runtime.checks_since(window) == (2, 540)

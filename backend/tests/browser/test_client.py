@@ -1842,3 +1842,48 @@ def test_the_coverage_page_lists_boards_that_stopped_answering(
     assert "Stopped answering (2)" in page.eval(
         "document.body.textContent"
     )
+
+
+def test_a_pull_says_how_much_it_checked_not_only_what_was_new(
+    page,
+) -> None:
+    """"31 postings seen" was read as ACE having looked at 31 postings.
+    In that quarter hour it had read 483 boards holding about 63,000."""
+
+    page.eval(
+        "state.page='pulls';"
+        "state.sessions=["
+        "{id:9001,started_at:'2026-10-05T16:15:00+00:00',"
+        "finished_at:'2026-10-05T16:29:00+00:00',jobs_discovered:31,"
+        "qualifying_discovered:0,boards_checked:483,"
+        "postings_checked:63517,jobs:[]},"
+        "{id:9000,started_at:'2026-10-05T16:00:00+00:00',"
+        "finished_at:'2026-10-05T16:14:00+00:00',jobs_discovered:62,"
+        "qualifying_discovered:0,boards_checked:0,"
+        "postings_checked:0,jobs:[]}];"
+        "render();1"
+    )
+
+    page.wait_for(
+        "document.querySelectorAll('.pl-seen').length===2"
+    )
+
+    checked, legacy = page.eval(
+        "Array.from(document.querySelectorAll('.pl-seen'))"
+        ".map(function(e){return e.textContent;})"
+    )
+
+    assert "31 new" in checked
+
+    assert "483 boards" in checked
+
+    assert "63,517 postings checked" in checked
+
+    # Recorded before checks were counted: what was new, nothing more,
+    # and never the misleading "seen".
+    assert legacy == "62 new postings"
+
+    assert "seen" not in page.eval(
+        "Array.from(document.querySelectorAll('.pl-seen,.pl-day-m'))"
+        ".map(function(e){return e.textContent;}).join(' ')"
+    )

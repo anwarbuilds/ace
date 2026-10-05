@@ -354,8 +354,10 @@ def main(
     def record_cycle(
         *,
         started_at,
+        checks_since,
     ) -> None:
-        """Group anything this cycle discovered into a run."""
+        """Group anything this cycle discovered into a run, and record
+        how much the run has checked so far."""
 
         with SessionLocal.begin() as session:
             run = record_discoveries(
@@ -363,12 +365,27 @@ def main(
                 since=started_at,
             )
 
-            if run is None:
-                # Nothing found, but ACE looked, and the log is read to
-                # find out whether it did.
-                record_check(
-                    session
-                )
+            # Nothing found, but ACE looked, and the log is read to find
+            # out whether it did.
+            checked = run or record_check(
+                session
+            )
+
+            boards, postings = checks_since(
+                checked.started_at
+            )
+
+            # Never lowered: after a restart the scheduler remembers
+            # nothing read before it, and the pull already counted it.
+            checked.boards_checked = max(
+                checked.boards_checked or 0,
+                boards,
+            )
+
+            checked.postings_checked = max(
+                checked.postings_checked or 0,
+                postings,
+            )
 
         if run is not None:
             LOGGER.info(

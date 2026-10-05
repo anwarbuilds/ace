@@ -608,3 +608,33 @@ def test_a_snapshot_read_in_part_is_not_allowed_to_close(
     assert seen == {
         "close_missing": False,
     }
+
+
+
+def test_an_unchanged_board_counts_the_postings_it_confirmed() -> None:
+    """A 304 downloads nothing, but every posting on the board was
+    confirmed unchanged -- a pull that read it checked all of them."""
+
+    from dataclasses import replace
+
+    from backend.app.scheduling.service import SourcePollResult
+
+    source = make_source()
+
+    unchanged = replace(
+        make_snapshot(
+            source
+        ),
+        unchanged=True,
+    )
+
+    assert SourcePollResult(
+        fetched_snapshot=unchanged,
+        workflow=None,
+        confirmed_count=412,
+    ).checked_count == 412
+
+    assert SourcePollResult(
+        fetched_snapshot=unchanged,
+        workflow=None,
+    ).checked_count == 0

@@ -1986,6 +1986,12 @@ def list_discovery_runs(
                 "qualifying_discovered": (
                     row.qualifying_discovered
                 ),
+                "boards_checked": (
+                    row.boards_checked
+                ),
+                "postings_checked": (
+                    row.postings_checked
+                ),
                 "qualifying_open_now": int(
                     open_qualifying or 0
                 ),

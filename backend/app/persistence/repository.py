@@ -401,12 +401,15 @@ class JobRepository:
         source: str,
         source_account: str,
         observed_at: datetime,
-    ) -> None:
+    ) -> int | None:
         """Record a poll where the provider reported no change.
 
         Only the success markers move. Job state is untouched, because a
         304 means the list is byte-identical: nothing was added, edited
         or closed.
+
+        Returns how many postings the board held when last read in full
+        -- every one of them confirmed unchanged by this poll.
         """
 
         state = self._session.get(
@@ -418,13 +421,15 @@ class JobRepository:
         )
 
         if state is None:
-            return
+            return None
 
         state.last_success_at = observed_at
 
         state.last_unchanged_at = observed_at
 
         self._session.flush()
+
+        return state.last_job_count
 
     def record_http_validators(
         self,

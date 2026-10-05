@@ -722,6 +722,23 @@ class PollSessionRecord(Base):
         server_default="0",
     )
 
+    # How much the pull checked, as well as what was new in it. "31
+    # postings seen" read as ACE having looked at 31 postings; in that
+    # quarter hour it had read 483 boards holding about 63,000. Distinct
+    # boards, so one polled three times in the window counts once; a
+    # board that answered "unchanged" counts with its known size.
+    boards_checked: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="0",
+    )
+
+    postings_checked: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="0",
+    )
+
     # When this pull's alert was sent. The guard against sending the
     # same pull twice, which matters because the scheduler decides what
     # to send on every cycle and a cycle runs every few seconds.

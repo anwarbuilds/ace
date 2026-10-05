@@ -85,6 +85,22 @@ class SourcePollResult:
 
     workflow: SourceSnapshotWorkflowResult | None
 
+    # For a board that answered "not modified": how many postings it
+    # held when last read in full. Nothing was downloaded, but every
+    # one of them was confirmed unchanged.
+    confirmed_count: int | None = None
+
+    @property
+    def checked_count(
+        self,
+    ) -> int:
+        """Postings this poll checked: downloaded, or confirmed unchanged."""
+
+        if self.fetched_snapshot.unchanged:
+            return self.confirmed_count or 0
+
+        return self.fetched_count
+
     @property
     def source_definition(
         self,
@@ -200,7 +216,7 @@ def poll_source_once(
         # last time, so there is nothing to diff. Only the success
         # markers move.
         if fetched_snapshot.unchanged:
-            job_repository.record_source_unchanged(
+            confirmed = job_repository.record_source_unchanged(
                 source=(
                     fetched_snapshot.source
                 ),
@@ -219,6 +235,7 @@ def poll_source_once(
                     fetched_snapshot
                 ),
                 workflow=None,
+                confirmed_count=confirmed,
             )
 
         workflow_result = (
