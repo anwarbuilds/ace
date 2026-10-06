@@ -62,6 +62,13 @@ BOARD_ADDED_LATER = "board added after the feed listed it"
 
 SEEN_LATE = "board already read; role seen late"
 
+# The employer published the posting -- or published it again -- after
+# the feed listed it, and ACE saw it within the half hour. Stripe's
+# "Software Engineer" was listed by the feed on 2026-09-18, published on
+# Stripe's board on 2026-10-02 at 18:52, and read by ACE at 18:55: not a
+# miss, and counting it as one would hide the real ones.
+REPUBLISHED = "republished after the feed listed it"
+
 
 def _as_utc(
     moment: datetime,
@@ -128,6 +135,7 @@ def caught_late(
                 feed.first_seen_at
             ),
             board.created_at,
+            direct.posted_at,
         )
         .join(
             feed,
@@ -157,6 +165,7 @@ def caught_late(
             direct.official_url,
             direct.first_seen_at,
             board.created_at,
+            direct.posted_at,
         )
     ).all()
 
@@ -170,6 +179,7 @@ def caught_late(
         direct_seen,
         feed_seen,
         board_added,
+        posted_at,
     ) in rows:
         direct_seen = _as_utc(
             direct_seen
@@ -184,12 +194,19 @@ def caught_late(
         if lag <= LATE_AFTER:
             continue
 
-        cause = (
-            BOARD_ADDED_LATER
-            if board_added is not None
-            and _as_utc(board_added) > feed_seen
-            else SEEN_LATE
-        )
+        if board_added is not None and _as_utc(
+            board_added
+        ) > feed_seen:
+            cause = BOARD_ADDED_LATER
+
+        elif posted_at is not None and (
+            _as_utc(posted_at) > feed_seen
+            and direct_seen - _as_utc(posted_at) <= LATE_AFTER
+        ):
+            cause = REPUBLISHED
+
+        else:
+            cause = SEEN_LATE
 
         late.append(
             {
@@ -222,6 +239,11 @@ def caught_late(
             1
             for row in late
             if row["cause"] == SEEN_LATE
+        ),
+        "republished": sum(
+            1
+            for row in late
+            if row["cause"] == REPUBLISHED
         ),
         "rows": late[:limit],
     }

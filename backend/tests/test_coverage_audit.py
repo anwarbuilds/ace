@@ -21,6 +21,7 @@ from sqlalchemy.orm import (
 
 from backend.app.coverage.audit import (
     BOARD_ADDED_LATER,
+    REPUBLISHED,
     SEEN_LATE,
     caught_late,
     feed_only,
@@ -72,6 +73,7 @@ def add_job(
     seen: datetime,
     status: str = "PASS",
     account: str = "acct",
+    posted: datetime | None = None,
 ) -> None:
     key = next(_ids)
 
@@ -84,6 +86,7 @@ def add_job(
         location="Bellevue, WA",
         description="",
         official_url=url,
+        posted_at=posted,
         content_hash=f"hash-{key}",
         first_seen_at=seen,
         last_seen_at=seen,
@@ -323,3 +326,50 @@ def test_feed_only_names_where_direct_coverage_is_missing(
         {"company": "Garmin", "passing": 2, "board_read": False},
         {"company": "Pinterest", "passing": 1, "board_read": True},
     ]
+
+
+
+def test_a_role_republished_after_the_feed_listed_it_is_not_a_miss(
+    session: Session,
+) -> None:
+    """Stripe's role: listed by the feed on the 18th, published on its
+    board on the 2nd at 18:52, read by ACE at 18:55."""
+
+    add_board(
+        session,
+        company="Stripe",
+        account="stripe",
+        added=NOW - timedelta(days=30),
+        source_type="greenhouse",
+    )
+
+    link = "https://stripe.com/jobs/search?gh_jid=8249901"
+
+    add_job(
+        session,
+        source="simplify",
+        company="Stripe",
+        title="Software Engineer",
+        url=link,
+        seen=NOW - timedelta(days=14),
+    )
+
+    add_job(
+        session,
+        source="greenhouse",
+        account="stripe",
+        company="Stripe",
+        title="Software Engineer",
+        url=link,
+        seen=NOW - timedelta(hours=2),
+        posted=NOW - timedelta(hours=2, minutes=3),
+    )
+
+    report = caught_late(
+        session,
+        now=NOW,
+    )
+
+    assert [row["cause"] for row in report["rows"]] == [REPUBLISHED]
+
+    assert (report["seen_late"], report["republished"]) == (0, 1)
