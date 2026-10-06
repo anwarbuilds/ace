@@ -2094,17 +2094,21 @@ function coverageLate(r){
       'before ACE saw them on the employer’s own board. <b>'+r.board_added_later+'</b> were on a board '+
       'ACE only started reading after the feed listed them; ACE now registers the boards feed links '+
       'name every half hour, so these should stop. <b>'+r.seen_late+'</b> were on a board ACE was '+
-      'already reading and saw late — those are ACE’s mistakes to fix.</p>'+
+      'already reading and saw late — those are ACE’s mistakes to fix.'+
+      (r.republished?' <b>'+r.republished+'</b> were republished by the employer after the feed '+
+        'listed them, and ACE read them within half an hour — not misses.':'')+'</p>'+
     '<div class="cov-grid cov-late">'+
       r.rows.map(function(x){
         return '<div class="cov-row" title="'+esc(x.cause)+'">'+
           '<span class="cov-name">'+esc(x.company)+' — '+esc(clean(x.title))+'</span>'+
-          '<span class="cov-n">'+esc(x.cause===LATE_BOARD_ADDED?"board added late":"seen late")+'</span>'+
+          '<span class="cov-n">'+esc(x.cause===LATE_BOARD_ADDED?"board added late"
+            :(x.cause===LATE_REPUBLISHED?"republished":"seen late"))+'</span>'+
           '<span class="cov-pct">'+x.lag_hours+' h</span></div>';
       }).join("")+
     '</div>';
 }
 var LATE_BOARD_ADDED="board added after the feed listed it";
+var LATE_REPUBLISHED="republished after the feed listed it";
 function coverageFeedOnly(rows){
   if(!rows||!rows.length) return "";
   var total=rows.reduce(function(n,r){ return n+r.passing; },0);
