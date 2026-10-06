@@ -457,23 +457,29 @@ def _join_scores(
 def posting_link_key(
     url,
 ):
-    """A posting link compared without case, scheme or "www.".
+    """A posting link compared without case, scheme, "www." or locale.
 
-    The feed writes "amazon.jobs/...", the employer "www.amazon.jobs/...".
-    Built from replace() and lower(), which both Postgres and SQLite
-    have; migration 0034 indexes exactly this expression.
+    The feed writes "amazon.jobs/...", the employer "www.amazon.jobs/...";
+    the feed's Workday links carry "/en-US/" where the board's own do not
+    -- every RELX and LexisNexis role was shown twice for it. Built from
+    replace() and lower(), which both Postgres and SQLite have;
+    migration 0036 indexes exactly this expression.
     """
 
     return func.replace(
         func.replace(
-            func.lower(
-                url
+            func.replace(
+                func.lower(
+                    url
+                ),
+                "://www.",
+                "://",
             ),
-            "://www.",
-            "://",
+            "http://",
+            "https://",
         ),
-        "http://",
-        "https://",
+        "/en-us/",
+        "/",
     )
 
 
@@ -549,6 +555,35 @@ def _apply_filters(
                     == func.lower(
                         func.trim(
                             JobRecord.title
+                        )
+                    ),
+                )
+            )
+        )
+
+        # A feed's copy of a role posted by a company switched off as a
+        # staffing agency: the board is off, and its reposts are the
+        # same noise arriving by another door.
+        statement = statement.where(
+            ~(
+                JobRecord.source.in_(
+                    MULTI_EMPLOYER_SOURCES
+                )
+                & exists().where(
+                    JobSourceRecord.enabled.is_(
+                        False
+                    ),
+                    JobSourceRecord.discovery_source.like(
+                        "%staffing%"
+                    ),
+                    func.lower(
+                        func.trim(
+                            JobSourceRecord.company_name
+                        )
+                    )
+                    == func.lower(
+                        func.trim(
+                            JobRecord.company
                         )
                     ),
                 )

@@ -2257,3 +2257,16 @@ def test_level_three_and_above_are_still_senior() -> None:
                 )
             ).reason_codes
         ), title
+
+
+def test_an_abbreviated_manager_title_is_senior() -> None:
+    """"Mgr Software Engineering" passed: only the full word was read."""
+
+    assert (
+        EligibilityReasonCode.SENIOR_TITLE
+        in evaluate_job(
+            make_job(
+                title="Mgr Software Engineering",
+            )
+        ).reason_codes
+    )

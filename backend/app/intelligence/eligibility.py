@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-06-v38"
+    "2026-10-06-v39"
 )
 
 
@@ -571,6 +571,8 @@ SENIOR_TITLE_PATTERNS = (
     r"\bprincipal\b",
     r"\blead\b",
     r"\bmanager\b",
+    # "Mgr Software Engineering" passed: only the full word was read.
+    r"\bmgrs?\b",
     r"\bdirector\b",
     # Level III and up. Level II used to be here too, as "the first
     # rung above new grad", and that was wrong for this user: with about

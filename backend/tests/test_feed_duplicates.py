@@ -384,3 +384,85 @@ def test_a_closed_direct_posting_does_not_hide_by_link_either(
                 session
             )
         ] == ["simplify"]
+
+
+def test_a_workday_link_with_a_locale_is_the_same_posting(
+    session_factory,
+) -> None:
+    """The feed writes "/en-US/" into Workday links where the board does
+    not: every RELX and LexisNexis role was shown twice."""
+
+    with session_factory() as session:
+        add_job(
+            session,
+            key="direct",
+            source="workday",
+            company="RELX",
+            title="Software Engineer 1",
+            url=(
+                "https://relx.wd3.myworkdayjobs.com/relx/job/"
+                "Alpharetta-GA/Software-Engineer-1_R117973-1"
+            ),
+        )
+
+        add_job(
+            session,
+            key="feed",
+            source="simplify",
+            company="RELX",
+            title="Software Engineer I - Risk Solutions",
+            url=(
+                "https://relx.wd3.myworkdayjobs.com/en-US/relx/job/"
+                "Alpharetta-GA/Software-Engineer-1_R117973-1"
+            ),
+        )
+
+        assert [
+            source
+            for source, _title in queue(
+                session
+            )
+        ] == ["workday"]
+
+
+def test_a_switched_off_agencys_feed_copies_are_hidden_too(
+    session_factory,
+) -> None:
+    """The board is off; its reposts arriving through a feed are the
+    same noise by another door."""
+
+    from backend.app.db.models import JobSourceRecord
+
+    with session_factory() as session:
+        session.add(
+            JobSourceRecord(
+                source_type="smartrecruiters",
+                source_account="9to9SoftwareSolutionsLLC",
+                company_name="9to9 Software Solutions",
+                enabled=False,
+                poll_interval_seconds=900,
+                discovery_source="manual rejected: staffing agency",
+            )
+        )
+
+        add_job(
+            session,
+            key="agency",
+            source="simplify",
+            company="9to9 Software Solutions",
+            title="Software Engineer",
+        )
+
+        add_job(
+            session,
+            key="employer",
+            source="simplify",
+            company="Garmin",
+            title="Software Engineer",
+        )
+
+        assert queue(
+            session
+        ) == [
+            ("simplify", "Software Engineer"),
+        ]
