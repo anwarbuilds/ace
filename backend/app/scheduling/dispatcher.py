@@ -48,6 +48,9 @@ from backend.app.adapters.bytedance import (
 from backend.app.adapters.oracle_recruiting import (
     fetch_oracle_recruiting_jobs,
 )
+from backend.app.adapters.workable import (
+    fetch_workable_jobs,
+)
 from backend.app.verification.employer_page import (
     EmployerPageVerifier,
 )
@@ -883,6 +886,67 @@ class OracleRecruitingSourceFetcher:
         )
 
 
+class WorkableSourceFetcher:
+    """Dispatch adapter for apply.workable.com boards.
+
+    ``source_account`` is the board's slug. Descriptions are fetched
+    only for titles the gate could pass, and kept between polls in the
+    shared reading store.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher=fetch_workable_jobs,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch every posting on one board."""
+
+        if (
+            source.source_type
+            != SourceType.WORKABLE
+        ):
+            raise ValueError(
+                (
+                    "WorkableSourceFetcher "
+                    "requires a WORKABLE "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            source_account=(
+                source.source_account
+            ),
+            company_name=(
+                source.company_name
+            ),
+            should_fetch_detail=(
+                build_detail_predicate(
+                    source="workable",
+                    company_name=(
+                        source.company_name
+                    ),
+                )
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
 class AvatureSourceFetcher:
     """Dispatch adapter for Avature-hosted employer boards.
 
@@ -1122,6 +1186,13 @@ class SimplifySourceFetcher:
             ]
             | None
         ) = None,
+        read_directly_factory: (
+            Callable[
+                [],
+                Callable[[str], bool],
+            ]
+            | None
+        ) = None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
@@ -1132,6 +1203,10 @@ class SimplifySourceFetcher:
         # Reads each posting's employer page so the gate judges it on
         # what the employer says, not on the feed's placeholder.
         self._verifier = verifier
+
+        # Answers, per poll, whether ACE already reads the board a
+        # posting is on -- so only those postings leave the feed lane.
+        self._read_directly_factory = read_directly_factory
 
     def _validators(
         self,
@@ -1180,6 +1255,12 @@ class SimplifySourceFetcher:
                     self._validators(
                         source
                     )
+                ),
+                read_directly=(
+                    self._read_directly_factory()
+                    if self._read_directly_factory
+                    is not None
+                    else None
                 ),
             )
         )
@@ -1277,6 +1358,56 @@ class SourceDispatcher:
 FULL_REFETCH_INTERVAL = timedelta(
     hours=6
 )
+
+
+def _registered_board_check() -> Callable[[str], bool]:
+    """Whether ACE reads the board a posting link names.
+
+    Registered and switched on -- not merely readable. Loaded once per
+    feed poll, in a short session of its own.
+    """
+
+    from sqlalchemy import select
+
+    from backend.app.db.models import (
+        JobSourceRecord,
+    )
+    from backend.app.db.session import (
+        SessionLocal,
+    )
+    from backend.app.discovery.detector import (
+        detect_source_from_url,
+    )
+
+    with SessionLocal() as session:
+        registered = {
+            (
+                source_type,
+                source_account.lower(),
+            )
+            for source_type, source_account in session.execute(
+                select(
+                    JobSourceRecord.source_type,
+                    JobSourceRecord.source_account,
+                ).where(
+                    JobSourceRecord.enabled.is_(True),
+                )
+            ).all()
+        }
+
+    def read_directly(
+        url: str,
+    ) -> bool:
+        detected = detect_source_from_url(
+            url
+        )
+
+        return detected is not None and (
+            detected.source_type.value,
+            detected.source_account.lower(),
+        ) in registered
+
+    return read_directly
 
 
 def _title_could_pass(
@@ -1408,6 +1539,9 @@ def build_default_source_dispatcher() -> (
             SourceType.ORACLE_RECRUITING: (
                 OracleRecruitingSourceFetcher()
             ),
+            SourceType.WORKABLE: (
+                WorkableSourceFetcher()
+            ),
             SourceType.SIMPLIFY: (
                 SimplifySourceFetcher(
                     validator_lookup=(
@@ -1417,6 +1551,9 @@ def build_default_source_dispatcher() -> (
                         worth_reading=(
                             _title_could_pass
                         ),
+                    ),
+                    read_directly_factory=(
+                        _registered_board_check
                     ),
                 )
             ),

@@ -59,6 +59,8 @@ class SourceType(StrEnum):
     BYTEDANCE = "bytedance"
     # Oracle's HCM cloud. The account is "{host}/{siteNumber}".
     ORACLE_RECRUITING = "oracle_recruiting"
+    # apply.workable.com boards. The account is the board's slug.
+    WORKABLE = "workable"
 
 
 def _require_non_empty(

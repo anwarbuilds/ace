@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 from backend.app.coverage.companies import (
     MULTI_EMPLOYER_SOURCES,
     SINGLE_REQUEST_PROVIDERS,
+    productive_interval,
     registration_interval,
 )
 from backend.app.db.models import (
@@ -116,18 +117,23 @@ def promote_productive_sources(
     promotions: list[Promotion] = []
 
     for record, passing in rows:
-        target = registration_interval(
-            record.source_type
-        )
+        if passing:
+            target = productive_interval(
+                record.source_type
+            )
 
-        if record.poll_interval_seconds <= target:
+        elif (
+            record.source_type
+            in SINGLE_REQUEST_PROVIDERS
+        ):
+            target = registration_interval(
+                record.source_type
+            )
+
+        else:
             continue
 
-        if (
-            not passing
-            and record.source_type
-            not in SINGLE_REQUEST_PROVIDERS
-        ):
+        if record.poll_interval_seconds <= target:
             continue
 
         promotions.append(

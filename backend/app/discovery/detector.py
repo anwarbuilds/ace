@@ -398,6 +398,162 @@ def _detect_workday(
     )
 
 
+# Workday's second public address for the same boards:
+#
+#     https://wd5.myworkdaysite.com/recruiting/chewy/External/job/...
+#                                              ^tenant ^site
+#
+# Chewy's postings link here, and none of them were recognised: the
+# coverage probe found no board for Chewy, and a Chewy "Software
+# Engineer I" posted the day before was never read. The same tenant
+# answers on its usual host, which is the one recorded, so a board
+# reached either way is one source.
+WORKDAY_SITE_HOST_PATTERN = re.compile(
+    r"^(?P<cluster>wd\d+)\.myworkdaysite\.com$"
+)
+
+
+def _detect_workday_site(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect myworkdaysite.com recruiting URLs."""
+
+    match = WORKDAY_SITE_HOST_PATTERN.match(
+        host
+    )
+
+    if match is None:
+        return None
+
+    parts = list(
+        segments
+    )
+
+    # A leading locale: /en-US/recruiting/...
+    if parts and re.fullmatch(
+        r"[a-z]{2}(?:-[A-Za-z]{2})?",
+        parts[0],
+    ):
+        parts = parts[1:]
+
+    if (
+        len(parts) < 3
+        or parts[0].lower() != "recruiting"
+    ):
+        return None
+
+    tenant = parts[1].lower()
+
+    site = parts[2]
+
+    if not re.fullmatch(
+        r"[a-z0-9][a-z0-9-]*",
+        tenant,
+    ) or not site or site.lower() == "job":
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.WORKDAY,
+        source_account=f"{tenant}/{site}",
+        source_host=(
+            f"{tenant}.{match.group('cluster')}"
+            ".myworkdayjobs.com"
+        ),
+    )
+
+
+# Oracle Recruiting Cloud candidate sites:
+#
+#     https://egug.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/
+#         sites/CX_1/job/26013256
+#
+# The account is the host and the site number together.
+ORACLE_HOST_PATTERN = re.compile(
+    r"^[a-z0-9][a-z0-9.-]*\.oraclecloud\.com$"
+)
+
+
+def _detect_oracle_recruiting(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect Oracle Recruiting Cloud candidate-experience URLs."""
+
+    if ORACLE_HOST_PATTERN.match(
+        host
+    ) is None:
+        return None
+
+    lowered = [
+        segment.lower()
+        for segment in segments
+    ]
+
+    if (
+        "candidateexperience" not in lowered
+        or "sites" not in lowered
+    ):
+        return None
+
+    index = lowered.index(
+        "sites"
+    )
+
+    if index + 1 >= len(segments):
+        return None
+
+    site = segments[index + 1]
+
+    if not re.fullmatch(
+        r"[A-Za-z0-9_-]+",
+        site,
+    ):
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.ORACLE_RECRUITING,
+        source_account=f"{host}/{site}",
+        source_host=host,
+    )
+
+
+def _detect_workable(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect apply.workable.com boards: /{account}/j/{shortcode}/."""
+
+    if host != "apply.workable.com" or not segments:
+        return None
+
+    account = segments[0].lower()
+
+    if account in {"api", "j", "careers"} or not re.fullmatch(
+        r"[a-z0-9][a-z0-9-]*",
+        account,
+    ):
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.WORKABLE,
+        source_account=account,
+        source_host=host,
+    )
+
+
 def detect_source_from_url(
     url: str,
 ) -> DetectedSourceIdentity | None:
@@ -444,6 +600,9 @@ def detect_source_from_url(
         _detect_ashby,
         _detect_smartrecruiters,
         _detect_workday,
+        _detect_workday_site,
+        _detect_oracle_recruiting,
+        _detect_workable,
     )
 
     for detector in detectors:

@@ -534,6 +534,14 @@ SOURCE_HOSTS = {
 REGISTRATION_POLL_INTERVAL_SECONDS = {
     "eightfold": 3600,
     "eightfold_pcsx": 3600,
+    # Workday pages twenty postings at a time, and a feed's links named
+    # 556 Workday boards ACE had never read: at fifteen minutes each
+    # they would put tens of thousands of requests an hour on Workday's
+    # shared edge, which also serves NVIDIA, Salesforce and Chewy. A new
+    # Workday or Oracle board starts hourly and is promoted to fifteen
+    # minutes the first time it produces a passing role.
+    "workday": 3600,
+    "oracle_recruiting": 3600,
 }
 
 
@@ -551,6 +559,26 @@ SINGLE_REQUEST_PROVIDERS = frozenset(
         "smartrecruiters",
     }
 )
+
+
+# How often a board that has produced a passing role is polled. Fifteen
+# minutes everywhere but Eightfold, whose shared edge refused ACE on
+# every tenant after its boards were swept together.
+PRODUCTIVE_POLL_INTERVAL_SECONDS = {
+    "eightfold": 3600,
+    "eightfold_pcsx": 3600,
+}
+
+
+def productive_interval(
+    source_type: str,
+) -> int:
+    """How often a board that has produced a passing role is polled."""
+
+    return PRODUCTIVE_POLL_INTERVAL_SECONDS.get(
+        source_type,
+        CURATED_POLL_INTERVAL_SECONDS,
+    )
 
 
 def registration_interval(

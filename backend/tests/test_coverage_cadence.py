@@ -248,3 +248,20 @@ def test_feeds_and_disabled_boards_are_left_alone(
     assert promote_productive_sources(
         session
     ) == []
+
+
+
+def test_a_productive_workday_board_is_polled_every_fifteen_minutes(
+    session: Session,
+) -> None:
+    """New Workday boards start hourly -- they cost a hundred requests a
+    poll -- and earn fifteen minutes by producing a passing role."""
+
+    add_source(session, "workday", "chewy/External", 3600)
+    add_job(session, "workday", "chewy/External", "PASS", "1")
+
+    promote_productive_sources(
+        session
+    )
+
+    assert interval(session, "workday", "chewy/External") == 900

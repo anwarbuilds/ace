@@ -16,11 +16,13 @@ source catalog rather than being hard-coded into Python.
 
 import argparse
 import logging
+import time
 from collections.abc import (
     Sequence,
 )
 from datetime import datetime
 
+import httpx
 from sqlalchemy import select
 
 from backend.app.config import (
@@ -31,6 +33,21 @@ from backend.app.coverage.cadence import (
 )
 from backend.app.coverage.recovery import (
     recover_dark_sources,
+)
+from backend.app.adapters.simplify import (
+    FEED_URLS,
+    is_in_scope,
+)
+from backend.app.discovery.feed_links import (
+    BOARDS_PER_RUN,
+    find_unregistered_boards,
+    read_boards,
+    register_confirmed_boards,
+    split_links,
+    stored_feed_postings,
+)
+from backend.app.runners.prefilter import (
+    build_detail_predicate,
 )
 from backend.app.db.models import (
     SourceState,
@@ -62,6 +79,18 @@ from backend.app.scheduling import (
 LOGGER = logging.getLogger(
     "ace.scheduler.cli"
 )
+
+
+# Feed links are checked for new boards, and productive boards promoted,
+# every half hour; dark boards are diagnosed every six.
+MAINTENANCE_SECONDS = 30 * 60
+
+DARK_CHECK_SECONDS = 6 * 60 * 60
+
+# Boards whose feed postings could pass for the user, read in one run.
+# A ceiling against a runaway, not an expected number: the first run
+# found about 170.
+URGENT_BOARDS_PER_RUN = 500
 
 
 def _positive_integer(
@@ -449,13 +478,164 @@ def main(
                 ).all()
             }
 
+    def register_feed_boards() -> None:
+        """Read and register the boards feed links name that ACE has
+        never known -- the step that, run by hand, had not run since
+        early September, which is how Chewy's board went unread."""
+
+        postings: list[tuple[str, str, str]] = []
+
+        current_wanted: list[tuple[str, str, str]] = []
+
+        try:
+            with httpx.Client(
+                timeout=60,
+                headers={
+                    "User-Agent": (
+                        "ACE/0.1 "
+                        "(personal career-intelligence project)"
+                    ),
+                },
+            ) as client:
+                for feed_url in FEED_URLS.values():
+                    for entry in client.get(
+                        feed_url
+                    ).json():
+                        if not (
+                            isinstance(entry, dict)
+                            and entry.get("active")
+                        ):
+                            continue
+
+                        posting = (
+                            str(entry.get("url") or ""),
+                            str(entry.get("company_name") or ""),
+                            str(entry.get("title") or ""),
+                        )
+
+                        # Today's in-scope postings lead the queue.
+                        (
+                            current_wanted
+                            if is_in_scope(entry)
+                            else postings
+                        ).append(
+                            posting
+                        )
+
+        except (httpx.HTTPError, ValueError):
+            # Stored links still count; today's listing is tried again
+            # next time.
+            LOGGER.warning(
+                "feed_listing_unavailable",
+                exc_info=True,
+            )
+
+        with SessionLocal() as session:
+            postings.extend(
+                stored_feed_postings(
+                    session
+                )
+            )
+
+            wanted, rest = split_links(
+                current_wanted + postings,
+                could_pass=lambda company, title: (
+                    build_detail_predicate(
+                        source="simplify",
+                        company_name=company,
+                    )(
+                        title
+                    )
+                ),
+            )
+
+            urgent = find_unregistered_boards(
+                session,
+                wanted,
+                limit=URGENT_BOARDS_PER_RUN,
+            )
+
+            urgent_keys = {
+                board.key
+                for board in urgent
+            }
+
+            boards = urgent + [
+                board
+                for board in find_unregistered_boards(
+                    session,
+                    rest,
+                    limit=(
+                        BOARDS_PER_RUN
+                        + len(urgent)
+                    ),
+                )
+                if board.key not in urgent_keys
+            ][
+                :BOARDS_PER_RUN
+            ]
+
+        if not boards:
+            return
+
+        # One board at a time, each saved as soon as it is read: a run
+        # through a backlog of 170 boards takes the better part of an
+        # hour, and a restart must not throw away what it had done.
+        for board in boards:
+            [outcome] = read_boards(
+                [board],
+                lambda definition: dispatcher.fetch(
+                    definition
+                ).jobs,
+            )
+
+            with SessionLocal.begin() as session:
+                added = register_confirmed_boards(
+                    session,
+                    [outcome],
+                )
+
+            if added:
+                LOGGER.warning(
+                    (
+                        "source_registered_from_feed "
+                        "company=%r source=%s/%s postings=%d"
+                    ),
+                    outcome.board.company_name,
+                    outcome.board.detected.source_type.value,
+                    outcome.board.detected.source_account,
+                    outcome.job_count,
+                )
+
+            else:
+                LOGGER.info(
+                    (
+                        "feed_board_not_registered "
+                        "company=%r source=%s/%s reason=%r"
+                    ),
+                    outcome.board.company_name,
+                    outcome.board.detected.source_type.value,
+                    outcome.board.detected.source_account,
+                    outcome.error,
+                )
+
+    # When dark boards were last diagnosed. That reads companies'
+    # websites, so it keeps its six-hour rhythm while the rest of the
+    # maintenance runs every half hour.
+    dark_checked = [
+        0.0,
+    ]
+
     def maintain() -> None:
-        """Speed up productive boards; follow ones that stopped answering.
+        """Register boards feed links name, speed up productive boards,
+        and -- every six hours -- follow ones that stopped answering.
 
         Dark boards are logged at warning either way: a board found
         dark is exactly the thing that went unnoticed for seventeen
         days.
         """
+
+        register_feed_boards()
 
         with SessionLocal.begin() as session:
             promotions = promote_productive_sources(
@@ -477,6 +657,11 @@ def main(
                 promotion.old_interval,
                 promotion.new_interval,
             )
+
+        if time.monotonic() - dark_checked[0] < DARK_CHECK_SECONDS:
+            return
+
+        dark_checked[0] = time.monotonic()
 
         with SessionLocal.begin() as session:
             recoveries = recover_dark_sources(
@@ -522,6 +707,9 @@ def main(
         alert_sender=send_alerts,
         reload_registry=reload_registry,
         maintenance=maintain,
+        maintenance_interval_seconds=(
+            MAINTENANCE_SECONDS
+        ),
         # --once is how a person asks for everything now, so it does
         # not wait out anyone's interval.
         last_polled=(

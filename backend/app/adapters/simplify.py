@@ -46,6 +46,7 @@ from datetime import (
     datetime,
     timezone,
 )
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -324,8 +325,42 @@ def is_reachable_by_adapter(
 
 def is_included(
     entry: dict[str, Any],
+    *,
+    read_directly: Callable[[str], bool] | None = None,
 ) -> bool:
-    """Return whether one feed entry belongs in ACE."""
+    """Return whether one feed entry belongs in ACE.
+
+    ``read_directly(url)`` says whether ACE already reads the board
+    this posting is on. It used to be "could ACE read it", which assumed
+    every such board was registered. Nothing made that true between
+    hand-run discoveries: a posting on a readable board ACE did not poll
+    was dropped here and never read anywhere. The scheduler now asks
+    whether the board is in fact registered; the default keeps the old
+    question for callers with no catalog to ask.
+    """
+
+    if not is_in_scope(
+        entry
+    ):
+        return False
+
+    return not (
+        read_directly
+        or is_reachable_by_adapter
+    )(
+        str(
+            entry.get(
+                "url"
+            )
+            or ""
+        )
+    )
+
+
+def is_in_scope(
+    entry: dict[str, Any],
+) -> bool:
+    """Active, visible, and in a category ACE is looking for."""
 
     if not entry.get(
         "active"
@@ -345,17 +380,7 @@ def is_included(
         or ""
     ).strip().lower()
 
-    if category not in INCLUDED_CATEGORIES:
-        return False
-
-    return not is_reachable_by_adapter(
-        str(
-            entry.get(
-                "url"
-            )
-            or ""
-        )
-    )
+    return category in INCLUDED_CATEGORIES
 
 
 def fetch_simplify_jobs(
@@ -364,6 +389,7 @@ def fetch_simplify_jobs(
     company_name: str = "",
     client: httpx.Client | None = None,
     validators: CacheValidators | None = None,
+    read_directly: Callable[[str], bool] | None = None,
 ) -> tuple[
     list[CanonicalJob],
     bool,
@@ -460,7 +486,8 @@ def fetch_simplify_jobs(
                 continue
 
             if not is_included(
-                entry
+                entry,
+                read_directly=read_directly,
             ):
                 continue
 
