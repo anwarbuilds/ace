@@ -25,6 +25,7 @@ from sqlalchemy import (
     case,
     exists,
     func,
+    literal,
     or_,
     select,
 )
@@ -464,7 +465,23 @@ def posting_link_key(
     -- every RELX and LexisNexis role was shown twice for it. Built from
     replace() and lower(), which both Postgres and SQLite have;
     migration 0036 indexes exactly this expression.
+
+    The strings are written into the SQL, never sent as parameters.
+    psycopg prepares a statement once it has run five times, and
+    Postgres may then plan it once for any parameters: with $13 and $14
+    where '://www.' and '://' stood, the expression no longer matched
+    the index, and every feed row in the queue read the whole jobs
+    table. On 2026-10-06 the Activity feed's query for one 28,589-row
+    run never finished, and ACE's page sat loading.
     """
+
+    def inline(
+        text: str,
+    ):
+        return literal(
+            text,
+            literal_execute=True,
+        )
 
     return func.replace(
         func.replace(
@@ -472,14 +489,14 @@ def posting_link_key(
                 func.lower(
                     url
                 ),
-                "://www.",
-                "://",
+                inline("://www."),
+                inline("://"),
             ),
-            "http://",
-            "https://",
+            inline("http://"),
+            inline("https://"),
         ),
-        "/en-us/",
-        "/",
+        inline("/en-us/"),
+        inline("/"),
     )
 
 

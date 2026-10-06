@@ -15,13 +15,16 @@ else.
 
 from __future__ import annotations
 
+import ast
 from datetime import (
     datetime,
     timezone,
 )
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import (
     Session,
     sessionmaker,
@@ -30,6 +33,7 @@ from sqlalchemy.orm import (
 from backend.app.api.queries import (
     JobFilters,
     list_jobs,
+    posting_link_key,
 )
 from backend.app.db.base import Base
 from backend.app.db.models import (
@@ -466,3 +470,58 @@ def test_a_switched_off_agencys_feed_copies_are_hidden_too(
         ) == [
             ("simplify", "Software Engineer"),
         ]
+
+
+def _indexed_link_expression() -> str:
+    """The expression the newest migration indexes the posting link on."""
+
+    versions = (
+        Path(__file__).resolve().parents[1]
+        / "migrations"
+        / "versions"
+    )
+
+    statements = [
+        node.value
+        for path in sorted(
+            versions.glob("*.py")
+        )
+        for function in ast.parse(
+            path.read_text()
+        ).body
+        if isinstance(function, ast.FunctionDef)
+        and function.name == "upgrade"
+        for node in ast.walk(function)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and node.value.startswith(
+            "CREATE INDEX ix_jobs_posting_link_key"
+        )
+    ]
+
+    return statements[-1].split(
+        "ON jobs (",
+        1,
+    )[1][:-1]
+
+
+def test_the_link_key_is_the_indexed_expression_with_no_parameters() -> None:
+    """Sent as parameters, the strings stop matching the index once
+    Postgres plans the prepared statement generically: every feed row
+    then read the whole jobs table, and ACE's page sat loading."""
+
+    compiled = posting_link_key(
+        JobRecord.official_url
+    ).compile(
+        dialect=postgresql.psycopg.dialect(),
+        compile_kwargs={
+            "render_postcompile": True,
+        },
+    )
+
+    assert compiled.params == {}
+
+    assert str(compiled).replace(
+        "jobs.official_url",
+        "official_url",
+    ) == _indexed_link_expression()
