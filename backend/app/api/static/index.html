@@ -460,6 +460,8 @@ tr.bandline span{display:block;padding:7px 14px;font-size:11px;letter-spacing:.0
   margin:0 var(--gutter) 0 0}}
 .pl-stats{display:flex;gap:30px;flex-wrap:wrap}
 .pl-stat{display:flex;flex-direction:column;gap:3px}
+.pl-alerts{align-self:center;margin-left:auto;height:34px;font-size:13px}
+.pl-alerts.on{color:var(--text-secondary);font-size:12.5px;height:auto}
 .pl-k{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
 .pl-v{font-size:15px;font-weight:600}
 .pl-v.bad{color:#d06a5e}
@@ -861,6 +863,68 @@ function loadJobs(append,quiet){
     if(token!==state.reqToken) return;
     state.loading=false; state.loadingMore=false; render();
   });
+}
+/* Desktop alerts. Email waits on a provider key, and the portal shows a
+   new role only when someone looks, so a role ACE caught early could
+   still wait hours to be seen. With alerts on, the open ACE tab -- in
+   the background is fine -- announces each pull's new qualifying roles
+   when the two-minute refresh brings them in. Remembered per pull, as
+   a count rather than a flag: a pull is fifteen minutes long and keeps
+   growing, so its third role must be announced even after its first
+   was. The first load only sets the baseline, so turning alerts on
+   does not replay the week. */
+var ALERTED_KEY="ace.alertedPulls";
+function alertedCounts(){
+  try{ var v=JSON.parse(localStorage.getItem(ALERTED_KEY)||"null"); return v&&typeof v==="object"?v:null; }
+  catch(e){ return null; }
+}
+function saveAlerted(map){
+  try{
+    // The fifty most recent pulls are all that can still change.
+    var ids=Object.keys(map).map(Number).sort(function(a,b){return b-a;}).slice(0,50);
+    var kept={}; ids.forEach(function(id){ kept[id]=map[id]; });
+    localStorage.setItem(ALERTED_KEY,JSON.stringify(kept));
+  }catch(e){}
+}
+function alertsSupported(){ return typeof window.Notification==="function"; }
+function alertsOn(){ return alertsSupported()&&window.Notification.permission==="granted"; }
+function announceNewRoles(sessions){
+  if(!sessions||!sessions.length) return;
+  var seen=alertedCounts();
+  var first=seen===null;
+  seen=seen||{};
+  var fresh=[];
+  sessions.forEach(function(s){
+    var had=seen[s.id]||0, now=s.qualifying_discovered||0;
+    if(now>had&&!first) fresh.push({pull:s,count:now-had});
+    if(now>had||!(s.id in seen)) seen[s.id]=now;
+  });
+  saveAlerted(seen);
+  if(!fresh.length||!alertsOn()) return;
+  var total=fresh.reduce(function(a,f){return a+f.count;},0);
+  var roles=[];
+  fresh.forEach(function(f){ (f.pull.jobs||[]).forEach(function(j){
+    if(roles.length<4) roles.push(j.company+" — "+clean(j.title)); }); });
+  try{
+    var n=new window.Notification(
+      "ACE: "+total+" new role"+(total===1?"":"s")+" pass"+(total===1?"es":"")+" your filters",
+      {body:roles.join("\n")||"Open ACE to see them.",tag:"ace-new-roles",renotify:true});
+    n.onclick=function(){ window.focus(); goTo("pulls"); n.close(); };
+  }catch(e){}
+}
+function enableAlerts(){
+  if(!alertsSupported()){ showToast("This browser cannot show desktop alerts."); return; }
+  window.Notification.requestPermission().then(function(p){
+    showToast(p==="granted"
+      ?"Desktop alerts on. Keep an ACE tab open, in the background is fine."
+      :"Alerts are blocked for this site in the browser's settings.");
+    render();
+  });
+}
+function alertsButton(){
+  if(!alertsSupported()) return "";
+  if(alertsOn()) return '<span class="pl-alerts on">Desktop alerts on</span>';
+  return '<button class="btn pl-alerts" data-act="alerts">Turn on desktop alerts</button>';
 }
 function loadShell(){
   return Promise.all([
@@ -1579,6 +1643,7 @@ function pullsPage(){
           ? st.sources_polled+" of "+st.sources_enabled : "unknown", sick)+
       stat("Jobs in queue",
         st.qualifying_active_jobs!=null?st.qualifying_active_jobs.toLocaleString():"-",false)+
+      alertsButton()+
     '</div></div></div>'+
     '<div class="scroll"><div class="pl-layout">'+
       '<div class="pl-wrap">'+
@@ -2799,6 +2864,7 @@ document.addEventListener("click",function(e){
       return; }
     if(d.act==="delrow"){ var r=t.closest(".ans-edit"); if(r) r.remove(); return; }
     if(d.act==="addsource"){ addSource(); return; }
+    if(d.act==="alerts"){ enableAlerts(); return; }
     if(d.act==="delhist"){ var h=t.closest(".hist"); if(h) h.remove(); return; }
     if(d.act==="addhist"){
       // Appended to the live DOM rather than to state, so anything
@@ -2917,6 +2983,7 @@ window.addEventListener("hashchange",function(){
   if(!routeFromHash() && state.page==="job") goTo(state.returnTo||"queue");
 });
 loadShell().then(function(){
+  announceNewRoles(state.sessions);
   // A direct link opens its job straight away; the list still loads
   // behind it so Back has somewhere to return to.
   var direct=routeFromHash();
@@ -2924,7 +2991,7 @@ loadShell().then(function(){
     if(direct) routeFromHash();
   });
 });
-setInterval(function(){ loadShell().then(function(){ if(isJobList()) render(); }); },120000);
+setInterval(function(){ loadShell().then(function(){ announceNewRoles(state.sessions); if(isJobList()) render(); }); },120000);
 </script>
 </body>
 </html>

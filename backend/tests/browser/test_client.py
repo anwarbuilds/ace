@@ -1887,3 +1887,84 @@ def test_a_pull_says_how_much_it_checked_not_only_what_was_new(
         "Array.from(document.querySelectorAll('.pl-seen,.pl-day-m'))"
         ".map(function(e){return e.textContent;}).join(' ')"
     )
+
+
+def test_new_qualifying_roles_raise_a_desktop_alert_once(
+    page,
+) -> None:
+    """Email waits on a provider key and the portal shows a role only
+    when someone looks. With alerts on, the open tab announces each
+    pull's new roles -- once, and again only for what was added."""
+
+    page.eval(
+        "localStorage.removeItem('ace.alertedPulls');"
+        "window.__shown=[];"
+        "window.Notification=function(title,opts){"
+        "window.__shown.push(title+' | '+(opts&&opts.body));"
+        "this.close=function(){};};"
+        "window.Notification.permission='granted';"
+        "window.Notification.requestPermission=function(){"
+        "return Promise.resolve('granted');};1"
+    )
+
+    def pull(qualifying, jobs):
+        return (
+            "{id:7001,qualifying_discovered:" + str(qualifying) + ",jobs:["
+            + ",".join(
+                "{company:'" + company + "',title:'" + title + "'}"
+                for company, title in jobs
+            )
+            + "]}"
+        )
+
+    chewy = [("Chewy", "Software Engineer I")]
+
+    # The first load sets the baseline: nothing already there is
+    # announced.
+    page.eval(
+        "announceNewRoles([" + pull(1, chewy) + "]);1"
+    )
+
+    assert page.eval("window.__shown.length") == 0
+
+    # A second role arrives in the same pull.
+    page.eval(
+        "announceNewRoles(["
+        + pull(2, chewy + [("TikTok", "Backend Software Engineer Graduate")])
+        + "]);1"
+    )
+
+    shown = page.eval("window.__shown")
+
+    assert len(shown) == 1
+
+    assert shown[0].startswith("ACE: 1 new role passes your filters")
+
+    assert "Chewy" in shown[0]
+
+    # Nothing new: no second alert.
+    page.eval(
+        "announceNewRoles(["
+        + pull(2, chewy + [("TikTok", "Backend Software Engineer Graduate")])
+        + "]);1"
+    )
+
+    assert page.eval("window.__shown.length") == 1
+
+
+def test_the_activity_page_offers_to_turn_alerts_on(
+    page,
+) -> None:
+    page.eval(
+        "window.Notification=function(){};"
+        "window.Notification.permission='default';"
+        "state.page='pulls';render();1"
+    )
+
+    page.wait_for(
+        "!!document.querySelector('[data-act=alerts]')"
+    )
+
+    assert "Turn on desktop alerts" in page.eval(
+        "document.querySelector('[data-act=alerts]').textContent"
+    )
