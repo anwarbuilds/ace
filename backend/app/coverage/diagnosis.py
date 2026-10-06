@@ -37,6 +37,7 @@ from backend.app.coverage.probing import (
     candidate_for_token,
     careers_page_token,
     page_board_ref,
+    ref_belongs_to,
     domain_candidates,
     find_eightfold_board,
     find_board,
@@ -315,30 +316,13 @@ def diagnose(
 
                 continue
 
-            if ref.source_type == "workday":
-                evidence = workday_belongs_to(
-                    company=company,
-                    token=ref.token,
-                )
-            else:
-                evidence = board_belongs_to(
-                    company=company,
-                    source_type=(
-                        ref.source_type
-                    ),
-                    token=ref.token,
-                    jobs=jobs,
-                    fetch=fetch,
-                    fetch_text=fetch_text,
-                ) or linked_board_belongs_to(
-                    company=company,
-                    source_type=(
-                        ref.source_type
-                    ),
-                    token=ref.token,
-                    fetch=fetch,
-                    fetch_text=fetch_text,
-                )
+            evidence = ref_belongs_to(
+                company=company,
+                ref=ref,
+                jobs=jobs,
+                fetch=fetch,
+                fetch_text=fetch_text,
+            )
 
             if evidence is None:
                 saw_unverified = (

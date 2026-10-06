@@ -1311,6 +1311,57 @@ def _workday_ref(
     )
 
 
+def _oracle_ref(
+    match: "re.Match",
+) -> "BoardRef":
+    host = match.group(1).lower()
+
+    return BoardRef(
+        source_type="oracle_recruiting",
+        token=f"{host}/{match.group(2)}",
+        source_host=host,
+    )
+
+
+def _workable_ref(
+    match: "re.Match",
+) -> "BoardRef | None":
+    account = match.group(1).lower()
+
+    if account in {"api", "j", "careers"}:
+        return None
+
+    return BoardRef(
+        source_type="workable",
+        token=account,
+        source_host="apply.workable.com",
+    )
+
+
+# Boards on platforms ACE reads whose links name the board outright.
+# Thirty-three companies the probe reported as hiring "through Oracle
+# Recruiting, which ACE has no adapter for", and twelve through Workable,
+# were on platforms ACE had since learned to read.
+_HOSTED_BOARD_PATTERNS = (
+    (
+        re.compile(
+            r"([a-z0-9][a-z0-9.-]*\.oraclecloud\.com)/hcmUI/"
+            r"CandidateExperience/[a-z]{2}(?:-[A-Za-z]{2})?/sites/"
+            r"([A-Za-z0-9_-]+)",
+            re.IGNORECASE,
+        ),
+        _oracle_ref,
+    ),
+    (
+        re.compile(
+            r"apply\.workable\.com/([a-z0-9][a-z0-9-]*)",
+            re.IGNORECASE,
+        ),
+        _workable_ref,
+    ),
+)
+
+
 def careers_page_token(
     html: str,
 ) -> "BoardRef | None":
@@ -1344,6 +1395,19 @@ def careers_page_token(
             source_type=source_type,
             token=token,
         )
+
+    for pattern, build in _HOSTED_BOARD_PATTERNS:
+        match = pattern.search(
+            html
+        )
+
+        if match is not None:
+            ref = build(
+                match
+            )
+
+            if ref is not None:
+                return ref
 
     return _workday_ref(
         html
@@ -1403,6 +1467,61 @@ def board_jobs(
     post=_post_json,
 ) -> list[dict]:
     """Return a sample of a board's postings, whatever ATS it is on."""
+
+    if ref.source_type == "oracle_recruiting":
+        host, _, site = ref.token.partition(
+            "/"
+        )
+
+        payload = fetch(
+            # The postings come back only when asked for: without the
+            # expand, Uber's board of 598 read as empty.
+            f"https://{host}/hcmRestApi/resources/latest/"
+            "recruitingCEJobRequisitions?onlyData=true"
+            "&expand=requisitionList&finder="
+            f"findReqs;siteNumber={site},limit=25,offset=0"
+        )
+
+        items = (
+            payload.get("items")
+            if isinstance(payload, dict)
+            else None
+        ) or [{}]
+
+        found = items[0].get(
+            "requisitionList"
+        ) if isinstance(items[0], dict) else None
+
+        return [
+            item
+            for item in found or []
+            if isinstance(item, dict)
+        ]
+
+    if ref.source_type == "workable":
+        payload = post(
+            f"https://apply.workable.com/api/v3/accounts/"
+            f"{ref.token}/jobs",
+            {
+                "query": "",
+                "location": [],
+                "department": [],
+                "worktype": [],
+                "remote": [],
+            },
+        )
+
+        found = (
+            payload.get("results")
+            if isinstance(payload, dict)
+            else None
+        )
+
+        return [
+            item
+            for item in found or []
+            if isinstance(item, dict)
+        ]
 
     if ref.source_type == "workday":
         tenant, _, site = ref.token.partition(
@@ -2258,6 +2377,60 @@ def page_board_ref(
     ), 1
 
 
+# Platforms whose links carry no company name to check: an Oracle site is
+# "egug.fa.us2.oraclecloud.com/CX_1". A board on one of these counts as
+# the company's because the company's own careers page links it -- a page
+# that has already passed page_claims_another_company.
+_LINKED_FROM_OWN_PAGE = frozenset(
+    {
+        "oracle_recruiting",
+        "workable",
+    }
+)
+
+
+def ref_belongs_to(
+    *,
+    company: str,
+    ref: "BoardRef",
+    jobs: list,
+    fetch,
+    fetch_text,
+) -> str | None:
+    """Evidence that a board read off a careers page is this company's.
+
+    Shared by discovery and diagnosis, so the two cannot disagree about
+    whose board it is.
+    """
+
+    if ref.source_type == "workday":
+        return workday_belongs_to(
+            company=company,
+            token=ref.token,
+        )
+
+    if ref.source_type in _LINKED_FROM_OWN_PAGE:
+        return (
+            f"{ref.source_type} board {ref.token!r} is linked from "
+            "the company's own careers page"
+        )
+
+    return board_belongs_to(
+        company=company,
+        source_type=ref.source_type,
+        token=ref.token,
+        jobs=jobs,
+        fetch=fetch,
+        fetch_text=fetch_text,
+    ) or linked_board_belongs_to(
+        company=company,
+        source_type=ref.source_type,
+        token=ref.token,
+        fetch=fetch,
+        fetch_text=fetch_text,
+    )
+
+
 def find_board_via_careers_page(
     company: str,
     *,
@@ -2388,30 +2561,13 @@ def find_board_via_careers_page(
             if not jobs:
                 continue
 
-            if ref.source_type == "workday":
-                evidence = workday_belongs_to(
-                    company=company,
-                    token=ref.token,
-                )
-            else:
-                evidence = board_belongs_to(
-                    company=company,
-                    source_type=(
-                        ref.source_type
-                    ),
-                    token=ref.token,
-                    jobs=jobs,
-                    fetch=fetch,
-                    fetch_text=fetch_text,
-                ) or linked_board_belongs_to(
-                    company=company,
-                    source_type=(
-                        ref.source_type
-                    ),
-                    token=ref.token,
-                    fetch=fetch,
-                    fetch_text=fetch_text,
-                )
+            evidence = ref_belongs_to(
+                company=company,
+                ref=ref,
+                jobs=jobs,
+                fetch=fetch,
+                fetch_text=fetch_text,
+            )
 
             if evidence is None:
                 continue

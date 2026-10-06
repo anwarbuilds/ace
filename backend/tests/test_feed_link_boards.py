@@ -657,3 +657,82 @@ def test_a_relative_job_search_link_is_followed_against_the_pages_base() -> None
     assert _job_search_link(
         '<a href="search-results">Search</a>'
     ) is None
+
+
+def test_boards_on_platforms_ace_reads_are_named_from_a_page() -> None:
+    """33 companies were reported as hiring "through Oracle Recruiting,
+    which ACE has no adapter for", and 12 through Workable, after ACE had
+    learned to read both."""
+
+    from backend.app.coverage.probing import careers_page_token
+
+    oracle = careers_page_token(
+        '<a href="https://iaziqy.fa.ocs.oraclecloud.com/hcmUI/'
+        'CandidateExperience/en/sites/UberCareers/jobs">Jobs</a>'
+    )
+
+    assert (oracle.source_type, oracle.token, oracle.source_host) == (
+        "oracle_recruiting",
+        "iaziqy.fa.ocs.oraclecloud.com/UberCareers",
+        "iaziqy.fa.ocs.oraclecloud.com",
+    )
+
+    workable = careers_page_token(
+        '<a href="https://apply.workable.com/avalore/">Open roles</a>'
+    )
+
+    assert (workable.source_type, workable.token) == ("workable", "avalore")
+
+
+def test_an_oracle_board_is_sampled_with_its_postings_expanded() -> None:
+    """Without the expand, Uber's board of 598 read as empty."""
+
+    from backend.app.coverage.probing import BoardRef, board_jobs
+
+    asked: list[str] = []
+
+    def fetch(url):
+        asked.append(url)
+
+        return {
+            "items": [
+                {
+                    "requisitionList": [
+                        {"Id": "1", "Title": "Software Engineer I"},
+                    ],
+                },
+            ],
+        }
+
+    jobs = board_jobs(
+        BoardRef(
+            source_type="oracle_recruiting",
+            token="iaziqy.fa.ocs.oraclecloud.com/UberCareers",
+            source_host="iaziqy.fa.ocs.oraclecloud.com",
+        ),
+        fetch=fetch,
+    )
+
+    assert jobs == [{"Id": "1", "Title": "Software Engineer I"}]
+
+    assert "expand=requisitionList" in asked[0]
+
+    assert "siteNumber=UberCareers" in asked[0]
+
+
+def test_a_board_linked_from_the_companys_own_page_is_theirs() -> None:
+    from backend.app.coverage.probing import BoardRef, ref_belongs_to
+
+    evidence = ref_belongs_to(
+        company="Uber",
+        ref=BoardRef(
+            source_type="oracle_recruiting",
+            token="iaziqy.fa.ocs.oraclecloud.com/UberCareers",
+            source_host="iaziqy.fa.ocs.oraclecloud.com",
+        ),
+        jobs=[{"Id": "1"}],
+        fetch=None,
+        fetch_text=None,
+    )
+
+    assert "linked from the company's own careers page" in evidence
