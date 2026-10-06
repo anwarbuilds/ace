@@ -2207,3 +2207,53 @@ def test_shorthand_that_admits_work_permits_is_not_a_blocker() -> None:
             EligibilityReasonCode.CITIZENSHIP_BLOCKER
             not in decision.reason_codes
         ), description
+
+
+def test_level_two_is_judged_by_the_years_it_asks() -> None:
+    """With about 3.5 years, a role asking 2 to 3 is the sweet spot. 250
+    were rejected for "II" in the title alone -- Microsoft's, American
+    Express's, JPMorgan's -- and none of those stating years asked 4."""
+
+    for title in (
+        "Software Engineer II",
+        "Software Development Engineer II",
+        "Software Engineering II",
+        "Software Engineer 2",
+    ):
+        asks_two = evaluate_job(
+            make_job(
+                title=title,
+                description="Requires 2+ years of software engineering experience.",
+            )
+        )
+
+        assert asks_two.status == EligibilityStatus.PASS, title
+
+        asks_five = evaluate_job(
+            make_job(
+                title=title,
+                description="Requires 5+ years of software engineering experience.",
+            )
+        )
+
+        assert (
+            EligibilityReasonCode.EXPERIENCE_TOO_HIGH
+            in asks_five.reason_codes
+        ), title
+
+
+def test_level_three_and_above_are_still_senior() -> None:
+    for title in (
+        "Software Engineer III",
+        "Data Scientist III",
+        "Software Engineer IV",
+        "Software Engineer 4",
+    ):
+        assert (
+            EligibilityReasonCode.SENIOR_TITLE
+            in evaluate_job(
+                make_job(
+                    title=title,
+                )
+            ).reason_codes
+        ), title

@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-05-v37"
+    "2026-10-06-v38"
 )
 
 
@@ -572,13 +572,19 @@ SENIOR_TITLE_PATTERNS = (
     r"\blead\b",
     r"\bmanager\b",
     r"\bdirector\b",
-    # Level II is the first rung above new grad: Amazon's SDE II asks
-    # 2 to 4 years, and 89 of them were sitting in the queue. Measured
-    # before adding: 370 active titles match, 89 were passing.
-    # Written for any of the role nouns, because "Software Developer
-    # II" and "Data Scientist II" are the same rung.
+    # Level III and up. Level II used to be here too, as "the first
+    # rung above new grad", and that was wrong for this user: with about
+    # 3.5 years, a role asking 2 to 3 is the sweet spot, not senior.
+    # Measured on 2026-10-06: 250 active roles were rejected for "II"
+    # alone; of those stating years, 76 asked 2, 6 asked 3, 4 asked 0
+    # or 1, and none asked 4 or more -- Microsoft's, American Express's,
+    # JPMorgan's. It was inconsistent besides: "Software Engineering II"
+    # and "Software Engineer 2" passed while "Software Engineer II" did
+    # not. A level-II role is now judged by the years it asks, like any
+    # other; four or more is still out. Written for any of the role
+    # nouns, because "Data Scientist III" is the same rung.
     r"\b(?:engineer|developer|scientist|architect|"
-    r"programmer|analyst)\s+i{2,3}\b",
+    r"programmer|analyst)\s+iii\b",
     r"\bengineer\s+iv\b",
     # Deliberately roman only. Numeric levels 1 to 3 were measured and
     # kept as early career, because Netflix and others number a normal
