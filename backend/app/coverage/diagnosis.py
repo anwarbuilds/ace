@@ -36,6 +36,7 @@ from backend.app.coverage.probing import (
     board_jobs,
     candidate_for_token,
     careers_page_token,
+    page_board_ref,
     domain_candidates,
     find_eightfold_board,
     find_board,
@@ -280,9 +281,14 @@ def diagnose(
                 )
             )
 
-            ref = careers_page_token(
-                html
+            ref, spent = page_board_ref(
+                company,
+                html,
+                fetch_text=fetch_text,
+                budget=budget,
             )
+
+            budget -= spent
 
             if ref is None:
                 if not saw_foreign:

@@ -560,3 +560,68 @@ def test_a_large_employer_on_smartrecruiters_is_not_taken_for_an_agency() -> Non
     )
 
     assert outcome.registered
+
+
+# --- the probe finds the board behind a careers front end -------------
+
+
+def test_a_workday_apply_link_in_either_form_names_the_board() -> None:
+    from backend.app.coverage.probing import careers_page_token
+
+    ref = careers_page_token(
+        '<a href="https://wd5.myworkdaysite.com/recruiting/chewy/External/'
+        'job/Bellevue-WA/Software-Engineer-I_R30985-1/apply">Apply</a>'
+    )
+
+    assert (ref.source_type, ref.token, ref.source_host) == (
+        "workday",
+        "chewy/External",
+        "chewy.wd5.myworkdayjobs.com",
+    )
+
+
+def test_a_careers_home_page_is_followed_to_its_job_search() -> None:
+    """Chewy's careers home page names no board; the job search it links
+    to carries the Workday link on every apply button. The probe stopped
+    at the home page and reported "hires through Phenom"."""
+
+    from backend.app.coverage.probing import page_board_ref
+
+    home = (
+        '<nav><a href="https://careers.chewy.com/us/en/search-results">'
+        "Search jobs</a></nav>"
+    )
+
+    search = (
+        '"applyUrl":"https://wd5.myworkdaysite.com/recruiting/chewy/'
+        'External/job/Bellevue-WA/Software-Engineer-I_R30985-1/apply"'
+    )
+
+    read: list[str] = []
+
+    def fetch_text(url):
+        read.append(url)
+
+        return search
+
+    ref, spent = page_board_ref(
+        "Chewy",
+        home,
+        fetch_text=fetch_text,
+        budget=5,
+    )
+
+    assert ref.token == "chewy/External"
+
+    assert (read, spent) == (
+        ["https://careers.chewy.com/us/en/search-results"],
+        1,
+    )
+
+    # No budget left: the home page alone is all there is.
+    assert page_board_ref(
+        "Chewy",
+        home,
+        fetch_text=fetch_text,
+        budget=0,
+    ) == (None, 0)

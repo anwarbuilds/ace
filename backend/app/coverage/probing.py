@@ -1201,6 +1201,17 @@ _WORKDAY = re.compile(
     re.IGNORECASE,
 )
 
+# Workday's second address for the same boards. Chewy's careers site
+# (Phenom) links every apply button here --
+# wd5.myworkdaysite.com/recruiting/chewy/External/job/... -- and the
+# probe, reading only the first form, reported Chewy as hiring through
+# an ATS ACE could not read, while its Workday board was one click away.
+_WORKDAY_SITE = re.compile(
+    r"(wd\d+)\.myworkdaysite\.com/(?:[a-z]{2}(?:-[A-Za-z]{2})?/)?"
+    r"recruiting/([a-z0-9][a-z0-9-]*)/([A-Za-z0-9_%.-]+)",
+    re.IGNORECASE,
+)
+
 # A locale Workday puts in front of the site name on some tenants:
 # ".../en-US/Boston_Dynamics/..." is the Boston_Dynamics site, not a
 # site called "en-US".
@@ -1235,7 +1246,32 @@ def _workday_ref(
     )
 
     if match is None:
-        return None
+        site_match = _WORKDAY_SITE.search(
+            html
+        )
+
+        if site_match is None:
+            return None
+
+        tenant = site_match.group(
+            2
+        ).lower()
+
+        site = site_match.group(
+            3
+        )
+
+        if site.lower() in {"job", "jobs"}:
+            return None
+
+        return BoardRef(
+            source_type="workday",
+            token=f"{tenant}/{site}",
+            source_host=(
+                f"{tenant}.{site_match.group(1).lower()}"
+                ".myworkdayjobs.com"
+            ),
+        )
 
     tenant = match.group(
         1
@@ -2106,6 +2142,82 @@ def candidate_for_token(
     return None
 
 
+# A link to a careers site's own job search: Phenom's "search-results",
+# and the usual spellings elsewhere.
+_JOB_SEARCH_LINK = re.compile(
+    r'href="(https?://[^"]*(?:search-results|job-search|search-jobs|'
+    r'jobs/search|/jobs\?)[^"]*)"',
+    re.IGNORECASE,
+)
+
+
+def _job_search_link(
+    html: str,
+) -> str | None:
+    """The first absolute link to the page's own job search, if any.
+
+    Absolute only: a careers page is usually reached through a
+    redirect, so a relative link has no reliable base.
+    """
+
+    match = _JOB_SEARCH_LINK.search(
+        html
+    )
+
+    return (
+        None
+        if match is None
+        else match.group(1)
+    )
+
+
+def page_board_ref(
+    company: str,
+    html: str,
+    *,
+    fetch_text,
+    budget: int,
+) -> "tuple[BoardRef | None, int]":
+    """The board a careers page points at, and the pages that cost.
+
+    A careers home page often names no board while the job search it
+    links to does: Chewy's home page has no Workday link, and its search
+    results carry one on every apply button. So when the page names
+    nothing, its own job-search link is read, one level deeper, if the
+    budget allows. Shared by discovery and diagnosis so the two cannot
+    drift apart again -- diagnosis had its own copy of this walk, and so
+    went on reporting Chewy as Phenom after discovery could read it.
+    """
+
+    ref = careers_page_token(
+        html
+    )
+
+    if ref is not None or budget <= 0:
+        return ref, 0
+
+    deeper = _job_search_link(
+        html
+    )
+
+    if deeper is None:
+        return None, 0
+
+    deeper_html = fetch_text(
+        deeper
+    )
+
+    if not deeper_html or page_claims_another_company(
+        company,
+        deeper_html,
+    ):
+        return None, 1
+
+    return careers_page_token(
+        deeper_html
+    ), 1
+
+
 def find_board_via_careers_page(
     company: str,
     *,
@@ -2215,9 +2327,14 @@ def find_board_via_careers_page(
                 )
             )
 
-            ref = careers_page_token(
-                html
+            ref, spent = page_board_ref(
+                company,
+                html,
+                fetch_text=fetch_text,
+                budget=budget,
             )
+
+            budget -= spent
 
             if ref is None:
                 continue
