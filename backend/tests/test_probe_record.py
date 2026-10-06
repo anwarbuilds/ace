@@ -135,3 +135,48 @@ def test_a_staffing_agency_the_probe_reaches_is_recorded_switched_off(
     assert not row.enabled
 
     assert row.discovery_source.startswith("probe rejected: staffing")
+
+
+def test_a_second_site_of_a_known_oracle_tenant_is_not_registered(
+    patched_session,
+):
+    from backend.app.coverage.diagnosis import REACHED
+    from backend.app.coverage.probing import BoardCandidate
+    from backend.app.db.models import JobSourceRecord
+
+    with patched_session() as session:
+        session.add(
+            JobSourceRecord(
+                source_type="oracle_recruiting",
+                source_account="eofe.fa.us2.oraclecloud.com/CX_1001",
+                company_name="BNY",
+                enabled=True,
+                poll_interval_seconds=900,
+            )
+        )
+        session.commit()
+
+    pc.record(
+        [
+            Diagnosis(
+                company="BNY",
+                outcome=REACHED,
+                detail="board found",
+                candidate=BoardCandidate(
+                    company="BNY",
+                    source_type="oracle_recruiting",
+                    source_account="eofe.fa.us2.oraclecloud.com/BNY-Careers",
+                    job_count=1367,
+                    evidence="linked from the company's own careers page",
+                    source_host="eofe.fa.us2.oraclecloud.com",
+                ),
+            ),
+        ]
+    )
+
+    with patched_session() as session:
+        rows = session.query(JobSourceRecord).all()
+
+    assert [row.source_account for row in rows] == [
+        "eofe.fa.us2.oraclecloud.com/CX_1001",
+    ]

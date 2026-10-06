@@ -54,6 +54,7 @@ from backend.app.discovery.detector import (
 )
 from backend.app.discovery.feed_links import (
     NamedBoard,
+    existing_board,
     staffing_reason,
 )
 from backend.app.scheduling.types import (
@@ -350,17 +351,10 @@ def record(
             if candidate is None:
                 continue
 
-            exists = session.scalar(
-                sa.select(
-                    JobSourceRecord
-                ).where(
-                    JobSourceRecord
-                    .source_type
-                    == candidate.source_type,
-                    JobSourceRecord
-                    .source_account
-                    == candidate.source_account,
-                )
+            exists = existing_board(
+                session,
+                candidate.source_type,
+                candidate.source_account,
             )
 
             if exists is not None:

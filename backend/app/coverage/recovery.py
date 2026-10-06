@@ -43,6 +43,9 @@ from backend.app.db.models import (
     JobSourceRecord,
     SourceState,
 )
+from backend.app.discovery.feed_links import (
+    existing_board,
+)
 from backend.app.persistence.repository import (
     JobRepository,
 )
@@ -253,17 +256,10 @@ def recover_dark_sources(
             )
         )
 
-        replacement = session.scalar(
-            sa.select(
-                JobSourceRecord,
-            ).where(
-                JobSourceRecord.source_type
-                == candidate.source_type,
-                sa.func.lower(
-                    JobSourceRecord.source_account
-                )
-                == candidate.source_account.lower(),
-            )
+        replacement = existing_board(
+            session,
+            candidate.source_type,
+            candidate.source_account,
         )
 
         if replacement is None:

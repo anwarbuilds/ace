@@ -736,3 +736,52 @@ def test_a_board_linked_from_the_companys_own_page_is_theirs() -> None:
     )
 
     assert "linked from the company's own careers page" in evidence
+
+
+def test_one_oracle_tenant_is_one_board_whatever_its_site_number(
+    session: Session,
+) -> None:
+    """BNY's CX_1001 and BNY-Careers list the same 1,367 requisitions;
+    registered twice, every BNY role was in the queue twice."""
+
+    from backend.app.discovery.feed_links import (
+        board_key,
+        existing_board,
+    )
+
+    assert board_key(
+        "oracle_recruiting",
+        "eofe.fa.us2.oraclecloud.com/CX_1001",
+    ) == board_key(
+        "oracle_recruiting",
+        "EOFE.fa.us2.oraclecloud.com/BNY-Careers",
+    )
+
+    # Every other provider still tells its accounts apart.
+    assert board_key("workday", "relx/relx") != board_key(
+        "workday",
+        "relx/RiskSolutions",
+    )
+
+    add_source(
+        session,
+        "oracle_recruiting",
+        "eofe.fa.us2.oraclecloud.com/CX_1001",
+    )
+
+    assert existing_board(
+        session,
+        "oracle_recruiting",
+        "eofe.fa.us2.oraclecloud.com/BNY-Careers",
+    ).source_account == "eofe.fa.us2.oraclecloud.com/CX_1001"
+
+    assert find_unregistered_boards(
+        session,
+        [
+            (
+                "https://eofe.fa.us2.oraclecloud.com/hcmUI/"
+                "CandidateExperience/en/sites/BNY-Careers/job/82248",
+                "BNY",
+            ),
+        ],
+    ) == []

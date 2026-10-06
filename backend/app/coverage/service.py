@@ -59,6 +59,9 @@ from backend.app.coverage.probing import (
 from backend.app.coverage.recovery import (
     dark_sources,
 )
+from backend.app.discovery.feed_links import (
+    existing_board,
+)
 from backend.app.db.models import (
     JobEvaluationRecord,
     JobRecord,
@@ -352,15 +355,10 @@ def add_source(
             ),
         )
 
-    existing = session.scalar(
-        sa.select(
-            JobSourceRecord
-        ).where(
-            JobSourceRecord.source_type
-            == candidate.source_type,
-            JobSourceRecord.source_account
-            == candidate.source_account,
-        )
+    existing = existing_board(
+        session,
+        candidate.source_type,
+        candidate.source_account,
     )
 
     if existing is not None:

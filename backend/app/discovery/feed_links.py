@@ -165,6 +165,61 @@ def staffing_reason(
     return None
 
 
+def board_key(
+    source_type: str,
+    source_account: str,
+) -> tuple[str, str]:
+    """Two names for one board are one board.
+
+    Accounts compare without case. An Oracle Recruiting tenant serves the
+    same requisitions under every career-site number on its host -- BNY's
+    CX_1001 and BNY-Careers both list the same 1,367, NOV's CX_4001 and
+    CX_2001 the same 687 -- so its key is the host alone. Registering a
+    second site of one tenant put every one of those roles in twice.
+    """
+
+    account = source_account.strip().lower()
+
+    if source_type == "oracle_recruiting":
+        account = account.split(
+            "/",
+            1,
+        )[0]
+
+    return (
+        source_type,
+        account,
+    )
+
+
+def existing_board(
+    session: Session,
+    source_type: str,
+    source_account: str,
+) -> JobSourceRecord | None:
+    """The catalog row for this board, under any of its names."""
+
+    wanted = board_key(
+        source_type,
+        source_account,
+    )
+
+    for row in session.scalars(
+        sa.select(
+            JobSourceRecord,
+        ).where(
+            JobSourceRecord.source_type == source_type,
+        )
+    ).all():
+        if board_key(
+            row.source_type,
+            row.source_account,
+        ) == wanted:
+            return row
+
+    return None
+
+
 @dataclass(
     frozen=True,
     slots=True,
@@ -180,9 +235,9 @@ class NamedBoard:
     def key(
         self,
     ) -> tuple[str, str]:
-        return (
+        return board_key(
             self.detected.source_type.value,
-            self.detected.source_account.lower(),
+            self.detected.source_account,
         )
 
 
@@ -499,9 +554,9 @@ def _known_boards(
     session: Session,
 ) -> set[tuple[str, str]]:
     return {
-        (
+        board_key(
             source_type,
-            source_account.lower(),
+            source_account,
         )
         for source_type, source_account in session.execute(
             sa.select(
