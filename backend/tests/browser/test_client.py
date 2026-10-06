@@ -1968,3 +1968,42 @@ def test_the_activity_page_offers_to_turn_alerts_on(
     assert "Turn on desktop alerts" in page.eval(
         "document.querySelector('[data-act=alerts]').textContent"
     )
+
+
+def test_the_coverage_page_reports_its_own_late_catches(
+    page,
+) -> None:
+    """A miss should be found by the page, not by the user."""
+
+    page.eval(
+        "state.page='coverage';"
+        "state.coverage={total:1,reached:1,unreached:[],sources:2,"
+        "sponsorship:[],dark:[],"
+        "caught_late:{count:2,board_added_later:1,seen_late:1,rows:["
+        "{company:'Northwind',title:'Software Engineer I',"
+        "official_url:'https://example.com/1',lag_hours:5.2,"
+        "cause:'board added after the feed listed it'},"
+        "{company:'Contoso',title:'Software Engineer, New Grad',"
+        "official_url:'https://example.com/2',lag_hours:24,"
+        "cause:'board already read; role seen late'}]},"
+        "feed_only:[{company:'Fabrikam',passing:2,board_read:false}]};"
+        "render();1"
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.cov-late')"
+    )
+
+    late = page.eval(
+        "document.querySelector('.cov-late').textContent"
+    )
+
+    assert "Northwind" in late and "board added late" in late
+
+    assert "Contoso" in late and "seen late" in late
+
+    assert "24 h" in late
+
+    assert "Fabrikam" in page.eval(
+        "document.querySelector('.cov-feedonly').textContent"
+    )

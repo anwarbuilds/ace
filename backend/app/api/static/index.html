@@ -2083,6 +2083,45 @@ function coverageDark(rows){
       }).join("")+
     '</div>';
 }
+/* ACE's own account of its misses, so a late catch is found by the page
+   rather than by the user. A role a feed listed before ACE saw it on the
+   employer's board, with why; and the companies ACE still reads only
+   through a feed. */
+function coverageLate(r){
+  if(!r||!r.count) return "";
+  return '<div class="ans-sec">Caught late ('+r.count+' in 14 days)</div>'+
+    '<p class="why" style="max-width:74ch">Roles that passed your filters but reached a curated feed '+
+      'before ACE saw them on the employer’s own board. <b>'+r.board_added_later+'</b> were on a board '+
+      'ACE only started reading after the feed listed them; ACE now registers the boards feed links '+
+      'name every half hour, so these should stop. <b>'+r.seen_late+'</b> were on a board ACE was '+
+      'already reading and saw late — those are ACE’s mistakes to fix.</p>'+
+    '<div class="cov-grid cov-late">'+
+      r.rows.map(function(x){
+        return '<div class="cov-row" title="'+esc(x.cause)+'">'+
+          '<span class="cov-name">'+esc(x.company)+' — '+esc(clean(x.title))+'</span>'+
+          '<span class="cov-n">'+esc(x.cause===LATE_BOARD_ADDED?"board added late":"seen late")+'</span>'+
+          '<span class="cov-pct">'+x.lag_hours+' h</span></div>';
+      }).join("")+
+    '</div>';
+}
+var LATE_BOARD_ADDED="board added after the feed listed it";
+function coverageFeedOnly(rows){
+  if(!rows||!rows.length) return "";
+  var total=rows.reduce(function(n,r){ return n+r.passing; },0);
+  return '<div class="ans-sec">Known only through a feed ('+rows.length+')</div>'+
+    '<p class="why" style="max-width:74ch">'+total+' roles that pass your filters reach ACE only from a '+
+      'feed, whose description is a placeholder until ACE reads the employer’s page. Where ACE '+
+      'already reads the company’s board, the role is missing from it and the reader is at fault; '+
+      'elsewhere ACE has no board for the company yet.</p>'+
+    '<div class="cov-grid cov-feedonly">'+
+      rows.map(function(r){
+        return '<div class="cov-row">'+
+          '<span class="cov-name">'+esc(r.company)+'</span>'+
+          '<span class="cov-n">'+(r.board_read?"board read, role missing":"no board yet")+'</span>'+
+          '<span class="cov-pct">'+r.passing+'</span></div>';
+      }).join("")+
+    '</div>';
+}
 function coveragePage(){
   var c=state.coverage;
   if(!c) return '<div class="head"><div class="head-row"><h1 class="h1">Coverage</h1></div></div>'+
@@ -2112,6 +2151,8 @@ function coveragePage(){
         ? '<div class="cov-out '+esc(state.coverageMsgKind||"")+'">'+esc(state.coverageMsg)+'</div>'
         : '')+
       coverageDark(c.dark)+
+      coverageLate(c.caught_late)+
+      coverageFeedOnly(c.feed_only)+
       coverageGaps(c.unreached)+
       coverageSponsorship(c.sponsorship)+
     '</div></div>';

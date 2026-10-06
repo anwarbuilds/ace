@@ -29,6 +29,10 @@ from urllib.parse import urlsplit
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from backend.app.coverage.audit import (
+    caught_late,
+    feed_only,
+)
 from backend.app.coverage.benchmark import (
     company_keys,
     normalise_company,
@@ -639,6 +643,15 @@ def coverage(
             )
         ),
         "sponsorship": sponsorship_refusals(
+            session
+        ),
+        # ACE's own account of its misses: roles a feed listed before
+        # ACE saw them at the source, and companies it reads only
+        # through a feed.
+        "caught_late": caught_late(
+            session
+        ),
+        "feed_only": feed_only(
             session
         ),
         # Boards ACE polls that have stopped answering. Kept apart from
