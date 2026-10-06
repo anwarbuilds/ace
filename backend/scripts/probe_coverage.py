@@ -49,6 +49,16 @@ from backend.app.db.models import (
     SourceProbeRecord,
 )
 from backend.app.db.session import SessionLocal
+from backend.app.discovery.detector import (
+    DetectedSourceIdentity,
+)
+from backend.app.discovery.feed_links import (
+    NamedBoard,
+    staffing_reason,
+)
+from backend.app.scheduling.types import (
+    SourceType,
+)
 from backend.app.discovery.watchlist import (
     fetch_watchlist,
 )
@@ -374,6 +384,33 @@ def record(
 
                 continue
 
+            # The corpus holds every company a feed ever named, staffing
+            # agencies among them. Judged by name here -- the probe
+            # reads a sample of a board, not its descriptions -- and an
+            # agency is recorded switched off, with the reason, so it is
+            # never re-probed and a person can see why.
+            agency = staffing_reason(
+                NamedBoard(
+                    detected=DetectedSourceIdentity(
+                        source_type=SourceType(
+                            candidate.source_type
+                        ),
+                        source_account=(
+                            candidate.source_account
+                        ),
+                        source_host=(
+                            candidate.source_host
+                            or SOURCE_HOSTS.get(
+                                candidate.source_type
+                            )
+                            or ""
+                        ),
+                    ),
+                    company_name=candidate.company,
+                ),
+                [],
+            )
+
             session.add(
                 JobSourceRecord(
                     source_type=(
@@ -394,7 +431,7 @@ def record(
                             candidate.source_type
                         )
                     ),
-                    enabled=True,
+                    enabled=agency is None,
                     poll_interval_seconds=(
                         registration_interval(
                             candidate.source_type
@@ -402,11 +439,14 @@ def record(
                     ),
                     discovery_source=(
                         "curated_list"
+                        if agency is None
+                        else f"probe rejected: staffing: {agency}"[:100]
                     ),
                 )
             )
 
-            added += 1
+            if agency is None:
+                added += 1
 
         session.commit()
 

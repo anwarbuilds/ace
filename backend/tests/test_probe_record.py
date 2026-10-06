@@ -101,3 +101,37 @@ def test_an_eightfold_board_is_registered_hourly(patched_session):
         "qualcomm.com": 3600,
         "cursor": 900,
     }
+
+
+def test_a_staffing_agency_the_probe_reaches_is_recorded_switched_off(
+    patched_session,
+):
+    """The corpus holds every company a feed ever named, agencies too."""
+
+    from backend.app.coverage.diagnosis import REACHED
+    from backend.app.coverage.probing import BoardCandidate
+    from backend.app.db.models import JobSourceRecord
+
+    pc.record(
+        [
+            Diagnosis(
+                company="Testing Xperts",
+                outcome=REACHED,
+                detail="board found",
+                candidate=BoardCandidate(
+                    company="Testing Xperts",
+                    source_type="smartrecruiters",
+                    source_account="TestingXperts",
+                    job_count=179,
+                    evidence="board found",
+                ),
+            ),
+        ]
+    )
+
+    with patched_session() as session:
+        [row] = session.query(JobSourceRecord).all()
+
+    assert not row.enabled
+
+    assert row.discovery_source.startswith("probe rejected: staffing")
