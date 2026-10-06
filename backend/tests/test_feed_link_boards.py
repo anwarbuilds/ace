@@ -625,3 +625,35 @@ def test_a_careers_home_page_is_followed_to_its_job_search() -> None:
         fetch_text=fetch_text,
         budget=0,
     ) == (None, 0)
+
+
+def test_a_relative_job_search_link_is_followed_against_the_pages_base() -> None:
+    """Cisco's careers home links its job search as plain
+    "search-results"; the page states its own base, and the board is
+    named only on the search page."""
+
+    from backend.app.coverage.probing import _job_search_link
+
+    phenom_home = (
+        '<script>var phApp = {"baseUrl":"https://careers.cisco.com/global/en/"};'
+        '</script><a href="search-results">Search jobs</a>'
+    )
+
+    assert _job_search_link(
+        phenom_home
+    ) == "https://careers.cisco.com/global/en/search-results"
+
+    canonical_only = (
+        '<link rel="canonical" href="https://jobs.example.com/us/en/home">'
+        '<a href="search-results">Search</a>'
+    )
+
+    assert _job_search_link(
+        canonical_only
+    ) == "https://jobs.example.com/us/en/search-results"
+
+    # No stated base: a relative link has nothing reliable to resolve
+    # against, so it is not guessed at.
+    assert _job_search_link(
+        '<a href="search-results">Search</a>'
+    ) is None

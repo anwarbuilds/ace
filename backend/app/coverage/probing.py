@@ -31,6 +31,7 @@ from dataclasses import dataclass
 import json
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from urllib.parse import urlsplit
 
@@ -2151,24 +2152,63 @@ _JOB_SEARCH_LINK = re.compile(
 )
 
 
+_RELATIVE_JOB_SEARCH_LINK = re.compile(
+    r'href="((?!https?:|//|#|mailto:)[^"]*(?:search-results|job-search|'
+    r'search-jobs|jobs/search)[^"]*)"',
+    re.IGNORECASE,
+)
+
+# Where a page says it lives. A careers page is usually reached through a
+# redirect, so the URL it was fetched from is no base for its relative
+# links; Phenom pages state their own ("baseUrl"), and most pages carry
+# a canonical link.
+_PAGE_BASE = (
+    re.compile(
+        r'"baseUrl"\s*:\s*"(https?://[^"]+)"',
+    ),
+    re.compile(
+        r'<link[^>]+rel="canonical"[^>]+href="(https?://[^"]+)"',
+        re.IGNORECASE,
+    ),
+)
+
+
 def _job_search_link(
     html: str,
 ) -> str | None:
-    """The first absolute link to the page's own job search, if any.
+    """The page's own link to its job search, if it has one.
 
-    Absolute only: a careers page is usually reached through a
-    redirect, so a relative link has no reliable base.
+    An absolute link first. A relative one only against the base the
+    page states for itself: Cisco's careers home links its job search
+    as plain "search-results", and the board is named only there.
     """
 
     match = _JOB_SEARCH_LINK.search(
         html
     )
 
-    return (
-        None
-        if match is None
-        else match.group(1)
+    if match is not None:
+        return match.group(1)
+
+    relative = _RELATIVE_JOB_SEARCH_LINK.search(
+        html
     )
+
+    if relative is None:
+        return None
+
+    for pattern in _PAGE_BASE:
+        base = pattern.search(
+            html
+        )
+
+        if base is not None:
+            return urllib.parse.urljoin(
+                base.group(1),
+                relative.group(1),
+            )
+
+    return None
 
 
 def page_board_ref(
