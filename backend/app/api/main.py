@@ -82,6 +82,9 @@ from backend.app.db.models import (
     JobRecord,
 )
 from backend.app.db.session import SessionLocal
+from backend.app.persistence.openings import (
+    OLD_OPENING_DAYS,
+)
 from backend.app.matching.parsing import (
     ResumeParseError,
     extract_resume_text,
@@ -683,6 +686,14 @@ def create_app() -> FastAPI:
                 "is deleted; the row still exists."
             ),
         ),
+        include_old: bool = Query(
+            default=False,
+            description=(
+                "Also show openings that opened "
+                "30 or more days ago, hidden by "
+                "default. Nothing is deleted."
+            ),
+        ),
         tier: str | None = Query(
             default=None,
             description=(
@@ -781,6 +792,11 @@ def create_app() -> FastAPI:
                 since=since,
                 max_detected_age_days=(
                     max_detected_age_days
+                ),
+                max_opening_age_days=(
+                    None
+                    if include_old
+                    else OLD_OPENING_DAYS
                 ),
                 tiers=_split_csv(
                     tier
@@ -890,6 +906,14 @@ def create_app() -> FastAPI:
             ge=1,
             le=3650,
         ),
+        include_old: bool = Query(
+            default=False,
+            description=(
+                "Also show openings that opened "
+                "30 or more days ago, hidden by "
+                "default. Nothing is deleted."
+            ),
+        ),
         active_only: bool = Query(
             default=True,
         ),
@@ -962,6 +986,11 @@ def create_app() -> FastAPI:
                 ),
                 max_detected_age_days=(
                     max_detected_age_days
+                ),
+                max_opening_age_days=(
+                    None
+                    if include_old
+                    else OLD_OPENING_DAYS
                 ),
                 active_only=active_only,
                 early_career_only=(
@@ -2038,6 +2067,14 @@ def create_app() -> FastAPI:
             ge=1,
             le=3650,
         ),
+        include_old: bool = Query(
+            default=False,
+            description=(
+                "Also show openings that opened "
+                "30 or more days ago, hidden by "
+                "default. Nothing is deleted."
+            ),
+        ),
         mark: str | None = Query(
             default=None,
         ),
@@ -2094,6 +2131,11 @@ def create_app() -> FastAPI:
                 min_match=min_match,
                 max_detected_age_days=(
                     max_detected_age_days
+                ),
+                max_opening_age_days=(
+                    None
+                    if include_old
+                    else OLD_OPENING_DAYS
                 ),
                 mark=mark,
                 resume_id=(

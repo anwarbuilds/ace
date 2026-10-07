@@ -5,6 +5,9 @@ exists, still counts in statistics, and stays reachable once the filter
 is lifted. Every test here is really checking one of those three
 guarantees, because the risk with a feature named after "removing" old
 jobs is that it quietly becomes destructive.
+
+Every query lifts the default 30-day opening cut, so this filter is
+tested on its own; test_old_openings covers that one.
 """
 
 from datetime import (
@@ -140,6 +143,7 @@ def test_recent_postings_pass_the_filter(
         page = list_jobs(
             session,
             filters=JobFilters(
+                max_opening_age_days=None,
                 max_detected_age_days=15,
             ),
             now=NOW,
@@ -161,6 +165,7 @@ def test_older_postings_are_hidden_not_visible_by_default(
         page = list_jobs(
             session,
             filters=JobFilters(
+                max_opening_age_days=None,
                 max_detected_age_days=15,
             ),
             now=NOW,
@@ -196,6 +201,7 @@ def test_a_posting_exactly_at_the_boundary_is_kept(
         page = list_jobs(
             session,
             filters=JobFilters(
+                max_opening_age_days=None,
                 max_detected_age_days=15,
             ),
             now=NOW,
@@ -228,6 +234,7 @@ def test_the_filter_never_deletes_anything(
         hidden = list_jobs(
             session,
             filters=JobFilters(
+                max_opening_age_days=None,
                 max_detected_age_days=15,
             ),
             now=NOW,
@@ -238,7 +245,9 @@ def test_the_filter_never_deletes_anything(
         # The row is untouched: no filter, and it is there.
         everything = list_jobs(
             session,
-            filters=JobFilters(),
+            filters=JobFilters(
+                max_opening_age_days=None,
+            ),
             now=NOW,
         )
 
@@ -271,6 +280,7 @@ def test_stats_reflect_the_same_cutoff_as_the_list(
         stats = build_stats(
             session,
             filters=JobFilters(
+                max_opening_age_days=None,
                 max_detected_age_days=15,
             ),
             now=NOW,
@@ -306,6 +316,7 @@ def test_a_stale_posted_date_does_not_hide_a_freshly_detected_job(
         page = list_jobs(
             session,
             filters=JobFilters(
+                max_opening_age_days=None,
                 max_detected_age_days=15,
             ),
             now=NOW,
@@ -334,6 +345,7 @@ def test_a_posting_with_no_posted_at_is_still_correctly_filtered(
         page = list_jobs(
             session,
             filters=JobFilters(
+                max_opening_age_days=None,
                 max_detected_age_days=15,
             ),
             now=NOW,

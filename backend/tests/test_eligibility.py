@@ -2270,3 +2270,91 @@ def test_an_abbreviated_manager_title_is_senior() -> None:
             )
         ).reason_codes
     )
+
+
+def test_a_bank_vice_president_is_senior() -> None:
+    """40 of BNY's "Vice President, Full-Stack Engineer" were passing."""
+
+    for title in (
+        "Vice President, Full-Stack Engineer",
+        "Java Backend Developer, Vice President",
+        "Liquid Financing Data/AI Engineer – VP",
+        "VP Software Engineering",
+    ):
+        assert (
+            EligibilityReasonCode.SENIOR_TITLE
+            in evaluate_job(
+                make_job(
+                    title=title,
+                )
+            ).reason_codes
+        ), title
+
+
+def test_an_assistant_vice_president_is_not_senior() -> None:
+    """Two to five years at Citi and State Street."""
+
+    for title in (
+        "Full Stack Developer - Assistant Vice President",
+        "Infrastructure Engineer - Azure Cloud, AVP",
+        "Associate Vice President, Software Engineer",
+    ):
+        assert (
+            EligibilityReasonCode.SENIOR_TITLE
+            not in evaluate_job(
+                make_job(
+                    title=title,
+                )
+            ).reason_codes
+        ), title
+
+
+def test_every_product_engineer_title_is_excluded() -> None:
+    """The user asked for the title to be cleared "strictly": the
+    hardware ones and the startup software ones alike."""
+
+    for title, description in (
+        (
+            "Product Engineer II",
+            "Own wafer yield and test program development. ",
+        ),
+        (
+            "Product Engineer",
+            "Ship features across our React and TypeScript frontend. ",
+        ),
+        (
+            "Full Stack Product Engineer",
+            "",
+        ),
+        (
+            "Product Engineer (Software Engineer)",
+            "",
+        ),
+    ):
+        decision = evaluate_job(
+            make_job(
+                title=title,
+                description=description,
+            )
+        )
+
+        assert decision.status != EligibilityStatus.PASS, title
+
+        assert (
+            EligibilityReasonCode.NON_TARGET_ROLE
+            in decision.reason_codes
+        ), title
+
+
+def test_a_team_named_product_engineering_is_not_the_title() -> None:
+    assert (
+        EligibilityReasonCode.NON_TARGET_ROLE
+        not in evaluate_job(
+            make_job(
+                title=(
+                    "New Grad Software Engineer, "
+                    "Product Engineering"
+                ),
+            )
+        ).reason_codes
+    )

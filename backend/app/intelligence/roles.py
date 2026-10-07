@@ -166,7 +166,6 @@ SOFTWARE_ENGINEERING_PATTERNS = (
 
     # Common startup titles.
     r"\bfounding engineer\b",
-    r"\bproduct engineer\b",
     r"\bmember of technical staff\b",
 
     # Common compact recruiting title.
@@ -232,8 +231,8 @@ def classify_role(
 
     rather than both being classified as generic software engineering.
 
-    Startup-oriented titles such as Founding Engineer, Product Engineer,
-    Full Stack Developer, Member of Technical Staff, and SWE are included
+    Startup-oriented titles such as Founding Engineer, Full Stack
+    Developer, Member of Technical Staff, and SWE are included
     to protect discovery recall. Eligibility remains responsible for
     rejecting explicit seniority or experience blockers.
     """

@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-06-v39"
+    "2026-10-07-v41"
 )
 
 
@@ -574,6 +574,13 @@ SENIOR_TITLE_PATTERNS = (
     # "Mgr Software Engineering" passed: only the full word was read.
     r"\bmgrs?\b",
     r"\bdirector\b",
+    # A bank's corporate title. Vice President is the rung past Associate,
+    # typically five years and more: 59 passing roles carried it on
+    # 2026-10-07, 40 of them BNY's "Vice President, Full-Stack
+    # Engineer". Assistant and Associate Vice President, two to five
+    # years at Citi and State Street, stay.
+    r"(?<!assistant )(?<!associate )\bvice[- ]president\b",
+    r"\b[se]?vp\b",
     # Level III and up. Level II used to be here too, as "the first
     # rung above new grad", and that was wrong for this user: with about
     # 3.5 years, a role asking 2 to 3 is the sweet spot, not senior.
@@ -1094,6 +1101,19 @@ HARDWARE_DESCRIPTION_MARKERS = (
 # embedded work out while letting an ML or platform role that merely
 # mentions embedded targets remain in scope.
 MINIMUM_HARDWARE_DESCRIPTION_MARKERS = 3
+
+
+# Product Engineer, in every form. The user asked twice for these to go,
+# the second time "strictly". On 2026-10-07, 132 passing roles carried
+# the title, most of them engineers on a physical product at KLA,
+# Micron, onsemi, Eaton, Magna and Cummins. Reading the description to
+# keep the software ones -- Anthropic's, PostHog's, TRM Labs'
+# university-grad role -- still left the title in the feed, and the user
+# wants it gone. A team named "Product Engineering" is not the title:
+# "New Grad Software Engineer, Product Engineering" stays.
+PRODUCT_ENGINEER_TITLE_PATTERNS = (
+    r"\bproduct engineers?\b",
+)
 
 
 # ----------------------------------------------------------------------
@@ -2528,6 +2548,26 @@ def evaluate_job(
                 "Posting is a hardware-"
                 "oriented embedded/firmware "
                 "role."
+            )
+        )
+
+    # Usually already outside the target families; recorded once.
+    if _matches_any_regex(
+        job.title,
+        PRODUCT_ENGINEER_TITLE_PATTERNS,
+    ) and (
+        EligibilityReasonCode.NON_TARGET_ROLE
+        not in reject_codes
+    ):
+        reject_codes.append(
+            EligibilityReasonCode
+            .NON_TARGET_ROLE
+        )
+
+        reject_reasons.append(
+            (
+                "Product Engineer roles "
+                "are excluded."
             )
         )
 

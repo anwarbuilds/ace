@@ -59,6 +59,10 @@ from backend.app.db.models import (
     ResumeRecord,
     SourceState,
 )
+from backend.app.persistence.openings import (
+    OLD_OPENING_DAYS,
+    opened_within,
+)
 
 
 DEFAULT_PAGE_SIZE = 50
@@ -171,6 +175,13 @@ class JobFilters:
     # still counts in Skills and Resume statistics, and is reachable
     # through Saved, Archive, or search with the cutoff cleared.
     max_detected_age_days: int | None = None
+
+    # Openings older than this are hidden, judged by when the posting
+    # opened rather than when ACE first saw it; see
+    # backend.app.persistence.openings. On by default, because the user
+    # asked for month-old openings to go. None shows every age. Never
+    # applied to marks, which are history.
+    max_opening_age_days: int | None = OLD_OPENING_DAYS
 
     # "saved", "archived" or "applied". Filtered in SQL rather than in
     # the client, so these pages search all 777 jobs instead of whichever
@@ -628,6 +639,14 @@ def _apply_filters(
                 )
             )
         )
+
+        if filters.max_opening_age_days is not None:
+            statement = statement.where(
+                opened_within(
+                    filters.max_opening_age_days,
+                    now=now,
+                )
+            )
 
     # A mark is a record of a decision the user already made. Filtering
     # it through the eligibility gate asks "should you apply to this"
@@ -2015,6 +2034,10 @@ def list_discovery_runs(
                 JobEvaluationRecord
                 .eligibility_status.in_(
                     QUALIFYING_STATUSES
+                ),
+                opened_within(
+                    OLD_OPENING_DAYS,
+                    now=reference,
                 ),
             )
         )

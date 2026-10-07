@@ -30,13 +30,17 @@ from backend.app.db.models import (
 )
 
 
-NOW = datetime(
-    2026,
-    9,
-    5,
-    16,
-    0,
-    tzinfo=timezone.utc,
+# Recent rather than a fixed date: the queue hides openings 30 days old
+# by the wall clock, and endpoints read the wall clock, so a fixed date
+# made every fixture an old opening once it was a month behind.
+NOW = datetime.now(
+    timezone.utc
+).replace(
+    minute=0,
+    second=0,
+    microsecond=0,
+) - timedelta(
+    hours=1,
 )
 
 
@@ -594,9 +598,10 @@ def test_stats_describe_only_the_apply_ready_queue(
         stats["posted_last_7_days"] == 2
     )
 
+    # The 40-day-old opening is not worth applying to, and is hidden.
     assert (
         stats["qualifying_active_jobs"]
-        == 3
+        == 2
     )
 
     # Nothing leaks the size of the rejected corpus.
@@ -816,7 +821,8 @@ def test_stats_honour_company_filter(
 def test_unfiltered_stats_count_everything_qualifying(
     session_factory,
 ) -> None:
-    """With no filters the total is the whole apply-ready queue."""
+    """With no filters, and every age shown, the total is everything
+    qualifying."""
 
     with session_factory.begin() as session:
         add_job(
@@ -834,6 +840,9 @@ def test_unfiltered_stats_count_everything_qualifying(
     with session_factory() as session:
         stats = build_stats(
             session,
+            filters=JobFilters(
+                max_opening_age_days=None,
+            ),
             now=NOW,
         )
 

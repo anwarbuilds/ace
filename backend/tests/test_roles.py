@@ -72,14 +72,16 @@ def test_full_stack_developer_is_software_engineering() -> None:
     )
 
 
-def test_product_engineer_is_software_engineering() -> None:
+def test_product_engineer_is_not_a_target_role() -> None:
+    """Excluded at the user's request; see eligibility."""
+
     result = classify_role(
         "Product Engineer"
     )
 
     assert (
         result.family
-        == RoleFamily.SOFTWARE_ENGINEERING
+        == RoleFamily.OTHER
     )
 
 

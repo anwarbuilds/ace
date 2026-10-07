@@ -677,7 +677,7 @@ var DEFAULT_SORTS=["unapplied_first","experience_fit_first","best_match"];
 var state={
   page:"queue", view:"all", jobId:null,
   q:"", sorts:DEFAULT_SORTS.slice(),
-  filters:{}, tiers:[], excluded:[], recentOnly:false, openPull:null, expandedGroups:{},
+  filters:{}, tiers:[], excluded:[], recentOnly:false, includeOld:false, openPull:null, expandedGroups:{},
   sessionsExhausted:false, loadingOlder:false,
   pinned:null, heldRow:null,
   items:[], total:0, loading:true, loadingMore:false, hasMore:false, offset:0, reqToken:0,
@@ -792,6 +792,9 @@ function params(extra){
   // Scoped to the Queue itself: a saved or archived job must never be
   // hidden by a housekeeping default.
   if(state.page==="queue" && state.recentOnly) p.set("max_detected_age_days",RECENT_DAYS);
+  // Openings 30 or more days old are hidden by default, server side:
+  // the user asked for them gone. Marks are never hidden by age.
+  if(state.includeOld) p.set("include_old","true");
   if(extra) Object.keys(extra).forEach(function(k){ if(extra[k]!=null) p.set(k,extra[k]); });
   return p;
 }
@@ -2786,6 +2789,9 @@ var PALETTE=[
       else state.filters.new_grad_only={param:"new_grad_only",type:"flag",label:"New grad",pinned:true};
       goTo("queue"); }},
   {label:"Toggle last 15 days only",run:function(){ state.recentOnly=!state.recentOnly; goTo("queue"); }},
+  {label:"Toggle openings 30+ days old",run:function(){ state.includeOld=!state.includeOld;
+      showToast(state.includeOld?"Showing openings of every age. Nothing was deleted.":"Hiding openings 30+ days old");
+      goTo("queue"); }},
   {label:"Clear all filters",run:function(){ state.filters={}; state.tiers=[]; state.excluded=[]; state.q=""; goTo("queue"); }},
   {label:"Show every company again",run:function(){ state.excluded=[]; goTo("queue"); }},
   {label:"Open your answers",run:function(){ state.answersOpen=true; render(); }},

@@ -47,6 +47,10 @@ from backend.app.db.models import (
     JobRecord,
     PollSessionRecord,
 )
+from backend.app.persistence.openings import (
+    OLD_OPENING_DAYS,
+    opened_within,
+)
 
 
 # Discoveries arriving within this gap belong to the same run. Long
@@ -274,12 +278,21 @@ def record_discoveries(
         )
     )
 
+    # A month-old opening is not an arrival, even the first time ACE
+    # sees it: the first read of a board brings in everything already
+    # on it, and counted here it made the pull say "12 passed" and the
+    # desktop alert fire for roles opened in June.
     qualifying = session.scalar(
         select(
             func.count()
         )
         .select_from(
             JobEvaluationRecord
+        )
+        .join(
+            JobRecord,
+            JobRecord.id
+            == JobEvaluationRecord.job_id,
         )
         .where(
             JobEvaluationRecord.job_id.in_(
@@ -288,6 +301,10 @@ def record_discoveries(
             JobEvaluationRecord
             .eligibility_status
             == "PASS",
+            opened_within(
+                OLD_OPENING_DAYS,
+                now=reference,
+            ),
         )
     )
 
