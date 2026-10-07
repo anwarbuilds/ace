@@ -511,3 +511,30 @@ def test_without_a_full_location_the_parts_are_used() -> None:
             },
         }
     ) == "Remote | Ann Arbor, MI, US"
+
+
+def test_a_posting_whose_detail_was_skipped_keeps_the_listing_s_location() -> None:
+    """Read from the empty detail, 61,000 postings were stored as
+    "Unknown", which the gate reads as outside the US."""
+
+    from backend.app.adapters.smartrecruiters import (
+        _canonical_job_from_posting,
+    )
+
+    job = _canonical_job_from_posting(
+        summary={
+            "id": "1",
+            "name": "Software Engineer",
+            "location": {
+                "city": "Owatonna",
+                "region": "MN",
+                "country": "us",
+                "fullLocation": "Owatonna, MN, United States",
+            },
+        },
+        detail={},
+        company_identifier="ExampleCompany",
+        company_name="Example Company",
+    )
+
+    assert job.location == "Owatonna, MN, United States"

@@ -740,3 +740,43 @@ def test_a_budget_too_small_for_the_slices_reads_in_part() -> None:
     )
 
     assert jobs.complete is False
+
+
+def test_a_posting_listed_without_a_location_takes_its_path_s() -> None:
+    """Accenture lists no location at all, and its Seattle role was
+    rejected as outside the US for it."""
+
+    from backend.app.adapters.workday import (
+        _listed_location,
+    )
+
+    assert _listed_location(
+        "",
+        "/job/Seattle-1191-2nd-Avenue-Corp/"
+        "AI-Native-Software-Engineer---Products_R00362472",
+    ) == "Seattle 1191 2nd Avenue Corp"
+
+
+def test_several_locations_keep_the_primary_and_say_how_many_more() -> None:
+    """"2 Locations" is all a listing says of a posting open in two
+    places, and the gate cannot place it anywhere."""
+
+    from backend.app.adapters.workday import (
+        _listed_location,
+    )
+
+    assert _listed_location(
+        "2 Locations",
+        "/job/US-CA-Santa-Clara/Software-Engineer_R1",
+    ) == "US CA Santa Clara + 1 more"
+
+
+def test_a_listed_location_is_kept_as_listed() -> None:
+    from backend.app.adapters.workday import (
+        _listed_location,
+    )
+
+    assert _listed_location(
+        "Austin, TX",
+        "/job/Austin-TX/Software-Engineer_R3",
+    ) == "Austin, TX"

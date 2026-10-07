@@ -197,27 +197,38 @@ def existing_board(
     source_type: str,
     source_account: str,
 ) -> JobSourceRecord | None:
-    """The catalog row for this board, under any of its names."""
+    """The catalog row for this board, under any of its names.
+
+    The enabled one when there are several: a copy switched off as a
+    duplicate is the wrong row to hand back, and dark-source recovery
+    re-enables whatever it is handed.
+    """
 
     wanted = board_key(
         source_type,
         source_account,
     )
 
-    for row in session.scalars(
-        sa.select(
-            JobSourceRecord,
-        ).where(
-            JobSourceRecord.source_type == source_type,
-        )
-    ).all():
+    matches = [
+        row
+        for row in session.scalars(
+            sa.select(
+                JobSourceRecord,
+            ).where(
+                JobSourceRecord.source_type == source_type,
+            )
+        ).all()
         if board_key(
             row.source_type,
             row.source_account,
-        ) == wanted:
+        ) == wanted
+    ]
+
+    for row in matches:
+        if row.enabled:
             return row
 
-    return None
+    return matches[0] if matches else None
 
 
 @dataclass(

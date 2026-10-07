@@ -785,3 +785,38 @@ def test_one_oracle_tenant_is_one_board_whatever_its_site_number(
             ),
         ],
     ) == []
+
+
+def test_the_enabled_copy_of_a_board_is_the_one_found(
+    session: Session,
+) -> None:
+    """"amgen/Careers" and "amgen/careers" were both registered. With
+    the duplicate switched off, the enabled copy is the board -- handed
+    the disabled one, dark-source recovery would switch it back on."""
+
+    from backend.app.discovery.feed_links import (
+        existing_board,
+    )
+
+    add_source(
+        session,
+        "workday",
+        "amgen/careers",
+        enabled=False,
+    )
+
+    add_source(
+        session,
+        "workday",
+        "amgen/Careers",
+    )
+
+    found = existing_board(
+        session,
+        "workday",
+        "AMGEN/CAREERS",
+    )
+
+    assert found.enabled
+
+    assert found.source_account == "amgen/Careers"

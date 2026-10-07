@@ -45,6 +45,9 @@ from backend.app.db.models import (
     JobSourceRecord,
 )
 from backend.app.db.session import SessionLocal
+from backend.app.discovery.feed_links import (
+    existing_board,
+)
 
 
 def fetch_text(
@@ -204,20 +207,15 @@ def register(
 
     with SessionLocal() as session:
         for candidate in candidates:
-            exists = session.scalar(
-                select(
-                    JobSourceRecord
-                ).where(
-                    JobSourceRecord
-                    .source_type
-                    == candidate.source_type,
-                    JobSourceRecord
-                    .source_account
-                    == candidate.source_account,
-                )
-            )
-
-            if exists is not None:
+            # Under any of its names. An exact match let "amgen/Careers"
+            # and "amgen/careers" both in on 2026-10-06, with ServiceNow,
+            # Renesas and eight more: every one polled twice and every
+            # role on it listed twice.
+            if existing_board(
+                session,
+                candidate.source_type,
+                candidate.source_account,
+            ) is not None:
                 continue
 
             session.add(

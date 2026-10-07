@@ -54,6 +54,7 @@ from datetime import (
 import html
 import re
 from typing import Any
+from urllib.parse import unquote
 
 import httpx
 
@@ -504,6 +505,69 @@ def _requisition_id(
     return None
 
 
+_LOCATION_COUNT = re.compile(
+    r"^\s*(\d+)\s+locations?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _listed_location(
+    locations_text: str,
+    external_path: str,
+) -> str:
+    """The listing's location, or the one the posting's own path names.
+
+    Some tenants list no location at all -- Accenture, Parsons, Levi's --
+    and every tenant lists a posting open in several places as "2
+    Locations". Unless its detail was read, that was all ACE stored, and
+    the gate cannot place "2 Locations" in the US: on 2026-10-07, 44,000
+    postings were stored that way and 166 were rejected for nothing but
+    their location, Accenture's Seattle "AI Native Software Engineer"
+    among them. The posting's path always names its primary location,
+    "/job/Seattle-1191-2nd-Avenue-Corp/...", and the detail, when it is
+    read, still replaces this with every location in full.
+    """
+
+    count = _LOCATION_COUNT.match(
+        locations_text
+    )
+
+    if locations_text and not count:
+        return locations_text
+
+    segments = external_path.split(
+        "/"
+    )
+
+    primary = ""
+
+    if (
+        len(segments) >= 4
+        and segments[1] == "job"
+    ):
+        primary = " ".join(
+            unquote(
+                segments[2]
+            )
+            .replace(
+                "-",
+                " ",
+            )
+            .split()
+        )
+
+    if not primary:
+        return locations_text
+
+    if count and int(count.group(1)) > 1:
+        return (
+            f"{primary} + "
+            f"{int(count.group(1)) - 1} more"
+        )
+
+    return primary
+
+
 def _detail_location(
     info: dict[str, Any],
 ) -> str:
@@ -941,12 +1005,15 @@ def fetch_workday_jobs(
 
             description = ""
 
-            location = str(
-                posting.get(
-                    "locationsText"
-                )
-                or ""
-            ).strip()
+            location = _listed_location(
+                str(
+                    posting.get(
+                        "locationsText"
+                    )
+                    or ""
+                ).strip(),
+                external_path,
+            )
 
             posted_at = parse_posted_on(
                 posting.get(
