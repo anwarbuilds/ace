@@ -117,6 +117,21 @@ var DELL_CASES = [
    + "selecting \u201cno\u201d will not disadvantage your application.",
    "choice", "Consent to AI in hiring"],
   ["phone device type select one required", "choice", "Phone type"],
+  // CVS's voluntary disclosures, also Workday dropdowns.
+  ["please select the veteran status which most accurately describes how "
+   + "you identify yourself.", "choice", "Veteran status"],
+  ["please select your gender", "choice", "Gender"],
+  ["please select the ethnicity which most accurately describes how you "
+   + "identify yourself.", "choice", "Race or ethnicity"],
+  ["are you hispanic or latino? (optional)", "choice", "Hispanic or Latino"],
+  ["are you hispanic/latino?", "choice", "Hispanic or Latino"],
+  // A race question defining its own options stays the race question.
+  ["race/ethnicity: hispanic or latino - a person of cuban, mexican, "
+   + "puerto rican, south or central american origin", "choice",
+   "Race or ethnicity"],
+  ["i agree", "yesno", "Agree to the terms shown"],
+  ["yes, i agree to receive sms updates about my application", "yesno",
+   null],
   ["country phone code", "choice", "Country"],
   ["language select one required", "choice", "Language"],
   ["comprehension select one required", "choice", "Language fluency"],
@@ -353,7 +368,33 @@ var OPTION_CASES = [
    ACE ships these wordings, so the user picks "Job board" once and
    never has to predict that Dell writes it one way and Ashby another.
    [options, answer, aliases, expected index] */
+var VETERAN_ALIASES = ["i am not a protected veteran", "not a protected veteran",
+  "no i am not a veteran", "not a veteran"];
+
 var ALIAS_CASES = [
+  // CVS's Workday list. "I am not a protected veteran" lined up word for
+  // word with the veteran option, and a non-veteran was declared one.
+  [["I am not a veteran", "I am a veteran, but not a protected veteran",
+    "I identify as one or more of the classifications of protected veteran",
+    "I do not wish to self-identify"],
+   "I am not a protected veteran", VETERAN_ALIASES, 0],
+  // No option for "not a veteran" at all: declining, never the veteran.
+  [["I am a veteran, but not a protected veteran",
+    "I identify as one or more of the classifications of protected veteran",
+    "I do not wish to self-identify"],
+   "I am not a protected veteran", VETERAN_ALIASES, 2],
+  [["I am not a protected veteran",
+    "I identify as one or more of the classifications of protected veteran",
+    "I do not wish to self-identify"],
+   "I am not a protected veteran", VETERAN_ALIASES, 0],
+  // Workday writes the country after every ethnicity.
+  [["American Indian or Alaska Native (United States of America)",
+    "Asian (United States of America)",
+    "Hispanic or Latino (United States of America)",
+    "White (United States of America)",
+    "I do not wish to self-identify (United States of America)"],
+   "Asian", ["asian", "asian not hispanic or latino"], 1],
+
   [["Job Board (e.g., LinkedIn, Indeed, Glassdoor)", "Employee Referral",
     "Search Engine"],
    "Job board", ["job board", "job portal", "indeed", "glassdoor"], 0],

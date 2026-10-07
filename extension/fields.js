@@ -218,7 +218,12 @@ var ACE_RULES = [
   { answer: "Agree to the terms shown", type: ACE_YESNO,
     any: ["screenshot", "please confirm your acceptance",
           "confirm your acceptance", "hereby provide my consent",
-          "acknowledge and agree", "i agree and hereby"] },
+          "acknowledge and agree", "i agree and hereby",
+          // Workday's closing page: "Terms and Conditions ... By
+          // clicking Agree below", then a box reading "I Agree".
+          "terms and conditions", "i agree"],
+    // Agreeing to texts and newsletters is a different consent.
+    not: ["sms", "text message", "whatsapp", "newsletter"] },
   // Deliberately narrow. Every date box on a form would take a date,
   // and only this one wants *today's*: a start date, a graduation date
   // and a work-history date are all wrong answers here. The phrase has
@@ -417,6 +422,16 @@ var ACE_RULES = [
   { answer: "Transgender", type: ACE_CHOICE, any: ["transgender"] },
   { answer: "Sexual orientation", type: ACE_CHOICE,
     any: ["sexual orientation", "lgbtq"] },
+  // Asked apart from race on US forms -- CVS's "Are you Hispanic or
+  // Latino? (Optional)", Greenhouse's "Are you Hispanic/Latino?" -- and
+  // answered Yes or No. Read as the race question, it offered the
+  // stored race to a Yes/No and stayed blank. Written as a question,
+  // because a race question's own help text defines "Hispanic or
+  // Latino" and must stay with the race rule.
+  { answer: "Hispanic or Latino", type: ACE_YESNO,
+    any: ["are you hispanic or latino", "are you hispanic/latino",
+          "are you hispanic latino", "are you latino or hispanic",
+          "are you of hispanic"] },
   { answer: "Race or ethnicity", type: ACE_CHOICE,
     any: ["race", "ethnicity", "hispanic", "latino", "latinx"] },
   { answer: "Veteran status", type: ACE_CHOICE,
@@ -999,6 +1014,21 @@ function aceChooseOption(options, answer, aliases) {
 
   var texts = options.map(aceNormalise);
 
+  // An option saying the opposite of the answer is never a match,
+  // however many of its words line up. "I am not a protected veteran"
+  // matched "I am a veteran, but not a protected veteran" word for word,
+  // in order, and a non-veteran would have been declared a veteran on a
+  // federal self-identification form. Neutral options are unaffected.
+  var answerIntent = aceIntent(answer);
+
+  function agrees(index) {
+    if (!answerIntent) return true;
+
+    var optionIntent = aceIntent(options[index]);
+
+    return !optionIntent || optionIntent === answerIntent;
+  }
+
   function only(matches) {
     // Exactly one candidate, or nothing. Two equally good options mean
     // the answer does not distinguish them and ACE must not pick.
@@ -1008,7 +1038,7 @@ function aceChooseOption(options, answer, aliases) {
   function indices(test) {
     var found = [];
     texts.forEach(function (text, index) {
-      if (text && test(text)) found.push(index);
+      if (text && test(text) && agrees(index)) found.push(index);
     });
     return found;
   }
@@ -1039,6 +1069,7 @@ function aceChooseOption(options, answer, aliases) {
 
   bare.forEach(function (text, index) {
     if (!text || text === texts[index]) return;
+    if (!agrees(index)) return;
     if (acePhraseIn(text, wanted) || acePhraseIn(wanted, text)) {
       dialled.push(index);
     }

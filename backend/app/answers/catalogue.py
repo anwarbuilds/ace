@@ -666,6 +666,10 @@ QUESTIONS: tuple[Question, ...] = (
     # --- Voluntary disclosures ---
     Question("Gender", kind=CHOICE, options=GENDER),
     Question("Race or ethnicity", kind=CHOICE, options=RACE),
+    _yes_no(
+        "Hispanic or Latino",
+        hint="Asked apart from race on US forms, as a Yes or No.",
+    ),
     Question("Veteran status", kind=CHOICE, options=VETERAN),
     Question("Disability status", kind=CHOICE, options=DISABILITY),
     Question("Transgender", kind=CHOICE, options=TRANSGENDER),
