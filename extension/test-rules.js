@@ -117,6 +117,15 @@ var DELL_CASES = [
    + "selecting \u201cno\u201d will not disadvantage your application.",
    "choice", "Consent to AI in hiring"],
   ["phone device type select one required", "choice", "Phone type"],
+  // Staples, on Oracle's Candidate Experience.
+  ["address line 1", "text", "Address"],
+  ["address line 2", "text", "Address line 2"],
+  ["please confirm your current city and state by typing it in below "
+   + "(for example: framingham, ma).", "text", "City and state"],
+  ["were you referred by a current staples employee?", "yesno",
+   "Referred by an employee"],
+  ["how did you hear about us? (e.g. employee referral, job board)",
+   "choice", "How did you hear about us"],
   // CVS's voluntary disclosures, also Workday dropdowns.
   ["please select the veteran status which most accurately describes how "
    + "you identify yourself.", "choice", "Veteran status"],

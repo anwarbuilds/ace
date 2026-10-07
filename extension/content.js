@@ -106,7 +106,12 @@
   // button pair has no such property and uses aria-pressed instead.
   function aceIsChosen(field) {
     if (field.tagName === "BUTTON") {
-      return field.getAttribute("aria-pressed") === "true";
+      // Oracle's Yes/No pills are role="radio" and say so with
+      // aria-checked; Ashby's pair uses aria-pressed.
+      return (
+        field.getAttribute("aria-pressed") === "true" ||
+        field.getAttribute("aria-checked") === "true"
+      );
     }
 
     return !!field.checked;
@@ -270,9 +275,17 @@
       // accessibility state instead. Both are gathered and then
       // filtered, so a decorative button in the same parent is not
       // mistaken for one of the choices.
-      var siblings = field.parentElement
+      //
+      // Oracle puts each pill in its own list item inside one
+      // role="radiogroup", so the shared parent is the group, not the
+      // immediate one. Read pill by pill, an answered "No" did not
+      // count as answered when ACE's answer was "Yes".
+      var scope =
+        field.closest("[role=radiogroup]") || field.parentElement;
+
+      var siblings = scope
         ? Array.prototype.slice.call(
-            field.parentElement.querySelectorAll("button")
+            scope.querySelectorAll("button")
           ).filter(aceIsChoiceControl)
         : [];
 
@@ -756,9 +769,18 @@
       }
     }
 
-    return box
-      ? Array.prototype.slice.call(box.querySelectorAll("[role=option]"))
-      : [];
+    if (!box) return [];
+
+    var options = box.querySelectorAll("[role=option]");
+
+    // Oracle's Candidate Experience -- Staples, Dell -- lists its
+    // choices as a grid: role="gridcell" in role="row", never
+    // role="option". Read as options only, every one of its dropdowns
+    // opened onto "nothing to choose", and ZIP code, city and state
+    // were left empty on a required page.
+    if (!options.length) options = box.querySelectorAll("[role=gridcell]");
+
+    return Array.prototype.slice.call(options);
   }
 
   /* Get the menu open.
@@ -904,7 +926,9 @@
 
         typeIntoCombobox(field, term);
 
-        return waitForComboboxOptions(field, 1200);
+        // A ZIP code is looked up on the employer's server, and the
+        // suggestions take longer than a second to come back.
+        return waitForComboboxOptions(field, 2500);
       });
     }, Promise.resolve([]));
   }
@@ -1979,6 +2003,15 @@
       answers["Today's date"] = aceTodayUS();
 
       aliases["Today's date"] = [];
+
+      // "Please confirm your current city and state (for example:
+      // Framingham, MA)" wants both, and the State rule alone typed
+      // "WA" -- too short for the form to accept. Composed from the two
+      // the bank already holds rather than stored a third time.
+      if (answers["City"] && answers["State"]) {
+        answers["City and state"] = answers["City"] + ", " + answers["State"];
+        aliases["City and state"] = [];
+      }
 
       if (!known) {
         render(panel(), shell(

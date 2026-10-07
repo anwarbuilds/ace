@@ -189,6 +189,12 @@ var ACE_RULES = [
     any: ["with a government official",
           "relationship with a government official"],
     not: ["referral of"] },
+  // Staples: "Were you referred by a current Staples employee?" Not
+  // "employee referral", which is an option of "How did you hear about
+  // us" and would pull that question here.
+  { answer: "Referred by an employee", type: ACE_YESNO,
+    any: ["were you referred by", "referred by a current",
+          "referred by an employee", "referred by one of our employees"] },
   { answer: "Referred by a merchant or third party", type: ACE_YESNO,
     any: ["are you a referral of", "referral of a",
           "existing or potential third party",
@@ -298,6 +304,13 @@ var ACE_RULES = [
   // number back to its dial code. The user saw a Phone reading "+1".
   { answer: "Country", type: ACE_CHOICE, needs: ACE_CHOICE,
     any: ACE_PHONE_COUNTRY },
+  // Its own question: the first line's whole address typed into it
+  // again was the result of reading it as "Address".
+  { answer: "Address line 2", type: ACE_TEXT,
+    any: ["address line 2", "address 2", "address2", "street address 2"] },
+  { answer: "City and state", type: ACE_TEXT,
+    any: ["city and state", "city state", "city/state", "city & state",
+          "city and state of residence"] },
   { answer: "Address", type: ACE_TEXT,
     any: ["street", "address line", "address"] },
   { answer: "Location", type: ACE_TEXT,
@@ -627,6 +640,24 @@ function aceGroupQuestion(field) {
   if (declared) {
     var named = aceHeadingIn(declared, field);
     if (named) return named;
+
+    // Then the group's own accessible name. Oracle's Candidate
+    // Experience puts the question on its radiogroup as aria-label and
+    // prints it in markup that reads as no heading, and climbing from
+    // there reaches the section title -- "Application Questions" --
+    // before the question.
+    var own = aceNormalise(declared.getAttribute("aria-label"));
+
+    var labelledBy = declared.getAttribute("aria-labelledby");
+
+    if (!own && labelledBy) {
+      own = aceNormalise(labelledBy.split(/\s+/).map(function (id) {
+        var node = document.getElementById(id);
+        return node ? node.textContent : "";
+      }).join(" "));
+    }
+
+    if (own && own.length <= ACE_MAX_QUESTION) return own;
   }
 
   // Lever declares no group, so the question is whatever heading sits

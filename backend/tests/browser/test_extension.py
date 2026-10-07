@@ -1838,3 +1838,159 @@ def test_someone_else_s_name_in_capitals_is_left_alone(
     assert page.eval(
         "document.getElementById('n').value"
     ) == "JORDAN LEE"
+
+
+# Oracle's Candidate Experience (Staples, Dell), as its own code renders
+# it: a search box whose suggestions come back from the server as a grid
+# -- role="gridcell" in role="row", never role="option" -- mounted
+# outside the field, which names it through aria-controls.
+ORACLE_ZIP = (
+    '<div class="input-field-container__left">'
+    '<label for="zip">ZIP Code</label>'
+    '<input id="zip" role="combobox" aria-controls="zip-listbox" '
+    'aria-autocomplete="list" class="cx-select-input">'
+    '</div>'
+)
+
+ORACLE_ZIP_BEHAVIOUR = """
+(function(){
+  var input=document.getElementById('zip');
+  input.addEventListener('input',function(){
+    var old=document.getElementById('zip-portal');
+    if(old) old.remove();
+    if(input.value.length<3) return;
+    setTimeout(function(){
+      var host=document.createElement('div');
+      host.id='zip-portal';
+      var grid=document.createElement('div');
+      grid.id='zip-listbox';
+      grid.setAttribute('role','grid');
+      ['98101','98101-1234'].forEach(function(text,i){
+        var row=document.createElement('div');
+        row.setAttribute('role','row');
+        var cell=document.createElement('div');
+        cell.setAttribute('role','gridcell');
+        cell.id='zip-listitem-'+i;
+        cell.textContent=text;
+        cell.addEventListener('click',function(){
+          input.value=text; window.__picked=text; host.remove();
+        });
+        row.appendChild(cell); grid.appendChild(row);
+      });
+      host.appendChild(grid);
+      document.body.appendChild(host);
+    },300);
+  });
+})();1
+"""
+
+
+def test_an_oracle_dropdown_s_grid_of_choices_is_read(
+    filler,
+) -> None:
+    """ZIP code, city and state stayed empty on Staples' application:
+    the choices were gridcells, and ACE looked only for options."""
+
+    filler.eval(
+        "document.body.innerHTML="
+        + json.dumps(
+            ORACLE_ZIP
+        )
+        + ";1"
+    )
+
+    filler.eval(
+        ORACLE_ZIP_BEHAVIOUR
+    )
+
+    filler.eval(
+        "window.__aceInternals.fillOneCombobox("
+        "document.getElementById('zip'),'98101',[]);1"
+    )
+
+    filler.wait_for(
+        "!!window.__picked",
+        timeout=12,
+    )
+
+    assert filler.eval(
+        "window.__picked"
+    ) == "98101"
+
+
+ORACLE_PILLS = (
+    '<form>'
+    '<div><span>Are you legally eligible to work in the United States?'
+    '</span><ul role="radiogroup" aria-label="Are you legally eligible to '
+    'work in the United States?">'
+    '<li role="presentation"><button type="button" role="radio" '
+    'aria-checked="false" id="elig-yes"><span>Yes</span></button></li>'
+    '<li role="presentation"><button type="button" role="radio" '
+    'aria-checked="false" id="elig-no"><span>No</span></button></li>'
+    '</ul></div>'
+    '<div><span>Will you now or in the future require sponsorship for '
+    'employment visa status?</span><ul role="radiogroup" aria-label="Will '
+    'you now or in the future require sponsorship for employment visa '
+    'status?">'
+    '<li role="presentation"><button type="button" role="radio" '
+    'aria-checked="false" id="spon-yes"><span>Yes</span></button></li>'
+    '<li role="presentation"><button type="button" role="radio" '
+    'aria-checked="true" id="spon-no"><span>No</span></button></li>'
+    '</ul></div>'
+    '</form>'
+)
+
+ORACLE_PILLS_BEHAVIOUR = """
+(function(){
+  window.__clicks=0;
+  document.querySelectorAll('[role=radiogroup]').forEach(function(group){
+    group.querySelectorAll('button').forEach(function(button){
+      button.addEventListener('click',function(){
+        window.__clicks+=1;
+        group.querySelectorAll('button').forEach(function(other){
+          other.setAttribute('aria-checked', other===button?'true':'false');
+        });
+      });
+    });
+  });
+})();1
+"""
+
+
+def test_an_oracle_yes_no_is_answered_and_an_answered_one_is_kept(
+    page,
+) -> None:
+    """Each pill sits in its own list item inside one radiogroup. Read
+    pill by pill, a question the user had answered "No" did not count as
+    answered, and ACE's "Yes" would have been clicked over it."""
+
+    _boot_form(
+        page,
+        ORACLE_PILLS,
+        [
+            {"label": "Work authorisation", "value": "Yes",
+             "aliases": []},
+            {"label": "Need sponsorship in future", "value": "Yes",
+             "aliases": []},
+        ],
+    )
+
+    page.eval(
+        ORACLE_PILLS_BEHAVIOUR
+    )
+
+    _fill_and_wait(
+        page
+    )
+
+    assert page.eval(
+        "document.getElementById('elig-yes').getAttribute('aria-checked')"
+    ) == "true"
+
+    assert page.eval(
+        "document.getElementById('spon-no').getAttribute('aria-checked')"
+    ) == "true", "the user's own answer was clicked over"
+
+    assert page.eval(
+        "window.__clicks"
+    ) == 1

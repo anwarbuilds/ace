@@ -526,6 +526,11 @@ QUESTIONS: tuple[Question, ...] = (
     # --- Address ---
     Question("Location"),
     Question("Address"),
+    Question(
+        "Address line 2",
+        hint="Apartment or suite, for forms that ask it on its own line. "
+        "Left empty, that line is left alone.",
+    ),
     Question("City"),
     Question("State"),
     Question("Postcode"),
@@ -583,6 +588,11 @@ QUESTIONS: tuple[Question, ...] = (
         "Related to a government official",
         hint="Asked separately from whether you are one, so it is "
         "stored separately.",
+    ),
+    _yes_no(
+        "Referred by an employee",
+        hint="Whether someone who works there referred you. Change it "
+        "for an application where they did.",
     ),
     _yes_no(
         "Referred by a merchant or third party",
