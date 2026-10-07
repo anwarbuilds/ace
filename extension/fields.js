@@ -1231,7 +1231,7 @@ function aceMonthName(month) {
    what every form seen so far uses for a work-history date. */
 /* A stored phone number with its country code taken off the front.
 
-   "+1 425 568 6378" becomes "425 568 6378". Only for the split phone
+   "+1 555 010 0123" becomes "555 010 0123". Only for the split phone
    widget, where a separate selector already carries the dial code and
    the number box beside it holds the national number alone -- writing
    the stored value whole there duplicates the code the selector is

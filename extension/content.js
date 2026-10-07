@@ -960,7 +960,7 @@
   /* Whether Phone sits beside a country selector that already carries
      the dial code, so the number written there should not repeat it.
 
-     Reported directly: the stored "+1 425 568 6378" went into the
+     Reported directly: the stored "+1 555 010 0123" went into the
      number box next to a selector already reading "+1", and editing
      out the duplicate by hand reset the selector too -- the two read
      as one bound value to the widget, not two independent fields, so

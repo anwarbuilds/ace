@@ -1351,7 +1351,7 @@ def test_the_number_does_not_repeat_the_dial_code_beside_it(
     page,
 ) -> None:
     """Reported with a screenshot: Country showing "+1" and Phone
-    reading "+1 425-568-6378" right next to it.
+    reading "+1 555-010-0123" right next to it.
 
     The selector already carries the code, so the box beside it takes
     the national number alone. The duplicate was not merely untidy --
