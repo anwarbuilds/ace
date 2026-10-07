@@ -47,6 +47,15 @@ left alone because there was already a value, and which questions it
 had no answer for, so you know exactly what is left to do by hand.
 **Undo** puts everything back.
 
+Dropdowns drawn as buttons -- Workday's "Select One" -- are opened, and
+the matching option is clicked, the same way as an autocomplete. **Undo**
+cannot put those back to "Select One"; it leaves them as chosen.
+
+Nothing typed by you is ever overwritten, with one exception: a name box
+that holds only your own name in capitals or in lower case, as a site
+copies it from a résumé header, gets your name the way the bank writes
+it.
+
 **Nothing on the page is marked.** Fields it fills look exactly like
 fields you typed, the way a browser's own autofill behaves. The panel
 is the record of what was done; the form is left alone.

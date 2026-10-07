@@ -42,7 +42,9 @@ var ACE_TEXT = "text";
    question that has to be answered before the plain fields rather than
    after them, and the two must not drift apart. */
 var ACE_PHONE_COUNTRY = [
-  "country code", "phone country", "dial code", "country calling code"
+  "country code", "phone country", "dial code", "country calling code",
+  // Workday's wording, on Medtronic's application among others.
+  "country phone code"
 ];
 
 /* Whether this question is a phone widget's own country control. */
@@ -200,6 +202,19 @@ var ACE_RULES = [
     any: ["retain your application", "keep your application on file",
           "subsequent job opportunities", "future job opportunities",
           "consider you for other", "talent community"] },
+  // "Medtronic uses AI-based tools in the recruitment process ... By
+  // selecting Yes, you consent to the use of AI in the recruitment
+  // process." Asked of the process, never of the candidate's own skill:
+  // "experience with AI-based tools" is a different question.
+  { answer: "Consent to AI in hiring", type: ACE_YESNO,
+    any: ["consent to the use of ai", "use of ai in the recruitment",
+          "use of ai in the hiring", "use of ai in our recruitment",
+          "use of ai in our hiring", "ai-based tools in the recruitment",
+          "ai based tools in the recruitment",
+          "ai in the recruitment process", "ai in the hiring process",
+          "artificial intelligence in the recruitment",
+          "artificial intelligence in the hiring"],
+    not: ["experience", "familiar", "proficien"] },
   { answer: "Agree to the terms shown", type: ACE_YESNO,
     any: ["screenshot", "please confirm your acceptance",
           "confirm your acceptance", "hereby provide my consent",
@@ -230,6 +245,11 @@ var ACE_RULES = [
     // options are Email, Email SMS and Email WhatsApp.
     not: ["receive communications", "opt in", "opt-in", "subscribe",
           "marketing", "sms", "preferred method", "method of communication"] },
+  // Workday asks what kind of phone the number is before it asks for
+  // the number: "Phone Device Type", Mobile or Landline.
+  { answer: "Phone type", type: ACE_CHOICE,
+    any: ["phone device type", "phone type", "type of phone",
+          "phone number type"] },
   { answer: "Phone", type: ACE_TEXT,
     any: ["phone", "mobile number", "telephone", "cell"],
     // DoorDash asks whether you want SMS and WhatsApp updates, and
@@ -446,9 +466,55 @@ function aceIsChoiceControl(field) {
    fillOneCombobox in content.js. */
 function aceIsAutocomplete(field) {
   return (
-    field.tagName === "INPUT" &&
-    field.getAttribute("role") === "combobox"
+    (
+      field.tagName === "INPUT" &&
+      field.getAttribute("role") === "combobox"
+    ) ||
+    aceIsListboxButton(field)
   );
+}
+
+/* Workday renders every dropdown as a button that opens a list:
+   <button aria-haspopup="listbox">Select One</button>, its options
+   mounted somewhere else on the page once it opens. Filling it is the
+   autocomplete's job again -- open it, read the options, click one --
+   but nothing here could see it: only buttons declaring themselves a
+   yes/no were ever collected, so every dropdown on a Workday
+   application was invisible. On Medtronic's that was all six screening
+   questions, the phone type and the whole language block. */
+function aceIsListboxButton(field) {
+  return (
+    field.tagName === "BUTTON" &&
+    field.getAttribute("aria-haspopup") === "listbox"
+  );
+}
+
+/* A name box the page filled from the résumé, in the résumé's capitals.
+
+   The user's résumé header gives the name in capitals, family name
+   first, and every site that reads a résumé copied it into the name
+   box that way: "RIVERA ALEX". ACE never overwrites a box that
+   already holds something, so the shouting stayed. This is the one
+   exception: a box holding nothing but the user's own name, all in
+   capitals or all in lower case, is the page's copy of the résumé
+   rather than anything typed, and it gets what ACE would have written
+   into it empty. `ownWords` is every word of the user's stored names. */
+function aceIsCopiedOwnName(current, ownWords) {
+  var value = String(current == null ? "" : current).trim();
+  var letters = value.replace(/[^A-Za-z]/g, "");
+
+  if (!letters || !ownWords || !ownWords.length) return false;
+
+  if (
+    letters !== letters.toUpperCase() &&
+    letters !== letters.toLowerCase()
+  ) return false;
+
+  var words = value.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+
+  return words.length > 0 && words.every(function (word) {
+    return ownWords.indexOf(word) >= 0;
+  });
 }
 
 /* What shape of answer this control can hold.

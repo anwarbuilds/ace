@@ -467,6 +467,13 @@ REFERRAL = (
 )
 
 
+PHONE_TYPE = (
+    Option("Mobile", ("mobile", "cell", "cell phone", "mobile phone")),
+    Option("Landline", ("landline", "home", "home phone")),
+    Option("Work", ("work", "work phone", "business", "office")),
+)
+
+
 CONTACT_METHOD = (
     Option("Email", ("email", "e mail", "e-mail")),
     Option("Phone", ("phone", "call", "telephone")),
@@ -508,6 +515,13 @@ QUESTIONS: tuple[Question, ...] = (
     Question("Full name"),
     Question("Email"),
     Question("Phone"),
+    Question(
+        "Phone type",
+        kind=CHOICE,
+        options=PHONE_TYPE,
+        hint="What kind of number Phone is. Workday asks before the "
+        "number itself.",
+    ),
     Question("Pronouns", kind=CHOICE, options=PRONOUNS),
     # --- Address ---
     Question("Location"),
@@ -583,6 +597,11 @@ QUESTIONS: tuple[Question, ...] = (
     _yes_no(
         "Agree to the terms shown",
         hint="For the consent controls that say I Agree rather than Yes.",
+    ),
+    _yes_no(
+        "Consent to AI in hiring",
+        hint="Whether an employer may use AI tools in reviewing your "
+        "application, as Medtronic asks.",
     ),
     # --- Education ---
     Question("University"),

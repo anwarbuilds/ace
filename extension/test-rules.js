@@ -93,6 +93,39 @@ var CASES = [
    The second element is the field kind, which is what the page's own
    options say the control can hold. */
 var DELL_CASES = [
+  // Medtronic's Workday application, as its dropdown buttons read: the
+  // button's own label carries the question and then "Select One
+  // Required". Every one of these was a dropdown ACE could not see.
+  ["are you 18 years of age or older? select one required", "choice",
+   "At least 18 years old"],
+  ["are you legally authorized to work in the united states? select one "
+   + "required", "choice", "Work authorisation"],
+  ["do you have a confidentiality obligation, non-compete clause or any "
+   + "other contractual obligation that could impact your ability to work "
+   + "for the position for which you have applied? select one required",
+   "choice", "Bound by a non-compete"],
+  ["will you now or in the future require sponsorship for employment visa "
+   + "status (e.g., h-1b status)? select one required", "choice",
+   "Need sponsorship in future"],
+  ["are you currently working for, or have you ever worked for, "
+   + "medtronic, covidien, or any of its subsidiaries? select one required",
+   "choice", "Previously employed by this company"],
+  ["medtronic uses ai-based tools in the recruitment process. these tools "
+   + "provide insights to aid recruiters, but it does not determine hiring "
+   + "decisions. by selecting \u201cyes\u201d, you consent to the use of ai "
+   + "in the recruitment process. participation is voluntary, and "
+   + "selecting \u201cno\u201d will not disadvantage your application.",
+   "choice", "Consent to AI in hiring"],
+  ["phone device type select one required", "choice", "Phone type"],
+  ["country phone code", "choice", "Country"],
+  ["language select one required", "choice", "Language"],
+  ["comprehension select one required", "choice", "Language fluency"],
+  ["overall select one required", "choice", "Language fluency"],
+  ["writing select one required", "choice", "Language fluency"],
+  // Asked of the candidate's skill, not of the process: not consent.
+  ["do you have experience with ai-based tools in the recruitment "
+   + "industry?", "yesno", null],
+
   ["is your current employer a reseller of dell technologies "
    + "(including dell, dell emc and affiliated companies), products, "
    + "services or technologies?", "yesno",
@@ -506,8 +539,37 @@ DATE_CASES.forEach(function (c) {
   }
 });
 
+/* A name box holding the résumé's capitals. The user's stored names
+   are fictional here, as everywhere in this file. */
+var OWN_WORDS = ["alex", "rivera", "morgan"];
+
+var NAME_CASES = [
+  ["RIVERA ALEX", true],
+  ["alex rivera", true],
+  ["ALEX", true],
+  // Typed the way a person types it: theirs, left alone.
+  ["Alex Rivera", false],
+  // Someone else's name, or anything else, is not the résumé's copy.
+  ["JORDAN LEE", false],
+  ["ALEX LEE", false],
+  ["", false]
+];
+
+NAME_CASES.forEach(function (c) {
+  var got = aceIsCopiedOwnName(c[0], OWN_WORDS);
+
+  if (got !== c[1]) {
+    failures += 1;
+    console.log(
+      "FAIL  copied name " + JSON.stringify(c[0]) +
+      "\n      got " + got + ", want " + c[1]
+    );
+  }
+});
+
 var total = CASES.length + OPTION_CASES.length + DELL_CASES.length +
-  ALIAS_CASES.length + HISTORY_ROLE_CASES.length + DATE_CASES.length;
+  ALIAS_CASES.length + HISTORY_ROLE_CASES.length + DATE_CASES.length +
+  NAME_CASES.length;
 
 console.log(
   failures

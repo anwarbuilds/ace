@@ -449,6 +449,7 @@ BANK = [
 def _boot_form(
     page,
     markup: str,
+    bank: list | None = None,
 ):
     """Put a form on the page, then load the real content script."""
 
@@ -464,6 +465,8 @@ def _boot_form(
         "window.__items="
         + json.dumps(
             BANK
+            if bank is None
+            else bank
         )
         + ";1"
     )
@@ -1573,3 +1576,265 @@ def test_closing_the_panel_holds_while_the_page_changes(
     assert not page.eval(
         "!!document.querySelector('.ace-root')"
     ), "the panel came back after the user closed it"
+
+
+# Workday's dropdowns, as its application renders them: a button reading
+# "Select One", whose menu is mounted at the end of the page a moment
+# after the press rather than beside it. A list of the same options sits
+# permanently elsewhere on the page, the way DoorDash keeps its country
+# list mounted; reading it instead of the button's own menu would choose
+# an option that commits nothing.
+WORKDAY_DROPDOWNS = (
+    '<form>'
+    '<label for="age">Are you 18 years of age or older?</label>'
+    '<button type="button" id="age" aria-haspopup="listbox">'
+    'Select One</button>'
+    '<label for="device">Phone Device Type</label>'
+    '<button type="button" id="device" aria-haspopup="listbox">'
+    'Select One</button>'
+    '<label for="authorised">Are you legally authorized to work in the '
+    'United States?</label>'
+    '<button type="button" id="authorised" aria-haspopup="listbox">'
+    'No</button>'
+    '<label for="li">LinkedIn</label><input id="li">'
+    '</form>'
+    '<ul role="listbox" id="decoy">'
+    '<li role="option">Yes</li><li role="option">No</li>'
+    '<li role="option">Mobile</li></ul>'
+)
+
+WORKDAY_BEHAVIOUR = """
+(function(){
+  var OPTIONS={age:['Yes','No'],device:['Mobile','Landline'],
+               authorised:['Yes','No']};
+  window.__opened=0;
+  document.querySelectorAll('button[aria-haspopup=listbox]')
+    .forEach(function(button){
+      button.addEventListener('click',function(){
+        window.__opened+=1;
+        var old=document.getElementById('portal');
+        if(old) old.remove();
+        var host=document.createElement('div');
+        host.id='portal';
+        var list=document.createElement('ul');
+        list.setAttribute('role','listbox');
+        OPTIONS[button.id].forEach(function(text){
+          var item=document.createElement('li');
+          item.setAttribute('role','option');
+          var label=document.createElement('div');
+          label.textContent=text;
+          item.appendChild(label);
+          item.addEventListener('click',function(){
+            button.textContent=text;
+            host.remove();
+          });
+          list.appendChild(item);
+        });
+        host.appendChild(list);
+        setTimeout(function(){document.body.appendChild(host);},120);
+      });
+    });
+})();1
+"""
+
+WORKDAY_BANK = [
+    {"label": "At least 18 years old", "value": "Yes", "aliases": []},
+    {"label": "Phone type", "value": "Mobile", "aliases": []},
+    {"label": "Work authorisation", "value": "Yes", "aliases": []},
+]
+
+
+def _fill_and_wait(
+    page,
+) -> None:
+    page.wait_for(
+        "!!document.querySelector('.ace-root')",
+        timeout=12,
+    )
+
+    page.eval(
+        "document.dispatchEvent(new KeyboardEvent("
+        "'keydown',{key:'a',altKey:true,bubbles:true}));1"
+    )
+
+    page.wait_for(
+        "/^Filled/.test("
+        "document.querySelector('.ace-root')"
+        ".shadowRoot.querySelector('.ace-title')"
+        ".textContent)",
+        timeout=20,
+    )
+
+
+def test_a_workday_dropdown_is_answered_from_its_own_menu(
+    page,
+) -> None:
+    """Every dropdown on Medtronic's Workday application was left on
+    "Select One": a button that opens a list was not something ACE
+    collected at all."""
+
+    _boot_form(
+        page,
+        WORKDAY_DROPDOWNS,
+        WORKDAY_BANK,
+    )
+
+    page.eval(
+        WORKDAY_BEHAVIOUR
+    )
+
+    _fill_and_wait(
+        page
+    )
+
+    assert page.eval(
+        "document.getElementById('age').textContent"
+    ) == "Yes"
+
+    assert page.eval(
+        "document.getElementById('device').textContent"
+    ) == "Mobile"
+
+
+def test_an_answered_workday_dropdown_is_left_alone(
+    page,
+) -> None:
+    """It shows its answer on its own face; "No" is not a placeholder."""
+
+    _boot_form(
+        page,
+        WORKDAY_DROPDOWNS,
+        WORKDAY_BANK,
+    )
+
+    page.eval(
+        WORKDAY_BEHAVIOUR
+    )
+
+    _fill_and_wait(
+        page
+    )
+
+    assert page.eval(
+        "document.getElementById('authorised').textContent"
+    ) == "No"
+
+    # Two presses, both on the empty dropdowns.
+    assert page.eval(
+        "window.__opened"
+    ) == 2
+
+
+def test_undo_survives_a_workday_dropdown(
+    page,
+) -> None:
+    """A button has no value to write back; undo must not throw on it
+    and abandon every field after it."""
+
+    _boot_form(
+        page,
+        WORKDAY_DROPDOWNS
+        + '<label for="em">Email</label><input id="em">',
+        WORKDAY_BANK
+        + [{"label": "Email", "value": "x@example.com", "aliases": []}],
+    )
+
+    page.eval(
+        WORKDAY_BEHAVIOUR
+    )
+
+    _fill_and_wait(
+        page
+    )
+
+    assert page.eval(
+        "document.getElementById('em').value"
+    ) == "x@example.com"
+
+    page.eval(
+        "document.querySelector('.ace-root').shadowRoot"
+        ".querySelector('[data-ace=undo]').click();1"
+    )
+
+    assert page.eval(
+        "document.getElementById('em').value"
+    ) == ""
+
+
+NAMES_BANK = [
+    {"label": "LinkedIn", "value": "https://linkedin.com/in/x",
+     "aliases": []},
+    {"label": "First name", "value": "Alex", "aliases": []},
+    {"label": "Last name", "value": "Rivera", "aliases": []},
+    {"label": "Full name", "value": "Alex Rivera", "aliases": []},
+]
+
+
+def test_the_resume_s_capitals_in_a_name_box_are_replaced(
+    page,
+) -> None:
+    """Reported: the Name box held the user's name in capitals, family
+    name first, as the résumé header writes it. A box holding
+    nothing but the user's own name in capitals is the page's copy of
+    the résumé, not something the user typed."""
+
+    _boot_form(
+        page,
+        '<form>'
+        '<label for="n">Name</label><input id="n" value="RIVERA ALEX">'
+        '<label for="f">First Name</label><input id="f" value="Alexa">'
+        '<label for="li">LinkedIn</label><input id="li">'
+        '<label for="em">Email</label><input id="em">'
+        '</form>',
+        NAMES_BANK,
+    )
+
+    _fill_and_wait(
+        page
+    )
+
+    assert page.eval(
+        "document.getElementById('n').value"
+    ) == "Alex Rivera"
+
+    # Typed by a person, in a person's capitals: theirs.
+    assert page.eval(
+        "document.getElementById('f').value"
+    ) == "Alexa"
+
+
+def test_someone_else_s_name_in_capitals_is_left_alone(
+    page,
+) -> None:
+    _boot_form(
+        page,
+        '<form>'
+        '<label for="n">Name</label><input id="n" value="JORDAN LEE">'
+        '<label for="li">LinkedIn</label><input id="li">'
+        '<label for="em">Email</label><input id="em">'
+        '<label for="gh">GitHub</label><input id="gh">'
+        '</form>',
+        NAMES_BANK,
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.ace-root')",
+        timeout=12,
+    )
+
+    page.eval(
+        "document.dispatchEvent(new KeyboardEvent("
+        "'keydown',{key:'a',altKey:true,bubbles:true}));1"
+    )
+
+    page.wait_for(
+        "!/^Filling/.test("
+        "document.querySelector('.ace-root')"
+        ".shadowRoot.querySelector('.ace-title')"
+        ".textContent)",
+        timeout=20,
+    )
+
+    assert page.eval(
+        "document.getElementById('n').value"
+    ) == "JORDAN LEE"

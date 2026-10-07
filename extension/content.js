@@ -120,6 +120,23 @@
       return !aceIsChosen(field);
     }
 
+    // Workday's dropdown says what it holds on its own face: "Select
+    // One" until something is chosen, the choice after.
+    if (aceIsListboxButton(field)) {
+      return isPlaceholderText(field.textContent);
+    }
+
+    // Workday's search-and-pick box keeps its choice as a pill beside
+    // an empty search input. The input being empty is not the question
+    // being unanswered, and picking again could take the choice away.
+    if (aceIsAutocomplete(field)) {
+      var picker = field.closest('[data-automation-id="multiSelectContainer"]');
+
+      if (picker && picker.querySelector('[data-automation-id="selectedItem"]')) {
+        return false;
+      }
+    }
+
     if (field.tagName !== "SELECT") {
       // A phone widget writes its country's dial code into the number
       // box the moment a country is chosen. "+1" on its own is that
@@ -141,16 +158,20 @@
     if (!option) return true;
     if (!option.value) return true;
 
-    // "No answer" is JazzHR's default for every dropdown, and it is a
-    // placeholder however it reads: treating it as an answer made ACE
-    // skip the relocation and felony questions on a real form and
-    // report them as already filled.
-    //
-    // Deliberately not including "none", which a person can mean.
-    // These are all wordings a form ships selected, never ones a
-    // person chooses.
+    return isPlaceholderText(option.textContent);
+  }
+
+  // "No answer" is JazzHR's default for every dropdown, and it is a
+  // placeholder however it reads: treating it as an answer made ACE
+  // skip the relocation and felony questions on a real form and report
+  // them as already filled.
+  //
+  // Deliberately not including "none", which a person can mean. These
+  // are all wordings a form ships selected, never ones a person
+  // chooses.
+  function isPlaceholderText(text) {
     return /^(select|choose|please select|please choose|select one|no answer|n\/a|-+|)\s*\.*$/.test(
-      aceNormalise(option.textContent)
+      aceNormalise(text)
     );
   }
 
@@ -185,7 +206,17 @@
       }
     );
 
-    return normal.concat(choiceButtons);
+    // Workday's dropdowns, which are buttons too: see
+    // aceIsListboxButton in fields.js.
+    var listboxButtons = Array.prototype.filter.call(
+      document.querySelectorAll('button[aria-haspopup="listbox"]'),
+      function (field) {
+        if (field.disabled || !field.offsetParent) return false;
+        return !aceShouldSkip(field);
+      }
+    );
+
+    return normal.concat(choiceButtons, listboxButtons);
   }
 
   function chooseOption(select, wanted, alts) {
@@ -539,6 +570,28 @@
       " " + (ACE_ROLE_LABELS[role] || role);
   }
 
+  var NAME_ANSWERS = ["First name", "Last name", "Full name"];
+
+  /* A name box holding the résumé's capitals rather than anything the
+     user typed: see aceIsCopiedOwnName. */
+  function copiedOwnName(field, name) {
+    if (NAME_ANSWERS.indexOf(name) < 0) return false;
+    if (field.tagName !== "INPUT") return false;
+
+    var own = [];
+
+    NAME_ANSWERS.forEach(function (label) {
+      String(answers[label] || "")
+        .toLowerCase()
+        .split(/[^a-z]+/)
+        .forEach(function (word) {
+          if (word && own.indexOf(word) < 0) own.push(word);
+        });
+    });
+
+    return aceIsCopiedOwnName(field.value, own);
+  }
+
   function plan() {
     var filled = [];
     var unknown = [];
@@ -590,7 +643,7 @@
         ? groupMembers(field)
         : [field];
 
-      if (!group.every(aceIsEmpty)) {
+      if (!group.every(aceIsEmpty) && !copiedOwnName(field, name)) {
         if (group[0] === field) already += 1;
         return;
       }
@@ -856,7 +909,158 @@
     }, Promise.resolve([]));
   }
 
+  /* A press the way a person makes one: the whole pointer sequence,
+     not a bare click event. A widget that acts on mousedown never sees
+     a .click(), and one that acts on click still gets it here. */
+  function press(element) {
+    [
+      "pointerdown",
+      "mousedown",
+      "pointerup",
+      "mouseup",
+      "click"
+    ].forEach(function (type) {
+      var Kind =
+        type.indexOf("pointer") === 0 && typeof PointerEvent === "function"
+          ? PointerEvent
+          : MouseEvent;
+
+      element.dispatchEvent(
+        new Kind(type, {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          button: 0,
+          buttons: /down$/.test(type) ? 1 : 0,
+          detail: 1
+        })
+      );
+    });
+  }
+
+  function shownListboxes() {
+    return Array.prototype.filter.call(
+      document.querySelectorAll("[role=listbox]"),
+      function (box) {
+        return box.getClientRects().length > 0;
+      }
+    );
+  }
+
+  /* The menu a Workday dropdown button just opened.
+
+     Workday mounts it elsewhere on the page, not beside the button, and
+     often points to it from nothing, so the climb comboboxOptions()
+     makes cannot reach it. What identifies it is time: it was not
+     showing before the button was pressed, and now it is. A list that
+     was already showing is never a candidate, which is what keeps a
+     permanently mounted one -- DoorDash's 244 countries -- from being
+     read as this button's options. Two new menus at once is ambiguous,
+     and ambiguity leaves the question blank. */
+  function listboxOpenedBy(field, before) {
+    var id =
+      field.getAttribute("aria-controls") ||
+      field.getAttribute("aria-owns");
+
+    var declared = id ? document.getElementById(id) : null;
+
+    if (declared && declared.querySelector("[role=option]")) return declared;
+
+    var fresh = shownListboxes().filter(function (box) {
+      return before.indexOf(box) < 0 && !!box.querySelector("[role=option]");
+    });
+
+    // A menu inside another new one is the same menu found twice.
+    fresh = fresh.filter(function (box) {
+      return !fresh.some(function (other) {
+        return other !== box && box.contains(other);
+      });
+    });
+
+    return fresh.length === 1 ? fresh[0] : null;
+  }
+
+  function waitFor(test, timeoutMs) {
+    return new Promise(function (resolve) {
+      var start = Date.now();
+
+      (function poll() {
+        var found = test();
+
+        if (found || Date.now() - start > timeoutMs) {
+          resolve(found);
+          return;
+        }
+
+        setTimeout(poll, 60);
+      })();
+    });
+  }
+
+  function closeListbox(field) {
+    [document.activeElement, field].forEach(function (target) {
+      if (!target) return;
+
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          keyCode: 27,
+          bubbles: true
+        })
+      );
+    });
+  }
+
+  /* Open the dropdown, pick the option, and confirm the button now
+     shows it. A press that did not take leaves the question reported
+     as unanswered rather than claimed. */
+  function fillOneListbox(field, value, alts) {
+    var before = shownListboxes();
+
+    press(field);
+
+    return waitFor(function () {
+      return listboxOpenedBy(field, before);
+    }, 1500).then(function (box) {
+      if (!box) {
+        closeListbox(field);
+        return { matched: false };
+      }
+
+      var options = Array.prototype.slice.call(
+        box.querySelectorAll("[role=option]")
+      );
+
+      var texts = options.map(function (option) {
+        return option.textContent;
+      });
+
+      var index = aceChooseOption(texts, value, alts);
+
+      if (index < 0) {
+        closeListbox(field);
+        return { matched: false };
+      }
+
+      press(options[index]);
+
+      return waitFor(function () {
+        return !aceIsEmpty(field);
+      }, 1200).then(function (took) {
+        if (!took) {
+          closeListbox(field);
+          return { matched: false };
+        }
+
+        return { matched: true, text: texts[index] };
+      });
+    });
+  }
+
   function fillOneCombobox(field, value, alts) {
+    if (aceIsListboxButton(field)) return fillOneListbox(field, value, alts);
+
     var typed = false;
 
     openCombobox(field);
@@ -1092,6 +1296,10 @@
       } else if (record.ticked) {
         record.field.checked = false;
         record.field.dispatchEvent(new Event("change", { bubbles: true }));
+      } else if (aceIsListboxButton(record.field)) {
+        // A Workday dropdown has no value to write back and, once
+        // answered, usually no "Select One" left to choose. Left as
+        // chosen rather than throwing halfway through the undo.
       } else {
         setNatively(record.field, record.previous);
       }
@@ -1540,7 +1748,9 @@
 
       var name = aceAnswerNameFor(question, kindOf(field));
 
-      var shape = aceIsAutocomplete(field)
+      var shape = aceIsListboxButton(field)
+        ? "dropdown"
+        : aceIsAutocomplete(field)
         ? "combobox"
         : field.tagName === "SELECT"
           ? "select"
