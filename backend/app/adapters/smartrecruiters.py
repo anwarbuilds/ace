@@ -139,10 +139,42 @@ def _location_from_posting(
 
     parts: list[str] = []
 
+    # SmartRecruiters' own rendering, with the country spelled out:
+    # "Bengaluru, KA, India". The country used to be written as its ISO
+    # code, and two letters read as a US state -- "Bengaluru, KA, IN"
+    # was Indiana, "Bundesweit, DE" Delaware, "Rabat, Rabat-Salé-
+    # Kénitra, MA" Massachusetts -- so on 2026-10-07 69 roles in India,
+    # Germany, Morocco, the Netherlands, Spain and Australia passed the
+    # gate as American. An empty region comes back as ", ," and is
+    # dropped.
+    full_location = location.get(
+        "fullLocation"
+    )
+
+    if isinstance(
+        full_location,
+        str,
+    ):
+        for part in full_location.split(
+            ","
+        ):
+            normalized = (
+                part.strip()
+            )
+
+            if normalized and normalized not in parts:
+                parts.append(
+                    normalized
+                )
+
     for key in (
-        "city",
-        "region",
-        "country",
+        ()
+        if parts
+        else (
+            "city",
+            "region",
+            "country",
+        )
     ):
         value = location.get(
             key

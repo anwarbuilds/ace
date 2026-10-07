@@ -447,3 +447,67 @@ def test_rejects_empty_company_identifier() -> None:
             "   ",
             "Example Company",
         )
+
+
+def test_the_country_is_written_out_not_as_a_code() -> None:
+    """"Bengaluru, KA, IN" read as Indiana: 47 roles in India passed the
+    gate as American, with Germany as Delaware and Morocco as
+    Massachusetts beside them."""
+
+    from backend.app.adapters.smartrecruiters import (
+        _location_from_posting,
+    )
+    from backend.app.intelligence.eligibility import (
+        _is_us_location,
+    )
+
+    location = _location_from_posting(
+        {
+            "location": {
+                "city": "Bengaluru",
+                "region": "KA",
+                "country": "in",
+                "remote": False,
+                "fullLocation": "Bengaluru, KA, India",
+            },
+        }
+    )
+
+    assert location == "Bengaluru, KA, India"
+
+    assert not _is_us_location(
+        location
+    )
+
+
+def test_an_empty_region_in_the_full_location_is_dropped() -> None:
+    from backend.app.adapters.smartrecruiters import (
+        _location_from_posting,
+    )
+
+    assert _location_from_posting(
+        {
+            "location": {
+                "city": "Mostar",
+                "country": "ba",
+                "fullLocation": "Mostar, , Bosnia and Herzegowina",
+            },
+        }
+    ) == "Mostar, Bosnia and Herzegowina"
+
+
+def test_without_a_full_location_the_parts_are_used() -> None:
+    from backend.app.adapters.smartrecruiters import (
+        _location_from_posting,
+    )
+
+    assert _location_from_posting(
+        {
+            "location": {
+                "city": "Ann Arbor",
+                "region": "MI",
+                "country": "us",
+                "remote": True,
+            },
+        }
+    ) == "Remote | Ann Arbor, MI, US"

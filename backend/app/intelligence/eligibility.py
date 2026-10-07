@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-07-v41"
+    "2026-10-07-v42"
 )
 
 
@@ -550,6 +550,34 @@ NON_US_LOCATION_PATTERNS = (
     r"\bsouth\s+africa\b",
     r"\buae\b",
     r"\bdubai\b",
+    # SmartRecruiters' spellings, now that its adapter writes the country
+    # out rather than a code. Every other name it writes on a board ACE
+    # reads was already above, checked one country at a time.
+    r"\bbosnia\b",
+    r"\buruguay\b",
+    # Cities, for boards that end an Indian location with "IN", which
+    # reads as Indiana: a Workday tenant's "Pune, IN". Only names no US
+    # place carries -- Delhi, New York and Madras, Oregon are why it is
+    # "new delhi" and Chennai alone.
+    r"\b(?:bengaluru|bangalore|hyderabad|pune|chennai|mumbai|gurugram|"
+    r"gurgaon|noida|new\s+delhi|kolkata|ahmedabad|kochi|coimbatore|"
+    r"thiruvananthapuram|trivandrum|chandigarh|mysuru|mysore|indore|"
+    r"vadodara|visakhapatnam|jaipur|nagpur|bhubaneswar|hosur)\b",
+)
+
+
+# A country written as its three-letter ISO code, the way some Workday
+# tenants end a location: Deluxe's "Chennai, TN, IND", where TN read as
+# Tennessee. A list of codes, never "any three letters": NSW, NRW and RMZ
+# end locations too, and they are regions and office parks. Upper case,
+# and never followed by a full stop, so "Evansville, Ind." -- Indiana's
+# old abbreviation -- is not India.
+NON_US_COUNTRY_CODE_PATTERN = re.compile(
+    r",\s*(?:IND|CAN|GBR|DEU|FRA|ESP|PRT|NLD|BEL|CHE|AUT|ITA|IRL|POL|"
+    r"ROU|HUN|CZE|SVK|SVN|HRV|SRB|BGR|GRC|UKR|LTU|LVA|EST|SWE|NOR|DNK|"
+    r"FIN|ISR|TUR|ARE|SAU|EGY|MAR|ZAF|NGA|KEN|CHN|JPN|KOR|TWN|HKG|SGP|"
+    r"MYS|IDN|THA|VNM|PHL|PAK|BGD|LKA|AUS|NZL|MEX|BRA|ARG|CHL|COL|URY|"
+    r"CRI)(?![\w.])"
 )
 
 
@@ -1346,6 +1374,11 @@ def _is_explicitly_non_us_location(
 
     if not location.strip():
         return False
+
+    if NON_US_COUNTRY_CODE_PATTERN.search(
+        location
+    ):
+        return True
 
     return _matches_any_regex(
         location,

@@ -2358,3 +2358,42 @@ def test_a_team_named_product_engineering_is_not_the_title() -> None:
             )
         ).reason_codes
     )
+
+
+def test_an_indian_location_ending_in_in_is_not_indiana() -> None:
+    """47 roles in India passed as American: "Bengaluru, KA, IN"."""
+
+    for location in (
+        "Bengaluru, KA, IN",
+        "hosur road bangalore, IN",
+        "Chennai, TN, IN",
+        "Pune, IN",
+        "Chennai, TN, IND",
+        "Mostar, Bosnia and Herzegowina",
+        "Montevideo, Uruguay",
+    ):
+        assert (
+            EligibilityReasonCode.OUTSIDE_US
+            in evaluate_job(
+                make_job(
+                    location=location,
+                )
+            ).reason_codes
+        ), location
+
+
+def test_indiana_is_still_indiana() -> None:
+    for location in (
+        "Indianapolis, IN",
+        "Plainfield, IN",
+        "Delhi, NY",
+        "Austin, TX, USA",
+    ):
+        assert (
+            EligibilityReasonCode.OUTSIDE_US
+            not in evaluate_job(
+                make_job(
+                    location=location,
+                )
+            ).reason_codes
+        ), location
