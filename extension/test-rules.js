@@ -117,6 +117,12 @@ var DELL_CASES = [
    + "selecting \u201cno\u201d will not disadvantage your application.",
    "choice", "Consent to AI in hiring"],
   ["phone device type select one required", "choice", "Phone type"],
+  // Manulife's Workday application.
+  ["country / territory phone code", "choice", "Country"],
+  ["spoken", "choice", "Language fluency"],
+  ["written", "choice", "Language fluency"],
+  ["do you give your written consent to a background check?", "choice",
+   null],
   // Workday's phone block: the extension box took the whole number.
   ["phone extension", "text", "Phone extension"],
   ["phone number", "text", "Phone"],

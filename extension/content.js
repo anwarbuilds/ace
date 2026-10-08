@@ -41,6 +41,7 @@
   // page where ACE's own panel sat over the real Submit button, there
   // was no way to get it out of the way to click through.
   var dismissed = false;
+  var lastFields = [];
   var lastHref = "";
   var lastSignature = "";
   var filling = false;
@@ -2110,6 +2111,18 @@
 
      With nothing filled there are no nodes to ask, so the questions
      themselves are compared instead. */
+  /* Whether the form ACE last saw has been taken off the page: at least
+     half of its fields no longer connected. */
+  function stepReplaced() {
+    if (!lastFields.length) return false;
+
+    var gone = lastFields.filter(function (field) {
+      return !field.isConnected;
+    }).length;
+
+    return gone * 2 >= lastFields.length;
+  }
+
   function movedOn() {
     if (lastFill.length) {
       return lastFill.every(function (record) {
@@ -2132,6 +2145,20 @@
       lastResult = null;
       lastFill = [];
     }
+
+    // A new step of an application is a new page to the user, who asked
+    // for the panel on every one of them: closing it on "My Information"
+    // kept it shut through every Workday step after, and each had to be
+    // started from the toolbar. A new step is the form being replaced --
+    // most of the fields seen last time gone -- not merely changed: a
+    // checkout that adds a field as it recalculates keeps its dismissal,
+    // which is what the IKEA report was about, and so does any page that
+    // is not an application.
+    if (dismissed && stepReplaced() && looksLikeApplication()) {
+      dismissed = false;
+    }
+
+    lastFields = fillable();
 
     // A dismissal, though, survives anything short of leaving the page.
     //

@@ -43,8 +43,9 @@ var ACE_TEXT = "text";
    after them, and the two must not drift apart. */
 var ACE_PHONE_COUNTRY = [
   "country code", "phone country", "dial code", "country calling code",
-  // Workday's wording, on Medtronic's application among others.
-  "country phone code"
+  // Workday's wording, on Medtronic's application among others, and
+  // Manulife's "Country / Territory Phone Code": any "... phone code".
+  "country phone code", "phone code"
 ];
 
 /* Whether this question is a phone widget's own country control. */
@@ -355,10 +356,16 @@ var ACE_RULES = [
   // is written down rather than left to arithmetic.
   // ------------------------------------------------------------------
 
-  { answer: "Language fluency", type: ACE_CHOICE,
+  // Manulife asks the same level as "Spoken" and "Written". Dropdowns
+  // only, and never where the word belongs to a consent or a statement:
+  // "written consent" is not a language level.
+  { answer: "Language fluency", type: ACE_CHOICE, needs: ACE_CHOICE,
     any: ["comprehension", "reading", "speaking", "writing", "overall",
-          "proficiency", "fluency level"],
-    not: ["gpa", "grade point", "result", "overall result"] },
+          "proficiency", "fluency level", "spoken", "written"],
+    not: ["gpa", "grade point", "result", "overall result", "consent",
+          "authorization", "authorisation", "statement", "permission",
+          "notice", "agreement", "acknowledge", "acknowledgement",
+          "signature", "test", "exam", "communication"] },
   { answer: "Fluent in this language", type: ACE_YESNO,
     any: ["fluent in this language", "i am fluent"] },
   { answer: "Language", type: ACE_TEXT,

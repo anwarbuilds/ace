@@ -50,16 +50,7 @@ function check() {
       { type: "status" },
       function (reply, missing) {
         if (missing) {
-          // Not "ACE does not work here". A content script only
-          // injects while a page is loading, so a tab that was already
-          // open when the extension was reloaded has none, whatever
-          // the manifest says. Telling the user to reload the page was
-          // a poor answer to that, and the Fill button below now
-          // injects on demand instead.
-          pageLine.className = "s warn";
-          pageLine.textContent =
-            "ACE has not loaded into this tab yet. " +
-            "Press Fill this page.";
+          explainMissing(tab);
           return;
         }
 
@@ -74,6 +65,42 @@ function check() {
 }
 
 fillButton.addEventListener("click", fillActivePage);
+
+/* Why ACE is not on a page that was loaded after it was installed.
+
+   Chrome lets a person set an extension to run only when its icon is
+   clicked ("Site access: On click"). Then the panel never appears by
+   itself, on any form, and every application has to be started from the
+   toolbar -- which is what the user was doing. The page cannot tell; the
+   granted permissions can. */
+function explainMissing(tab) {
+  var origin = null;
+
+  try {
+    origin = new URL(tab.url).origin;
+  } catch (error) {
+    origin = null;
+  }
+
+  pageLine.className = "s warn";
+
+  if (!origin || !/^https?:/.test(origin)) {
+    pageLine.textContent = "ACE does not run on this page.";
+    return;
+  }
+
+  chrome.permissions.contains(
+    { origins: [origin + "/*"] },
+    function (granted) {
+      pageLine.textContent = granted
+        ? "ACE has not loaded into this tab yet. Reload the page, " +
+          "or press Fill this page."
+        : "Chrome runs ACE here only when you click it. For the panel " +
+          "to appear by itself: chrome://extensions, ACE Autofill, " +
+          "Details, Site access: On all sites.";
+    }
+  );
+}
 
 document.getElementById("save").addEventListener("click", function () {
   chrome.storage.local.set(

@@ -2271,3 +2271,69 @@ def test_a_different_number_in_the_box_is_left_alone(
     assert page.eval(
         "document.getElementById('num').value"
     ) == "+1 (555) 010-9999"
+
+
+def test_manulife_s_territory_phone_code_counts_as_the_country_code(
+    page,
+) -> None:
+    """Manulife labels it "Country / Territory Phone Code", which ACE did
+    not recognise: the profile's "+1 (...)" stayed and was refused."""
+
+    _boot_form(
+        page,
+        _prefilled_workday_phone("+1 (555) 010-0000").replace(
+            "Country Phone Code",
+            "Country / Territory Phone Code",
+        ),
+        WORKDAY_PHONE_BANK,
+    )
+
+    _fill_and_wait(
+        page
+    )
+
+    assert page.eval(
+        "document.getElementById('num').value"
+    ) == "5550100000"
+
+
+def test_a_closed_panel_comes_back_on_the_next_step(
+    page,
+) -> None:
+    """Closing the panel on one Workday step kept it shut on every step
+    after, and each had to be started from the toolbar."""
+
+    _boot_form(
+        page,
+        PAGE_ONE,
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.ace-root')",
+        timeout=12,
+    )
+
+    page.eval(
+        "document.querySelector('.ace-root').shadowRoot"
+        ".querySelector('[data-ace=close]').click();1"
+    )
+
+    page.wait_for(
+        "!document.querySelector('.ace-root')",
+        timeout=5,
+    )
+
+    # Workday swaps the step without changing the address.
+    page.eval(
+        "document.querySelector('form').outerHTML="
+        + json.dumps(
+            PAGE_TWO.replace("<form>", "<form>"
+                             '<label for="w">LinkedIn</label><input id="w">')
+        )
+        + ";1"
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.ace-root')",
+        timeout=12,
+    )
