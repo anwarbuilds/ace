@@ -12,13 +12,20 @@ button{margin-top:9px;background:#c9a227;color:#231633;border:0;padding:7px 12px
   font-weight:600;font-size:12px;cursor:pointer;width:100%;font-family:inherit}
 .s{margin-top:8px;font-size:11.5px;color:#63558a}
 .s.warn{color:#8a5a00}
+label.check{display:flex;gap:6px;align-items:center;font-weight:500;font-size:11.5px;margin:0 0 10px}
+label.check input{width:auto;margin:0}
+button.ghost{background:transparent;border:1px solid #c9a227;color:#5a4a00}
 </style>
 <h1>ACE Autofill</h1>
-<p>Fills application forms from your answer bank, on any site. It never submits &mdash; you review, then you send.</p>
+<p>Fills application forms from your answer bank. Runs by itself on job portals &mdash; Workday, Greenhouse, Lever, Ashby, Oracle, SmartRecruiters, iCIMS and more &mdash; and on no other site unless you turn it on there. It never submits &mdash; you review, then you send.</p>
+<label class="check"><input id="autofill" type="checkbox"> Fill automatically when an application opens</label>
 <label for="base">ACE address</label>
 <input id="base" type="url" spellcheck="false" placeholder="http://localhost:8000">
 <button id="save">Save and test</button>
 <div class="s" id="answers"></div>
 <div class="s" id="page"></div>
-<button id="fill" class="btn">Fill this page</button>
+<button id="fill" class="btn">Fill this page once</button>
+<div class="s" id="site"></div>
+<button id="always" class="btn ghost" style="display:none">Always run on this site</button>
+<button id="stop" class="btn ghost" style="display:none">Stop running on this site</button>
 <script src="popup.js"></script>

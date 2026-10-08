@@ -41,6 +41,14 @@
   // page where ACE's own panel sat over the real Submit button, there
   // was no way to get it out of the way to click through.
   var dismissed = false;
+
+  // Fill without waiting for a click, once per form step. The user had
+  // to open the extension on every application; a page ACE recognises
+  // as one is now filled as it appears, and still never submitted. A
+  // switch in the toolbar popup turns it off. Where Chrome storage is
+  // unavailable it stays off, and Fill stays a click.
+  var autoFill = false;
+  var autoFilled = "";
   var lastHref = "";
   var lastSignature = "";
   var filling = false;
@@ -1898,6 +1906,13 @@
       '<button class="ace-link" data-ace="copy">Copy what ACE sees</button>' +
       '<span class="ace-note ace-copied"></span>'
     ));
+
+    // Once per form step: after an Undo, or on a step already filled,
+    // the preview waits for a click like before.
+    if (autoFill && autoFilled !== lastSignature) {
+      autoFilled = lastSignature;
+      runFill();
+    }
   }
 
   /* What ACE sees on this page, as text the user can paste.
@@ -2408,6 +2423,15 @@
       });
     }
   );
+
+  try {
+    chrome.storage.local.get({ autoFill: true }, function (config) {
+      autoFill = !!(config && config.autoFill);
+      if (autoFill && loaded) refresh();
+    });
+  } catch (error) {
+    /* no storage here: Fill stays a click */
+  }
 
   (function boot() {
     if (!document.body) {

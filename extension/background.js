@@ -74,3 +74,44 @@ chrome.runtime.onMessage.addListener(
     }
   }
 );
+
+
+/* A careers site the user turned ACE on for, from the popup.
+
+   The manifest runs ACE only on job portals. A company that self-hosts
+   its careers site is added one site at a time: the popup asks Chrome
+   for that site, and once Chrome reports the grant, ACE is registered
+   there and persists across restarts. Done here rather than in the
+   popup, because the popup can close while Chrome's prompt is showing.
+   Removing the grant removes ACE from the site. */
+function siteScriptId(pattern) {
+  return "site-" + pattern.replace(/[^a-z0-9]/gi, "_");
+}
+
+chrome.permissions.onAdded.addListener(function (added) {
+  (added.origins || []).forEach(function (pattern) {
+    // Never every site at once: that is what the user asked ACE to stop.
+    if (/^https?:\/\/\*\//.test(pattern)) return;
+
+    chrome.scripting.registerContentScripts([{
+      id: siteScriptId(pattern),
+      matches: [pattern],
+      js: ["fields.js", "content.js"],
+      runAt: "document_idle",
+      allFrames: true,
+      persistAcrossSessions: true
+    }]).catch(function () {
+      /* already registered */
+    });
+  });
+});
+
+chrome.permissions.onRemoved.addListener(function (removed) {
+  (removed.origins || []).forEach(function (pattern) {
+    chrome.scripting.unregisterContentScripts({
+      ids: [siteScriptId(pattern)]
+    }).catch(function () {
+      /* was not registered */
+    });
+  });
+});

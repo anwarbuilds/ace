@@ -4,12 +4,17 @@
 
    The same is true of a page ACE stays quiet on. "Nothing to autofill"
    looks identical to a broken extension, so the popup says which of
-   the two it is -- and it asks the page rather than guessing from the
-   host. There is no host list any more: ACE runs everywhere and
-   decides per page, because the list could not be made to hold. Most
-   companies self-host their own board and Oracle gives every tenant a
-   subdomain, so a substantial share of one real user's applications went through 19
-   hosts the list did not name. */
+   the two it is, by asking the page.
+
+   Where ACE runs. It ran on every site once, deciding per page, because
+   a list of job portals missed the companies that self-host their own
+   careers site. The user asked for the opposite: start by itself on job
+   portals, and stay out of every other site they open. So the manifest
+   names the application systems -- Workday, Greenhouse, Oracle and the
+   rest -- and a careers site outside that list is one button away:
+   "Always run on this site" asks Chrome for that one site, and the
+   service worker registers ACE there. Anything else gets "Fill this
+   page once", which runs only when clicked. */
 
 var base = document.getElementById("base");
 var answerLine = document.getElementById("answers");
@@ -74,6 +79,111 @@ function check() {
 }
 
 fillButton.addEventListener("click", fillActivePage);
+
+var autoBox = document.getElementById("autofill");
+var siteLine = document.getElementById("site");
+var alwaysButton = document.getElementById("always");
+var stopButton = document.getElementById("stop");
+
+chrome.storage.local.get({ autoFill: true }, function (config) {
+  autoBox.checked = !!config.autoFill;
+});
+
+autoBox.addEventListener("change", function () {
+  chrome.storage.local.set({ autoFill: autoBox.checked });
+});
+
+/* Whether the manifest already runs ACE on this host. Read from the
+   manifest itself, so the list lives in one place. */
+function builtIn(hostname) {
+  return chrome.runtime.getManifest().content_scripts[0].matches.some(
+    function (pattern) {
+      var host = pattern.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+
+      if (host.indexOf("*.") === 0) {
+        var root = host.slice(2);
+        return hostname === root || hostname.slice(-root.length - 1) === "." + root;
+      }
+
+      return hostname === host;
+    }
+  );
+}
+
+function siteOf(tab) {
+  try {
+    var url = new URL(tab.url);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return { origin: url.origin, hostname: url.hostname };
+  } catch (error) {
+    return null;
+  }
+}
+
+function showSite() {
+  alwaysButton.style.display = "none";
+  stopButton.style.display = "none";
+
+  withActiveTab(function (tab) {
+    var site = siteOf(tab);
+
+    if (!site) {
+      siteLine.textContent = "";
+      return;
+    }
+
+    if (builtIn(site.hostname)) {
+      siteLine.textContent = "Runs by itself on this job portal.";
+      return;
+    }
+
+    chrome.permissions.contains(
+      { origins: [site.origin + "/*"] },
+      function (granted) {
+        if (granted) {
+          siteLine.textContent = "You turned ACE on for this site.";
+          stopButton.style.display = "";
+          return;
+        }
+
+        siteLine.textContent =
+          "Off on this site. Turn it on for a company's own careers site.";
+        alwaysButton.style.display = "";
+      }
+    );
+  });
+}
+
+alwaysButton.addEventListener("click", function () {
+  withActiveTab(function (tab) {
+    var site = siteOf(tab);
+    if (!site) return;
+
+    // The service worker registers ACE once Chrome reports the grant;
+    // the popup can close while Chrome's own prompt is showing.
+    chrome.permissions.request(
+      { origins: [site.origin + "/*"] },
+      function (granted) {
+        if (granted) fillActivePage();
+        showSite();
+      }
+    );
+  });
+});
+
+stopButton.addEventListener("click", function () {
+  withActiveTab(function (tab) {
+    var site = siteOf(tab);
+    if (!site) return;
+
+    chrome.permissions.remove(
+      { origins: [site.origin + "/*"] },
+      showSite
+    );
+  });
+});
+
+showSite();
 
 document.getElementById("save").addEventListener("click", function () {
   chrome.storage.local.set(

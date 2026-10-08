@@ -452,6 +452,7 @@ def _boot_form(
     bank: list | None = None,
     work: list | None = None,
     education: list | None = None,
+    auto_fill: bool = False,
 ):
     """Put a form on the page, then load the real content script."""
 
@@ -490,11 +491,18 @@ def _boot_form(
           onMessage:{addListener:function(){}},
           getURL:function(p){return p;},
           getManifest:function(){return{version:'test'};},
+          storage:undefined,
           sendMessage:function(msg,cb){
             if(msg.type==='answers') cb({ok:true,items:window.__items});
             else cb({ok:true,work:window.__work,education:window.__education});
           }}};1"""
     )
+
+    if auto_fill:
+        page.eval(
+            "window.chrome.storage={local:{get:function(d,cb){"
+            "cb({autoFill:true});}}};1"
+        )
 
     source = "\n;\n".join(
         (
@@ -2271,3 +2279,29 @@ def test_a_different_number_in_the_box_is_left_alone(
     assert page.eval(
         "document.getElementById('num').value"
     ) == "+1 (555) 010-9999"
+
+
+def test_an_application_fills_itself_when_auto_fill_is_on(
+    page,
+) -> None:
+    """The user had to open the extension on every application. With
+    auto-fill on, a page ACE recognises is filled as it appears -- no
+    click, no Alt+A -- and still never submitted."""
+
+    _boot_form(
+        page,
+        PAGE_ONE,
+        auto_fill=True,
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.ace-root') && /^Filled/.test("
+        "document.querySelector('.ace-root')"
+        ".shadowRoot.querySelector('.ace-title')"
+        ".textContent)",
+        timeout=15,
+    )
+
+    assert page.eval(
+        "document.getElementById('c').value"
+    ) == "Alex"

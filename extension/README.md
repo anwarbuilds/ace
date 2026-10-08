@@ -4,11 +4,19 @@ Fills the fields every application form asks for, from the answer bank
 in your local ACE instance. It fills and stops: nothing here submits a
 form, and nothing overwrites a box that already has something in it.
 
-Runs on every site and decides per page, rather than from a list of
-supported hosts. The list could not be made to hold: most companies
-self-host their board and Oracle gives every tenant its own subdomain,
-so a substantial share of one real user's applications went through 19
-hosts a list did not name.
+Runs by itself only on job portals: Workday, Greenhouse, Lever, Ashby,
+Oracle, SmartRecruiters, iCIMS, Taleo, SuccessFactors, Jobvite, Workable
+and the other application systems named in `manifest.json`. It stays off
+every other site you open.
+
+A company that runs its own careers site is one click away: open the
+toolbar icon on that site and press **Always run on this site**. Chrome
+asks once, for that site only. **Stop running on this site** takes it
+back. **Fill this page once** works anywhere, only when clicked.
+
+When a page is recognised as an application, ACE fills it as it appears,
+once per step. **Fill automatically** in the toolbar popup turns that
+off, and then the panel waits for **Fill** or Alt+A.
 
 ## Install
 
