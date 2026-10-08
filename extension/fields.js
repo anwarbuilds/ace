@@ -503,7 +503,19 @@ function aceIsAutocomplete(field) {
       field.tagName === "INPUT" &&
       field.getAttribute("role") === "combobox"
     ) ||
-    aceIsListboxButton(field)
+    aceIsListboxButton(field) ||
+    aceIsWorkdayPrompt(field)
+  );
+}
+
+/* Workday's search-and-pick box: School, Field of Study, Country Phone
+   Code. A plain text input by its markup, so it was typed into as one,
+   and Workday discards text that was never searched and picked. */
+function aceIsWorkdayPrompt(field) {
+  return (
+    field.tagName === "INPUT" &&
+    field.getAttribute("data-automation-id") === "searchBox" &&
+    !!field.closest('[data-automation-id="multiSelectContainer"]')
   );
 }
 
@@ -1255,6 +1267,15 @@ var ACE_HISTORY_ROLES = [
     any: ["employer location", "company location", "job location",
           "work location"] }
 ];
+
+/* Whether a history block is a job or a school, from its anchor's
+   question: "School or University" is education, "Company" is work. */
+function aceHistoryKind(question) {
+  return /(^|[^a-z])(school|university|college|institution)s?([^a-z]|$)/
+    .test(String(question || "").toLowerCase())
+    ? "education"
+    : "work";
+}
 
 var ACE_MONTHS = [
   "January", "February", "March", "April", "May", "June",

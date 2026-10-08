@@ -450,6 +450,8 @@ def _boot_form(
     page,
     markup: str,
     bank: list | None = None,
+    work: list | None = None,
+    education: list | None = None,
 ):
     """Put a form on the page, then load the real content script."""
 
@@ -472,13 +474,25 @@ def _boot_form(
     )
 
     page.eval(
+        "window.__work="
+        + json.dumps(
+            work or []
+        )
+        + ";window.__education="
+        + json.dumps(
+            education or []
+        )
+        + ";1"
+    )
+
+    page.eval(
         """window.chrome={runtime:{
           onMessage:{addListener:function(){}},
           getURL:function(p){return p;},
           getManifest:function(){return{version:'test'};},
           sendMessage:function(msg,cb){
             if(msg.type==='answers') cb({ok:true,items:window.__items});
-            else cb({ok:true,work:[],education:[]});
+            else cb({ok:true,work:window.__work,education:window.__education});
           }}};1"""
     )
 
@@ -2041,3 +2055,163 @@ def test_workday_s_phone_number_drops_the_dial_code_and_skips_the_extension(
     assert page.eval(
         "document.getElementById('ext').value"
     ) == ""
+
+
+def _workday_prompt(
+    box_id: str,
+    label: str,
+) -> str:
+    return (
+        f'<label for="{box_id}">{label}</label>'
+        f'<div data-automation-id="multiSelectContainer" id="{box_id}-picker">'
+        '<div data-automation-id="multiselectInputContainer">'
+        f'<input id="{box_id}" data-automation-id="searchBox">'
+        '</div></div>'
+    )
+
+
+# Workday's search-and-pick, as its own code behaves: typing only edits
+# the box and the search runs on Enter; each result is a role="option"
+# row whose click handler is on an inner promptLeafNode, so a click on
+# the row itself does nothing; and the choice lands as a pill.
+WORKDAY_PROMPT_BEHAVIOUR = """
+(function(){
+  var RESULTS={school:['Lakeview University','Lakeview College'],
+               field:['Computer and Information Science',
+                      'Computer Science','Computer Engineering']};
+  window.__picks={};
+  document.querySelectorAll('[data-automation-id=searchBox]')
+    .forEach(function(input){
+      input.addEventListener('keydown',function(event){
+        if(event.key!=='Enter') return;
+        var old=document.getElementById('popup');
+        if(old) old.remove();
+        var popup=document.createElement('div');
+        popup.id='popup';
+        (RESULTS[input.id]||[]).filter(function(text){
+          return text.toLowerCase().indexOf(
+            input.value.toLowerCase().split(' ')[0])>=0;
+        }).forEach(function(text){
+          var row=document.createElement('div');
+          row.setAttribute('role','option');
+          row.setAttribute('data-automation-id','menuItem');
+          var leaf=document.createElement('div');
+          leaf.setAttribute('data-automation-id','promptLeafNode');
+          var label=document.createElement('div');
+          label.setAttribute('data-automation-id','promptOption');
+          label.setAttribute('data-automation-label',text);
+          label.textContent=text;
+          leaf.appendChild(label);
+          row.appendChild(leaf);
+          leaf.addEventListener('click',function(){
+            var pill=document.createElement('div');
+            pill.setAttribute('data-automation-id','selectedItem');
+            pill.textContent=text;
+            document.getElementById(input.id+'-picker').appendChild(pill);
+            window.__picks[input.id]=text;
+            input.value='';
+            popup.remove();
+          });
+          popup.appendChild(row);
+        });
+        document.body.appendChild(popup);
+      });
+    });
+})();1
+"""
+
+WORKDAY_EDUCATION = (
+    '<form>'
+    '<div><h3>Education</h3>'
+    + _workday_prompt("school", "School or University")
+    + _workday_prompt("field", "Field of Study")
+    + '<label for="gpa">Overall Result (GPA)</label><input id="gpa">'
+    '</div>'
+    '<label for="li">LinkedIn</label><input id="li">'
+    '<label for="em">Email</label><input id="em">'
+    '</form>'
+)
+
+
+def test_workday_s_school_and_field_of_study_are_searched_and_picked(
+    page,
+) -> None:
+    """Reported: Field of Study had to be picked by hand. The box was
+    typed into as plain text, never searched; and with no education
+    history stored, the whole block was claimed by a history pass with
+    nothing to write, so GPA stayed empty too."""
+
+    _boot_form(
+        page,
+        WORKDAY_EDUCATION,
+        [
+            {"label": "University", "value": "Lakeview University",
+             "aliases": []},
+            {"label": "Field of study", "value": "Computer Science",
+             "aliases": []},
+            {"label": "GPA", "value": "3.8", "aliases": []},
+            {"label": "LinkedIn", "value": "https://linkedin.com/in/x",
+             "aliases": []},
+        ],
+    )
+
+    page.eval(
+        WORKDAY_PROMPT_BEHAVIOUR
+    )
+
+    _fill_and_wait(
+        page
+    )
+
+    assert page.eval(
+        "window.__picks.school"
+    ) == "Lakeview University"
+
+    assert page.eval(
+        "window.__picks.field"
+    ) == "Computer Science"
+
+    assert page.eval(
+        "document.getElementById('gpa').value"
+    ) == "3.8"
+
+
+def test_a_school_block_is_never_given_a_job(
+    page,
+) -> None:
+    """Work and education blocks came back as one list, matched to the
+    stored jobs by position: an education section placed above the
+    work section would have had the employer typed into School."""
+
+    _boot_form(
+        page,
+        '<form>'
+        '<div class="edu"><label for="s1">School</label><input id="s1">'
+        '<label for="d1">Degree</label><input id="d1"></div>'
+        '<div class="job"><label for="c1">Company</label><input id="c1">'
+        '<label for="t1">Job Title</label><input id="t1"></div>'
+        '<label for="li">LinkedIn</label><input id="li">'
+        '</form>',
+        [
+            {"label": "LinkedIn", "value": "https://linkedin.com/in/x",
+             "aliases": []},
+            {"label": "University", "value": "Lakeview University",
+             "aliases": []},
+        ],
+        work=[
+            {"employer": "Northwind", "job_title": "Engineer",
+             "is_current": True},
+        ],
+    )
+
+    _fill_and_wait(
+        page
+    )
+
+    assert page.eval(
+        "document.getElementById('c1').value"
+    ) == "Northwind"
+
+    assert page.eval(
+        "document.getElementById('s1').value"
+    ) == "Lakeview University"

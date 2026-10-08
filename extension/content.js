@@ -400,6 +400,7 @@
      on a page that has no such section, which is most of them. */
   function historyBlocks(kind) {
     var anchors = [];
+    var kinds = [];
 
     fillable().forEach(function (field) {
       var question = aceQuestionFor(field);
@@ -407,13 +408,24 @@
 
       if (aceHistoryRole(field, question) === "employer") {
         anchors.push(field);
+        kinds.push(aceHistoryKind(question));
       }
     });
 
     if (anchors.length < 1) return [];
 
-    var blocks = anchors.map(function (field) {
-      return { node: blockAround(field, anchors), fields: [] };
+    // Every anchor bounds every block, whatever its kind, so a lone job
+    // block cannot grow to swallow the education section below it. The
+    // kind is kept per block and filtered on at the end: work and
+    // education used to come back as one list, matched to entries by
+    // position across both, and a school block was always claimed --
+    // by the work pass, which had two entries.
+    var blocks = anchors.map(function (field, index) {
+      return {
+        node: blockAround(field, anchors),
+        kind: kinds[index],
+        fields: []
+      };
     }).filter(function (block) {
       return !!block.node;
     });
@@ -445,7 +457,9 @@
       }
     });
 
-    return blocks;
+    return blocks.filter(function (block) {
+      return block.kind === kind;
+    });
   }
 
   /* The smallest ancestor holding this employer box and no other. */
@@ -473,7 +487,17 @@
     var owned = [];
 
     ["work", "education"].forEach(function (kind) {
-      historyBlocks(kind).forEach(function (block) {
+      // With nothing stored for this kind, the first block is answered
+      // from the bank -- its University, Degree, Field of study and GPA
+      // are exactly that one entry. Claimed by a history pass with
+      // nothing to write, Workday's Education block sat empty beside a
+      // bank that held every answer. Later blocks stay claimed: the
+      // bank's one school must not be typed into a second.
+      var stored = (histories[kind] || []).length > 0;
+
+      historyBlocks(kind).forEach(function (block, index) {
+        if (!stored && index === 0) return;
+
         block.fields.forEach(function (entry) {
           owned.push(entry.field);
         });
@@ -481,6 +505,31 @@
     });
 
     return owned;
+  }
+
+  /* The stored history value for a field inside a history block, or
+     null when its block has no entry behind it. Undefined when the
+     field belongs to no block. */
+  function historyValueFor(field) {
+    var found;
+
+    ["work", "education"].forEach(function (kind) {
+      if (found !== undefined) return;
+
+      historyBlocks(kind).forEach(function (block, index) {
+        block.fields.forEach(function (slot) {
+          if (found !== undefined || slot.field !== field) return;
+
+          var entry = (histories[kind] || [])[index];
+
+          found = entry
+            ? aceHistoryValue(entry, slot.role, field)
+            : null;
+        });
+      });
+    });
+
+    return found;
   }
 
   function ownedByHistory(field) {
@@ -1082,8 +1131,97 @@
     });
   }
 
+  /* Workday's search-and-pick: School, Field of Study, Country Phone
+     Code. Read from Workday's own code: typing only edits the box, and
+     the search runs on Enter; each result is a role="option" row whose
+     click handler sits on an inner element, so a click on the row itself
+     never reaches it -- the label inside it is pressed instead; and the
+     choice lands as a pill beside the box, which is how it is confirmed. */
+  function workdayResults() {
+    return Array.prototype.filter.call(
+      document.querySelectorAll('[data-automation-id="promptOption"]'),
+      function (node) {
+        return (
+          node.getClientRects().length > 0 &&
+          !node.closest('[data-automation-id="selectedItem"]')
+        );
+      }
+    );
+  }
+
+  function workdayPicked(field) {
+    var picker = field.closest('[data-automation-id="multiSelectContainer"]');
+
+    return !!(
+      picker &&
+      picker.querySelector('[data-automation-id="selectedItem"]')
+    );
+  }
+
+  function pressEnter(field) {
+    ["keydown", "keypress", "keyup"].forEach(function (type) {
+      field.dispatchEvent(
+        new KeyboardEvent(type, {
+          key: "Enter",
+          code: "Enter",
+          keyCode: 13,
+          which: 13,
+          bubbles: true,
+          cancelable: true
+        })
+      );
+    });
+  }
+
+  function fillOneWorkdayPrompt(field, value, alts) {
+    var terms = searchTerms(value);
+
+    return terms.reduce(function (chain, term) {
+      return chain.then(function (done) {
+        if (done && done.matched) return done;
+
+        typeIntoCombobox(field, term);
+        pressEnter(field);
+
+        return waitFor(function () {
+          var found = workdayResults();
+          return found.length ? found : null;
+        }, 3000).then(function (results) {
+          if (!results) return { matched: false };
+
+          var texts = results.map(function (node) {
+            return node.getAttribute("data-automation-label") ||
+              node.textContent;
+          });
+
+          var index = aceChooseOption(texts, value, alts);
+          if (index < 0) return { matched: false };
+
+          press(results[index]);
+
+          return waitFor(function () {
+            return workdayPicked(field);
+          }, 2000).then(function (took) {
+            return took
+              ? { matched: true, text: texts[index] }
+              : { matched: false };
+          });
+        });
+      });
+    }, Promise.resolve(null)).then(function (outcome) {
+      if (!outcome || !outcome.matched) {
+        typeIntoCombobox(field, "");
+        closeCombobox(field);
+        return { matched: false };
+      }
+
+      return outcome;
+    });
+  }
+
   function fillOneCombobox(field, value, alts) {
     if (aceIsListboxButton(field)) return fillOneListbox(field, value, alts);
+    if (aceIsWorkdayPrompt(field)) return fillOneWorkdayPrompt(field, value, alts);
 
     var typed = false;
 
@@ -1255,6 +1393,13 @@
           if (!name) return;
 
           var value = answers[name];
+
+          // Inside a claimed history block, the block's own entry is the
+          // answer, and a block with no entry is left alone.
+          if (ownedByHistory(field)) {
+            value = historyValueFor(field) || null;
+          }
+
           if (!value) return;
 
           if (!aceIsEmpty(field)) return;
