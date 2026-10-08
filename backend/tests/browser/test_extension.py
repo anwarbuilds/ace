@@ -1013,7 +1013,7 @@ def test_the_phone_country_is_chosen_before_the_number(
     # chosen, which is a separate thing from what shape it takes.
     assert page.eval(
         "document.getElementById('ph').value"
-    ) == "555 010 0000", (
+    ) == "5550100000", (
         "the number was written before the country and did not "
         "survive it"
     )
@@ -1106,7 +1106,7 @@ def test_a_number_typed_before_the_country_is_mangled_by_the_widget(
 
     assert page.eval(
         "document.getElementById('ph').value"
-    ) == "555 010 0000", (
+    ) == "5550100000", (
         "the number went in before the widget knew its country, so "
         "the widget ate the dial code"
     )
@@ -2050,7 +2050,7 @@ def test_workday_s_phone_number_drops_the_dial_code_and_skips_the_extension(
 
     assert page.eval(
         "document.getElementById('num').value"
-    ) == "555 010 0000"
+    ) == "5550100000"
 
     assert page.eval(
         "document.getElementById('ext').value"
@@ -2215,3 +2215,59 @@ def test_a_school_block_is_never_given_a_job(
     assert page.eval(
         "document.getElementById('s1').value"
     ) == "Lakeview University"
+
+
+def _prefilled_workday_phone(
+    number: str,
+) -> str:
+    return WORKDAY_PHONE.replace(
+        '<input id="num">',
+        f'<input id="num" value="{number}">',
+    )
+
+
+WORKDAY_PHONE_BANK = [
+    {"label": "Phone", "value": "+1 555 010 0000", "aliases": []},
+    {"label": "Email", "value": "x@example.com", "aliases": []},
+    {"label": "LinkedIn", "value": "https://linkedin.com/in/x",
+     "aliases": []},
+]
+
+
+def test_the_profile_s_number_with_its_dial_code_is_rewritten(
+    page,
+) -> None:
+    """Reported: Workday fills Phone Number from the profile as "+1 (...)"
+    beside a Country Phone Code already holding +1, and refuses it."""
+
+    _boot_form(
+        page,
+        _prefilled_workday_phone("+1 (555) 010-0000"),
+        WORKDAY_PHONE_BANK,
+    )
+
+    _fill_and_wait(
+        page
+    )
+
+    assert page.eval(
+        "document.getElementById('num').value"
+    ) == "5550100000"
+
+
+def test_a_different_number_in_the_box_is_left_alone(
+    page,
+) -> None:
+    _boot_form(
+        page,
+        _prefilled_workday_phone("+1 (555) 010-9999"),
+        WORKDAY_PHONE_BANK,
+    )
+
+    _fill_and_wait(
+        page
+    )
+
+    assert page.eval(
+        "document.getElementById('num').value"
+    ) == "+1 (555) 010-9999"

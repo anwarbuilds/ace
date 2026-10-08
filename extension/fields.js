@@ -1385,7 +1385,10 @@ function aceMonthName(month) {
    what every form seen so far uses for a work-history date. */
 /* A stored phone number with its country code taken off the front.
 
-   "+1 555 010 0123" becomes "555 010 0123". Only for the split phone
+   "+1 555 010 0123" becomes "5550100123": digits alone, because that
+   is the one shape every number box accepts -- Workday's refused the
+   number with its "+1", and a box with a mask formats digits itself.
+   Only for the split phone
    widget, where a separate selector already carries the dial code and
    the number box beside it holds the national number alone -- writing
    the stored value whole there duplicates the code the selector is
@@ -1402,7 +1405,7 @@ function aceMonthName(month) {
 function acePhoneLocalNumber(value) {
   var text = String(value == null ? "" : value).trim();
 
-  var local = text.replace(/^\+\s*\d{1,4}[\s-]*/, "").trim();
+  var local = text.replace(/^\+\s*\d{1,4}[\s-]*/, "").replace(/\D/g, "");
 
   // Nothing recognisable left means this was not the shape assumed --
   // a bare "+1" with no number after it, say. The stored value goes in

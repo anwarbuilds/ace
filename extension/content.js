@@ -654,6 +654,29 @@
     return aceIsCopiedOwnName(field.value, own);
   }
 
+  /* A phone box holding the user's own number with its dial code, on a
+     form that asks for the code in a box of its own.
+
+     Workday fills Phone Number from the candidate's profile as "+1
+     (425) ...", beside a Country Phone Code already holding +1, and then
+     refuses it. ACE never overwrites a box that holds something, so the
+     refusal stayed. The same number, written without the code the form
+     keeps elsewhere, is not an overwrite of anything the user typed. */
+  function copiedOwnPhone(field, name) {
+    if (name !== "Phone") return false;
+    if (field.tagName !== "INPUT") return false;
+
+    var current = String(field.value || "").trim();
+    if (current.charAt(0) !== "+") return false;
+
+    var stored = String(answers.Phone || "").replace(/\D/g, "");
+    if (!stored) return false;
+
+    if (current.replace(/\D/g, "") !== stored) return false;
+
+    return hasPairedCountrySelector(field);
+  }
+
   function plan() {
     var filled = [];
     var unknown = [];
@@ -705,7 +728,11 @@
         ? groupMembers(field)
         : [field];
 
-      if (!group.every(aceIsEmpty) && !copiedOwnName(field, name)) {
+      if (
+        !group.every(aceIsEmpty) &&
+        !copiedOwnName(field, name) &&
+        !copiedOwnPhone(field, name)
+      ) {
         if (group[0] === field) already += 1;
         return;
       }
