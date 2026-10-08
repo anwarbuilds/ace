@@ -175,6 +175,9 @@ var ACE_RULES = [
   { answer: "Related to an employee here", type: ACE_YESNO,
     any: ["relatives employed", "family member employed",
           "related to any employee", "relative who works",
+          // Workday: "Do you have relatives who work for our company?"
+          "relatives who work", "relatives working", "family members who work",
+          "family member who works",
           "know anyone who works",
           "with an employee of", "relationship with an employee"] },
   { answer: "Government official", type: ACE_YESNO,

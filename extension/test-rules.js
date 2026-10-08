@@ -120,6 +120,15 @@ var DELL_CASES = [
   // Workday's phone block: the extension box took the whole number.
   ["phone extension", "text", "Phone extension"],
   ["phone number", "text", "Phone"],
+  // A Workday application's questions, as its dropdown buttons read.
+  ["do you have relatives who work for our company? select one required",
+   "choice", "Related to an employee here"],
+  ["are you legally eligible to work in the country to which you are "
+   + "applying? select one required", "choice", "Work authorisation"],
+  ["do you currently have a noncompete that may impact this job "
+   + "application? select one required", "choice", "Bound by a non-compete"],
+  ["what is your desired salary range for the position you are applying "
+   + "to?", "text", "Salary expectation"],
   // Staples, on Oracle's Candidate Experience.
   ["address line 1", "text", "Address"],
   ["address line 2", "text", "Address line 2"],
