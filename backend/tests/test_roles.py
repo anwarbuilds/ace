@@ -289,3 +289,45 @@ def test_a_discipline_named_inside_another_role_is_not_claimed() -> None:
         assert classify_role(
             title
         ).family is not RoleFamily.SOFTWARE_ENGINEERING, title
+
+
+def test_the_rest_of_the_software_trade_is_software_engineering() -> None:
+    """411 active roles with titles like these were rejected as outside
+    the target families, IBM's "Entry Level Back End Developer" and
+    xAI's "Mobile Android Engineer" among them."""
+
+    for title in (
+        "Entry Level Back End Developer - Poughkeepsie, NY - 2027",
+        "Entry Level Back-End Developer - Dallas, TX - 2027",
+        "Associate Application Developer AWS - 2027",
+        "Mobile Android Engineer",
+        "Mobile Engineer, iOS",
+        "Frontend Engineer",
+        "Front-End Developer",
+        "Site Reliability Engineer 2",
+        "Java Developer",
+        ".NET Developer",
+        "C++ Developer",
+        "Web Developer, Marketing Site",
+        "Entry Level Cloud Developer - Chicago, IL - 2027",
+        "SW Developer | AI Center of Excellence",
+        "Associate Developer - Adobe 2027",
+    ):
+        assert (
+            classify_role(title).family
+            == RoleFamily.SOFTWARE_ENGINEERING
+        ), title
+
+
+def test_other_developers_and_engineers_are_still_not() -> None:
+    for title in (
+        "Business Developer",
+        "Real Estate Developer",
+        "Sales Engineer",
+        "Field Engineer",
+        "Mechanical Engineer",
+    ):
+        assert (
+            classify_role(title).family
+            == RoleFamily.OTHER
+        ), title

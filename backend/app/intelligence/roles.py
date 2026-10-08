@@ -164,6 +164,31 @@ SOFTWARE_ENGINEERING_PATTERNS = (
     r"\binfrastructure engineer(?:ing)?\b",
     r"\bdistributed systems engineer(?:ing)?\b",
 
+    # The rest of the software trade, by its own names. On 2026-10-08,
+    # 411 active roles with titles like these were rejected as outside
+    # the target families and nothing else: IBM's "Entry Level Back End
+    # Developer - Poughkeepsie, NY - 2027" and "Associate Application
+    # Developer ... 2027", xAI's "Mobile Android Engineer", 79 Site
+    # Reliability Engineers, 69 Java Developers. A narrower title is
+    # still judged by every other rule; only the family was wrong.
+    r"\bfront[- ]?end (?:software )?(?:engineer(?:ing)?|developer)\b",
+    r"\bback[- ]?end (?:software )?(?:engineer(?:ing)?|developer)\b",
+    r"\b(?:ios|android|mobile) (?:software )?(?:engineer|developer)\b",
+    r"\bmobile (?:ios|android) (?:engineer|developer)\b",
+    r"\b(?:android|ios) and (?:android|ios) (?:engineer|developer)\b",
+    r"\bweb (?:software |application )?(?:engineer|developer)\b",
+    r"\bapplications? developer\b",
+    r"\bsite reliability engineer(?:ing)?\b",
+    r"\bsre\b",
+    r"\bcloud (?:software )?developer\b",
+    r"\bsw (?:engineer|developer)\b",
+    r"\b(?:java|python|golang|go|ruby|scala|kotlin|swift|react|javascript|"
+    r"typescript|node(?:\.js)?|php) (?:software )?(?:engineer|developer)\b",
+    # Led by a symbol, where no word boundary can sit.
+    r"(?:^|[^a-z0-9])(?:(?:vb)?\.net|c#|c\+\+) (?:software )?(?:engineer|developer)\b",
+    r"\bfull[- ]?stack\b",
+    r"\b(?:associate|junior|entry[- ]level) (?:software )?developer\b",
+
     # Common startup titles.
     r"\bfounding engineer\b",
     r"\bmember of technical staff\b",

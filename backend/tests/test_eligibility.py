@@ -2397,3 +2397,59 @@ def test_indiana_is_still_indiana() -> None:
                 )
             ).reason_codes
         ), location
+
+
+SERVICENOW_EXPORT_PARAGRAPH = (
+    "Export Control Regulations For positions requiring access to "
+    "controlled technology subject to export control regulations, "
+    "including the U.S. Export Administration Regulations (EAR), "
+    "ServiceNow may be required to obtain export control approval from "
+    "government authorities for certain individuals. All employment is "
+    "contingent upon ServiceNow obtaining any export license or other "
+    "approval that may be required by relevant export control "
+    "authorities. "
+)
+
+
+def test_an_employer_that_will_seek_an_export_licence_is_not_a_citizenship_bar() -> None:
+    """Every ServiceNow posting ends with this paragraph, and read as a
+    citizenship requirement it hid its new-grad Moveworks role."""
+
+    assert (
+        EligibilityReasonCode.CITIZENSHIP_BLOCKER
+        not in evaluate_job(
+            make_job(
+                title="Software Engineer, Core Infrastructure (New Grad)",
+                description=SERVICENOW_EXPORT_PARAGRAPH,
+            )
+        ).reason_codes
+    )
+
+
+def test_a_demand_for_us_person_status_is_still_a_bar() -> None:
+    for text in (
+        # General Motors
+        "The position is subject to export control restrictions and "
+        "requires the successful candidate to be a U.S. Person (U.S. "
+        "citizen, U.S. permanent resident, asylee or refugee). ",
+        # GrayMatter Robotics
+        "it is required that the applicant must fall under one of the "
+        "following categories: (i) U.S. citizen or national, (ii) U.S. "
+        "lawful permanent resident. ",
+        # K2 Space
+        "Export Compliance: As defined in the ITAR, U.S. Persons include "
+        "U.S. citizens, lawful permanent residents. ",
+        # Microsoft
+        "As a condition of employment, the successful candidate's "
+        "citizenship will be verified with a valid passport. ",
+        "Applicants must be able to access export-controlled technology "
+        "without a license. ",
+    ):
+        assert (
+            EligibilityReasonCode.CITIZENSHIP_BLOCKER
+            in evaluate_job(
+                make_job(
+                    description=text,
+                )
+            ).reason_codes
+        ), text[:60]

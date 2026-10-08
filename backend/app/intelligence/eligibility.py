@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-07-v42"
+    "2026-10-08-v43"
 )
 
 
@@ -775,9 +775,24 @@ CITIZENSHIP_BLOCKERS = (
 # The enumerator between "a" and "U.S." defeats a literal phrase match,
 # which let 316 defense and aerospace postings through the gate.
 #
-# ITAR and EAR require "US person" status. A candidate needing visa
-# sponsorship is not a
-# US person, so these roles are closed regardless of sponsorship policy.
+# ITAR requires "US person" status, and a candidate needing visa
+# sponsorship is not a US person, so an ITAR role is closed regardless of
+# sponsorship policy.
+#
+# Export control in general is not that. The Export Administration
+# Regulations let an employer release controlled technology to a foreign
+# national under a licence, and many say they will seek one: every
+# ServiceNow posting ends "ServiceNow may be required to obtain export
+# control approval from government authorities for certain individuals.
+# All employment is contingent upon ServiceNow obtaining any export
+# license". Read as a citizenship bar, that rejected every ServiceNow
+# role -- its "Software Engineer, Core Infrastructure - Moveworks (New
+# Grad)" among them, found the day it opened and never shown -- and
+# AeroVironment's, Cloudflare's, Intuitive Surgical's and SiFive's with
+# them. A bare mention of export control is therefore not a blocker. What
+# is: the role demanding US-person status or citizenship outright (the
+# patterns below), or access to controlled technology "without a
+# licence", which is the same demand in other words.
 # Work permits named right after a citizenship shorthand widen it to
 # people who are not citizens.
 _NO_WORK_PERMIT_FOLLOWS = (
@@ -791,9 +806,29 @@ CITIZENSHIP_BLOCKER_PATTERNS = (
     r"\bitar[-\s]controlled\b",
     r"subject\s+to\s+(?:the\s+)?itar\b",
     r"conform\s+to\s+u\.?\s?s\.?\s+government\s+export",
-    r"\bexport\s+control(?:led)?\s+"
-    r"(?:laws|regulations|requirements|restrictions)\b",
-    r"\bexport\s+administration\s+regulations\b",
+    # Controlled access with no licence to be had: US persons only.
+    r"export[^.]{0,120}?\bwithout\s+(?:an?\s+)?(?:export\s+)?licen[cs]e\b",
+    r"\bwithout\s+(?:an?\s+)?(?:export\s+)?licen[cs]e\b[^.]{0,120}?export",
+    # The demand itself, as it was found in roles a bare export-control
+    # mention used to catch for the wrong reason:
+    # General Motors -- "requires the successful candidate to be a U.S.
+    # Person (U.S. citizen, U.S. permanent resident, asylee or refugee)".
+    r"\bto\s+be\s+an?\s+(?:u\.?\s?s\.?|united\s+states)\s+"
+    r"(?:person|citizen)\b",
+    # GrayMatter -- "the applicant must fall under one of the following
+    # categories: (i) U.S. citizen or national, (ii) U.S. lawful
+    # permanent resident": the ITAR definition, listed as the condition.
+    r"\(\s*i\s*\)\s*(?:u\.?\s?s\.?|united\s+states)\s+citizen\s+or\s+"
+    r"national\b",
+    # K2 Space -- "Export Compliance: As defined in the ITAR, U.S.
+    # Persons include U.S. citizens, lawful permanent residents".
+    r"\bitar\b[^.]{0,150}?\b(?:u\.?\s?s\.?|united\s+states)\s+persons?\b",
+    r"\b(?:u\.?\s?s\.?|united\s+states)\s+persons?\b[^.]{0,150}?\bitar\b",
+    # Microsoft -- "the successful candidate's citizenship will be
+    # verified with a valid passport ... Citizenship & Citizenship
+    # Verification: This position requires ...".
+    r"\bcitizenship\s+will\s+be\s+verified\b",
+    r"\bcitizenship\s*(?:&|and)\s*citizenship\s+verification\b",
 
     # "must be a (i) U.S. citizen or national"
     r"must\s+be\s+(?:an?\s+)?"
@@ -820,10 +855,6 @@ CITIZENSHIP_BLOCKER_PATTERNS = (
 
     # "are a U.S. Person because of required access to..."
     r"\bare\s+a\s+(?:u\.?\s?s\.?|united\s+states)\s+person\b",
-
-    # "access to export controlled data / information / technology"
-    r"export\s+control(?:led)?\s+"
-    r"(?:data|information|technology|technical\s+data)\b",
 
     # Bulleted eligibility: "US citizen or permanent resident"
     r"\b(?:u\.?\s?s\.?|united\s+states)\s+citizen\s+or\s+"
