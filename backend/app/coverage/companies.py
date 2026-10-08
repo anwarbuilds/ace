@@ -523,6 +523,7 @@ SOURCE_HOSTS = {
     "smartrecruiters": (
         "jobs.smartrecruiters.com"
     ),
+    "ibm": "www-api.ibm.com",
 }
 
 

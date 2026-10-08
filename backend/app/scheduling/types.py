@@ -61,6 +61,9 @@ class SourceType(StrEnum):
     ORACLE_RECRUITING = "oracle_recruiting"
     # apply.workable.com boards. The account is the board's slug.
     WORKABLE = "workable"
+    # IBM's own careers search, read because careers.ibm.com sits behind
+    # a bot challenge. One account: "careers.ibm.com".
+    IBM = "ibm"
 
 
 def _require_non_empty(

@@ -51,6 +51,9 @@ from backend.app.adapters.oracle_recruiting import (
 from backend.app.adapters.workable import (
     fetch_workable_jobs,
 )
+from backend.app.adapters.ibm import (
+    fetch_ibm_jobs,
+)
 from backend.app.verification.employer_page import (
     EmployerPageVerifier,
 )
@@ -947,6 +950,61 @@ class WorkableSourceFetcher:
         )
 
 
+class IbmSourceFetcher:
+    """Dispatch adapter for IBM's careers search.
+
+    Read newest first, in full every two hours and otherwise only as far
+    as the last few days; a partial read is reported as one, so it
+    closes nothing.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher=fetch_ibm_jobs,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch IBM's openings."""
+
+        if (
+            source.source_type
+            != SourceType.IBM
+        ):
+            raise ValueError(
+                (
+                    "IbmSourceFetcher "
+                    "requires an IBM "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            source_account=(
+                source.source_account
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+            complete=getattr(
+                jobs,
+                "complete",
+                True,
+            ),
+        )
+
+
 class AvatureSourceFetcher:
     """Dispatch adapter for Avature-hosted employer boards.
 
@@ -1541,6 +1599,9 @@ def build_default_source_dispatcher() -> (
             ),
             SourceType.WORKABLE: (
                 WorkableSourceFetcher()
+            ),
+            SourceType.IBM: (
+                IbmSourceFetcher()
             ),
             SourceType.SIMPLIFY: (
                 SimplifySourceFetcher(
