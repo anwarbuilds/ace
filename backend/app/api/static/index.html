@@ -269,6 +269,7 @@ tr.bandline span{display:block;padding:7px 14px;font-size:11px;letter-spacing:.0
 .badge.offer,.badge.accepted{background:rgba(95,176,127,.16);color:var(--success)}
 .badge.rejected,.badge.withdrawn,.badge.ghosted{background:rgba(222,107,107,.14);color:var(--danger)}
 .badge.saved{background:var(--surface-2);color:var(--text-secondary)}
+.badge.export{background:var(--gold-surface);color:var(--gold);margin-left:6px;vertical-align:1px}
 
 .readline{padding:0}
 .readline td{padding:16px var(--gutter) 12px;border-bottom:1px solid var(--border-subtle)}
@@ -1265,7 +1266,8 @@ function jobRow(j,inGroup){
     '<td class="c-rail"><div class="rail t-'+tier+'"></div></td>'+
     '<td class="c-co"><div class="co-name">'+esc(j.company)+'</div>'+
       (TIER_LABEL[tier]?'<div class="co-tier">'+TIER_LABEL[tier]+'</div>':'')+'</td>'+
-    '<td class="c-title"><a class="j-title" href="#job/'+j.id+'" data-open="'+j.id+'">'+esc(clean(j.title))+'</a></td>'+
+    '<td class="c-title"><a class="j-title" href="#job/'+j.id+'" data-open="'+j.id+'">'+esc(clean(j.title))+'</a>'+
+      (exportCaveat(j)?'<span class="badge export" title="'+esc(EXPORT_NOTE)+'">Export check</span>':'')+'</td>'+
     '<td class="c-loc">'+esc(j.location)+'</td>'+
     '<td class="c-exp"><span class="'+fit.c+'">'+esc(fit.t)+'</span></td>'+
     '<td class="c-match">'+(t==="unscored"
@@ -1521,6 +1523,7 @@ function jobPage(){
         '<dt>First detected</dt><dd>'+new Date(j.first_seen_at).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})+'</dd>'+
         '<dt>Last confirmed</dt><dd>'+new Date(j.last_seen_at).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})+'</dd>'+
         '<dt>Source</dt><dd>'+esc(j.source)+(j.requirements_verified?", verified":", not readable")+'</dd>'+
+        (exportCaveat(j)?'<dt>Export control</dt><dd>'+esc(EXPORT_NOTE)+'</dd>':'')+
         (j.requisition_id?'<dt>Requisition</dt><dd>'+esc(j.requisition_id)+'</dd>':'')+
       '</dl></div>'+
     '</div></div>'+
@@ -2364,6 +2367,14 @@ function onScroll(e){
 }
 
 /* ---------------- navigation ---------------- */
+/* A role passed with an export-control caveat: the posting mentions
+   export control without saying the employer will seek a licence, and
+   without demanding US-person status outright. Shown, not hidden -- the
+   user decides -- but never silently. */
+var EXPORT_NOTE="May require U.S.-person status for export control; the posting does not say the employer will seek a licence. Check before applying.";
+function exportCaveat(j){
+  return (j.reasons||[]).some(function(r){ return /^Export control:/.test(r); });
+}
 function isJobList(){ return ["queue","saved","applied","archive"].indexOf(state.page)>=0; }
 function goTo(page,view){
   state.pinned=null; state.heldRow=null;

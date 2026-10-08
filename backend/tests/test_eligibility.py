@@ -2453,3 +2453,80 @@ def test_a_demand_for_us_person_status_is_still_a_bar() -> None:
                 )
             ).reason_codes
         ), text[:60]
+
+
+EXPORT_CASES = {
+    # The employer will seek the licence: the role is open.
+    "keep": (
+        "ServiceNow may be required to obtain export control approval "
+        "from government authorities for certain individuals. All "
+        "employment is contingent upon ServiceNow obtaining any export "
+        "license or other approval. ",
+        "Any offer is contingent on the Company verifying that you are "
+        "authorized for access to export-controlled technology or, if "
+        "you are not already authorized, our ability to successfully "
+        "obtain any necessary export license(s). ",
+        "The person hired will have access to information subject to "
+        "U.S. export controls, and therefore, must either be a “U.S. "
+        "person” as defined by 22 C.F.R. 120.62 or otherwise eligible "
+        "for deemed export licensing. ",
+        "This role may require access to information subject to U.S. "
+        "export control laws. Applicants must be authorized to access "
+        "such information or eligible for government authorization. ",
+    ),
+    # The applicant must already be a US person: rejected.
+    "reject": (
+        "Any offer of employment may be conditioned on your authorization "
+        "to receive software or technology controlled under these U.S. "
+        "export laws without sponsorship for an export license. ",
+        "This offer is contingent upon the applicant's capacity to "
+        "perform job functions in compliance with U.S. export control "
+        "laws without obtaining a license. ",
+        "This role requires use of technical data subject to U.S. "
+        "Government export restrictions and this posting is only for "
+        "U.S. Persons (U.S. Citizens, lawful permanent residents). ",
+        "It requires access to export-controlled information or items "
+        "that require “U.S. Person” status. ",
+    ),
+    # Neither: passes, with a caveat on the role.
+    "caveat": (
+        "To comply with U.S. export control laws and regulations, "
+        "candidates for this role may need to meet certain legal status "
+        "requirements as provided in those laws and regulations. ",
+        "This position involves access to technology that is subject to "
+        "U.S. export controls. Any job offer made will be contingent upon "
+        "the applicant’s capacity to serve in compliance with U.S. "
+        "export controls. ",
+    ),
+}
+
+
+def test_export_control_is_read_for_who_carries_the_licence() -> None:
+    """The user: reject a role that wants applicants to already be US
+    persons, keep one whose employer will apply for the licence, and
+    miss nothing genuine in between."""
+
+    for expected, texts in EXPORT_CASES.items():
+        for text in texts:
+            decision = evaluate_job(
+                make_job(
+                    description=text,
+                )
+            )
+
+            codes = set(
+                decision.reason_codes
+            )
+
+            blocked = (
+                EligibilityReasonCode.CITIZENSHIP_BLOCKER
+                in codes
+            )
+
+            caveat = (
+                EligibilityReasonCode.EXPORT_CONTROL_CAVEAT
+                in codes
+            )
+
+            assert blocked == (expected == "reject"), (expected, text[:50])
+            assert caveat == (expected == "caveat"), (expected, text[:50])

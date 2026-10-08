@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-08-v43"
+    "2026-10-08-v44"
 )
 
 
@@ -84,6 +84,10 @@ class EligibilityReasonCode(
 
     LOCATION_UNCERTAIN = (
         "LOCATION_UNCERTAIN"
+    )
+
+    EXPORT_CONTROL_CAVEAT = (
+        "EXPORT_CONTROL_CAVEAT"
     )
 
     NON_TARGET_ROLE = (
@@ -807,8 +811,22 @@ CITIZENSHIP_BLOCKER_PATTERNS = (
     r"subject\s+to\s+(?:the\s+)?itar\b",
     r"conform\s+to\s+u\.?\s?s\.?\s+government\s+export",
     # Controlled access with no licence to be had: US persons only.
-    r"export[^.]{0,120}?\bwithout\s+(?:an?\s+)?(?:export\s+)?licen[cs]e\b",
-    r"\bwithout\s+(?:an?\s+)?(?:export\s+)?licen[cs]e\b[^.]{0,120}?export",
+    # Cloudflare: "authorization to receive software or technology
+    # controlled under these U.S. export laws without sponsorship for an
+    # export license"; MatX: "without obtaining a license".
+    r"export[^.]{0,120}?\bwithout\s+(?:(?:sponsorship|the\s+need)\s+(?:for|of)\s+|"
+    r"obtaining\s+|requiring\s+)?(?:an?\s+)?(?:export\s+)?licen[cs]e\b",
+    r"\bwithout\s+(?:(?:sponsorship|the\s+need)\s+(?:for|of)\s+|obtaining\s+|"
+    r"requiring\s+)?(?:an?\s+)?(?:export\s+)?licen[cs]e\b[^.]{0,120}?export",
+    # GE Vernova: "this posting is only for U.S. Persons".
+    r"\bonly\s+(?:for|to)\s+(?:u\.?\s?s\.?|united\s+states)\s+(?:persons?|citizens?)\b",
+    r"\b(?:open|available|limited|restricted)\s+(?:only\s+)?to\s+"
+    r"(?:u\.?\s?s\.?|united\s+states)\s+(?:persons?|citizens?)\b",
+    # Saronic: "items that require \u201cU.S. Person\u201d status".
+    r"requir\w*\s+[\"\u201c\u201d']?\s*(?:u\.?\s?s\.?|united\s+states)\s+persons?"
+    r"\s*[\"\u201c\u201d']?\s+status\b",
+    r"\b(?:qualify\s+as|meet\s+the\s+definition\s+of)\s+an?\s+[\"\u201c\u201d']?"
+    r"(?:u\.?\s?s\.?|united\s+states)\s+person\b",
     # The demand itself, as it was found in roles a bare export-control
     # mention used to catch for the wrong reason:
     # General Motors -- "requires the successful candidate to be a U.S.
@@ -869,6 +887,45 @@ CITIZENSHIP_BLOCKER_PATTERNS = (
     r"(?:gc|green\s*card)s?(?:\s+holders?)?\b" + _NO_WORK_PERMIT_FOLLOWS,
     r"\b(?:gc|green\s*card)s?(?:\s+holders?)?\s*(?:/|\bor\b|&|\band\b)\s*"
     r"(?:usc|(?:u\.?\s?s\.?\s+)?citizens?)\b" + _NO_WORK_PERMIT_FOLLOWS,
+)
+
+
+# A demand that offers its own way out is not a bar. Hermeus: "must
+# either be a 'U.S. person' as defined by 22 C.F.R. 120.62 or otherwise
+# eligible for deemed export licensing". The licence route is looked for
+# close around the demand; "without (sponsorship for / obtaining) a
+# licence" is taken out first, because it closes that route rather than
+# opening it.
+LICENCE_ROUTE_PATTERNS = (
+    r"eligible\s+for\s+(?:a\s+|an\s+)?(?:deemed\s+)?export\s+licen[cs]",
+    r"eligible\s+for\s+(?:(?:u\.?\s?s\.?\s+)?government\s+)?authori[sz]ation",
+    r"\bobtain(?:ing|ed)?\s+(?:an?\s+|any\s+)?(?:necessary\s+|required\s+)?"
+    r"(?:u\.?\s?s\.?\s+government\s+)?(?:export\s+)?licen[cs]e",
+    r"\bapply\s+for\s+an?\s+(?:u\.?\s?s\.?\s+)?(?:government\s+)?(?:export\s+)?licen[cs]e",
+    r"\bexport\s+licen[cs]ing\s+(?:review|process|approval)",
+    r"\bexport\s+control\s+approval\b",
+    r"\btechnology\s+control\s+plan\b",
+)
+
+_LICENCE_CLOSED = re.compile(
+    r"without\s+(?:(?:sponsorship|the\s+need)\s+(?:for|of)\s+|obtaining\s+|"
+    r"requiring\s+)?(?:an?\s+)?(?:export\s+)?licen[cs]e",
+    re.IGNORECASE,
+)
+
+LICENCE_ROUTE_WINDOW = 200
+
+
+# Export control mentioned with neither a demand nor a licence route:
+# OpenAI's "candidates for this role may need to meet certain legal
+# status requirements", Radiant's "contingent upon the applicant's
+# capacity to serve in compliance with U.S. export controls". Not
+# enough to reject a role the user may well get; not nothing either. It
+# passes, with a caveat shown on the role.
+EXPORT_CONTROL_MENTION = re.compile(
+    r"\bexport[\s-]+control|\bexport\s+administration\s+regulations\b|"
+    r"\bexport\s+(?:laws|regulations|restrictions)\b|\bdeemed\s+export\b",
+    re.IGNORECASE,
 )
 
 
@@ -1375,6 +1432,49 @@ def _contains_any(
         in normalized
         for phrase in phrases
     )
+
+
+def _offers_licence_route(
+    text: str,
+    start: int,
+    end: int,
+) -> bool:
+    """Whether a licence route sits close around a demand."""
+
+    window = _LICENCE_CLOSED.sub(
+        " ",
+        text[max(0, start - LICENCE_ROUTE_WINDOW):end + LICENCE_ROUTE_WINDOW],
+    )
+
+    return _matches_any_regex(
+        window,
+        LICENCE_ROUTE_PATTERNS,
+    )
+
+
+def _demands_citizenship(
+    text: str,
+) -> bool:
+    """A US citizenship or US-person demand with no licence route."""
+
+    folded = text.casefold()
+
+    for phrase in CITIZENSHIP_BLOCKERS:
+        wanted = phrase.casefold()
+        start = folded.find(wanted)
+
+        while start >= 0:
+            if not _offers_licence_route(text, start, start + len(wanted)):
+                return True
+
+            start = folded.find(wanted, start + 1)
+
+    for pattern in CITIZENSHIP_BLOCKER_PATTERNS:
+        for found in re.finditer(pattern, text, re.IGNORECASE):
+            if not _offers_licence_route(text, found.start(), found.end()):
+                return True
+
+    return False
 
 
 def _matches_any_regex(
@@ -2657,13 +2757,11 @@ def evaluate_job(
         f"{job.title}\n{job.description}"
     )
 
-    if _contains_any(
-        blocker_text,
-        CITIZENSHIP_BLOCKERS,
-    ) or _matches_any_regex(
-        blocker_text,
-        CITIZENSHIP_BLOCKER_PATTERNS,
-    ):
+    citizenship_demanded = _demands_citizenship(
+        blocker_text
+    )
+
+    if citizenship_demanded:
         reject_codes.append(
             EligibilityReasonCode
             .CITIZENSHIP_BLOCKER
@@ -2674,6 +2772,29 @@ def evaluate_job(
                 "Posting contains an "
                 "explicit US citizenship / "
                 "US-person requirement."
+            )
+        )
+
+    if (
+        not citizenship_demanded
+        and EXPORT_CONTROL_MENTION.search(blocker_text)
+        and not _matches_any_regex(
+            blocker_text,
+            LICENCE_ROUTE_PATTERNS,
+        )
+    ):
+        note_codes.append(
+            EligibilityReasonCode
+            .EXPORT_CONTROL_CAVEAT
+        )
+
+        note_reasons.append(
+            (
+                "Export control: the posting "
+                "may require U.S.-person status "
+                "and does not say the employer "
+                "will seek a licence. Check "
+                "before applying."
             )
         )
 
