@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ACE Autofill",
-  "version": "2.0.0",
-  "description": "Fills application forms on job portals from the answer bank in your local ACE instance. It never submits anything.",
+  "version": "1.18.0",
+  "description": "Fills application forms from the answer bank in your local ACE instance. It never submits anything.",
   "permissions": [
     "storage",
     "activeTab",
@@ -18,41 +18,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://*.myworkdayjobs.com/*",
-        "https://*.myworkday.com/*",
-        "https://*.myworkdaysite.com/*",
-        "https://*.greenhouse.io/*",
-        "https://*.lever.co/*",
-        "https://*.ashbyhq.com/*",
-        "https://*.oraclecloud.com/*",
-        "https://*.successfactors.com/*",
-        "https://*.successfactors.eu/*",
-        "https://*.sapsf.com/*",
-        "https://*.taleo.net/*",
-        "https://*.smartrecruiters.com/*",
-        "https://*.icims.com/*",
-        "https://*.jobvite.com/*",
-        "https://*.workable.com/*",
-        "https://*.applytojob.com/*",
-        "https://*.bamboohr.com/*",
-        "https://*.eightfold.ai/*",
-        "https://*.avature.net/*",
-        "https://*.phenompeople.com/*",
-        "https://*.ultipro.com/*",
-        "https://*.ukg.com/*",
-        "https://*.paylocity.com/*",
-        "https://workforcenow.adp.com/*",
-        "https://myjobs.adp.com/*",
-        "https://*.dayforcehcm.com/*",
-        "https://*.recruitee.com/*",
-        "https://*.breezy.hr/*",
-        "https://*.teamtailor.com/*",
-        "https://*.pinpointhq.com/*",
-        "https://ats.rippling.com/*",
-        "https://jobs.gem.com/*",
-        "https://app.dover.com/*",
-        "https://wellfound.com/*",
-        "https://*.joinhandshake.com/*"
+        "http://*/*",
+        "https://*/*"
       ],
       "js": [
         "fields.js",
@@ -65,9 +32,5 @@
   "action": {
     "default_popup": "popup.html",
     "default_title": "ACE Autofill"
-  },
-  "optional_host_permissions": [
-    "https://*/*",
-    "http://*/*"
-  ]
+  }
 }
