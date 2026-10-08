@@ -468,7 +468,20 @@ REFERRAL = (
 
 
 PHONE_TYPE = (
-    Option("Mobile", ("mobile", "cell", "cell phone", "mobile phone")),
+    # Workday offers "Mobile - Personal" beside "Mobile - Work", and
+    # "Mobile" alone fits both, so it chose neither.
+    Option(
+        "Mobile",
+        (
+            "mobile",
+            "cell",
+            "cell phone",
+            "mobile phone",
+            "mobile personal",
+            "personal mobile",
+            "personal cell",
+        ),
+    ),
     Option("Landline", ("landline", "home", "home phone")),
     Option("Work", ("work", "work phone", "business", "office")),
 )

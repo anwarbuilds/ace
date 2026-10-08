@@ -256,6 +256,11 @@ var ACE_RULES = [
     // options are Email, Email SMS and Email WhatsApp.
     not: ["receive communications", "opt in", "opt-in", "subscribe",
           "marketing", "sms", "preferred method", "method of communication"] },
+  // Workday's "Phone Extension" sits under "Phone Number", and matched
+  // the phone rule on its first word: the whole number went in as an
+  // extension. Its own question, left empty unless the bank holds one.
+  { answer: "Phone extension", type: ACE_TEXT,
+    any: ["phone extension", "extension", "ext"] },
   // Workday asks what kind of phone the number is before it asks for
   // the number: "Phone Device Type", Mobile or Landline.
   { answer: "Phone type", type: ACE_CHOICE,
@@ -268,7 +273,7 @@ var ACE_RULES = [
     // email and/or telephone calls". That is a yes/no about consent,
     // and it matched the phone rule on the word buried in the
     // explanation. A phone number typed into it answers nothing.
-    not: ["country", "receive communications", "sms", "whatsapp",
+    not: ["country", "extension", "receive communications", "sms", "whatsapp",
           "data rates", "opt out", "opt-out"] },
   { answer: "Pronouns", type: ACE_CHOICE, any: ["pronoun"] },
 

@@ -117,6 +117,9 @@ var DELL_CASES = [
    + "selecting \u201cno\u201d will not disadvantage your application.",
    "choice", "Consent to AI in hiring"],
   ["phone device type select one required", "choice", "Phone type"],
+  // Workday's phone block: the extension box took the whole number.
+  ["phone extension", "text", "Phone extension"],
+  ["phone number", "text", "Phone"],
   // Staples, on Oracle's Candidate Experience.
   ["address line 1", "text", "Address"],
   ["address line 2", "text", "Address line 2"],
@@ -381,6 +384,10 @@ var VETERAN_ALIASES = ["i am not a protected veteran", "not a protected veteran"
   "no i am not a veteran", "not a veteran"];
 
 var ALIAS_CASES = [
+  // Workday: "Mobile" alone fits both mobile options and chose neither.
+  [["Select One", "Home", "Mobile - Personal", "Mobile - Work", "Work"],
+   "Mobile", ["mobile", "cell", "cell phone", "mobile phone",
+              "mobile personal", "personal mobile", "personal cell"], 2],
   // CVS's Workday list. "I am not a protected veteran" lined up word for
   // word with the veteran option, and a non-veteran was declared one.
   [["I am not a veteran", "I am a veteran, but not a protected veteran",

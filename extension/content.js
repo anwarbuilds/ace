@@ -1200,11 +1200,36 @@
 
     if (index < 0) return false;
 
-    return [index - 1, index + 1].some(function (i) {
+    var beside = [index - 1, index + 1].some(function (i) {
       var neighbour = fields[i];
 
       return !!neighbour && acePhoneCountryField(neighbour);
     });
+
+    return beside || pageHasPhoneCountryControl();
+  }
+
+  /* Whether the form asks for the dial code anywhere, as its own control.
+
+     Workday's "Country Phone Code" is a picker holding "United States of
+     America (+1)" as a pill, three boxes above Phone Number and not next
+     to it in any order ACE reads, so the number went in with its "+1"
+     and Workday refused it: "Enter a valid format for Phone Number". A
+     form that asks for the code on its own wants the number without it.
+     Hidden controls count -- the picker's own search box is one -- and
+     only short texts, so a paragraph mentioning a country code is not
+     taken for the control. */
+  function pageHasPhoneCountryControl() {
+    return Array.prototype.some.call(
+      document.querySelectorAll("label, legend, input, select, button"),
+      function (node) {
+        var text = /^(INPUT|SELECT|BUTTON)$/.test(node.tagName)
+          ? aceQuestionFor(node)
+          : aceNormalise(node.textContent);
+
+        return !!text && text.length <= 80 && aceIsPhoneCountry(text);
+      }
+    );
   }
 
   /* Every autocomplete on the page, filled one at a time -- two open

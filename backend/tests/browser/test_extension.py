@@ -1994,3 +1994,50 @@ def test_an_oracle_yes_no_is_answered_and_an_answered_one_is_kept(
     assert page.eval(
         "window.__clicks"
     ) == 1
+
+
+# Workday's phone block: the country code is a picker holding a pill,
+# its search box hidden, and not beside Phone Number in any order ACE
+# reads; Phone Extension sits underneath.
+WORKDAY_PHONE = (
+    '<form>'
+    '<label for="cc">Country Phone Code</label>'
+    '<div><span>United States of America (+1)</span>'
+    '<input id="cc" style="display:none"></div>'
+    '<label for="email">Email</label><input id="email">'
+    '<label for="num">Phone Number</label><input id="num">'
+    '<label for="ext">Phone Extension</label><input id="ext">'
+    '<label for="li">LinkedIn</label><input id="li">'
+    '</form>'
+)
+
+
+def test_workday_s_phone_number_drops_the_dial_code_and_skips_the_extension(
+    page,
+) -> None:
+    """Reported: the number went into Phone Extension, and Phone Number
+    was refused -- "Enter a valid format" -- with the "+1" the picker
+    above it already holds."""
+
+    _boot_form(
+        page,
+        WORKDAY_PHONE,
+        [
+            {"label": "Phone", "value": "+1 555 010 0000", "aliases": []},
+            {"label": "Email", "value": "x@example.com", "aliases": []},
+            {"label": "LinkedIn", "value": "https://linkedin.com/in/x",
+             "aliases": []},
+        ],
+    )
+
+    _fill_and_wait(
+        page
+    )
+
+    assert page.eval(
+        "document.getElementById('num').value"
+    ) == "555 010 0000"
+
+    assert page.eval(
+        "document.getElementById('ext').value"
+    ) == ""
