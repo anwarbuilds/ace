@@ -326,6 +326,9 @@ def test_other_developers_and_engineers_are_still_not() -> None:
         "Sales Engineer",
         "Field Engineer",
         "Mechanical Engineer",
+        # Facilities: a building engineer who travels between sites.
+        "Mobile Engineer",
+        "Union Mobile Engineer",
     ):
         assert (
             classify_role(title).family

@@ -2306,9 +2306,33 @@ function saveAnswers(){
 }
 
 /* ---------------- render ---------------- */
+/* Where the list was, kept across redraws.
+
+   Every redraw rebuilds the scrolling panel, and a rebuilt panel starts
+   at the top: marking a job applied, a toast, the two-minute refresh,
+   coming back from a job page -- each threw the user back to row one
+   and they scrolled down again, every time. The position is now kept on
+   any redraw of the same page and view, and remembered per page and
+   view, so coming back to one returns to where it was left. A filter or
+   sort change still starts at the top on its own: the list empties
+   while it reloads, and an empty list has nowhere else to be. */
+var scrollMemory={}, renderedKey=null, restoreTo=null;
+function viewKey(){
+  return state.page==="job" ? "job:"+state.jobId : state.page+":"+(state.view||"");
+}
 function render(keepScroll){
   var app=document.getElementById("app");
-  var prior=keepScroll?(document.querySelector(".scroll")||{}).scrollTop:null;
+  var old=document.querySelector(".scroll");
+  // Not while a return is still waiting for its rows: the empty panel's
+  // zero would overwrite the place being returned to.
+  if(old && renderedKey && !(restoreTo && restoreTo.key===renderedKey)){
+    scrollMemory[renderedKey]=old.scrollTop;
+  }
+  var key=viewKey();
+  if(key!==renderedKey){
+    restoreTo=scrollMemory[key]!=null ? {key:key, top:scrollMemory[key]} : null;
+  }
+  var prior=(old && key===renderedKey) ? old.scrollTop : null;
   // The search box is the one control that can be mid-word when a
   // render lands on it, and this redraw is innerHTML: it destroys the
   // element the user is typing into.
@@ -2355,9 +2379,18 @@ function render(keepScroll){
 
   var sc=document.querySelector(".scroll");
   if(sc){
-    if(prior!=null) sc.scrollTop=prior;
+    if(restoreTo && restoreTo.key===key){
+      var room=sc.scrollHeight-sc.clientHeight;
+      // Applied once the rows are there to scroll through; until then
+      // the empty panel would clamp it to the top.
+      if(room>=restoreTo.top || !state.loading){
+        sc.scrollTop=Math.min(restoreTo.top, Math.max(room,0));
+        restoreTo=null;
+      }
+    } else if(prior!=null) sc.scrollTop=prior;
     sc.addEventListener("scroll",onScroll,{passive:true});
   }
+  renderedKey=key;
   var sel=document.querySelector('.row[aria-selected="true"]');
   if(sel&&state.scrollTo){ sel.scrollIntoView({block:"nearest"}); state.scrollTo=false; }
 }
@@ -2376,6 +2409,19 @@ function exportCaveat(j){
   return (j.reasons||[]).some(function(r){ return /^Export control:/.test(r); });
 }
 function isJobList(){ return ["queue","saved","applied","archive"].indexOf(state.page)>=0; }
+/* Back from a job page to the list it was opened from, as it was left:
+   the same rows, the same place in them, the same row selected. Going
+   back reloaded the list, which emptied it to its first page, so a role
+   found three pages down could not be returned to and the user scrolled
+   down again after every application. A mark made on the job page is
+   already on the row: applyMark updates every copy. */
+function goBack(){
+  var page=state.returnTo||"queue";
+  if(location.hash) location.hash="";
+  state.page=page; state.menuOpen=false; closePop();
+  if(!isJobList()){ render(); return; }
+  if(state.items.length) render(); else loadJobs();
+}
 function goTo(page,view){
   state.pinned=null; state.heldRow=null;
   if(location.hash) location.hash="";
@@ -2908,7 +2954,7 @@ document.addEventListener("click",function(e){
     if(d.act==="clearall"){ state.filters={}; state.tiers=[]; state.excluded=[]; state.q="";
       loadShell().then(function(){ loadJobs(); }); return; }
     if(d.act==="shownew"){ state.sorts=["newest"]; goTo("queue","all"); return; }
-    if(d.act==="back"){ goTo(state.returnTo||"queue"); return; }
+    if(d.act==="back"){ goBack(); return; }
     if(d.act==="openanswers"){ state.answersOpen=true; render(); return; }
     if(d.act==="closeanswers"){ state.answersOpen=false; render(); return; }
     if(d.act==="saveanswers"){ saveAnswers(); return; }
@@ -3001,7 +3047,7 @@ document.addEventListener("keydown",function(e){
     if(state.importData){ closeImport(); return; }
     if(state.menuOpen){ state.menuOpen=false; render(); return; }
     if(document.querySelector(".pop")){ closePop(); return; }
-    if(state.page==="job"){ goTo(state.returnTo||"queue"); return; }
+    if(state.page==="job"){ goBack(); return; }
     return;
   }
   if(state.page==="job"&&state.detailJob){
@@ -3042,7 +3088,7 @@ applyTheme(validTheme?urlTheme:load("ace.theme","dark"));
 initVisit();
 render();
 window.addEventListener("hashchange",function(){
-  if(!routeFromHash() && state.page==="job") goTo(state.returnTo||"queue");
+  if(!routeFromHash() && state.page==="job") goBack();
 });
 loadShell().then(function(){
   announceNewRoles(state.sessions);

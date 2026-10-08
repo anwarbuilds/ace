@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-08-v44"
+    "2026-10-08-v45"
 )
 
 

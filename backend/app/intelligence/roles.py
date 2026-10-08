@@ -173,8 +173,15 @@ SOFTWARE_ENGINEERING_PATTERNS = (
     # still judged by every other rule; only the family was wrong.
     r"\bfront[- ]?end (?:software )?(?:engineer(?:ing)?|developer)\b",
     r"\bback[- ]?end (?:software )?(?:engineer(?:ing)?|developer)\b",
-    r"\b(?:ios|android|mobile) (?:software )?(?:engineer|developer)\b",
+    r"\b(?:ios|android) (?:software )?(?:engineer|developer)\b",
     r"\bmobile (?:ios|android) (?:engineer|developer)\b",
+    # "Mobile" alone is not the trade: in facilities, a Mobile Engineer
+    # is a building engineer who travels between sites -- Jones Lang
+    # LaSalle's "Mobile Engineer" and "Union Mobile Engineer" filled the
+    # queue under the bare rule. Software when the title says so.
+    r"\bmobile (?:software|app(?:lication)?s?) (?:engineer|developer)\b",
+    r"\bmobile developer\b",
+    r"\bmobile engineer\b(?=.*\b(?:ios|android|react native|flutter|app)\b)",
     r"\b(?:android|ios) and (?:android|ios) (?:engineer|developer)\b",
     r"\bweb (?:software |application )?(?:engineer|developer)\b",
     r"\bapplications? developer\b",
