@@ -69,6 +69,12 @@ from backend.app.adapters.jibe import (
 from backend.app.adapters.gem import (
     fetch_gem_jobs,
 )
+from backend.app.adapters.google import (
+    fetch_google_jobs,
+)
+from backend.app.adapters.sitemap_jobs import (
+    fetch_sitemap_jobs,
+)
 from backend.app.verification.employer_page import (
     EmployerPageVerifier,
 )
@@ -1289,6 +1295,118 @@ class JibeSourceFetcher:
         )
 
 
+class GoogleSourceFetcher:
+    """Dispatch adapter for Google's careers searches.
+
+    Only the first page of each search may be read, so every read is
+    partial and closes nothing.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher=fetch_google_jobs,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch the newest of Google's openings."""
+
+        if (
+            source.source_type
+            != SourceType.GOOGLE
+        ):
+            raise ValueError(
+                (
+                    "GoogleSourceFetcher "
+                    "requires a GOOGLE "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher()
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+            complete=getattr(
+                jobs,
+                "complete",
+                False,
+            ),
+        )
+
+
+class SitemapSourceFetcher:
+    """Dispatch adapter for careers sites read through their sitemap.
+
+    ``source_account`` is the site's host. Each posting's page is read
+    once and kept in the shared reading store; the sitemap is the whole
+    board, so a read is complete.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher=fetch_sitemap_jobs,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch one site's postings."""
+
+        if (
+            source.source_type
+            != SourceType.JOBPOSTING_SITEMAP
+        ):
+            raise ValueError(
+                (
+                    "SitemapSourceFetcher "
+                    "requires a JOBPOSTING_SITEMAP "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            host=source.source_account,
+            company_name=source.company_name,
+            should_fetch_detail=(
+                build_detail_predicate(
+                    source="jobposting_sitemap",
+                    company_name=(
+                        source.company_name
+                    ),
+                )
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+            complete=getattr(
+                jobs,
+                "complete",
+                True,
+            ),
+        )
+
+
 class GemSourceFetcher:
     """Dispatch adapter for jobs.gem.com boards: one request a board."""
 
@@ -2014,6 +2132,12 @@ def build_default_source_dispatcher() -> (
             ),
             SourceType.GEM: (
                 GemSourceFetcher()
+            ),
+            SourceType.GOOGLE: (
+                GoogleSourceFetcher()
+            ),
+            SourceType.JOBPOSTING_SITEMAP: (
+                SitemapSourceFetcher()
             ),
             SourceType.SIMPLIFY: (
                 SimplifySourceFetcher(

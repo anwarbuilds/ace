@@ -43,7 +43,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-09-v51"
+    "2026-10-09-v52"
 )
 
 
@@ -619,6 +619,19 @@ CONTRACT_TITLE_PATTERN = re.compile(
 )
 
 
+# "Software Engineer III" is Google's second rung, asking two years of
+# experience -- 19 of the first 20 mid-level software postings Google
+# listed on 2026-10-09 were rejected as senior for the numeral alone. At
+# most other employers level III is a senior rung asking five years or
+# more. The title cannot tell them apart; the years the posting states
+# can. Level III with no stated requirement stays senior.
+LEVEL_THREE_TITLE_PATTERN = re.compile(
+    r"\b(?:engineer|developer|scientist|architect|programmer|analyst)"
+    r"\s+iii\b",
+    re.IGNORECASE,
+)
+
+
 SENIOR_TITLE_PATTERNS = (
     # And Citi's "Seniorr Programmer Analyst".
     r"\bsenior+\b",
@@ -655,8 +668,8 @@ SENIOR_TITLE_PATTERNS = (
     # not. A level-II role is now judged by the years it asks, like any
     # other; four or more is still out. Written for any of the role
     # nouns, because "Data Scientist III" is the same rung.
-    r"\b(?:engineer|developer|scientist|architect|"
-    r"programmer|analyst)\s+iii\b",
+    # Level III is judged with the years the posting asks: see
+    # LEVEL_THREE_TITLE_PATTERN.
     r"\bengineer\s+iv\b",
     # Deliberately roman only. Numeric levels 1 to 3 were measured and
     # kept as early career, because Netflix and others number a normal
@@ -2573,6 +2586,31 @@ def evaluate_job(
             job
         )
     )
+
+    if (
+        EligibilityReasonCode.SENIOR_TITLE
+        not in reject_codes
+        and LEVEL_THREE_TITLE_PATTERN.search(
+            job.title
+        )
+        and (
+            required_years is None
+            or required_years
+            > MAX_OPEN_ENDED_YEARS
+        )
+    ):
+        reject_codes.append(
+            EligibilityReasonCode
+            .SENIOR_TITLE
+        )
+
+        reject_reasons.append(
+            (
+                "Title is level III and the "
+                "posting does not ask three "
+                "years or fewer."
+            )
+        )
 
     # The user has ~3.5 years of experience and wants only roles they
     # can credibly apply to. Four or more years is therefore a hard

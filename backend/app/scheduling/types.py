@@ -79,6 +79,13 @@ class SourceType(StrEnum):
     # jobs.gem.com boards, through Gem's public job board API. The
     # account is the board's name.
     GEM = "gem"
+    # The first page of Google's own careers searches, newest first:
+    # robots.txt allows no other. One account: "google.com".
+    GOOGLE = "google"
+    # A careers site's sitemap of every posting, each posting's page
+    # read for its JSON-LD JobPosting: Meta, and the Radancy sites of
+    # Intuit, Arm and Synopsys. The account is the site's host.
+    JOBPOSTING_SITEMAP = "jobposting_sitemap"
 
 
 def _require_non_empty(

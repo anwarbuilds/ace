@@ -528,6 +528,7 @@ SOURCE_HOSTS = {
     "apple": "jobs.apple.com",
     "shopify": "www.shopify.com",
     "gem": "api.gem.com",
+    "google": "www.google.com",
 }
 
 

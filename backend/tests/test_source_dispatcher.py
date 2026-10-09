@@ -490,6 +490,8 @@ def test_default_dispatcher_supports_all_implemented_sources() -> None:
                 SourceType.SHOPIFY,
                 SourceType.JIBE,
                 SourceType.GEM,
+                SourceType.GOOGLE,
+                SourceType.JOBPOSTING_SITEMAP,
             }
         )
     )
