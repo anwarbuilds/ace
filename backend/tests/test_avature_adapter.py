@@ -13,6 +13,7 @@ import httpx
 
 from backend.app.adapters.avature import (
     fetch_avature_jobs,
+    parse_job_locations,
     parse_job_page,
     parse_listing,
 )
@@ -343,3 +344,248 @@ def test_the_apply_link_is_the_employer_s_own_posting() -> None:
     assert jobs[0].official_url.startswith(
         "https://careers.twosigma.com/careers/JobDetail/"
     )
+
+
+# --- a portal keyed on its listing page: EA's -------------------------
+
+
+EA = "https://jobs.example-games.com/en_US/careers/SearchJobs"
+
+
+def ea_article(
+    *,
+    job_id: str,
+    title: str,
+    location: str = "Redwood City, United States of America",
+) -> str:
+    """One row of a SearchJobs listing, shaped like EA's."""
+
+    return (
+        '<article class="article article--result article--non-toggle">'
+        '<h3 class="article__header__text__title title title--04 ">'
+        '<a class="link link_result" href="https://jobs.example-games.com'
+        f'/en_US/careers/JobDetail/{title.replace(" ", "-")}/{job_id}">'
+        f" {title} </a></h3>"
+        '<div class="article__header__text__subtitle">'
+        f'<span class="list-item-location">{location}</span> '
+        f'<span class="list-item-id">Role ID {job_id}</span>'
+        "</div></article>"
+    )
+
+
+def ea_listing(
+    *articles: str,
+) -> str:
+    """A SearchJobs page, linking to the pages after it."""
+
+    return listing(
+        *articles,
+        '<a href="SearchJobs?jobOffset=20">2</a>'
+        '<a href="SearchJobs?jobOffset=40">3</a>',
+    )
+
+
+EA_JOB_PAGE = """<html><body>
+<div class="article__content">
+  <div class="article__content__view__field__value">
+    <strong>Locations</strong>: Vancouver, British Columbia, Canada&nbsp;
+    <ul class="MultipleDataSetFields"><li class="MultipleDataSetField">
+    <span class="MultipleDataSetFieldLabel">Location:</span>
+    <span class="MultipleDataSetFieldValue">Kirkland</span></li>
+    <li class="MultipleDataSetField">
+    <span class="MultipleDataSetFieldLabel">State:</span>
+    <span class="MultipleDataSetFieldValue">Washington</span></li>
+    <li class="MultipleDataSetField">
+    <span class="MultipleDataSetFieldLabel">Country:</span>
+    <span class="MultipleDataSetFieldValue">United States of America</span>
+    </li></ul><br/><br>
+  </div>
+  <div class="article__content__view__field">
+    <p>Build gameplay systems. 0-2 years of experience.</p>
+  </div>
+</div>
+<footer>Share</footer>
+</body></html>"""
+
+
+def test_a_listing_page_portal_is_read_there_in_its_own_steps() -> None:
+    asked: list[str] = []
+
+    def handle(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        asked.append(
+            str(request.url)
+        )
+
+        if "JobDetail" in request.url.path:
+            return httpx.Response(
+                200,
+                text=EA_JOB_PAGE,
+            )
+
+        offset = int(
+            request.url.params.get(
+                "jobOffset",
+                0,
+            )
+        )
+
+        pages = {
+            0: ea_listing(
+                ea_article(
+                    job_id="216200",
+                    title="Software Engineer I",
+                )
+            ),
+            20: ea_listing(
+                ea_article(
+                    job_id="216290",
+                    title="Software Engineer II",
+                )
+            ),
+        }
+
+        return httpx.Response(
+            200,
+            text=pages.get(
+                offset,
+                ea_listing(),
+            ),
+        )
+
+    jobs = fetch_avature_jobs(
+        source_account=EA,
+        company_name="Electronic Arts",
+        client=httpx.Client(
+            transport=httpx.MockTransport(
+                handle,
+            ),
+        ),
+        concurrency=1,
+    )
+
+    listings = [
+        url
+        for url in asked
+        if "SearchJobs" in url
+    ]
+
+    assert listings == [
+        EA,
+        f"{EA}?jobOffset=20",
+        f"{EA}?jobOffset=40",
+    ]
+
+    assert {
+        job.external_id
+        for job in jobs
+    } == {
+        "216200",
+        "216290",
+    }
+
+
+def test_the_listing_location_is_read_from_a_searchjobs_row() -> None:
+    rows = parse_listing(
+        ea_listing(
+            ea_article(
+                job_id="216200",
+                title="Software Engineer I",
+                location="Hyderabad, India",
+            )
+        ),
+        base_url=EA,
+    )
+
+    assert rows[0][3] == "Hyderabad, India"
+
+
+def test_every_location_the_posting_names_is_kept() -> None:
+    """The listing names one place; a Vancouver role open in Kirkland
+    too is a US role."""
+
+    assert parse_job_locations(
+        EA_JOB_PAGE,
+    ) == (
+        "Vancouver, British Columbia, Canada; "
+        "Kirkland, Washington, United States of America"
+    )
+
+
+def test_a_single_location_page_names_one_place() -> None:
+    assert parse_job_locations(
+        "<div><strong>Locations</strong>: Hyderabad, Telangana, "
+        "India&nbsp; <br></div>"
+    ) == "Hyderabad, Telangana, India"
+
+
+def test_a_title_the_gate_rejects_is_never_read_in_full() -> None:
+    read: list[str] = []
+
+    def handle(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        if "JobDetail" in request.url.path:
+            read.append(
+                request.url.path
+            )
+
+            return httpx.Response(
+                200,
+                text=EA_JOB_PAGE,
+            )
+
+        if request.url.params.get(
+            "jobOffset"
+        ):
+            return httpx.Response(
+                200,
+                text=listing(),
+            )
+
+        return httpx.Response(
+            200,
+            text=listing(
+                ea_article(
+                    job_id="1",
+                    title="Art Director",
+                ),
+                ea_article(
+                    job_id="2",
+                    title="Software Engineer I",
+                ),
+            ),
+        )
+
+    jobs = fetch_avature_jobs(
+        source_account=EA,
+        company_name="Electronic Arts",
+        client=httpx.Client(
+            transport=httpx.MockTransport(
+                handle,
+            ),
+        ),
+        concurrency=1,
+        should_fetch_detail=lambda title: "Software" in title,
+    )
+
+    assert [
+        path.rsplit("/", 1)[-1]
+        for path in read
+    ] == [
+        "2",
+    ]
+
+    by_id = {
+        job.external_id: job
+        for job in jobs
+    }
+
+    assert by_id["1"].description == ""
+
+    assert by_id["1"].location == (
+        "Redwood City, United States of America"
+    )
+
+    assert "Kirkland" in by_id["2"].location

@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-08-v47"
+    "2026-10-08-v48"
 )
 
 
@@ -474,6 +474,13 @@ US_CITY_PATTERN = re.compile(
 # province code disambiguates it, which is why these run first.
 NON_US_LOCATION_PATTERNS = (
     r",\s*(?:ON|QC|BC|AB|MB|SK|NS|NB|NL|PE|YT|NT|NU)\s*,\s*CA\b",
+    # Spelled out too: Magna writes "Vaughan, Ontario, CA", and it read
+    # as California. A bare "Ontario, CA" is the Californian city and
+    # stays US.
+    r",\s*(?:ontario|qu[eé]bec|british\s+columbia|alberta|manitoba|"
+    r"saskatchewan|nova\s+scotia|new\s+brunswick|newfoundland"
+    r"(?:\s+and\s+labrador)?|prince\s+edward\s+island|yukon|"
+    r"northwest\s+territories|nunavut)\s*,\s*CA\b",
     r"\bcanada\b",
     r"\bunited\s+kingdom\b",
     r"\bengland\b",
@@ -597,7 +604,8 @@ AMBIGUOUS_REMOTE_PATTERNS = (
 
 
 SENIOR_TITLE_PATTERNS = (
-    r"\bsenior\b",
+    # And Citi's "Seniorr Programmer Analyst".
+    r"\bsenior+\b",
     r"\bsr\.?\b",
     r"\bstaff\b",
     r"\bprincipal\b",

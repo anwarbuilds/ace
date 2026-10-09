@@ -30,11 +30,21 @@ its own page. Paging stops when a page introduces no new identifier,
 which is what the portal does at the end rather than returning an empty
 list.
 
+A portal whose listing has another name is keyed on the listing page
+itself: EA's is ``jobs.ea.com/en_US/careers/SearchJobs``, twenty roles
+a page. The step between pages is however many the first page held.
+
 The listing alone would pass the gate a title and nothing else, so each
 posting's own page is then read for its description. Those pages carry
 no JSON-LD -- unlike RippleMatch -- so the content region is flattened
 to text, which is what the phrase rules that read requirement text
-need.
+need. Only postings whose title the gate could pass are read: EA lists
+365 roles, most of them art, finance and senior engineering, and a
+posting the gate rejects on its title alone needs no description to be
+rejected.
+
+A posting's own page names every location it is open in; the listing
+names one. Where the page names them, those are the location.
 
 The listing is served ``no-store, no-cache`` with no ETag, and its
 ``Last-Modified`` is the moment of the request, so conditional HTTP is
@@ -48,6 +58,7 @@ import concurrent.futures
 import html
 import logging
 import re
+from collections.abc import Callable
 from urllib.parse import (
     urljoin,
     urlsplit,
@@ -75,8 +86,9 @@ TIMEOUT_SECONDS = 20.0
 # day.
 TOTAL_DEADLINE_SECONDS = 300.0
 
-# The portal pages ten at a time. The cap is a guard against a portal
-# that never stops paging, not an expectation: 200 pages is 2,000
+# Two Sigma's portal pages ten at a time and EA's twenty; the step is
+# taken from the first page. The cap is a guard against a portal that
+# never stops paging, not an expectation: 200 pages is thousands of
 # roles, far beyond any board seen here.
 PAGE_SIZE = 10
 
@@ -102,8 +114,42 @@ _LINK = re.compile(
 )
 
 _LOCATION = re.compile(
-    r'class="paragraph_inner-span"[^>]*>(.*?)</span>',
+    r'class="(?:paragraph_inner-span|list-item-location)"[^>]*>(.*?)</span>',
     re.DOTALL,
+)
+
+# "<strong>Locations</strong>: Hyderabad, Telangana, India&nbsp;<br>",
+# one place a line.
+_PAGE_LOCATIONS = re.compile(
+    r"<strong>\s*Locations?\s*</strong>\s*:?(.*?)</div>",
+    re.DOTALL | re.IGNORECASE,
+)
+
+_BREAK = re.compile(
+    r"<br\s*/?>",
+    re.IGNORECASE,
+)
+
+# The places after the first, one set each: "Location: Redwood City",
+# "State: California", "Country: United States of America".
+_DATA_SET = re.compile(
+    r'<ul class="MultipleDataSetFields">(.*?)</ul>',
+    re.DOTALL,
+)
+
+_DATA_VALUE = re.compile(
+    r'class="MultipleDataSetFieldValue"[^>]*>(.*?)</span>',
+    re.DOTALL,
+)
+
+_OFFSET = re.compile(
+    r"jobOffset=(\d+)",
+)
+
+# A portal keyed on its listing page rather than its base.
+_LISTING_PAGE = re.compile(
+    r"/(?:SearchJobs|OpenRoles)/?$",
+    re.IGNORECASE,
 )
 
 _CONTENT = re.compile(
@@ -285,19 +331,105 @@ def parse_job_page(
     )
 
 
+def parse_job_locations(
+    markup: str,
+) -> str:
+    """Every location a posting's own page names, or empty."""
+
+    field = _PAGE_LOCATIONS.search(
+        markup,
+    )
+
+    if field is None:
+        return ""
+
+    body = field.group(
+        1,
+    )
+
+    places = [
+        _inline(
+            line,
+        ).strip(
+            " ,;"
+        )
+        for line in _BREAK.split(
+            _DATA_SET.sub(
+                "<br>",
+                body,
+            )
+        )
+    ] + [
+        ", ".join(
+            value
+            for value in (
+                _inline(
+                    found,
+                )
+                for found in _DATA_VALUE.findall(
+                    data_set,
+                )
+            )
+            if value
+        )
+        for data_set in _DATA_SET.findall(
+            body,
+        )
+    ]
+
+    return "; ".join(
+        place
+        for place in places
+        if place
+    )
+
+
+def _page_step(
+    markup: str,
+    rows: int,
+) -> int:
+    """The portal's own page size: ten on Two Sigma's, twenty on EA's.
+
+    Read from the first page's links to the pages after it, or from the
+    page itself when it links nowhere.
+    """
+
+    offsets = [
+        int(found)
+        for found in _OFFSET.findall(
+            markup,
+        )
+        if int(found) > 0
+    ]
+
+    return min(offsets) if offsets else max(
+        rows,
+        PAGE_SIZE,
+    )
+
+
 def _listing_url(
     base_url: str,
     offset: int,
 ) -> str:
     """The listing page at one offset."""
 
-    joined = urljoin(
-        base_url.rstrip(
+    if _LISTING_PAGE.search(
+        urlsplit(
+            base_url,
+        ).path
+    ):
+        joined = base_url.rstrip(
             "/"
         )
-        + "/",
-        "OpenRoles",
-    )
+    else:
+        joined = urljoin(
+            base_url.rstrip(
+                "/"
+            )
+            + "/",
+            "OpenRoles",
+        )
 
     if not offset:
         return joined
@@ -311,12 +443,18 @@ def fetch_avature_jobs(
     company_name: str = "",
     client: httpx.Client | None = None,
     concurrency: int = CONCURRENCY,
+    should_fetch_detail: Callable[[str], bool] | None = None,
 ) -> list[CanonicalJob]:
     """Fetch every public posting on one Avature portal.
 
     ``source_account`` is the portal base URL, for the reason given at
     the top of this module: an Avature portal is served from the
-    employer's own domain and carries no slug to key on.
+    employer's own domain and carries no slug to key on. It may also be
+    the listing page itself, as EA's is.
+
+    ``should_fetch_detail`` decides from a title whether the posting's
+    own page is worth reading; a posting it turns down keeps the
+    listing's title and location and no description.
 
     Paging stops when a page introduces no new identifier. The portal
     repeats the last page rather than returning an empty one, so
@@ -346,13 +484,16 @@ def fetch_avature_jobs(
             tuple[str, str, str, str]
         ] = []
 
-        for page in range(
+        offset = 0
+        step = 0
+
+        for _page in range(
             MAX_PAGES
         ):
             response = session.get(
                 _listing_url(
                     source_account,
-                    page * PAGE_SIZE,
+                    offset,
                 ),
             )
 
@@ -381,6 +522,15 @@ def fetch_avature_jobs(
                 fresh,
             )
 
+            step = step or _page_step(
+                response.text,
+                len(
+                    rows,
+                ),
+            )
+
+            offset += step
+
         LOGGER.info(
             "avature_listing_read account=%s listed=%d",
             source_account,
@@ -393,6 +543,22 @@ def fetch_avature_jobs(
             row: tuple[str, str, str, str],
         ) -> CanonicalJob | None:
             job_id, url, title, location = row
+
+            if (
+                should_fetch_detail is not None
+                and not should_fetch_detail(
+                    title,
+                )
+            ):
+                return CanonicalJob(
+                    source=SOURCE,
+                    company=company_name,
+                    external_id=job_id,
+                    title=title,
+                    location=location,
+                    description="",
+                    official_url=url,
+                )
 
             try:
                 page = session.get(
@@ -414,7 +580,12 @@ def fetch_avature_jobs(
                 company=company_name,
                 external_id=job_id,
                 title=title,
-                location=location,
+                location=(
+                    parse_job_locations(
+                        page.text,
+                    )
+                    or location
+                ),
                 description=parse_job_page(
                     page.text,
                 ),

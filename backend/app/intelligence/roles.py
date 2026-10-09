@@ -195,9 +195,27 @@ SOFTWARE_ENGINEERING_PATTERNS = (
     r"\b(?:java|python|golang|go|ruby|scala|kotlin|swift|react|javascript|"
     r"typescript|node(?:\.js)?|php) (?:software )?(?:engineer|developer)\b",
     # Led by a symbol, where no word boundary can sit.
-    r"(?:^|[^a-z0-9])(?:(?:vb)?\.net|c#|c\+\+) (?:software )?(?:engineer|developer)\b",
+    r"(?:^|[^a-z0-9])(?:(?:vb|asp)?\.net|c#|c\+\+) (?:software )?"
+    r"(?:engineer|developer|programmer)\b",
     r"\bfull[- ]?stack\b",
     r"\b(?:associate|junior|entry[- ]level) (?:software )?developer\b",
+
+    # Interfaces, games and graphics, by their own names: Cisco's and
+    # Nokia's "UI Engineer", Disney's "Advanced Gameplay Engineer",
+    # Caterpillar's "Rendering Engineer", Epic's "Build Programmer".
+    r"\bui(?:/ux)? (?:software )?(?:engineer|developer)\b",
+    r"\bgameplay (?:software )?(?:engineer|developer|programmer)\b",
+    r"\bgame (?:software )?(?:engineer|developer|programmer)\b",
+    r"\b(?:graphics|rendering) (?:software )?engineer\b",
+    # A programmer is software only when the title says which kind: a
+    # CNC, CMM or PLC programmer runs machines.
+    r"\b(?:software|application|web|php|java|python|research|engine|tools|"
+    r"graphics|rendering|animation(?: systems)?|physics|audio|network|"
+    r"online|build|ui|ai|gameplay) programmer\b",
+    r"\b(?:associate|junior|entry[- ]level) programmer\b",
+    # Citi's developers are "Apps Dev Programmer Analysts".
+    r"\bprogrammer[/ ]analyst\b",
+    r"\banalyst[/ ]programmer\b",
 
     # Common startup titles.
     r"\bfounding engineer\b",

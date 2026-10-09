@@ -1124,6 +1124,14 @@ class AvatureSourceFetcher:
             company_name=(
                 source.company_name
             ),
+            should_fetch_detail=(
+                build_detail_predicate(
+                    source="avature",
+                    company_name=(
+                        source.company_name
+                    ),
+                )
+            ),
         )
 
         return FetchedSourceSnapshot(

@@ -314,6 +314,23 @@ def test_the_rest_of_the_software_trade_is_software_engineering() -> None:
         "Associate Developer - Adobe 2027",
         "Software Application Development Engineer",
         "AI Application Development Engineer Graduate - 2027 Start",
+        "UI Engineer Hybrid North Carolina",
+        "Frontend UI Engineer",
+        "Web/UI Developer",
+        "UI/UX Engineer",
+        "Advanced Gameplay Engineer",
+        "Unity Game Developer",
+        "Build Programmer",
+        "Animation Systems Programmer",
+        "Rendering Engineer",
+        "Neural Graphics Engineer",
+        "Apps Dev Intmd Programmer Analyst - C11 - TAMPA",
+        "Programmer/Analyst",
+        "Database Analyst Programmer-Associate (On-Site)",
+        "Entry Level ASP.NET programmer",
+        "C++ Programmer",
+        "Software Programmer - Career",
+        "Entry Level Programmer / Developer",
     ):
         assert (
             classify_role(title).family
@@ -334,6 +351,14 @@ def test_other_developers_and_engineers_are_still_not() -> None:
         # Semiconductor equipment: process applications, not software.
         "Applications Development Engineer - FaST",
         "Application Development Engineer - (E3 or E4)",
+        # Programmers of machines, not software.
+        "CNC Programmer",
+        "5-Axis CNC Programmer",
+        "CMM Programmer/Operator Level II",
+        "Electrician/PLC Programmer (Nights)",
+        "Fire Alarm System Programmer (Remote)",
+        "Entry Level CNC Programmer",
+        "UI/UX Designer",
     ):
         assert (
             classify_role(title).family

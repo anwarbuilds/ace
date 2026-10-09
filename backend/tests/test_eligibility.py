@@ -1529,6 +1529,9 @@ def test_rule_version_records_the_new_gate() -> None:
         "Ottawa, ON, CA",
         "Vancouver, BC, CA",
         "Toronto, ON, Canada",
+        "Vaughan, Ontario, CA",
+        "St. Thomas – Formet, Ontario, CA",
+        "Montreal, Quebec, CA",
         "London, United Kingdom",
         "Bengaluru, India",
         "Berlin, Germany",
@@ -2143,6 +2146,11 @@ def test_the_ambiguous_code_override_still_holds() -> None:
 
     assert not _is_us_location(
         "Toronto, ON, Canada"
+    )
+
+    # Ontario, California, is still California.
+    assert _is_us_location(
+        "Ontario, CA"
     )
 
 
