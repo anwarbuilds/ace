@@ -31,10 +31,9 @@ class RoleFamily(str, Enum):
     FORWARD_DEPLOYED_ENGINEERING = (
         "FORWARD_DEPLOYED_ENGINEERING"
     )
-    # Tracked only when the posting is written for a new graduate or
-    # early career -- the eligibility gate enforces that. Asked for on
-    # 2026-10-09: Atlassian's "Data Engineer, 2027 Graduate U.S" and
-    # "Data Scientist, 2027 Graduate U.S." were rejected as off-target.
+    # Named so the gate can say what a role is. Off the list unless the
+    # gate's INCLUDE_NEW_GRAD_DATA_ROLES is set, and then only for new
+    # graduates and early career: asked for and withdrawn on 2026-10-09.
     DATA_ENGINEERING = "DATA_ENGINEERING"
     DATA_SCIENCE = "DATA_SCIENCE"
     OTHER = "OTHER"

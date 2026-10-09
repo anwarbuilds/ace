@@ -43,7 +43,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-09-v52"
+    "2026-10-09-v53"
 )
 
 
@@ -1114,6 +1114,14 @@ _LEVEL_ONE = re.compile(
 # roles only. Kept as a flag rather than deleted rules, because a search
 # strategy changes more often than code should.
 INCLUDE_INTERNSHIPS = False
+
+
+# Data engineering and data science are excluded too. The user asked
+# for new-grad data roles on 2026-10-09 and withdrew the request the
+# same day: their preparation is for software, machine learning and
+# forward deployed engineering. With the flag on, those families pass
+# only when written for new graduates or early career.
+INCLUDE_NEW_GRAD_DATA_ROLES = False
 
 
 INTERNSHIP_TITLE_PATTERNS = (
@@ -2686,15 +2694,16 @@ def evaluate_job(
         )
     )
 
-    # Data engineering and data science are on the list only for new
-    # graduates and early career, as the user asked: "Data Engineer,
-    # 2027 Graduate" is in, a Data Scientist II asking three years is
-    # not.
+    # Data engineering and data science: off the list unless switched on
+    # (INCLUDE_NEW_GRAD_DATA_ROLES), and then only for new graduates and
+    # early career -- "Data Engineer, 2027 Graduate" in, a Data
+    # Scientist II asking three years out.
     if (
         role.family
         in NEW_GRAD_ONLY_FAMILIES
         and (
-            not is_early_career
+            not INCLUDE_NEW_GRAD_DATA_ROLES
+            or not is_early_career
             # "Data Scientist II", Amazon's "Applied Scientist II": a
             # rung past the graduate one, whatever years it states.
             # "Data Scientist I or II" is open to the graduate.
@@ -2715,6 +2724,12 @@ def evaluate_job(
                 "science roles are tracked "
                 "only when written for new "
                 "graduates or early career."
+            )
+            if INCLUDE_NEW_GRAD_DATA_ROLES
+            else (
+                "Data engineering and data "
+                "science roles are not on "
+                "the list."
             )
         )
 

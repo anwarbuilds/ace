@@ -2340,15 +2340,53 @@ def test_level_three_and_above_are_still_senior() -> None:
         ), title
 
 
-def test_new_grad_data_roles_pass_and_others_do_not() -> None:
-    """Data engineering and data science only for new graduates and
-    early career, as the user asked."""
+def test_data_engineering_and_data_science_are_off_the_list() -> None:
+    """The user asked for new-grad data roles and withdrew the request
+    the same day: their preparation is for software, machine learning and
+    forward deployed engineering."""
+
+    for title in (
+        "Data Engineer, 2027 Graduate U.S",
+        "Data Scientist, 2027 Graduate U.S.",
+        "Associate Data Scientist",
+        "Data Engineer I",
+    ):
+        assert (
+            EligibilityReasonCode.NON_TARGET_ROLE
+            in evaluate_job(
+                make_job(
+                    title=title,
+                    description="1+ years of experience with SQL.",
+                )
+            ).reason_codes
+        ), title
+
+    # Software and machine learning engineering on data are unaffected.
+    for title in (
+        "Software Engineer, Data Platform",
+        "Machine Learning Engineer, New Grad",
+    ):
+        assert evaluate_job(
+            make_job(
+                title=title,
+            )
+        ).status is EligibilityStatus.PASS, title
+
+
+def test_with_data_roles_switched_on_only_new_grad_ones_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend.app.intelligence import eligibility
+
+    monkeypatch.setattr(
+        eligibility,
+        "INCLUDE_NEW_GRAD_DATA_ROLES",
+        True,
+    )
 
     for title, description in (
         ("Data Engineer, 2027 Graduate U.S", "Build pipelines in Python."),
-        ("Data Scientist, 2027 Graduate U.S.", "Statistics and Python."),
         ("Associate Data Scientist", "Python and SQL."),
-        ("Data Engineer I", "SQL and Spark."),
         ("Data Engineer", "1+ years of experience with SQL."),
     ):
         assert evaluate_job(
@@ -2359,16 +2397,16 @@ def test_new_grad_data_roles_pass_and_others_do_not() -> None:
             )
         ).status is EligibilityStatus.PASS, title
 
-    for title, description in (
-        ("Data Engineer", "Build data pipelines for the business."),
-        ("Data Scientist", "Own experimentation for the product."),
+    for title in (
+        "Data Engineer",
+        "Data Scientist II",
     ):
         assert (
             EligibilityReasonCode.NON_TARGET_ROLE
             in evaluate_job(
                 make_job(
                     title=title,
-                    description=description,
+                    description="Own the data platform.",
                     early_career=False,
                 )
             ).reason_codes
