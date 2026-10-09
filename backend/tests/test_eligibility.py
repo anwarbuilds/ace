@@ -2340,6 +2340,41 @@ def test_level_three_and_above_are_still_senior() -> None:
         ), title
 
 
+def test_new_grad_data_roles_pass_and_others_do_not() -> None:
+    """Data engineering and data science only for new graduates and
+    early career, as the user asked."""
+
+    for title, description in (
+        ("Data Engineer, 2027 Graduate U.S", "Build pipelines in Python."),
+        ("Data Scientist, 2027 Graduate U.S.", "Statistics and Python."),
+        ("Associate Data Scientist", "Python and SQL."),
+        ("Data Engineer I", "SQL and Spark."),
+        ("Data Engineer", "1+ years of experience with SQL."),
+    ):
+        assert evaluate_job(
+            make_job(
+                title=title,
+                description=description,
+                early_career=False,
+            )
+        ).status is EligibilityStatus.PASS, title
+
+    for title, description in (
+        ("Data Engineer", "Build data pipelines for the business."),
+        ("Data Scientist", "Own experimentation for the product."),
+    ):
+        assert (
+            EligibilityReasonCode.NON_TARGET_ROLE
+            in evaluate_job(
+                make_job(
+                    title=title,
+                    description=description,
+                    early_career=False,
+                )
+            ).reason_codes
+        ), title
+
+
 def test_a_distinguished_engineer_is_senior() -> None:
     for title in (
         "Distinguished Engineer, AI Infrastructure",

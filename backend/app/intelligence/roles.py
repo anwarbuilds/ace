@@ -31,7 +31,22 @@ class RoleFamily(str, Enum):
     FORWARD_DEPLOYED_ENGINEERING = (
         "FORWARD_DEPLOYED_ENGINEERING"
     )
+    # Tracked only when the posting is written for a new graduate or
+    # early career -- the eligibility gate enforces that. Asked for on
+    # 2026-10-09: Atlassian's "Data Engineer, 2027 Graduate U.S" and
+    # "Data Scientist, 2027 Graduate U.S." were rejected as off-target.
+    DATA_ENGINEERING = "DATA_ENGINEERING"
+    DATA_SCIENCE = "DATA_SCIENCE"
     OTHER = "OTHER"
+
+
+# The families admitted only for new-grad and early-career postings.
+NEW_GRAD_ONLY_FAMILIES = frozenset(
+    {
+        RoleFamily.DATA_ENGINEERING,
+        RoleFamily.DATA_SCIENCE,
+    }
+)
 
 
 class RolePriority(str, Enum):
@@ -92,6 +107,11 @@ NON_SOFTWARE_DOMAIN_PATTERNS = (
     r"\bhvac\b",
     # Not a posting at all: Hearst's "FDB Software Engineers TEST JOB".
     r"\btest\s+(?:job|posting|requisition)\b",
+    # Celonis's "Associate Value Engineer (AI-Driven Data Science &
+    # Analytics)" sells; Anduril's "Supplier Quality Data Analytics
+    # Engineer" inspects parts.
+    r"\bvalue\s+engineer\b",
+    r"\bsupplier\s+quality\b",
 )
 
 
@@ -228,6 +248,25 @@ SOFTWARE_ENGINEERING_PATTERNS = (
 )
 
 
+# A data engineering analyst, manager or lead is not the engineer.
+DATA_ENGINEERING_PATTERNS = (
+    r"\bdata engineer(?:ing)?\b(?!\s*(?:analyst|manager|director|lead)\b)",
+    r"\banalytics engineer(?:ing)?\b",
+    r"\bdata (?:platform|infrastructure|pipeline) engineer\b",
+    r"\bbig data (?:engineer|developer)\b",
+    r"\betl (?:engineer|developer)\b",
+)
+
+
+DATA_SCIENCE_PATTERNS = (
+    r"\bdata scientist\b",
+    r"\bdata science\b(?!\s*(?:manager|director|lead)\b)",
+    r"\bdecision scientist\b",
+    r"\bapplied scientist\b",
+    r"\b(?:machine learning|ml) scientist\b",
+)
+
+
 def _first_matching_pattern(
     title: str,
     patterns: tuple[str, ...],
@@ -361,6 +400,30 @@ def classify_role(
             ),
             matched_pattern=software_match,
         )
+
+    for family, patterns in (
+        (
+            RoleFamily.DATA_ENGINEERING,
+            DATA_ENGINEERING_PATTERNS,
+        ),
+        (
+            RoleFamily.DATA_SCIENCE,
+            DATA_SCIENCE_PATTERNS,
+        ),
+    ):
+        data_match = _first_matching_pattern(
+            title,
+            patterns,
+        )
+
+        if data_match:
+            return RoleClassification(
+                family=family,
+                priority=(
+                    RolePriority.SECONDARY
+                ),
+                matched_pattern=data_match,
+            )
 
     return RoleClassification(
         family=RoleFamily.OTHER,

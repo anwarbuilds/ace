@@ -342,6 +342,31 @@ def test_the_rest_of_the_software_trade_is_software_engineering() -> None:
         ), title
 
 
+def test_data_engineering_and_data_science_are_their_own_families() -> None:
+    """Asked for on 2026-10-09, for new graduates: Atlassian's "Data
+    Engineer, 2027 Graduate U.S" was rejected as off-target."""
+
+    for title, family in (
+        ("Data Engineer, 2027 Graduate U.S", RoleFamily.DATA_ENGINEERING),
+        ("Analytics Engineer, New Grad", RoleFamily.DATA_ENGINEERING),
+        ("Data Pipeline Engineer", RoleFamily.DATA_ENGINEERING),
+        ("Data Platform Engineer I", RoleFamily.SOFTWARE_ENGINEERING),
+        ("Data Scientist, 2027 Graduate U.S.", RoleFamily.DATA_SCIENCE),
+        ("Associate Data Scientist", RoleFamily.DATA_SCIENCE),
+        ("Applied Scientist I", RoleFamily.DATA_SCIENCE),
+        # Software and AI titles keep their families.
+        ("Software Engineer, Data Platform", RoleFamily.SOFTWARE_ENGINEERING),
+        ("Machine Learning Engineer, Data", RoleFamily.AI_ML_ENGINEERING),
+        # An analyst or a manager is not the engineer.
+        ("Data Engineering Analyst", RoleFamily.OTHER),
+        ("Data Engineering Manager", RoleFamily.OTHER),
+        ("Data Analyst", RoleFamily.OTHER),
+    ):
+        assert classify_role(
+            title
+        ).family == family, title
+
+
 def test_other_developers_and_engineers_are_still_not() -> None:
     for title in (
         "Business Developer",

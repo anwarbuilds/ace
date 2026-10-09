@@ -32,6 +32,7 @@ from pydantic import (
 )
 
 from backend.app.intelligence.roles import (
+    NEW_GRAD_ONLY_FAMILIES,
     RoleFamily,
     RolePriority,
     classify_role,
@@ -42,7 +43,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-08-v50"
+    "2026-10-09-v51"
 )
 
 
@@ -1032,10 +1033,11 @@ EARLY_CAREER_TITLE_PATTERNS = (
     r"\brotational\b",
     r"\bgraduate\s+(?:software|engineer|program|scheme)\b",
     r"\bjunior\b",
-    r"\bassociate\s+(?:software\s+)?engineer\b",
+    r"\bassociate\s+(?:software\s+|data\s+)?(?:engineer|scientist)\b",
     r"\b20\d\d\s+(?:grad|start|graduate)\b",
-    # "Software Engineer I" / "SDE 1" but not "Engineer II"
-    r"\b(?:software\s+engineer|sde|swe|engineer|developer)\s*"
+    # "Software Engineer I" / "SDE 1" / "Data Scientist I" but not
+    # "Engineer II"
+    r"\b(?:software\s+engineer|sde|swe|engineer|developer|scientist)\s*"
     r"(?:i|1)\b(?![iv\d])",
 )
 
@@ -1080,6 +1082,19 @@ def is_new_grad_title(
 # A role stating two years or less is an early-career role even when it
 # never uses the words.
 EARLY_CAREER_MAX_YEARS = 2
+
+
+# Career levels written into a title, for the families tracked only for
+# new graduates.
+_LEVEL_TWO_OR_ABOVE = re.compile(
+    r"\b(?:ii|iii|iv|v|2|3|4|5)\b(?!\s*\+)",
+    re.IGNORECASE,
+)
+
+_LEVEL_ONE = re.compile(
+    r"\b(?:i|1)\b\s*(?:/|or|-|to|&)?\s*(?:ii|2)?\b",
+    re.IGNORECASE,
+)
 
 
 # Internships are excluded: the user is targeting full-time early-career
@@ -2632,6 +2647,38 @@ def evaluate_job(
             required_years=required_years,
         )
     )
+
+    # Data engineering and data science are on the list only for new
+    # graduates and early career, as the user asked: "Data Engineer,
+    # 2027 Graduate" is in, a Data Scientist II asking three years is
+    # not.
+    if (
+        role.family
+        in NEW_GRAD_ONLY_FAMILIES
+        and (
+            not is_early_career
+            # "Data Scientist II", Amazon's "Applied Scientist II": a
+            # rung past the graduate one, whatever years it states.
+            # "Data Scientist I or II" is open to the graduate.
+            or (
+                _LEVEL_TWO_OR_ABOVE.search(job.title)
+                and not _LEVEL_ONE.search(job.title)
+            )
+        )
+    ):
+        reject_codes.append(
+            EligibilityReasonCode
+            .NON_TARGET_ROLE
+        )
+
+        reject_reasons.append(
+            (
+                "Data engineering and data "
+                "science roles are tracked "
+                "only when written for new "
+                "graduates or early career."
+            )
+        )
 
     if not has_verifiable_requirements(
         job
