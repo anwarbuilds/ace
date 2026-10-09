@@ -525,6 +525,8 @@ SOURCE_HOSTS = {
     ),
     "ibm": "www-api.ibm.com",
     "atlassian": "www.atlassian.com",
+    "apple": "jobs.apple.com",
+    "shopify": "www.shopify.com",
 }
 
 

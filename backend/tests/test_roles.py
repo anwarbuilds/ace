@@ -331,6 +331,10 @@ def test_the_rest_of_the_software_trade_is_software_engineering() -> None:
         "C++ Programmer",
         "Software Programmer - Career",
         "Entry Level Programmer / Developer",
+        # Pipelines named in the plural.
+        "Software Engineers, Mobile",
+        "Real-Time Software Engineers (Associate or Experienced)",
+        "Infrastructure Engineers",
     ):
         assert (
             classify_role(title).family
@@ -359,6 +363,9 @@ def test_other_developers_and_engineers_are_still_not() -> None:
         "Fire Alarm System Programmer (Remote)",
         "Entry Level CNC Programmer",
         "UI/UX Designer",
+        "Roadway Engineers and Designers",
+        # Not a posting at all.
+        "FDB Software Engineers TEST JOB",
     ):
         assert (
             classify_role(title).family

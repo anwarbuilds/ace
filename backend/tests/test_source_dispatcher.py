@@ -486,6 +486,8 @@ def test_default_dispatcher_supports_all_implemented_sources() -> None:
                 SourceType.WORKABLE,
                 SourceType.IBM,
                 SourceType.ATLASSIAN,
+                SourceType.APPLE,
+                SourceType.SHOPIFY,
             }
         )
     )

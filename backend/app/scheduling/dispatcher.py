@@ -57,6 +57,12 @@ from backend.app.adapters.ibm import (
 from backend.app.adapters.atlassian import (
     fetch_atlassian_jobs,
 )
+from backend.app.adapters.apple import (
+    fetch_apple_jobs,
+)
+from backend.app.adapters.shopify import (
+    fetch_shopify_jobs,
+)
 from backend.app.verification.employer_page import (
     EmployerPageVerifier,
 )
@@ -1074,6 +1080,151 @@ class IbmSourceFetcher:
         )
 
 
+class AppleSourceFetcher:
+    """Dispatch adapter for Apple's careers search.
+
+    Read newest first, in full every four hours and otherwise only as
+    far as the last two days; a partial read is reported as one, so it
+    closes nothing. A posting's own page is read once: what ACE already
+    holds for it is handed back to the reader.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher=fetch_apple_jobs,
+        known_lookup: (
+            Callable[
+                [SourceDefinition],
+                dict[str, tuple[str, str]],
+            ]
+            | None
+        ) = None,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._known_lookup = known_lookup
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch Apple's openings."""
+
+        if (
+            source.source_type
+            != SourceType.APPLE
+        ):
+            raise ValueError(
+                (
+                    "AppleSourceFetcher "
+                    "requires an APPLE "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            source_account=(
+                source.source_account
+            ),
+            should_fetch_detail=(
+                build_detail_predicate(
+                    source="apple",
+                    company_name=(
+                        source.company_name
+                    ),
+                )
+            ),
+            known=(
+                self._known_lookup(source)
+                if self._known_lookup is not None
+                else None
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+            complete=getattr(
+                jobs,
+                "complete",
+                True,
+            ),
+        )
+
+
+class ShopifySourceFetcher:
+    """Dispatch adapter for Shopify's careers page.
+
+    One page carries every posting, so every read is complete. A
+    posting's own page is read once: what ACE already holds for it is
+    handed back to the reader.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher=fetch_shopify_jobs,
+        known_lookup: (
+            Callable[
+                [SourceDefinition],
+                dict[str, tuple[str, str]],
+            ]
+            | None
+        ) = None,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._known_lookup = known_lookup
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch Shopify's openings."""
+
+        if (
+            source.source_type
+            != SourceType.SHOPIFY
+        ):
+            raise ValueError(
+                (
+                    "ShopifySourceFetcher "
+                    "requires a SHOPIFY "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            should_fetch_detail=(
+                build_detail_predicate(
+                    source="shopify",
+                    company_name=(
+                        source.company_name
+                    ),
+                )
+            ),
+            known=(
+                self._known_lookup(source)
+                if self._known_lookup is not None
+                else None
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
 class AvatureSourceFetcher:
     """Dispatch adapter for Avature-hosted employer boards.
 
@@ -1562,6 +1713,51 @@ def _title_could_pass(
     )
 
 
+def _stored_descriptions(
+    source: SourceDefinition,
+) -> dict[str, tuple[str, str]]:
+    """What ACE already holds for each posting of one source.
+
+    Each posting's location and description, by its identifier, for a
+    reader that would otherwise fetch every posting's own page on every
+    poll. Read in its own short session, like the validators.
+    """
+
+    from sqlalchemy import (
+        select,
+    )
+
+    from backend.app.db.models import (
+        JobRecord,
+    )
+    from backend.app.db.session import (
+        SessionLocal,
+    )
+
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(
+                JobRecord.external_id,
+                JobRecord.location,
+                JobRecord.description,
+            ).where(
+                JobRecord.source
+                == source.source_type.value,
+                JobRecord.source_account
+                == source.source_account,
+                JobRecord.description != "",
+            )
+        ).all()
+
+    return {
+        external_id: (
+            location,
+            description,
+        )
+        for external_id, location, description in rows
+    }
+
+
 def _stored_validators(
     source: SourceDefinition,
 ):
@@ -1684,6 +1880,20 @@ def build_default_source_dispatcher() -> (
                 AtlassianSourceFetcher(
                     validator_lookup=(
                         _stored_validators
+                    )
+                )
+            ),
+            SourceType.APPLE: (
+                AppleSourceFetcher(
+                    known_lookup=(
+                        _stored_descriptions
+                    )
+                )
+            ),
+            SourceType.SHOPIFY: (
+                ShopifySourceFetcher(
+                    known_lookup=(
+                        _stored_descriptions
                     )
                 )
             ),

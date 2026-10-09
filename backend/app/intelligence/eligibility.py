@@ -42,7 +42,7 @@ from backend.app.models.job import (
 
 
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-08-v48"
+    "2026-10-08-v50"
 )
 
 
@@ -603,12 +603,29 @@ AMBIGUOUS_REMOTE_PATTERNS = (
 )
 
 
+# A title that names the engagement: Sony's "Software Development
+# Engineer in Test - Contractor", Invisible's "Backend Engineering
+# Specialist - Freelance AI Trainer Project", Prolific's "(Freelance -
+# Remote)", EA's "(12 Month Temporary)". The user is after full-time
+# employment. A smart contract engineer writes software.
+CONTRACT_TITLE_PATTERN = re.compile(
+    r"(?<!smart )\bcontract(?:or|ors)?\b"
+    r"|\bfreelance(?:r|rs)?\b"
+    r"|\btemporary\b"
+    r"|\bfixed[- ]term\b"
+    r"|\bai\s+(?:trainer|tutor)s?\b",
+    re.IGNORECASE,
+)
+
+
 SENIOR_TITLE_PATTERNS = (
     # And Citi's "Seniorr Programmer Analyst".
     r"\bsenior+\b",
     r"\bsr\.?\b",
     r"\bstaff\b",
     r"\bprincipal\b",
+    # Apple's "Distinguished Engineer, AI Infrastructure".
+    r"\bdistinguished\b",
     r"\blead\b",
     r"\bmanager\b",
     # "Mgr Software Engineering" passed: only the full word was read.
@@ -1533,14 +1550,29 @@ def _is_explicitly_non_us_location(
 UNAMBIGUOUS_US_PATTERN = re.compile(
     r"\bunited states\b"
     r"|\busa\b"
-    r"|(?<![a-z])u\.s\.(?:a\.?)?(?![a-z])",
+    r"|(?<![a-z])u\.s\.(?:a\.?)?(?![a-z])"
+    # "US" where it can only be the country: next to Remote, or in a
+    # list with Canada. Stripe's "US / Canada", Render's "SF or Remote
+    # (US/Canada)" and GitLab's "Remote, Canada; Remote, US" were read
+    # as Canada alone.
+    r"|\bremote\s*(?:[-\u2013,(/]\s*|in\s+(?:the\s+)?)?us\b"
+    r"|(?<![a-z-])us\s*[-\u2013/]?\s*remote\b"
+    r"|(?<![a-z-])us\s*(?:/|\+|,|&|\bor\b|\band\b)\s*canada\b"
+    r"|\bcanada\s*(?:/|\+|,|&|\bor\b|\band\b)\s*(?:the\s+)?us\b"
+    r"|\bcontinental\s+us\b"
+    # A place of its own in a list: "...; Remote US; US".
+    r"|(?:^|[;|])\s*us\s*(?=[;|]|$)",
 )
 
 US_MARKER_PATTERN = re.compile(
     r"\bunited states\b"
     r"|\busa\b"
     r"|(?<![a-z])u\.s\.(?:a\.?)?(?![a-z])"
-    r"|\bremote\s*[-,/(]?\s*us\b",
+    r"|\bremote\s*[-,/(]?\s*us\b"
+    # A region the US is part of: Shopify hires its engineers remote
+    # across the "Americas". Checked after the foreign-country check,
+    # so "Toronto, Canada (North America)" stays Canadian.
+    r"|(?<!latin )(?<!south )(?<!central )\b(?:north\s+america|americas)\b",
 )
 
 
@@ -2673,11 +2705,14 @@ def evaluate_job(
     # assumed to be a contract role, and title/description language
     # already carries its own hard-blocker rules elsewhere; this one
     # exists because Adzuna reports the type as data, not as prose.
+    # A title that says so counts the same.
     if (
         job.employment_type
         is not None
         and "contract"
         in job.employment_type
+    ) or CONTRACT_TITLE_PATTERN.search(
+        job.title
     ):
         reject_codes.append(
             EligibilityReasonCode

@@ -67,6 +67,12 @@ class SourceType(StrEnum):
     # The job list Atlassian's own careers site loads. One account:
     # "atlassian".
     ATLASSIAN = "atlassian"
+    # Apple's own careers search, its software and machine-learning
+    # teams in the US. One account: "jobs.apple.com".
+    APPLE = "apple"
+    # The openings Shopify's own careers page carries. One account:
+    # "www.shopify.com".
+    SHOPIFY = "shopify"
 
 
 def _require_non_empty(

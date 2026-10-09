@@ -2135,6 +2135,79 @@ def test_usa_inside_a_foreign_place_name_is_not_the_usa() -> None:
         ), location
 
 
+@pytest.mark.parametrize(
+    "location",
+    [
+        "US / Canada",
+        "SF or Remote (US/Canada)",
+        "Remote, Canada; Remote, US",
+        "Remote in the US, Remote in Canada",
+        "Chicago, US-Remote, Canada-Remote",
+        "Remote (US + Canada Only)",
+        "San Mateo, CA / Remote (Continental US + Hawaii + Canada Only)",
+        "Toronto, Canada; US",
+        "Remote - Americas",
+        "Home Based - Americas; Home based - EMEA",
+        "North America",
+    ],
+)
+def test_us_named_beside_canada_is_still_the_us(
+    location: str,
+) -> None:
+    """Stripe's "US / Canada" and GitLab's "Remote, Canada; Remote, US"
+    were read as Canada alone."""
+
+    assert _is_us_location(
+        location
+    ), location
+
+
+@pytest.mark.parametrize(
+    "location",
+    [
+        "Shah Alam, Selangor, Non-US, Malaysia",
+        "US Expat - A363 Italy Sigonella",
+        "Remote - Latin America",
+        "Toronto, Ontario, Canada (North America)",
+        "Remote - Canada",
+        "Campus, Malaysia",
+    ],
+)
+def test_us_and_americas_do_not_reach_past_their_meaning(
+    location: str,
+) -> None:
+    assert not _is_us_location(
+        location
+    ), location
+
+
+def test_contract_freelance_and_temporary_titles_are_not_full_time() -> None:
+    for title in (
+        "Software Development Engineer in Test - Contractor",
+        "ML Engineer Specialist - Freelance AI Trainer Project",
+        "Software Developer Leaders for Workflow Tools - (Freelance - Remote)",
+        "Software Engineer, C++ - EA SPORTS FC (12 Month Temporary)",
+        "Forward Deployed Engineer — Associate (Contract-to-Hire)",
+    ):
+        assert (
+            EligibilityReasonCode.CONTRACT_ROLE
+            in evaluate_job(
+                make_job(
+                    title=title,
+                )
+            ).reason_codes
+        ), title
+
+    assert (
+        EligibilityReasonCode.CONTRACT_ROLE
+        not in evaluate_job(
+            make_job(
+                title="Smart Contract Engineer",
+            )
+        ).reason_codes
+    )
+
+
 def test_the_ambiguous_code_override_still_holds() -> None:
     """What the foreign-country check was written for, and still does:
     in "Ottawa, ON, CA" the CA is Canada, not California. Only the words
@@ -2265,6 +2338,17 @@ def test_level_three_and_above_are_still_senior() -> None:
                 )
             ).reason_codes
         ), title
+
+
+def test_a_distinguished_engineer_is_senior() -> None:
+    assert (
+        EligibilityReasonCode.SENIOR_TITLE
+        in evaluate_job(
+            make_job(
+                title="Distinguished Engineer, AI Infrastructure",
+            )
+        ).reason_codes
+    )
 
 
 def test_an_abbreviated_manager_title_is_senior() -> None:

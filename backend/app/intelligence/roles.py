@@ -90,6 +90,8 @@ NON_SOFTWARE_DOMAIN_PATTERNS = (
     r"\bpackaging\b",
     r"\bsupply\s+chain\s+engineer\b",
     r"\bhvac\b",
+    # Not a posting at all: Hearst's "FDB Software Engineers TEST JOB".
+    r"\btest\s+(?:job|posting|requisition)\b",
 )
 
 
@@ -232,8 +234,13 @@ def _first_matching_pattern(
 ) -> str | None:
     """Return the first regex pattern matching a title."""
 
-    normalized_title = (
-        title.casefold()
+    # A title naming a pipeline in the plural -- Shopify's "Software
+    # Engineers, Mobile", Boeing's "Real-Time Software Engineers" -- is
+    # the same trade as the singular.
+    normalized_title = re.sub(
+        r"\b(engineer|developer|scientist|programmer)s\b",
+        r"\1",
+        title.casefold(),
     )
 
     for pattern in patterns:
