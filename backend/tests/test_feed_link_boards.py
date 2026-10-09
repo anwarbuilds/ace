@@ -509,6 +509,51 @@ def test_a_rejected_board_is_recorded_switched_off_with_its_reason(
 
 
 
+def test_a_board_that_was_only_busy_is_read_again_later(
+    session: Session,
+) -> None:
+    """On 2026-10-07 Workable answered 429 to a sweep, and 92 boards were
+    switched off for good as unreadable."""
+
+    import httpx
+
+    def busy(definition):
+        request = httpx.Request("GET", "https://apply.workable.com/api")
+
+        raise httpx.HTTPStatusError(
+            "429 Too Many Requests",
+            request=request,
+            response=httpx.Response(429, request=request),
+        )
+
+    [outcome] = read_boards(
+        boards_named_in(
+            [("https://apply.workable.com/seeq/j/ABC123/", "Seeq")]
+        ),
+        busy,
+    )
+
+    assert outcome.transient
+
+    assert register_confirmed_boards(
+        session,
+        [outcome],
+    ) == []
+
+    assert session.scalars(
+        sa.select(JobSourceRecord)
+    ).all() == []
+
+    # Still a candidate for the next run.
+    assert [
+        board.key
+        for board in find_unregistered_boards(
+            session,
+            [("https://apply.workable.com/seeq/j/ABC123/", "Seeq")],
+        )
+    ] == [("workable", "seeq")]
+
+
 def test_links_whose_posting_could_pass_are_kept_apart() -> None:
     """Chewy's board was 168th of 1,197: the boards that matter are all
     read every run, the rest a few at a time."""

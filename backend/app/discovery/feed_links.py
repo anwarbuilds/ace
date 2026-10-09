@@ -32,6 +32,7 @@ from datetime import (
 import logging
 import re
 
+import httpx
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
@@ -267,6 +268,11 @@ class BoardOutcome:
 
     error: str | None = None
 
+    # The provider was busy or briefly down -- a 429, a 5xx, a timeout --
+    # not the board at fault. Nothing is recorded, so a later run reads
+    # it again.
+    transient: bool = False
+
 
 def boards_named_in(
     links: Iterable[tuple[str, str]],
@@ -413,6 +419,33 @@ def find_unregistered_boards(
     ]
 
 
+def is_transient(
+    exc: BaseException,
+) -> bool:
+    """Whether a failed read says nothing about the board itself.
+
+    On 2026-10-07 a sweep read Workable boards faster than Workable
+    allows, and 92 boards answered 429. Each was recorded as unreadable
+    and switched off for good -- DataVisor's and Seeq's among them.
+    """
+
+    if isinstance(
+        exc,
+        httpx.HTTPStatusError,
+    ):
+        status = exc.response.status_code
+
+        return status == 429 or status >= 500
+
+    return isinstance(
+        exc,
+        (
+            httpx.TimeoutException,
+            httpx.TransportError,
+        ),
+    )
+
+
 def read_boards(
     boards: Sequence[NamedBoard],
     read_board: Callable[[SourceDefinition], Sequence],
@@ -444,6 +477,9 @@ def read_boards(
                     error=(
                         f"unreadable: {type(exc).__name__}: {exc}"
                     )[:300],
+                    transient=is_transient(
+                        exc
+                    ),
                 )
             )
 
@@ -517,7 +553,7 @@ def register_confirmed_boards(
     added: list[BoardOutcome] = []
 
     for outcome in outcomes:
-        if outcome.board.key in known:
+        if outcome.board.key in known or outcome.transient:
             continue
 
         definition = _definition(

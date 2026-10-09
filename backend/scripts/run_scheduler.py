@@ -578,10 +578,19 @@ def main(
         if not boards:
             return
 
+        # A provider that answered "too many requests" is left alone for
+        # the rest of the run; its boards are read on a later one.
+        throttled: set[str] = set()
+
         # One board at a time, each saved as soon as it is read: a run
         # through a backlog of 170 boards takes the better part of an
         # hour, and a restart must not throw away what it had done.
         for board in boards:
+            provider = board.detected.source_type.value
+
+            if provider in throttled:
+                continue
+
             [outcome] = read_boards(
                 [board],
                 lambda definition: dispatcher.fetch(
@@ -595,7 +604,23 @@ def main(
                     [outcome],
                 )
 
-            if added:
+            if outcome.transient:
+                throttled.add(
+                    provider
+                )
+
+                LOGGER.info(
+                    (
+                        "feed_board_deferred "
+                        "company=%r source=%s/%s reason=%r"
+                    ),
+                    outcome.board.company_name,
+                    provider,
+                    outcome.board.detected.source_account,
+                    outcome.error,
+                )
+
+            elif added:
                 LOGGER.warning(
                     (
                         "source_registered_from_feed "
