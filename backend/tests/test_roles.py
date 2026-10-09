@@ -312,6 +312,8 @@ def test_the_rest_of_the_software_trade_is_software_engineering() -> None:
         "Entry Level Cloud Developer - Chicago, IL - 2027",
         "SW Developer | AI Center of Excellence",
         "Associate Developer - Adobe 2027",
+        "Software Application Development Engineer",
+        "AI Application Development Engineer Graduate - 2027 Start",
     ):
         assert (
             classify_role(title).family
@@ -329,6 +331,9 @@ def test_other_developers_and_engineers_are_still_not() -> None:
         # Facilities: a building engineer who travels between sites.
         "Mobile Engineer",
         "Union Mobile Engineer",
+        # Semiconductor equipment: process applications, not software.
+        "Applications Development Engineer - FaST",
+        "Application Development Engineer - (E3 or E4)",
     ):
         assert (
             classify_role(title).family

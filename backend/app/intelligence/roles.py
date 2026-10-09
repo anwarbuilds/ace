@@ -185,6 +185,9 @@ SOFTWARE_ENGINEERING_PATTERNS = (
     r"\b(?:android|ios) and (?:android|ios) (?:engineer|developer)\b",
     r"\bweb (?:software |application )?(?:engineer|developer)\b",
     r"\bapplications? developer\b",
+    # Bare "Applications Development Engineer" is KLA's and Applied
+    # Materials' semiconductor process role; only the software one counts.
+    r"\b(?:software|sw|ai) applications? development engineer\b",
     r"\bsite reliability engineer(?:ing)?\b",
     r"\bsre\b",
     r"\bcloud (?:software )?developer\b",

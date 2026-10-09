@@ -485,6 +485,7 @@ def test_default_dispatcher_supports_all_implemented_sources() -> None:
                 SourceType.ORACLE_RECRUITING,
                 SourceType.WORKABLE,
                 SourceType.IBM,
+                SourceType.ATLASSIAN,
             }
         )
     )

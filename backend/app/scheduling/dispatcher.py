@@ -54,6 +54,9 @@ from backend.app.adapters.workable import (
 from backend.app.adapters.ibm import (
     fetch_ibm_jobs,
 )
+from backend.app.adapters.atlassian import (
+    fetch_atlassian_jobs,
+)
 from backend.app.verification.employer_page import (
     EmployerPageVerifier,
 )
@@ -950,6 +953,72 @@ class WorkableSourceFetcher:
         )
 
 
+class AtlassianSourceFetcher:
+    """Dispatch adapter for the job list Atlassian's careers site loads.
+
+    One request for the whole board, made conditional with the validators
+    remembered from the last poll, so an unchanged list costs nothing.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher=fetch_atlassian_jobs,
+        clock: Clock = utc_now,
+        validator_lookup: (
+            ValidatorLookup | None
+        ) = None,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+        self._validator_lookup = (
+            validator_lookup
+        )
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch Atlassian's openings."""
+
+        from backend.app.adapters.http_cache import (
+            CacheValidators,
+        )
+
+        if (
+            source.source_type
+            != SourceType.ATLASSIAN
+        ):
+            raise ValueError(
+                (
+                    "AtlassianSourceFetcher "
+                    "requires an ATLASSIAN "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs, unchanged, validators = self._fetcher(
+            validators=(
+                self._validator_lookup(source)
+                if self._validator_lookup is not None
+                else CacheValidators()
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+            unchanged=unchanged,
+            etag=validators.etag,
+            last_modified=(
+                validators.last_modified
+            ),
+        )
+
+
 class IbmSourceFetcher:
     """Dispatch adapter for IBM's careers search.
 
@@ -1602,6 +1671,13 @@ def build_default_source_dispatcher() -> (
             ),
             SourceType.IBM: (
                 IbmSourceFetcher()
+            ),
+            SourceType.ATLASSIAN: (
+                AtlassianSourceFetcher(
+                    validator_lookup=(
+                        _stored_validators
+                    )
+                )
             ),
             SourceType.SIMPLIFY: (
                 SimplifySourceFetcher(

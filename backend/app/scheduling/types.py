@@ -64,6 +64,9 @@ class SourceType(StrEnum):
     # IBM's own careers search, read because careers.ibm.com sits behind
     # a bot challenge. One account: "careers.ibm.com".
     IBM = "ibm"
+    # The job list Atlassian's own careers site loads. One account:
+    # "atlassian".
+    ATLASSIAN = "atlassian"
 
 
 def _require_non_empty(
