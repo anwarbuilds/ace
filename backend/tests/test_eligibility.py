@@ -2341,11 +2341,25 @@ def test_level_three_and_above_are_still_senior() -> None:
 
 
 def test_a_distinguished_engineer_is_senior() -> None:
+    for title in (
+        "Distinguished Engineer, AI Infrastructure",
+        "Fellow Software Development Engineer, GEMM Optimization",
+        "Technical Fellow, Compilers",
+    ):
+        assert (
+            EligibilityReasonCode.SENIOR_TITLE
+            in evaluate_job(
+                make_job(
+                    title=title,
+                )
+            ).reason_codes
+        ), title
+
     assert (
         EligibilityReasonCode.SENIOR_TITLE
-        in evaluate_job(
+        not in evaluate_job(
             make_job(
-                title="Distinguished Engineer, AI Infrastructure",
+                title="Machine Learning Fellow - Human Frontier Collective",
             )
         ).reason_codes
     )

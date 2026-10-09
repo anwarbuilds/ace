@@ -63,6 +63,12 @@ from backend.app.adapters.apple import (
 from backend.app.adapters.shopify import (
     fetch_shopify_jobs,
 )
+from backend.app.adapters.jibe import (
+    fetch_jibe_jobs,
+)
+from backend.app.adapters.gem import (
+    fetch_gem_jobs,
+)
 from backend.app.verification.employer_page import (
     EmployerPageVerifier,
 )
@@ -1225,6 +1231,112 @@ class ShopifySourceFetcher:
         )
 
 
+class JibeSourceFetcher:
+    """Dispatch adapter for iCIMS Jibe careers sites.
+
+    Read newest first, in full every four hours and otherwise only as
+    far as the last few days; a partial read is reported as one, so it
+    closes nothing.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher=fetch_jibe_jobs,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch one Jibe site's openings."""
+
+        if (
+            source.source_type
+            != SourceType.JIBE
+        ):
+            raise ValueError(
+                (
+                    "JibeSourceFetcher "
+                    "requires a JIBE "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            source_account=(
+                source.source_account
+            ),
+            company_name=(
+                source.company_name
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+            complete=getattr(
+                jobs,
+                "complete",
+                True,
+            ),
+        )
+
+
+class GemSourceFetcher:
+    """Dispatch adapter for jobs.gem.com boards: one request a board."""
+
+    def __init__(
+        self,
+        *,
+        fetcher=fetch_gem_jobs,
+        clock: Clock = utc_now,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Fetch every post on one Gem board."""
+
+        if (
+            source.source_type
+            != SourceType.GEM
+        ):
+            raise ValueError(
+                (
+                    "GemSourceFetcher "
+                    "requires a GEM "
+                    "SourceDefinition."
+                )
+            )
+
+        jobs = self._fetcher(
+            source_account=(
+                source.source_account
+            ),
+            company_name=(
+                source.company_name
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
 class AvatureSourceFetcher:
     """Dispatch adapter for Avature-hosted employer boards.
 
@@ -1896,6 +2008,12 @@ def build_default_source_dispatcher() -> (
                         _stored_descriptions
                     )
                 )
+            ),
+            SourceType.JIBE: (
+                JibeSourceFetcher()
+            ),
+            SourceType.GEM: (
+                GemSourceFetcher()
             ),
             SourceType.SIMPLIFY: (
                 SimplifySourceFetcher(

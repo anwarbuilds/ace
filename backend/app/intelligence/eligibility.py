@@ -626,6 +626,11 @@ SENIOR_TITLE_PATTERNS = (
     r"\bprincipal\b",
     # Apple's "Distinguished Engineer, AI Infrastructure".
     r"\bdistinguished\b",
+    # AMD's "Fellow Software Development Engineer": the rank, not a
+    # postdoctoral or early-career fellowship, which names the fellow
+    # after the field.
+    r"^\s*fellow\b",
+    r"\b(?:technical|corporate|engineering)\s+fellow\b",
     r"\blead\b",
     r"\bmanager\b",
     # "Mgr Software Engineering" passed: only the full word was read.

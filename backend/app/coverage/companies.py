@@ -527,6 +527,7 @@ SOURCE_HOSTS = {
     "atlassian": "www.atlassian.com",
     "apple": "jobs.apple.com",
     "shopify": "www.shopify.com",
+    "gem": "api.gem.com",
 }
 
 

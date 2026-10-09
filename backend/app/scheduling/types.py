@@ -73,6 +73,12 @@ class SourceType(StrEnum):
     # The openings Shopify's own careers page carries. One account:
     # "www.shopify.com".
     SHOPIFY = "shopify"
+    # iCIMS Jibe careers sites' job API. The account is where the job
+    # pages live: "careers.sig.com", "careers.amd.com/careers-home".
+    JIBE = "jibe"
+    # jobs.gem.com boards, through Gem's public job board API. The
+    # account is the board's name.
+    GEM = "gem"
 
 
 def _require_non_empty(
