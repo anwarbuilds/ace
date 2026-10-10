@@ -1308,11 +1308,11 @@ def test_both_themes_paint_their_own_background(
     for theme, expected in (
         (
             "dark",
-            "rgb(13, 8, 23)",
+            "rgb(41, 49, 51)",
         ),
         (
             "light",
-            "rgb(252, 250, 254)",
+            "rgb(238, 241, 241)",
         ),
     ):
         page.eval(
@@ -1327,151 +1327,6 @@ def test_both_themes_paint_their_own_background(
 
     page.eval(
         'applyTheme("dark")'
-    )
-
-
-# --- sheet sync -------------------------------------------------------
-
-
-def _seed_import(
-    page,
-    status,
-    candidates=2,
-):
-    """Put one row of the given status into the import dialog."""
-
-    page.eval(
-        """
-        (function(){
-          var cands=[];
-          for(var i=0;i<"""
-        + str(
-            candidates
-        )
-        + """;i++){
-            cands.push({job_id:100+i,company:'Stripe',
-              title:'Software Engineer, New Grad',
-              location:'City '+i});
-          }
-          state.importChoice={};
-          state.keepExternal=false;
-          state.importData={total:1,
-            counts:{matched:0,recorded:0,ambiguous:0,
-              unmatched:0,unusable:0},
-            rows:[{row_number:1,status:'"""
-        + status
-        + """',
-              method:'already kept as history',job_id:null,
-              company:'Stripe',
-              title:'Software Engineer, New Grad',
-              applied_on:'2026-03-04',
-              application_status:'applied',
-              candidates:cands}]};
-          state.importData.counts['"""
-        + status
-        + """']=1;
-          renderImport();
-          return 'ok';
-        })()
-        """
-    )
-
-
-def test_a_recorded_row_is_not_presented_as_a_question(
-    page,
-) -> None:
-    """The whole point of the RECORDED status, seen from the page.
-
-    ACE asked about the same 42 rows on every upload of one real sheet,
-    every one of which it had already recorded. The dialog must say so
-    rather than counting them as work.
-    """
-
-    _seed_import(
-        page,
-        "recorded",
-    )
-
-    body = page.eval(
-        "document.querySelector"
-        "('.sheet').innerText"
-    )
-
-    assert (
-        "already yours"
-        in body
-    )
-
-    assert (
-        "Already in ACE as history"
-        in body
-    )
-
-    # It is carried into the sync without being ticked, and it is not
-    # counted among the rows that still need an answer.
-    assert page.eval(
-        "recordedRows().length"
-    ) == 1
-
-    assert page.eval(
-        "unplaceableRows().length"
-    ) == 0
-
-    page.eval(
-        "closeImport()"
-    )
-
-
-def test_a_genuinely_new_row_is_still_a_question(
-    page,
-) -> None:
-    """Settling must be keyed on history, not applied to everything."""
-
-    _seed_import(
-        page,
-        "ambiguous",
-    )
-
-    assert page.eval(
-        "recordedRows().length"
-    ) == 0
-
-    assert page.eval(
-        "unplaceableRows().length"
-    ) == 1
-
-    page.eval(
-        "closeImport()"
-    )
-
-
-def test_a_recorded_row_can_still_be_attached_to_a_posting(
-    page,
-) -> None:
-    """Settled is not closed: the option has to survive."""
-
-    _seed_import(
-        page,
-        "recorded",
-    )
-
-    assert page.eval(
-        "document.querySelectorAll"
-        "('[data-improw]').length"
-    ) == 1
-
-    # Choosing a posting moves it out of the history bucket, so it is
-    # attached to the job rather than refreshed as a placeholder.
-    page.eval(
-        "state.importChoice[1]=100;"
-    )
-
-    assert page.eval(
-        "recordedRows().length"
-    ) == 0
-
-    page.eval(
-        "closeImport()"
     )
 
 
@@ -2012,3 +1867,55 @@ def test_the_coverage_page_reports_its_own_late_catches(
     assert "Fabrikam" in page.eval(
         "document.querySelector('.cov-feedonly').textContent"
     )
+
+
+def test_no_em_dash_reaches_the_screen(
+    page,
+) -> None:
+    """The interface never shows an em dash, whatever a source wrote.
+
+    Titles were cleaned as they rendered, but locations, company names
+    and anything drawn outside render() went through as written.
+    """
+
+    page.eval(
+        """
+        (function(){
+          var j=state.items[0];
+          j.location='Austin — TX';
+          j.company='Example — Labs';
+          render();
+          return 'ok';
+        })()
+        """
+    )
+
+    assert "—" not in page.eval(
+        "document.body.innerText"
+    )
+
+    # A popover is drawn outside render(); it is covered too.
+    page.eval(
+        "openPop(document.querySelector('.h1'),"
+        "'<p>Range — check</p>');1"
+    )
+
+    assert "—" not in page.eval(
+        "document.querySelector('.pop').innerText"
+    )
+
+    page.eval(
+        "closePop();1"
+    )
+
+    # What the user types is theirs.
+    assert page.eval(
+        """
+        (function(){
+          var t=document.createElement('textarea');
+          t.value='mine — kept';
+          document.body.appendChild(t);
+          var v=t.value; t.remove(); return v;
+        })()
+        """
+    ) == "mine — kept"

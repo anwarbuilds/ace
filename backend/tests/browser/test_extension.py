@@ -2337,3 +2337,20 @@ def test_a_closed_panel_comes_back_on_the_next_step(
         "!!document.querySelector('.ace-root')",
         timeout=12,
     )
+
+
+def test_the_panel_never_shows_an_em_dash(
+    filler,
+) -> None:
+    """Nothing in ace shows an em dash, and a form's own question can be
+    written with one. Display only: what is typed into the form is the
+    saved answer, unchanged."""
+
+    html = filler.eval(
+        "window.__aceInternals.shell("
+        "'Fill \\u2014 3 fields','Review \\u2014 then send','','')"
+    )
+
+    assert "—" not in html
+
+    assert "Fill, 3 fields" in html

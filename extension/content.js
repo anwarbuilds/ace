@@ -1667,7 +1667,7 @@
      argument reliably, because the next board will reset something
      else. A shadow root ends it: nothing the page declares crosses
      the boundary, in either direction. */
-  var PANEL_CSS = "/* Deliberately narrow selectors and a high stacking context: this\n   panel lives inside somebody else's stylesheet and must neither\n   inherit from it nor be painted over by it. */\n/* Anchored top-right, not bottom-right: a form's own Submit control\n   is almost always at the bottom of the page, and a fixed panel\n   sitting on top of it blocks the one click the user needs most. */\n.ace-panel{\n  position:fixed;right:18px;top:18px;z-index:2147483647;\n  width:330px;max-height:min(70vh,560px);display:flex;flex-direction:column;\n  background:#1c1229;color:#f4f0fa;border:1px solid #4a3468;border-radius:12px;\n  box-shadow:0 16px 48px rgba(0,0,0,.42);\n  font:13px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif;\n  overflow:hidden}\n.ace-panel *{box-sizing:border-box;font-family:inherit}\n\n.ace-head{display:flex;align-items:center;gap:9px;padding:12px 14px;border-bottom:1px solid #33244a}\n.ace-mark{width:20px;height:20px;border-radius:5px;background:#c9a227;color:#231633;\n  font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}\n.ace-title{font-weight:600;font-size:13px}\n.ace-sub{font-size:11px;color:#b3a3cd;margin-top:1px}\n.ace-ver{margin-left:auto;font-size:10px;color:#6f6090;letter-spacing:.04em;flex:0 0 auto}\n.ace-x{margin-left:6px;background:none;border:0;color:#8d7ca8;cursor:pointer;\n  font-size:17px;line-height:1;padding:2px 4px;border-radius:4px}\n.ace-x:hover{background:#2a1b3d;color:#f4f0fa}\n\n.ace-body{overflow-y:auto;padding:6px 0;flex:1 1 auto}\n.ace-body::-webkit-scrollbar{width:8px}\n.ace-body::-webkit-scrollbar-thumb{background:#3d2b58;border-radius:4px}\n\n.ace-group{font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;\n  color:#8d7ca8;padding:10px 14px 4px}\n.ace-item{display:flex;gap:9px;align-items:flex-start;padding:5px 14px}\n.ace-item .k{color:#b3a3cd;font-size:11.5px;flex:0 0 40%;word-break:break-word}\n.ace-item .v{color:#f4f0fa;font-size:11.5px;flex:1 1 auto;word-break:break-word}\n.ace-item.miss .v{color:#e8b84b}\n.ace-item.skip .v{color:#8d7ca8}\n\n.ace-foot{padding:11px 14px;border-top:1px solid #33244a;display:flex;gap:8px;align-items:center}\n.ace-btn{background:#c9a227;color:#231633;border:0;padding:8px 14px;border-radius:7px;\n  font-weight:600;font-size:12.5px;cursor:pointer}\n.ace-btn:hover{background:#dcb534}\n.ace-btn.ghost{background:transparent;color:#b3a3cd;border:1px solid #4a3468}\n.ace-btn.ghost:hover{background:#2a1b3d;color:#f4f0fa}\n.ace-link{background:none;border:0;padding:0;margin-left:auto;font-size:11px;\n  color:#8d7ca8;cursor:pointer;text-decoration:underline;font-family:inherit}\n.ace-link:hover{color:#f4f0fa}\n.ace-note{font-size:11px;color:#b3a3cd}\n.ace-note.warn{color:#e8b84b}\n\n\n@media (prefers-reduced-motion:no-preference){\n  .ace-panel{animation:ace-in .16s ease-out}\n  @keyframes ace-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}\n}";
+  var PANEL_CSS = "/* Deliberately narrow selectors and a high stacking context: this\n   panel lives inside somebody else's stylesheet and must neither\n   inherit from it nor be painted over by it. */\n/* Anchored top-right, not bottom-right: a form's own Submit control\n   is almost always at the bottom of the page, and a fixed panel\n   sitting on top of it blocks the one click the user needs most. */\n/* Anthracite grey, as the ace web app is: charcoal surfaces at night,\n   their light version by day, one red action, green for what was\n   filled, amber for what still needs you. */\n.ace-panel{\n  --bg:#293133;--head:rgba(241,243,243,.025);--line:rgba(241,243,243,.08);--line2:rgba(241,243,243,.14);\n  --text:#F1F3F3;--sec:#B8C0C2;--muted:#ABB3B5;--hover:rgba(241,243,243,.06);\n  --ok:#5BE083;--warn:#F7B84B;--accent:#E50914;--accent-hi:#F6121D;\n  --shadow:0 24px 64px rgba(14,18,19,.5),0 2px 6px rgba(14,18,19,.3),inset 0 1px 0 rgba(255,255,255,.06);\n  position:fixed;right:18px;top:18px;z-index:2147483647;\n  width:340px;max-height:min(72vh,580px);display:flex;flex-direction:column;\n  background:var(--bg);color:var(--text);border:1px solid var(--line2);border-radius:16px;\n  box-shadow:var(--shadow);\n  font:13px/1.5 \"Geist\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif;\n  letter-spacing:-.003em;-webkit-font-smoothing:antialiased;\n  overflow:hidden}\n@media (prefers-color-scheme:light){\n  .ace-panel{\n    --bg:#F8FAFA;--head:rgba(41,49,51,.03);--line:rgba(41,49,51,.09);--line2:rgba(41,49,51,.16);\n    --text:#293133;--sec:#4A5558;--muted:#5A6669;--hover:rgba(41,49,51,.05);\n    --ok:#11743A;--warn:#8A5300;--accent:#D90B15;--accent-hi:#E50914;\n    --shadow:0 24px 64px rgba(41,49,51,.18),0 2px 6px rgba(41,49,51,.08)}\n}\n.ace-panel *{box-sizing:border-box;font-family:inherit}\n\n.ace-head{display:flex;align-items:center;gap:11px;padding:14px 14px 13px 16px;\n  border-bottom:1px solid var(--line);background:var(--head)}\n.ace-mark{font-size:17px;font-weight:700;letter-spacing:-.055em;line-height:1;color:var(--text);\n  padding-right:11px;border-right:1px solid var(--line2);flex:0 0 auto}\n.ace-title{font-weight:650;font-size:13.5px;letter-spacing:-.01em}\n.ace-sub{font-size:11.5px;color:var(--muted);margin-top:1px}\n.ace-ver{margin-left:auto;font-size:10px;color:var(--muted);letter-spacing:.02em;flex:0 0 auto;\n  font-family:ui-monospace,\"SF Mono\",Menlo,monospace;padding:2px 7px;border-radius:99px;\n  background:var(--hover)}\n.ace-x{margin-left:4px;background:none;border:0;color:var(--muted);cursor:pointer;\n  font-size:18px;line-height:1;width:28px;height:28px;border-radius:8px;flex:0 0 auto}\n.ace-x:hover{background:var(--hover);color:var(--text)}\n\n.ace-body{overflow-y:auto;padding:6px 0 8px;flex:1 1 auto}\n.ace-body::-webkit-scrollbar{width:10px}\n.ace-body::-webkit-scrollbar-thumb{background:var(--line2);border-radius:99px;\n  border:3px solid transparent;background-clip:content-box}\n\n.ace-group{font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;\n  color:var(--muted);padding:12px 16px 5px}\n.ace-item{display:flex;gap:10px;align-items:flex-start;padding:6px 16px}\n.ace-item:hover{background:var(--hover)}\n.ace-item .k{color:var(--sec);font-size:12px;flex:0 0 42%;word-break:break-word}\n.ace-item .v{color:var(--text);font-size:12px;font-weight:500;flex:1 1 auto;word-break:break-word}\n.ace-item.done .v{color:var(--ok)}\n.ace-item.miss .v{color:var(--warn)}\n.ace-item.skip .v{color:var(--muted);font-weight:400}\n\n.ace-foot{padding:12px 14px;border-top:1px solid var(--line);display:flex;gap:8px;\n  align-items:center;background:var(--head)}\n.ace-btn{background:var(--accent);color:#FFFFFF;border:0;height:36px;padding:0 16px;border-radius:10px;\n  font-weight:650;font-size:13px;cursor:pointer;\n  box-shadow:0 8px 20px -8px rgba(229,9,20,.55),inset 0 1px 0 rgba(255,255,255,.18);\n  transition:background .12s,transform .12s}\n.ace-btn:hover{background:var(--accent-hi)}\n.ace-btn:active{transform:scale(.97)}\n.ace-btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line2);box-shadow:none}\n.ace-btn.ghost:hover{background:var(--hover)}\n.ace-link{background:none;border:0;padding:0;margin-left:auto;font-size:11.5px;\n  color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:3px;font-family:inherit}\n.ace-link:hover{color:var(--text)}\n.ace-note{font-size:11.5px;color:var(--sec)}\n.ace-note.warn{color:var(--warn)}\n\n\n@media (prefers-reduced-motion:no-preference){\n  .ace-panel{animation:ace-in .22s cubic-bezier(.34,1.3,.64,1)}\n  @keyframes ace-in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}\n}";
 
   function panel() {
     var existing = document.querySelector(".ace-root");
@@ -1722,13 +1722,24 @@
     }
   }
 
+  /* What the panel shows never carries an em dash, as nothing in ace
+     does: a form's own question can be written with one. Display only:
+     the value typed into the form is exactly the saved answer. An
+     unspaced en dash is a range and stays. */
+  function plain(text) {
+    return String(text == null ? "" : text)
+      .replace(/\s*(?:[\u2014\u2015]+|\s\u2013\s)\s*/g, ", ")
+      .replace(/^(?:,\s*)+|(?:,\s*)+$/g, "")
+      .trim();
+  }
+
   function shell(title, subtitle, body, footer) {
     var tag = version();
 
     return '<div class="ace-head">' +
-        '<div class="ace-mark">A</div>' +
-        '<div><div class="ace-title">' + esc(title) + '</div>' +
-        (subtitle ? '<div class="ace-sub">' + esc(subtitle) + '</div>' : "") +
+        '<div class="ace-mark">ace</div>' +
+        '<div><div class="ace-title">' + esc(plain(title)) + '</div>' +
+        (subtitle ? '<div class="ace-sub">' + esc(plain(subtitle)) + '</div>' : "") +
         '</div>' +
         (tag ? '<span class="ace-ver">' + esc(tag) + '</span>' : "") +
         '<button class="ace-x" data-ace="close" title="Close">&times;</button>' +
@@ -1740,8 +1751,8 @@
   function rows(items, kind) {
     return items.map(function (item) {
       return '<div class="ace-item ' + kind + '">' +
-        '<span class="k">' + esc(item[0]) + '</span>' +
-        '<span class="v">' + esc(item[1]) + '</span>' +
+        '<span class="k">' + esc(plain(item[0])) + '</span>' +
+        '<span class="v">' + esc(plain(item[1])) + '</span>' +
       '</div>';
     }).join("");
   }
@@ -2054,7 +2065,7 @@
         ? '<div class="ace-group">Filled</div>' +
           rows(result.filled.map(function (name) {
             return [name, tidy(answers[name])];
-          }), "")
+          }), "done")
         : "") +
       (result.unmatched.length
         ? '<div class="ace-group">Reword these in ACE</div>' +

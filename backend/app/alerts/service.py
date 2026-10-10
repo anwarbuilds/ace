@@ -31,6 +31,7 @@ an email.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import (
     datetime,
     timedelta,
@@ -211,7 +212,7 @@ def render(
     )
 
     subject = (
-        f"ACE: {count} new "
+        f"ace: {count} new "
         + (
             "opportunity"
             if count == 1
@@ -232,7 +233,7 @@ def render(
 
     for job, evaluation, _score in jobs[:MAX_LISTED]:
         lines.append(
-            f"{job.company} - {job.title}",
+            f"{_plain(job.company)} - {_plain(job.title)}",
         )
 
         lines.append(
@@ -240,7 +241,7 @@ def render(
             + " | ".join(
                 part
                 for part in (
-                    job.location,
+                    _plain(job.location),
                     _experience(
                         evaluation,
                     ),
@@ -284,6 +285,33 @@ def render(
     )
 
 
+def _plain(
+    value: object,
+) -> str:
+    """Employer text as ace prints it: never an em dash.
+
+    The web app and the extension hold the same rule; a title written
+    "Engineer \u2014 Platform" reads "Engineer, Platform". An unspaced en
+    dash is a range ("2\u20134 years") and stays.
+    """
+
+    text = str(
+        value or "",
+    )
+
+    text = re.sub(
+        r"\s*(?:[\u2014\u2015]+|\s\u2013\s)\s*",
+        ", ",
+        text,
+    )
+
+    return re.sub(
+        r"^(?:,\s*)+|(?:,\s*)+$",
+        "",
+        text,
+    ).strip()
+
+
 def _escape(
     value: str,
 ) -> str:
@@ -303,13 +331,15 @@ def _escape(
 # ACE's own palette. Stated as hex rather than variables because email
 # clients do not support custom properties, and repeated inline rather
 # than in a stylesheet because Gmail strips <style> in some contexts.
-INK = "#f4f0fa"
-MUTED = "#b3a3cd"
-CANVAS = "#0f0a17"
-CARD = "#1c1229"
-LINE = "#33244a"
-GOLD = "#c9a227"
-PURPLE = "#8b6fc7"
+# Anthracite grey, as the ace web app is: one red action, green for a
+# strong match. Solid colours only; mail clients drop rgba.
+INK = "#f1f3f3"
+MUTED = "#abb3b5"
+CANVAS = "#293133"
+CARD = "#30393b"
+LINE = "#434d50"
+ACCENT = "#e50914"
+MATCH = "#5be083"
 
 
 def _tier_badge(
@@ -333,9 +363,9 @@ def _tier_badge(
         return ""
 
     colour = (
-        GOLD
+        INK
         if tier is CompanyTier.BIG_TECH
-        else PURPLE
+        else MUTED
     )
 
     return (
@@ -371,7 +401,7 @@ def _score_chip(
     )
 
     colour = (
-        GOLD
+        MATCH
         if score >= 70
         else INK
         if score >= 45
@@ -416,7 +446,7 @@ def render_html(
     # which is the wordmark, so every alert previews as "A C E".
     preheader = _escape(
         ", ".join(
-            f"{job.company} {job.title}"[:48]
+            f"{_plain(job.company)} {_plain(job.title)}"[:48]
             for job, _evaluation, _score in jobs[:3]
         )
     )
@@ -429,7 +459,7 @@ def render_html(
                 part,
             )
             for part in (
-                job.location,
+                _plain(job.location),
                 _experience(
                     evaluation,
                 ),
@@ -446,13 +476,13 @@ def render_html(
     <tr><td style="padding:18px 20px;">
       <div style="font-size:13px;font-weight:600;color:{MUTED};
                   padding-bottom:6px;">
-        {_escape(job.company)}{_tier_badge(job.company)}
+        {_escape(_plain(job.company))}{_tier_badge(job.company)}
       </div>
       <div style="padding-bottom:10px;">
         <a href="{_escape(job.official_url)}"
            style="color:{INK};font-size:17px;font-weight:600;
                   text-decoration:none;line-height:1.35;">
-          {_escape(job.title)}
+          {_escape(_plain(job.title))}
         </a>
       </div>
       <div style="font-size:12.5px;color:{MUTED};padding-bottom:14px;">
@@ -466,10 +496,10 @@ def render_html(
           <td align="right">
             <table role="presentation" cellpadding="0" cellspacing="0"
                    border="0" style="display:inline-block;">
-              <tr><td bgcolor="{GOLD}" align="center"
-                      style="background:{GOLD};border-radius:7px;">
+              <tr><td bgcolor="{ACCENT}" align="center"
+                      style="background:{ACCENT};border-radius:9px;">
                 <a href="{_escape(job.official_url)}"
-                   style="display:block;color:#231633;font-size:13px;
+                   style="display:block;color:#ffffff;font-size:13px;
                           font-weight:700;text-decoration:none;
                           padding:10px 20px;font-family:Arial,Helvetica,
                           sans-serif;">Apply</a>
@@ -506,7 +536,7 @@ def render_html(
      the palette and leave light text on a light card. -->
 <meta name="color-scheme" content="dark light">
 <meta name="supported-color-schemes" content="dark light">
-<title>ACE</title>
+<title>ace</title>
 </head>
 <body style="margin:0;padding:0;background:{CANVAS};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
@@ -524,8 +554,8 @@ def render_html(
   </td></tr>
 
   <tr><td style="padding:0 0 22px 0;">
-    <div style="font-size:15px;font-weight:700;letter-spacing:.18em;
-                color:{INK};">A C E</div>
+    <div style="font-size:24px;font-weight:700;letter-spacing:-.04em;
+                line-height:1;color:{INK};">ace</div>
     <div style="font-size:22px;font-weight:600;color:{INK};
                 padding-top:12px;">
       {count} new {"opportunity" if count == 1 else "opportunities"}
@@ -540,7 +570,7 @@ def render_html(
 
   <tr><td style="padding:10px 0 0 0;border-top:1px solid {LINE};">
     <div style="padding-top:16px;font-size:12px;color:{MUTED};">
-      <a href="{base}/" style="color:{PURPLE};text-decoration:none;">
+      <a href="{base}/" style="color:{INK};text-decoration:underline;">
         Open the full queue
       </a>
     </div>

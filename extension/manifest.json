@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "ACE Autofill",
-  "version": "1.19.0",
+  "name": "ace autofill",
+  "version": "1.20.0",
   "description": "Fills application forms from the answer bank in your local ACE instance. It never submits anything.",
   "permissions": [
     "storage",
@@ -31,6 +31,6 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "ACE Autofill"
+    "default_title": "ace autofill"
   }
 }

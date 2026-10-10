@@ -1,24 +1,60 @@
 <meta charset="utf-8">
-<title>ACE Autofill</title>
+<title>ace autofill</title>
 <style>
-body{margin:0;padding:14px;width:250px;font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  background:#faf8fd;color:#2a1b3d}
-h1{font-size:14px;margin:0 0 8px}
-p{margin:0 0 10px;font-size:11.5px;color:#63558a}
-label{display:block;font-size:11px;font-weight:600;margin-bottom:4px}
-input{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #d8cfe8;border-radius:6px;
-  font-size:12px;font-family:inherit}
-button{margin-top:9px;background:#c9a227;color:#231633;border:0;padding:7px 12px;border-radius:6px;
-  font-weight:600;font-size:12px;cursor:pointer;width:100%;font-family:inherit}
-.s{margin-top:8px;font-size:11.5px;color:#63558a}
-.s.warn{color:#8a5a00}
+/* Anthracite grey, as the ace web app is. */
+:root{--bg:#293133;--s1:#30393B;--s2:#363F42;--line:rgba(241,243,243,.1);--line2:rgba(241,243,243,.16);
+  --text:#F1F3F3;--sec:#B8C0C2;--muted:#ABB3B5;--hover:rgba(241,243,243,.07);--ring:rgba(241,243,243,.06);
+  --accent:#E50914;--accent-hi:#F6121D;--ok:#5BE083;--warn:#F7B84B}
+/* By day, the light version of the same grey. */
+@media (prefers-color-scheme:light){
+  :root{--bg:#EEF1F1;--s1:#F8FAFA;--s2:#E9EDED;--line:rgba(41,49,51,.1);--line2:rgba(41,49,51,.18);
+    --text:#293133;--sec:#4A5558;--muted:#5A6669;--hover:rgba(41,49,51,.06);--ring:rgba(41,49,51,.06);
+    --accent:#D90B15;--accent-hi:#E50914;--ok:#11743A;--warn:#8A5300}
+}
+*{box-sizing:border-box}
+body{margin:0;width:300px;background:var(--bg);color:var(--text);
+  font:13px/1.5 "Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;letter-spacing:-.003em}
+header{display:flex;align-items:center;gap:10px;padding:14px 16px 12px;border-bottom:1px solid var(--line)}
+.mark{font-size:20px;font-weight:700;letter-spacing:-.055em;line-height:1;padding-right:10px;border-right:1px solid var(--line)}
+.what{font-size:12.5px;font-weight:600;color:var(--sec)}
+main{padding:14px 16px 16px}
+p{margin:0 0 14px;font-size:12px;color:var(--sec);line-height:1.55}
+.status{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;padding:11px 12px;border-radius:12px;
+  background:var(--s1);border:1px solid var(--line)}
+.s{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--sec)}
+.s:empty{display:none}
+.s::before{content:"";width:7px;height:7px;border-radius:99px;margin-top:5px;flex:none;background:var(--ok)}
+.s.warn{color:var(--warn)}
+.s.warn::before{background:var(--warn)}
+button{font-family:inherit;cursor:pointer;border-radius:10px;font-weight:650;font-size:13px;width:100%;height:38px;border:0}
+#fill{background:var(--accent);color:#fff;box-shadow:0 8px 20px -8px rgba(229,9,20,.6),inset 0 1px 0 rgba(255,255,255,.18)}
+#fill:hover{background:var(--accent-hi)}
+details{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+summary{cursor:pointer;font-size:11.5px;color:var(--muted);list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::after{content:" +";}
+details[open] summary::after{content:" \2212"}
+label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin:10px 0 5px;letter-spacing:.02em}
+input{width:100%;height:34px;padding:0 10px;border:1px solid var(--line);border-radius:9px;background:var(--s1);
+  color:var(--text);font:12.5px inherit;font-family:inherit}
+input:focus{outline:none;border-color:var(--line2);box-shadow:0 0 0 3px var(--ring)}
+#save{margin-top:8px;height:34px;background:transparent;color:var(--text);border:1px solid var(--line2);font-size:12.5px}
+#save:hover{background:var(--hover)}
 </style>
-<h1>ACE Autofill</h1>
-<p>Fills application forms from your answer bank, on any site. It never submits &mdash; you review, then you send.</p>
-<label for="base">ACE address</label>
-<input id="base" type="url" spellcheck="false" placeholder="http://localhost:8000">
-<button id="save">Save and test</button>
-<div class="s" id="answers"></div>
-<div class="s" id="page"></div>
+<header><span class="mark">ace</span><span class="what">Autofill</span></header>
+<main>
+<p>Fills application forms from your answer bank, on any site. It never submits. You review, then you send.</p>
+<div class="status">
+  <div class="s" id="answers"></div>
+  <div class="s" id="page"></div>
+</div>
 <button id="fill" class="btn">Fill this page</button>
+<details>
+  <summary>Connection</summary>
+  <label for="base">ace address</label>
+  <input id="base" type="url" spellcheck="false" placeholder="http://localhost:8000">
+  <button id="save">Save and test</button>
+</details>
+</main>
 <script src="popup.js"></script>

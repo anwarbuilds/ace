@@ -19,9 +19,9 @@ from sqlalchemy.orm import (
 )
 
 from backend.app.alerts.service import (
+    ACCENT,
     CANVAS,
     CARD,
-    GOLD,
     MAX_AGE,
     MAX_LISTED,
     render_html,
@@ -471,7 +471,7 @@ def test_the_subject_says_how_many(
         ),
     )
 
-    assert subject == "ACE: 1 new opportunity"
+    assert subject == "ace: 1 new opportunity"
 
 
 # --- the HTML part -------------------------------------------------
@@ -653,7 +653,7 @@ def test_the_apply_button_is_not_a_bare_anchor(
         session,
     )
 
-    assert f'bgcolor="{GOLD}"' in body
+    assert f'bgcolor="{ACCENT}"' in body
 
 
 def test_cards_carry_a_bgcolor_attribute(
@@ -708,3 +708,17 @@ def test_the_inbox_preview_names_roles_not_the_wordmark(
 
     assert "Stripe" in preview
     assert preview != "A C E"
+
+
+
+def test_no_em_dash_reaches_the_email(
+    session,
+) -> None:
+    """ace never prints an em dash, and employers write them."""
+
+    from backend.app.alerts.service import _plain
+
+    assert _plain("Software Engineer \u2014 Platform") == "Software Engineer, Platform"
+    assert _plain("Engineer \u2013 Payments") == "Engineer, Payments"
+    assert _plain("2\u20134 years") == "2\u20134 years"
+    assert _plain("\u2014 Remote") == "Remote"

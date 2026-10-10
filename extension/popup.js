@@ -96,7 +96,7 @@ function explainMissing(tab) {
         ? "ACE has not loaded into this tab yet. Reload the page, " +
           "or press Fill this page."
         : "Chrome runs ACE here only when you click it. For the panel " +
-          "to appear by itself: chrome://extensions, ACE Autofill, " +
+          "to appear by itself: chrome://extensions, ace autofill, " +
           "Details, Site access: On all sites.";
     }
   );
