@@ -334,10 +334,10 @@ def _escape(
 # Anthracite grey, as the ace web app is: one red action, green for a
 # strong match. Solid colours only; mail clients drop rgba.
 INK = "#f1f3f3"
-MUTED = "#abb3b5"
-CANVAS = "#293133"
-CARD = "#30393b"
-LINE = "#434d50"
+MUTED = "#a7b0b2"
+CANVAS = "#1f2628"
+CARD = "#293133"
+LINE = "#3b4547"
 ACCENT = "#e50914"
 MATCH = "#5be083"
 

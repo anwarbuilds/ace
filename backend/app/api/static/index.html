@@ -7,12 +7,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231F2427'/%3E%3Ctext x='16' y='22.5' text-anchor='middle' font-family='Arial,Helvetica,sans-serif' font-weight='700' font-size='19' fill='%23ECEFF1'%3Ea%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231F2628'/%3E%3Ctext x='16' y='22.5' text-anchor='middle' font-family='Arial,Helvetica,sans-serif' font-weight='700' font-size='19' fill='%23ECEFF1'%3Ea%3C/text%3E%3C/svg%3E">
 <style>
 /* ============================================================
    ace, Anthracite grey. Charcoal-grey surfaces, one signal colour.
-   Night is RAL 7016 itself; day is its light version, the same cool
-   green-blue grey with anthracite as the ink.
+   Night sets RAL 7016 (#293133) cards on a deeper base; day is its
+   light version, the same cool green-blue grey with anthracite as the
+   ink. Both a step darker than first drawn, at the user's request.
 
    Red is budgeted: the brand mark, the active indicator, the one
    primary action on a screen. Green means match, as on a streaming
@@ -22,23 +23,23 @@
    and passes AA.
    ============================================================ */
 :root{
-  --canvas:#EEF1F1; --side-bg:#E6EAEA; --surface-1:#F8FAFA; --surface-2:#E9EDED; --raised:#FFFFFF;
-  --hover:rgba(41,49,51,.05); --selected:rgba(41,49,51,.085);
-  --border-subtle:rgba(41,49,51,.085); --border:rgba(41,49,51,.13); --border-strong:rgba(41,49,51,.24);
-  --text:#293133; --text-secondary:#4A5558; --text-muted:#5A6669;
-  --accent:#D90B15; --accent-hover:#E50914; --accent-text:#B80D17; --on-accent:#FFFFFF;
-  --accent-soft:rgba(217,11,21,.08); --accent-glow:rgba(217,11,21,.26);
-  --match:#11743A; --match-soft:rgba(17,116,58,.10);
-  --tier-big:#293133; --tier-top:#5F6B6E; --tier-est:#C3CBCC;
-  --success:#11743A; --warning:#8A5300; --danger:#B42318; --info:#1D5FBF;
-  --warning-soft:rgba(138,83,0,.10); --danger-soft:rgba(180,35,24,.08);
-  --shadow-sm:0 1px 2px rgba(41,49,51,.07);
-  --shadow-md:0 8px 24px rgba(41,49,51,.09),0 1px 2px rgba(41,49,51,.06);
-  --shadow-lg:0 24px 64px rgba(41,49,51,.16),0 2px 6px rgba(41,49,51,.07);
-  --glass:rgba(248,250,250,.8);
-  --backdrop:rgba(41,49,51,.28);
-  --hero-glow:rgba(217,11,21,.06);
-  --scroll-thumb:rgba(41,49,51,.2);
+  --canvas:#E2E7E7; --side-bg:#D9DFDF; --surface-1:#ECF0F0; --surface-2:#DDE3E3; --raised:#F4F7F7;
+  --hover:rgba(31,38,40,.055); --selected:rgba(31,38,40,.09);
+  --border-subtle:rgba(31,38,40,.09); --border:rgba(31,38,40,.14); --border-strong:rgba(31,38,40,.26);
+  --text:#1F2628; --text-secondary:#3F4A4D; --text-muted:#4E5A5D;
+  --accent:#D90B15; --accent-hover:#E50914; --accent-text:#A50C15; --on-accent:#FFFFFF;
+  --accent-soft:rgba(217,11,21,.09); --accent-glow:rgba(217,11,21,.28);
+  --match:#0E6532; --match-soft:rgba(14,101,50,.11);
+  --tier-big:#1F2628; --tier-top:#56625F; --tier-est:#B5BEBF;
+  --success:#0E6532; --warning:#7A4900; --danger:#A11F15; --info:#1A54A8;
+  --warning-soft:rgba(122,73,0,.11); --danger-soft:rgba(161,31,21,.09);
+  --shadow-sm:0 1px 2px rgba(31,38,40,.08);
+  --shadow-md:0 8px 24px rgba(31,38,40,.11),0 1px 2px rgba(31,38,40,.07);
+  --shadow-lg:0 24px 64px rgba(31,38,40,.2),0 2px 6px rgba(31,38,40,.08);
+  --glass:rgba(236,240,240,.84);
+  --backdrop:rgba(31,38,40,.32);
+  --hero-glow:rgba(217,11,21,.07);
+  --scroll-thumb:rgba(31,38,40,.24);
   /* Aliases kept for markup that names the old tokens. */
   --purple:var(--text); --purple-rail:var(--accent); --gold-rail:var(--accent);
   --gold:var(--accent-text); --text-primary:var(--text); --surface:var(--surface-1);
@@ -52,46 +53,45 @@
   --side:244px; --gutter:32px;
 }
 :root:not([data-theme="light"]){
-  /* Anthracite grey, RAL 7016 (#293133): a soft charcoal grey with a
-     faint green-blue cast. Surfaces step lighter as they rise toward
-     the reader; the sidebar sits just below the canvas. */
-  --canvas:#293133; --side-bg:#232A2C; --surface-1:#30393B; --surface-2:#363F42; --raised:#3D474A;
+  /* Anthracite grey, RAL 7016: the cards are the grey itself (#293133)
+     on a deeper base, surfaces stepping lighter toward the reader. */
+  --canvas:#1F2628; --side-bg:#1A2022; --surface-1:#293133; --surface-2:#2F383A; --raised:#363F42;
   --hover:rgba(241,243,243,.055); --selected:rgba(241,243,243,.09);
-  --border-subtle:rgba(241,243,243,.08); --border:rgba(241,243,243,.12); --border-strong:rgba(241,243,243,.22);
-  --text:#F1F3F3; --text-secondary:#B8C0C2; --text-muted:#ABB3B5;
+  --border-subtle:rgba(241,243,243,.075); --border:rgba(241,243,243,.115); --border-strong:rgba(241,243,243,.21);
+  --text:#F1F3F3; --text-secondary:#B8C0C2; --text-muted:#A7B0B2;
   --accent:#E50914; --accent-hover:#F6121D; --accent-text:#FF8A8F; --on-accent:#FFFFFF;
   --accent-soft:rgba(229,9,20,.16); --accent-glow:rgba(229,9,20,.42);
   --match:#5BE083; --match-soft:rgba(91,224,131,.13);
-  --tier-big:#F1F3F3; --tier-top:#A3ACAE; --tier-est:#56605F;
+  --tier-big:#F1F3F3; --tier-top:#A3ACAE; --tier-est:#4F595B;
   --success:#5BE083; --warning:#F7B84B; --danger:#FF9C9C; --info:#86BFFF;
   --warning-soft:rgba(247,184,75,.14); --danger-soft:rgba(255,156,156,.13);
-  --shadow-sm:0 1px 2px rgba(0,0,0,.16);
-  --shadow-md:0 10px 28px rgba(14,18,19,.36),inset 0 1px 0 rgba(255,255,255,.05);
-  --shadow-lg:0 28px 72px rgba(14,18,19,.48),inset 0 1px 0 rgba(255,255,255,.07);
-  --glass:rgba(48,57,59,.8);
-  --backdrop:rgba(18,22,23,.5);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.2);
+  --shadow-md:0 10px 28px rgba(8,11,12,.42),inset 0 1px 0 rgba(255,255,255,.05);
+  --shadow-lg:0 28px 72px rgba(8,11,12,.55),inset 0 1px 0 rgba(255,255,255,.07);
+  --glass:rgba(41,49,51,.82);
+  --backdrop:rgba(10,13,14,.55);
   --hero-glow:rgba(229,9,20,.14);
   --scroll-thumb:rgba(241,243,243,.16);
 }
 @media (prefers-color-scheme: light){
   :root:not([data-theme="dark"]){
-    --canvas:#EEF1F1; --side-bg:#E6EAEA; --surface-1:#F8FAFA; --surface-2:#E9EDED; --raised:#FFFFFF;
-    --hover:rgba(41,49,51,.05); --selected:rgba(41,49,51,.085);
-    --border-subtle:rgba(41,49,51,.085); --border:rgba(41,49,51,.13); --border-strong:rgba(41,49,51,.24);
-    --text:#293133; --text-secondary:#4A5558; --text-muted:#5A6669;
-    --accent:#D90B15; --accent-hover:#E50914; --accent-text:#B80D17; --on-accent:#FFFFFF;
-    --accent-soft:rgba(217,11,21,.08); --accent-glow:rgba(217,11,21,.26);
-    --match:#11743A; --match-soft:rgba(17,116,58,.10);
-    --tier-big:#293133; --tier-top:#5F6B6E; --tier-est:#C3CBCC;
-    --success:#11743A; --warning:#8A5300; --danger:#B42318; --info:#1D5FBF;
-    --warning-soft:rgba(138,83,0,.10); --danger-soft:rgba(180,35,24,.08);
-    --shadow-sm:0 1px 2px rgba(41,49,51,.07);
-    --shadow-md:0 8px 24px rgba(41,49,51,.09),0 1px 2px rgba(41,49,51,.06);
-    --shadow-lg:0 24px 64px rgba(41,49,51,.16),0 2px 6px rgba(41,49,51,.07);
-    --glass:rgba(248,250,250,.8);
-    --backdrop:rgba(41,49,51,.28);
-    --hero-glow:rgba(217,11,21,.06);
-    --scroll-thumb:rgba(41,49,51,.2);
+    --canvas:#E2E7E7; --side-bg:#D9DFDF; --surface-1:#ECF0F0; --surface-2:#DDE3E3; --raised:#F4F7F7;
+    --hover:rgba(31,38,40,.055); --selected:rgba(31,38,40,.09);
+    --border-subtle:rgba(31,38,40,.09); --border:rgba(31,38,40,.14); --border-strong:rgba(31,38,40,.26);
+    --text:#1F2628; --text-secondary:#3F4A4D; --text-muted:#4E5A5D;
+    --accent:#D90B15; --accent-hover:#E50914; --accent-text:#A50C15; --on-accent:#FFFFFF;
+    --accent-soft:rgba(217,11,21,.09); --accent-glow:rgba(217,11,21,.28);
+    --match:#0E6532; --match-soft:rgba(14,101,50,.11);
+    --tier-big:#1F2628; --tier-top:#56625F; --tier-est:#B5BEBF;
+    --success:#0E6532; --warning:#7A4900; --danger:#A11F15; --info:#1A54A8;
+    --warning-soft:rgba(122,73,0,.11); --danger-soft:rgba(161,31,21,.09);
+    --shadow-sm:0 1px 2px rgba(31,38,40,.08);
+    --shadow-md:0 8px 24px rgba(31,38,40,.11),0 1px 2px rgba(31,38,40,.07);
+    --shadow-lg:0 24px 64px rgba(31,38,40,.2),0 2px 6px rgba(31,38,40,.08);
+    --glass:rgba(236,240,240,.84);
+    --backdrop:rgba(31,38,40,.32);
+    --hero-glow:rgba(217,11,21,.07);
+    --scroll-thumb:rgba(31,38,40,.24);
   }
 }
 @property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
@@ -319,13 +319,13 @@ tr.bandline span{display:block;padding:9px var(--gutter);font-size:10.5px;font-w
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.07),inset 0 1px 0 rgba(255,255,255,.08);
   text-transform:uppercase;user-select:none;
 }
-:root[data-theme="light"] .co-av{color:hsl(var(--h) 38% 27%);
-  background:linear-gradient(145deg,hsl(var(--h) 34% 92%),hsl(var(--h) 24% 84%));
-  box-shadow:inset 0 0 0 1px rgba(41,49,51,.07)}
+:root[data-theme="light"] .co-av{color:hsl(var(--h) 38% 24%);
+  background:linear-gradient(145deg,hsl(var(--h) 30% 88%),hsl(var(--h) 22% 80%));
+  box-shadow:inset 0 0 0 1px rgba(31,38,40,.08)}
 @media (prefers-color-scheme: light){
-  :root:not([data-theme="dark"]) .co-av{color:hsl(var(--h) 38% 27%);
-    background:linear-gradient(145deg,hsl(var(--h) 34% 92%),hsl(var(--h) 24% 84%));
-    box-shadow:inset 0 0 0 1px rgba(41,49,51,.07)}
+  :root:not([data-theme="dark"]) .co-av{color:hsl(var(--h) 38% 24%);
+    background:linear-gradient(145deg,hsl(var(--h) 30% 88%),hsl(var(--h) 22% 80%));
+    box-shadow:inset 0 0 0 1px rgba(31,38,40,.08)}
 }
 .co-av.lg{width:64px;height:64px;border-radius:18px;font-size:22px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 12px 32px rgba(0,0,0,.35)}
 .co-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -432,7 +432,9 @@ tr.bandline span{display:block;padding:9px var(--gutter);font-size:10.5px;font-w
 .jp-head{display:flex;align-items:flex-start;gap:20px}
 .jp-headtxt{min-width:0;flex:1}
 .jp-tier{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-bottom:9px}
-.jp-tier::before{content:"";width:16px;height:2px;border-radius:2px;background:currentColor}
+/* A dot, never a short rule: a bar drawn before a word reads as an em
+   dash, and ace shows none, typed or drawn. */
+.jp-tier::before{content:"";width:6px;height:6px;border-radius:99px;background:currentColor}
 .jp-title{font-size:34px;font-weight:750;letter-spacing:-.035em;line-height:1.12;margin:0 0 14px;text-wrap:balance}
 .jp-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--text-secondary)}
 .jp-meta>span:not(.badge):not([class^="exp-"]){display:inline-flex;align-items:center;height:28px;padding:0 11px;border-radius:99px;

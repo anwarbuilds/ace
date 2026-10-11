@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import pytest
 
+from .scans import drawn_dash_scan
+
 
 pytestmark = pytest.mark.browser
 
@@ -1288,7 +1290,7 @@ def test_the_activity_sidebar_shows_real_source_counts(
 # --- content rules ----------------------------------------------------
 
 
-def test_no_em_dash_reaches_the_screen(
+def test_the_rendered_queue_has_no_em_dash(
     page,
 ) -> None:
     """A permanent content rule, and the one most easily broken by a
@@ -1308,11 +1310,11 @@ def test_both_themes_paint_their_own_background(
     for theme, expected in (
         (
             "dark",
-            "rgb(41, 49, 51)",
+            "rgb(31, 38, 40)",
         ),
         (
             "light",
-            "rgb(238, 241, 241)",
+            "rgb(226, 231, 231)",
         ),
     ):
         page.eval(
@@ -1919,3 +1921,125 @@ def test_no_em_dash_reaches_the_screen(
         })()
         """
     ) == "mine — kept"
+
+
+def test_the_scan_for_drawn_dashes_finds_one(
+    page,
+) -> None:
+    """Prove the scan below can fail before trusting it to pass.
+
+    The rule that once sat before a tier name, rebuilt on purpose.
+    """
+
+    page.eval(
+        """
+        (function(){
+          var s=document.createElement('style');
+          s.textContent='.probe::before{content:"";display:inline-block;'
+            +'width:16px;height:2px;background:red;margin-right:7px}';
+          document.head.appendChild(s);
+          var p=document.createElement('span');
+          p.className='probe';
+          p.textContent='BIG TECH';
+          document.body.appendChild(p);
+          return 1;
+        })()
+        """
+    )
+
+    found = page.eval(
+        drawn_dash_scan()
+    )
+
+    assert any(
+        "probe::before" in item
+        for item in found
+    ), found
+
+
+def test_no_page_draws_a_dash(
+    page,
+) -> None:
+    """A short horizontal rule painted with CSS reads as an em dash.
+
+    The text guard cannot see one, so this looks at what is drawn, on
+    every page and on a job, in the colours of both themes.
+    """
+
+    def scan(label: str) -> list[str]:
+        return [
+            label + ": " + item
+            for item in page.eval(
+                drawn_dash_scan()
+            )
+        ]
+
+    found: list[str] = []
+
+    for theme in (
+        "dark",
+        "light",
+    ):
+        page.eval(
+            f'applyTheme("{theme}");1'
+        )
+
+        found += scan(
+            f"{theme} queue"
+        )
+
+        for route in (
+            "pulls",
+            "applied",
+            "resumes",
+            "skills",
+            "answers",
+            "coverage",
+            "settings",
+        ):
+            page.eval(
+                f'goTo("{route}");1'
+            )
+
+            page.wait_for(
+                f"state.page==='{route}'"
+                " && state.loading===false",
+                timeout=30,
+            )
+
+            found += scan(
+                f"{theme} {route}"
+            )
+
+        page.eval(
+            'goTo("queue");1'
+        )
+
+        page.wait_for(
+            "state.page==='queue' && "
+            "document.querySelectorAll('.row')"
+            ".length > 0"
+        )
+
+        page.eval(
+            "document.querySelector('.j-title')"
+            ".click();1"
+        )
+
+        page.wait_for(
+            "!!document.querySelector('.jp-title')"
+        )
+
+        found += scan(
+            f"{theme} job page"
+        )
+
+        page.eval(
+            'goTo("queue");1'
+        )
+
+    page.eval(
+        'applyTheme("dark");1'
+    )
+
+    assert not found, found

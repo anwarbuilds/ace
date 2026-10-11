@@ -20,6 +20,8 @@ import pathlib
 
 import pytest
 
+from .scans import drawn_dash_scan
+
 
 EXTENSION = (
     pathlib.Path(
@@ -2354,3 +2356,52 @@ def test_the_panel_never_shows_an_em_dash(
     assert "—" not in html
 
     assert "Fill, 3 fields" in html
+
+
+def test_the_popup_draws_no_dash(
+    page,
+) -> None:
+    """The popup is its own page, so the app's scan never sees it.
+
+    Its "Connection" toggle once swapped a plus for a minus sign when it
+    opened, and the minus read as a dash. Checked open and closed.
+    """
+
+    html = (
+        EXTENSION / "popup.html"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    page.eval(
+        "(function(){"
+        "var f=document.createElement('iframe');"
+        "f.id='popup-frame';"
+        "f.style.cssText='position:fixed;left:0;top:0;"
+        "width:320px;height:420px;border:0';"
+        "document.body.appendChild(f);"
+        "f.srcdoc=" + json.dumps(html) + ";"
+        "return 1;})()"
+    )
+
+    frame = (
+        "document.getElementById('popup-frame')"
+        ".contentDocument"
+    )
+
+    page.wait_for(
+        f"!!{frame} && !!{frame}.querySelector('summary')"
+    )
+
+    assert page.eval(
+        drawn_dash_scan(frame)
+    ) == []
+
+    page.eval(
+        f"{frame}.querySelector('details')"
+        ".open=true;1"
+    )
+
+    assert page.eval(
+        drawn_dash_scan(frame)
+    ) == []
