@@ -5,9 +5,9 @@ top to bottom (about ten minutes), then start at section 9. Written on
 2026-10-10. This repo is PUBLIC, so this file holds no personal data; the
 private context arrives in the prompt the session is started with.
 
-`docs/ACE-KNOWLEDGE.md` is a 200 KB local history file that is gitignored and
-will not exist in a cloud session. Everything needed to continue is here. If
-you do have it, grep it for one fact instead of reading it.
+The full engineering history is split by topic in `docs/knowledge/` (committed,
+personal details removed; index and recurring lessons in `docs/knowledge/README.md`).
+Open a topic file only when you work in that area. Everything needed to continue is here.
 
 ## 1. What the user is trying to achieve
 
@@ -335,7 +335,7 @@ npm ci`. You cannot reach the user's database, scheduler, `.env` or the
 extension in their browser. Work on a branch and open a pull request; main stays
 deployable, and the live app only changes when the user pulls and rebuilds.
 
-## 11. Operational gotchas
+## 11. Operational gotchas (the short list; the rest is in `docs/knowledge/08-operations-and-testing.md`)
 
 - `docker compose build` before `up`; containers bake the source. `migrate` has
   its own image, so building only web and scheduler leaves migrations unapplied.
@@ -379,8 +379,20 @@ deployable, and the live app only changes when the user pulls and rebuilds.
 
 ## 13. First moves for the next session
 
-1. Read this file; check `git log -5` and `git status`.
+1. Read this file and the index `docs/knowledge/README.md` (about 1k tokens); check `git log -5` and `git status`.
 2. Do Step 0 and Step 0b, test first, on a branch.
 3. Start Phase 1 with the shell (layout, tokens, theme switch, nav), then the
    queue with URL-held filters and numbered pagination, then the job page.
 4. Show the user a screenshot of each page in both themes as it lands.
+
+## 14. Keeping this current
+
+Knowledge only compounds if it is written down and pushed. Before ending any session:
+
+1. Update section 3 (state) of this file, and section 9 if the plan moved. Keep the file under 450 lines; move detail
+   into `docs/knowledge/`.
+2. Add a dated entry to the right topic file in `docs/knowledge/` for anything learned or reversed (its README says how),
+   and a Status line on anything the entry supersedes.
+3. Commit the docs with the code, push, and open or update the pull request. A cloud session starts from what is on
+   GitHub, so ask the user to merge, or start the next session from the work branch.
+4. No personal data in either place: this repo is public.

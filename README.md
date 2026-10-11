@@ -17,7 +17,8 @@
 </div>
 
 > Picking this project up cold, or starting a fresh AI session on it? Read
-> [docs/HANDOFF.md](docs/HANDOFF.md) first: goal, rules, current state and plan.
+> [docs/HANDOFF.md](docs/HANDOFF.md) first: goal, rules, current state and plan. The full history by topic is in
+> [docs/knowledge/](docs/knowledge/README.md).
 
 ---
 
