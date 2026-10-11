@@ -62,3 +62,7 @@ ace-applications*.csv
 # publish from a repo owned under a real name. Keeping it out entirely
 # is the honest answer rather than editing around the problem.
 docs/ACE-KNOWLEDGE.md
+
+# The prompt used to start a fresh session carries private context (profile,
+# cleanup items). docs/HANDOFF.md is the public-safe brief it points to.
+docs/NEXT-SESSION-PROMPT.md
