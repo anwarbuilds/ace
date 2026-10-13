@@ -38,9 +38,12 @@ from datetime import (
     timezone,
 )
 
+from zoneinfo import ZoneInfo
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.applications.prior import find_applied_before
 from backend.app.config import get_settings
 from backend.app.intelligence.companies import (
     CompanyTier,
@@ -201,9 +204,54 @@ def _experience(
     return "Experience not stated"
 
 
+def applied_before_notes(
+    session: Session,
+    jobs: list,
+) -> dict[int, str]:
+    """Job id to "Applied before, Oct 4" for re-listings of an application.
+
+    A posting the employer closed and listed again arrives as a new job
+    with no mark, so without this the alert reads as a fresh opening the
+    user has not applied to. Derived, never stored; see
+    applications/prior.py. The date is shown in the user's own zone, not
+    the container's UTC.
+    """
+
+    if not jobs:
+        return {}
+
+    zone = ZoneInfo(
+        get_settings().display_timezone
+    )
+
+    found = find_applied_before(
+        session,
+        [
+            (
+                job.id,
+                job.company,
+                job.title,
+                job.location,
+            )
+            for job, _evaluation, _score in jobs
+        ],
+    )
+
+    return {
+        job_id: "Applied before, "
+        + earlier.applied_at.astimezone(
+            zone
+        ).strftime(
+            "%b %-d"
+        )
+        for job_id, earlier in found.items()
+    }
+
+
 def render(
     pull: PollSessionRecord,
     jobs: list[tuple[JobRecord, JobEvaluationRecord]],
+    notes: dict[int, str] | None = None,
 ) -> tuple[str, str]:
     """Return the subject and body for one pull."""
 
@@ -249,6 +297,11 @@ def render(
                 if part
             ),
         )
+
+        if notes and job.id in notes:
+            lines.append(
+                "  " + notes[job.id],
+            )
 
         # The employer's own posting, never an aggregator or a link
         # back into ACE. Tapping it on a phone has to land on the
@@ -340,6 +393,7 @@ CARD = "#293133"
 LINE = "#3b4547"
 ACCENT = "#e50914"
 MATCH = "#5be083"
+WARN = "#f7b84b"
 
 
 def _tier_badge(
@@ -415,9 +469,27 @@ def _score_chip(
     )
 
 
+def _applied_chip(
+    note: str | None,
+) -> str:
+    """A small amber chip saying this role resembles an application."""
+
+    if not note:
+        return ""
+
+    return (
+        '<div style="padding-bottom:14px;">'
+        '<span style="display:inline-block;padding:3px 8px;'
+        "border-radius:6px;font-size:11px;font-weight:700;"
+        f'color:{WARN};border:1px solid {WARN};">'
+        f"{_escape(note)}</span></div>"
+    )
+
+
 def render_html(
     pull: PollSessionRecord,
     jobs: list,
+    notes: dict[int, str] | None = None,
 ) -> str:
     """The alert as HTML.
 
@@ -485,9 +557,10 @@ def render_html(
           {_escape(_plain(job.title))}
         </a>
       </div>
-      <div style="font-size:12.5px;color:{MUTED};padding-bottom:14px;">
+      <div style="font-size:12.5px;color:{MUTED};padding-bottom:{"8px" if notes and job.id in notes else "14px"};">
         {facts}
       </div>
+      {_applied_chip((notes or {}).get(job.id))}
       <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
         <tr>
           <td align="left" style="vertical-align:middle;">
@@ -627,9 +700,15 @@ def send_pending(
             pull.notified_at = moment
             continue
 
+        notes = applied_before_notes(
+            session,
+            jobs,
+        )
+
         subject, body = render(
             pull,
             jobs,
+            notes,
         )
 
         delivered = send_mail(
@@ -639,6 +718,7 @@ def send_pending(
             html=render_html(
                 pull,
                 jobs,
+                notes,
             ),
         )
 

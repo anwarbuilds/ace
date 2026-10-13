@@ -437,6 +437,30 @@ def _serialize_job(
             if job.applied_at is None
             else job.applied_at.isoformat()
         ),
+        # A re-listing of a posting the user applied to, or null.
+        "applied_before": (
+            None
+            if job.applied_before is None
+            else {
+                "job_id": job.applied_before.job_id,
+                "title": job.applied_before.title,
+                "location": (
+                    job.applied_before.location
+                ),
+                "applied_at": (
+                    job.applied_before
+                    .applied_at.isoformat()
+                ),
+                "is_active": (
+                    job.applied_before.is_active
+                ),
+                "requisition_id": (
+                    job.applied_before
+                    .requisition_id
+                ),
+                "count": job.applied_before.count,
+            }
+        ),
     }
 
 

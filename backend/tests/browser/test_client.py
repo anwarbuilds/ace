@@ -2043,3 +2043,142 @@ def test_no_page_draws_a_dash(
     )
 
     assert not found, found
+
+
+_RELISTED = (
+    "{job_id:1,title:'Software Engineer',"
+    "location:'Redmond, WA',"
+    "applied_at:'2026-10-04T19:00:00+00:00',"
+    "is_active:false,requisition_id:'200059000',count:6}"
+)
+
+
+def test_a_relisting_of_an_applied_posting_is_marked_on_its_row(
+    page,
+) -> None:
+    """The mark stays on the closed posting; the new listing must still
+    say the user applied, with the date, and not read as unapplied."""
+
+    page.eval(
+        "(function(){var j=state.items[0];"
+        "j.applied_at=null;j.application_status=null;"
+        "j.review_state=null;j.is_saved=false;"
+        f"j.applied_before={_RELISTED};"
+        "render();return 1;})()"
+    )
+
+    text = page.eval(
+        "document.querySelector('.badge.before').textContent"
+    )
+
+    assert text.startswith("Applied before")
+    assert "Oct 4" in text
+
+    tip = page.eval(
+        "document.querySelector('.badge.before').title"
+    )
+
+    assert "You applied to" in tip
+    assert "that posting has closed" in tip
+    assert "5 other earlier applications" in tip
+    assert "requisition 200059000" in tip
+
+    # Not an applied row: it is still a live opening to act on.
+    assert page.eval(
+        "!document.querySelector('.badge.before')"
+        ".closest('.row').classList.contains('done')"
+    )
+
+
+def test_a_relisting_says_so_on_its_job_page(
+    page,
+) -> None:
+    page.eval(
+        "openJob(state.items[0].id);1"
+    )
+
+    page.wait_for(
+        "!!document.querySelector('.jp-title')"
+    )
+
+    page.eval(
+        "(function(){var j=state.detailJob||jobById(state.jobId);"
+        "j.applied_at=null;j.application_status=null;"
+        f"j.applied_before={_RELISTED};"
+        "render();return 1;})()"
+    )
+
+    assert page.eval(
+        "!!document.querySelector('.jp-meta .badge.before')"
+    )
+
+    card = page.eval(
+        "document.body.innerText"
+    )
+
+    assert "Applied before." in card
+    assert "This posting is not marked applied." in card
+
+    assert page.eval(
+        "document.querySelector("
+        "'a.link-btn[href=\"#job/1\"]')!==null"
+    )
+
+    assert "\u2014" not in card
+
+
+def test_a_collapsed_group_says_when_members_were_applied_to(
+    page,
+) -> None:
+    """Re-listings fold into "N similar openings", which hides their own
+    notice, so the group header has to carry it."""
+
+    page.eval(
+        "(function(){var a=state.items[0];"
+        "state.expandedGroups={};"
+        "state.items=[1,2,3].map(function(n){"
+        "var j=Object.assign({},a);"
+        "j.id=900000+n;j.title='Software Engineer';"
+        "j.applied_at=null;j.application_status=null;"
+        "j.review_state=null;j.is_saved=false;"
+        "j.applied_before=null;return j;});"
+        f"state.items[1].applied_before={_RELISTED};"
+        "render();return 1;})()"
+    )
+
+    badge = page.eval(
+        "(function(){var b=document.querySelector("
+        "'.grp-head .badge.before');"
+        "return b?b.textContent:null;})()"
+    )
+
+    assert badge == "1 already applied", badge
+
+
+def test_the_notice_compares_requisition_numbers(
+    page,
+) -> None:
+    """Two open listings with different numbers may be two openings, and
+    the notice says so instead of implying the same one came back."""
+
+    note = page.eval(
+        "beforeNote({requisition_id:'R-110488',"
+        "applied_before:{title:'Software Development Engineer II',"
+        "location:'Washington - Seattle Campus',"
+        "applied_at:'2026-10-08T19:00:00+00:00',is_active:true,"
+        "requisition_id:'R-108814',count:1}})"
+    )
+
+    assert "requisition R-108814" in note
+    assert "requisition R-110488, so it may be a separate opening" in note
+    assert "that posting has closed" not in note
+
+    same = page.eval(
+        "beforeNote({requisition_id:'R-1',"
+        "applied_before:{title:'Engineer',location:'Austin',"
+        "applied_at:'2026-10-08T19:00:00+00:00',is_active:false,"
+        "requisition_id:'R-1',count:1}})"
+    )
+
+    assert "Same requisition as this posting." in same
+    assert "(requisition R-1, that posting has closed)" in same

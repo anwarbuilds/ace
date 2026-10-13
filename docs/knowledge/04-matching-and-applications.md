@@ -432,3 +432,32 @@ Worth noting the backend was already right. `set_mark` has recorded
 `applied_at` whenever a status is set for a while now, on the reasoning
 that a status implies an application was sent. The whole failure was
 client-side state.
+
+## A closed posting listed again looked unapplied (2026-10-12)
+
+The user saw jobs they had already applied to arriving again in the pulls and asked to be told they were applied.
+The data explained it: Microsoft closed "Software Engineer" in Redmond (the postings applied to on Oct 2, 4 and 8) and listed
+the same title and place again under new ids on Oct 12. Each listing is its own job, so the mark stayed on the closed rows
+and the new ones had none. An Amgen role held twice in one run did the same. The queue also folds similar openings into one
+header ("Software Engineer, 3 similar openings"), which hid even the marks that did exist, so a whole group of re-listings
+read as new.
+
+The mark is not copied across. Whether a second listing is the same opening is something only the user knows (an employer can
+hold six open requisitions with one title), and this file already records what guessing an identity cost. Instead the notice
+is derived when a page is read and never stored: `applications/prior.py` finds, for a job with no applied mark of its own,
+earlier applied jobs with the same company and title (ignoring case and spacing) and a compatible place (the same first place,
+or one side naming only a country; "Remote" never matches a city). `/api/jobs` returns `applied_before` with the latest such
+posting, its date, whether it is still open, and how many match. It shows as an amber "Applied before, Oct 4" on the row and
+in the job page header and status card (with a link to the earlier posting), as "k already applied" on a group header, in the
+desktop notification, and in the alert email (plain text and HTML, date in the user's zone).
+
+The notice also carries the employer's requisition number for both postings. The first complaint after release was an
+Expedia role whose notice read "You applied to this" while the two postings were both open with different requisitions
+(R-108814 applied on Oct 8, R-110488 new): a second opening that looks the same, not a re-listing. The text now says
+"This posting is requisition R-110488, so it may be a separate opening" when the numbers differ, and "Same requisition"
+when they match.
+
+Verified on live data first: the Redmond re-listings pointed at the Oct 4 application with six matches, the Amgen twin at the
+role marked that morning, and a 200 row page still answered in 0.2 s. Lesson: a mark belongs to a posting, but the user's
+question is about the opening, so show the resemblance and let them decide; and any summary row that hides its members
+(a collapsed group) has to carry the warnings its members would have shown.

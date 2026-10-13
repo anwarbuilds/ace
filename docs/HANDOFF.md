@@ -105,12 +105,16 @@ excluded kinds unless the user asks.
   jobs, roughly 600 applications tracked, a 66 row answer bank. The scheduler
   polls continuously (five minute cycles; Google every 30 minutes) and alerts
   are one email per closed 15 minute pull.
-- Tests: 1009 unit (hermetic, SQLite, ~20 s), 101 browser (one skips when the
+- Tests: 1027 unit (hermetic, SQLite, ~20 s), 105 browser (one skips when the
   live data lacks a recent check with a job), 185 extension matcher cases.
 - Done this week: own-site readers for Atlassian, EA, Apple, Shopify, AMD, SIG,
   Booking.com, Groq, Google, Meta, Intuit, Arm, Synopsys and about 25 more
   boards; gate v46 to v53; the full anthracite redesign (web, extension, email),
   night and day, then a step darker; em dash guards and the drawn dash scan.
+- 2026-10-12: a posting the user applied to that an employer lists again (new id, no mark) now shows
+  "Applied before, Oct 4" on its row, job page, group header, desktop notification and alert email. Derived on
+  read in `applications/prior.py`, never stored, and compares requisition numbers so two open listings that differ are
+  called possibly separate openings; see `docs/knowledge/04`.
 - **Known issue, found 2026-10-10, not fixed: resume scores never refresh.**
   `rescore_corpus` (`backend/app/matching/service.py`) runs only from
   `POST /api/resume`. Every row in `job_resume_scores` (31,445) dates from one

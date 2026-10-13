@@ -34,6 +34,10 @@ from sqlalchemy.orm import (
     aliased,
 )
 
+from backend.app.applications.prior import (
+    AppliedBefore,
+    find_applied_before,
+)
 from backend.app.coverage.companies import (
     MULTI_EMPLOYER_SOURCES,
 )
@@ -291,6 +295,11 @@ class JobListing:
     status_changed_at: datetime | None = None
 
     status_note: str | None = None
+
+    # Set only when the job carries no application mark of its own but
+    # resembles a posting the user applied to. Derived on read, never
+    # stored: see applications/prior.py.
+    applied_before: AppliedBefore | None = None
 
 
 @dataclass(
@@ -1462,6 +1471,36 @@ def list_jobs(
         )
         for job, evaluation, match, mark in rows
     )
+
+    # A re-listing of something already applied to is a new row with no
+    # mark. Say so, rather than let it read as unapplied.
+    unmarked = [
+        (
+            item.id,
+            item.company,
+            item.title,
+            item.location,
+        )
+        for item in items
+        if item.applied_at is None
+    ]
+
+    if unmarked:
+        prior = find_applied_before(
+            session,
+            unmarked,
+        )
+
+        if prior:
+            items = tuple(
+                replace(
+                    item,
+                    applied_before=prior[item.id],
+                )
+                if item.id in prior
+                else item
+                for item in items
+            )
 
     return JobPage(
         items=items,
