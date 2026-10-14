@@ -722,3 +722,103 @@ def test_no_em_dash_reaches_the_email(
     assert _plain("Engineer \u2013 Payments") == "Engineer, Payments"
     assert _plain("2\u20134 years") == "2\u20134 years"
     assert _plain("\u2014 Remote") == "Remote"
+
+
+# --- what actually happened to each alert (2026-10-14) ----------------
+
+
+def test_an_alert_with_no_mail_provider_says_so(
+    session,
+) -> None:
+    """A pull was marked notified even when no email could leave, and
+    nothing could tell the two apart. The status says which happened."""
+
+    pull = make_pull(
+        session,
+        started_at=NOW - timedelta(hours=1),
+    )
+
+    add_job(
+        session,
+        pull,
+        index=1,
+    )
+
+    send_pending(
+        session,
+        now=NOW,
+    )
+
+    assert pull.alert_status == "unconfigured"
+
+
+def test_a_delivered_alert_is_recorded_as_sent(
+    session,
+    monkeypatch,
+) -> None:
+    import backend.app.alerts.service as service
+
+    monkeypatch.setattr(service, "send_mail", lambda **_: True)
+    monkeypatch.setattr(service, "mail_configured", lambda: True)
+
+    pull = make_pull(
+        session,
+        started_at=NOW - timedelta(hours=1),
+    )
+
+    add_job(
+        session,
+        pull,
+        index=1,
+    )
+
+    assert send_pending(session, now=NOW) == 1
+
+    assert pull.alert_status == "sent"
+
+
+def test_a_refused_alert_is_recorded_as_failed(
+    session,
+    monkeypatch,
+) -> None:
+    import backend.app.alerts.service as service
+
+    monkeypatch.setattr(service, "send_mail", lambda **_: False)
+    monkeypatch.setattr(service, "mail_configured", lambda: True)
+
+    pull = make_pull(
+        session,
+        started_at=NOW - timedelta(hours=1),
+    )
+
+    add_job(
+        session,
+        pull,
+        index=1,
+    )
+
+    assert send_pending(session, now=NOW) == 0
+
+    assert pull.alert_status == "failed"
+
+
+def test_a_stale_pull_is_skipped_not_sent(
+    session,
+) -> None:
+    pull = make_pull(
+        session,
+        started_at=NOW - timedelta(days=3),
+    )
+
+    add_job(
+        session,
+        pull,
+        index=1,
+    )
+
+    send_pending(
+        session,
+        now=NOW,
+    )
+
+    assert pull.alert_status == "skipped"

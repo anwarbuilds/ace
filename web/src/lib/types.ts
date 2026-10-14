@@ -122,6 +122,7 @@ export interface Pull {
   postings_checked: number | null;
   qualifying_open_now: number;
   age_seconds: number;
+  alert_status: string | null;
   jobs: Job[];
 }
 
@@ -238,4 +239,17 @@ export interface SourceResult {
   job_count: number | null;
   evidence: string | null;
   detail: string | null;
+}
+
+export interface SystemStatus {
+  versions: { gate: string; matching: string };
+  display_timezone: string;
+  scheduler: { last_poll_at: string | null; stale: boolean; sources_enabled: number };
+  alerts: {
+    address_set: boolean;
+    provider_configured: boolean;
+    last_sent_at: string | null;
+    last_7_days: Record<string, number>;
+  };
+  scoring: { resume_active: boolean; queue_jobs: number; queue_unscored: number };
 }

@@ -56,7 +56,10 @@ from backend.app.db.models import (
     PollSessionRecord,
     ResumeRecord,
 )
-from backend.app.mail.sender import send as send_mail
+from backend.app.mail.sender import (
+    mail_configured,
+    send as send_mail,
+)
 from backend.app.persistence.sessions import (
     SESSION_BUCKET,
     _as_utc,
@@ -698,6 +701,7 @@ def send_pending(
             # recorded but the jobs have since been re-evaluated away.
             # Marked so it is not reconsidered every cycle.
             pull.notified_at = moment
+            pull.alert_status = "skipped"
             continue
 
         notes = applied_before_notes(
@@ -723,6 +727,16 @@ def send_pending(
         )
 
         pull.notified_at = moment
+
+        # Told apart, so no screen calls an alert sent when no provider
+        # was ever configured to send it.
+        pull.alert_status = (
+            "sent"
+            if delivered
+            else "failed"
+            if mail_configured()
+            else "unconfigured"
+        )
 
         if delivered:
             sent += 1

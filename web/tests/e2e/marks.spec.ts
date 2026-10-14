@@ -9,17 +9,25 @@ async function markOf(request: import("@playwright/test").APIRequestContext, id:
   return (await res.json()) as { is_saved: boolean; review_state: string | null; applied_at: string | null };
 }
 
-test("save from the row dock, then undo it", async ({ page, request }) => {
+test("mark reviewed from the row dock, then undo it", async ({ page, request }) => {
   await page.goto("/app/opportunities?sort=company");
   const row = page.locator(".row[data-id]:not(.grp-head)").first();
   const id = (await row.getAttribute("data-id"))!;
-  const before = await markOf(request, id);
+  const before = (await markOf(request, id)).review_state;
   await row.hover();
-  await row.locator('button[data-mark="saved"]').click();
-  await expect(page.locator(".toast")).toContainText(before.is_saved ? "Removed from saved" : "Saved");
-  await expect.poll(async () => (await markOf(request, id)).is_saved).toBe(!before.is_saved);
+  await row.locator('button[data-mark="reviewed"]').click();
+  await expect(page.locator(".toast")).toContainText(before === "reviewed" ? "Review cleared" : "Marked reviewed");
+  await expect.poll(async () => (await markOf(request, id)).review_state).toBe(before === "reviewed" ? null : "reviewed");
   await page.locator(".toast .link-btn", { hasText: "Undo" }).click();
-  await expect.poll(async () => (await markOf(request, id)).is_saved).toBe(before.is_saved);
+  await expect.poll(async () => (await markOf(request, id)).review_state).toBe(before);
+});
+
+test("there is no save star anywhere", async ({ page }) => {
+  await page.goto("/app/opportunities");
+  await expect(page.locator('[data-mark="saved"]')).toHaveCount(0);
+  await page.locator("a.j-title").first().click();
+  await expect(page.locator(".jp-title")).toBeVisible();
+  await expect(page.locator('[data-mark="saved"]')).toHaveCount(0);
 });
 
 test("marking applied on the job page shows at once and persists", async ({ page, request }) => {

@@ -1,6 +1,7 @@
 import type { BrowserContext, Page } from "@playwright/test";
 
 export const ROUTES = [
+  "/app",
   "/app/opportunities",
   "/app/activity",
   "/app/applications",

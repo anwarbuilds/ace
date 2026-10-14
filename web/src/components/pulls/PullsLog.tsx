@@ -12,6 +12,20 @@ import type { Pull, PullsResponse } from "@/lib/types";
 
 const PAGE = 30;
 
+// What happened to the pull's email. "Sent" only when a provider took it.
+const ALERT_LABEL: Record<string, string> = {
+  sent: "emailed",
+  failed: "email failed",
+  unconfigured: "not emailed",
+  skipped: "no email",
+};
+const ALERT_NOTE: Record<string, string> = {
+  sent: "The alert email was accepted by the mail provider.",
+  failed: "The mail provider refused the alert or could not be reached.",
+  unconfigured: "No mail provider key is set, so the alert could not leave.",
+  skipped: "Nothing left to alert about, or too old to be useful.",
+};
+
 /** What a pull read as well as what was new in it. "31 postings seen"
  *  was once read as ace having looked at 31 postings, when it had read
  *  483 boards and 31 of their postings were new. */
@@ -131,6 +145,11 @@ export function PullsLog({ initial }: { initial: Pull[] }) {
                       </span>
                       <span className={`pl-badge${counted ? " hit" : ""}`}>{label}</span>
                       <span className="pl-seen">{checked(s)}</span>
+                      {s.alert_status ? (
+                        <span className={`pl-alert a-${s.alert_status}`} title={ALERT_NOTE[s.alert_status] ?? s.alert_status}>
+                          {ALERT_LABEL[s.alert_status] ?? s.alert_status}
+                        </span>
+                      ) : null}
                       <span className="pl-ago" suppressHydrationWarning>
                         {ago(s.finished_at || s.started_at, now)}
                       </span>

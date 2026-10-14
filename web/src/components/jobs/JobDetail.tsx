@@ -66,7 +66,6 @@ export function JobDetail({ job: served, resumeLabel }: { job: Job; resumeLabel:
       if (document.querySelector(".palette-wrap,.pop,.ab")) return;
       if (e.key === "Escape") back.go();
       else if (e.key === "Enter") window.open(job.official_url, "_blank", "noopener");
-      else if (e.key === "s") void mark(job, "saved");
       else if (e.key === "a") void mark(job, "applied");
     };
     document.addEventListener("keydown", onKey);
@@ -216,10 +215,9 @@ export function JobDetail({ job: served, resumeLabel }: { job: Job; resumeLabel:
                   <Icon name="ext" />
                 </a>
                 <div className="status-grid">
-                  {markBtn("saved", "star", "Save", job.is_saved)}
                   {markBtn("reviewed", "check", "Reviewed", job.review_state === "reviewed")}
                   {markBtn("dismissed", "x", "Not relevant", job.review_state === "dismissed")}
-                  {markBtn("applied", "briefcase", "Applied", applied)}
+                  <div style={{ gridColumn: "1 / -1", display: "grid" }}>{markBtn("applied", "briefcase", "Applied", applied)}</div>
                 </div>
               </div>
             </div>

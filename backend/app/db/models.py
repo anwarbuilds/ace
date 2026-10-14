@@ -750,6 +750,15 @@ class PollSessionRecord(Base):
         nullable=True,
     )
 
+    # What happened to that alert, because notified_at is set either way:
+    # sent, failed (the provider refused or was unreachable), unconfigured
+    # (no mail provider key, so nothing could leave), skipped (too old to
+    # be useful, or nothing left to list). Null means never attempted.
+    alert_status: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
 class JobMarkRecord(Base):
     """One person's standing judgement about one job.
 

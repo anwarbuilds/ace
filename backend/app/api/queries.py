@@ -2154,6 +2154,9 @@ def list_discovery_runs(
                 "qualifying_open_now": int(
                     open_qualifying or 0
                 ),
+                # sent, failed, unconfigured, skipped, or null when no
+                # alert was attempted. Never shown as sent unless sent.
+                "alert_status": row.alert_status,
                 "age_seconds": (
                     None
                     if finished is None

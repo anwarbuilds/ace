@@ -62,6 +62,7 @@ export function Sidebar({
           <span className="kbd">{mac ? "⌘K" : "Ctrl K"}</span>
         </button>
         <div className="nav">
+          <NavItem href="/app" label="Overview" icon="home" active={path === "/app"} />
           <NavItem href="/app/opportunities" label="Opportunities" count={queueCount} icon="queue" active={on("/app/opportunities")} />
           <NavItem href="/app/activity" label="Activity" icon="feed" active={on("/app/activity")} />
         </div>

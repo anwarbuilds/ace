@@ -10,6 +10,12 @@ const PATHS = {
       <path d="M11 9.5V13H3V5h3.5" />
     </>
   ),
+  home: (
+    <>
+      <path d="M2.5 7.5L8 3l5.5 4.5" />
+      <path d="M4 6.5V13h8V6.5" />
+    </>
+  ),
   left: <path d="M10 3L5 8l5 5" />,
   right: <path d="M6 3l5 5-5 5" />,
   search: (

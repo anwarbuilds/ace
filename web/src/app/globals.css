@@ -859,3 +859,16 @@ a.pager-btn:hover{background:var(--surface-2);border-color:var(--border);color:v
 /* Tailwind has a utility called "ring" (a box-shadow); the score ring
    keeps the old UI's meaning of the class. */
 .ring{box-shadow:none}
+/* Overview */
+a.stat-link{display:block;color:inherit;text-decoration:none}
+.ov-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.ov-list{border:1px solid var(--border-subtle);border-radius:var(--r-lg);overflow:hidden;background:var(--surface-1)}
+.ov-list .row td:first-child{padding-left:16px}
+.ov-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+a.bar-link{color:inherit;text-decoration:none;border-radius:6px}
+a.bar-link:hover span:first-child{text-decoration:underline;text-underline-offset:3px}
+.ov-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.ov-list .c-status,.ov-list .c-loc{display:none}
+.pl-alert{font-size:11px;color:var(--text-muted);padding:2px 8px;border-radius:99px;border:1px solid var(--border-subtle);white-space:nowrap}
+.pl-alert.a-sent{color:var(--match);border-color:color-mix(in srgb,var(--match) 40%,transparent)}
+.pl-alert.a-failed{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,transparent)}

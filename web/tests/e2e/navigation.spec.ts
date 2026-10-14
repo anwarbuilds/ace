@@ -9,8 +9,7 @@ test("old route names redirect to the new ones", async ({ page }) => {
     ["/app/applied", "/app/applications"],
     ["/app/resume", "/app/resume-studio"],
     ["/app/skills", "/app/insights/skills"],
-    ["/app", "/app/opportunities"],
-    ["/", "/app/opportunities"],
+    ["/", "/app"],
   ]) {
     await page.goto(from);
     await expect(page).toHaveURL(new RegExp(`${to}$`));
@@ -27,14 +26,16 @@ test("an old #job link opens that job's page", async ({ page }) => {
 
 test("sort, tier and page live in the URL and survive a reload", async ({ page }) => {
   await page.goto("/app/opportunities");
-  await page.locator(".chip", { hasText: "New grad first" }).click();
-  await expect(page).toHaveURL(/sort=new_grad_first%2Cunapplied_first%2Cexperience_fit_first|sort=new_grad_first,unapplied_first,experience_fit_first/);
+  // New grad first is the default; turning another sort on makes it lead.
+  await expect(page.locator(".chip.on", { hasText: "New grad first" })).toContainText("1st");
+  await page.locator(".chip", { hasText: "Fits my experience" }).click();
+  await expect(page).toHaveURL(/sort=experience_fit_first(%2C|,)new_grad_first(%2C|,)unapplied_first/);
   await page.locator(".chip", { hasText: "Top tier" }).click();
   await expect(page).toHaveURL(/tier=TOP_TIER/);
   await page.reload();
   await expect(page.locator(".chip.on", { hasText: "Top tier" })).toBeVisible();
-  await expect(page.locator(".chip.on", { hasText: "New grad first" })).toContainText("1st");
-  await expect(page.locator(".sort-says")).toContainText("Showing new grad roles first");
+  await expect(page.locator(".chip.on", { hasText: "Fits my experience" })).toContainText("1st");
+  await expect(page.locator(".sort-says")).toContainText("Showing roles that fit your experience first, then new grad roles");
   for (const tier of await page.locator(".co-tier").allTextContents()) expect(tier).toBe("Top tier");
 });
 

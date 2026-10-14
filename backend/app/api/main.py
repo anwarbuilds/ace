@@ -9,7 +9,6 @@ and the notification worker, so the web application cannot become a
 second, divergent source of truth.
 """
 
-from collections.abc import Iterator
 import csv
 import io
 from datetime import (
@@ -81,7 +80,6 @@ from backend.app.db.models import (
     HistoryEntryRecord,
     JobRecord,
 )
-from backend.app.db.session import SessionLocal
 from backend.app.persistence.openings import (
     OLD_OPENING_DAYS,
 )
@@ -105,11 +103,8 @@ STATIC_DIRECTORY = (
 )
 
 
-def get_session() -> Iterator[Session]:
-    """Provide one request-scoped read session."""
-
-    with SessionLocal() as session:
-        yield session
+# One definition, shared with the routers in backend/app/api/routers/.
+from backend.app.api.deps import get_session  # noqa: E402
 
 
 def _split_csv(
@@ -2172,6 +2167,19 @@ def create_app() -> FastAPI:
                     else resume.id
                 ),
             ),
+        )
+
+    from backend.app.api.routers import (
+        export,
+        system,
+    )
+
+    for module in (
+        system,
+        export,
+    ):
+        app.include_router(
+            module.router
         )
 
     if STATIC_DIRECTORY.is_dir():

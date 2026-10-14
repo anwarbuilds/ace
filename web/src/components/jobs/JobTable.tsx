@@ -190,7 +190,6 @@ export function JobTable({
       } else if (!job) return;
       else if (k === "Enter") open(job.id);
       else if (k === "o") window.open(job.official_url, "_blank", "noopener");
-      else if (k === "s") void mark(job, "saved");
       else if (k === "a") void mark(job, "applied");
       else if (k === "e" || k === "x") {
         const key: MarkKey = k === "e" ? "reviewed" : "dismissed";
@@ -209,7 +208,6 @@ export function JobTable({
     <span className="acts">
       {(
         [
-          ["saved", "star", "Save", j.is_saved],
           ["reviewed", "check", "Reviewed", j.review_state === "reviewed"],
           ["dismissed", "x", "Not relevant", j.review_state === "dismissed"],
         ] as const

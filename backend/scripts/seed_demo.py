@@ -751,6 +751,8 @@ def _store_jobs(
             boards_checked=len(DEMO_COMPANY_TIERS),
             postings_checked=0,
             notified_at=started_at + timedelta(minutes=15),
+            # The demo has no mail provider, so no alert could leave.
+            alert_status="unconfigured",
         )
 
         session.add(

@@ -33,7 +33,9 @@ export const SORT_PHRASE: Record<string, string> = {
   title: "job title",
 };
 
-export const DEFAULT_SORTS = ["unapplied_first", "experience_fit_first", "best_match"];
+// New grad roles are the primary target, so they lead; then the ones not
+// yet applied to, then the best match.
+export const DEFAULT_SORTS = ["new_grad_first", "unapplied_first", "best_match"];
 
 export const TIERS: Tier[] = ["BIG_TECH", "TOP_TIER", "ESTABLISHED"];
 

@@ -30,6 +30,14 @@ RESEND_ENDPOINT = "https://api.resend.com/emails"
 TIMEOUT_SECONDS = 10.0
 
 
+def mail_configured() -> bool:
+    """Whether a provider key exists, so a message could leave at all."""
+
+    return bool(
+        get_settings().resend_api_key
+    )
+
+
 def send(
     *,
     to: str,
