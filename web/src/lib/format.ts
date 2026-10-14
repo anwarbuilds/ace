@@ -3,7 +3,7 @@
 // explicit: the server renders these, so "which day was this" has to be
 // asked in the reader's zone, not the container's (UTC).
 
-import type { ApplicationStatus, Job, Tier } from "./types";
+import type { ApplicationStatus, Job, MatchState, Tier } from "./types";
 
 export const HIGH = 70;
 export const MED = 45;
@@ -217,4 +217,30 @@ export function tierMove(j: Job, prevVisit: Date | null): string | null {
 
 export function plural(n: number, one: string, many?: string): string {
   return `${n.toLocaleString("en-US")} ${n === 1 ? one : many ?? one + "s"}`;
+}
+
+/** Short and long words for a missing score: never "0", never one "n/a"
+ *  standing for five different facts. */
+export const UNSCORED: Record<Exclude<MatchState, "scored">, { short: string; long: string }> = {
+  pending: {
+    short: "Not scored yet",
+    long: "Not scored yet. ace scores new postings against your resume within a few minutes of finding them.",
+  },
+  no_description: {
+    short: "No description",
+    long: "Description unavailable. ace could not read this posting's requirements, so there is nothing to score against.",
+  },
+  insufficient: {
+    short: "Too little to score",
+    long: "ace read this posting but it names too few recognised skills to rank fairly. That is not a low match.",
+  },
+  no_resume: {
+    short: "No resume",
+    long: "No resume uploaded yet. Add one in Resume Studio to see how this posting matches.",
+  },
+};
+
+export function unscoredReason(j: Pick<Job, "match_state" | "is_scored">): Exclude<MatchState, "scored"> {
+  if (j.match_state && j.match_state !== "scored") return j.match_state;
+  return j.is_scored === false ? "pending" : "insufficient";
 }

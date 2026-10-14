@@ -235,3 +235,11 @@ export const CLEARED: Partial<ListState> = {
   early: false,
   newGrad: false,
 };
+
+/** Turning a sort on makes it the primary one, as a column header does;
+ *  appending it instead only broke ties and looked broken. */
+export function toggledSort(sorts: string[], key: string): string[] {
+  const i = sorts.indexOf(key);
+  if (i >= 0) return sorts.filter((s) => s !== key);
+  return [key, ...sorts].slice(0, 3);
+}

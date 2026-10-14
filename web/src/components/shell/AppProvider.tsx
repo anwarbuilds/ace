@@ -183,12 +183,16 @@ export function AppProvider({
 
   // Optimistic edits belong to the screen they were made on. A new
   // route renders fresh server data, which already carries them.
+  // Reset during render when the route changes (React's pattern for
+  // state derived from a changing input), not in an effect.
   const routeKey = `${pathname}?${search.toString()}`;
-  useEffect(() => {
+  const [seenRoute, setSeenRoute] = useState(routeKey);
+  if (seenRoute !== routeKey) {
+    setSeenRoute(routeKey);
     setPatches({});
     setHidden(new Set());
     setMenuOpen(false);
-  }, [routeKey]);
+  }
 
   const setTheme = useCallback((t: ThemeChoice) => {
     setCookie("ace_theme", t);
@@ -228,13 +232,25 @@ export function AppProvider({
     });
   }, []);
 
+  // Links from the old UI were /#job/123; a redirect keeps the fragment,
+  // so it arrives here and opens the job's own page.
+  useEffect(() => {
+    const m = /^#job\/(\d+)$/.exec(window.location.hash);
+    if (m) router.replace(`/app/jobs/${m[1]}`);
+  }, [router]);
+
   // The reader's own zone, so dates render where they are standing.
   useEffect(() => {
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (zone && zone !== tz) {
-      setCookie("ace_tz", zone);
-      router.refresh();
-    }
+    if (!zone || zone === tz) return;
+    setCookie("ace_tz", zone);
+    // Once per browser. Deferred a moment and skipped if the reader has
+    // already moved on, so it can never swallow a click.
+    const here = window.location.href;
+    const t = setTimeout(() => {
+      if (window.location.href === here) router.refresh();
+    }, 400);
+    return () => clearTimeout(t);
   }, [tz, router]);
 
   // Dash guard over everything drawn, portals and popovers included.
@@ -274,7 +290,7 @@ export function AppProvider({
   useEffect(() => {
     const check = () => {
       getJson<PullsResponse>("/api/sessions", new URLSearchParams({ limit: "30", jobs_per_session: "6" }))
-        .then((d) => announceNewRoles(d, () => router.push("/app/pulls")))
+        .then((d) => announceNewRoles(d, () => router.push("/app/activity")))
         .catch(() => {});
     };
     check();

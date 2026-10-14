@@ -5,13 +5,14 @@ import type { CSSProperties, ReactNode } from "react";
 
 import {
   STATUS_LABEL,
+  UNSCORED,
   TIER_LABEL,
   hueOf,
   monogram,
   tierLabel,
   tierOf,
 } from "@/lib/format";
-import type { ApplicationStatus, Tier } from "@/lib/types";
+import type { ApplicationStatus, MatchState, Tier } from "@/lib/types";
 
 /** Initials on a tone of their own, so a column of employers can be
  *  scanned by shape before it is read. */
@@ -41,12 +42,12 @@ export function CompanyCell({ name, tier }: { name: string; tier: Tier }) {
 
 /** The score as a percentage in the match colour, its tier beside it,
  *  and a hairline of how full it is. */
-export function MatchCell({ score, scored }: { score: number | null; scored?: boolean }) {
+export function MatchCell({ score, reason }: { score: number | null; reason: Exclude<MatchState, "scored"> }) {
   const t = tierOf(score);
   if (t === "unscored")
     return (
-      <span className="m-unscored" title={scored === false ? "Not scored yet" : "Too little to score"}>
-        {scored === false ? "Not scored yet" : "Not scored"}
+      <span className="m-unscored" title={UNSCORED[reason].long}>
+        {UNSCORED[reason].short}
       </span>
     );
   return (

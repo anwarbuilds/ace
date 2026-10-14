@@ -13,6 +13,9 @@ export type ApplicationStatus =
   | "withdrawn"
   | "ghosted";
 
+/** Why a job has, or lacks, a score. See backend _match_state. */
+export type MatchState = "scored" | "pending" | "no_description" | "insufficient" | "no_resume";
+
 export type ReviewState = "reviewed" | "dismissed";
 
 export interface AppliedBefore {
@@ -51,6 +54,7 @@ export interface Job {
   requirements_verified: boolean;
   match_score: number | null;
   is_scored?: boolean;
+  match_state?: MatchState;
   matched_skills: string[];
   missing_skills: string[];
   related_skills: string[];

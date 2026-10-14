@@ -1,36 +1,20 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ace web
 
-## Getting Started
+The Next.js app for ace. It reads and writes through the FastAPI backend in `backend/`; it has no database of its own.
+The old single-file UI stays at FastAPI `/` until this app reaches parity and the owner switches over.
 
-First, run the development server:
+```
+# from the repo root: a fictional demo database and the API on :8000
+.venv/bin/python -m backend.scripts.seed_demo
+ACE_DEMO_COMPANIES=1 DATABASE_URL=sqlite:///ace-demo.db .venv/bin/uvicorn backend.app.api.main:app --port 8000
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# here
+npm ci
+npm run dev                     # http://localhost:3000 (API_ORIGIN defaults to http://127.0.0.1:8000)
+npx playwright test             # 39 browser tests; they write marks, so demo data only
+npx next build                  # production build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Map: routes in `src/app/app/`, URL state in `src/lib/listState.ts`, server reads in `src/lib/api.ts`, browser calls in
+`src/lib/client.ts`, shell (sidebar, palette, toasts, dash guard) in `src/components/shell/`. Design tokens are the old
+UI's, in `src/app/globals.css`. Read `AGENTS.md` before changing Next.js code.

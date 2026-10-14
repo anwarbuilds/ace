@@ -34,5 +34,5 @@ export function putMark(id: number, body: MarkBody): Promise<MarkResult> {
 }
 
 export function setCookie(name: string, value: string): void {
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=31536000; samesite=lax`;
+  document.cookie = `${name}=${encodeURIComponent(value).replace(/%2F/g, "/")}; path=/; max-age=31536000; samesite=lax`;
 }
