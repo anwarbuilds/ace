@@ -1,15 +1,14 @@
 import { AnswersDock } from "@/components/shell/AnswersDock";
 import { AppProvider } from "@/components/shell/AppProvider";
 import { CommandPalette } from "@/components/shell/CommandPalette";
-import { Sidebar } from "@/components/shell/Sidebar";
-import { Topbar } from "@/components/shell/Topbar";
+import { SiteHeader } from "@/components/shell/SiteHeader";
 import { apiGetOr } from "@/lib/api";
 import { getPrefs, getPrevVisit } from "@/lib/prefs";
 import type { Answer, Coverage, ExternalApplication, MarkCounts, Stats } from "@/lib/types";
 
 const NO_MARKS: MarkCounts = { saved: 0, archived: 0, applied: 0, open_applications: 0, by_status: {} };
 
-// The shell: sidebar counts, the live indicator and the answers drawer.
+// The shell: the top navigation's counts, the live indicator and the answers drawer.
 // Layouts persist across navigation, so this is read once per visit and
 // again on each refresh (a mark, or the two-minute live refresh).
 export default async function AppLayout({ children }: LayoutProps<"/app">) {
@@ -32,16 +31,15 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
       marks={marks}
     >
       <div className="app">
-        <Sidebar
+        <SiteHeader
           queueCount={stats.qualifying_active_jobs ?? 0}
           externalCount={external.items.length}
           answersFilled={answers.items.filter((a) => a.value).length}
           coverageGaps={coverage?.unreached.length ?? 0}
         />
-        <div className="main">
-          <Topbar />
+        <main className="main" id="main">
           {children}
-        </div>
+        </main>
       </div>
       <AnswersDock answers={answers.items} />
       <CommandPalette />

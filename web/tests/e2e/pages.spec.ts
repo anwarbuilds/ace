@@ -38,12 +38,12 @@ for (const theme of ["dark", "light"] as const) {
 
 test("the wordmark is lowercase ace and nothing else", async ({ page }) => {
   await page.goto("/app/opportunities");
-  await expect(page.locator(".side .brand")).toHaveText("ace");
+  await expect(page.locator(".site-brand")).toHaveText("ace");
 });
 
 test("Saved is not in the navigation, but saved roles stay reachable", async ({ page }) => {
   await page.goto("/app/opportunities");
-  await expect(page.locator(".side .nav-item", { hasText: "Saved" })).toHaveCount(0);
+  await expect(page.locator(".site a", { hasText: "Saved" })).toHaveCount(0);
   await page.goto("/app/saved");
   await expect(page.locator("h1")).toHaveText("Saved");
 });
