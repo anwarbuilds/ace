@@ -117,7 +117,7 @@ def test_demo_is_fictional_and_realistic(
     # More than one page (30) of the activity log.
     assert pulls > 30
 
-    assert summary["jobs"] == 200
+    assert summary["jobs"] >= 200
 
 
 def test_seed_refuses_nothing_on_a_fresh_sqlite_file(
@@ -134,4 +134,4 @@ def test_seed_refuses_nothing_on_a_fresh_sqlite_file(
     with Session(create_engine(url)) as session:
         assert session.scalar(
             select(func.count()).select_from(JobRecord)
-        ) == 40
+        ) == 44

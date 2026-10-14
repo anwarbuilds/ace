@@ -428,3 +428,148 @@ def test_listing_tells_unscored_from_unreadable(
 
     assert listed[thin.id].is_scored is True
     assert listed[pending.id].is_scored is False
+
+
+def test_listing_names_each_score_state(
+    session_factory,
+) -> None:
+    """The page must say which of five things is true, never just "n/a".
+
+    scored: a number. pending: not scored yet. no_description: ace never
+    read the requirements. insufficient: read, but too little to rank.
+    no_resume: nothing to score against.
+    """
+
+    with session_factory() as session:
+        resume = add_resume(
+            session
+        )
+
+        scored = add_job(
+            session,
+            external_id="1",
+        )
+
+        thin = add_job(
+            session,
+            external_id="2",
+            description="Join us.",
+        )
+
+        unread = add_job(
+            session,
+            external_id="3",
+        )
+
+        session.get(
+            JobEvaluationRecord,
+            unread.id,
+        ).requirements_verified = False
+
+        session.flush()
+
+        score_unscored_jobs(
+            session,
+            now=NOW + timedelta(minutes=5),
+        )
+
+        pending = add_job(
+            session,
+            external_id="4",
+        )
+
+        def state(job_id, resume_id):
+            return get_job(
+                session,
+                job_id=job_id,
+                resume_id=resume_id,
+            ).match_state
+
+        assert state(scored.id, resume.id) == "scored"
+        assert state(thin.id, resume.id) == "insufficient"
+        assert state(unread.id, resume.id) == "no_description"
+        assert state(pending.id, resume.id) == "pending"
+        assert state(scored.id, None) == "no_resume"
+
+
+def test_scores_from_retired_rules_are_refreshed(
+    session_factory,
+) -> None:
+    """A score written by an older algorithm is stale, not authoritative."""
+
+    with session_factory() as session:
+        job = add_job(
+            session,
+            external_id="1",
+        )
+
+        add_resume(
+            session
+        )
+
+        score_unscored_jobs(
+            session,
+            now=NOW + timedelta(minutes=5),
+        )
+
+        row = score_row(
+            session,
+            job.id,
+        )
+
+        row.algorithm_version = "2020-01-01-v0"
+
+        session.flush()
+
+        assert score_unscored_jobs(
+            session,
+            now=NOW + timedelta(minutes=10),
+        ) == 1
+
+        assert score_row(
+            session,
+            job.id,
+        ).algorithm_version == MATCHING_ALGORITHM_VERSION
+
+
+def test_one_job_failing_to_score_does_not_stop_the_rest(
+    session_factory,
+    monkeypatch,
+) -> None:
+    """A failure is logged and retried next cycle; it never blocks the
+    sweep, and never writes a fake score."""
+
+    import backend.app.matching.service as service
+
+    real = service.score_job
+
+    def flaky(**kwargs):
+        if "Kafka" in kwargs["job_text"] and "boom" in kwargs["job_text"]:
+            raise ValueError("boom")
+        return real(**kwargs)
+
+    monkeypatch.setattr(service, "score_job", flaky)
+
+    with session_factory() as session:
+        bad = add_job(
+            session,
+            external_id="1",
+            description=RICH + " boom",
+        )
+
+        good = add_job(
+            session,
+            external_id="2",
+        )
+
+        add_resume(
+            session
+        )
+
+        assert score_unscored_jobs(
+            session,
+            now=NOW + timedelta(minutes=5),
+        ) == 1
+
+        assert score_row(session, bad.id) is None
+        assert score_row(session, good.id) is not None

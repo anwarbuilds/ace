@@ -16,6 +16,7 @@ from datetime import (
     timezone,
 )
 import hashlib
+import logging
 
 from sqlalchemy import (
     delete,
@@ -42,6 +43,8 @@ from backend.app.matching.skills import (
 
 
 SCORE_BATCH_SIZE = 1000
+
+LOGGER = logging.getLogger(__name__)
 
 
 def content_hash(
@@ -301,7 +304,8 @@ def score_unscored_jobs(
     Two kinds of row are written. A job with no row for the active
     resume is scored for the first time. A job whose evaluation was
     rewritten after its score was taken (its posting changed, or the
-    rules did) is scored again, and remembers what it moved from.
+    rules did), or whose score came from an older scoring algorithm, is
+    scored again, and remembers what it moved from.
 
     Bounded to active jobs that passed the gate, the ones the queue
     shows, so a cycle costs what it found rather than the corpus; an
@@ -365,6 +369,12 @@ def score_unscored_jobs(
             | (
                 JobResumeScoreRecord.scored_at
                 < JobEvaluationRecord.evaluated_at
+            )
+            | (
+                JobResumeScoreRecord.algorithm_version
+                .is_distinct_from(
+                    MATCHING_ALGORITHM_VERSION
+                )
             ),
         )
         .order_by(
@@ -400,21 +410,36 @@ def score_unscored_jobs(
         )
     }
 
+    scored = 0
+
     for (
         job_id,
         title,
         description,
         verified,
     ) in rows:
-        result = score_job(
-            resume_skills=resume_skills,
-            job_text=(
-                f"{title}\n{description}"
-            ),
-            requirements_verified=bool(
-                verified
-            ),
-        )
+        # One bad posting must not stop the sweep. Nothing is written
+        # for it, so it is retried next cycle and still reads as "not
+        # scored yet" rather than carrying a made-up number.
+        try:
+            result = score_job(
+                resume_skills=resume_skills,
+                job_text=(
+                    f"{title}\n{description}"
+                ),
+                requirements_verified=bool(
+                    verified
+                ),
+            )
+        except Exception:
+            LOGGER.exception(
+                "job_score_failed job_id=%s",
+                job_id,
+            )
+
+            continue
+
+        scored += 1
 
         values = {
             "score": result.score,
@@ -465,9 +490,7 @@ def score_unscored_jobs(
 
     session.flush()
 
-    return len(
-        rows
-    )
+    return scored
 
 
 def stale_score_count(

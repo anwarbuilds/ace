@@ -267,6 +267,12 @@ class JobListing:
     # when it is false the job has simply not been scored yet.
     is_scored: bool = False
 
+    # Why there is or is not a number, so the page never says "n/a" for
+    # five different reasons: scored, pending (not scored yet),
+    # no_description (requirements never read), insufficient (read, but
+    # too few recognised skills to rank), no_resume.
+    match_state: str = "pending"
+
     matched_skills: tuple[str, ...] = ()
 
     missing_skills: tuple[str, ...] = ()
@@ -1195,6 +1201,30 @@ def _apply_sort(
     )
 
 
+def _match_state(
+    match,
+    *,
+    resume_id: int | None,
+    verified: bool,
+) -> str:
+    """Name the reason a job has, or lacks, a match score."""
+
+    if resume_id is None:
+        return "no_resume"
+
+    if match is None:
+        return "pending"
+
+    if match.score is not None:
+        return "scored"
+
+    return (
+        "insufficient"
+        if verified
+        else "no_description"
+    )
+
+
 def get_job(
     session: Session,
     *,
@@ -1399,6 +1429,13 @@ def list_jobs(
             ),
             is_scored=(
                 match is not None
+            ),
+            match_state=_match_state(
+                match,
+                resume_id=filters.resume_id,
+                verified=bool(
+                    evaluation.requirements_verified
+                ),
             ),
             matched_skills=(
                 ()

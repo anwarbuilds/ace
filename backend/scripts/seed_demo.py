@@ -458,6 +458,51 @@ def build_demo_jobs(
             )
         )
 
+    # One role posted once per vertical, as some employers do: four real
+    # postings that read as one decision, which both UIs fold into a
+    # group. Recent, so it lands on the first page.
+    # Reposts share one description, as they do on real boards.
+    agent_description = _description(
+        random.Random(SEED + 1),
+        company="Pinecrest AI",
+        team="Agents",
+        pool="FDE",
+        experience="zero_two",
+        refuses_sponsorship=False,
+        unreadable=False,
+    )
+
+    for offset, vertical in enumerate(
+        ("Healthcare", "Finance", "Retail", "Legal")
+    ):
+        external_id = str(
+            4900000 + offset
+        )
+
+        jobs.append(
+            DemoJob(
+                job=CanonicalJob(
+                    source="ashby",
+                    company="Pinecrest AI",
+                    external_id=external_id,
+                    requisition_id=f"R-49{offset:03d}",
+                    title=f"Software Engineer, Agent - {vertical}",
+                    location="San Francisco, CA",
+                    description=agent_description,
+                    official_url=(
+                        "https://careers.pinecrestai.example"
+                        f"/jobs/{external_id}"
+                    ),
+                    posted_at=now - timedelta(hours=5),
+                ),
+                account="pinecrestai",
+                first_seen_at=pulls[1] + timedelta(minutes=offset),
+                last_seen_at=now - timedelta(minutes=3),
+                is_active=True,
+                pull_index=1,
+            )
+        )
+
     return jobs
 
 
@@ -494,16 +539,14 @@ Software Engineer
 
 Experience
 Software Engineer, Example Analytics (fictional), 2023 to present
-Built Python and TypeScript services on AWS with PostgreSQL and Redis.
-Ran Docker and Kubernetes deployments through CI/CD pipelines.
-Shipped React dashboards and REST APIs used by internal teams.
+Built Python services on AWS backed by PostgreSQL.
+Ran Docker deployments through CI/CD pipelines.
 
 Machine Learning Research Assistant, Example State University (fictional)
-Trained PyTorch models for computer vision and NLP experiments.
+Trained PyTorch models for computer vision experiments.
 
 Skills
-Python, TypeScript, Java, React, Node.js, SQL, PostgreSQL, Redis, Docker,
-Kubernetes, AWS, PyTorch, machine learning, Linux, Git
+Python, TypeScript, PostgreSQL, Docker, AWS, PyTorch, machine learning, Linux, Git
 
 Education
 M.S. Computer Science, Example State University (fictional), expected December 2026
