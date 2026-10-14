@@ -25,6 +25,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -1479,3 +1480,209 @@ class LoginAttemptRecord(Base):
         DateTime(timezone=True),
         nullable=False,
     )
+
+
+
+# ----------------------------------------------------------------------
+# Resume Studio
+# ----------------------------------------------------------------------
+#
+# Facts are kept apart from wording. A career fact is something the
+# owner has said is true (or ace suggested and the owner has not yet
+# confirmed); a resume version is wording built on top of facts. The
+# original files are kept untouched so every extraction can be checked
+# against its source.
+
+
+class ResumeDocumentRecord(Base):
+    """An uploaded resume or template file, kept exactly as uploaded."""
+
+    __tablename__ = "resume_documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # resume | template
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    media_type: Mapped[str] = mapped_column(String(120), nullable=False)
+
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+
+    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+
+    extracted_text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # pdfplumber | python-docx | text
+    parser: Mapped[str] = mapped_column(String(24), nullable=False)
+
+    # Layout findings: pages, tables, columns, headings and styles.
+    report: Mapped[dict | None] = mapped_column(JSON_PAYLOAD, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CareerFactRecord(Base):
+    """One thing about the owner's career, with where it came from."""
+
+    __tablename__ = "career_facts"
+
+    __table_args__ = (
+        Index("ix_career_facts_kind_status", "kind", "status"),
+        CheckConstraint(
+            "status IN ('verified', 'suggested', 'deprecated', 'needs_clarification')",
+            name="ck_career_facts_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # experience | education | project | skill | certification | summary | preference
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+
+    title: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+
+    organization: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+
+    # "2022-01"; end may also be "present".
+    start_date: Mapped[str] = mapped_column(String(10), nullable=False, default="")
+
+    end_date: Mapped[str] = mapped_column(String(10), nullable=False, default="")
+
+    bullets: Mapped[list | None] = mapped_column(JSON_PAYLOAD, nullable=True)
+
+    skills: Mapped[list | None] = mapped_column(JSON_PAYLOAD, nullable=True)
+
+    # The source lines, verbatim, for a parsed fact.
+    evidence: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+
+    # parsed | user
+    origin: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    source_document_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("resume_documents.id", ondelete="SET NULL"), nullable=True
+    )
+
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CareerFactEventRecord(Base):
+    """The audit trail: every change to a fact, by whom and from what."""
+
+    __tablename__ = "career_fact_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    fact_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("career_facts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    # created | edited | status
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    from_status: Mapped[str] = mapped_column(String(24), nullable=False, default="")
+
+    to_status: Mapped[str] = mapped_column(String(24), nullable=False, default="")
+
+    # The fields before the change, so an edit can be read back.
+    before: Mapped[dict | None] = mapped_column(JSON_PAYLOAD, nullable=True)
+
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ResumeVersionRecord(Base):
+    """A resume's wording: the master, or a version tailored to a job."""
+
+    __tablename__ = "resume_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # master | tailored
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    parent_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("resume_versions.id", ondelete="SET NULL"), nullable=True
+    )
+
+    document_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("resume_documents.id", ondelete="SET NULL"), nullable=True
+    )
+
+    template_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("resume_documents.id", ondelete="SET NULL"), nullable=True
+    )
+
+    job_id: Mapped[int | None] = mapped_column(
+        BIGINT_ID, ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True
+    )
+
+    body_text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # draft | approved | archived
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    # The version the job list scores against.
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ResumeAssessmentRecord(Base):
+    """One run of the checker, kept so versions can be compared over time."""
+
+    __tablename__ = "resume_assessments"
+
+    __table_args__ = (
+        Index("ix_resume_assessments_version", "version_id", "created_at"),
+        Index("ix_resume_assessments_job", "job_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    version_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("resume_versions.id", ondelete="CASCADE"), nullable=False
+    )
+
+    job_id: Mapped[int | None] = mapped_column(
+        BIGINT_ID, ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # stored | pasted
+    job_source: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    job_title: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+
+    job_company: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+
+    job_text_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # Kept for a pasted job, which has no other home.
+    job_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    algorithm_version: Mapped[str] = mapped_column(String(40), nullable=False)
+
+    # scored | insufficient_job_data | unreadable_resume
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    aggregate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    confidence: Mapped[str] = mapped_column(String(8), nullable=False)
+
+    result: Mapped[dict] = mapped_column(JSON_PAYLOAD, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

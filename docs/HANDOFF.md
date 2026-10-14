@@ -105,7 +105,7 @@ excluded kinds unless the user asks.
   jobs, roughly 600 applications tracked, a 66 row answer bank. The scheduler
   polls continuously (five minute cycles; Google every 30 minutes) and alerts
   are one email per closed 15 minute pull.
-- Tests on `next-app`: 1124 unit (hermetic, SQLite, ~30 s), 105 old UI browser (run with `ACE_AUTH=disabled`), 55
+- Tests on `next-app`: 1154 unit (hermetic, SQLite, ~35 s), 105 old UI browser (run with `ACE_AUTH=disabled`), 68
   Playwright (signed in as the demo owner), 185 extension matcher cases.
 - Done this week: own-site readers for Atlassian, EA, Apple, Shopify, AMD, SIG,
   Booking.com, Groq, Google, Meta, Intuit, Arm, Synopsys and about 25 more
@@ -134,6 +134,12 @@ excluded kinds unless the user asks.
     `ace demo password` exists only in generated demo databases. Details: `docs/knowledge/07`. On the live database
     the owner runs `create_owner` once and pairs the extension; until then the API answers 401 (or set
     `ACE_AUTH=disabled` for a local rollback).
+  - **Account creation in the browser:** the first visit to `/login` (or the old UI) offers "Create your account"
+    while no owner exists; refused afterwards; from a public address it needs `SETUP_TOKEN`. The web app listens on
+    127.0.0.1 because Next's rewrites do not forward the browser's address.
+  - **Resume Studio foundation:** documents kept as uploaded, a career knowledge base with suggested, verified,
+    needs clarification and retired facts and an audit trail, versions with a primary one feeding the job list, and a
+    deterministic ATS checker with evidence quotes, unknowns and history. Migration 0039. `docs/knowledge/09`.
   - Hazard: the live compose (built from `main`) cannot migrate a database already upgraded by `next-app` (alembic
     cannot locate 0037 or 0038). Do not rebuild the live stack from `main` against a database `next-app` migrated;
     merge first.
@@ -281,6 +287,10 @@ the switch of FastAPI `/` (only with the owner's approval). The master brief's r
 **Phase 2. Sign-in: done on `next-app`** (2026-10-14). Owner from the CLI, no sign-up; cookie sessions with CSRF;
 throttling; reset by email only when Resend is configured; extension pairing token limited to answers and history;
 rollback switch. Remaining from the brief: typed API (Pydantic response models and generated types).
+
+**Resume Studio foundation: done on `next-app`** (2026-10-14): knowledge base, versions, checker. Next: tailoring
+without AI (map requirements to verified facts, propose reorderings and wording drawn only from them, side-by-side
+diff, approve), DOCX export into the owner's template and PDF, durable jobs.
 
 **Phase 3. Home page and onboarding.** A public landing page at `/`; a signed-in
 home (new roles today, highly matched, pipeline funnel, poll health, coverage

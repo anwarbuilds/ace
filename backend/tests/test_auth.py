@@ -6,6 +6,7 @@ with its token, and only to read answers and history. Fictional
 addresses and passwords only.
 """
 
+import re
 from datetime import (
     datetime,
     timedelta,
@@ -109,9 +110,8 @@ def _private_routes(app):
         if not route.path.startswith("/api/") or route.path in PUBLIC:
             continue
         for method in route.methods:
-            yield method, route.path.replace("{job_id}", "1").replace(
-                "{kind}", "work"
-            ).replace("{token_id}", "1")
+            path = route.path.replace("{kind}", "work")
+            yield method, re.sub(r"\{[a-z_]+\}", "1", path)
 
 
 def test_every_private_route_refuses_an_anonymous_caller(client) -> None:

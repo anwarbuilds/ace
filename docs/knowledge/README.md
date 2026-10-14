@@ -15,6 +15,7 @@ a topic file when you work in that area. Reading all of it is about 53k tokens; 
 | `06-extension-autofill.md` | The matcher, the answer bank, the panel, phone and country widgets, repeating blocks, multi-page forms, what real forms taught (Dell, DoorDash, Handshake, JazzHR, Ashby) | you change anything that touches a live application form | ~11k |
 | `07-alerts-email-and-auth.md` | Freshness, the removed email subsystem, one alert per pull, email client quirks, why sign-in was built then removed | you touch alerts or Resend, or you start the sign-in work | ~2k |
 | `08-operations-and-testing.md` | Operational gotchas (build before up, UTC, restarts, generic plans), incidents, and browser-test craft | you deploy, restart, debug the scheduler or write browser tests | ~3k |
+| `09-resume-studio.md` | Resume Studio: documents, the career knowledge base, versions, the ATS checker and its rubric | you work on resumes, facts, the checker, tailoring or export | ~1k |
 
 ## How to find things
 

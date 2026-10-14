@@ -12,10 +12,11 @@ export interface TabDef {
 
 // The pill's last position, kept across navigations so it slides from
 // the tab it was on rather than appearing at the new one.
-let memo: { x: number; w: number } | null = null;
+// One memory per tab group, so two groups never slide from each other.
+const memos = new Map<string, { x: number; w: number }>();
 
 /** A segmented control with one pill that slides to the chosen tab. */
-export function Tabs({ tabs, active }: { tabs: TabDef[]; active: string }) {
+export function Tabs({ tabs, active, group = "list" }: { tabs: TabDef[]; active: string; group?: string }) {
   const bar = useRef<HTMLDivElement>(null);
   const ind = useRef<HTMLSpanElement>(null);
 
@@ -26,6 +27,7 @@ export function Tabs({ tabs, active }: { tabs: TabDef[]; active: string }) {
       if (!on || !pill) return;
       const x = on.offsetLeft;
       const w = on.offsetWidth;
+      const memo = memos.get(group);
       if (memo && (memo.x !== x || memo.w !== w)) {
         pill.style.transition = "none";
         pill.style.transform = `translateX(${memo.x}px)`;
@@ -35,13 +37,13 @@ export function Tabs({ tabs, active }: { tabs: TabDef[]; active: string }) {
       }
       pill.style.transform = `translateX(${x}px)`;
       pill.style.width = `${w}px`;
-      memo = { x, w };
+      memos.set(group, { x, w });
     };
     place();
     document.fonts?.ready.then(place);
     window.addEventListener("resize", place);
     return () => window.removeEventListener("resize", place);
-  }, [active]);
+  }, [active, group]);
 
   return (
     <div className="tabs has-ind" role="tablist" ref={bar}>

@@ -219,6 +219,10 @@ export function JobDetail({ job: served, resumeLabel }: { job: Job; resumeLabel:
                   {markBtn("dismissed", "x", "Not relevant", job.review_state === "dismissed")}
                   <div style={{ gridColumn: "1 / -1", display: "grid" }}>{markBtn("applied", "briefcase", "Applied", applied)}</div>
                 </div>
+                <Link className="btn btn-secondary" href={`/app/resume-studio/check?job=${job.id}`}>
+                  <Icon name="doc" />
+                  Check my resume for this role
+                </Link>
               </div>
             </div>
 

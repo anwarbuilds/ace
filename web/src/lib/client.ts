@@ -57,7 +57,7 @@ export async function getJson<T>(path: string, params?: URLSearchParams): Promis
 }
 
 export async function sendJson<T>(
-  method: "PUT" | "POST" | "DELETE",
+  method: "PUT" | "POST" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
   opts: { redirectOn401?: boolean } = {},

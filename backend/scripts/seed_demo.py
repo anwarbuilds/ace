@@ -563,6 +563,32 @@ Education
 M.S. Computer Science, Example State University (fictional), expected December 2026
 """
 
+# The richer resume Resume Studio shows: dated entries and bullets, so the
+# knowledge base and the checker have something to read. Fictional.
+STUDIO_RESUME = """Alex Rivera
+alex.rivera@example.com | (555) 010-0100 | github.com/example-alex-rivera
+
+Experience
+Software Engineer, Example Analytics    Jan 2023 to Present
+\u2022 Built Python services on AWS backed by PostgreSQL that serve 40 internal dashboards
+\u2022 Cut deployment time from 30 minutes to 6 by moving builds to Docker and CI/CD
+\u2022 Wrote alerting for 25 services, reducing missed incidents by half
+Machine Learning Research Assistant, Example State University    Aug 2021 to Dec 2022
+\u2022 Trained PyTorch models for computer vision experiments on 120,000 labelled images
+\u2022 Developed a data loading pipeline in Python that halved training time
+
+Projects
+Trailhead Maps
+\u2022 Designed a route planner in TypeScript and React used by 300 hikers
+
+Education
+Example State University, M.S. Computer Science    2025 to 2026
+
+Skills
+Python, TypeScript, PostgreSQL, Docker, AWS, PyTorch, machine learning, Linux, Git, React
+"""
+
+
 TEXT_ANSWERS = {
     "First name": "Alex",
     "Last name": "Rivera",
@@ -1026,6 +1052,63 @@ def _store_answers(
     )
 
 
+def _store_studio(session, *, now: datetime) -> None:
+    """Resume Studio: an uploaded DOCX, its suggested facts (some
+    verified), a primary master and a few checks. Scores in the job list
+    keep coming from RESUME_TEXT, which the primary version holds."""
+
+    import io
+
+    import docx
+
+    from backend.app.db.models import (
+        CareerFactRecord,
+        JobEvaluationRecord,
+        JobRecord,
+        JobResumeScoreRecord,
+        ResumeVersionRecord,
+    )
+    from backend.app.studio import service as studio
+
+    document = docx.Document()
+    for line in STUDIO_RESUME.splitlines():
+        document.add_paragraph(line)
+    buffer = io.BytesIO()
+    document.save(buffer)
+
+    studio.upload(session, filename="alex-rivera-resume.docx", payload=buffer.getvalue(),
+                  kind="resume", now=now - timedelta(days=12), primary_if_first=False)
+    detailed = session.scalar(select(ResumeVersionRecord))
+
+    primary = ResumeVersionRecord(
+        label="Alex Rivera, fall 2026", kind="master", body_text=RESUME_TEXT,
+        content_hash=studio.sha256(RESUME_TEXT), status="approved", is_primary=True,
+        created_at=now - timedelta(days=12), approved_at=now - timedelta(days=12),
+    )
+    session.add(primary)
+
+    facts = session.scalars(select(CareerFactRecord).order_by(CareerFactRecord.id)).all()
+    for fact in facts:
+        if fact.kind in ("experience", "education") or fact.title in ("python", "postgresql", "docker", "aws"):
+            studio.update_fact(session, fact.id, changes={"status": "verified"}, now=now - timedelta(days=11))
+    project = next((f for f in facts if f.kind == "project"), None)
+    if project is not None:
+        studio.update_fact(session, project.id, changes={"status": "needs_clarification",
+                           "note": "Confirm the user count."}, now=now - timedelta(days=10))
+
+    best = session.execute(
+        select(JobRecord.id)
+        .join(JobEvaluationRecord, JobEvaluationRecord.job_id == JobRecord.id)
+        .join(JobResumeScoreRecord, JobResumeScoreRecord.job_id == JobRecord.id)
+        .where(JobEvaluationRecord.eligibility_status == "PASS", JobRecord.is_active.is_(True))
+        .order_by(JobResumeScoreRecord.score.desc().nulls_last(), JobRecord.id)
+        .limit(3)
+    ).scalars().all()
+    for offset, job_id in enumerate(best):
+        studio.check(session, version_id=detailed.id, job_id=job_id, now=now - timedelta(hours=6 - offset))
+    session.flush()
+
+
 def seed(
     database_url: str,
     *,
@@ -1126,6 +1209,9 @@ def seed(
             session,
             now=now,
         )
+
+    with factory.begin() as session:
+        _store_studio(session, now=now)
 
     # A fictional owner, so the demo runs with sign-in on, exactly as the
     # real app does. The password is public on purpose: it opens only

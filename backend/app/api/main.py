@@ -2214,6 +2214,7 @@ def create_app() -> FastAPI:
     from backend.app.api.routers import (
         auth,
         export,
+        studio,
         system,
     )
 
@@ -2221,6 +2222,7 @@ def create_app() -> FastAPI:
         auth,
         system,
         export,
+        studio,
     ):
         app.include_router(
             module.router
