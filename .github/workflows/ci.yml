@@ -1,0 +1,109 @@
+# Every pull request and every push to main runs the whole safety net:
+# the backend unit tests, the extension's matcher cases, the web app's
+# typecheck, lint and build, and both browser suites (the old UI's and
+# the new app's) against the fictional demo database. Nothing here
+# touches real data, and no secrets are needed.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r backend/requirements.txt
+      - name: Unit tests (hermetic, SQLite)
+        run: python -m pytest backend/tests -q --ignore=backend/tests/browser
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Extension matcher cases
+        run: node extension/test-rules.js
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx next typegen
+      - run: npx tsc --noEmit
+      - run: npx eslint src tests
+      - run: npx next build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [backend, web]
+    env:
+      DATABASE_URL: sqlite:///ace-demo.db
+      ACE_DEMO_COMPANIES: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r backend/requirements.txt websocket-client
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build the demo database
+        run: python -m backend.scripts.seed_demo
+      - name: Start the API on the demo database
+        run: |
+          nohup python -m uvicorn backend.app.api.main:app --port 8000 > uvicorn.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8000/healthz && break; sleep 1; done
+      - name: Old UI browser tests
+        env:
+          ACE_BROWSER_TEST_URL: http://127.0.0.1:8000
+        run: python -m pytest backend/tests/browser -q -rs
+      - name: Reseed (the old UI suite writes marks)
+        run: |
+          pkill -f "uvicorn backend.app.api.main" || true
+          python -m backend.scripts.seed_demo
+          nohup python -m uvicorn backend.app.api.main:app --port 8000 > uvicorn.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8000/healthz && break; sleep 1; done
+      - name: Build and start the web app
+        working-directory: web
+        run: |
+          npm ci
+          npx next build
+          nohup npx next start -p 3000 > next.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf -o /dev/null localhost:3000/app/opportunities && break; sleep 1; done
+      - name: New app browser tests
+        working-directory: web
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+      - name: Server logs on failure
+        if: failure()
+        run: tail -n 100 uvicorn.log web/next.log || true
