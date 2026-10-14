@@ -185,8 +185,8 @@ def login(
         raise _refuse(
             409,
             "no_owner",
-            "No owner account yet. Create it on the server with "
-            "python -m backend.scripts.create_owner.",
+            "No owner account yet. Create it on the machine that runs ace "
+            "with the create_owner script, then sign in.",
         )
 
     try:

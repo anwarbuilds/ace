@@ -893,7 +893,7 @@ a.bar-link:hover span:first-child{text-decoration:underline;text-underline-offse
 .auth-foot .link-btn{font-size:12.5px}
 .auth pre,.auth code{font-family:var(--mono);font-size:12px}
 .auth pre{background:var(--canvas);border:1px solid var(--border-subtle);border-radius:var(--r-md,9px);
-  padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text-secondary);margin:0 0 14px}
+  padding:10px 12px;white-space:pre;overflow-x:auto;color:var(--text-secondary);margin:0 0 14px}
 
 /* Settings, sign-in and devices. */
 .sec-form{display:flex;flex-wrap:wrap;gap:8px;align-items:center;max-width:620px;margin-top:12px}
