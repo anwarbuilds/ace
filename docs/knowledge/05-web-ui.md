@@ -639,3 +639,29 @@ had 92 first, by a median of 5 hours. The 14 feed-first were Amazon
 daily board -- which is why every board on a one-request provider is
 now polled every fifteen minutes whatever it has produced (71 moved;
 the RippleMatch feed is the only daily source left).
+
+## The Next.js app, under new names (2026-10-14)
+
+Built in `web/` against the unchanged FastAPI API, in a cloud session on the fictional demo database. The old UI's CSS
+is ported with its class names (`web/src/app/globals.css`), Tailwind loaded without its preflight so the approved
+spacing does not move. Server components read FastAPI through `API_ORIGIN`; the browser calls `/api/*`, rewritten to
+FastAPI. Filters, sort and page are URL parameters (`src/lib/listState.ts`), with numbered pages instead of infinite
+scroll. Theme and time zone are cookies, so the server renders the right theme and dates with no flash; last visit is
+worked out in `src/proxy.ts` before the page renders.
+
+New names, by the owner's brief: Opportunities (Queue), Activity (Pulls), Applications (Applied), Resume Studio
+(Resume), Skills under `/app/insights/skills`; tabs All opportunities, Strong matches, New since your last visit, Latest
+discoveries. Old URLs redirect (307), and `/#job/<id>` links open the job page. Saved left the navigation at the
+owner's request; its data, the star on rows and `/app/saved` remain.
+
+Bugs the Playwright suite found before the user could:
+- A Tailwind utility is named `ring`, the same as the score ring's class, and drew a square box around it.
+- The scroll restorer reset the panel to the top during hydration, after the browser had scrolled to the pager, so a
+  quick click on page 2 landed on empty space. It now restores only a remembered position, and resets only on a real
+  route change.
+- Every popover listened for Escape even while closed and stopped it, so Escape never left the job page.
+- The palette kept the last search when reopened; it now mounts only while open.
+
+Tests: `web/tests/e2e` (39: every route in both themes with the typed and drawn dash scans, URL state, pagination,
+redirects, keyboard, palette, marks with undo, score wording). Screenshots: `web/scripts/screenshots.mjs`, demo data
+only.

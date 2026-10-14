@@ -461,3 +461,22 @@ Verified on live data first: the Redmond re-listings pointed at the Oct 4 applic
 role marked that morning, and a 200 row page still answered in 0.2 s. Lesson: a mark belongs to a posting, but the user's
 question is about the opening, so show the resemblance and let them decide; and any summary row that hides its members
 (a collapsed group) has to carry the warnings its members would have shown.
+
+## Scores now follow the corpus, and say why they are missing (2026-10-14)
+
+Reported on 2026-10-10: almost every job in the queue showed "n/a", and the job page said ACE "could not read this
+posting". Cause: `rescore_corpus` was the only writer of `job_resume_scores` and ran only on resume upload, so every job
+found after 2026-09-06 had no row at all, and the page treated "no row" and "row with no score" as the same thing.
+
+Fix: `score_unscored_jobs` (in `matching/service.py`) runs from the scheduler's cycle recorder before the pull is
+recorded and alerted. It scores active PASS jobs that have no row for the active resume, whose evaluation was rewritten
+after they were scored (the posting changed, or the gate did), or whose row came from an older
+`MATCHING_ALGORITHM_VERSION`; at most 2,000 per cycle so a backlog drains over a few cycles. A refreshed row keeps the
+old number in `previous_score`. A job that throws is logged as `job_score_failed` and skipped, so it is retried and
+never carries an invented score. Bounded to the queue on purpose: an upload still rescores the corpus.
+
+The API now returns `match_state`: `scored`, `pending` (not scored yet), `no_description` (requirements never read),
+`insufficient` (read, too few recognised skills to rank), `no_resume`. Both UIs word each one differently.
+
+Lesson: a derived table with one writer goes stale silently. Ask which events should refresh it (new row, changed input,
+changed rules, changed algorithm), and test each one. Tests: `backend/tests/test_score_sweep.py`.

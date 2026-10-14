@@ -96,7 +96,7 @@ excluded kinds unless the user asks.
 - Commit author is the user's configured git identity. End commits with the
   attribution trailer the harness gives you.
 
-## 3. State on 2026-10-10
+## 3. State on 2026-10-14
 
 - **Live** on the user's machine via `compose.yaml`: postgres (host port 5433),
   migrate, scheduler, web (port 8000, FastAPI serving the old UI at `/`). Built
@@ -115,12 +115,18 @@ excluded kinds unless the user asks.
   "Applied before, Oct 4" on its row, job page, group header, desktop notification and alert email. Derived on
   read in `applications/prior.py`, never stored, and compares requisition numbers so two open listings that differ are
   called possibly separate openings; see `docs/knowledge/04`.
-- **Known issue, found 2026-10-10, not fixed: resume scores never refresh.**
-  `rescore_corpus` (`backend/app/matching/service.py`) runs only from
-  `POST /api/resume`. Every row in `job_resume_scores` (31,445) dates from one
-  batch on 2026-09-06. Jobs found since, 1,238 of the 1,249 in the queue, have
-  no score, and the job page tells the user "ACE could not read this posting",
-  which is wrong for them. See Step 0b.
+- **2026-10-14, branch `next-app` (cloud session, demo data only):**
+  - Resume scoring fixed: the scheduler now scores, after every cycle, active PASS jobs with no current score for the
+    active resume (new, changed since scoring, or from an older algorithm), at most 2,000 per cycle. The API returns
+    `match_state` (scored, pending, no_description, insufficient, no_resume) so no page says "n/a" or "could not read"
+    for a job that simply was not scored yet. Not yet run on the live database: after pulling, rebuild and watch the
+    scheduler log for `jobs_scored count=`.
+  - `backend/scripts/seed_demo.py` builds a fictional demo database (SQLite or empty PostgreSQL); `db/session.py`
+    branches on dialect. Demo tiers apply only with `ACE_DEMO_COMPANIES=1`.
+  - The Next.js app in `web/` works against FastAPI: every page of the old UI under the new names (section 9), URL-held
+    filters, sort and numbered pages, palette with role search, marks with undo, dash guards. Old UI still at `/`.
+  - CI added (`.github/workflows/ci.yml`): unit, extension, web build, both browser suites on demo data.
+  - Baseline, gap matrix, decisions and open questions: `docs/architecture/2026-10-14-baseline-and-plan.md`.
 - Alerts are composed but **not delivered**: `RESEND_API_KEY` is not set, so each
   pull logs `mail_not_configured`. Only the user can add the key.
 - `README.md` is stale (472 sources, 706 tests, old UI). Refresh it when
@@ -150,7 +156,7 @@ sources -> adapters -> persist and diff -> eligibility gate -> freshness
 | Old UI | `backend/app/api/static/index.html` | one file of vanilla JS, source of truth for the design tokens and behaviours |
 | Extension | `extension/` | MV3: `content.js` (panel in a shadow root), `fields.js` (question matcher), `popup.html/js`, `background.js`, `test-rules.js` |
 | Tests | `backend/tests/` | browser tests in `backend/tests/browser/` drive real Chrome over DevTools |
-| Next.js app | `web/` | scaffold only: create-next-app 16.3.8, nothing wired up |
+| Next.js app | `web/` | the new app: `src/app/app/*` routes, `src/lib/listState.ts` (URL state), `src/components/`; Playwright in `web/tests/e2e` |
 
 Terms: **PASS/REJECT** gate outcome. **Pulls** are poll sessions, grouped by run.
 **Feed** sources (simplify, ripplematch) list roles before the employer board is
@@ -252,33 +258,15 @@ you use that is not listed here.
 
 ## 9. The plan, in order
 
-**Step 0. Make the project runnable anywhere** (a cloud session has no database).
-Write `backend/scripts/seed_demo.py`: fictional companies and jobs only (the repo
-is public), at least 25 companies and a few hundred jobs across tiers, families,
-experience and status, plus marks, 66 or more fictional answers, a fictional
-resume with skills, and a few pulls. Aim at SQLite first: `backend/tests/
-test_web_api.py` already builds the API on in-memory SQLite (`session_factory`,
-`add_job`), and `models.py` falls back from JSONB to JSON. `db/session.py` passes pool arguments that an in-memory
-SQLite engine rejects, so use a file database or branch on dialect. If something needs Postgres,
-install it. Done when `uvicorn` serves `/api/jobs` from the demo database and the
-browser tests pass against it.
+**Step 0 and 0b: done on `next-app`** (demo database, scoring sweep, score states, CI). Verify on the live database
+after merging.
 
-**Step 0b. Fix resume scoring** (section 3). Score each job when it is persisted
-or evaluated, or sweep PASS active jobs with no row for the active resume at the
-end of each scheduler cycle; keep `rescore_corpus` for uploads. Test first on
-SQLite. Change the job page copy so "not scored yet" and "could not read" differ.
-Verifying on real data and deploying must happen on the user's machine.
-
-**Phase 1. Next.js app at parity in `web/`.** TypeScript strict, Tailwind 4 with
-the tokens above as CSS variables, `data-theme` set before paint (no flash),
-Geist through `next/font`. Server components fetch through `API_ORIGIN`; client
-mutations use optimistic updates and a toast with undo. Routes: `/login`,
-`/app/queue`, `/app/jobs/[id]`, `/app/pulls`, `/app/saved`, `/app/applied`,
-`/app/archive`, `/app/resume`, `/app/skills`, `/app/answers`, `/app/coverage`,
-`/app/settings`. Filters, sort and page live in the URL; numbered pagination
-replaces infinite scroll. Port the em dash guards. Test with Playwright: both
-themes, the drawn dash scan, the text scan, keyboard flow. Keep the old UI at
-FastAPI `/` until parity, then switch.
+**Phase 1. Next.js app at parity in `web/`: in progress.** Built: shell, Opportunities (was Queue), job page, Activity
+(was Pulls), Applications (was Applied), Archive, Saved (kept, out of navigation), Resume Studio (today the old Resume
+page), Skills, Answers, Coverage, Settings, palette, toasts with undo, keyboard flow, numbered pages. Old names
+redirect. Remaining: a signed-in overview at `/app`, the page by page parity report with old and new screenshots, and
+the switch of FastAPI `/` (only with the owner's approval). The master brief's route names and phases are in
+`docs/architecture/2026-10-14-baseline-and-plan.md`; it supersedes the route list that used to be here.
 
 **Phase 2. Sign-in** (decided: one private user, email and password). argon2id;
 HttpOnly, Secure, SameSite cookie sessions stored in the database; login
@@ -322,7 +310,7 @@ curl localhost:8000/healthz
 Tests:
 
 ```
-.venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/browser   # 1009, hermetic
+.venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/browser   # 1038, hermetic
 node extension/test-rules.js                                                 # 185 cases
 ACE_BROWSER_TEST_URL=http://127.0.0.1:8000 \
   .venv/bin/python -m pytest backend/tests/browser -q                        # ~4.5 min
@@ -332,6 +320,16 @@ Browser tests need Chrome, `websocket-client` (not in `requirements.txt`) and an
 app with realistic data; they skip rather than fail when either is missing. To
 try a UI change without touching the live app, run a second `uvicorn
 backend.app.api.main:app --port 8001` and point `ACE_BROWSER_TEST_URL` at it.
+
+Demo data and the new app, anywhere (no live database needed):
+
+```
+.venv/bin/python -m backend.scripts.seed_demo                       # writes ace-demo.db, fictional
+ACE_DEMO_COMPANIES=1 DATABASE_URL=sqlite:///ace-demo.db \
+  .venv/bin/uvicorn backend.app.api.main:app --port 8000
+cd web && npm ci && npm run dev                                     # http://localhost:3000, API_ORIGIN defaults to :8000
+npx playwright test                                                 # writes marks: demo data only
+```
 
 In a cloud session: `python -m venv .venv && .venv/bin/pip install -r
 backend/requirements.txt websocket-client`, the unit tests work as is, `cd web &&
@@ -371,6 +369,10 @@ deployable, and the live app only changes when the user pulls and rebuilds.
 
 ## 12. Decisions, newest first
 
+- 2026-10-14: master brief adopted as the spec for new scope. Route names changed (Opportunities, Activity,
+  Applications, Resume Studio, Skills under insights); Saved left the navigation, its data and route kept. Theme and
+  time zone are cookies. SDE II targeting proposed, not active, pending the owner's approval of a dry run.
+
 - 2026-10-10: darker anthracite (night and day); no drawn dashes; platform
   rebuild decided: one private user, Next.js and TypeScript, email and password,
   Render; phases above. Resume Studio will replace Resume and Skills.
@@ -383,11 +385,10 @@ deployable, and the live app only changes when the user pulls and rebuilds.
 
 ## 13. First moves for the next session
 
-1. Read this file and the index `docs/knowledge/README.md` (about 1k tokens); check `git log -5` and `git status`.
-2. Do Step 0 and Step 0b, test first, on a branch.
-3. Start Phase 1 with the shell (layout, tokens, theme switch, nav), then the
-   queue with URL-held filters and numbered pagination, then the job page.
-4. Show the user a screenshot of each page in both themes as it lands.
+1. Read this file and `docs/architecture/2026-10-14-baseline-and-plan.md`; check `git log -5` on `next-app`.
+2. Run the app on demo data (section 10) and the three suites: unit, `backend/tests/browser`, `web` Playwright.
+3. Continue Phase 1: the `/app` overview, then the parity report; then Phase 2 (auth with extension pairing).
+4. Do not switch on the SDE II gate change until the owner approves the dry run (baseline doc, section 6).
 
 ## 14. Keeping this current
 
