@@ -258,3 +258,28 @@ every active posting re-evaluated.
   fixed-term / AI trainer titles are CONTRACT_ROLE; "Smart Contract
   Engineer" is not. Contract-to-hire is rejected too -- the user asked
   for full-time only.
+
+## Candidate profiles, SDE II, and two recall fixes (2026-10-14)
+
+The owner has three years of experience. New grad roles stay the primary target (they sort first by default), and SDE II
+is now wanted too. The gate's thresholds moved out of loose constants into a versioned `CandidateProfile`
+(`eligibility.py`), chosen by `ACE_TARGET_PROFILE` at import, so the gate itself still reads no environment, clock or
+network:
+
+- `early-career` (default): unchanged thresholds. 4+ years rejected; open-ended "3+" rejected.
+- `sde2`: identical except open-ended "3+" is admitted. 4+ or 5+, senior, staff, manager and L4/L5 stay rejected.
+
+A decision records its profile's rule version, so switching re-evaluates stored decisions instead of mixing them.
+`backend/scripts/gate_dry_run.py --profile sde2` lists, read-only, every job the switch would add or drop on the real
+database; the owner reviews that list before switching.
+
+Two recall fixes found while building the fixtures, shipped in v54 for both profiles:
+- A bare "SDE II" (Amazon's short form) and "Software Dev Engineer" classified as OTHER, so every such role was
+  rejected as non-target whatever its level. `roles.py` now reads `\bsde\b` as software engineering (`SDET` is not
+  matched).
+- `PREFERRED_CONTEXT_MARKERS` existed but was never used, so "3+ years preferred, 1+ years required" was rejected on the
+  preferred figure. Experience figures in a clause that says preferred, nice to have, bonus or ideally now count as
+  optional, like those under a "Preferred qualifications" heading.
+
+After deploying v54, the stale-evaluation refresh re-evaluates the corpus (about 25 jobs a second). Tests:
+`test_candidate_profiles.py` (the full matrix for both profiles), `test_gate_dry_run.py`.

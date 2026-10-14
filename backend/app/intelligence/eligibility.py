@@ -23,7 +23,9 @@ Core invariants:
     remains in scope.
 """
 
+import os
 import re
+from dataclasses import dataclass
 from enum import Enum
 
 from pydantic import (
@@ -42,26 +44,107 @@ from backend.app.models.job import (
 )
 
 
+@dataclass(
+    frozen=True,
+)
+class CandidateProfile:
+    """Who the gate is choosing for, as numbers it can apply.
+
+    Experience is the owner's, not a constant buried in a rule: it lives
+    here, versioned, so a change to it is a change of rule version and
+    the corpus is re-evaluated rather than silently mixed.
+
+    ``max_required_years``: a stated requirement at or above this is
+    rejected. ``max_open_ended_years``: an open-ended bar ("N+ years")
+    at or above this is rejected, while the same figure stated as a
+    bounded range is judged by its floor.
+    """
+
+    key: str
+
+    experience_years: int
+
+    max_required_years: int
+
+    max_open_ended_years: int
+
+    rule_version: str
+
+
+PROFILES: dict[str, CandidateProfile] = {
+    # The long-standing rule: "anything between zero and three should
+    # be there, three-plus should not". v54 changes no threshold; it
+    # reads "SDE" titles as software engineering and stops counting an
+    # inline "preferred" figure as the requirement, both recall fixes.
+    "early-career": CandidateProfile(
+        key="early-career",
+        experience_years=3,
+        max_required_years=4,
+        max_open_ended_years=3,
+        rule_version="2026-10-14-v54",
+    ),
+    # New grad roles stay the primary target (they sort first), and SDE
+    # II comes in: with three years, a posting asking "3+ years" is one
+    # the owner meets. Four or more, open-ended or not, stays out, and
+    # so do senior, staff and manager titles.
+    "sde2": CandidateProfile(
+        key="sde2",
+        experience_years=3,
+        max_required_years=4,
+        max_open_ended_years=4,
+        rule_version="2026-10-14-v54-sde2",
+    ),
+}
+
+
+def _active_profile() -> CandidateProfile:
+    """The profile named by ACE_TARGET_PROFILE, early-career by default.
+
+    Read once, at import: the gate itself never reads the environment,
+    the clock or the network, so a given profile and posting always give
+    the same decision. An unknown name is an error, not a fallback, so a
+    typo cannot quietly change who the gate admits.
+    """
+
+    name = os.environ.get(
+        "ACE_TARGET_PROFILE",
+        "early-career",
+    ).strip() or "early-career"
+
+    if name not in PROFILES:
+        raise ValueError(
+            f"ACE_TARGET_PROFILE={name!r} is not one of "
+            + ", ".join(sorted(PROFILES))
+        )
+
+    return PROFILES[name]
+
+
+ACTIVE_PROFILE = _active_profile()
+
+
 ELIGIBILITY_RULE_VERSION = (
-    "2026-10-09-v53"
+    ACTIVE_PROFILE.rule_version
 )
 
 
-# The user has roughly 3.5 years of experience. A posting demanding four
-# or more years is excluded outright rather than softened, because ACE
-# now surfaces a single list meaning "apply to this".
-MAX_REQUIRED_EXPERIENCE_YEARS = 4
+# A posting demanding four or more years is excluded outright rather
+# than softened, because ACE surfaces a single list meaning "apply to
+# this". Kept as module names because the queue's experience sort reads
+# the same bar.
+MAX_REQUIRED_EXPERIENCE_YEARS = (
+    ACTIVE_PROFILE.max_required_years
+)
 
 
 # An open-ended bar at or above this is rejected, while the same figure
 # stated as a bound is kept. "3+ years" and "1 to 3 years" both extract
 # as three, and they are not the same posting: the first sets a floor
-# and takes whoever is above it, so a graduate competes with someone
-# who has five. The second describes the band the role sits in.
-#
-# The user drew this line themselves: anything between zero and three
-# should be there, three-plus should not.
-MAX_OPEN_ENDED_YEARS = 3
+# and takes whoever is above it. Under the early-career profile that
+# floor of three is out; under sde2 it is in.
+MAX_OPEN_ENDED_YEARS = (
+    ACTIVE_PROFILE.max_open_ended_years
+)
 
 
 class EligibilityStatus(
@@ -1959,7 +2042,7 @@ def _experience_figures(
             )
         )
 
-        if _nearest_section_is_preferred(
+        if _is_optional_figure(
             description,
             match.start(),
         ):
@@ -2013,7 +2096,7 @@ def _experience_figures(
             )
         )
 
-        if _nearest_section_is_preferred(
+        if _is_optional_figure(
             description,
             match.start(),
         ):
@@ -2142,6 +2225,59 @@ def _is_open_ended(
     )
 
 
+def _clause_is_preferred(
+    description: str,
+    position: int,
+) -> bool:
+    """Whether the clause holding ``position`` calls itself optional.
+
+    Sections are handled by _nearest_section_is_preferred. This catches
+    the inline form, "3+ years preferred, 1+ years required", where one
+    sentence carries both figures and only the second is the bar. The
+    clause runs between the nearest comma, semicolon, full stop or line
+    break on either side, so the required half is not caught up in the
+    preferred one.
+    """
+
+    start = max(
+        description.rfind(mark, 0, position)
+        for mark in (".", ";", ",", "\n")
+    ) + 1
+
+    ends = [
+        found
+        for found in (
+            description.find(mark, position)
+            for mark in (".", ";", ",", "\n")
+        )
+        if found != -1
+    ]
+
+    clause = description[
+        start : (min(ends) if ends else len(description))
+    ].lower()
+
+    return any(
+        marker in clause
+        for marker in PREFERRED_CONTEXT_MARKERS
+    )
+
+
+def _is_optional_figure(
+    description: str,
+    position: int,
+) -> bool:
+    """A preferred section, or a clause that says preferred."""
+
+    return _nearest_section_is_preferred(
+        description,
+        position,
+    ) or _clause_is_preferred(
+        description,
+        position,
+    )
+
+
 def _open_ended_required_years(
     description: str,
 ) -> int | None:
@@ -2199,7 +2335,7 @@ def _open_ended_required_years(
         ):
             continue
 
-        if _nearest_section_is_preferred(
+        if _is_optional_figure(
             description,
             match.start(),
         ):
@@ -2469,8 +2605,15 @@ def _is_systems_language_only_role(
 
 def evaluate_job(
     job: CanonicalJob,
+    profile: CandidateProfile | None = None,
 ) -> EligibilityDecision:
-    """Evaluate one normalized job against ACE eligibility rules."""
+    """Evaluate one normalized job against ACE eligibility rules.
+
+    ``profile`` defaults to the active one; passing another is how a dry
+    run compares rule sets without changing what is stored.
+    """
+
+    profile = profile or ACTIVE_PROFILE
 
     role = classify_role(
         job.title
@@ -2604,7 +2747,7 @@ def evaluate_job(
         and (
             required_years is None
             or required_years
-            > MAX_OPEN_ENDED_YEARS
+            > profile.max_open_ended_years
         )
     ):
         reject_codes.append(
@@ -2645,7 +2788,7 @@ def evaluate_job(
     if (
         open_ended is not None
         and open_ended
-        >= MAX_OPEN_ENDED_YEARS
+        >= profile.max_open_ended_years
     ):
         reject_codes.append(
             EligibilityReasonCode
@@ -2663,7 +2806,7 @@ def evaluate_job(
     elif (
         required_years is not None
         and required_years
-        >= MAX_REQUIRED_EXPERIENCE_YEARS
+        >= profile.max_required_years
     ):
         reject_codes.append(
             EligibilityReasonCode
@@ -3008,10 +3151,12 @@ def evaluate_job(
             required_experience_years=(
                 required_years
             ),
+            rule_version=profile.rule_version,
         )
 
     return EligibilityDecision(
         status=EligibilityStatus.PASS,
+        rule_version=profile.rule_version,
         role_family=role.family,
         role_priority=role.priority,
         reason_codes=tuple(

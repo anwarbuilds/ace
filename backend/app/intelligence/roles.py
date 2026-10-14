@@ -171,6 +171,11 @@ AI_ML_PATTERNS = (
 SOFTWARE_ENGINEERING_PATTERNS = (
     r"\bsoftware engineer(?:ing)?\b",
     r"\bsoftware development engineer(?:ing)?\b",
+    # Amazon and others shorten it: "SDE II", "SDE-1", "Software Dev
+    # Engineer". Read as nothing before 2026-10-14, so every such role
+    # was rejected as non-target whatever its level.
+    r"\bsde\b",
+    r"\bsoftware dev\.? engineer\b",
     r"\bsoftware developer\b",
     r"\bsystems software engineer(?:ing)?\b",
     r"\bbackend software engineer(?:ing)?\b",

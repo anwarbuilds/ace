@@ -37,7 +37,10 @@ from backend.app.db.models import (
     JobSourceRecord,
     PollSessionRecord,
 )
-from backend.app.intelligence.eligibility import ELIGIBILITY_RULE_VERSION
+from backend.app.intelligence.eligibility import (
+    ACTIVE_PROFILE,
+    ELIGIBILITY_RULE_VERSION,
+)
 from backend.app.mail.sender import mail_configured
 from backend.app.matching.scoring import MATCHING_ALGORITHM_VERSION
 from backend.app.matching.service import get_active_resume
@@ -191,6 +194,12 @@ def get_system(
     )
 
     return {
+        "profile": {
+            "key": ACTIVE_PROFILE.key,
+            "experience_years": ACTIVE_PROFILE.experience_years,
+            "max_open_ended_years": ACTIVE_PROFILE.max_open_ended_years,
+            "max_required_years": ACTIVE_PROFILE.max_required_years,
+        },
         "versions": {
             "gate": ELIGIBILITY_RULE_VERSION,
             "matching": MATCHING_ALGORITHM_VERSION,

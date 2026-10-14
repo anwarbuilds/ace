@@ -115,6 +115,13 @@ export default async function SettingsPage() {
                       <dd>{week}</dd>
                     </>
                   ) : null}
+                  <dt>Targeting</dt>
+                  <dd>
+                    {system.profile.key === "sde2"
+                      ? `new grad first, SDE II included: up to ${system.profile.max_open_ended_years - 1}+ years`
+                      : `early career: up to ${system.profile.max_open_ended_years - 1} years, "3+" left out`}
+                    {`, ${system.profile.experience_years} years of experience`}
+                  </dd>
                   <dt>Rule versions</dt>
                   <dd>
                     gate {system.versions.gate}, matching {system.versions.matching}

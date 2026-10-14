@@ -195,6 +195,8 @@ POSTINGS = (
     ("ML Infrastructure Engineer", "ML", "none", 3),
     ("Forward Deployed Engineer", "FDE", "one_plus", 5),
     ("Forward Deployed Software Engineer, New Grad", "FDE", "new_grad", 4),
+    ("SDE II", "SOFTWARE", "three_plus", 3),
+    ("Software Engineer II", "SOFTWARE", "three_plus", 3),
     ("Senior Software Engineer", "SOFTWARE", "five_plus", 6),
     ("Staff Machine Learning Engineer", "ML", "eight_plus", 2),
     ("Software Engineering Intern, Summer 2027", "SOFTWARE", "intern", 3),
@@ -214,6 +216,7 @@ EXPERIENCE = {
     "one_plus": "1+ years of professional software engineering experience.",
     "two_plus": "2+ years of experience building production systems.",
     "two_three": "2-3 years of industry experience.",
+    "three_plus": "3+ years of professional software engineering experience.",
     "none": (
         "A degree in Computer Science or equivalent practical experience."
     ),

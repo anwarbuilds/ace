@@ -242,6 +242,7 @@ export interface SourceResult {
 }
 
 export interface SystemStatus {
+  profile: { key: string; experience_years: number; max_open_ended_years: number; max_required_years: number };
   versions: { gate: string; matching: string };
   display_timezone: string;
   scheduler: { last_poll_at: string | null; stale: boolean; sources_enabled: number };
