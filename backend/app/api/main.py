@@ -388,6 +388,9 @@ def _serialize_job(
             job.requirements_verified
         ),
         "match_score": job.match_score,
+        # False until the active resume has scored this job, so a
+        # missing score reads as "not scored yet", not "unreadable".
+        "is_scored": job.is_scored,
         "matched_skills": list(
             job.matched_skills
         ),

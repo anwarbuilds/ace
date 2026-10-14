@@ -1746,7 +1746,9 @@ function jobPage(){
       '<div class="card match"><p class="eyebrow">Resume match</p>'+
         '<div class="score-row">'+scoreRing(j.match_score)+'<div>'+
           '<div class="score-meta">'+(t==="unscored"
-            ? "ACE could not read this posting, so it has no score."
+            ? (j.is_scored===false
+              ? "Not scored yet. ACE scores new postings against your resume within a few minutes of finding them."
+              : "ACE could not read enough of this posting to score it.")
             : '<b class="m-'+t+'">'+tierLabel(t)+'</b> match against '+esc(state.resume?state.resume.label:"your resume"))+
             ' <button class="info" data-act="scoreinfo" aria-label="What this means">i</button></div>'+
         '</div></div>'+

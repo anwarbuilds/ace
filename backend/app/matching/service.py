@@ -285,6 +285,191 @@ def rescore_corpus(
     return scored
 
 
+def score_unscored_jobs(
+    session: Session,
+    *,
+    now: datetime | None = None,
+    limit: int = 2000,
+) -> int:
+    """Score queue jobs the active resume has no current score for.
+
+    ``rescore_corpus`` runs only when a resume is uploaded, so before
+    this existed every job found afterwards had no score row at all: on
+    2026-10-10 that was 1,238 of the 1,249 jobs in the queue. The
+    scheduler calls this after each cycle.
+
+    Two kinds of row are written. A job with no row for the active
+    resume is scored for the first time. A job whose evaluation was
+    rewritten after its score was taken (its posting changed, or the
+    rules did) is scored again, and remembers what it moved from.
+
+    Bounded to active jobs that passed the gate, the ones the queue
+    shows, so a cycle costs what it found rather than the corpus; an
+    upload still rescores everything. ``limit`` caps one sweep so a
+    backlog drains over a few cycles instead of stalling one.
+
+    Returns:
+        The number of jobs scored.
+    """
+
+    resume = get_active_resume(
+        session
+    )
+
+    if resume is None:
+        return 0
+
+    stamp = (
+        now
+        if now is not None
+        else datetime.now(
+            timezone.utc
+        )
+    )
+
+    rows = session.execute(
+        select(
+            JobRecord.id,
+            JobRecord.title,
+            JobRecord.description,
+            JobEvaluationRecord
+            .requirements_verified,
+        )
+        .join(
+            JobEvaluationRecord,
+            JobEvaluationRecord.job_id
+            == JobRecord.id,
+        )
+        .outerjoin(
+            JobResumeScoreRecord,
+            (
+                JobResumeScoreRecord.job_id
+                == JobRecord.id
+            )
+            & (
+                JobResumeScoreRecord.resume_id
+                == resume.id
+            ),
+        )
+        .where(
+            JobRecord.is_active.is_(
+                True
+            ),
+            JobEvaluationRecord
+            .eligibility_status
+            == "PASS",
+            (
+                JobResumeScoreRecord.job_id
+                .is_(None)
+            )
+            | (
+                JobResumeScoreRecord.scored_at
+                < JobEvaluationRecord.evaluated_at
+            ),
+        )
+        .order_by(
+            JobRecord.id
+        )
+        .limit(
+            limit
+        )
+    ).all()
+
+    if not rows:
+        return 0
+
+    resume_skills = extract_skills(
+        resume.raw_text or ""
+    )
+
+    existing = {
+        record.job_id: record
+        for record in session.scalars(
+            select(
+                JobResumeScoreRecord
+            ).where(
+                JobResumeScoreRecord.resume_id
+                == resume.id,
+                JobResumeScoreRecord.job_id.in_(
+                    [
+                        row[0]
+                        for row in rows
+                    ]
+                ),
+            )
+        )
+    }
+
+    for (
+        job_id,
+        title,
+        description,
+        verified,
+    ) in rows:
+        result = score_job(
+            resume_skills=resume_skills,
+            job_text=(
+                f"{title}\n{description}"
+            ),
+            requirements_verified=bool(
+                verified
+            ),
+        )
+
+        values = {
+            "score": result.score,
+            "matched_skills": list(
+                result.matched_skills
+            ),
+            "missing_skills": list(
+                result.missing_skills
+            ),
+            "related_skills": list(
+                result.related_skills
+            ),
+            "algorithm_version": (
+                MATCHING_ALGORITHM_VERSION
+            ),
+            "scored_at": stamp,
+        }
+
+        record = existing.get(
+            job_id
+        )
+
+        if record is None:
+            session.add(
+                JobResumeScoreRecord(
+                    job_id=job_id,
+                    resume_id=resume.id,
+                    previous_score=None,
+                    **values,
+                )
+            )
+
+            continue
+
+        values["previous_score"] = (
+            record.score
+        )
+
+        for (
+            field,
+            value,
+        ) in values.items():
+            setattr(
+                record,
+                field,
+                value,
+            )
+
+    session.flush()
+
+    return len(
+        rows
+    )
+
+
 def stale_score_count(
     session: Session,
     *,

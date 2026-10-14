@@ -262,6 +262,11 @@ class JobListing:
 
     match_score: int | None = None
 
+    # Whether the active resume has a score row for this job at all. A
+    # null match_score means "could not read" only when this is true;
+    # when it is false the job has simply not been scored yet.
+    is_scored: bool = False
+
     matched_skills: tuple[str, ...] = ()
 
     missing_skills: tuple[str, ...] = ()
@@ -1391,6 +1396,9 @@ def list_jobs(
                 None
                 if match is None
                 else match.score
+            ),
+            is_scored=(
+                match is not None
             ),
             matched_skills=(
                 ()

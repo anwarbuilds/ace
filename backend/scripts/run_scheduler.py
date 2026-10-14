@@ -61,6 +61,9 @@ from backend.app.evaluation.freshness import (
 from backend.app.alerts.service import (
     send_pending,
 )
+from backend.app.matching.service import (
+    score_unscored_jobs,
+)
 from backend.app.persistence.sessions import (
     record_check,
     record_discoveries,
@@ -387,6 +390,21 @@ def main(
     ) -> None:
         """Group anything this cycle discovered into a run, and record
         how much the run has checked so far."""
+
+        # Score what this cycle found against the active resume before
+        # the pull is recorded and alerted, so the queue, the job page
+        # and the email carry a match instead of "n/a". Uploads still
+        # rescore the corpus; this keeps up with what arrives after.
+        with SessionLocal.begin() as session:
+            scored = score_unscored_jobs(
+                session
+            )
+
+        if scored:
+            LOGGER.info(
+                "jobs_scored count=%d",
+                scored,
+            )
 
         with SessionLocal.begin() as session:
             run = record_discoveries(
