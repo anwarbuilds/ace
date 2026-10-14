@@ -20,6 +20,7 @@ badge said otherwise. When a new spelling shows up it goes in ALIASES.
 
 from __future__ import annotations
 
+import os
 from enum import StrEnum
 
 
@@ -364,6 +365,16 @@ ESTABLISHED_NAMES = frozenset(
 # Spellings that appear in the wild mapped onto the canonical name the
 # tier sets use. This is where a new variant goes; it is the only place
 # fuzziness is permitted, and it stays explicit so SQL can mirror it.
+# The demo database's fictional employers, taken in only when asked
+# for. See backend/app/demo/companies.py.
+if os.environ.get("ACE_DEMO_COMPANIES") == "1":
+    from backend.app.demo.companies import demo_names_for
+
+    BIG_TECH_NAMES = BIG_TECH_NAMES | demo_names_for("BIG_TECH")
+    TOP_TIER_NAMES = TOP_TIER_NAMES | demo_names_for("TOP_TIER")
+    ESTABLISHED_NAMES = ESTABLISHED_NAMES | demo_names_for("ESTABLISHED")
+
+
 ALIASES: dict[str, str] = {
     "amazon.com": "amazon",
     "amazon web services (aws)": "amazon",

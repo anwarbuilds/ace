@@ -66,3 +66,6 @@ docs/ACE-KNOWLEDGE.md
 # The prompt used to start a fresh session carries private context (profile,
 # cleanup items). docs/HANDOFF.md is the public-safe brief it points to.
 docs/NEXT-SESSION-PROMPT.md
+
+# Demo database built by backend/scripts/seed_demo.py
+ace-demo.db
