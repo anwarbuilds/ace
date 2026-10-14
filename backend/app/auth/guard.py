@@ -60,6 +60,7 @@ PUBLIC = frozenset(
         "/api/auth/reset/request",
         "/api/auth/reset/confirm",
         "/api/extension/pair",
+        "/api/auth/setup",
     }
 )
 

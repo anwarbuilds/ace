@@ -869,22 +869,37 @@ var API="";
     });
   };
   function signIn(){
+    raw(API+"/api/auth/status",{cache:"no-store"}).then(function(r){ return r.json(); })
+      .then(function(st){ card(st&&st.owner_exists===false?st:null); })
+      .catch(function(){ card(null); });
+  }
+  // One card for both: signing in, or, on the very first visit, creating
+  // the one account (never a sign-up: refused once an account exists).
+  function card(setup){
     var box=document.createElement("div");
     box.className="signin";
     box.innerHTML='<form class="signin-card" novalidate>'+
       '<span class="signin-mark">ace</span>'+
-      '<h1>Sign in</h1><p>Your opportunities, applications and answers are private to you.</p>'+
+      (setup?'<h1>Create your account</h1><p>ace has one private account. Create it now; after this, this card only signs you in.</p>'
+            :'<h1>Sign in</h1><p>Your opportunities, applications and answers are private to you.</p>')+
       '<label for="si-email">Email</label><input id="si-email" type="email" autocomplete="username" required>'+
-      '<label for="si-pw">Password</label><input id="si-pw" type="password" autocomplete="current-password" required>'+
+      '<label for="si-pw">Password'+(setup?', 12 or more characters':'')+'</label>'+
+      '<input id="si-pw" type="password" autocomplete="'+(setup?'new':'current')+'-password" required>'+
+      (setup?'<label for="si-pw2">Password again</label><input id="si-pw2" type="password" autocomplete="new-password" required>':'')+
+      (setup&&setup.setup_needs_token?'<label for="si-tok">Setup code</label><input id="si-tok" type="password" autocomplete="off">':'')+
       '<p class="signin-err" role="alert"></p>'+
-      '<button type="submit">Sign in</button></form>';
+      '<button type="submit">'+(setup?'Create account':'Sign in')+'</button></form>';
     document.body.appendChild(box);
     var form=box.querySelector("form"), err=box.querySelector(".signin-err");
+    function val(id){ var el=box.querySelector(id); return el?el.value:""; }
     box.querySelector("#si-email").focus();
     form.addEventListener("submit",function(e){
       e.preventDefault(); err.textContent="";
-      raw(API+"/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({email:box.querySelector("#si-email").value,password:box.querySelector("#si-pw").value})})
+      if(setup&&val("#si-pw")!==val("#si-pw2")){ err.textContent="The two passwords differ."; return; }
+      var body=setup?{email:val("#si-email"),password:val("#si-pw"),setup_token:val("#si-tok")}
+                    :{email:val("#si-email"),password:val("#si-pw")};
+      raw(API+(setup?"/api/auth/setup":"/api/auth/login"),{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(body)})
       .then(function(r){
         if(r.ok){ location.reload(); return; }
         return r.json().then(function(b){

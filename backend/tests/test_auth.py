@@ -337,7 +337,7 @@ def test_with_no_owner_login_says_how_to_create_one(factory, monkeypatch) -> Non
     client = TestClient(_app(factory, monkeypatch))
     response = _login(client)
     assert response.status_code == 409
-    assert "create_owner" in response.json()["detail"]["message"]
+    assert response.json()["detail"]["reason"] == "no_owner"
     assert client.get("/api/auth/status").json()["owner_exists"] is False
     get_settings.cache_clear()
 
@@ -628,3 +628,54 @@ def test_the_cli_refuses_mismatched_passwords(factory, monkeypatch) -> None:
 
     with factory() as session:
         assert service.owner_exists(session) is False
+
+
+
+# ----------------------------------------------------------------------
+# First-run setup in the browser
+# ----------------------------------------------------------------------
+
+
+def test_the_first_visit_creates_the_account_and_signs_in(factory, monkeypatch) -> None:
+    app = _app(factory, monkeypatch)
+    local = _Peer(app, "127.0.0.1").client
+
+    status = local.get("/api/auth/status").json()
+    assert status["owner_exists"] is False and status["setup_allowed"] is True
+
+    weak = local.post("/api/auth/setup", json={"email": EMAIL, "password": "short"})
+    assert weak.status_code == 400
+
+    made = local.post("/api/auth/setup", json={"email": EMAIL, "password": PASSWORD})
+    assert made.status_code == 200
+    assert local.get("/api/answers").status_code == 200
+    get_settings.cache_clear()
+
+
+def test_setup_works_once_and_is_never_a_sign_up(factory, monkeypatch) -> None:
+    app = _app(factory, monkeypatch)
+    local = _Peer(app, "127.0.0.1").client
+    local.post("/api/auth/setup", json={"email": EMAIL, "password": PASSWORD})
+
+    again = _Peer(app, "127.0.0.1").client.post(
+        "/api/auth/setup", json={"email": "second@example.com", "password": PASSWORD}
+    )
+    assert again.status_code == 409
+    get_settings.cache_clear()
+
+
+def test_setup_from_a_public_address_needs_the_setup_code(factory, monkeypatch) -> None:
+    app = _app(factory, monkeypatch)
+    remote = _Peer(app, "203.0.113.5").client
+    assert remote.get("/api/auth/status").json()["setup_allowed"] is False
+    assert remote.post("/api/auth/setup", json={"email": EMAIL, "password": PASSWORD}).status_code == 403
+
+    monkeypatch.setenv("SETUP_TOKEN", "fictional-setup-code")
+    get_settings.cache_clear()
+    status = remote.get("/api/auth/status").json()
+    assert status["setup_allowed"] is True and status["setup_needs_token"] is True
+    assert remote.post("/api/auth/setup", json={"email": EMAIL, "password": PASSWORD,
+                                                "setup_token": "wrong"}).status_code == 403
+    assert remote.post("/api/auth/setup", json={"email": EMAIL, "password": PASSWORD,
+                                                "setup_token": "fictional-setup-code"}).status_code == 200
+    get_settings.cache_clear()

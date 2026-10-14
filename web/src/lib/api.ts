@@ -59,6 +59,8 @@ export interface AuthStatus {
   kind: "session" | "token" | "local" | null;
   email: string | null;
   reset_by_email: boolean;
+  setup_allowed: boolean;
+  setup_needs_token: boolean;
 }
 
 /** Never redirects: the sign-in page itself needs this. */

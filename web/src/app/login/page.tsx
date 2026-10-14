@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/components/auth/LoginForm";
+import { SetupForm } from "@/components/auth/SetupForm";
 import { authStatus } from "@/lib/api";
 import { safeNext } from "@/lib/safeNext";
 
@@ -25,13 +26,19 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           </>
         ) : !status.owner_exists ? (
           <>
-            <h1 className="auth-h">Create the owner account</h1>
-            <p className="auth-sub">
-              ace has one private account and no sign-up page. Create it on the machine that runs ace; the password is
-              typed at a hidden prompt.
-            </p>
-            <pre>python -m backend.scripts.create_owner you@example.com</pre>
-            <p className="auth-sub">In Docker, prefix it with docker exec -it ace-web-1. Then reload this page.</p>
+            <h1 className="auth-h">Create your account</h1>
+            {status.setup_allowed ? (
+              <>
+                <p className="auth-sub">
+                  ace has one private account. Create it now; after this, the page only signs you in.
+                </p>
+                <SetupForm next={next} needsToken={status.setup_needs_token} />
+              </>
+            ) : (
+              <p className="auth-sub">
+                For safety, the account can only be created from the computer that runs ace. Open this page there.
+              </p>
+            )}
           </>
         ) : (
           <>

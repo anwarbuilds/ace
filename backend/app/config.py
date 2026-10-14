@@ -105,6 +105,12 @@ class Settings(BaseSettings):
     # switching it on cannot expose a cloud deployment.
     ace_auth: str = "required"
 
+    # First-run account creation in the browser is allowed from this
+    # computer or a private network. On a server reached over the
+    # internet, set this and type it on the setup page, so nobody who
+    # finds the address first can claim the account.
+    setup_token: str = ""
+
     # A browser session lasts this long, then the owner signs in again.
     session_days: int = 30
 

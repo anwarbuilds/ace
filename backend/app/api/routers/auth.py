@@ -28,6 +28,7 @@ from backend.app.api.deps import get_session
 from backend.app.auth import service
 from backend.app.auth.crypto import (
     WeakPassword,
+    same,
     verify_password,
 )
 from backend.app.auth.guard import (
@@ -54,6 +55,12 @@ router = APIRouter()
 class LoginRequest(BaseModel):
     email: str = ""
     password: str = ""
+
+
+class SetupRequest(BaseModel):
+    email: str = ""
+    password: str = ""
+    setup_token: str = ""
 
 
 class PasswordChange(BaseModel):
@@ -169,7 +176,70 @@ def status(
             else None
         ),
         "reset_by_email": mail_configured(),
+        "setup_allowed": _setup_allowed(request),
+        "setup_needs_token": bool(settings.setup_token)
+        and not is_local_request(request),
     }
+
+
+def _setup_allowed(request: Request) -> bool:
+    return is_local_request(request) or bool(get_settings().setup_token)
+
+
+@router.post("/api/auth/setup")
+def setup(
+    payload: SetupRequest,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> dict:
+    """Create the one account from the browser, the first time only.
+
+    Refused once an owner exists, so this is never a sign-up page. From
+    a public address it also needs ACE_SETUP_TOKEN, so whoever finds a
+    fresh server first cannot claim it.
+    """
+
+    _json_only(request)
+
+    if service.owner_exists(session):
+        raise _refuse(409, "owner_exists", "This ace already has an account. Sign in instead.")
+
+    if not is_local_request(request):
+        expected = get_settings().setup_token
+        if not expected or not same(payload.setup_token.strip(), expected):
+            raise _refuse(
+                403,
+                "setup_token",
+                "Enter the setup code from this server's settings to create the account.",
+            )
+
+    try:
+        user = service.create_owner(
+            session, email=payload.email, password=payload.password, now=_now()
+        )
+    except WeakPassword as weak:
+        raise _refuse(400, "weak_password", str(weak)) from None
+    except service.AuthRefused as refused:
+        raise _refuse(400, refused.reason, refused.message) from None
+
+    created = service.start_session(
+        session,
+        user,
+        user_agent=request.headers.get("user-agent", ""),
+        now=_now(),
+        lifetime=_lifetime(),
+    )
+    session.commit()
+    _set_cookies(
+        response,
+        request,
+        token=created.token,
+        csrf=created.csrf,
+        max_age=int(_lifetime().total_seconds()),
+    )
+    LOGGER.info("owner_created_from_web user=%s", user.id)
+    return {"ok": True, "email": user.email}
 
 
 @router.post("/api/auth/login")
@@ -185,8 +255,7 @@ def login(
         raise _refuse(
             409,
             "no_owner",
-            "No owner account yet. Create it on the machine that runs ace "
-            "with the create_owner script, then sign in.",
+            "No account yet. Reload this page to create one.",
         )
 
     try:
