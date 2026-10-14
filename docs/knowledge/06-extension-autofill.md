@@ -861,3 +861,6 @@ remedy. Only the extension's own pages may pair or unpair, never a
 content script. An `https://` address (the cloud deployment) asks
 Chrome for that origin when it is saved (`optional_host_permissions`).
 Backward compatible: against an ace without sign-in it behaves as 1.20.
+Host permission is now any localhost port (`http://localhost/*`; a
+pattern without a port matches every port), so a second API on 8001 for
+testing a branch can be paired too. Verified in Chromium on 8000 and 8001.
