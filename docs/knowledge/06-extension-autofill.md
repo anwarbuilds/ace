@@ -848,3 +848,16 @@ the reformat case fails without the reordering -- and it fails
 reproducing the reported value exactly, `+2060000000` against the
 user's `+2065550100`, which is what confirmed the diagnosis rather than
 merely being consistent with it.
+
+
+## Pairing (1.21.0, 2026-10-14)
+
+ace now asks who is calling, so the extension carries its own token
+(see 07, "Owner sign-in with extension pairing"). Popup, Connection: a
+pairing code from ace Settings, Pair, and Unpair. The service worker
+adds `Authorization: Bearer` to every read and reports a 401 as
+`unpaired`, which both the popup and the in-page panel turn into the
+remedy. Only the extension's own pages may pair or unpair, never a
+content script. An `https://` address (the cloud deployment) asks
+Chrome for that origin when it is saved (`optional_host_permissions`).
+Backward compatible: against an ace without sign-in it behaves as 1.20.

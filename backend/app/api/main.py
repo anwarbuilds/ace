@@ -103,6 +103,11 @@ STATIC_DIRECTORY = (
 )
 
 
+# A resume is a few pages. Anything larger is not one, and reading it
+# whole would let one request hold the server's memory.
+MAX_RESUME_BYTES = 5 * 1024 * 1024
+
+
 # One definition, shared with the routers in backend/app/api/routers/.
 from backend.app.api.deps import get_session  # noqa: E402
 
@@ -522,6 +527,12 @@ def _no_store(
 def create_app() -> FastAPI:
     """Build the ACE web application."""
 
+    from backend.app.auth.guard import require_auth
+
+    docs = get_settings().api_docs
+
+    # require_auth runs before every route, so a route added later is
+    # private unless it is listed in guard.PUBLIC.
     app = FastAPI(
         title="ACE",
         description=(
@@ -529,6 +540,14 @@ def create_app() -> FastAPI:
             "read model."
         ),
         version="1.0.0",
+        dependencies=[
+            Depends(
+                require_auth
+            )
+        ],
+        docs_url="/docs" if docs else None,
+        redoc_url=None,
+        openapi_url="/openapi.json" if docs else None,
     )
 
     @app.middleware("http")
@@ -548,6 +567,21 @@ def create_app() -> FastAPI:
             _no_store(
                 response
             )
+
+        # Basic hardening for every response. The pages are ace's own
+        # and are never meant to be framed by another site.
+        response.headers.setdefault(
+            "X-Content-Type-Options", "nosniff"
+        )
+        response.headers.setdefault(
+            "X-Frame-Options", "DENY"
+        )
+        response.headers.setdefault(
+            "Referrer-Policy", "same-origin"
+        )
+        response.headers.setdefault(
+            "Content-Security-Policy", "frame-ancestors 'none'"
+        )
 
         return response
 
@@ -1177,7 +1211,15 @@ def create_app() -> FastAPI:
         of in a background job the user waits on.
         """
 
-        payload = file.file.read()
+        payload = file.file.read(
+            MAX_RESUME_BYTES + 1
+        )
+
+        if len(payload) > MAX_RESUME_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail="A resume file is at most 5 MB.",
+            )
 
         try:
             text = extract_resume_text(
@@ -2170,11 +2212,13 @@ def create_app() -> FastAPI:
         )
 
     from backend.app.api.routers import (
+        auth,
         export,
         system,
     )
 
     for module in (
+        auth,
         system,
         export,
     ):

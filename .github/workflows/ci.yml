@@ -78,15 +78,18 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Build the demo database
         run: python -m backend.scripts.seed_demo
-      - name: Start the API on the demo database
+      # The old UI suite runs through the rollback switch (sign-in off,
+      # this machine only), which proves the switch still works; the
+      # old UI with sign-in on is covered by web/tests/e2e/old-ui.spec.ts.
+      - name: Start the API on the demo database, sign-in off
         run: |
-          nohup python -m uvicorn backend.app.api.main:app --port 8000 > uvicorn.log 2>&1 &
+          ACE_AUTH=disabled nohup python -m uvicorn backend.app.api.main:app --port 8000 > uvicorn.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:8000/healthz && break; sleep 1; done
       - name: Old UI browser tests
         env:
           ACE_BROWSER_TEST_URL: http://127.0.0.1:8000
         run: python -m pytest backend/tests/browser -q -rs
-      - name: Reseed (the old UI suite writes marks)
+      - name: Reseed (the old UI suite writes marks), sign-in on
         run: |
           pkill -f "uvicorn backend.app.api.main" || true
           python -m backend.scripts.seed_demo
@@ -98,7 +101,7 @@ jobs:
           npm ci
           npx next build
           nohup npx next start -p 3000 > next.log 2>&1 &
-          for i in $(seq 1 30); do curl -sf -o /dev/null localhost:3000/app/opportunities && break; sleep 1; done
+          for i in $(seq 1 30); do curl -sf -o /dev/null localhost:3000/login && break; sleep 1; done
       - name: New app browser tests
         working-directory: web
         run: |

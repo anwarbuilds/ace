@@ -2201,6 +2201,16 @@
     chrome.runtime.sendMessage({ type: "answers" }, function (reply) {
       if (chrome.runtime.lastError) return;
 
+      if (reply && !reply.ok && reply.error === "unpaired") {
+        render(panel(), shell(
+          "Pair ace autofill first",
+          "In ace, Settings, Pair the extension. Then type the code in the toolbar icon, Connection.",
+          "",
+          ""
+        ));
+        return;
+      }
+
       if (!reply || !reply.ok) {
         render(panel(), shell(
           "ACE is not reachable",

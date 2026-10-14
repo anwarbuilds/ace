@@ -9,7 +9,8 @@ services:
       POSTGRES_PASSWORD: ${ACE_DB_PASSWORD:-ace_local_dev}
 
     ports:
-      - "${ACE_DB_PORT:-5433}:5432"
+      # This machine only: the database has a default password.
+      - "127.0.0.1:${ACE_DB_PORT:-5433}:5432"
 
     volumes:
       - ace_postgres_data:/var/lib/postgresql/data

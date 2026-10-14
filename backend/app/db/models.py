@@ -1198,3 +1198,284 @@ class EmployerPageReading(Base):
         DateTime(timezone=True),
         nullable=False,
     )
+
+
+# ----------------------------------------------------------------------
+# Sign-in
+# ----------------------------------------------------------------------
+#
+# ace has one private user, the owner. These tables exist so that the
+# API refuses anyone else, not so that anyone can sign up: there is no
+# open registration, and the owner is created from the command line.
+#
+# Every secret is stored as a SHA-256 hash (session and extension
+# tokens, pairing codes, reset links) or an argon2id hash (the
+# password). A database dump therefore holds nothing that signs in.
+
+
+class UserRecord(Base):
+    """A person who may sign in. Today only the owner."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    # Stored lowercased, compared lowercased.
+    email: Mapped[str] = mapped_column(
+        String(320),
+        nullable=False,
+        unique=True,
+    )
+
+    password_hash: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    # owner is the only role the API accepts. Anything else signs in and
+    # is refused, so a second account can never read the owner's data
+    # by accident before multi-user scoping exists.
+    role: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="owner",
+    )
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    password_changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+
+class AuthSessionRecord(Base):
+    """One signed-in browser."""
+
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    token_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        unique=True,
+    )
+
+    # The CSRF token belongs to the session, so a token lifted from one
+    # browser is worthless in another.
+    csrf_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    # Shown in Settings so the owner can tell sessions apart. Trimmed,
+    # never parsed.
+    user_agent: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        default="",
+    )
+
+
+class ApiTokenRecord(Base):
+    """A long-lived token for a device that cannot hold a cookie.
+
+    The Chrome extension is the only one. It reads the answer bank and
+    the work and education history and nothing else: the scope is
+    checked on every request.
+    """
+
+    __tablename__ = "api_tokens"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    token_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        unique=True,
+    )
+
+    # The first characters, kept in the clear so Settings can name a
+    # token without being able to use it.
+    prefix: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(80),
+        nullable=False,
+    )
+
+    scope: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    last_used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+
+class AuthCodeRecord(Base):
+    """A one-time code: extension pairing or a password reset link.
+
+    Short-lived and single use. Only the hash is stored.
+    """
+
+    __tablename__ = "auth_codes"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    code_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        unique=True,
+    )
+
+    # pairing | password_reset
+    purpose: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+
+class LoginAttemptRecord(Base):
+    """One sign-in or pairing attempt, kept to slow down guessing.
+
+    Stored rather than held in memory so a restart does not reset the
+    count, and so two API processes agree on it.
+    """
+
+    __tablename__ = "login_attempts"
+
+    __table_args__ = (
+        Index(
+            "ix_login_attempts_key_at",
+            "key",
+            "attempted_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    # "email:<address>", "ip:<address>" or "pair:<address>".
+    key: Mapped[str] = mapped_column(
+        String(400),
+        nullable=False,
+    )
+
+    succeeded: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+    )
+
+    attempted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )

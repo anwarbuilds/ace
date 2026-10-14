@@ -17,6 +17,7 @@ from sqlalchemy.pool import StaticPool
 
 from backend.app.api.deps import get_session
 from backend.app.api.main import create_app
+from backend.app.auth.guard import require_auth
 from backend.app.config import get_settings
 from backend.app.db.base import Base
 from backend.app.db.models import (
@@ -51,6 +52,9 @@ def fixture_client(monkeypatch):
 
     app = create_app()
     app.dependency_overrides[get_session] = override
+    # Sign-in has its own suite (test_auth.py); these tests are about
+    # what the routes say, so they run as the owner.
+    app.dependency_overrides[require_auth] = lambda: None
 
     with factory.begin() as session:
         session.add_all(

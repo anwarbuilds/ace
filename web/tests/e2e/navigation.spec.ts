@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
 
-import { test } from "./helpers";
+import { signIn, test } from "./helpers";
 
 test("old route names redirect to the new ones", async ({ page }) => {
   for (const [from, to] of [
@@ -79,6 +79,7 @@ test("the tabs carry their professional names", async ({ page }) => {
 
 test("a first visit learns the time zone without losing a click", async ({ browser, baseURL }) => {
   const context = await browser.newContext({ timezoneId: "America/New_York" });
+  await signIn(context, baseURL!);
   const page = await context.newPage();
   await page.goto(`${baseURL}/app/opportunities`);
   await page.locator(".pager-btn", { hasText: /^2$/ }).click();
@@ -88,7 +89,8 @@ test("a first visit learns the time zone without losing a click", async ({ brows
 });
 
 test("one role posted per vertical folds into a group that opens", async ({ page }) => {
-  await page.goto("/app/opportunities");
+  // Searched, so the group is on page one whatever earlier tests marked.
+  await page.goto("/app/opportunities?q=Pinecrest");
   const head = page.locator(".grp-head").first();
   await expect(head).toContainText("similar openings");
   await expect(page.locator(".grp-member")).toHaveCount(0);

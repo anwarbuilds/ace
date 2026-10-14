@@ -105,8 +105,8 @@ excluded kinds unless the user asks.
   jobs, roughly 600 applications tracked, a 66 row answer bank. The scheduler
   polls continuously (five minute cycles; Google every 30 minutes) and alerts
   are one email per closed 15 minute pull.
-- Tests: 1027 unit (hermetic, SQLite, ~20 s), 105 browser (one skips when the
-  live data lacks a recent check with a job), 185 extension matcher cases.
+- Tests on `next-app`: 1124 unit (hermetic, SQLite, ~30 s), 105 old UI browser (run with `ACE_AUTH=disabled`), 55
+  Playwright (signed in as the demo owner), 185 extension matcher cases.
 - Done this week: own-site readers for Atlassian, EA, Apple, Shopify, AMD, SIG,
   Booking.com, Groq, Google, Meta, Intuit, Arm, Synopsys and about 25 more
   boards; gate v46 to v53; the full anthracite redesign (web, extension, email),
@@ -127,6 +127,16 @@ excluded kinds unless the user asks.
     filters, sort and numbered pages, palette with role search, marks with undo, dash guards. Old UI still at `/`.
   - CI added (`.github/workflows/ci.yml`): unit, extension, web build, both browser suites on demo data.
   - Baseline, gap matrix, decisions and open questions: `docs/architecture/2026-10-14-baseline-and-plan.md`.
+  - Overview at `/app`, Saved star removed (data kept), new grad first by default, `/api/system` health and
+    `/api/export.json`; candidate profiles (`ACE_TARGET_PROFILE`, sde2 off until the owner approves a dry run).
+  - **Sign-in (Phase 2):** owner-only, argon2id, DB sessions, CSRF, throttling, extension pairing (extension
+    1.21.0), rollback `ACE_AUTH=disabled` (local peers only). Migration 0038. Demo owner `demo@ace.example` /
+    `ace demo password` exists only in generated demo databases. Details: `docs/knowledge/07`. On the live database
+    the owner runs `create_owner` once and pairs the extension; until then the API answers 401 (or set
+    `ACE_AUTH=disabled` for a local rollback).
+  - Hazard: the live compose (built from `main`) cannot migrate a database already upgraded by `next-app` (alembic
+    cannot locate 0037 or 0038). Do not rebuild the live stack from `main` against a database `next-app` migrated;
+    merge first.
 - Alerts are composed but **not delivered**: `RESEND_API_KEY` is not set, so each
   pull logs `mail_not_configured`. Only the user can add the key.
 - `README.md` is stale (472 sources, 706 tests, old UI). Refresh it when
@@ -268,15 +278,9 @@ redirect. Remaining: a signed-in overview at `/app`, the page by page parity rep
 the switch of FastAPI `/` (only with the owner's approval). The master brief's route names and phases are in
 `docs/architecture/2026-10-14-baseline-and-plan.md`; it supersedes the route list that used to be here.
 
-**Phase 2. Sign-in** (decided: one private user, email and password). argon2id;
-HttpOnly, Secure, SameSite cookie sessions stored in the database; login
-throttling; email verification and password reset through Resend; the owner is
-created from env or a CLI, with no open sign-up; CSRF protection; a
-`require_user` dependency on every `/api/` route except `/healthz`. The Chrome
-extension gets its own pairing token: shown once in Settings, stored hashed,
-revocable, sent as a Bearer header. **Auth was rolled back in September 2026
-because it locked the extension out**, so ship pairing with it and keep a
-rollback switch.
+**Phase 2. Sign-in: done on `next-app`** (2026-10-14). Owner from the CLI, no sign-up; cookie sessions with CSRF;
+throttling; reset by email only when Resend is configured; extension pairing token limited to answers and history;
+rollback switch. Remaining from the brief: typed API (Pydantic response models and generated types).
 
 **Phase 3. Home page and onboarding.** A public landing page at `/`; a signed-in
 home (new roles today, highly matched, pipeline funnel, poll health, coverage
@@ -288,10 +292,9 @@ edits (never invent experience), PDF and DOCX export (`python-docx`,
 `pdfplumber`, `pypdfium2` are already dependencies). Ask the user for design
 preferences before building; it is a large product area.
 
-**Phase 5. Cloud on Render** (the user said "you choose"): web, API, the
-scheduler as an always-on background worker, managed Postgres with backups,
-GitHub deploys. Keep it portable (containers, Postgres, S3-compatible storage).
-Confirm live pricing first. The scheduler uses about 1.4 GB RAM and 20 percent
+**Phase 5. Cloud on Oracle Cloud Always Free** (2026-10-14: the owner will not pay for hosting): one VM running the
+same compose stack (Postgres, API, scheduler, Next.js) behind Caddy for HTTPS, backups to Object Storage, a restore
+drill. Keep it portable (containers, Postgres, S3-compatible storage). Confirm the free tier limits on the day. The scheduler uses about 1.4 GB RAM and 20 percent
 CPU, the database is about 1.8 GB. **Risk**: some boards (Cloudflare, Akamai)
 block datacenter addresses that a home connection gets through; measure the
 refusal rate from the cloud before cutting over.
@@ -369,6 +372,10 @@ deployable, and the live app only changes when the user pulls and rebuilds.
 
 ## 12. Decisions, newest first
 
+- 2026-10-14: owner answered the open questions: experience is 3 years; new grad first, SDE II also targeted (behind
+  the profile switch); Resume Studio starts with no AI (deterministic), a provider can be added later; templates
+  adapt to an uploaded DOCX; hosting must cost nothing, so Oracle Cloud Always Free replaces Render; the Saved star
+  is removed. Sign-in shipped with extension pairing and a local-only rollback switch.
 - 2026-10-14: master brief adopted as the spec for new scope. Route names changed (Opportunities, Activity,
   Applications, Resume Studio, Skills under insights); Saved left the navigation, its data and route kept. Theme and
   time zone are cookies. SDE II targeting proposed, not active, pending the owner's approval of a dry run.
@@ -387,7 +394,8 @@ deployable, and the live app only changes when the user pulls and rebuilds.
 
 1. Read this file and `docs/architecture/2026-10-14-baseline-and-plan.md`; check `git log -5` on `next-app`.
 2. Run the app on demo data (section 10) and the three suites: unit, `backend/tests/browser`, `web` Playwright.
-3. Continue Phase 1: the `/app` overview, then the parity report; then Phase 2 (auth with extension pairing).
+3. Continue: Resume Studio foundation (Phase 3 of the brief), tailoring without AI, the Oracle Always Free kit, the
+   parity report; see `docs/architecture/2026-10-14-baseline-and-plan.md` section 7.
 4. Do not switch on the SDE II gate change until the owner approves the dry run (baseline doc, section 6).
 
 ## 14. Keeping this current

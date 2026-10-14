@@ -1,6 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 
-import { DRAWN_SCAN, ROUTES, TEXT_SCAN, setThemeCookies, watchErrors } from "./helpers";
+import { DRAWN_SCAN, ROUTES, TEXT_SCAN, setThemeCookies, test, watchErrors } from "./helpers";
 
 // Every route renders in both themes with no errors and no dash, typed
 // or drawn. This is the guard the user asked for repeatedly.

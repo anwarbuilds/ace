@@ -26,7 +26,7 @@ than dropping delivery history. Drop them with a migration if wanted.
 
 ## Authentication was built, then removed (2026-09-13 to 09-14)
 
-> **Status:** History. Sign-in returns in Phase 2 of the platform rebuild (HANDOFF.md section 9). Read this first: it records what went wrong, chiefly that the extension was locked out.
+> **Status:** History. Superseded by "Owner sign-in with extension pairing (2026-10-14)" below, which shipped the extension token with it.
 
 Built for a deployment that had not happened, and reverted the next day
 because it made the platform worse in the meantime: the Chrome
@@ -163,3 +163,64 @@ specifically is what actually pins the behaviour.
   notification_outbox table is dead by design (email subsystem removed
   2026-09-06; alerts are now one Resend call per closed 15-minute pull).
   Only the user can add the key -- never ask for it in the conversation.
+
+
+## Owner sign-in with extension pairing (2026-10-14)
+
+Phase 2 of the rebuild, on `next-app`. Built so that the September
+failure (the extension locked out) cannot recur: the extension token
+shipped in the same change, and a rollback switch exists.
+
+**Shape.** `backend/app/auth/`: `crypto.py` (argon2id via argon2-cffi,
+RFC 9106 defaults; tokens are 256 random bits stored as SHA-256),
+`service.py` (pure rules over a session and an explicit `now`),
+`guard.py` (`require_auth`, installed as an app-wide FastAPI dependency
+so a new route is private unless listed in `guard.PUBLIC`). HTTP in
+`backend/app/api/routers/auth.py`. Migration 0038 adds `users`,
+`auth_sessions`, `api_tokens`, `auth_codes`, `login_attempts`; purely
+additive. Owner from `python -m backend.scripts.create_owner EMAIL`
+(hidden prompt; `--reset` changes the password and signs browsers out).
+
+**Decisions.**
+- Cookie `ace_session` (HttpOnly, SameSite=Lax, Secure on HTTPS or
+  behind a local proxy saying https) plus `ace_csrf` (readable) and the
+  header `X-CSRF-Token` on every unsafe method, checked against a hash
+  stored per session. Login, reset and pairing require
+  `application/json`, which a cross-site form cannot send.
+- Throttling is stored, not in memory: 5 failures per address or 20
+  per IP in 15 minutes; 10 pairing guesses per IP. A forwarded address
+  is believed only from a local proxy, and only its last hop.
+- The extension token (`ace_ext_...`) may only GET `/api/answers`,
+  `/api/history/{work,education}` and `/api/auth/status`. Pairing is a
+  one-time 8 character code (no look-alike letters), 10 minutes, made in
+  Settings by a password session, never by a token.
+- `ACE_AUTH=disabled` answers only loopback and RFC 1918 or ULA peers,
+  with every `X-Forwarded-For` hop also local. Python's `is_private`
+  was not used: it also counts documentation ranges such as
+  203.0.113.0/24, which a test caught.
+- No `owner_id` columns yet. Single owner, enforced at the auth layer
+  (a non-owner role is refused with 403). Multi-user needs re-keying
+  `job_marks` and `external_applications` anyway (see above), so it
+  belongs in the Phase 6 design, not here.
+- Reset by email only when `RESEND_API_KEY` is set; otherwise no reset
+  token is created at all, because the mail fallback logs the message
+  body and would put a working link in the log.
+
+**Lessons.**
+- The Playwright `request` fixture does not share the browser context's
+  cookies; it needs its own sign-in or every API check reads 401.
+- A popup opened as a tab has `sender.tab` set, so "no tab" was the wrong
+  test for "message from our own page". The extension now compares
+  `sender.url` with `chrome.runtime.getURL("")`.
+- SQLAlchemy bulk `delete` with the default `synchronize_session`
+  evaluates the WHERE in Python over loaded rows; on SQLite's naive
+  timestamps against an aware cutoff that raises. Pass
+  `synchronize_session=False` for housekeeping deletes.
+- "--reset" in UI text reads as a dash in Geist. UI copy names the
+  command without flags.
+
+**Verified.** 1124 unit tests (47 auth), Playwright 55 with sign-in on
+(including the old UI sign-in card and a CSRF refusal), old UI browser
+suite 105 through the rollback switch, the unpacked extension driven in
+Chromium: unpaired message, wrong code refused, pairing, answers and
+history read, unpair. Migration 0038 up, down, up on PostgreSQL 16.

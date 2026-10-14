@@ -86,9 +86,31 @@ import { test as base } from "@playwright/test";
 
 /** A returning visitor: theme and time zone already known, as after the
  *  first visit. The first visit's one-off refresh is tested on its own. */
+export const OWNER = {
+  email: process.env.ACE_TEST_EMAIL ?? "demo@ace.example",
+  password: process.env.ACE_TEST_PASSWORD ?? "ace demo password",
+};
+
+/** Sign in through the API, as the login form does, so the context holds
+ *  the owner's session and CSRF cookies. */
+export async function signIn(context: BrowserContext, baseURL: string) {
+  const res = await context.request.post(`${baseURL}/api/auth/login`, { data: OWNER });
+  if (!res.ok()) throw new Error(`sign-in failed: ${res.status()} ${await res.text()}`);
+}
+
+/** A signed-in, returning visitor: theme and time zone already known, as
+ *  after the first visit. The first visit's one-off refresh, and signing
+ *  in itself, are tested on their own. */
 export const test = base.extend({
   context: async ({ context, baseURL }, run) => {
     await setThemeCookies(context, baseURL!, "dark");
+    await signIn(context, baseURL!);
     await run(context);
+  },
+  // The standalone API client too, for tests that check what was stored.
+  request: async ({ request, baseURL }, run) => {
+    const res = await request.post(`${baseURL}/api/auth/login`, { data: OWNER });
+    if (!res.ok()) throw new Error(`sign-in failed: ${res.status()}`);
+    await run(request);
   },
 });

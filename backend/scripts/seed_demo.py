@@ -80,6 +80,14 @@ from backend.app.persistence.hashing import (
     compute_job_content_hash,
 )
 from backend.app.persistence.openings import OLD_OPENING_DAYS
+from backend.app.auth.service import create_owner
+
+
+# Sign in to the demo with these. Fictional, and only ever valid for a
+# database this script generated.
+DEMO_OWNER_EMAIL = "demo@ace.example"
+
+DEMO_OWNER_PASSWORD = "ace demo password"
 
 
 SEED = 20261014
@@ -1119,6 +1127,17 @@ def seed(
             now=now,
         )
 
+    # A fictional owner, so the demo runs with sign-in on, exactly as the
+    # real app does. The password is public on purpose: it opens only
+    # this generated, fictional database.
+    with factory.begin() as session:
+        create_owner(
+            session,
+            email=DEMO_OWNER_EMAIL,
+            password=DEMO_OWNER_PASSWORD,
+            now=now,
+        )
+
     with factory() as session:
         passing = session.scalar(
             select(
@@ -1148,6 +1167,7 @@ def seed(
         "scored": scored,
         "pulls": len(pulls),
         "answers": answers,
+        "owner": DEMO_OWNER_EMAIL,
     }
 
 

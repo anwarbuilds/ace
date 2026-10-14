@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { getJson } from "@/lib/client";
+import { getJson, sendJson } from "@/lib/client";
 import { clean } from "@/lib/format";
 import type { JobPage } from "@/lib/types";
 
@@ -60,6 +60,16 @@ function PaletteDialog() {
       { label: "Edit your answers", href: "/app/answers" },
       { label: "Upload resume", href: "/app/resume-studio" },
       { label: "Switch theme", run: cycleTheme },
+      { label: "Pair the Chrome extension", href: "/app/settings" },
+      {
+        label: "Sign out",
+        run: () => {
+          void sendJson("POST", "/api/auth/logout")
+            .catch(() => null)
+            // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+            .then(() => window.location.assign("/login"));
+        },
+      },
     ],
     [setAnswersOpen, cycleTheme],
   );

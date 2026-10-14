@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ace autofill",
-  "version": "1.20.0",
-  "description": "Fills application forms from the answer bank in your local ACE instance. It never submits anything.",
+  "version": "1.21.0",
+  "description": "Fills application forms from the answer bank in your ACE instance. It never submits anything.",
   "permissions": [
     "storage",
     "activeTab",
@@ -11,6 +11,9 @@
   "host_permissions": [
     "http://localhost:8000/*",
     "http://127.0.0.1:8000/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
   ],
   "background": {
     "service_worker": "background.js"

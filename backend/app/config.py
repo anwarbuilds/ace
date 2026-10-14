@@ -91,6 +91,29 @@ class Settings(BaseSettings):
         "America/Los_Angeles"
     )
 
+    # ------------------------------------------------------------------
+    # Sign-in
+    # ------------------------------------------------------------------
+    #
+    # required: every /api/ route except sign-in itself and /healthz
+    # needs the owner's browser session or a paired extension token.
+    #
+    # disabled: the rollback switch, kept because the first attempt at
+    # auth (September 2026) locked the extension out and had to be
+    # reverted. It answers only requests from this computer or a
+    # private network, never one forwarded from a public address, so
+    # switching it on cannot expose a cloud deployment.
+    ace_auth: str = "required"
+
+    # A browser session lasts this long, then the owner signs in again.
+    session_days: int = 30
+
+    # Where the Next.js app is served, for links in password reset mail.
+    web_base_url: str = "http://localhost:3000"
+
+    # The interactive API docs list every route. Off unless asked for.
+    api_docs: bool = False
+
 
     @field_validator(
         "max_alert_posting_age_days"
@@ -144,6 +167,26 @@ class Settings(BaseSettings):
                     "as America/Los_Angeles."
                 )
             ) from error
+
+        return value
+
+
+    @field_validator(
+        "ace_auth"
+    )
+    @classmethod
+    def _validate_ace_auth(
+        cls,
+        value: str,
+    ) -> str:
+        """Refuse a typo rather than guess which way it was meant."""
+
+        value = value.strip().lower()
+
+        if value not in ("required", "disabled"):
+            raise ValueError(
+                "ACE_AUTH must be required or disabled."
+            )
 
         return value
 

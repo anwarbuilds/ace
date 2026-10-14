@@ -1,6 +1,7 @@
 // Screenshot pages in both themes at desktop, tablet and phone widths.
 // Usage: BASE=http://localhost:3000 OUT=/tmp/shots node scripts/screenshots.mjs /app/opportunities [...]
 // Point it at demo data only: screenshots of real data must never be committed.
+// Signs in as the demo owner unless SIGNED_OUT=1 (for /login itself).
 import { chromium } from "@playwright/test";
 
 const base = process.env.BASE ?? "http://localhost:3000";
@@ -22,6 +23,15 @@ for (const size of sizes) {
       { name: "ace_theme", value: theme, url: base },
       { name: "ace_tz", value: "America/Los_Angeles", url: base },
     ]);
+    if (!process.env.SIGNED_OUT) {
+      const res = await ctx.request.post(`${base}/api/auth/login`, {
+        data: {
+          email: process.env.ACE_TEST_EMAIL ?? "demo@ace.example",
+          password: process.env.ACE_TEST_PASSWORD ?? "ace demo password",
+        },
+      });
+      if (!res.ok()) throw new Error(`sign-in failed: ${res.status()}`);
+    }
     const page = await ctx.newPage();
     page.on("pageerror", (e) => console.log("pageerror", e.message));
     for (const p of pages) {

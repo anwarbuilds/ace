@@ -820,6 +820,22 @@ select{width:100%;background:var(--surface-2);color:var(--text);border:1px solid
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:80ms!important}
   .side{transition:none}
 }
+
+/* Sign-in card, shown over the page when the API says signed out. */
+.signin{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:16px;background:var(--canvas)}
+.signin-card{width:100%;max-width:400px;background:var(--surface-1,var(--bg-2));border:1px solid var(--border-subtle);
+  border-radius:var(--r-xl);padding:32px 28px 28px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--shadow-lg)}
+.signin-mark{font-size:24px;font-weight:700;letter-spacing:-.055em;line-height:1;margin-bottom:20px}
+.signin-card h1{font-size:19px;font-weight:650;letter-spacing:-.02em;margin:0}
+.signin-card p{font-size:13px;color:var(--text-secondary);margin:0 0 12px;line-height:1.6}
+.signin-card label{font-size:11.5px;font-weight:600;color:var(--text-muted);margin-top:6px}
+.signin-card input{height:42px;padding:0 12px;background:var(--canvas);color:var(--text);border:1px solid var(--border);
+  border-radius:var(--r-md);font:inherit;font-size:14px}
+.signin-card input:focus{outline:none;border-color:var(--border-strong);box-shadow:0 0 0 4px var(--hover)}
+.signin-card .signin-err{color:var(--danger);font-size:12.5px;margin:4px 0 0;min-height:1em}
+.signin-card button{margin-top:8px;height:44px;border:0;border-radius:var(--r-md);background:var(--accent);color:var(--on-accent);
+  font:inherit;font-weight:650;font-size:14px;cursor:pointer}
+.signin-card button:hover{background:var(--accent-hover)}
 </style>
 </head>
 <body>
@@ -831,6 +847,53 @@ select{width:100%;background:var(--surface-2);color:var(--text);border:1px solid
    ACE client
    ============================================================ */
 var API="";
+
+/* Sign-in. Every change carries the CSRF token FastAPI set at sign-in
+   (another site's page cannot read it, so it cannot forge one), and a
+   signed-out answer shows a sign-in card instead of a page that looks
+   empty. With ACE_AUTH=disabled neither ever triggers. */
+(function(){
+  var raw=window.fetch.bind(window), shown=false;
+  function csrf(){ var m=document.cookie.match(/(?:^|;\s*)ace_csrf=([^;]+)/); return m?decodeURIComponent(m[1]):""; }
+  window.fetch=function(url,opts){
+    opts=opts||{};
+    var method=String(opts.method||"GET").toUpperCase();
+    if(method!=="GET"&&method!=="HEAD"){
+      var h=new Headers(opts.headers||{}), t=csrf();
+      if(t) h.set("X-CSRF-Token",t);
+      opts.headers=h;
+    }
+    return raw(url,opts).then(function(r){
+      if(r.status===401&&String(url).indexOf("/api/auth/")<0&&!shown){ shown=true; signIn(); }
+      return r;
+    });
+  };
+  function signIn(){
+    var box=document.createElement("div");
+    box.className="signin";
+    box.innerHTML='<form class="signin-card" novalidate>'+
+      '<span class="signin-mark">ace</span>'+
+      '<h1>Sign in</h1><p>Your opportunities, applications and answers are private to you.</p>'+
+      '<label for="si-email">Email</label><input id="si-email" type="email" autocomplete="username" required>'+
+      '<label for="si-pw">Password</label><input id="si-pw" type="password" autocomplete="current-password" required>'+
+      '<p class="signin-err" role="alert"></p>'+
+      '<button type="submit">Sign in</button></form>';
+    document.body.appendChild(box);
+    var form=box.querySelector("form"), err=box.querySelector(".signin-err");
+    box.querySelector("#si-email").focus();
+    form.addEventListener("submit",function(e){
+      e.preventDefault(); err.textContent="";
+      raw(API+"/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({email:box.querySelector("#si-email").value,password:box.querySelector("#si-pw").value})})
+      .then(function(r){
+        if(r.ok){ location.reload(); return; }
+        return r.json().then(function(b){
+          err.textContent=(b&&b.detail&&b.detail.message)||"That did not work. Try again.";
+        });
+      }).catch(function(){ err.textContent="ace did not answer. Try again in a moment."; });
+    });
+  }
+})();
 var HIGH=70, MED=45, PAGE=60;
 // Optional Queue housekeeping, off by default: the user would rather
 // see the whole queue and narrow it deliberately than have anything

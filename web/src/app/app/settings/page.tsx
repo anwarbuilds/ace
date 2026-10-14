@@ -1,8 +1,9 @@
 import { ThemeChips } from "@/components/pages/ThemeChips";
+import { SecuritySettings, type SessionRow, type TokenRow } from "@/components/pages/SecuritySettings";
 import { UploadResume } from "@/components/pages/UploadResume";
 import { LiveChip } from "@/components/shell/Live";
 import { ScrollArea } from "@/components/shell/ScrollArea";
-import { apiGetOr } from "@/lib/api";
+import { apiGetOr, authStatus } from "@/lib/api";
 import { clock, shortDate } from "@/lib/format";
 import { getPrefs } from "@/lib/prefs";
 import type { Facets, MarkCounts, ResumeResponse, SystemStatus } from "@/lib/types";
@@ -10,13 +11,25 @@ import type { Facets, MarkCounts, ResumeResponse, SystemStatus } from "@/lib/typ
 export const metadata = { title: "Settings · ace" };
 
 export default async function SettingsPage() {
-  const [facets, data, m, system, { tz }] = await Promise.all([
+  const [facets, data, m, system, { tz }, auth, sessions, tokens] = await Promise.all([
     apiGetOr<Facets | null>("/api/facets", null),
     apiGetOr<ResumeResponse>("/api/resume", { resume: null, skills_gap: [] }),
     apiGetOr<MarkCounts | null>("/api/marks", null),
     apiGetOr<SystemStatus | null>("/api/system", null),
     getPrefs(),
+    authStatus(),
+    apiGetOr<{ items: SessionRow[] }>("/api/auth/sessions", { items: [] }),
+    apiGetOr<{ items: TokenRow[] }>("/api/extension/tokens", { items: [] }),
   ]);
+  // Dates are formatted here, in the reader's zone, so the client renders
+  // exactly what the server did.
+  const when: Record<string, string> = {};
+  for (const iso of [
+    ...sessions.items.map((s) => s.last_seen_at),
+    ...tokens.items.flatMap((t) => (t.last_used_at ? [t.last_used_at] : [])),
+  ]) {
+    when[iso] = `${shortDate(iso, tz)} ${clock(iso, tz)}`;
+  }
   const a = system?.alerts;
   const week = a ? Object.entries(a.last_7_days).map(([k, n]) => `${n} ${k}`).join(", ") : "";
   const r = data.resume;
@@ -45,13 +58,24 @@ export default async function SettingsPage() {
               <ThemeChips />
               <p className="why">Night is anthracite grey, Day its light version. System follows your operating system.</p>
             </div>
+            {auth?.kind === "session" && auth.email ? (
+              <SecuritySettings email={auth.email} sessions={sessions.items} tokens={tokens.items} when={when} />
+            ) : auth?.kind === "local" ? (
+              <div className="sect">
+                <p className="eyebrow">Sign-in</p>
+                <p className="why">
+                  Sign-in is switched off (ACE_AUTH=disabled), so ace answers only on this computer. Remove that line
+                  from .env and restart to turn it back on.
+                </p>
+              </div>
+            ) : null}
             <div className="sect">
               <p className="eyebrow">Your pipeline</p>
               <div className="cards3">
                 {stat(m?.applied, "Applied")}
                 {stat(m?.open_applications, "Still open")}
                 {stat(m?.by_status.rejected, "Rejected")}
-                {stat(m?.saved, "Saved")}
+                {stat(m?.by_status.interviewing, "Interviewing")}
               </div>
             </div>
             <div className="sect">

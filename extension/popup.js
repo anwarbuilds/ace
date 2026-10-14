@@ -25,6 +25,14 @@ function check() {
   answerLine.textContent = "Checking ACE...";
 
   chrome.runtime.sendMessage({ type: "answers" }, function (reply) {
+    if (reply && !reply.ok && reply.error === "unpaired") {
+      answerLine.textContent =
+        "Not paired. In ace, Settings, Pair the extension, then type the code under Connection.";
+      answerLine.className = "s warn";
+      document.getElementById("connection").open = true;
+      return;
+    }
+
     if (!reply || !reply.ok) {
       answerLine.textContent = "Cannot reach ACE. Is it running?";
       answerLine.className = "s warn";
@@ -102,11 +110,66 @@ function explainMissing(tab) {
   );
 }
 
+/* An ace that is not on this computer (the cloud deployment) needs
+   Chrome's permission to be read. Asked for here, inside the click,
+   because Chrome only shows the prompt in response to a gesture. */
 document.getElementById("save").addEventListener("click", function () {
-  chrome.storage.local.set(
-    { base: base.value.trim() || "http://localhost:8000" },
-    check
-  );
+  var value = base.value.trim() || "http://localhost:8000";
+  var origin = null;
+
+  try {
+    origin = new URL(value).origin;
+  } catch (error) {
+    answerLine.className = "s warn";
+    answerLine.textContent = "That is not an address.";
+    return;
+  }
+
+  function save() {
+    chrome.storage.local.set({ base: value }, check);
+  }
+
+  if (!/^https:/.test(origin)) {
+    save();
+    return;
+  }
+
+  chrome.permissions.request({ origins: [origin + "/*"] }, function (granted) {
+    if (!granted) {
+      answerLine.className = "s warn";
+      answerLine.textContent = "Chrome did not allow reading " + origin + ".";
+      return;
+    }
+    save();
+  });
+});
+
+document.getElementById("pair").addEventListener("click", function () {
+  var code = document.getElementById("code").value.trim();
+
+  if (!code) {
+    answerLine.className = "s warn";
+    answerLine.textContent = "Type the code ace shows in Settings.";
+    return;
+  }
+
+  answerLine.className = "s";
+  answerLine.textContent = "Pairing...";
+
+  chrome.runtime.sendMessage({ type: "pair", code: code }, function (reply) {
+    if (!reply || !reply.ok) {
+      answerLine.className = "s warn";
+      answerLine.textContent = (reply && reply.error) || "Pairing failed.";
+      return;
+    }
+
+    document.getElementById("code").value = "";
+    check();
+  });
+});
+
+document.getElementById("unpair").addEventListener("click", function () {
+  chrome.runtime.sendMessage({ type: "unpair" }, check);
 });
 
 function withActiveTab(run) {
