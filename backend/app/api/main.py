@@ -2213,6 +2213,7 @@ def create_app() -> FastAPI:
 
     from backend.app.api.routers import (
         auth,
+        companies,
         export,
         studio,
         system,
@@ -2220,6 +2221,7 @@ def create_app() -> FastAPI:
 
     for module in (
         auth,
+        companies,
         system,
         export,
         studio,

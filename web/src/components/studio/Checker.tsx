@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { clean } from "@/lib/format";
 import { useEffect, useState } from "react";
 
 import { AssessmentView } from "@/components/studio/AssessmentView";
@@ -105,7 +106,7 @@ export function Checker({
             job ? (
               <div className="st-picked">
                 <span>
-                  <b>{job.company}</b>, {job.title}
+                  <b>{job.company}</b>, {clean(job.title)}
                 </span>
                 <button className="link-btn" onClick={() => setJob(null)}>
                   Change
@@ -124,7 +125,7 @@ export function Checker({
                   <div className="st-picklist">
                     {results.map((r) => (
                       <button key={r.id} onClick={() => setJob(r)}>
-                        <b>{r.company}</b> {r.title}
+                        <b>{r.company}</b> {clean(r.title)}
                       </button>
                     ))}
                   </div>

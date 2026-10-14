@@ -32,9 +32,11 @@ import { useMarks, type MarkKey } from "./useMarks";
 const GROUP_MIN = 3;
 
 function jobStem(title: string): string {
-  const t = clean(title || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
-  const parts = t.split(/\s+[-–]\s+/);
-  return (parts.length > 1 ? parts[0] : t).toLowerCase();
+  // Split on the raw title: cleaning turns "Agent - Legal" into
+  // "Agent, Legal", and the vertical is what varies between reposts.
+  const raw = (title || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+  const parts = raw.split(/\s+[-–—]\s+/);
+  return clean(parts.length > 1 ? parts[0] : raw).toLowerCase();
 }
 
 function groupKey(j: Job): string {

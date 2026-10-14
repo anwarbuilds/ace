@@ -665,3 +665,26 @@ Bugs the Playwright suite found before the user could:
 Tests: `web/tests/e2e` (39: every route in both themes with the typed and drawn dash scans, URL state, pagination,
 redirects, keyboard, palette, marks with undo, score wording). Screenshots: `web/scripts/screenshots.mjs`, demo data
 only.
+
+## A website, not a dashboard (2026-10-14)
+
+The owner asked for the app to read as a multi-page website, "like Amazon, Flipkart or Netflix", not a dashboard.
+What changed on `next-app`:
+
+- **Top navigation** replaced the sidebar: Home, Opportunities, Companies, Applications, Resume Studio, Answers and a
+  More menu (Discovery activity, Archive, Skills, Coverage); search, theme and settings on the right; a drawer under
+  1024px. A department strip under it links every browse group.
+- **The document scrolls.** The page body scrolls under a sticky header and ends in a footer with a site map. Table
+  headers and asides stick below the header (`--site-h`). `ScrollArea` now saves and restores `window.scrollY` per
+  URL, so returning from a job page still lands on the row.
+- **Browse groups** (`web/src/lib/browse.ts`): strong matches, new today, new grad, big tech, top tier, machine
+  learning, forward deployed, software engineering, remote. Each is a saved `/api/jobs` query with its own route,
+  `/app/browse/<slug>`, with sort, tier filter and numbered pages in the URL, and breadcrumbs. Nothing is hidden that
+  Opportunities shows.
+- **Home** (`/app`) is a shop front: a featured top pick, then a row of cards per group, each leading to its page,
+  then companies hiring, then applications and service health.
+- **Companies**: `/api/companies` (open qualifying roles and applications per employer) feeds a directory at
+  `/app/companies` and a page per company, `/app/companies/<name>`.
+
+Lessons: a spaced hyphen ("Agent - Legal") reads as a dash; `clean()` now turns it into a comma and the dash scan
+flags it, but the repost grouping must split on the raw title before cleaning or the vertical disappears.

@@ -195,3 +195,13 @@ def test_a_verified_knowledge_base_flags_unbacked_claims(client):
     version = client.get("/api/studio").json()["primary"]["id"]
     result = client.post("/api/studio/check", json={"version_id": version, "job_text": JOB}).json()["result"]
     assert any("not in your knowledge base" in f["message"] for f in result["findings"])
+
+
+def test_the_company_directory_counts_open_roles_and_applications(client, factory):
+    with factory.begin() as session:
+        job = session.scalar(select(JobRecord))
+        from backend.app.db.models import JobMarkRecord
+        session.add(JobMarkRecord(job_id=job.id, is_saved=False, applied_at=NOW, application_status="applied", updated_at=NOW))
+    items = client.get("/api/companies").json()["items"]
+    assert items == [{"name": "Pinecrest AI", "tier": items[0]["tier"], "open_roles": 1, "applied": 1,
+                      "newest_role_at": items[0]["newest_role_at"]}]

@@ -157,7 +157,7 @@ export default async function SettingsPage() {
                 <p className="why">The ace API did not answer, so its health is unknown.</p>
               )}
             </div>
-            <div className="sect">
+            <div className="sect" id="data">
               <p className="eyebrow">Your data</p>
               <p className="why">
                 Everything you entered by hand, in one file: marks, statuses and notes, answers, work and education

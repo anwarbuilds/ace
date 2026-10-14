@@ -56,6 +56,8 @@ export function undash(text: string): string {
 export function clean(value: string | null | undefined): string {
   return undash(String(value ?? ""))
     .replace(/\s*[—–]\s*/g, ", ")
+    // A hyphen with a space on each side is a dash too ("Agent - Legal").
+    .replace(/\s+-\s+/g, ", ")
     .replace(/\s+([,;:])/g, "$1")
     .replace(/\s{2,}/g, " ")
     .trim();

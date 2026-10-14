@@ -1,6 +1,7 @@
 import { AnswersDock } from "@/components/shell/AnswersDock";
 import { AppProvider } from "@/components/shell/AppProvider";
 import { CommandPalette } from "@/components/shell/CommandPalette";
+import { SiteFooter } from "@/components/shell/SiteFooter";
 import { SiteHeader } from "@/components/shell/SiteHeader";
 import { apiGetOr } from "@/lib/api";
 import { getPrefs, getPrevVisit } from "@/lib/prefs";
@@ -40,6 +41,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
         <main className="main" id="main">
           {children}
         </main>
+        <SiteFooter />
       </div>
       <AnswersDock answers={answers.items} />
       <CommandPalette />

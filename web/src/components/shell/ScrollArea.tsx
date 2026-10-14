@@ -3,9 +3,10 @@
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
 
-/** The page's scrolling panel. Its position is remembered per URL, so
- *  coming back from a job page returns to the row you left, and a list
- *  page records itself as the place "Back" on a job page leads to. */
+/** The page body. The whole document scrolls, as on any website; the
+ *  position is remembered per URL, so coming back from a job page returns
+ *  to the row you left, and a list page records itself as the place
+ *  "Back" on a job page leads to. */
 export function ScrollArea({ children, list = false }: { children: ReactNode; list?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const path = usePathname();
@@ -31,8 +32,8 @@ export function ScrollArea({ children, list = false }: { children: ReactNode; li
     } catch {}
     // A remembered place wins. Otherwise a new route starts at the top,
     // and the first mount leaves the panel where the browser put it.
-    if (saved != null && Number.isFinite(saved)) el.scrollTop = saved;
-    else if (shown.current !== null && shown.current !== key) el.scrollTop = 0;
+    if (saved != null && Number.isFinite(saved)) window.scrollTo(0, saved);
+    else if (shown.current !== null && shown.current !== key) window.scrollTo(0, 0);
     shown.current = key;
 
     let t: ReturnType<typeof setTimeout> | null = null;
@@ -40,14 +41,14 @@ export function ScrollArea({ children, list = false }: { children: ReactNode; li
       if (t) clearTimeout(t);
       t = setTimeout(() => {
         try {
-          sessionStorage.setItem(`ace.scroll:${key}`, String(el.scrollTop));
+          sessionStorage.setItem(`ace.scroll:${key}`, String(window.scrollY));
         } catch {}
       }, 120);
     };
-    el.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       if (t) clearTimeout(t);
-      el.removeEventListener("scroll", onScroll);
+      window.removeEventListener("scroll", onScroll);
     };
   }, [key, list]);
 

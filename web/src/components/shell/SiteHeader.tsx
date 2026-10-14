@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "@/components/Icon";
+import { GROUPS } from "@/lib/browse";
 
 import { useApp } from "./AppProvider";
 
@@ -57,17 +58,23 @@ export function SiteHeader({
   const on = (l: NavLink) => (l.exact ? path === l.href : path === l.href || path.startsWith(`${l.href}/`));
 
   const primary: NavLink[] = [
-    { href: "/app", label: "Overview", exact: true },
+    { href: "/app", label: "Home", exact: true },
     { href: "/app/opportunities", label: "Opportunities", count: queueCount },
+    { href: "/app/companies", label: "Companies" },
     { href: "/app/applications", label: "Applications", count: (marks.applied || 0) + externalCount },
     { href: "/app/resume-studio", label: "Resume Studio" },
-    { href: "/app/activity", label: "Activity" },
     { href: "/app/answers", label: "Answers", count: answersFilled },
   ];
   const secondary: NavLink[] = [
+    { href: "/app/activity", label: "Discovery activity" },
     { href: "/app/archive", label: "Archive", count: marks.archived },
     { href: "/app/insights/skills", label: "Skills" },
     { href: "/app/coverage", label: "Coverage", count: coverageGaps },
+  ];
+  // The department strip under the header, as in a shop.
+  const cats: NavLink[] = [
+    { href: "/app/browse", label: "All groups", exact: true },
+    ...GROUPS.map((g) => ({ href: `/app/browse/${g.slug}`, label: g.title })),
   ];
   const moreActive = secondary.some(on);
 
@@ -129,6 +136,9 @@ export function SiteHeader({
           <Icon name="menu" />
         </button>
       </div>
+      <nav className="site-cats" aria-label="Browse by group">
+        {cats.map((l) => link(l, "site-cat"))}
+      </nav>
       {menuOpen ? (
         <nav className="site-drawer" aria-label="All pages">
           {[...primary, ...secondary, { href: "/app/settings", label: "Settings" }].map((l) => link(l, "site-drawer-item"))}

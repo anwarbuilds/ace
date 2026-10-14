@@ -3,6 +3,11 @@ import type { BrowserContext, Page } from "@playwright/test";
 export const ROUTES = [
   "/app",
   "/app/opportunities",
+  "/app/browse",
+  "/app/browse/new-grad",
+  "/app/browse/strong-matches",
+  "/app/companies",
+  "/app/companies/Pinecrest%20AI",
   "/app/activity",
   "/app/applications",
   "/app/archive",
@@ -40,7 +45,7 @@ export function watchErrors(page: Page): string[] {
 // range ("2–4 years") and is allowed. Textareas hold the user's own
 // words and are skipped.
 export const TEXT_SCAN = `(() => {
-  const BAD = /[\\u2014\\u2015\\u2012\\u2212]|\\s\\u2013\\s/;
+  const BAD = /[\\u2014\\u2015\\u2012\\u2212]|\\s\\u2013\\s|\\s-\\s/;
   const found = [];
   const walk = (n) => {
     if (n.nodeType === 3) {

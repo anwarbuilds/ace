@@ -1,3 +1,4 @@
+import { clean } from "@/lib/format";
 import Link from "next/link";
 
 import {
@@ -83,10 +84,10 @@ export function AssessmentView({ a, versionLabel }: { a: Assessment; versionLabe
             {a.job_source === "stored" && a.job_id ? (
               <Link href={`/app/jobs/${a.job_id}`}>
                 {a.job_company ? `${a.job_company}, ` : ""}
-                {a.job_title || "Job"}
+                {clean(a.job_title) || "Job"}
               </Link>
             ) : (
-              <>{a.job_title || a.job_company || "Pasted job description"}</>
+              <>{clean(a.job_title) || a.job_company || "Pasted job description"}</>
             )}
           </h2>
           <p className="why" style={{ margin: 0 }}>
