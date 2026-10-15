@@ -19,6 +19,13 @@ MAX_RESUME_BYTES = 10 * 1024 * 1024
 MIN_EXTRACTED_CHARS = 200
 
 
+# A run of 18 or more letters is almost never one English word; several
+# on a page means its word gaps were lost in extraction.
+_RUN_TOGETHER = re.compile(r"[A-Za-z]{18,}")
+
+RUN_TOGETHER_LIMIT = 5
+
+
 class ResumeParseError(ValueError):
     """Raised when resume text cannot be extracted."""
 
@@ -61,9 +68,17 @@ def _extract_pdf(
         )
     ) as document:
         for page in document.pages:
+            text = page.extract_text() or ""
+
+            # Tightly kerned PDFs lose the gap between words at the
+            # default tolerance ("NorthfieldStateUniversity"), which hides
+            # every skill and date in them. Only then is the page read
+            # again more finely, so PDFs that read well do not change.
+            if len(_RUN_TOGETHER.findall(text)) > RUN_TOGETHER_LIMIT:
+                text = page.extract_text(x_tolerance=1.5) or text
+
             pages.append(
-                page.extract_text()
-                or ""
+                text
             )
 
     return "\n".join(

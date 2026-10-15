@@ -203,6 +203,13 @@ def _parseability(structure: Structure, text: str, report: dict, findings: list[
         lose(5, "low", "No phone number could be read.")
     if not structure.dates:
         lose(10, "medium", "No date ranges could be read. Write them as Jan 2022 to Present or 2021 to 2023.")
+    else:
+        work = structure.section("experience")
+        if work is not None:
+            end = next((x.start for x in structure.sections if x.start > work.start), len(structure.lines))
+            if not any(work.start < d.line < end for d in structure.dates):
+                lose(10, "medium", "The work entries have no dates. Parsers compute years of experience from them; "
+                                   "add a range such as Jan 2023 to Present to each role.")
     for problem in date_problems(structure)[:2]:
         lose(10, "medium", problem)
     if report.get("tables"):

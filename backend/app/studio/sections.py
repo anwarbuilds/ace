@@ -103,6 +103,23 @@ class Structure:
         return [s.kind for s in self.sections]
 
 
+_SENTENCE_END = re.compile(r"[.!?:;)]\s*$")
+
+
+def continues_bullet(previous: str, line: str) -> bool:
+    """Whether a plain line is the wrapped tail of the bullet above it.
+
+    PDF text comes out one visual line at a time, so a two-line bullet
+    arrives as a bullet and a plain line. The tail starts lowercase, or
+    follows a line that did not end a sentence. A line with a separator
+    or a date range is an entry header, never a tail."""
+
+    text = line.strip()
+    if not text or "|" in text or DATE_RANGE.search(text) or heading_kind(text):
+        return False
+    return text[0].islower() or text[0].isdigit() or not _SENTENCE_END.search(previous)
+
+
 def heading_kind(line: str) -> str | None:
     """The section a line opens, if it is a heading."""
 
@@ -133,6 +150,7 @@ def read_structure(text: str) -> Structure:
     current: Section | None = None
     dates: list[DateSpan] = []
     bullets: list[tuple[int, str]] = []
+    last_bullet_line = -2  # no bullet yet; never "the line before" line 0
 
     for index, line in enumerate(lines):
         kind = heading_kind(line)
@@ -144,6 +162,12 @@ def read_structure(text: str) -> Structure:
             current.lines.append(line)
         if BULLET.match(line):
             bullets.append((index, BULLET.sub("", line).strip()))
+            last_bullet_line = index
+        elif last_bullet_line == index - 1 and continues_bullet(bullets[-1][1], line):
+            # Fold the wrapped tail into its bullet, so a bullet's number
+            # or verb is judged on the whole sentence.
+            bullets[-1] = (bullets[-1][0], f"{bullets[-1][1]} {line.strip()}")
+            last_bullet_line = index
         for m in DATE_RANGE.finditer(line):
             ongoing = bool(re.fullmatch(_NOW, m.group("end").strip(), re.IGNORECASE))
             dates.append(

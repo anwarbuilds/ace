@@ -46,8 +46,11 @@ export function StudioUpload({
           try {
             const res = await fetch("/api/studio/documents", { method: "POST", body, headers: csrfHeader() });
             const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-              toast(typeof data.detail === "string" ? data.detail : "That file could not be read.");
+            if (res.status >= 500) {
+              // Not the file's fault: say so, and point at the usual cause.
+              toast("ace hit a server error storing the file. If you just updated, run alembic upgrade head, then retry.");
+            } else if (!res.ok) {
+              toast(typeof data.detail === "string" ? data.detail : `The upload was refused (${res.status}).`);
             } else if (!data.created) {
               toast("That file is already here.");
             } else {

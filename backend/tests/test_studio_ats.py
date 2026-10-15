@@ -203,3 +203,61 @@ def test_layout_problems_from_the_file_count_against_parseability():
     clean = _check()
     messy = _check(report={"tables": 2, "columns": True})
     assert messy.components["parseability"] < clean.components["parseability"]
+
+
+# A PDF arrives one visual line at a time: wrapped bullets, "|" headers,
+# jobs with no dates. Fictional, shaped like a real two-column-free resume.
+WRAPPED = """Jordan Vale
+Seattle, WA | jordan.vale@example.com | (555) 010-0177
+
+EDUCATION
+Northfield State University Seattle, WA
+Master of Science in Computer Science June 2025 - December 2026 (Expected)
+
+SKILLS
+Languages: Python, TypeScript, Go
+
+WORK EXPERIENCE
+Graduate Research Assistant | Example Lab, Northfield State University
+• Migrated a Python 3.8 Flask service to Python 3.11, cutting memory use from 1.9 GB to
+500 MB and request latency by 40%.
+• Built a React and TypeScript interface for annotators, used by a team of
+12 linguists.
+Software Development Engineer | Example Corp, Bengaluru
+• Architected REST APIs in FastAPI serving 50K+ requests a day at under 100ms, backed
+by MongoDB and Azure Cosmos DB.
+• Led a migration of MongoDB clusters from M30 to
+M20, saving 25% at a 99.9% availability SLA.
+
+PROJECTS
+Speech Toolkit – Open Source Language Tools | PyTorch, PySide6
+• Built a voice activity detection pipeline with forced alignment and
+export to ELAN.
+"""
+
+
+def test_wrapped_bullets_stay_one_bullet_and_jobs_stay_whole():
+    facts = suggest_facts(read_structure(WRAPPED))
+    jobs = [f for f in facts if f.kind == "experience"]
+    assert [(j.title, j.organization) for j in jobs] == [
+        ("Graduate Research Assistant", "Example Lab"),
+        ("Software Development Engineer", "Example Corp"),
+    ]
+    assert len(jobs[0].bullets) == 2 and jobs[0].bullets[0].endswith("latency by 40%.")
+    assert jobs[1].bullets[1] == "Led a migration of MongoDB clusters from M30 to M20, saving 25% at a 99.9% availability SLA."
+    # No dates were written for the jobs, so none are invented.
+    assert all(j.start == "" and j.end == "" for j in jobs)
+    project = next(f for f in facts if f.kind == "project")
+    assert project.title == "Speech Toolkit" and len(project.bullets) == 1
+
+
+def test_wrapped_bullets_count_once_for_quality():
+    s = read_structure(WRAPPED)
+    assert len(s.bullets) == 5
+    assert all(not b[1][0].islower() for b in s.bullets)
+
+
+def test_work_entries_without_dates_are_flagged():
+    a = assess(resume_text=WRAPPED, job=None, job_text=JOB, profile=PROFILES["early-career"])
+    assert any("work entries have no dates" in f.message for f in a.findings)
+    assert not any("work entries have no dates" in f.message for f in _check().findings)

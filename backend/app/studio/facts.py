@@ -18,12 +18,13 @@ from backend.app.studio.sections import (
     Section,
     Structure,
     _point,
+    continues_bullet,
 )
 
 
 ENTRY_KINDS = {"experience": "experience", "education": "education", "projects": "project"}
 
-_SPLIT = re.compile(r"\s*(?:\||•|\t| {2,}|,\s+| at | @ )\s*")
+_SPLIT = re.compile(r"\s*(?:\||\u2022|\t| {2,}|,\s+| at | @ |\s[-\u2013\u2014]\s)\s*")
 
 
 @dataclass
@@ -54,6 +55,9 @@ def _entries(section: Section) -> list[tuple[list[str], list[str]]]:
             continue
         if BULLET.match(raw):
             bullets.append(BULLET.sub("", raw).strip())
+            continue
+        if bullets and continues_bullet(bullets[-1], line):
+            bullets[-1] = f"{bullets[-1]} {line}"
             continue
         if bullets:
             # A plain line after bullets starts the next entry.
