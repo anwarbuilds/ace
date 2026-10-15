@@ -54,6 +54,17 @@ requiremnts1.txt
 ace-applications*.csv
 *resume*
 *Resume*
+# ...but not the code and notes about resumes. The rule above once hid
+# every Resume Studio page and a migration from git, so the app worked
+# where it was written and 404ed everywhere else. Real resumes are PDFs,
+# DOCX or text files, still ignored by name and by the extensions above.
+!*resume*/
+!*Resume*/
+!*resume*.py
+!*resume*.ts
+!*resume*.tsx
+!*Resume*.tsx
+!docs/knowledge/*resume*.md
 
 # The durable memory file stays local, by the user's decision.
 #
