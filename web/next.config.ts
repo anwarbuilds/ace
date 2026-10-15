@@ -4,8 +4,6 @@ import type { NextConfig } from "next";
 // calls /api/... on this origin and src/app/api/[...path]/route.ts
 // forwards it, reading API_ORIGIN when the server starts rather than
 // when the app was built. No CORS is needed.
-const API_ORIGIN = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
-
 // No nonces: every page is rendered per request anyway, but nonces would
 // force dynamic rendering on purpose and buy little for a one-person app
 // with no third-party script. The guide's "without nonces" policy, minus
@@ -49,11 +47,6 @@ const nextConfig: NextConfig = {
       { source: "/app/applied", destination: "/app/applications", permanent: false },
       { source: "/app/resume", destination: "/app/resume-studio", permanent: false },
       { source: "/app/skills", destination: "/app/insights/skills", permanent: false },
-    ];
-  },
-  async rewrites() {
-    return [
-      { source: "/healthz", destination: `${API_ORIGIN}/healthz` },
     ];
   },
 };

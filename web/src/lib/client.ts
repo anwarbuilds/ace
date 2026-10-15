@@ -88,3 +88,16 @@ export function putMark(id: number, body: MarkBody): Promise<MarkResult> {
 export function setCookie(name: string, value: string): void {
   document.cookie = `${name}=${encodeURIComponent(value).replace(/%2F/g, "/")}; path=/; max-age=31536000; samesite=lax`;
 }
+
+/** What a sign-in form says when a request fails. A 404 or a server
+ *  error means the API behind the web app is missing or out of date (a
+ *  "Not Found" under the button helped nobody); a refusal keeps the
+ *  API's own words, which are written for people. */
+export function authErrorText(err: unknown): string {
+  if (err instanceof RequestError) {
+    if (err.status === 404 || err.status === 405 || err.status >= 500)
+      return "The sign-in service is not reachable. Check that ace's API is running and up to date, then try again.";
+    return err.message;
+  }
+  return "ace did not answer. Try again in a moment.";
+}

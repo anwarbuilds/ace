@@ -21,6 +21,7 @@ from backend.app.api.deps import get_session
 from backend.app.api.queries import MATCH_HIGH_MIN, MATCH_MEDIUM_MIN, QUALIFYING_STATUSES
 from backend.app.config import get_settings
 from backend.app.db.models import (
+    ExternalApplicationRecord,
     JobEvaluationRecord,
     JobMarkRecord,
     JobRecord,
@@ -117,6 +118,8 @@ def dashboard(session: Session = Depends(get_session)) -> dict:
         )
     )
 
+    applied = _applications(session, zone=zone, first_day=first_day)
+
     return {
         "total_open": len(rows),
         "resume": {"label": resume.label} if resume else None,
@@ -129,9 +132,88 @@ def dashboard(session: Session = Depends(get_session)) -> dict:
             companies.values(), key=lambda c: (-(c["best"] or -1), -c["open"], c["name"])
         )[:12],
         "applications": dict(statuses),
+        "applied": applied,
         "daily": [
             {"date": (first_day + timedelta(days=i)).isoformat(), "found": daily.get(first_day + timedelta(days=i), 0)}
             for i in range(DAYS)
         ],
         "thresholds": {"high": MATCH_HIGH_MIN, "medium": MATCH_MEDIUM_MIN},
+    }
+
+
+# Statuses that mean the employer answered. "No reply" (ghosted) and
+# "withdrawn" are not answers; "applied" is still waiting.
+HEARD_BACK = {"screening", "interviewing", "offer", "accepted", "rejected"}
+INTERVIEWED = {"interviewing", "offer", "accepted"}
+OFFERED = {"offer", "accepted"}
+
+
+def _applications(session: Session, *, zone: ZoneInfo, first_day) -> dict:
+    """Every application ace holds, open or closed, with or without a
+    stored posting. Counted by current status: ace keeps no status
+    history, so one that reached an interview and was then rejected is
+    counted as rejected. The page says so."""
+
+    marked = session.execute(
+        select(
+            JobRecord.company,
+            JobEvaluationRecord.role_family,
+            JobMarkRecord.applied_at,
+            JobMarkRecord.application_status,
+        )
+        .join(JobRecord, JobRecord.id == JobMarkRecord.job_id)
+        .outerjoin(JobEvaluationRecord, JobEvaluationRecord.job_id == JobRecord.id)
+        .where(JobMarkRecord.applied_at.is_not(None))
+    ).all()
+
+    external = session.execute(
+        select(
+            ExternalApplicationRecord.company,
+            ExternalApplicationRecord.applied_at,
+            ExternalApplicationRecord.application_status,
+        )
+    ).all()
+
+    rows = [(c, f or "OTHER", a, st or "applied") for c, f, a, st in marked] + [
+        (c, "NOT_STORED", a, st or "applied") for c, a, st in external
+    ]
+
+    by_status: Counter = Counter()
+    by_family: Counter = Counter()
+    by_company: Counter = Counter()
+    per_day: Counter = Counter()
+    undated = 0
+
+    for company, family, applied_at, status in rows:
+        by_status[status] += 1
+        by_family[family] += 1
+        by_company[company] += 1
+        if applied_at is None:
+            undated += 1
+            continue
+        at = applied_at if applied_at.tzinfo else applied_at.replace(tzinfo=timezone.utc)
+        day = at.astimezone(zone).date()
+        if day >= first_day:
+            per_day[day] += 1
+
+    total = len(rows)
+    heard = sum(n for s, n in by_status.items() if s in HEARD_BACK)
+    interviews = sum(n for s, n in by_status.items() if s in INTERVIEWED)
+    offers = sum(n for s, n in by_status.items() if s in OFFERED)
+
+    return {
+        "total": total,
+        "with_posting": len(marked),
+        "without_posting": len(external),
+        "by_status": dict(by_status),
+        "by_family": [{"family": f, "count": n} for f, n in by_family.most_common()],
+        "top_companies": [{"name": c, "count": n} for c, n in by_company.most_common(10)],
+        "daily": [
+            {"date": (first_day + timedelta(days=i)).isoformat(), "applied": per_day.get(first_day + timedelta(days=i), 0)}
+            for i in range(DAYS)
+        ],
+        "undated": undated,
+        "heard_back": heard,
+        "interviews": interviews,
+        "offers": offers,
     }

@@ -737,3 +737,17 @@ The owner approved a prototype (`ace-pulls-first-demo.html`, kept outside the re
 Lessons: the sidebar count for Opportunities used the queue total (204) while the list showed 203 under its default
 filters, so it was removed rather than shown wrong. The prototype's dimmest grey (#889496) fails AA on small text over
 the panel; `--text-muted` stands in.
+
+## Analytics and Applications on the new page pattern; no build-time API address (2026-10-15)
+
+- `/api/dashboard` gained `applied`: every application (marked jobs and external ones), by current status, role
+  family (external ones as "No stored posting"), company and day, with heard back (screening, interviewing, offer,
+  accepted, rejected), interviews and offers. ace keeps no status history, so the page says counts are by current
+  status; No reply is never counted as rejected.
+- Analytics leads with applications (KPIs, applied per day, status, family, companies), then discovery and resume
+  fit. Applications shows four KPIs above the list. Ported pages (Opportunities, Archive, Coverage, Settings, Answers,
+  Skills, Resume Studio) take the new header scale and gutter; their duplicate live chips are gone (the top bar has it).
+- A local agent found `/login` showing "Not Found": an older build had baked `rewrites()` to :8000, where the old
+  container has no `/api/auth`. Already fixed by the runtime proxy; `/healthz` now goes through a route handler too,
+  so `.next/routes-manifest.json` holds no API address (checked with a build without API_ORIGIN). Sign-in forms now
+  say "The sign-in service is not reachable" for a 404, 405 or 5xx instead of the raw status text.

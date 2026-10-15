@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import { LiveChip } from "@/components/shell/Live";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGetOr } from "@/lib/api";
 import { HIGH, familyLabel } from "@/lib/format";
@@ -39,11 +38,11 @@ export default async function SkillsPage(props: PageProps<"/app/insights/skills"
   return (
     <>
       <div className="head">
+        <div className="eyebrow">Resume Studio</div>
         <div className="head-row">
           <h1 className="h1">Skills</h1>
           <span className="h1-count">across {s.qualifying_active_jobs ?? 0}</span>
           <span className="spacer" />
-          <LiveChip />
         </div>
         <div className="controls">
           {fams.map(([v, label]) => (

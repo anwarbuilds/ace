@@ -214,3 +214,21 @@ def test_the_dashboard_groups_open_roles_by_tier_and_score(client, factory):
     assert sum(body["scores"].values()) == 1
     assert len(body["daily"]) == 14
     assert body["top_companies"][0]["name"] == "Pinecrest AI"
+
+
+def test_application_analytics_count_every_application_by_current_status(client, factory):
+    from backend.app.db.models import ExternalApplicationRecord, JobMarkRecord
+
+    with factory.begin() as session:
+        job = session.scalar(select(JobRecord))
+        session.add(JobMarkRecord(job_id=job.id, is_saved=False, applied_at=NOW, application_status="interviewing", updated_at=NOW))
+        session.add(ExternalApplicationRecord(company="Example Corp", title="Software Engineer", match_key="example corp|software engineer",
+                                              applied_at=NOW, application_status="ghosted"))
+    applied = client.get("/api/dashboard").json()["applied"]
+    assert applied["total"] == 2
+    assert (applied["with_posting"], applied["without_posting"]) == (1, 1)
+    assert applied["by_status"] == {"interviewing": 1, "ghosted": 1}
+    # No reply is not an answer; an interview is.
+    assert (applied["heard_back"], applied["interviews"], applied["offers"]) == (1, 1, 0)
+    assert sum(d["applied"] for d in applied["daily"]) == 2
+    assert {f["family"] for f in applied["by_family"]} >= {"NOT_STORED"}

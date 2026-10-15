@@ -1,7 +1,6 @@
 import { ThemeChips } from "@/components/pages/ThemeChips";
 import { SecuritySettings, type SessionRow, type TokenRow } from "@/components/pages/SecuritySettings";
 import { UploadResume } from "@/components/pages/UploadResume";
-import { LiveChip } from "@/components/shell/Live";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGetOr, authStatus } from "@/lib/api";
 import { clock, shortDate } from "@/lib/format";
@@ -44,10 +43,10 @@ export default async function SettingsPage() {
   return (
     <>
       <div className="head">
+        <div className="eyebrow">System</div>
         <div className="head-row">
           <h1 className="h1">Settings</h1>
           <span className="spacer" />
-          <LiveChip />
         </div>
       </div>
       <ScrollArea>

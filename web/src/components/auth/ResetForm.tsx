@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { RequestError, sendJson } from "@/lib/client";
+import { authErrorText, sendJson } from "@/lib/client";
 
 export function ResetForm({ token }: { token: string }) {
   const [error, setError] = useState(token ? "" : "This link is incomplete. Ask for a new one from the sign-in page.");
@@ -18,7 +18,7 @@ export function ResetForm({ token }: { token: string }) {
       await sendJson("POST", "/api/auth/reset/confirm", { token, new_password: password }, { redirectOn401: false });
       setDone(true);
     } catch (err) {
-      setError(err instanceof RequestError ? err.message : "ace did not answer. Try again in a moment.");
+      setError(authErrorText(err));
     }
   }
 

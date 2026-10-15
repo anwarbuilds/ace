@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { EmptyBox, StatusBadge } from "@/components/bits";
 import { Icon } from "@/components/Icon";
-import { LiveChip } from "@/components/shell/Live";
+import { Kpi } from "@/components/page/PageParts";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGet, apiGetOr } from "@/lib/api";
 import { PAGE_SIZE, ago, clean, clock, dayName, shortDate } from "@/lib/format";
@@ -31,6 +31,26 @@ const TITLES: Record<ListPage, string> = {
   applied: "Applications",
   archive: "Archive",
 };
+const EYEBROW: Record<ListPage, string> = {
+  queue: "Daily workspace",
+  saved: "Kept for later",
+  applied: "Daily workspace",
+  archive: "Career tools",
+};
+const SUBTITLE: Record<ListPage, string> = {
+  queue: "Every qualifying role ace holds, ranked your way. Nothing that passes your filters is hidden.",
+  saved: "Roles you starred before Saved left the navigation. Kept, never deleted.",
+  applied: "Everything you applied to, with its status and notes. Set a status from the job page as it moves.",
+  archive: "Roles you marked reviewed or not relevant. Restore any of them from its page.",
+};
+interface AppliedSummary {
+  total: number;
+  heard_back: number;
+  interviews: number;
+  offers: number;
+  by_status: Record<string, number>;
+  without_posting: number;
+}
 const BASE: Record<ListPage, string> = {
   queue: "/app/opportunities",
   saved: "/app/saved",
@@ -53,7 +73,7 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
   );
   const latest = pulls.sessions[0] ?? null;
 
-  const [jobs, stats, newCount, external] = await Promise.all([
+  const [jobs, stats, newCount, external, summary] = await Promise.all([
     apiGet<JobPage>("/api/jobs", jobsParams(state, { prevVisit, latestPullId: latest?.id ?? null })),
     apiGetOr<Stats>("/api/stats", { last_poll_at: null }, filterParams(state)),
     page === "queue" && prevVisit
@@ -62,7 +82,11 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
     page === "applied"
       ? apiGetOr<{ items: ExternalApplication[] }>("/api/applications/external", { items: [] })
       : Promise.resolve({ items: [] as ExternalApplication[] }),
+    page === "applied"
+      ? apiGetOr<{ applied: AppliedSummary } | null>("/api/dashboard", null)
+      : Promise.resolve(null),
   ]);
+  const applied = summary?.applied ?? null;
 
   const newSince = newCount?.total ?? 0;
   const href = (change: Parameters<typeof listHref>[2]) => listHref(base, state, change);
@@ -84,6 +108,7 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
   return (
     <>
       <div className="head">
+        <div className="eyebrow">{EYEBROW[page]}</div>
         <div className="head-row">
           <h1 className="h1">{TITLES[page]}</h1>
           <span className="h1-count">{jobs.total.toLocaleString("en-US")}</span>
@@ -104,17 +129,34 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
               {newSince} new since {clock(prevVisit, tz)}
             </Link>
           ) : null}
-          <LiveChip />
         </div>
+        <p className="subtitle">{SUBTITLE[page]}</p>
+        {applied ? (
+          <section className="kpis head-kpis" aria-label="Applications summary">
+            <Kpi label="Applications" value={applied.total.toLocaleString("en-US")} foot={`${applied.without_posting} without a stored posting`} />
+            <Kpi
+              label="Waiting"
+              value={(applied.by_status.applied ?? 0).toLocaleString("en-US")}
+              foot="Applied, no answer yet"
+            />
+            <Kpi
+              label="Interviews"
+              value={applied.interviews.toLocaleString("en-US")}
+              foot="Interviewing, offer or accepted now"
+              tone={applied.interviews ? "good" : undefined}
+            />
+            <Kpi
+              label="No reply"
+              value={(applied.by_status.ghosted ?? 0).toLocaleString("en-US")}
+              foot="Marked no reply, never counted as rejected"
+              href="/app/analytics"
+            />
+          </section>
+        ) : null}
         {page === "queue" ? <Tabs tabs={tabs} active={state.view} /> : null}
         <ListControls state={state} />
       </div>
       <ScrollArea list>
-        {page === "applied" ? (
-          <div className="ext-note" style={{ paddingTop: 12 }}>
-            Everything you mark applied in ace, newest first. Set its status from the job page as it moves forward.
-          </div>
-        ) : null}
         <JobTable
           items={jobs.items}
           total={jobs.total}

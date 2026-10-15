@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { RequestError, sendJson } from "@/lib/client";
+import { authErrorText, sendJson } from "@/lib/client";
 
 export function LoginForm({ next, resetByEmail }: { next: string; resetByEmail: boolean }) {
   const [busy, setBusy] = useState(false);
@@ -28,7 +28,7 @@ export function LoginForm({ next, resetByEmail }: { next: string; resetByEmail: 
         return;
       }
     } catch (err) {
-      setError(err instanceof RequestError ? err.message : "ace did not answer. Try again in a moment.");
+      setError(authErrorText(err));
     }
     setBusy(false);
   }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Bars, DayColumns, Kpi, PageHero } from "@/components/page/PageParts";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGetOr } from "@/lib/api";
 import { STATUS_LABEL, TIER_LABEL, familyLabel } from "@/lib/format";
@@ -26,6 +27,21 @@ interface Dashboard {
   applications: Partial<Record<ApplicationStatus, number>>;
   daily: { date: string; found: number }[];
   thresholds: { high: number; medium: number };
+  applied: Applied;
+}
+
+interface Applied {
+  total: number;
+  with_posting: number;
+  without_posting: number;
+  by_status: Partial<Record<ApplicationStatus, number>>;
+  by_family: { family: string; count: number }[];
+  top_companies: { name: string; count: number }[];
+  daily: { date: string; applied: number }[];
+  undated: number;
+  heard_back: number;
+  interviews: number;
+  offers: number;
 }
 
 const BANDS = ["high", "medium", "minimal", "unscored"] as const;
@@ -102,132 +118,175 @@ function BreakdownTable({
   );
 }
 
-export default async function DashboardPage() {
+function pctOf(n: number, of: number): string {
+  return of ? `${Math.round((100 * n) / of)}%` : "no applications yet";
+}
+
+const STATUS_ORDER: ApplicationStatus[] = ["applied", "screening", "interviewing", "offer", "accepted", "rejected", "withdrawn", "ghosted"];
+
+export default async function AnalyticsPage() {
   const d = await apiGetOr<Dashboard | null>("/api/dashboard", null);
   if (!d) {
     return (
-      <div className="page">
-        <p className="why">The dashboard could not be loaded.</p>
+      <div className="pg">
+        <PageHero eyebrow="Daily workspace" title="Analytics" subtitle="The analysis could not be loaded. Check that the API is running, then reload." />
       </div>
     );
   }
-  const maxDay = Math.max(1, ...d.daily.map((x) => x.found));
-  const apps = Object.entries(d.applications) as [ApplicationStatus, number][];
-  const maxApp = Math.max(1, ...apps.map(([, n]) => n));
+  const a = d.applied;
   const pct = (n: number) => (d.total_open ? Math.round((100 * n) / d.total_open) : 0);
+  const applied14 = a.daily.reduce((x, y) => x + y.applied, 0);
+  const found14 = d.daily.reduce((x, y) => x + y.found, 0);
 
   return (
-    <>
-      <div className="head">
-        <div className="head-row">
-          <h1 className="h1">Analytics</h1>
-          <span className="h1-count">{d.total_open.toLocaleString("en-US")} open roles</span>
-        </div>
-        <p className="why" style={{ margin: "6px 0 0" }}>
-          {d.resume ? `Scored against ${d.resume.label}.` : "No resume is used for matching yet."} Every row opens the
-          roles behind it.
-        </p>
-      </div>
-      <ScrollArea>
-        <div className="page">
-          <div className="cards3 sect">
-            {BANDS.map((k) => (
-              <Link
-                key={k}
-                className="stat stat-link"
-                href={k === "high" ? "/app/opportunities?view=matched" : "/app/opportunities?sort=best_match"}
-              >
-                <div className={`stat-n${k === "high" ? " m-high" : ""}`}>{d.scores[k]}</div>
-                <div className="stat-l">
-                  {k === "unscored" ? "Not scored" : `${BAND_LABEL[k]} match`}, {pct(d.scores[k])}%
-                </div>
-              </Link>
-            ))}
-          </div>
+    <ScrollArea>
+      <div className="pg">
+        <PageHero
+          eyebrow="Daily workspace"
+          title="Analytics"
+          subtitle={
+            <>
+              Your applications, then what ace is finding and how your resume scores against it.{" "}
+              {d.resume ? `Scored against ${d.resume.label}.` : "No resume is used for matching yet."} Every bar opens the
+              records behind it.
+            </>
+          }
+          actions={
+            <a className="btn" href="/api/applications/export.csv" download>
+              Export applications CSV
+            </a>
+          }
+        />
 
-          <section className="sect">
-            <h2 className="row-title">By company tier</h2>
-            <Legend t={d.thresholds} />
-            <BreakdownTable
-              rows={d.tiers.map((t) => ({
-                key: t.tier,
-                label: TIER_LABEL[t.tier] || "Other companies",
-                href: t.tier === "OTHER" ? "/app/opportunities" : `/app/opportunities?tier=${t.tier}`,
-                b: t,
-              }))}
-            />
+        <section className="kpis" aria-label="Applications">
+          <Kpi
+            label="Applications"
+            value={a.total.toLocaleString("en-US")}
+            foot={`${a.with_posting} with a stored posting, ${a.without_posting} without`}
+            href="/app/applications"
+          />
+          <Kpi label="Heard back" value={a.total ? pctOf(a.heard_back, a.total) : "0"} foot={`${a.heard_back} of ${a.total} have an answer`} />
+          <Kpi
+            label="Interviews"
+            value={a.interviews.toLocaleString("en-US")}
+            foot={a.total ? `${pctOf(a.interviews, a.total)} of applications, by current status` : "None yet"}
+            tone={a.interviews ? "good" : undefined}
+          />
+          <Kpi
+            label="Applied, last 14 days"
+            value={applied14.toLocaleString("en-US")}
+            foot={a.undated ? `${a.undated} application${a.undated === 1 ? "" : "s"} have no date` : "Every application is dated"}
+          />
+        </section>
+
+        <div className="cards-2 sect-gap">
+          <section className="panel">
+            <h3>Applied per day</h3>
+            <p>Applications by the day you marked them, last {a.daily.length} days.</p>
+            <DayColumns days={a.daily.map((x) => ({ date: x.date, n: x.applied }))} label="Applications per day" />
           </section>
-
-          <section className="sect">
-            <h2 className="row-title">By role family</h2>
-            <BreakdownTable
-              rows={d.families.map((f) => ({
-                key: f.family,
-                label: familyLabel(f.family),
-                href: `/app/opportunities?family=${f.family}`,
-                b: f,
-              }))}
-            />
-          </section>
-
-          <div className="db-grid">
-            <section className="card db-card">
-              <h2 className="row-title">Found per day</h2>
-              <p className="why" style={{ margin: "2px 0 14px" }}>
-                Qualifying roles ace first saw each day, last {d.daily.length} days.
-              </p>
-              <div className="db-days" role="img" aria-label="Qualifying roles found per day">
-                {d.daily.map((x) => (
-                  <span key={x.date} className="db-day" title={`${x.date}: ${x.found}`}>
-                    <span className="db-day-bar" style={{ height: x.found ? `${Math.max(8, (x.found / maxDay) * 100)}%` : 0 }} />
-                    <span className="db-day-l">{new Date(`${x.date}T12:00:00`).getDate()}</span>
-                  </span>
-                ))}
-              </div>
-            </section>
-
-            <section className="card db-card">
-              <h2 className="row-title">Applications by status</h2>
-              <div className="bars" style={{ marginTop: 14 }}>
-                {apps.length ? (
-                  apps
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([s, n]) => (
-                      <Link key={s} className="bar bar-link" href="/app/applications" title={`${STATUS_LABEL[s] ?? s}: ${n}`}>
-                        <span>{STATUS_LABEL[s] ?? s}</span>
-                        <span className="bar-t">
-                          <span className="bar-f" style={{ width: `${Math.round((n / maxApp) * 100)}%` }} />
-                        </span>
-                        <span className="bar-n">{n}</span>
-                      </Link>
-                    ))
-                ) : (
-                  <p className="why">No applications yet.</p>
-                )}
-              </div>
-            </section>
-          </div>
-
-          <section className="sect">
-            <h2 className="row-title">Best fits by company</h2>
-            <p className="why" style={{ margin: "2px 0 12px" }}>
-              Companies ordered by their highest scoring open role for your resume.
+          <section className="panel">
+            <h3>By current status</h3>
+            <p>
+              ace keeps each application&rsquo;s current status, not its history, so one rejected after an interview counts as
+              rejected. No reply is never counted as rejected.
             </p>
+            <Bars
+              rows={STATUS_ORDER.filter((st) => a.by_status[st]).map((st) => ({
+                label: STATUS_LABEL[st],
+                n: a.by_status[st] ?? 0,
+                href: "/app/applications",
+              }))}
+              empty="No applications yet."
+            />
+          </section>
+          <section className="panel">
+            <h3>By role family</h3>
+            <Bars
+              rows={a.by_family.map((f) => ({
+                label: f.family === "NOT_STORED" ? "No stored posting" : familyLabel(f.family),
+                n: f.count,
+                href: f.family === "NOT_STORED" ? "/app/applications" : `/app/applications?family=${f.family}`,
+              }))}
+              empty="No applications yet."
+            />
+          </section>
+          <section className="panel">
+            <h3>Most applied companies</h3>
+            <Bars
+              rows={a.top_companies.map((c) => ({ label: c.name, n: c.count, href: `/app/applications?company=${encodeURIComponent(c.name)}` }))}
+              empty="No applications yet."
+            />
+          </section>
+        </div>
+
+        <div className="section-head">
+          <h2>Discovery and resume fit</h2>
+          <span className="section-sub">{d.total_open.toLocaleString("en-US")} open qualifying roles</span>
+        </div>
+
+        <section className="kpis" aria-label="Resume fit">
+          {BANDS.map((k) => (
+            <Kpi
+              key={k}
+              label={k === "unscored" ? "Not scored" : `${BAND_LABEL[k]} match`}
+              value={d.scores[k].toLocaleString("en-US")}
+              foot={`${pct(d.scores[k])}% of open roles`}
+              tone={k === "high" && d.scores[k] ? "good" : undefined}
+              href={k === "high" ? "/app/opportunities?view=matched" : "/app/opportunities?sort=best_match"}
+            />
+          ))}
+        </section>
+
+        <section className="panel sect-gap">
+          <h3>By company tier</h3>
+          <Legend t={d.thresholds} />
+          <BreakdownTable
+            rows={d.tiers.map((t) => ({
+              key: t.tier,
+              label: TIER_LABEL[t.tier] || "Other companies",
+              href: t.tier === "OTHER" ? "/app/opportunities" : `/app/opportunities?tier=${t.tier}`,
+              b: t,
+            }))}
+          />
+        </section>
+
+        <section className="panel sect-gap">
+          <h3>By role family</h3>
+          <BreakdownTable
+            rows={d.families.map((f) => ({
+              key: f.family,
+              label: familyLabel(f.family),
+              href: `/app/opportunities?family=${f.family}`,
+              b: f,
+            }))}
+          />
+        </section>
+
+        <div className="sect-gap">
+          <section className="panel">
+            <h3>Qualifying roles found per day</h3>
+            <p>
+              First seen each day, last {d.daily.length} days: {found14.toLocaleString("en-US")} still open. Closed roles are
+              not counted.
+            </p>
+            <DayColumns days={d.daily.map((x) => ({ date: x.date, n: x.found }))} label="Qualifying roles found per day" />
+          </section>
+        </div>
+
+        <section className="panel sect-gap">
+            <h3>Best fits by company</h3>
+            <p>Companies ordered by their highest scoring open role for your resume.</p>
             <div className="db-table" role="table">
               <div className="db-tr db-th db-co" role="row">
                 <span role="columnheader">Company</span>
                 <span role="columnheader">Tier</span>
                 <span role="columnheader">Open</span>
-                <span role="columnheader">Best score</span>
+                <span role="columnheader">Best</span>
                 <span role="columnheader">Applied</span>
               </div>
               {d.top_companies.map((c) => (
-                <Link
-                  key={c.name}
-                  className="db-tr db-co"
-                  role="row"
-                  href={`/app/opportunities?company=${encodeURIComponent(c.name)}`}
-                >
+                <Link key={c.name} className="db-tr db-co" role="row" href={`/app/opportunities?company=${encodeURIComponent(c.name)}`}>
                   <span className="db-name">{c.name}</span>
                   <span className="st-muted">{TIER_LABEL[c.tier] || "Other"}</span>
                   <span className="db-num">{c.open}</span>
@@ -236,9 +295,8 @@ export default async function DashboardPage() {
                 </Link>
               ))}
             </div>
-          </section>
-        </div>
-      </ScrollArea>
-    </>
+        </section>
+      </div>
+    </ScrollArea>
   );
 }

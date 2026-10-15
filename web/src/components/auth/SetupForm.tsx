@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { RequestError, sendJson } from "@/lib/client";
+import { authErrorText, sendJson } from "@/lib/client";
 
 /** The first visit only: create the one account, then go straight in. */
 export function SetupForm({ next, needsToken }: { next: string; needsToken: boolean }) {
@@ -27,7 +27,7 @@ export function SetupForm({ next, needsToken }: { next: string; needsToken: bool
       window.location.assign(next);
       return;
     } catch (err) {
-      setError(err instanceof RequestError ? err.message : "ace did not answer. Try again in a moment.");
+      setError(authErrorText(err));
     }
     setBusy(false);
   }

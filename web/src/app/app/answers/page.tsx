@@ -1,5 +1,4 @@
 import { AnswersEditor } from "@/components/pages/AnswersEditor";
-import { LiveChip } from "@/components/shell/Live";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGet } from "@/lib/api";
 import type { Answer, HistoryEntry } from "@/lib/types";
@@ -17,11 +16,11 @@ export default async function AnswersPage() {
   return (
     <>
       <div className="head">
+        <div className="eyebrow">Autofill Extension</div>
         <div className="head-row">
           <h1 className="h1">Answers</h1>
           <span className="h1-count">{answers.items.filter((a) => a.value).length} filled</span>
           <span className="spacer" />
-          <LiveChip />
         </div>
       </div>
       <ScrollArea>

@@ -1,5 +1,4 @@
 import { AddSource } from "@/components/pages/AddSource";
-import { LiveChip } from "@/components/shell/Live";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGet } from "@/lib/api";
 import { clean, shortDate } from "@/lib/format";
@@ -49,13 +48,13 @@ export default async function CoveragePage() {
   return (
     <>
       <div className="head">
+        <div className="eyebrow">System</div>
         <div className="head-row">
           <h1 className="h1">Coverage</h1>
           <span className="h1-count">
             {c.reached} of {c.total}
           </span>
           <span className="spacer" />
-          <LiveChip />
         </div>
       </div>
       <ScrollArea>
