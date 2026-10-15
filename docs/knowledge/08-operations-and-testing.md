@@ -236,3 +236,14 @@ a revision whose file no longer exists.
 **Rebuild `web`, `scheduler` and `migrate` together, always.** The
 existing note says a stale migrate image leaves new migrations
 unapplied; it also re-applies removed ones.
+
+## An ignore rule hid working code (2026-10-15)
+
+`.gitignore` held `*resume*` to keep real resumes out of the public repo. It also matched
+`web/src/app/app/resume-studio/`, `UploadResume.tsx`, migration `0039_add_resume_studio.py` and
+`docs/knowledge/09-resume-studio.md`. Every test passed in the session that wrote them, because the files existed there;
+every other checkout got a 404 on Resume Studio, a Settings page that could not compile, and a database that never got
+the 0039 tables. The rule now re-includes code and notes (`!*resume*/`, `!*resume*.py`, `.ts`, `.tsx`).
+
+Lesson: before pushing, check `git status --ignored` for source files, and prove a change from a clean checkout of the
+pushed commit (`git worktree add --detach /tmp/x HEAD`, then typecheck and the unit tests there).
