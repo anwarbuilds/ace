@@ -73,14 +73,6 @@ export function SecuritySettings({
   const ordered = [...sessions].sort((a, b) => Number(b.current) - Number(a.current));
   const shown = allSessions ? ordered : ordered.slice(0, 4);
 
-  async function signOut() {
-    await sendJson("POST", "/api/auth/logout").catch(() => null);
-    // A full load on purpose: the session cookie changed, so nothing
-    // rendered under the old one may be reused.
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    window.location.assign("/login");
-  }
-
   async function revokeOthers() {
     try {
       const r = await sendJson<{ revoked: number }>("POST", "/api/auth/sessions/revoke-others");
@@ -113,9 +105,9 @@ export function SecuritySettings({
         <p className="eyebrow">Sign-in</p>
         <div className="gaprow">
           <span>Signed in as {email}</span>
-          <button className="link-btn" onClick={signOut}>
+          <Link className="link-btn" href="/app/sign-out">
             Sign out
-          </button>
+          </Link>
         </div>
         <div className="sec-list" style={{ marginTop: 12 }}>
           {shown.map((s) => (

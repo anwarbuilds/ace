@@ -62,7 +62,7 @@ export function MobileBar() {
     { href: "/app/opportunities", label: "Jobs", icon: "briefcase" as const, also: ["/app/jobs"] },
     { href: "/app/applications", label: "Applied", icon: "send" as const },
     { href: "/app/analytics", label: "Analytics", icon: "chart" as const },
-    { href: "/app/more", label: "More", icon: "settings" as const, also: ["/app/resume-studio", "/app/extension", "/app/archive", "/app/coverage", "/app/settings", "/app/answers", "/app/insights"] },
+    { href: "/app/more", label: "More", icon: "settings" as const, also: ["/app/resume-studio", "/app/extension", "/app/archive", "/app/coverage", "/app/settings", "/app/sign-out", "/app/answers", "/app/insights"] },
   ];
   const under = (h: string) => path === h || path.startsWith(`${h}/`);
   return (

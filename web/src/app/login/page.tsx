@@ -8,7 +8,9 @@ import { safeNext } from "@/lib/safeNext";
 export const metadata = { title: "Sign in · ace" };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
-  const next = safeNext((await searchParams).next);
+  const params = await searchParams;
+  const next = safeNext(params.next);
+  const signedOut = params.signed_out === "1";
   const status = await authStatus();
 
   if (status?.signed_in) redirect(next);
@@ -44,6 +46,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           <>
             <h1 className="auth-h">Sign in</h1>
             <p className="auth-sub">Your opportunities, applications and answers are private to you.</p>
+            {signedOut ? <p className="auth-ok auth-status" role="status">You are signed out.</p> : null}
             <LoginForm next={next} resetByEmail={status.reset_by_email} />
           </>
         )}

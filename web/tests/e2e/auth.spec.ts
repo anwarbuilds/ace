@@ -125,9 +125,11 @@ test("the extension page pairs it, and the token reads only answers", async ({ p
 });
 
 test("signing out ends the session", async ({ page }) => {
-  await page.goto("/app/settings");
+  await page.goto("/app/sign-out");
+  await expect(page.getByRole("heading", { name: "Sign out" })).toBeVisible();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?signed_out=1$/);
+  await expect(page.getByText("You are signed out.")).toBeVisible();
   await page.goto("/app/pulls");
   await expect(page).toHaveURL(/\/login\?next=%2Fapp%2Fpulls$/);
 });

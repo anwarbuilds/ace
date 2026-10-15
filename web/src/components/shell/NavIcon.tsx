@@ -81,6 +81,12 @@ const PATHS = {
       <path d="m9 12 2 2 4-4" />
     </>
   ),
+  signout: (
+    <>
+      <path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5" />
+      <path d="m16 8 4 4-4 4M20 12H9" />
+    </>
+  ),
 } as const;
 
 export type NavIconName = keyof typeof PATHS;

@@ -18,6 +18,7 @@ export const ROUTES = [
   "/app/answers",
   "/app/coverage",
   "/app/settings",
+  "/app/sign-out",
 ];
 
 export async function setThemeCookies(context: BrowserContext, baseURL: string, theme: "dark" | "light") {
