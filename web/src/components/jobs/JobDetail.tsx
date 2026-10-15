@@ -63,7 +63,7 @@ export function JobDetail({ job: served, resumeLabel }: { job: Job; resumeLabel:
     const onKey = (e: KeyboardEvent) => {
       if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target as Element)?.tagName ?? "")) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (document.querySelector(".palette-wrap,.pop,.ab")) return;
+      if (document.querySelector(".pop,.ab")) return;
       if (e.key === "Escape") back.go();
       else if (e.key === "Enter") window.open(job.official_url, "_blank", "noopener");
       else if (e.key === "a") void mark(job, "applied");

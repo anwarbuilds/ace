@@ -180,7 +180,7 @@ export function JobTable({
     const onKey = (e: KeyboardEvent) => {
       if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target as Element)?.tagName ?? "")) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (document.querySelector(".palette-wrap,.pop,.ab")) return;
+      if (document.querySelector(".pop,.ab")) return;
       const job = visible.find((j) => j.id === selected);
       const k = e.key;
       if (k === "ArrowDown" || k === "j") {

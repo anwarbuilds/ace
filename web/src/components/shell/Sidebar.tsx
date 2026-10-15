@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { useApp, useNow } from "./AppProvider";
 import { liveState } from "./liveState";
@@ -22,12 +23,41 @@ export function Sidebar({ counts, email }: { counts: Record<string, number | nul
   const { lastPoll } = useApp();
   const now = useNow();
   const state = liveState(lastPoll, now);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCollapsed(localStorage.getItem("ace.sidebar") === "collapsed");
+    } catch {}
+  }, []);
+
+  function toggle() {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        localStorage.setItem("ace.sidebar", next ? "collapsed" : "open");
+      } catch {}
+      return next;
+    });
+  }
 
   return (
-    <aside className="sb" aria-label="Application navigation">
-      <Link className="sb-brand" href="/app/pulls" aria-label="ace, Pulls">
-        ace
-      </Link>
+    <aside className={`sb${collapsed ? " collapsed" : ""}`} aria-label="Application navigation">
+      <div className="sb-brand-row">
+        <Link className="sb-brand" href="/app/pulls" aria-label="ace, Pulls">
+          ace
+        </Link>
+        <button
+          className="sb-collapse"
+          type="button"
+          onClick={toggle}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <NavIcon name="left" size="sm" />
+        </button>
+      </div>
       {NAV.map((group) => (
         <div className="sb-group" key={group.label}>
           <div className="sb-label">{group.label}</div>

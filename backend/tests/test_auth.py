@@ -98,6 +98,12 @@ def _csrf(client) -> dict:
     return {"X-CSRF-Token": client.cookies.get(CSRF_COOKIE)}
 
 
+def test_backend_home_redirects_to_the_web_app(client) -> None:
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "http://localhost:3000/app/pulls"
+
+
 # ----------------------------------------------------------------------
 # Anonymous callers
 # ----------------------------------------------------------------------

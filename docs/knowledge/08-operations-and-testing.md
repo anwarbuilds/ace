@@ -247,3 +247,21 @@ the 0039 tables. The rule now re-includes code and notes (`!*resume*/`, `!*resum
 
 Lesson: before pushing, check `git status --ignored` for source files, and prove a change from a clean checkout of the
 pushed commit (`git worktree add --detach /tmp/x HEAD`, then typecheck and the unit tests there).
+
+## Compose now separates the API and Next.js services (2026-10-15)
+
+The old `web` service was FastAPI because it also served the single-file interface. After that interface retired,
+the Python service became `api` on `127.0.0.1:8000` and `web` became the production Next.js server on
+`127.0.0.1:3000`, with `API_ORIGIN=http://api:8000`. Both have health checks and the Next service waits for the API.
+
+Build and start every image after a code or migration update:
+
+```text
+docker compose build migrate scheduler api web
+docker compose up -d migrate scheduler api web
+curl http://127.0.0.1:3000/healthz
+curl http://127.0.0.1:8000/healthz
+```
+
+Backend maintenance now uses `docker compose exec api ...`. `PUBLIC_BASE_URL` and `WEB_BASE_URL` should both name
+the browser-facing Next.js origin so alerts, reset links and the FastAPI root redirect land on the canonical app.

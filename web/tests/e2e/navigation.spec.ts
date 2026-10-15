@@ -11,11 +11,24 @@ test("old route names redirect to the new ones", async ({ page }) => {
     ["/app/applied", "/app/applications"],
     ["/app/resume", "/app/resume-studio"],
     ["/app/skills", "/app/insights/skills"],
+    ["/app/browse/software-engineering", "/app/opportunities"],
+    ["/app/companies/Pinecrest%20AI", "/app/opportunities"],
     ["/", "/app/pulls"],
   ]) {
     await page.goto(from);
     await expect(page).toHaveURL(new RegExp(`${to}$`));
   }
+});
+
+test("the desktop sidebar collapses, persists and expands", async ({ page }) => {
+  await page.goto("/app/pulls");
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(page.locator(".sb")).toHaveClass(/collapsed/);
+  await expect(page.locator(".sb-text").first()).toBeHidden();
+  await page.reload();
+  await expect(page.locator(".sb")).toHaveClass(/collapsed/);
+  await page.getByRole("button", { name: "Expand sidebar" }).click();
+  await expect(page.locator(".sb")).not.toHaveClass(/collapsed/);
 });
 
 test("an old #job link opens that job's page", async ({ page }) => {

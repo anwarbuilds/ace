@@ -47,6 +47,10 @@ const nextConfig: NextConfig = {
       { source: "/app/applied", destination: "/app/applications", permanent: false },
       { source: "/app/resume", destination: "/app/resume-studio", permanent: false },
       { source: "/app/skills", destination: "/app/insights/skills", permanent: false },
+      { source: "/app/browse", destination: "/app/opportunities", permanent: false },
+      { source: "/app/browse/:path*", destination: "/app/opportunities", permanent: false },
+      { source: "/app/companies", destination: "/app/opportunities", permanent: false },
+      { source: "/app/companies/:path*", destination: "/app/opportunities", permanent: false },
     ];
   },
 };

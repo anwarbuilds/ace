@@ -13,7 +13,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
@@ -36,9 +36,6 @@ router = APIRouter()
 
 TIERS = ("BIG_TECH", "TOP_TIER", "ESTABLISHED", "OTHER")
 
-DAYS = 14
-
-
 def _band(score: int | None) -> str:
     if score is None:
         return "unscored"
@@ -54,12 +51,16 @@ def _empty() -> dict:
 
 
 @router.get("/api/dashboard")
-def dashboard(session: Session = Depends(get_session)) -> dict:
+def dashboard(
+    session: Session = Depends(get_session),
+    days: int = Query(14, ge=7, le=90),
+    family: str | None = Query(None),
+) -> dict:
     now = datetime.now(timezone.utc)
     zone = ZoneInfo(get_settings().display_timezone)
     resume = get_active_resume(session)
 
-    rows = session.execute(
+    all_rows = session.execute(
         select(
             JobRecord.company,
             JobEvaluationRecord.role_family,
@@ -82,13 +83,15 @@ def dashboard(session: Session = Depends(get_session)) -> dict:
             opened_within(OLD_OPENING_DAYS, now=now),
         )
     ).all()
+    available_families = sorted({row.role_family for row in all_rows if row.role_family})
+    rows = [row for row in all_rows if not family or row.role_family == family]
 
     tiers = {t: _empty() for t in TIERS}
     families: dict[str, dict] = defaultdict(_empty)
     companies: dict[str, dict] = {}
     scores: Counter = Counter()
     daily: Counter = Counter()
-    first_day = (now.astimezone(zone) - timedelta(days=DAYS - 1)).date()
+    first_day = (now.astimezone(zone) - timedelta(days=days - 1)).date()
 
     for company, family, score, first_seen, applied_at in rows:
         tier = classify_company(company).value
@@ -118,7 +121,7 @@ def dashboard(session: Session = Depends(get_session)) -> dict:
         )
     )
 
-    applied = _applications(session, zone=zone, first_day=first_day)
+    applied = _applications(session, zone=zone, first_day=first_day, days=days)
 
     return {
         "total_open": len(rows),
@@ -135,9 +138,11 @@ def dashboard(session: Session = Depends(get_session)) -> dict:
         "applied": applied,
         "daily": [
             {"date": (first_day + timedelta(days=i)).isoformat(), "found": daily.get(first_day + timedelta(days=i), 0)}
-            for i in range(DAYS)
+            for i in range(days)
         ],
         "thresholds": {"high": MATCH_HIGH_MIN, "medium": MATCH_MEDIUM_MIN},
+        "filters": {"days": days, "family": family},
+        "available_families": available_families,
     }
 
 
@@ -148,7 +153,7 @@ INTERVIEWED = {"interviewing", "offer", "accepted"}
 OFFERED = {"offer", "accepted"}
 
 
-def _applications(session: Session, *, zone: ZoneInfo, first_day) -> dict:
+def _applications(session: Session, *, zone: ZoneInfo, first_day, days: int) -> dict:
     """Every application ace holds, open or closed, with or without a
     stored posting. Counted by current status: ace keeps no status
     history, so one that reached an interview and was then rejected is
@@ -210,7 +215,7 @@ def _applications(session: Session, *, zone: ZoneInfo, first_day) -> dict:
         "top_companies": [{"name": c, "count": n} for c, n in by_company.most_common(10)],
         "daily": [
             {"date": (first_day + timedelta(days=i)).isoformat(), "applied": per_day.get(first_day + timedelta(days=i), 0)}
-            for i in range(DAYS)
+            for i in range(days)
         ],
         "undated": undated,
         "heard_back": heard,

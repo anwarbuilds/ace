@@ -39,40 +39,21 @@ test("analytics groups roles by tier and family, and a row opens them", async ({
   await expect(page).toHaveURL(/\/app\/opportunities\?tier=BIG_TECH/);
 });
 
+test("analytics trend and role filters live in the URL", async ({ page }) => {
+  await page.goto("/app/analytics");
+  await page.getByLabel("Trend range").selectOption("30");
+  await page.getByLabel("Discovery role family").selectOption("AI_ML_ENGINEERING");
+  await page.getByRole("button", { name: "Apply filters" }).click();
+  await expect(page).toHaveURL(/days=30.*family=AI_ML_ENGINEERING/);
+  await expect(page.getByText("Applied, last 30 days")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Clear" })).toBeVisible();
+});
+
 test("there is no command palette and no search-or-jump box", async ({ page }) => {
   await page.goto("/app/pulls");
   await expect(page.getByText("Search or jump to")).toHaveCount(0);
   await page.keyboard.press("Control+k");
   await expect(page.locator(".palette")).toHaveCount(0);
-});
-
-test("a group page sorts, filters and pages through the URL", async ({ page }) => {
-  await page.goto("/app/browse/software-engineering");
-  await page.locator(".side-opt", { hasText: "Newest" }).click();
-  await expect(page).toHaveURL(/sort=newest/);
-  await page.locator(".side-opt", { hasText: "Top tier" }).first().click();
-  await expect(page).toHaveURL(/sort=newest&tier=TOP_TIER/);
-  for (const t of await page.locator(".jc .co-tier").allTextContents()) expect(t).toBe("Top tier");
-});
-
-test("a card opens the role's own page", async ({ page }) => {
-  await page.goto("/app/browse/strong-matches");
-  const card = page.locator(".jc").first();
-  const title = (await card.locator(".jc-title").textContent())!.trim();
-  await card.click();
-  await expect(page).toHaveURL(/\/app\/jobs\/\d+/);
-  await expect(page.locator(".jp-title")).toHaveText(title);
-});
-
-test("companies: directory, a company page, and breadcrumbs back", async ({ page }) => {
-  await page.goto("/app/companies");
-  await page.getByLabel("Find a company").fill("Pinecrest");
-  await page.locator(".co-card", { hasText: "Pinecrest AI" }).click();
-  await expect(page).toHaveURL(/\/app\/companies\/Pinecrest%20AI$/);
-  await expect(page.locator("h1")).toHaveText("Pinecrest AI");
-  await expect(page.locator(".jc").first()).toBeVisible();
-  await page.locator(".crumbs a", { hasText: "Companies" }).click();
-  await expect(page).toHaveURL(/\/app\/companies$/);
 });
 
 test("the whole page scrolls under a fixed header and sidebar", async ({ page }) => {

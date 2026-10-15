@@ -28,6 +28,8 @@ interface Dashboard {
   daily: { date: string; found: number }[];
   thresholds: { high: number; medium: number };
   applied: Applied;
+  filters: { days: number; family: string | null };
+  available_families: string[];
 }
 
 interface Applied {
@@ -124,8 +126,13 @@ function pctOf(n: number, of: number): string {
 
 const STATUS_ORDER: ApplicationStatus[] = ["applied", "screening", "interviewing", "offer", "accepted", "rejected", "withdrawn", "ghosted"];
 
-export default async function AnalyticsPage() {
-  const d = await apiGetOr<Dashboard | null>("/api/dashboard", null);
+export default async function AnalyticsPage({ searchParams }: PageProps<"/app/analytics">) {
+  const query = await searchParams;
+  const days = query.days === "30" || query.days === "90" ? query.days : "14";
+  const family = typeof query.family === "string" ? query.family : "";
+  const params: Record<string, string> = { days };
+  if (family) params.family = family;
+  const d = await apiGetOr<Dashboard | null>("/api/dashboard", null, params);
   if (!d) {
     return (
       <div className="pg">
@@ -135,8 +142,8 @@ export default async function AnalyticsPage() {
   }
   const a = d.applied;
   const pct = (n: number) => (d.total_open ? Math.round((100 * n) / d.total_open) : 0);
-  const applied14 = a.daily.reduce((x, y) => x + y.applied, 0);
-  const found14 = d.daily.reduce((x, y) => x + y.found, 0);
+  const appliedRange = a.daily.reduce((x, y) => x + y.applied, 0);
+  const foundRange = d.daily.reduce((x, y) => x + y.found, 0);
 
   return (
     <ScrollArea>
@@ -158,6 +165,27 @@ export default async function AnalyticsPage() {
           }
         />
 
+        <form className="analytics-filters" action="/app/analytics">
+          <label>
+            Trend range
+            <select name="days" defaultValue={String(d.filters.days)}>
+              <option value="14">Last 14 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          </label>
+          <label>
+            Discovery role family
+            <select name="family" defaultValue={d.filters.family ?? ""}>
+              <option value="">All role families</option>
+              {d.available_families.map((value) => <option key={value} value={value}>{familyLabel(value)}</option>)}
+            </select>
+          </label>
+          <button className="btn" type="submit">Apply filters</button>
+          {d.filters.days !== 14 || d.filters.family ? <Link className="btn ghost" href="/app/analytics">Clear</Link> : null}
+          <span>Role family narrows discovery and resume fit. Application totals always include your full history.</span>
+        </form>
+
         <section className="kpis" aria-label="Applications">
           <Kpi
             label="Applications"
@@ -173,8 +201,8 @@ export default async function AnalyticsPage() {
             tone={a.interviews ? "good" : undefined}
           />
           <Kpi
-            label="Applied, last 14 days"
-            value={applied14.toLocaleString("en-US")}
+            label={`Applied, last ${d.filters.days} days`}
+            value={appliedRange.toLocaleString("en-US")}
             foot={a.undated ? `${a.undated} application${a.undated === 1 ? "" : "s"} have no date` : "Every application is dated"}
           />
         </section>
@@ -267,7 +295,7 @@ export default async function AnalyticsPage() {
           <section className="panel">
             <h3>Qualifying roles found per day</h3>
             <p>
-              First seen each day, last {d.daily.length} days: {found14.toLocaleString("en-US")} still open. Closed roles are
+              First seen each day, last {d.daily.length} days: {foundRange.toLocaleString("en-US")} still open. Closed roles are
               not counted.
             </p>
             <DayColumns days={d.daily.map((x) => ({ date: x.date, n: x.found }))} label="Qualifying roles found per day" />

@@ -215,6 +215,12 @@ def test_the_dashboard_groups_open_roles_by_tier_and_score(client, factory):
     assert len(body["daily"]) == 14
     assert body["top_companies"][0]["name"] == "Pinecrest AI"
 
+    filtered = client.get("/api/dashboard?days=30&family=AI_ML_ENGINEERING").json()
+    assert len(filtered["daily"]) == 30
+    assert filtered["total_open"] == 0
+    assert filtered["filters"] == {"days": 30, "family": "AI_ML_ENGINEERING"}
+    assert filtered["available_families"] == ["SOFTWARE_ENGINEERING"]
+
 
 def test_application_analytics_count_every_application_by_current_status(client, factory):
     from backend.app.db.models import ExternalApplicationRecord, JobMarkRecord

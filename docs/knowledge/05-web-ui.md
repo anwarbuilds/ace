@@ -751,3 +751,17 @@ the panel; `--text-muted` stands in.
   container has no `/api/auth`. Already fixed by the runtime proxy; `/healthz` now goes through a route handler too,
   so `.next/routes-manifest.json` holds no API address (checked with a build without API_ORIGIN). Sign-in forms now
   say "The sign-in service is not reachable" for a 404, 405 or 5xx instead of the raw status text.
+
+## Pulls-first interface completed; legacy UI retired (2026-10-15)
+
+The approved multi-route interface is now the only UI. The desktop sidebar collapses to icons and persists that
+choice in local storage; below 900 px it uses the compact rail, and below 650 px the phone bar remains the navigation.
+Analytics gained URL-backed 14, 30 and 90 day trend ranges and a role-family filter for discovery and resume-fit
+data. Application totals stay all-history, which the filter copy says explicitly.
+
+The unlinked Browse and Companies pages and components were removed. Their URLs issue temporary redirects to
+Opportunities so old bookmarks do not break. FastAPI no longer serves `static/index.html`; `/` sends the browser to
+`WEB_BASE_URL/app/pulls`. The command-palette CSS and the last keyboard-guard references were deleted as well.
+
+Production builds use the Geist files already installed with Next through `next/font/local`. This avoids a Google
+Fonts request during a build and keeps the rendered typography identical in disconnected containers.

@@ -15,7 +15,6 @@ from datetime import (
     datetime,
     timezone,
 )
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import (
@@ -27,10 +26,9 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import (
-    FileResponse,
+    RedirectResponse,
     Response,
 )
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
 
@@ -93,14 +91,6 @@ from backend.app.matching.service import (
     rescore_corpus,
     skills_gap,
     store_resume,
-)
-
-
-STATIC_DIRECTORY = (
-    Path(
-        __file__
-    ).parent
-    / "static"
 )
 
 
@@ -2255,26 +2245,13 @@ def create_app() -> FastAPI:
             module.router
         )
 
-    if STATIC_DIRECTORY.is_dir():
-        @app.get(
-            "/"
-        )
-        def index() -> FileResponse:
-            """Serve the single-page application."""
+    @app.get("/", include_in_schema=False)
+    def index() -> RedirectResponse:
+        """Send people to the canonical Next.js application."""
 
-            return FileResponse(
-                STATIC_DIRECTORY
-                / "index.html"
-            )
-
-        app.mount(
-            "/static",
-            StaticFiles(
-                directory=(
-                    STATIC_DIRECTORY
-                )
-            ),
-            name="static",
+        return RedirectResponse(
+            get_settings().web_base_url.rstrip("/") + "/app/pulls",
+            status_code=307,
         )
 
     return app

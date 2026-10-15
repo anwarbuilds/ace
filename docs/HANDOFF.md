@@ -21,11 +21,11 @@ ace is one person's private career engine. In priority order:
    application forms from an answer bank and never submits. Built, v1.20.0.
 3. **A professional web platform, not a prototype.** Real routes, pagination,
    sign-in, a proper home page, a polished anthracite grey design in a night
-   and a day theme. The old single-file UI is live and polished; the Next.js
-   rebuild has only been scaffolded.
+   and a day theme. The Next.js rebuild is complete on `next-app`; deployment
+   to the user's machine still needs approval.
 4. **A strong ATS resume system ("Resume Studio").** Resume versions, an ATS
-   score and keyword gaps per job, tailored versions, PDF and DOCX export.
-   Not started.
+   score and keyword gaps per job are built. Tailored versions and PDF and
+   DOCX export remain later scope.
 5. **Run it in the cloud, always on**, as a portfolio-grade project. Not
    started. Decided: build the platform properly first, then deploy.
 
@@ -51,7 +51,7 @@ excluded kinds unless the user asks.
   placeholders, emails, the extension, and your own messages to the user. Also
   no en dash used as a dash, no minus-sign toggles, and no CSS rule or bar that
   looks like a dash (a bar before "BIG TECH" got through once). The user has
-  asked repeatedly. Guards exist: `undash`/MutationObserver in the old UI,
+  asked repeatedly. Guards exist: `undash`/MutationObserver in the Next.js UI,
   `_plain()` in the email, `plain()` in the extension, and the browser scan in
   `backend/tests/browser/scans.py`. Port all of them to the new app.
 - The wordmark is **"ace"**, all lowercase. No logo tile, no caption, no
@@ -105,8 +105,8 @@ excluded kinds unless the user asks.
   jobs, roughly 600 applications tracked, a 66 row answer bank. The scheduler
   polls continuously (five minute cycles; Google every 30 minutes) and alerts
   are one email per closed 15 minute pull.
-- Tests on `next-app`: 1154 unit (hermetic, SQLite, ~35 s), 105 old UI browser (run with `ACE_AUTH=disabled`), 84
-  Playwright (signed in as the demo owner), 185 extension matcher cases.
+- Tests on `next-app`: 1,172 backend tests (hermetic SQLite), 78 Next.js Playwright tests against fictional demo
+  data, and 185 extension matcher cases. The retired single-file UI suite was removed; extension DOM tests remain.
 - Done this week: own-site readers for Atlassian, EA, Apple, Shopify, AMD, SIG,
   Booking.com, Groq, Google, Meta, Intuit, Arm, Synopsys and about 25 more
   boards; gate v46 to v53; the full anthracite redesign (web, extension, email),
@@ -150,13 +150,18 @@ excluded kinds unless the user asks.
     attempts and failures per window (older windows say not recorded). Deep links survive sign-in. Details:
     `docs/knowledge/05`. The web app forwards `/api/*` at runtime (`web/src/app/api/[...path]/route.ts`), so a build
     no longer bakes in API_ORIGIN.
+  - **Pulls-first completion (2026-10-15):** the sidebar now collapses and remembers the choice; Analytics has URL
+    backed 14, 30 and 90 day trend ranges plus a discovery role-family filter. The obsolete Browse and Companies
+    pages redirect to Opportunities and their code is gone. FastAPI `/` redirects to Next.js and the legacy HTML was
+    removed. Compose now has separate `api` and `web` services on local ports 8000 and 3000. Geist is bundled from
+    the installed Next package, so production builds do not contact Google Fonts.
   - Hazard: the live compose (built from `main`) cannot migrate a database already upgraded by `next-app` (alembic
     cannot locate 0037 or 0038). Do not rebuild the live stack from `main` against a database `next-app` migrated;
     merge first.
 - Alerts are composed but **not delivered**: `RESEND_API_KEY` is not set, so each
   pull logs `mail_not_configured`. Only the user can add the key.
-- `README.md` is stale (472 sources, 706 tests, old UI). Refresh it when
-  convenient.
+- `README.md` now reflects the Next.js runtime and current test counts. Live source and posting totals remain the
+  last recorded production figures until the approved deployment verification.
 - User side, not yours: add `RESEND_API_KEY`; reload the extension at
   `chrome://extensions` (1.20.0, it never reloads itself); a private cleanup
   item the prompt mentions.
@@ -179,7 +184,7 @@ sources -> adapters -> persist and diff -> eligibility gate -> freshness
 | Answers, applications | `backend/app/answers/`, `backend/app/applications/` | answer bank catalogue; application tracking and export |
 | Alerts | `backend/app/alerts/service.py` | one HTML email per closed pull, via Resend |
 | API | `backend/app/api/main.py`, `queries.py`, `marks.py` | FastAPI; every `/api/` response is `no-store` |
-| Old UI | `backend/app/api/static/index.html` | one file of vanilla JS, source of truth for the design tokens and behaviours |
+| Web UI | `web/` | canonical Next.js multi-route app; FastAPI `/` redirects to `/app/pulls` on `WEB_BASE_URL` |
 | Extension | `extension/` | MV3: `content.js` (panel in a shadow root), `fields.js` (question matcher), `popup.html/js`, `background.js`, `test-rules.js` |
 | Tests | `backend/tests/` | browser tests in `backend/tests/browser/` drive real Chrome over DevTools |
 | Next.js app | `web/` | the new app: `src/app/app/*` routes, `src/lib/listState.ts` (URL state), `src/components/`; Playwright in `web/tests/e2e` |
@@ -194,7 +199,7 @@ Accepted, Rejected, Withdrawn, No reply) and a note.
 
 ## 5. API the new front end consumes
 
-All JSON, no auth today. Read `main.py` for exact shapes; OpenAPI response
+All JSON and owner authenticated. Read `main.py` for exact shapes; OpenAPI response
 bodies are untyped, so hand-write TypeScript types (or, better, add Pydantic
 response models to FastAPI and generate them).
 
@@ -325,16 +330,18 @@ On the user's machine (the only place that can deploy):
 
 ```
 cd ~/Documents/ace
-docker compose build            # rebuilds migrate, scheduler and web (one Dockerfile)
-docker compose up -d web scheduler
+docker compose build migrate scheduler api web
+docker compose up -d migrate scheduler api web
+curl localhost:3000/healthz
 curl localhost:8000/healthz
 ```
 
 Tests:
 
 ```
-.venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/browser   # 1038, hermetic
+.venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/browser   # 1172, hermetic
 node extension/test-rules.js                                                 # 185 cases
+cd web && npx playwright test                                                # 78 cases, fictional demo data
 ACE_BROWSER_TEST_URL=http://127.0.0.1:8000 \
   .venv/bin/python -m pytest backend/tests/browser -q                        # ~4.5 min
 ```
@@ -362,10 +369,9 @@ deployable, and the live app only changes when the user pulls and rebuilds.
 
 ## 11. Operational gotchas (the short list; the rest is in `docs/knowledge/08-operations-and-testing.md`)
 
-- `docker compose build` before `up`; containers bake the source. `migrate` has
-  its own image, so building only web and scheduler leaves migrations unapplied.
-- Address the server as `docker exec ace-web-1`; `compose exec` can land in a
-  stale one-off container.
+- `docker compose build` before `up`; containers bake the source. `migrate`,
+  `scheduler` and `api` use the Python image; `web` uses the Next.js image.
+- Run backend maintenance with `docker compose exec api ...`.
 - Containers run on UTC. Any date shown to a person goes through
   `settings.display_timezone`.
 - The extension does not reload itself; unpacked extensions need the refresh icon
@@ -412,10 +418,10 @@ deployable, and the live app only changes when the user pulls and rebuilds.
 
 ## 13. First moves for the next session
 
-1. Read this file and `docs/architecture/2026-10-14-baseline-and-plan.md`; check `git log -5` on `next-app`.
-2. Run the app on demo data (section 10) and the three suites: unit, `backend/tests/browser`, `web` Playwright.
-3. Continue: Resume Studio foundation (Phase 3 of the brief), tailoring without AI, the Oracle Always Free kit, the
-   parity report; see `docs/architecture/2026-10-14-baseline-and-plan.md` section 7.
+1. Before daily-use rollout, merge `next-app`, back up Postgres, run migrations, rebuild all four application images,
+   and verify Pulls against live data read-only. This needs the owner's explicit deployment approval.
+2. Confirm new Pulls windows show checked, answered, failed and attempts; pre-0040 windows must say not recorded.
+3. Later scope: Resume Studio tailoring and DOCX/PDF export, the Oracle Always Free kit, and the SDE II dry run.
 4. Do not switch on the SDE II gate change until the owner approves the dry run (baseline doc, section 6).
 
 ## 14. Keeping this current

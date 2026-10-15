@@ -35,9 +35,12 @@ EXTENSION = (
 
 @pytest.fixture(name="filler")
 def fixture_filler(
-    page,
+    browser,
 ):
     """Load the real content.js and hand back its internals."""
+
+    browser._send("Page.navigate", {"url": "data:text/html,<html><body></body></html>"})
+    browser.wait_for("document.readyState === 'complete'")
 
     # Same order the manifest declares: content.js calls into the
     # matcher, so loading it alone dies on the first question.
@@ -56,22 +59,22 @@ def fixture_filler(
     # The script reaches for the extension APIs on load. Stubbing them
     # is what the earlier harnesses did too; it is the DOM behaviour
     # below that is real here, not the messaging.
-    page.eval(
+    browser.eval(
         "window.chrome={runtime:{"
         "onMessage:{addListener:function(){}},"
         "sendMessage:function(){},"
         "getURL:function(p){return p;}}};1"
     )
 
-    page.eval(
+    browser.eval(
         source + "\n;1"
     )
 
-    assert page.eval(
+    assert browser.eval(
         "!!window.__aceInternals"
     ), "content.js exposed no seam to test through"
 
-    return page
+    return browser
 
 
 def _make_field(

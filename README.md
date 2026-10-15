@@ -11,7 +11,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-D71F00?style=flat-square)](https://www.sqlalchemy.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
-[![Tests](https://img.shields.io/badge/tests-706%20passing-2ea44f?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-1435%20passing-2ea44f?style=flat-square)](#testing)
 [![Chrome Extension](https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#the-chrome-extension)
 
 </div>
@@ -91,7 +91,7 @@ Everything between those two lists is what this repository contains.
 | **Passing the gate right now** | 989 |
 | **Curated target companies** | 411, of which 283 are reachable |
 | **Poll cadence** | 5 minutes, 6 sources concurrently |
-| **Tests** | 706 Python, 89 matcher cases, real-Chrome browser suite |
+| **Tests** | 1,172 Python, 78 Playwright, 185 matcher cases |
 | **Continuously running since** | 2026-08-29 |
 
 ---
@@ -116,7 +116,7 @@ flowchart TB
 
     PIPE ==> DB[("PostgreSQL<br/>jobs, evaluations, scores, marks")]
 
-    DB --> WEB["Web application<br/>FastAPI + single-file client"]
+    DB --> WEB["Web application<br/>FastAPI API + Next.js client"]
     DB --> EXT["Chrome extension<br/>reads the answer bank"]
 
     WEB --> USER(["You"])
@@ -457,7 +457,7 @@ Every rule in the matcher was written blind, failed against a real form, and was
 | Read the field's **own** dropdown, never the first on the page | A permanently-mounted phone country list of 244 options was answering every question on the form |
 | Verify your own writes survived | Choosing a country made the phone widget wipe the number ACE had just typed |
 
-The matcher's rules are pinned by 89 cases, **half of which are questions that must stay empty**, because a wrong answer on a form about to reach an employer is worse than a blank one.
+The matcher's rules are pinned by 185 cases, including questions that must stay empty, because a wrong answer on a form about to reach an employer is worse than a blank one.
 
 ---
 
@@ -497,10 +497,11 @@ git clone https://github.com/anwarbuilds/ace.git
 cd ace
 cp .env.example .env          # then edit it
 
-docker compose up -d          # postgres, migrations, scheduler, web
+docker compose up -d          # postgres, migrations, API, scheduler, Next.js
 ```
 
-The web application is then on **http://localhost:8000**, and PostgreSQL is on host port **5433** to stay out of a local install's way.
+The web application is then on **http://localhost:3000**. The API health endpoint is on
+**http://localhost:8000/healthz**, and PostgreSQL is on host port **5433** to stay out of a local install's way.
 
 ```bash
 docker compose ps             # scheduler reports healthy once it has polled
@@ -510,8 +511,9 @@ docker compose logs -f scheduler
 > [!IMPORTANT]
 > `docker compose build` on its own restarts nothing. After a build, run
 > `docker compose up -d --force-recreate <service>` or the container keeps
-> serving the old image. The `migrate` service has its own image off the same
-> Dockerfile, so rebuilding only `web` leaves migrations on disk unapplied.
+> serving the old image. The `migrate` and `api` services use the Python image,
+> while `web` uses the Next.js image. Rebuilding only `web` leaves migrations
+> on disk unapplied.
 
 **Loading the extension:** open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select the `extension/` folder. Reloading the extension does not reload the content script in tabs that are already open; reload the tab, or use **Fill this page** from the toolbar popup, which injects on demand.
 
@@ -520,9 +522,10 @@ docker compose logs -f scheduler
 ## Testing
 
 ```bash
-python -m pytest backend/tests -q        # 706 tests, about 40 seconds
+python -m pytest backend/tests -q        # 1,172 tests
 python -m pytest backend/tests -m browser # real Chrome, over DevTools protocol
-cd extension && node test-rules.js        # 89 matcher cases
+cd extension && node test-rules.js        # 185 matcher cases
+cd web && npx playwright test              # 78 browser tests against a demo database
 ```
 
 The browser suite drives a real Chrome instance against a running ACE, and skips rather than fails when Chrome or the server is absent, so a plain checkout stays green.
@@ -552,9 +555,11 @@ backend/
     coverage/       The owned company list and the recall benchmark
     applications/   Reads a tracker sheet, matches rows to stored postings
     answers/        What each application question is, and the wordings forms use
-    api/            FastAPI + a single-file vanilla-JS client
-  tests/            706 tests, including a real-Chrome browser suite
+    api/            FastAPI JSON API
+  tests/            1,172 tests, including extension DOM checks
   migrations/       Alembic, currently at 0028
+
+web/                Next.js application and its Playwright browser suite
 
 extension/          Manifest V3 autofill. fields.js is pure matching logic and
                     is unit-tested standalone; content.js touches the DOM

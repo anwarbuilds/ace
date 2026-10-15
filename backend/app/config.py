@@ -85,7 +85,7 @@ class Settings(BaseSettings):
     # How ACE refers to itself in links inside an email. Without this
     # a link would have to be built from a request, and an alert is
     # sent by the scheduler where there is no request to build from.
-    public_base_url: str = "http://localhost:8000"
+    public_base_url: str = "http://localhost:3000"
 
     display_timezone: str = (
         "America/Los_Angeles"

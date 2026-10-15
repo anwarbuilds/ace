@@ -3,11 +3,6 @@ import type { BrowserContext, Page } from "@playwright/test";
 export const ROUTES = [
   "/app/pulls",
   "/app/opportunities",
-  "/app/browse",
-  "/app/browse/new-grad",
-  "/app/browse/strong-matches",
-  "/app/companies",
-  "/app/companies/Pinecrest%20AI",
   "/app/analytics",
   "/app/extension",
   "/app/more",
