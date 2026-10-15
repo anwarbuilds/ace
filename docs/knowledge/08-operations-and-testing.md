@@ -236,3 +236,12 @@ a revision whose file no longer exists.
 **Rebuild `web`, `scheduler` and `migrate` together, always.** The
 existing note says a stale migrate image leaves new migrations
 unapplied; it also re-applies removed ones.
+
+## The live database can be ahead of the checked-out branch (2026-10-15)
+
+`docker compose up -d web` from `main` stopped the web container: `web` depends on `migrate`, and `migrate` failed with
+"Can't locate revision identified by '0040'" because the live database had been migrated from `next-app`, which has
+revisions 0037 to 0040 that `main` lacks. Recovered in under a minute with `docker compose up -d --no-deps web`; the old
+code had already been running against that schema. Before rebuilding, compare `select version_num from
+alembic_version` with the newest file in `backend/migrations/versions/`, and use `--no-deps` when the database is ahead.
+

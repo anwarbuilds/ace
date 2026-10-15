@@ -2803,11 +2803,13 @@ function toggleTier(t){
 
 /* ---------------- toast / popovers ---------------- */
 var toastTimer=null;
-function showToast(msg,undo){
+/* sticky: stays until the next toast replaces it, for work that outlasts four seconds */
+function showToast(msg,undo,sticky){
   state.toast='<div class="toast" role="status"><span>'+esc(msg)+'</span>'+
     (undo?'<button class="link-btn" data-act="undo">Undo</button>':'')+'</div>';
   state.undoFn=undo||null;
   clearTimeout(toastTimer);
+  if(sticky) return;
   toastTimer=setTimeout(function(){ state.toast=null; state.undoFn=null; render(); },4000);
 }
 function closePop(){ var p=document.querySelector(".pop"); if(p) p.remove(); }
@@ -2930,7 +2932,7 @@ function pickResume(){
   input.addEventListener("change",function(){
     var file=input.files&&input.files[0]; if(!file) return;
     var body=new FormData(); body.append("file",file);
-    showToast("Reading "+file.name); render();
+    showToast("Reading "+file.name+" and scoring your queue. This takes about a minute.",null,true); render();
     fetch(API+"/api/resume",{method:"POST",body:body}).then(function(r){
       return r.json().then(function(d){ if(!r.ok) throw new Error(d.detail||"upload failed"); return d; });
     }).then(function(d){

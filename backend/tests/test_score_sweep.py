@@ -34,6 +34,7 @@ from backend.app.api.queries import (
 from backend.app.db.base import Base
 from backend.app.db.models import (
     JobEvaluationRecord,
+    JobMarkRecord,
     JobRecord,
     JobResumeScoreRecord,
 )
@@ -335,6 +336,70 @@ def test_only_active_qualifying_jobs_are_swept(
                 select(JobResumeScoreRecord)
             )
         ] == [kept.id]
+
+
+def test_upload_scores_the_queue_and_marked_jobs_only(
+    session_factory,
+) -> None:
+    """An upload must not wait on the whole corpus.
+
+    The bug: on 2026-10-15 an upload scored all 788,904 stored jobs in
+    one transaction, about 45 minutes, and the new resume stayed
+    invisible until it committed. Closed and rejected postings are not
+    shown, except an application, which keeps its score after closing.
+    """
+
+    with session_factory() as session:
+        add_job(
+            session,
+            external_id="1",
+            status="REJECT",
+        )
+
+        add_job(
+            session,
+            external_id="2",
+            is_active=False,
+        )
+
+        queued = add_job(
+            session,
+            external_id="3",
+        )
+
+        applied = add_job(
+            session,
+            external_id="4",
+            is_active=False,
+        )
+
+        session.add(
+            JobMarkRecord(
+                job_id=applied.id,
+                applied_at=NOW,
+                updated_at=NOW,
+            )
+        )
+
+        session.flush()
+
+        resume = add_resume(
+            session
+        )
+
+        assert rescore_corpus(
+            session,
+            resume=resume,
+        ) == 2
+
+        assert sorted(
+            row.job_id
+            for row in session.scalars(
+                select(JobResumeScoreRecord)
+            )
+        ) == sorted(
+            [queued.id, applied.id]
+        )
 
 
 def test_no_resume_means_nothing_to_score(

@@ -473,10 +473,30 @@ recorded and alerted. It scores active PASS jobs that have no row for the active
 after they were scored (the posting changed, or the gate did), or whose row came from an older
 `MATCHING_ALGORITHM_VERSION`; at most 2,000 per cycle so a backlog drains over a few cycles. A refreshed row keeps the
 old number in `previous_score`. A job that throws is logged as `job_score_failed` and skipped, so it is retried and
-never carries an invented score. Bounded to the queue on purpose: an upload still rescores the corpus.
+never carries an invented score. Bounded to the queue on purpose. (Status: the upload no longer
+rescores the corpus either; see 2026-10-15 below.)
 
 The API now returns `match_state`: `scored`, `pending` (not scored yet), `no_description` (requirements never read),
 `insufficient` (read, too few recognised skills to rank), `no_resume`. Both UIs word each one differently.
 
 Lesson: a derived table with one writer goes stale silently. Ask which events should refresh it (new row, changed input,
 changed rules, changed algorithm), and test each one. Tests: `backend/tests/test_score_sweep.py`.
+
+## A resume upload rescored the whole corpus and stayed invisible for 45 minutes (2026-10-15)
+
+Reported: a new resume was uploaded, but the scores and the Resume page still showed the old one. Cause: `rescore_corpus`
+scored every stored job (788,904, of which about 3,400 are in the queue or marked) inside the upload request, in one
+transaction. The previous upload had taken 44 minutes; until it committed the new resume did not exist for any other
+reader, and the "Reading" toast vanished after four seconds, so the page looked as if nothing had happened. Uvicorn logs
+a request only when it finishes, so an upload in flight leaves no log line; `pg_stat_activity` showed it as an open
+transaction from the web container inserting `job_resume_scores`.
+
+Fix: `rescore_corpus` now scores the queue (active PASS) plus every marked job, so an application keeps its score after
+the posting closes. Closed and rejected postings that nobody marked are kept but not rescored; they show `pending` if
+opened. Live: 3,333 jobs in 50 seconds. Scoring is still about 16 ms a job, nearly all of it the 216 separate alias
+regexes in `extract_skills`; aliases are regex fragments, so a substring precheck is not a safe speed-up. The upload
+toast now stays until the request answers. The resume and its scores still commit together on purpose: committing the
+resume first would let the scheduler's sweep insert the same `(job_id, resume_id)` rows concurrently.
+
+Lesson: bound any work done in a request to what a page can show; store everything, recompute little. Test:
+`test_upload_scores_the_queue_and_marked_jobs_only` in `backend/tests/test_score_sweep.py`.

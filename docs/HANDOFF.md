@@ -127,6 +127,10 @@ excluded kinds unless the user asks.
     filters, sort and numbered pages, palette with role search, marks with undo, dash guards. Old UI still at `/`.
   - CI added (`.github/workflows/ci.yml`): unit, extension, web build, both browser suites on demo data.
   - Baseline, gap matrix, decisions and open questions: `docs/architecture/2026-10-14-baseline-and-plan.md`.
+- 2026-10-15, on `main`: a resume upload scored all 788,904 stored jobs in one transaction (45 minutes, the new resume
+  invisible until it committed). It now scores the queue plus marked jobs (3,333 in 50 s live) and the toast stays
+  until it finishes. The live database is at Alembic 0040 (from `next-app`), ahead of `main`: rebuild web from `main`
+  with `docker compose up -d --no-deps web`, or the failing migrate step stops it. See `docs/knowledge/04` and `08`.
 - Alerts are composed but **not delivered**: `RESEND_API_KEY` is not set, so each
   pull logs `mail_not_configured`. Only the user can add the key.
 - `README.md` is stale (472 sources, 706 tests, old UI). Refresh it when
