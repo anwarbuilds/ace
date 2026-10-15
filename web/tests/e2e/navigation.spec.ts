@@ -5,7 +5,8 @@ import { signIn, test } from "./helpers";
 test("old route names redirect to the new ones", async ({ page }) => {
   for (const [from, to] of [
     ["/app/queue", "/app/opportunities"],
-    ["/app/pulls", "/app/activity"],
+    ["/app/pulls", "/app"],
+    ["/app/activity", "/app"],
     ["/app/applied", "/app/applications"],
     ["/app/resume", "/app/resume-studio"],
     ["/app/skills", "/app/insights/skills"],

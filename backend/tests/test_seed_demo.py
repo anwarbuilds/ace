@@ -135,3 +135,38 @@ def test_seed_refuses_nothing_on_a_fresh_sqlite_file(
         assert session.scalar(
             select(func.count()).select_from(JobRecord)
         ) == 44
+
+
+def test_the_activity_feed_is_a_few_queries_and_unchanged(tmp_path):
+    """The feed once ran a full job listing per run (about 140 queries for
+    30 runs). It must stay a constant handful, and list the same jobs the
+    per-run listing would."""
+
+    from sqlalchemy import create_engine, event
+    from sqlalchemy.orm import Session
+
+    from backend.app.api import main
+    from backend.app.api.queries import JobFilters, list_discovery_runs, list_jobs
+    from backend.app.matching.service import get_active_resume
+    from backend.scripts.seed_demo import seed
+
+    url = f"sqlite:///{tmp_path / 'feed.db'}"
+    seed(url, job_count=200)
+    engine = create_engine(url)
+    count = [0]
+    event.listen(engine, "before_cursor_execute", lambda *a: count.__setitem__(0, count[0] + 1))
+
+    with Session(engine) as session:
+        runs = list_discovery_runs(session, limit=30)
+        count[0] = 0
+        feed = main._with_session_jobs(session, runs=runs, per_session=6)
+        assert count[0] <= 10
+
+        resume = get_active_resume(session)
+        for run in feed:
+            expected = (
+                [j.id for j in list_jobs(session, filters=JobFilters(
+                    session_id=run["id"], resume_id=resume.id, sort="best_match", limit=6)).items]
+                if run.get("qualifying_discovered") else []
+            )
+            assert [j["id"] for j in run["jobs"]] == expected

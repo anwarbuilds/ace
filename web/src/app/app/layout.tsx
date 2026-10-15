@@ -1,11 +1,10 @@
 import { AnswersDock } from "@/components/shell/AnswersDock";
 import { AppProvider } from "@/components/shell/AppProvider";
-import { CommandPalette } from "@/components/shell/CommandPalette";
 import { SiteFooter } from "@/components/shell/SiteFooter";
 import { SiteHeader } from "@/components/shell/SiteHeader";
 import { apiGetOr, authStatus } from "@/lib/api";
 import { getPrefs, getPrevVisit } from "@/lib/prefs";
-import type { Answer, Coverage, ExternalApplication, MarkCounts, Stats } from "@/lib/types";
+import type { Answer, MarkCounts, SystemStatus } from "@/lib/types";
 
 const NO_MARKS: MarkCounts = { saved: 0, archived: 0, applied: 0, open_applications: 0, by_status: {} };
 
@@ -13,15 +12,17 @@ const NO_MARKS: MarkCounts = { saved: 0, archived: 0, applied: 0, open_applicati
 // Layouts persist across navigation, so this is read once per visit and
 // again on each refresh (a mark, or the two-minute live refresh).
 export default async function AppLayout({ children }: LayoutProps<"/app">) {
-  const [status, prefs, prevVisit, stats, marks, answers, coverage, external] = await Promise.all([
+  // Only what every page needs: who is signed in, when ace last
+  // checked, the marks for the nav count and the answers drawer. Each
+  // page loads its own data; the shell must stay cheap because it runs
+  // on every navigation.
+  const [status, prefs, prevVisit, system, marks, answers] = await Promise.all([
     authStatus(),
     getPrefs(),
     getPrevVisit(),
-    apiGetOr<Stats>("/api/stats", { last_poll_at: null }),
+    apiGetOr<SystemStatus | null>("/api/system", null),
     apiGetOr<MarkCounts>("/api/marks", NO_MARKS),
     apiGetOr<{ items: Answer[] }>("/api/answers", { items: [] }),
-    apiGetOr<Coverage | null>("/api/coverage", null),
-    apiGetOr<{ items: ExternalApplication[] }>("/api/applications/external", { items: [] }),
   ]);
 
   return (
@@ -29,16 +30,11 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
       tz={prefs.tz}
       theme={prefs.theme}
       prevVisit={prevVisit ? prevVisit.getTime() : null}
-      lastPoll={stats.last_poll_at}
+      lastPoll={system?.scheduler.last_poll_at ?? null}
       marks={marks}
     >
       <div className="app">
-        <SiteHeader
-          queueCount={stats.qualifying_active_jobs ?? 0}
-          externalCount={external.items.length}
-          answersFilled={answers.items.filter((a) => a.value).length}
-          coverageGaps={coverage?.unreached.length ?? 0}
-        />
+        <SiteHeader answersFilled={answers.items.filter((a) => a.value).length} />
         {status === null ? (
           <div className="down" role="alert">
             <b>ace&rsquo;s API is not answering</b>, so nothing below is real data. The web app looks for it at{" "}
@@ -52,7 +48,6 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
         <SiteFooter />
       </div>
       <AnswersDock answers={answers.items} />
-      <CommandPalette />
     </AppProvider>
   );
 }

@@ -8,7 +8,7 @@ export const ROUTES = [
   "/app/browse/strong-matches",
   "/app/companies",
   "/app/companies/Pinecrest%20AI",
-  "/app/activity",
+  "/app/dashboard",
   "/app/applications",
   "/app/archive",
   "/app/saved",

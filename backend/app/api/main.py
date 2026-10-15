@@ -63,6 +63,7 @@ from backend.app.applications.service import (
 )
 from backend.app.api.queries import (
     DEFAULT_PAGE_SIZE,
+    best_arrivals_by_run,
     get_job,
     MAX_PAGE_SIZE,
     SORT_OPTIONS,
@@ -281,41 +282,61 @@ def _with_session_jobs(
         session
     )
 
-    enriched: list[dict] = []
+    # Three queries for the whole feed: which jobs lead each run, then
+    # those jobs in one listing. It used to be a full listing per run,
+    # about 140 queries for a page of 30 runs.
+    picked = best_arrivals_by_run(
+        session,
+        run_ids=[
+            run["id"]
+            for run in runs
+            if run.get("qualifying_discovered")
+        ],
+        per_run=per_session,
+        resume_id=None if resume is None else resume.id,
+    )
 
-    for run in runs:
-        jobs: list[dict] = []
+    wanted = [
+        job_id
+        for ids in picked.values()
+        for job_id in ids
+    ]
 
-        if run.get(
-            "qualifying_discovered"
-        ):
-            page = list_jobs(
-                session,
-                filters=JobFilters(
-                    session_id=run["id"],
-                    resume_id=(
-                        None
-                        if resume is None
-                        else resume.id
-                    ),
-                    sort="best_match",
-                    limit=per_session,
+    by_id: dict[int, dict] = {}
+
+    # In pages of the listing's maximum, so a long feed loses nothing.
+    for start in range(0, len(wanted), MAX_PAGE_SIZE):
+        chunk = tuple(wanted[start:start + MAX_PAGE_SIZE])
+        page = list_jobs(
+            session,
+            filters=JobFilters(
+                job_ids=chunk,
+                resume_id=(
+                    None
+                    if resume is None
+                    else resume.id
                 ),
-            )
-
-            jobs = [
-                _serialize_job(
-                    job
-                )
-                for job in page.items
-            ]
-
-        enriched.append(
-            {
-                **run,
-                "jobs": jobs,
-            }
+                sort="best_match",
+                limit=len(chunk),
+            ),
         )
+
+        by_id.update(
+            (job.id, _serialize_job(job))
+            for job in page.items
+        )
+
+    enriched: list[dict] = [
+        {
+            **run,
+            "jobs": [
+                by_id[job_id]
+                for job_id in picked.get(run["id"], [])
+                if job_id in by_id
+            ],
+        }
+        for run in runs
+    ]
 
     return enriched
 
@@ -2214,6 +2235,7 @@ def create_app() -> FastAPI:
     from backend.app.api.routers import (
         auth,
         companies,
+        dashboard,
         export,
         studio,
         system,
@@ -2222,6 +2244,7 @@ def create_app() -> FastAPI:
     for module in (
         auth,
         companies,
+        dashboard,
         system,
         export,
         studio,

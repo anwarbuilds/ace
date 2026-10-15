@@ -43,7 +43,8 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: "/app/queue", destination: "/app/opportunities", permanent: false },
-      { source: "/app/pulls", destination: "/app/activity", permanent: false },
+      { source: "/app/pulls", destination: "/app", permanent: false },
+      { source: "/app/activity", destination: "/app", permanent: false },
       { source: "/app/applied", destination: "/app/applications", permanent: false },
       { source: "/app/resume", destination: "/app/resume-studio", permanent: false },
       { source: "/app/skills", destination: "/app/insights/skills", permanent: false },

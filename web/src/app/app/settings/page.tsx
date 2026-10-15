@@ -173,7 +173,6 @@ export default async function SettingsPage() {
                 </a>
               </div>
             </div>
-            <div className="note">Press Ctrl or Command plus K for the command palette.</div>
           </div>
         </div>
       </ScrollArea>

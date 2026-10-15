@@ -20,23 +20,6 @@ test("j, k, Enter and Escape walk the list and the job page", async ({ page }) =
   await expect(page).toHaveURL(/\/app\/opportunities/);
 });
 
-test("Ctrl+K opens a palette that navigates and finds roles", async ({ page }) => {
-  await page.goto("/app/opportunities");
-  await page.keyboard.press("Control+k");
-  await expect(page.locator(".palette")).toBeVisible();
-  await page.keyboard.type("activity");
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/app\/activity$/);
-
-  await page.keyboard.press("Control+k");
-  await page.keyboard.type("Halcyra");
-  const hit = page.locator(".pal-opt", { hasText: "Open Halcyra" }).first();
-  await expect(hit).toBeVisible();
-  await hit.click();
-  await expect(page).toHaveURL(/\/app\/jobs\/\d+$/);
-  await expect(page.locator(".jp-co")).toHaveText("Halcyra");
-});
-
 test("keys do nothing while typing in the search box", async ({ page }) => {
   await page.goto("/app/opportunities");
   await page.locator("#q").click();

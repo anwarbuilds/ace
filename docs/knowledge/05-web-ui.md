@@ -688,3 +688,19 @@ What changed on `next-app`:
 
 Lessons: a spaced hyphen ("Agent - Legal") reads as a dash; `clean()` now turns it into a comma and the dash scan
 flags it, but the repost grouping must split on the raw title before cleaning or the vertical disappears.
+
+## Pulls is home; focused navigation; speed (2026-10-15)
+
+The owner's daily loop is: open Pulls every 15 minutes, open a new role, apply with the extension. So `/app` is now
+Pulls (old `/app/activity` and `/app/pulls` redirect there). Navigation is Pulls, Opportunities, Applications,
+Dashboard, Resume Studio, Answers, with Archive, Skills and Coverage under More. The command palette ("Search or jump
+to", Ctrl K) and the department strip were removed on request; the browse and company routes still exist but are not
+linked from the shell. New `/app/dashboard` (one call, `/api/dashboard`): open roles by company tier and role family
+with how the resume scores across each (high, medium, minimal, not scored), best fits by company, applications by
+status, roles found per day.
+
+Speed: `/api/sessions` ran a full job listing per run, about 144 queries for a page of 30 runs (0.7 s on a 364 job
+demo, seconds on the live corpus). It is now one grouped count, one ranked query (row_number per run, the listing's own
+best_match tie-breaks) and one listing by id: 8 queries, identical output, pinned by a test. The shell layout no longer
+fetches stats, coverage or external applications on every navigation, and `/app/loading.tsx` answers a click at once.
+`next dev` compiles each route on first visit; for daily use run the production build (`npm run build && npm start`).

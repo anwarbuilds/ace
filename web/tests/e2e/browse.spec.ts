@@ -2,23 +2,25 @@ import { expect } from "@playwright/test";
 
 import { test } from "./helpers";
 
-test("home is a shop front: a top pick, then rows that lead to their own pages", async ({ page }) => {
+test("home is Pulls: every check, newest first, and a row opens its jobs", async ({ page }) => {
   await page.goto("/app");
-  await expect(page.locator(".hero")).toBeVisible();
-  const row = page.locator(".row-sec", { has: page.locator(".row-title", { hasText: "New grad" }) });
-  await expect(row.locator(".jc").first()).toBeVisible();
-  await row.getByRole("link", { name: "See all" }).click();
-  await expect(page).toHaveURL(/\/app\/browse\/new-grad$/);
-  await expect(page.locator("h1")).toHaveText("New grad");
+  await expect(page.locator("h1")).toHaveText("Pulls");
+  await expect(page.locator(".site-link[aria-current=page]")).toHaveText("Pulls");
+  await expect(page.locator(".pl-run").first()).toBeVisible();
 });
 
-test("the department strip moves between group pages, and Back returns", async ({ page }) => {
-  await page.goto("/app/browse/new-grad");
-  await page.locator(".site-cat", { hasText: "Big tech" }).click();
-  await expect(page).toHaveURL(/\/app\/browse\/big-tech$/);
-  await expect(page.locator(".site-cat[aria-current=page]")).toHaveText("Big tech");
-  await page.goBack();
-  await expect(page).toHaveURL(/\/app\/browse\/new-grad$/);
+test("the dashboard groups roles by tier and family, and a row opens them", async ({ page }) => {
+  await page.goto("/app/dashboard");
+  await expect(page.locator("h1")).toHaveText("Dashboard");
+  await page.locator(".db-tr .db-name", { hasText: /^Big tech$/ }).click();
+  await expect(page).toHaveURL(/\/app\/opportunities\?tier=BIG_TECH/);
+});
+
+test("there is no command palette and no search-or-jump box", async ({ page }) => {
+  await page.goto("/app");
+  await expect(page.getByText("Search or jump to")).toHaveCount(0);
+  await page.keyboard.press("Control+k");
+  await expect(page.locator(".palette")).toHaveCount(0);
 });
 
 test("a group page sorts, filters and pages through the URL", async ({ page }) => {

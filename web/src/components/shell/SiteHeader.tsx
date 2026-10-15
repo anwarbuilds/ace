@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "@/components/Icon";
-import { GROUPS } from "@/lib/browse";
 
 import { useApp } from "./AppProvider";
 
@@ -19,24 +18,11 @@ interface NavLink {
 /** The site's top navigation: one row of page links, like any website.
  *  Every link is its own route; the active page is marked for screen
  *  readers with aria-current and drawn as a pill. */
-export function SiteHeader({
-  queueCount,
-  externalCount,
-  answersFilled,
-  coverageGaps,
-}: {
-  queueCount: number;
-  externalCount: number;
-  answersFilled: number;
-  coverageGaps: number;
-}) {
+export function SiteHeader({ answersFilled }: { answersFilled: number }) {
   const path = usePathname();
-  const { marks, cycleTheme, setPaletteOpen, menuOpen, setMenuOpen } = useApp();
+  const { marks, cycleTheme, menuOpen, setMenuOpen } = useApp();
   const [more, setMore] = useState(false);
-  const [mac, setMac] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setMac(/Mac|iPhone|iPad/.test(navigator.userAgent)), []);
 
   // A new page closes any open menu.
   const [seen, setSeen] = useState(path);
@@ -57,24 +43,21 @@ export function SiteHeader({
 
   const on = (l: NavLink) => (l.exact ? path === l.href : path === l.href || path.startsWith(`${l.href}/`));
 
+  // What the owner uses: Pulls first (the 15 minute check), then the
+  // list, applications, the analysis page, Resume Studio and the answers
+  // the extension fills from.
   const primary: NavLink[] = [
-    { href: "/app", label: "Home", exact: true },
-    { href: "/app/opportunities", label: "Opportunities", count: queueCount },
-    { href: "/app/companies", label: "Companies" },
-    { href: "/app/applications", label: "Applications", count: (marks.applied || 0) + externalCount },
+    { href: "/app", label: "Pulls", exact: true },
+    { href: "/app/opportunities", label: "Opportunities" },
+    { href: "/app/applications", label: "Applications", count: marks.applied || null },
+    { href: "/app/dashboard", label: "Dashboard" },
     { href: "/app/resume-studio", label: "Resume Studio" },
     { href: "/app/answers", label: "Answers", count: answersFilled },
   ];
   const secondary: NavLink[] = [
-    { href: "/app/activity", label: "Discovery activity" },
     { href: "/app/archive", label: "Archive", count: marks.archived },
     { href: "/app/insights/skills", label: "Skills" },
-    { href: "/app/coverage", label: "Coverage", count: coverageGaps },
-  ];
-  // The department strip under the header, as in a shop.
-  const cats: NavLink[] = [
-    { href: "/app/browse", label: "All groups", exact: true },
-    ...GROUPS.map((g) => ({ href: `/app/browse/${g.slug}`, label: g.title })),
+    { href: "/app/coverage", label: "Coverage" },
   ];
   const moreActive = secondary.some(on);
 
@@ -115,11 +98,6 @@ export function SiteHeader({
           </div>
         </nav>
         <span className="spacer" />
-        <button className="site-search" onClick={() => setPaletteOpen(true)} title="Command palette">
-          <Icon name="search" size={14} />
-          <span className="site-search-l">Search or jump to</span>
-          <span className="kbd">{mac ? "⌘K" : "Ctrl K"}</span>
-        </button>
         <button className="site-icon" onClick={cycleTheme} title="Switch theme" aria-label="Switch theme">
           <Icon name="contrast" />
         </button>
@@ -136,9 +114,6 @@ export function SiteHeader({
           <Icon name="menu" />
         </button>
       </div>
-      <nav className="site-cats" aria-label="Browse by group">
-        {cats.map((l) => link(l, "site-cat"))}
-      </nav>
       {menuOpen ? (
         <nav className="site-drawer" aria-label="All pages">
           {[...primary, ...secondary, { href: "/app/settings", label: "Settings" }].map((l) => link(l, "site-drawer-item"))}

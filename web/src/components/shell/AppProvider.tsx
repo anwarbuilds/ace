@@ -43,8 +43,6 @@ interface AppState {
   hideJob: (id: number, hide: boolean) => void;
   answersOpen: boolean;
   setAnswersOpen: (open: boolean) => void;
-  paletteOpen: boolean;
-  setPaletteOpen: (open: boolean) => void;
   menuOpen: boolean;
   setMenuOpen: (open: boolean) => void;
 }
@@ -173,7 +171,6 @@ export function AppProvider({
   const [patches, setPatches] = useState<Record<number, Partial<Job>>>({});
   const [hidden, setHidden] = useState<Set<number>>(new Set());
   const [answersOpen, setAnswersOpen] = useState(false);
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -290,7 +287,7 @@ export function AppProvider({
   useEffect(() => {
     const check = () => {
       getJson<PullsResponse>("/api/sessions", new URLSearchParams({ limit: "30", jobs_per_session: "6" }))
-        .then((d) => announceNewRoles(d, () => router.push("/app/activity")))
+        .then((d) => announceNewRoles(d, () => router.push("/app")))
         .catch(() => {});
     };
     check();
@@ -301,14 +298,9 @@ export function AppProvider({
     return () => clearInterval(t);
   }, [router]);
 
-  // Global keys: the palette, and Escape closing whatever is open.
+  // Global keys: "/" to search a list, and Escape closing whatever is open.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
-        e.preventDefault();
-        setPaletteOpen(true);
-        return;
-      }
       const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as Element)?.tagName ?? "");
       if (e.key === "/" && !typing) {
         const q = document.getElementById("q") as HTMLInputElement | null;
@@ -348,8 +340,6 @@ export function AppProvider({
       hideJob,
       answersOpen,
       setAnswersOpen,
-      paletteOpen,
-      setPaletteOpen,
       menuOpen,
       setMenuOpen,
     }),
@@ -368,7 +358,6 @@ export function AppProvider({
       hidden,
       hideJob,
       answersOpen,
-      paletteOpen,
       menuOpen,
     ],
   );

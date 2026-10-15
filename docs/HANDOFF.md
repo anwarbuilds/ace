@@ -142,6 +142,8 @@ excluded kinds unless the user asks.
     deterministic ATS checker with evidence quotes, unknowns and history. Migration 0039. `docs/knowledge/09`.
   - **Website layout:** top navigation and a department strip instead of the sidebar, whole-page scrolling with a
     footer, browse groups at `/app/browse/<slug>`, a shop-front home, company directory and pages. `docs/knowledge/05`.
+  - **Pulls is home** (`/app`), focused navigation, a Dashboard page, no command palette, `/api/sessions` from about
+    144 queries to 8. `docs/knowledge/05`.
   - Hazard: the live compose (built from `main`) cannot migrate a database already upgraded by `next-app` (alembic
     cannot locate 0037 or 0038). Do not rebuild the live stack from `main` against a database `next-app` migrated;
     merge first.

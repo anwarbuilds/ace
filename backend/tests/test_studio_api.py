@@ -205,3 +205,12 @@ def test_the_company_directory_counts_open_roles_and_applications(client, factor
     items = client.get("/api/companies").json()["items"]
     assert items == [{"name": "Pinecrest AI", "tier": items[0]["tier"], "open_roles": 1, "applied": 1,
                       "newest_role_at": items[0]["newest_role_at"]}]
+
+
+def test_the_dashboard_groups_open_roles_by_tier_and_score(client, factory):
+    body = client.get("/api/dashboard").json()
+    assert body["total_open"] == 1
+    assert sum(t["open"] for t in body["tiers"]) == 1
+    assert sum(body["scores"].values()) == 1
+    assert len(body["daily"]) == 14
+    assert body["top_companies"][0]["name"] == "Pinecrest AI"

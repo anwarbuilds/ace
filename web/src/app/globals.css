@@ -1074,7 +1074,7 @@ a.bar-link:hover span:first-child{text-decoration:underline;text-underline-offse
 .st-select{width:100%}
 
 /* ---- website pieces: department strip, footer, cards, rows ---- */
-.app{--site-h:102px}
+
 .site-cats{display:flex;gap:4px;overflow-x:auto;padding:0 var(--gutter) 8px;scrollbar-width:none}
 .site-cats::-webkit-scrollbar{display:none}
 .site-cat{flex:none;display:inline-flex;align-items:center;height:30px;padding:0 12px;border-radius:999px;
@@ -1173,3 +1173,44 @@ a.bar-link:hover span:first-child{text-decoration:underline;text-underline-offse
   color:var(--text);border:1px solid var(--danger);font-size:13.5px;line-height:1.6}
 .down b{color:var(--danger)}
 .down code{font-family:var(--mono);font-size:12.5px}
+
+.foot-links{display:flex;flex-wrap:wrap;gap:8px 22px}
+.foot-links a{color:var(--text-secondary);text-decoration:none;font-size:13px}
+.foot-links a:hover{color:var(--text);text-decoration:underline;text-underline-offset:3px}
+
+/* Dashboard. Score bands are ordered, so one hue from light to dark;
+   not scored is neutral grey. Text stays in text colours. */
+.db-high{background:var(--match)}
+.db-medium{background:color-mix(in srgb,var(--match) 58%,var(--surface-2))}
+.db-minimal{background:color-mix(in srgb,var(--match) 26%,var(--surface-2))}
+.db-unscored{background:var(--border-strong)}
+.db-legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--text-secondary);margin:4px 0 12px}
+.db-legend span{display:inline-flex;align-items:center;gap:7px}
+.db-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.db-table{display:flex;flex-direction:column;border:1px solid var(--border-subtle);border-radius:var(--r-lg);overflow:hidden}
+.db-tr{display:grid;grid-template-columns:minmax(150px,1.2fr) 70px 70px minmax(200px,3fr) 60px;gap:14px;align-items:center;
+  padding:11px 16px;border-top:1px solid var(--border-subtle);background:var(--surface-1);color:var(--text);text-decoration:none;font-size:13px}
+.db-tr:first-child{border-top:0}
+a.db-tr:hover{background:var(--surface-2)}
+.db-th{background:var(--canvas);font-size:10.5px;font-weight:600;letter-spacing:.11em;text-transform:uppercase;color:var(--text-muted)}
+.db-co{grid-template-columns:minmax(160px,2fr) 110px 70px 90px 70px}
+.db-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.db-num{font-family:var(--mono);font-size:12.5px;color:var(--text-secondary)}
+.db-stack{display:flex;gap:2px;height:12px;border-radius:4px;overflow:hidden}
+.db-seg{min-width:4px;height:100%}
+.db-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin:6px 0 22px}
+.db-card{padding:20px 22px}
+.db-days{display:grid;grid-template-columns:repeat(14,1fr);gap:6px;height:160px;align-items:end}
+.db-day{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;height:100%}
+.db-day-bar{width:100%;max-width:28px;border-radius:4px 4px 0 0;background:var(--match)}
+.db-day-l{font-family:var(--mono);font-size:10.5px;color:var(--text-muted)}
+@media (max-width:760px){.db-tr{grid-template-columns:1fr 50px 50px}.db-tr>:nth-child(n+4){display:none}}
+
+/* Loading placeholder: soft blocks, never thin bars (a thin bar reads as a dash). */
+.sk-page{display:flex;flex-direction:column;gap:14px;max-width:1180px}
+.sk-line,.sk-block{display:block;border-radius:var(--r-md);background:var(--surface-1);animation:sk-pulse 1.2s ease-in-out infinite}
+.sk-line{height:16px;width:46%}
+.sk-h{height:30px;width:220px}
+.sk-block{height:64px}
+@keyframes sk-pulse{50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){.sk-line,.sk-block{animation:none}}

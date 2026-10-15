@@ -2082,6 +2082,47 @@ def list_discovery_runs(
         )
     ).all()
 
+    # Counted for every run in one grouped query, not one per run: the
+    # Activity feed asks for 30 runs on every load, and a query each was
+    # most of its time. What is counted is what is still open and
+    # qualifying now, which is what the user can act on; the stored
+    # count is a record of what arrived, including jobs since closed.
+    open_counts: dict[int, int] = {}
+
+    if rows:
+        open_counts = dict(
+            session.execute(
+                select(
+                    JobRecord.first_seen_session_id,
+                    func.count(),
+                )
+                .join(
+                    JobEvaluationRecord,
+                    JobEvaluationRecord.job_id
+                    == JobRecord.id,
+                )
+                .where(
+                    JobRecord.first_seen_session_id.in_(
+                        [row.id for row in rows]
+                    ),
+                    JobRecord.is_active.is_(
+                        True
+                    ),
+                    JobEvaluationRecord
+                    .eligibility_status.in_(
+                        QUALIFYING_STATUSES
+                    ),
+                    opened_within(
+                        OLD_OPENING_DAYS,
+                        now=reference,
+                    ),
+                )
+                .group_by(
+                    JobRecord.first_seen_session_id
+                )
+            ).all()
+        )
+
     runs: list[dict] = []
 
     for row in rows:
@@ -2093,38 +2134,7 @@ def list_discovery_runs(
             row.last_activity_at
         )
 
-        # Count what is still open and qualifying now, which is what the
-        # user can actually act on -- the stored count is a record of
-        # what arrived, including jobs since closed.
-        open_qualifying = session.scalar(
-            select(
-                func.count()
-            )
-            .select_from(
-                JobRecord
-            )
-            .join(
-                JobEvaluationRecord,
-                JobEvaluationRecord.job_id
-                == JobRecord.id,
-            )
-            .where(
-                JobRecord
-                .first_seen_session_id
-                == row.id,
-                JobRecord.is_active.is_(
-                    True
-                ),
-                JobEvaluationRecord
-                .eligibility_status.in_(
-                    QUALIFYING_STATUSES
-                ),
-                opened_within(
-                    OLD_OPENING_DAYS,
-                    now=reference,
-                ),
-            )
-        )
+        open_qualifying = open_counts.get(row.id, 0)
 
         runs.append(
             {
@@ -2152,7 +2162,7 @@ def list_discovery_runs(
                     row.postings_checked
                 ),
                 "qualifying_open_now": int(
-                    open_qualifying or 0
+                    open_qualifying
                 ),
                 # sent, failed, unconfigured, skipped, or null when no
                 # alert was attempted. Never shown as sent unless sent.
@@ -2171,3 +2181,85 @@ def list_discovery_runs(
         )
 
     return runs
+
+
+def best_arrivals_by_run(
+    session: Session,
+    *,
+    run_ids: Sequence[int],
+    per_run: int,
+    resume_id: int | None,
+    now: datetime | None = None,
+) -> dict[int, list[int]]:
+    """The best few qualifying arrivals of each run, as job ids.
+
+    One ranked query for all runs instead of a job list per run. Ordered
+    as the per-run list was: best match first, unscored last, then the
+    freshest, so the feed shows the same jobs it always did.
+    """
+
+    if not run_ids or per_run <= 0:
+        return {}
+
+    reference = _as_utc(now) or datetime.now(timezone.utc)
+
+    score = (
+        select(
+            JobResumeScoreRecord.job_id,
+            JobResumeScoreRecord.score,
+        )
+        .where(
+            JobResumeScoreRecord.resume_id == resume_id
+        )
+        .subquery()
+    )
+
+    rank = func.row_number().over(
+        partition_by=JobRecord.first_seen_session_id,
+        # The listing's own best_match order, tie-breaks included
+        # (freshness, then id), so the same jobs lead each run.
+        order_by=(
+            score.c.score.desc().nulls_last(),
+            JobRecord.first_seen_at.desc(),
+            JobRecord.id.desc(),
+        ),
+    ).label("rank")
+
+    ranked = (
+        select(
+            JobRecord.id.label("job_id"),
+            JobRecord.first_seen_session_id.label("run_id"),
+            rank,
+        )
+        .join(
+            JobEvaluationRecord,
+            JobEvaluationRecord.job_id == JobRecord.id,
+        )
+        .outerjoin(
+            score,
+            score.c.job_id == JobRecord.id,
+        )
+        .where(
+            JobRecord.first_seen_session_id.in_(list(run_ids)),
+            JobRecord.is_active.is_(True),
+            JobEvaluationRecord.eligibility_status.in_(
+                QUALIFYING_STATUSES
+            ),
+            opened_within(
+                OLD_OPENING_DAYS,
+                now=reference,
+            ),
+        )
+        .subquery()
+    )
+
+    picked: dict[int, list[int]] = {}
+
+    for job_id, run_id in session.execute(
+        select(ranked.c.job_id, ranked.c.run_id)
+        .where(ranked.c.rank <= per_run)
+        .order_by(ranked.c.run_id, ranked.c.rank)
+    ):
+        picked.setdefault(run_id, []).append(job_id)
+
+    return picked
