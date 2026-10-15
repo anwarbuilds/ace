@@ -1167,3 +1167,9 @@ a.bar-link:hover span:first-child{text-decoration:underline;text-underline-offse
 .co-card-s{font-size:12.5px;color:var(--text-secondary)}
 .co-hero{display:flex;align-items:center;gap:16px}
 @media (max-width:1024px){.site-cats{display:none}.app{--site-h:60px}}
+
+/* The API could not be reached: say so instead of showing zeros. */
+.down{margin:16px var(--gutter) 0;padding:14px 18px;border-radius:var(--r-lg);background:var(--danger-soft);
+  color:var(--text);border:1px solid var(--danger);font-size:13.5px;line-height:1.6}
+.down b{color:var(--danger)}
+.down code{font-family:var(--mono);font-size:12.5px}

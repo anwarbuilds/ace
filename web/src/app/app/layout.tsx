@@ -3,7 +3,7 @@ import { AppProvider } from "@/components/shell/AppProvider";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { SiteFooter } from "@/components/shell/SiteFooter";
 import { SiteHeader } from "@/components/shell/SiteHeader";
-import { apiGetOr } from "@/lib/api";
+import { apiGetOr, authStatus } from "@/lib/api";
 import { getPrefs, getPrevVisit } from "@/lib/prefs";
 import type { Answer, Coverage, ExternalApplication, MarkCounts, Stats } from "@/lib/types";
 
@@ -13,7 +13,8 @@ const NO_MARKS: MarkCounts = { saved: 0, archived: 0, applied: 0, open_applicati
 // Layouts persist across navigation, so this is read once per visit and
 // again on each refresh (a mark, or the two-minute live refresh).
 export default async function AppLayout({ children }: LayoutProps<"/app">) {
-  const [prefs, prevVisit, stats, marks, answers, coverage, external] = await Promise.all([
+  const [status, prefs, prevVisit, stats, marks, answers, coverage, external] = await Promise.all([
+    authStatus(),
     getPrefs(),
     getPrevVisit(),
     apiGetOr<Stats>("/api/stats", { last_poll_at: null }),
@@ -38,6 +39,13 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
           answersFilled={answers.items.filter((a) => a.value).length}
           coverageGaps={coverage?.unreached.length ?? 0}
         />
+        {status === null ? (
+          <div className="down" role="alert">
+            <b>ace&rsquo;s API is not answering</b>, so nothing below is real data. The web app looks for it at{" "}
+            <code>{process.env.API_ORIGIN ?? "http://127.0.0.1:8000"}</code>. Start the API there, or restart the web
+            app with API_ORIGIN pointing at it, then reload.
+          </div>
+        ) : null}
         <main className="main" id="main">
           {children}
         </main>
