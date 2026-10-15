@@ -40,7 +40,7 @@ function useBack() {
       if (last) setTarget(last.replace(/\?$/, ""));
     } catch {}
   }, []);
-  const label = target === "/app" || target.startsWith("/app?")
+  const label = target.startsWith("/app/pulls")
     ? "pulls"
     : target.startsWith("/app/saved")
       ? "saved roles"

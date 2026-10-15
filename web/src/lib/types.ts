@@ -254,3 +254,56 @@ export interface SystemStatus {
   };
   scoring: { resume_active: boolean; queue_jobs: number; queue_unscored: number };
 }
+
+// GET /api/pulls: the Pulls page in one request. See
+// backend/app/api/routers/pulls.py for what each number means.
+export type PullState = "live" | "delayed" | "stalled" | "unknown";
+export type PullOutcome = "opportunities" | "new_postings" | "quiet";
+export type PullFilter = "all" | "opportunities" | "quiet";
+
+export interface PullBucket {
+  id: number;
+  start: string;
+  end: string;
+  last_activity_at: string | null;
+  outcome: PullOutcome;
+  new_postings: number;
+  new_qualifying: number;
+  qualifying_open_now: number;
+  sources_succeeded: number;
+  postings_observed: number;
+  sources_attempted: number | null;
+  poll_attempts: number | null;
+  failed_checks: number | null;
+  telemetry: "full" | "partial";
+  alert_status: string | null;
+}
+
+export interface PullsPage {
+  timezone: string;
+  today: string;
+  date: string;
+  prev_date: string | null;
+  next_date: string | null;
+  filter: PullFilter;
+  status: {
+    state: PullState;
+    last_success_at: string | null;
+    age_seconds: number | null;
+    delayed_after_seconds: number;
+    stalled_after_seconds: number;
+    sources_enabled: number;
+  };
+  summary: {
+    window_start: string;
+    window_end: string;
+    new_postings: number;
+    new_qualifying: number;
+    sources_succeeded: number;
+    sources_enabled: number;
+    windows: number;
+    windows_with_failures: number | null;
+  };
+  day: { date: string; new_postings: number; new_qualifying: number; counts: Record<PullFilter, number> };
+  buckets: PullBucket[];
+}

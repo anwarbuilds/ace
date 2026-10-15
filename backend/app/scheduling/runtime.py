@@ -44,8 +44,10 @@ from collections.abc import (
 )
 import threading
 import time
+from collections import deque
 from datetime import (
     datetime,
+    timedelta,
     timezone,
 )
 from concurrent.futures import (
@@ -242,11 +244,16 @@ class CycleRecorder(Protocol):
             [datetime],
             tuple[int, int],
         ],
+        activity_since: Callable[
+            [datetime],
+            "CheckActivity",
+        ],
     ) -> None:
         """Record the discoveries made during one cycle.
 
         ``checks_since(moment)`` answers how many distinct boards were
         read since then, and how many postings they held.
+        ``activity_since(moment)`` adds the attempts and failures.
         """
 
 
@@ -288,6 +295,41 @@ class SourcePollFailure:
     error_message: str
 
     duration_seconds: float
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class CheckActivity:
+    """What the scheduler attempted since a moment, by board.
+
+    sources_attempted: distinct boards with any finished attempt.
+    poll_attempts: finished attempts, so a board read three times is 3.
+    succeeded: distinct boards with a successful read.
+    failed: distinct boards with a failed or refused attempt. A board
+    that failed and then succeeded counts in both, so succeeded plus
+    failed can exceed sources_attempted.
+    postings: postings held by the succeeded boards, each at its latest
+    read.
+    """
+
+    sources_attempted: int
+
+    poll_attempts: int
+
+    succeeded: int
+
+    failed: int
+
+    postings: int
+
+
+# How far back attempt times are kept in memory. A pull is fifteen
+# minutes and is recorded every cycle, so an hour is ample.
+ATTEMPT_MEMORY = timedelta(
+    hours=1,
+)
 
 
 @dataclass(
@@ -501,6 +543,29 @@ class SchedulerRuntime:
                 str,
             ],
             tuple[datetime, int],
+        ] = {}
+
+        # Every finished attempt, failed ones included, so a pull can
+        # say how many boards it tried and how many failed, not only how
+        # many answered. Guarded by _due_lock; pruned to ATTEMPT_MEMORY.
+        self._attempt_times: deque[
+            datetime
+        ] = deque()
+
+        self._last_attempted: dict[
+            tuple[
+                object,
+                str,
+            ],
+            datetime,
+        ] = {}
+
+        self._last_failed: dict[
+            tuple[
+                object,
+                str,
+            ],
+            datetime,
         ] = {}
 
         self._resume_schedule(
@@ -934,6 +999,8 @@ class SchedulerRuntime:
                 source.poll_interval_seconds
             )
 
+            succeeded = False
+
             try:
                 self._logger.info(
                     (
@@ -1079,6 +1146,8 @@ class SchedulerRuntime:
                         ),
                     )
 
+                succeeded = True
+
                 with results_lock:
                     successes.append(
                         SourcePollSuccess(
@@ -1133,6 +1202,11 @@ class SchedulerRuntime:
 
                     self._in_flight.discard(
                         source.identity
+                    )
+
+                    self._note_attempt(
+                        source.identity,
+                        succeeded=succeeded,
                     )
 
                     # What it found is grouped into a pull from the
@@ -1267,6 +1341,7 @@ class SchedulerRuntime:
             self._cycle_recorder(
                 started_at=since,
                 checks_since=self.checks_since,
+                activity_since=self.activity_since,
             )
 
         except Exception:
@@ -1275,6 +1350,84 @@ class SchedulerRuntime:
             self._logger.exception(
                 "cycle_recording_failed"
             )
+
+    def _note_attempt(
+        self,
+        identity: tuple[object, str],
+        *,
+        succeeded: bool,
+    ) -> None:
+        """Remember one finished attempt. Caller holds _due_lock."""
+
+        attempted_at = self._wall_clock()
+
+        self._attempt_times.append(
+            attempted_at
+        )
+
+        self._last_attempted[
+            identity
+        ] = attempted_at
+
+        if not succeeded:
+            self._last_failed[
+                identity
+            ] = attempted_at
+
+        horizon = attempted_at - ATTEMPT_MEMORY
+
+        while (
+            self._attempt_times
+            and self._attempt_times[0] < horizon
+        ):
+            self._attempt_times.popleft()
+
+    def activity_since(
+        self,
+        moment: datetime,
+    ) -> CheckActivity:
+        """Attempts, failures and successful reads since ``moment``.
+
+        Only what this process saw: after a restart, attempts made
+        before it are unknown, which is why a pull never lowers what it
+        already recorded.
+        """
+
+        if moment.tzinfo is None:
+            moment = moment.replace(
+                tzinfo=timezone.utc,
+            )
+
+        with self._due_lock:
+            attempted = sum(
+                1
+                for when in self._last_attempted.values()
+                if when >= moment
+            )
+
+            attempts = sum(
+                1
+                for when in self._attempt_times
+                if when >= moment
+            )
+
+            failed = sum(
+                1
+                for when in self._last_failed.values()
+                if when >= moment
+            )
+
+        succeeded, postings = self.checks_since(
+            moment
+        )
+
+        return CheckActivity(
+            sources_attempted=attempted,
+            poll_attempts=attempts,
+            succeeded=succeeded,
+            failed=failed,
+            postings=postings,
+        )
 
     def checks_since(
         self,

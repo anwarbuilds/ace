@@ -5,12 +5,13 @@ import { signIn, test } from "./helpers";
 test("old route names redirect to the new ones", async ({ page }) => {
   for (const [from, to] of [
     ["/app/queue", "/app/opportunities"],
-    ["/app/pulls", "/app"],
-    ["/app/activity", "/app"],
+    ["/app", "/app/pulls"],
+    ["/app/activity", "/app/pulls"],
+    ["/app/dashboard", "/app/analytics"],
     ["/app/applied", "/app/applications"],
     ["/app/resume", "/app/resume-studio"],
     ["/app/skills", "/app/insights/skills"],
-    ["/", "/app"],
+    ["/", "/app/pulls"],
   ]) {
     await page.goto(from);
     await expect(page).toHaveURL(new RegExp(`${to}$`));

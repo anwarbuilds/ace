@@ -65,6 +65,7 @@ from backend.app.matching.service import (
     score_unscored_jobs,
 )
 from backend.app.persistence.sessions import (
+    record_attempts,
     record_check,
     record_discoveries,
 )
@@ -387,6 +388,7 @@ def main(
         *,
         started_at,
         checks_since,
+        activity_since=None,
     ) -> None:
         """Group anything this cycle discovered into a run, and record
         how much the run has checked so far."""
@@ -433,6 +435,14 @@ def main(
                 checked.postings_checked or 0,
                 postings,
             )
+
+            if activity_since is not None:
+                record_attempts(
+                    checked,
+                    activity_since(
+                        checked.started_at
+                    ),
+                )
 
         if run is not None:
             LOGGER.info(

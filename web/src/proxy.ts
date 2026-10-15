@@ -18,6 +18,8 @@ export function proxy(request: NextRequest) {
   if (current && now - current >= GAP_MS) previous = current;
 
   const headers = new Headers(request.headers);
+  // Where the reader was going, so a sign-in can return them there.
+  headers.set("x-ace-path", request.nextUrl.pathname + request.nextUrl.search);
   if (previous) headers.set("x-ace-prev-visit", String(previous));
   else headers.delete("x-ace-prev-visit");
 

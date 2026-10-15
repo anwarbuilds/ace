@@ -800,7 +800,60 @@ def _store_jobs(
             run
         )
 
+    # The scheduler writes a window every quarter hour it reads
+    # anything, so the last twelve hours are dense with quiet windows
+    # between the ones that found something, as a real log is.
+    taken = set(
+        pulls
+    )
+
+    for step in range(
+        48
+    ):
+        started_at = pulls[0] - timedelta(
+            minutes=15 * step
+        )
+
+        if started_at in taken:
+            continue
+
+        session.add(
+            PollSessionRecord(
+                started_at=started_at,
+                last_activity_at=started_at + timedelta(minutes=14),
+                jobs_discovered=0,
+                qualifying_discovered=0,
+                boards_checked=len(DEMO_COMPANY_TIERS),
+                postings_checked=len(DEMO_COMPANY_TIERS) * 21,
+            )
+        )
+
     session.flush()
+
+    # What each window attempted. One board in every fifth window fails,
+    # so a partial failure is visible in the demo.
+    for index, run in enumerate(
+        session.scalars(
+            select(
+                PollSessionRecord
+            ).order_by(
+                PollSessionRecord.started_at.desc()
+            )
+        )
+    ):
+        failed = 1 if index % 5 == 3 else 0
+
+        # The failing board answered nothing, so it leaves the boards
+        # read successfully; it was still attempted.
+        run.sources_attempted = run.boards_checked
+
+        run.boards_checked -= failed
+
+        run.failed_checks = failed
+
+        run.poll_attempts = (
+            run.sources_attempted * 3
+        )
 
     ids = []
 

@@ -5,7 +5,7 @@ import { apiGetOr } from "@/lib/api";
 import { STATUS_LABEL, TIER_LABEL, familyLabel } from "@/lib/format";
 import type { ApplicationStatus, Tier } from "@/lib/types";
 
-export const metadata = { title: "Dashboard · ace" };
+export const metadata = { title: "Analytics · ace" };
 
 interface Bucket {
   open: number;
@@ -120,7 +120,7 @@ export default async function DashboardPage() {
     <>
       <div className="head">
         <div className="head-row">
-          <h1 className="h1">Dashboard</h1>
+          <h1 className="h1">Analytics</h1>
           <span className="h1-count">{d.total_open.toLocaleString("en-US")} open roles</span>
         </div>
         <p className="why" style={{ margin: "6px 0 0" }}>

@@ -287,7 +287,7 @@ export function AppProvider({
   useEffect(() => {
     const check = () => {
       getJson<PullsResponse>("/api/sessions", new URLSearchParams({ limit: "30", jobs_per_session: "6" }))
-        .then((d) => announceNewRoles(d, () => router.push("/app")))
+        .then((d) => announceNewRoles(d, () => router.push("/app/pulls")))
         .catch(() => {});
     };
     check();

@@ -12,7 +12,7 @@ const anon = base.extend({
 
 anon("a signed-out visit to the app goes to sign in", async ({ page }) => {
   await page.goto("/app/opportunities");
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?next=%2Fapp%2Fopportunities$/);
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 });
 
@@ -65,7 +65,16 @@ anon("next cannot send the reader to another site", async ({ page }) => {
   await page.getByLabel("Email").fill(OWNER.email);
   await page.getByLabel("Password").fill(OWNER.password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app\/pulls$/);
+});
+
+anon("a deep link survives signing in", async ({ page }) => {
+  await page.goto("/app/analytics");
+  await expect(page).toHaveURL(/\/login\?next=%2Fapp%2Fanalytics$/);
+  await page.getByLabel("Email").fill(OWNER.email);
+  await page.getByLabel("Password").fill(OWNER.password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/app\/analytics$/);
 });
 
 test("pages carry the security headers", async ({ page }) => {
@@ -89,9 +98,10 @@ test("a change without the CSRF header is refused", async ({ page }) => {
   expect(status).toBe(403);
 });
 
-test("Settings pairs the extension, and the token reads only answers", async ({ page, playwright, baseURL }) => {
+test("the extension page pairs it, and the token reads only answers", async ({ page, playwright, baseURL }) => {
   await page.goto("/app/settings");
   await expect(page.getByText(`Signed in as ${OWNER.email}`)).toBeVisible();
+  await page.goto("/app/extension");
   await page.getByRole("button", { name: "Pair the extension" }).click();
   const code = (await page.getByLabel("Pairing code").textContent())!.trim();
   expect(code).toMatch(/^[A-Z2-9]{4} [A-Z2-9]{4}$/);
@@ -106,7 +116,7 @@ test("Settings pairs the extension, and the token reads only answers", async ({ 
   expect((await extension.get("/api/jobs", { headers: bearer })).status()).toBe(403);
 
   await page.reload();
-  const row = page.locator(".sec-row", { hasText: "Chrome extension" }).first();
+  const row = page.locator(".pair-list .lineitem", { hasText: "Chrome extension" }).first();
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "Unpair" }).click();
   await expect(page.locator(".toast")).toContainText("Extension unpaired");
@@ -118,6 +128,6 @@ test("signing out ends the session", async ({ page }) => {
   await page.goto("/app/settings");
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
-  await page.goto("/app");
-  await expect(page).toHaveURL(/\/login$/);
+  await page.goto("/app/pulls");
+  await expect(page).toHaveURL(/\/login\?next=%2Fapp%2Fpulls$/);
 });

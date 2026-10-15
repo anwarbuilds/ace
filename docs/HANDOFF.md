@@ -96,7 +96,7 @@ excluded kinds unless the user asks.
 - Commit author is the user's configured git identity. End commits with the
   attribution trailer the harness gives you.
 
-## 3. State on 2026-10-14
+## 3. State on 2026-10-15
 
 - **Live** on the user's machine via `compose.yaml`: postgres (host port 5433),
   migrate, scheduler, web (port 8000, FastAPI serving the old UI at `/`). Built
@@ -144,6 +144,12 @@ excluded kinds unless the user asks.
     footer, browse groups at `/app/browse/<slug>`, a shop-front home, company directory and pages. `docs/knowledge/05`.
   - **Pulls is home** (`/app`), focused navigation, a Dashboard page, no command palette, `/api/sessions` from about
     144 queries to 8. `docs/knowledge/05`.
+  - **Pulls-first shell (2026-10-15)**, after the owner's approved prototype: sidebar in three groups, top bar with
+    live, delayed or stalled, `/app/pulls` as home, `/app/analytics` (was Dashboard), `/app/extension` (pairing), a
+    phone bottom bar. `/api/pulls` serves 15 minute windows with an honest metric contract; migration 0040 adds
+    attempts and failures per window (older windows say not recorded). Deep links survive sign-in. Details:
+    `docs/knowledge/05`. The web app forwards `/api/*` at runtime (`web/src/app/api/[...path]/route.ts`), so a build
+    no longer bakes in API_ORIGIN.
   - Hazard: the live compose (built from `main`) cannot migrate a database already upgraded by `next-app` (alembic
     cannot locate 0037 or 0038). Do not rebuild the live stack from `main` against a database `next-app` migrated;
     merge first.

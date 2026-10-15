@@ -234,7 +234,7 @@ function emptyState({
         title={`Latest pull, ${l ? clock(l.started_at, tz) : "not recorded"}`}
         actions={
           <>
-            {button("/app", "See all pulls")} {button(href({ view: "all" }), "Back to all", true)}
+            {button("/app/pulls", "See all pulls")} {button(href({ view: "all" }), "Back to all", true)}
           </>
         }
       >

@@ -2237,6 +2237,7 @@ def create_app() -> FastAPI:
         companies,
         dashboard,
         export,
+        pulls,
         studio,
         system,
     )
@@ -2247,6 +2248,7 @@ def create_app() -> FastAPI:
         dashboard,
         system,
         export,
+        pulls,
         studio,
     ):
         app.include_router(

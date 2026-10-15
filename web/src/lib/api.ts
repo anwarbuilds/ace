@@ -1,6 +1,6 @@
 import "server-only";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect, unstable_rethrow } from "next/navigation";
 
 // Server-side reads from the FastAPI backend. Every response describes
@@ -26,13 +26,20 @@ async function sessionHeaders(): Promise<HeadersInit> {
   return session ? { cookie: `ace_session=${session}` } : {};
 }
 
+/** The sign-in page, with the page asked for as where to return. The
+ *  path comes from proxy.ts, which sees every /app request. */
+export async function signInPath(): Promise<string> {
+  const asked = (await headers()).get("x-ace-path");
+  return asked ? `/login?next=${encodeURIComponent(asked)}` : "/login";
+}
+
 export async function apiGet<T>(path: string, params?: URLSearchParams | Record<string, string>): Promise<T> {
   const query = params ? new URLSearchParams(params).toString() : "";
   const res = await fetch(`${API_ORIGIN}${path}${query ? `?${query}` : ""}`, {
     cache: "no-store",
     headers: await sessionHeaders(),
   });
-  if (res.status === 401) redirect("/login");
+  if (res.status === 401) redirect(await signInPath());
   if (!res.ok) throw new ApiError(res.status, path);
   return (await res.json()) as T;
 }

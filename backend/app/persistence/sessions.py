@@ -325,3 +325,39 @@ def record_discoveries(
     session.flush()
 
     return run
+
+
+def record_attempts(
+    run: PollSessionRecord,
+    activity,
+) -> None:
+    """Store what a pull attempted, as well as what it read.
+
+    ``activity`` is the scheduler's CheckActivity since the pull's
+    start. Never lowered, like boards_checked: after a restart the
+    scheduler remembers nothing from before it, and the pull already
+    counted that. A null column becomes the first value seen.
+    """
+
+    for column, value in (
+        (
+            "sources_attempted",
+            activity.sources_attempted,
+        ),
+        (
+            "poll_attempts",
+            activity.poll_attempts,
+        ),
+        (
+            "failed_checks",
+            activity.failed,
+        ),
+    ):
+        setattr(
+            run,
+            column,
+            max(
+                getattr(run, column) or 0,
+                int(value),
+            ),
+        )

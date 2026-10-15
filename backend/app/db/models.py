@@ -740,6 +740,29 @@ class PollSessionRecord(Base):
         server_default="0",
     )
 
+    # What the window attempted, recorded from migration 0040 on; null
+    # on older rows, which the interface reports as not recorded.
+    # sources_attempted: distinct boards with any finished attempt.
+    # poll_attempts: every finished attempt, so one board polled three
+    # times counts three. failed_checks: distinct boards with at least
+    # one failed or refused attempt; a board that failed and then
+    # succeeded in the same window is counted here and in
+    # boards_checked, so the two may sum past sources_attempted.
+    sources_attempted: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    poll_attempts: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    failed_checks: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
     # When this pull's alert was sent. The guard against sending the
     # same pull twice, which matters because the scheduler decides what
     # to send on every cycle and a cycle runs every few seconds.

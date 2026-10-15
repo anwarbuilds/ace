@@ -704,3 +704,36 @@ demo, seconds on the live corpus). It is now one grouped count, one ranked query
 best_match tie-breaks) and one listing by id: 8 queries, identical output, pinned by a test. The shell layout no longer
 fetches stats, coverage or external applications on every navigation, and `/app/loading.tsx` answers a click at once.
 `next dev` compiles each route on first visit; for daily use run the production build (`npm run build && npm start`).
+
+## Pulls-first shell after the approved prototype (2026-10-15)
+
+Status: supersedes the top navigation of "A website, not a dashboard" and the `/app` home of the entry above.
+
+The owner approved a prototype (`ace-pulls-first-demo.html`, kept outside the repo) and a directive. Implemented:
+
+- **Shell**: a 244 px sidebar in three groups (Daily workspace: Pulls, Opportunities, Applications, Analytics; Career
+  tools: Resume Studio, Autofill Extension, Archive; System: Coverage, Settings), a red bar on the active entry, the
+  owner chip and the engine state at the bottom. Icons only below 900 px; below 650 px the sidebar goes and a bottom
+  bar holds Pulls, Jobs, Applied, Analytics and More (`/app/more` lists every page). A sticky 64 px top bar holds the
+  breadcrumb, the live pill and the theme switch. No palette, no Jump, no Ctrl K. Answers stay at `/app/answers`
+  (selects Autofill Extension), Skills at `/app/insights/skills` (selects Resume Studio).
+- **Routes**: `/` and `/app` redirect to `/app/pulls`; `/app/activity` to `/app/pulls`; `/app/dashboard` to
+  `/app/analytics`. New `/app/extension` holds pairing (moved out of Settings, which links to it). An /app request
+  while signed out now goes to `/login?next=<path>` (proxy.ts passes the path as `x-ace-path`), so deep links survive.
+- **Pulls** (`/app/pulls`, one request to `/api/pulls`): live, delayed (no successful read for 15 minutes) or stalled
+  (45) from `SourceState.last_success_at`, never from the page loading; four 24 hour KPIs; one card per 15 minute
+  window for the chosen local day, quiet windows included, with the time range in the reader's zone; filters All
+  activity, With opportunities, Quiet checks, and day paging; a window opens to its qualifying jobs (loaded on open
+  from `/api/jobs?session_id=`) with details, official posting, applied and not relevant, all through the marks API.
+- **Metric contract** (`backend/app/api/routers/pulls.py` docstring): sources enabled is configuration; sources
+  checked is distinct boards attempted in the window; answered is distinct boards read successfully
+  (`boards_checked`); failed is distinct boards with a failed or refused attempt (one that failed then succeeded counts
+  in both); attempts counts every attempt; postings observed is what answered boards held (mostly seen before); new is
+  first seen in the window; relevant is new and passing the gate when it arrived. Attempts and failures come from
+  migration 0040 (three nullable columns on `poll_sessions`, filled by the scheduler from memory, never lowered);
+  older windows show them as not recorded. The 24 hour "sources checked" KPI counts enabled sources whose last
+  success is inside the span, because summing per window distinct counts would count a board once per window.
+
+Lessons: the sidebar count for Opportunities used the queue total (204) while the list showed 203 under its default
+filters, so it was removed rather than shown wrong. The prototype's dimmest grey (#889496) fails AA on small text over
+the panel; `--text-muted` stands in.

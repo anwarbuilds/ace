@@ -1,21 +1,20 @@
+import { redirect } from "next/navigation";
+
 import { AnswersDock } from "@/components/shell/AnswersDock";
 import { AppProvider } from "@/components/shell/AppProvider";
-import { SiteFooter } from "@/components/shell/SiteFooter";
-import { SiteHeader } from "@/components/shell/SiteHeader";
-import { apiGetOr, authStatus } from "@/lib/api";
+import { Sidebar } from "@/components/shell/Sidebar";
+import { MobileBar, Topbar } from "@/components/shell/Topbar";
+import { apiGetOr, authStatus, signInPath } from "@/lib/api";
 import { getPrefs, getPrevVisit } from "@/lib/prefs";
 import type { Answer, MarkCounts, SystemStatus } from "@/lib/types";
 
 const NO_MARKS: MarkCounts = { saved: 0, archived: 0, applied: 0, open_applications: 0, by_status: {} };
 
-// The shell: the top navigation's counts, the live indicator and the answers drawer.
-// Layouts persist across navigation, so this is read once per visit and
-// again on each refresh (a mark, or the two-minute live refresh).
+// The shell: sidebar, page header and the answers drawer. Layouts persist
+// across navigation, so this is read once per visit and again on each
+// refresh (a mark, or the two-minute live refresh). Only what every page
+// needs; each page loads its own data.
 export default async function AppLayout({ children }: LayoutProps<"/app">) {
-  // Only what every page needs: who is signed in, when ace last
-  // checked, the marks for the nav count and the answers drawer. Each
-  // page loads its own data; the shell must stay cheap because it runs
-  // on every navigation.
   const [status, prefs, prevVisit, system, marks, answers] = await Promise.all([
     authStatus(),
     getPrefs(),
@@ -25,6 +24,15 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
     apiGetOr<{ items: Answer[] }>("/api/answers", { items: [] }),
   ]);
 
+  // The server decides; this only saves a round of empty pages. The
+  // page asked for comes back after signing in.
+  if (status && !status.signed_in) redirect(await signInPath());
+
+  const counts: Record<string, number | null> = {
+    "/app/applications": marks.applied || null,
+    "/app/archive": marks.archived || null,
+  };
+
   return (
     <AppProvider
       tz={prefs.tz}
@@ -33,20 +41,26 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
       lastPoll={system?.scheduler.last_poll_at ?? null}
       marks={marks}
     >
-      <div className="app">
-        <SiteHeader answersFilled={answers.items.filter((a) => a.value).length} />
-        {status === null ? (
-          <div className="down" role="alert">
-            <b>ace&rsquo;s API is not answering</b>, so nothing below is real data. The web app looks for it at{" "}
-            <code>{process.env.API_ORIGIN ?? "http://127.0.0.1:8000"}</code>. Start the API there, or restart the web
-            app with API_ORIGIN pointing at it, then reload.
-          </div>
-        ) : null}
-        <main className="main" id="main">
-          {children}
-        </main>
-        <SiteFooter />
+      <a className="skip" href="#main">
+        Skip to content
+      </a>
+      <div className="shell">
+        <Sidebar counts={counts} email={status?.email ?? null} />
+        <div className="shell-main">
+          <Topbar />
+          {status === null ? (
+            <div className="down" role="alert">
+              <b>ace&rsquo;s API is not answering</b>, so nothing below is real data. The web app looks for it at{" "}
+              <code>{process.env.API_ORIGIN ?? "http://127.0.0.1:8000"}</code>. Start the API there, or restart the web
+              app with API_ORIGIN pointing at it, then reload.
+            </div>
+          ) : null}
+          <main className="main content" id="main">
+            {children}
+          </main>
+        </div>
       </div>
+      <MobileBar />
       <AnswersDock answers={answers.items} />
     </AppProvider>
   );

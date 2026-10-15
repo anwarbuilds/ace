@@ -246,3 +246,31 @@ export function unscoredReason(j: Pick<Job, "match_state" | "is_scored">): Exclu
   if (j.match_state && j.match_state !== "scored") return j.match_state;
   return j.is_scored === false ? "pending" : "insufficient";
 }
+
+/** The zone's short name at a moment, "PDT" or "PST", so a time range
+ *  says which clock it is on. */
+export function zoneName(iso: string | Date | null | undefined, tz?: string): string {
+  const d = iso instanceof Date ? iso : parseDate(iso);
+  if (!d) return "";
+  const part = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" })
+    .formatToParts(d)
+    .find((p) => p.type === "timeZoneName");
+  return part?.value ?? "";
+}
+
+/** "11:45 AM to 12:00 PM PDT": a window, on the reader's clock. */
+export function timeRange(start: string, end: string, tz?: string): string {
+  return `${clock(start, tz)} to ${clock(end, tz)} ${zoneName(start, tz)}`.trim();
+}
+
+/** "Wednesday, Oct 15" for a YYYY-MM-DD calendar day, with no zone
+ *  arithmetic: the day is already local. */
+export function calendarDay(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}

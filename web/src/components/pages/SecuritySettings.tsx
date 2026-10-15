@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -65,7 +66,6 @@ export function SecuritySettings({
 }) {
   const router = useRouter();
   const { toast } = useApp();
-  const [code, setCode] = useState<string | null>(null);
   const [pwError, setPwError] = useState("");
   const others = sessions.filter((s) => !s.current).length;
   const [allSessions, setAllSessions] = useState(false);
@@ -104,25 +104,6 @@ export function SecuritySettings({
       router.refresh();
     } catch (err) {
       setPwError(message(err));
-    }
-  }
-
-  async function pair() {
-    try {
-      const r = await sendJson<{ code: string }>("POST", "/api/extension/pairing");
-      setCode(r.code);
-    } catch (err) {
-      toast(message(err));
-    }
-  }
-
-  async function revoke(id: number) {
-    try {
-      await sendJson("DELETE", `/api/extension/tokens/${id}`);
-      toast("Extension unpaired");
-      router.refresh();
-    } catch (err) {
-      toast(message(err));
     }
   }
 
@@ -176,41 +157,9 @@ export function SecuritySettings({
       <div className="sect">
         <p className="eyebrow">Chrome extension</p>
         <p className="why">
-          The extension reads your answer bank and history with its own key, and can read nothing else. To pair it,
-          make a code here, then open the extension, Connection, and type the code. A code works once, for 10 minutes.
+          {tokens.length ? `${tokens.length} paired. ` : "Not paired. "}
+          Pairing and unpairing are on the <Link href="/app/extension">Autofill Extension</Link> page.
         </p>
-        {code ? (
-          <div>
-            <span className="pair-code" aria-label="Pairing code">
-              {code}
-            </span>
-            <p className="why">Shown once. Making another cancels this one.</p>
-          </div>
-        ) : null}
-        <div className="controls" style={{ paddingLeft: 0 }}>
-          <button className="btn btn-secondary btn-sm" onClick={pair}>
-            {code ? "Make a new code" : "Pair the extension"}
-          </button>
-        </div>
-        {tokens.length ? (
-          <div className="sec-list">
-            {tokens.map((t) => (
-              <div className="sec-row" key={t.id}>
-                <span className="sec-main">
-                  {t.name} <span className="sec-meta">{t.prefix}</span>
-                </span>
-                <span className="sec-meta">
-                  {t.last_used_at ? `used ${when[t.last_used_at] ?? ""}` : "not used yet"}
-                </span>
-                <button className="link-btn" onClick={() => revoke(t.id)}>
-                  Unpair
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="why">No extension paired.</p>
-        )}
       </div>
     </>
   );
