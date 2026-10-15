@@ -80,3 +80,6 @@ docs/NEXT-SESSION-PROMPT.md
 
 # Demo database built by backend/scripts/seed_demo.py
 ace-demo.db
+
+# Local design references (the approved prototype and directive); kept out of the public repo.
+/design/
