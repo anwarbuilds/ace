@@ -13,7 +13,6 @@ test("old route names redirect to the new ones", async ({ page }) => {
     ["/app/skills", "/app/insights/skills"],
     ["/app/browse/software-engineering", "/app/opportunities"],
     ["/app/companies/Pinecrest%20AI", "/app/opportunities"],
-    ["/", "/app/pulls"],
   ]) {
     await page.goto(from);
     await expect(page).toHaveURL(new RegExp(`${to}$`));

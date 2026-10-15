@@ -1,7 +1,13 @@
-import { redirect } from "next/navigation";
+import { LegacyHashRedirect } from "@/components/auth/LegacyHashRedirect";
+import { PublicInfoCard } from "@/components/auth/PublicInfoCard";
 
-// ace is private: the root opens Pulls, and the app sends anyone not
-// signed in to the sign-in page first.
 export default function Home() {
-  redirect("/app/pulls");
+  return (
+    <>
+      <LegacyHashRedirect />
+      <PublicInfoCard title="Career Intelligence Always On">
+        <p>ace is a private, owner-only workspace for reviewing opportunities and preparing applications.</p>
+      </PublicInfoCard>
+    </>
+  );
 }

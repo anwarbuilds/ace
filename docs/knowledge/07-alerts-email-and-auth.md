@@ -219,8 +219,35 @@ additive. Owner from `python -m backend.scripts.create_owner EMAIL`
 - "--reset" in UI text reads as a dash in Geist. UI copy names the
   command without flags.
 
-**Verified.** 1124 unit tests (47 auth), Playwright 55 with sign-in on
-(including the old UI sign-in card and a CSRF refusal), old UI browser
-suite 105 through the rollback switch, the unpacked extension driven in
-Chromium: unpaired message, wrong code refused, pairing, answers and
-history read, unpair. Migration 0038 up, down, up on PostgreSQL 16.
+## Approved authentication surface (2026-10-15)
+
+The owner approved a separate cinematic Day and Night surface for authentication.
+It changes presentation and routing around the existing owner-only security model;
+it does not create another identity system.
+
+- `/login` renders live text, buttons and accessible forms over decorative auth
+  artwork. The Email control opens the existing password form and preserves safe
+  deep-link return behavior.
+- Google and Microsoft controls are part of the approved composition, but no OIDC
+  implementation or provider configuration exists. They state that fact and offer
+  Email. They never simulate a successful login or create an owner.
+- `Create account` opens the existing first-owner bootstrap only when no owner
+  exists and setup is allowed. Once an owner exists, it explains that this is a
+  private one-owner workspace.
+- `/logout` performs the authenticated POST first. Only after the API confirms
+  revocation does the browser reach `/signed-out`. The signed-out route is public
+  and is a success state, not a pre-logout confirmation.
+- `/` is now a small public informational route so the signed-out secondary action
+  has a real public destination. `/terms` and `/privacy` are public as well.
+- The extension pairing token, its narrow read-only scope and immediate revocation
+  behavior are unchanged and covered by the browser and extension tests.
+
+The visual reference kit remains local under ignored `design/`; no private data or
+reference screenshots are committed. Production auth artwork lives in
+`web/public/auth/` and contains decoration only, with no baked-in copy or controls.
+
+**Verified for this surface.** The 51 backend authentication tests, all 80
+Next.js Playwright tests, the 185-case extension rules test, lint, TypeScript
+and the production build pass. The browser suite covers anonymous API refusal,
+CSRF, safe return paths, session logout, provider unavailable states and
+extension pairing plus revocation.

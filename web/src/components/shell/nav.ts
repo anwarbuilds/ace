@@ -40,7 +40,7 @@ export const NAV: NavGroup[] = [
     items: [
       { href: "/app/coverage", label: "Coverage", short: "Coverage", icon: "globe" },
       { href: "/app/settings", label: "Settings", short: "Settings", icon: "settings" },
-      { href: "/app/sign-out", label: "Sign out", short: "Sign out", icon: "signout" },
+      { href: "/logout", label: "Sign out", short: "Sign out", icon: "signout" },
     ],
   },
 ];

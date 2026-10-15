@@ -13,7 +13,13 @@ const anon = base.extend({
 anon("a signed-out visit to the app goes to sign in", async ({ page }) => {
   await page.goto("/app/opportunities");
   await expect(page).toHaveURL(/\/login\?next=%2Fapp%2Fopportunities$/);
-  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Career Intelligence Always On" })).toBeVisible();
+});
+
+anon("the public home is available without a session", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Career Intelligence Always On" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
 });
 
 anon("the API refuses an anonymous reader", async ({ request }) => {
@@ -35,7 +41,7 @@ for (const theme of ["dark", "light"] as const) {
     await setThemeCookies(context, baseURL!, theme);
     const errors = watchErrors(page);
     await page.goto("/login");
-    await expect(page.locator(".brand-name")).toHaveText("ace");
+    await expect(page.locator(".auth-wordmark").first()).toHaveText("ace");
     expect(await page.evaluate(TEXT_SCAN)).toEqual([]);
     expect(await page.evaluate(DRAWN_SCAN)).toEqual([]);
     expect(errors).toEqual([]);
@@ -44,7 +50,8 @@ for (const theme of ["dark", "light"] as const) {
 
 anon("a wrong password says so and stays on the page", async ({ page }) => {
   await page.goto("/login");
-  await page.getByLabel("Email").fill(OWNER.email);
+  await page.getByRole("button", { name: "Continue with Email" }).click();
+  await page.getByRole("textbox", { name: "Email", exact: true }).fill(OWNER.email);
   await page.getByLabel("Password").fill("not the demo password");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.locator(".auth-err")).toHaveText("That email and password do not match.");
@@ -53,7 +60,8 @@ anon("a wrong password says so and stays on the page", async ({ page }) => {
 
 anon("signing in returns to the page that was asked for", async ({ page }) => {
   await page.goto("/login?next=%2Fapp%2Fanswers");
-  await page.getByLabel("Email").fill(OWNER.email);
+  await page.getByRole("button", { name: "Continue with Email" }).click();
+  await page.getByRole("textbox", { name: "Email", exact: true }).fill(OWNER.email);
   await page.getByLabel("Password").fill(OWNER.password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/app\/answers$/);
@@ -62,7 +70,8 @@ anon("signing in returns to the page that was asked for", async ({ page }) => {
 
 anon("next cannot send the reader to another site", async ({ page }) => {
   await page.goto("/login?next=%2F%2Fevil.example%2F");
-  await page.getByLabel("Email").fill(OWNER.email);
+  await page.getByRole("button", { name: "Continue with Email" }).click();
+  await page.getByRole("textbox", { name: "Email", exact: true }).fill(OWNER.email);
   await page.getByLabel("Password").fill(OWNER.password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/app\/pulls$/);
@@ -71,10 +80,19 @@ anon("next cannot send the reader to another site", async ({ page }) => {
 anon("a deep link survives signing in", async ({ page }) => {
   await page.goto("/app/analytics");
   await expect(page).toHaveURL(/\/login\?next=%2Fapp%2Fanalytics$/);
-  await page.getByLabel("Email").fill(OWNER.email);
+  await page.getByRole("button", { name: "Continue with Email" }).click();
+  await page.getByRole("textbox", { name: "Email", exact: true }).fill(OWNER.email);
   await page.getByLabel("Password").fill(OWNER.password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/app\/analytics$/);
+});
+
+anon("unconfigured providers do not claim a successful sign-in", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByRole("heading", { name: "Google sign-in" })).toBeVisible();
+  await expect(page.getByText("This private workspace has not configured Google sign-in.")).toBeVisible();
+  await expect(page).toHaveURL(/\/login$/);
 });
 
 test("pages carry the security headers", async ({ page }) => {
@@ -125,11 +143,13 @@ test("the extension page pairs it, and the token reads only answers", async ({ p
 });
 
 test("signing out ends the session", async ({ page }) => {
-  await page.goto("/app/sign-out");
-  await expect(page.getByRole("heading", { name: "Sign out" })).toBeVisible();
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await expect(page).toHaveURL(/\/login\?signed_out=1$/);
-  await expect(page.getByText("You are signed out.")).toBeVisible();
+  await page.goto("/signed-out");
+  await expect(page).toHaveURL(/\/app\/pulls$/);
+  await page.goto("/logout");
+  await expect(page).toHaveURL(/\/signed-out$/);
+  await expect(page.getByRole("heading", { name: "You’re signed out" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in again" })).toHaveAttribute("href", "/login");
+  await expect(page.getByRole("link", { name: "Go to public home" })).toHaveAttribute("href", "/");
   await page.goto("/app/pulls");
   await expect(page).toHaveURL(/\/login\?next=%2Fapp%2Fpulls$/);
 });

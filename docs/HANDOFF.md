@@ -105,7 +105,7 @@ excluded kinds unless the user asks.
   jobs, roughly 600 applications tracked, a 66 row answer bank. The scheduler
   polls continuously (five minute cycles; Google every 30 minutes) and alerts
   are one email per closed 15 minute pull.
-- Tests on `next-app`: 1,172 backend tests (hermetic SQLite), 78 Next.js Playwright tests against fictional demo
+- Tests on `next-app`: 1,172 backend tests (hermetic SQLite), 80 Next.js Playwright tests against fictional demo
   data, and 185 extension matcher cases. The retired single-file UI suite was removed; extension DOM tests remain.
 - Done this week: own-site readers for Atlassian, EA, Apple, Shopify, AMD, SIG,
   Booking.com, Groq, Google, Meta, Intuit, Arm, Synopsys and about 25 more
@@ -134,6 +134,13 @@ excluded kinds unless the user asks.
     `ace demo password` exists only in generated demo databases. Details: `docs/knowledge/07`. On the live database
     the owner runs `create_owner` once and pairs the extension; until then the API answers 401 (or set
     `ACE_AUTH=disabled` for a local rollback).
+  - **Approved auth surface (2026-10-15, branch `auth-approved-design`):** `/login` now uses the locked Day and
+    Night cinematic design with live DOM controls and the existing owner session flow. Email opens the real sign-in
+    form. Google and Microsoft remain honest unavailable states because no OIDC backend exists. `/logout` revokes
+    the server session before sending the browser to the exact `/signed-out` success screen. `/` is a public
+    informational page, with public `/terms` and `/privacy`; private `/app/*` routes and extension token scopes are
+    unchanged. Canonical capture command: `cd web && API_ORIGIN=http://127.0.0.1:18000 npm start`, then
+    `WEB_URL=http://127.0.0.1:3000 CHROMIUM_PATH=/usr/bin/google-chrome node scripts/capture-auth-screenshots.mjs`.
   - **Account creation in the browser:** the first visit to `/login` (or the old UI) offers "Create your account"
     while no owner exists; refused afterwards; from a public address it needs `SETUP_TOKEN`. The web app listens on
     127.0.0.1 because Next's rewrites do not forward the browser's address.
@@ -341,7 +348,7 @@ Tests:
 ```
 .venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/browser   # 1172, hermetic
 node extension/test-rules.js                                                 # 185 cases
-cd web && npx playwright test                                                # 78 cases, fictional demo data
+cd web && npx playwright test                                                # 80 cases, fictional demo data
 ACE_BROWSER_TEST_URL=http://127.0.0.1:8000 \
   .venv/bin/python -m pytest backend/tests/browser -q                        # ~4.5 min
 ```

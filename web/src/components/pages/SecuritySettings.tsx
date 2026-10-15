@@ -105,7 +105,7 @@ export function SecuritySettings({
         <p className="eyebrow">Sign-in</p>
         <div className="gaprow">
           <span>Signed in as {email}</span>
-          <Link className="link-btn" href="/app/sign-out">
+          <Link className="link-btn" href="/logout">
             Sign out
           </Link>
         </div>

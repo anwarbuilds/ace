@@ -91,7 +91,7 @@ Everything between those two lists is what this repository contains.
 | **Passing the gate right now** | 989 |
 | **Curated target companies** | 411, of which 283 are reachable |
 | **Poll cadence** | 5 minutes, 6 sources concurrently |
-| **Tests** | 1,172 Python, 78 Playwright, 185 matcher cases |
+| **Tests** | 1,172 Python, 80 Playwright, 185 matcher cases |
 | **Continuously running since** | 2026-08-29 |
 
 ---

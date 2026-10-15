@@ -1,7 +1,7 @@
 # ace web
 
 The Next.js app for ace. It reads and writes through the FastAPI backend in `backend/`; it has no database of its own.
-The old single-file UI stays at FastAPI `/` until this app reaches parity and the owner switches over.
+The app serves the private workspace plus the approved public authentication surface.
 
 ```
 # from the repo root: a fictional demo database and the API on :8000
@@ -11,8 +11,9 @@ ACE_DEMO_COMPANIES=1 DATABASE_URL=sqlite:///ace-demo.db .venv/bin/uvicorn backen
 # here
 npm ci
 npm run dev                     # http://localhost:3000 (API_ORIGIN defaults to http://127.0.0.1:8000)
-npx playwright test             # 39 browser tests; they write marks, so demo data only
+npx playwright test             # 80 browser tests; they write marks, so demo data only
 npx next build                  # production build
+node scripts/capture-auth-screenshots.mjs  # fixed-size auth reference captures
 ```
 
 Map: routes in `src/app/app/`, URL state in `src/lib/listState.ts`, server reads in `src/lib/api.ts`, browser calls in
