@@ -106,7 +106,7 @@ excluded kinds unless the user asks.
   jobs, roughly 600 applications tracked, a 66 row answer bank. The scheduler
   polls continuously (five minute cycles; Google every 30 minutes) and alerts
   are one email per closed 15 minute pull.
-- Tests on `wine-rose-platform`: 1,172 backend tests (hermetic SQLite), 87 Next.js Playwright tests against fictional demo
+- Tests on `wine-rose-platform`: 1,173 backend tests (hermetic SQLite), 87 Next.js Playwright tests against fictional demo
   data, and 185 extension matcher cases. The retired single-file UI suite was removed; extension DOM tests remain.
 - Done this week: own-site readers for Atlassian, EA, Apple, Shopify, AMD, SIG,
   Booking.com, Groq, Google, Meta, Intuit, Arm, Synopsys and about 25 more
@@ -149,6 +149,9 @@ excluded kinds unless the user asks.
     refresh and roll back on save failure. `scripts/no_user_facing_dashes.py` scans production sources. Visual evidence
     is kept locally under ignored `artifacts/wine-rose/`; implementation baseline and decisions are in
     `docs/architecture/2026-10-15-wine-rose-baseline.md`.
+  - **Legacy backend parity (2026-10-15):** the one commit added to `main` after the branches diverged was carried
+    forward. Resume activation now scores only active qualifying and marked jobs instead of the entire historical
+    corpus. This preserves visible scores while avoiding the 45 minute live upload observed on the legacy system.
   - **Account creation in the browser:** the first visit to `/login` (or the old UI) offers "Create your account"
     while no owner exists; refused afterwards; from a public address it needs `SETUP_TOKEN`. The web app listens on
     127.0.0.1 because Next's rewrites do not forward the browser's address.
@@ -354,7 +357,7 @@ curl localhost:8000/healthz
 Tests:
 
 ```
-.venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/browser   # 1172, hermetic
+.venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/browser   # 1173, hermetic
 node extension/test-rules.js                                                 # 185 cases
 cd web && npm run check:dashes && npm run typecheck && npm run lint && npm run build
 cd web && npx playwright test                                                # 87 cases, fictional demo data

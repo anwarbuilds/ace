@@ -16,6 +16,10 @@ Verified on 2026-10-15 against the current `wine-rose-platform` branch and the l
 | Text guard | Runtime MutationObserver and Playwright visible-text and drawn-bar checks exist | Add a static user-facing source scanner that excludes fixtures, tests, comments, and the guard patterns themselves. Expand rendered coverage to public pages, all 12 routes, and dynamic states in both themes. |
 | Tests | Backend auth and mark tests, Next.js Playwright tests, production build, and 185 extension matcher cases exist | Add total consistency, first mark, duplicate click, clear, status promotion, reload, failed rollback, external history, filters, focus refresh, and screenshot coverage. |
 
+The final legacy `main` change after the branch point was audited and carried forward on 2026-10-15. Resume activation
+now bounds synchronous scoring to active qualifying and marked jobs. The affected tests pass, and the full backend
+suite reports 1,173 passing tests.
+
 ## Route gap matrix
 
 | Route | Real feature status | Visual gap | Primary files |
