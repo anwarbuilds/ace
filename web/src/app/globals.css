@@ -1598,7 +1598,8 @@ html[data-theme="light"] .wine-art-a .outer{fill:url(#wine-a-light);stroke:#db94
 .wine-button:hover{background:var(--hover);transform:translateY(-1px)}.wine-button.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 9px 24px rgba(166,41,87,.2)}.wine-button.primary:hover{background:var(--accent-hover)}.wine-button.small{min-height:34px;padding:7px 12px;font-size:12px;border-radius:9px}
 
 /* Public home */
-.wine-home .wine-art-a{left:auto;right:clamp(18px,6vw,100px);top:130px;width:clamp(360px,39vw,600px)}
+.wine-home .wine-art-a{left:auto;right:7%;top:118px;width:min(38vw,540px);height:560px;max-width:none;opacity:.73;filter:drop-shadow(0 34px 38px rgba(136,20,69,.25));transform:rotate(-4deg)}
+html[data-theme="light"] .wine-home .wine-art-a{opacity:.5;filter:drop-shadow(0 36px 28px rgba(143,58,95,.13))}
 .wine-home-hero{position:relative;z-index:2;min-height:calc(100vh - 92px);display:flex;align-items:center;padding:52px clamp(30px,7vw,102px) 80px}
 .wine-home-copy{max-width:640px}.wine-kicker,.wine-home-micro{display:flex;align-items:center;gap:10px;color:var(--text-secondary);font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:760}.wine-kicker i,.wine-home-micro i,.wine-preview-top i,.wine-preview-sidebar small i,.wine-preview-pull header>i{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent);flex:none}.wine-kicker b,.wine-home-micro b{color:var(--accent);font-size:10px}
 .wine-home-copy h1{font-size:clamp(62px,6.8vw,98px);line-height:1.02;letter-spacing:-.068em;margin:34px 0 20px;font-weight:820}.wine-home-copy h1 em{font-style:normal;color:color-mix(in srgb,var(--text) 78%,var(--accent))}

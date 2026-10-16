@@ -13,12 +13,12 @@ const anon = base.extend({
 anon("a signed-out visit to the app goes to sign in", async ({ page }) => {
   await page.goto("/app/opportunities");
   await expect(page).toHaveURL(/\/login\?next=%2Fapp%2Fopportunities$/);
-  await expect(page.getByRole("heading", { name: "Career intelligence, always on." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Career intelligence." })).toBeVisible();
 });
 
 anon("the public home is available without a session", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Career intelligence, always on." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Career intelligence." })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in", exact: true }).first()).toHaveAttribute("href", "/login");
 });
 

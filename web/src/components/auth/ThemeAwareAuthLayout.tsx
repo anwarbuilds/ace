@@ -28,7 +28,7 @@ export function ThemeAwareAuthLayout({
         {intro ? (
           <section className="auth-intro">
             <span>{intro}</span>
-            <h2>Career intelligence,<br />always on.</h2>
+            <h2>Career<br />intelligence.</h2>
             <p>Grow at your own pace.</p>
             {intro === "Career intelligence" ? <small>Your engineering opportunities, applications and resumes in one private workspace.</small> : null}
           </section>
