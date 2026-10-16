@@ -298,7 +298,9 @@ creation. Do not enable paid upgrades, paid load balancers or paid databases.
 The backup script is `deploy/oracle/backup.sh`. It writes a mode 600 PostgreSQL
 custom dump compressed with gzip, retains 14 days locally and can upload to a
 private OCI Object Storage bucket when `OCI_BACKUP_BUCKET` is set and the OCI
-CLI is configured.
+CLI is configured. The deployment kit includes a 14-day Object Storage
+lifecycle rule and a 15 GiB upload ceiling, leaving headroom inside Oracle's
+published 20 GB Always Free Object Storage allowance.
 
 ## Git and GitHub
 
@@ -350,6 +352,8 @@ and live cutover require these owner actions:
 - Added privacy-safe source and target inventory tooling.
 - Added the Oracle production Compose, Caddy HTTPS, backup script and operating
   guide.
+- Bounded offsite backup retention with a 14-day lifecycle rule and a hard
+  upload ceiling so ACE backups cannot silently consume the full free quota.
 - Completed a migration rehearsal from a private dump of the real database.
   Restore, migration and the five-resume Studio bridge succeeded. Temporary
   dump and rehearsal database files were deleted afterward.

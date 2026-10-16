@@ -143,8 +143,22 @@ ls -lh private-backups
 ```
 
 Set `OCI_BACKUP_BUCKET` only for a private Object Storage bucket after the OCI
-CLI is configured. If ACE is installed at `/opt/ace` under the `ubuntu` user,
-install the included daily systemd timer:
+CLI is configured. Use a dedicated bucket with versioning disabled. Install the
+14-day deletion policy before the first upload. This command replaces any
+existing lifecycle policy, which is why the bucket must be dedicated to ACE.
+
+```bash
+oci os object-lifecycle-policy put \
+  --bucket-name "$OCI_BACKUP_BUCKET" \
+  --items file://deploy/oracle/object-lifecycle-items.json \
+  --force
+```
+
+The backup script also measures existing ACE objects before every upload and
+refuses the upload if it would cross the default 15 GiB ceiling. This leaves
+headroom within Oracle's documented 20 GB Always Free Object Storage allowance.
+If ACE is installed at `/opt/ace` under the `ubuntu` user, install the included
+daily systemd timer:
 
 ```bash
 sudo cp deploy/oracle/ace-backup.service /etc/systemd/system/

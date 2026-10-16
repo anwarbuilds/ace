@@ -1,0 +1,15 @@
+[
+  {
+    "action": "DELETE",
+    "isEnabled": true,
+    "name": "delete-ace-backups-after-14-days",
+    "objectNameFilter": {
+      "exclusionPatterns": [],
+      "inclusionPatterns": [],
+      "inclusionPrefixes": ["ace-"]
+    },
+    "target": "objects",
+    "timeAmount": 14,
+    "timeUnit": "DAYS"
+  }
+]
