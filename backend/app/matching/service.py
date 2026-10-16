@@ -1,9 +1,10 @@
-"""Resume storage and corpus re-scoring for ACE.
+"""Resume storage and re-scoring for ACE.
 
-Uploading a resume re-scores every stored job. That is cheap because
-scoring is keyword overlap over already-extracted text, not a model
-call, so the whole corpus is re-ranked in one pass rather than as a
-background job the user waits on.
+Uploading a resume re-scores the jobs a page can show: the queue and
+anything the user has marked. Scoring is keyword overlap over stored
+text, not a model call, so that set is re-ranked in the upload request
+rather than as a background job the user waits on. Closed and rejected
+postings are kept but not re-scored.
 
 Scores are derived data. Losing them costs a rebuild, which is why they
 live in their own table rather than on the job.
@@ -19,8 +20,10 @@ import hashlib
 import logging
 
 from sqlalchemy import (
+    and_,
     delete,
     func,
+    or_,
     select,
     update,
 )
@@ -28,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.db.models import (
     JobEvaluationRecord,
+    JobMarkRecord,
     JobRecord,
     JobResumeScoreRecord,
     ResumeRecord,
@@ -145,16 +149,37 @@ def store_resume(
     return record
 
 
+def _shown_jobs():
+    """Return the condition for jobs a page can show a score for."""
+
+    return or_(
+        and_(
+            JobRecord.is_active.is_(True),
+            JobEvaluationRecord.eligibility_status == "PASS",
+        ),
+        JobRecord.id.in_(select(JobMarkRecord.job_id)),
+    )
+
+
 def rescore_corpus(
     session: Session,
     *,
     resume: ResumeRecord,
 ) -> int:
-    """Score every stored job against one resume.
+    """Score the queue and marked jobs against one resume.
 
     Returns:
         The number of jobs scored.
     """
+
+    shown = (
+        select(JobRecord.id)
+        .join(
+            JobEvaluationRecord,
+            JobEvaluationRecord.job_id == JobRecord.id,
+        )
+        .where(_shown_jobs())
+    )
 
     # Re-extract rather than trusting the stored list. The skills on the
     # record were extracted by whatever vocabulary existed at upload
@@ -188,8 +213,8 @@ def rescore_corpus(
                 JobResumeScoreRecord.job_id,
                 JobResumeScoreRecord.score,
             ).where(
-                JobResumeScoreRecord.resume_id
-                == resume.id
+                JobResumeScoreRecord.resume_id == resume.id,
+                JobResumeScoreRecord.job_id.in_(shown),
             )
         ).all()
     }
@@ -198,8 +223,8 @@ def rescore_corpus(
         delete(
             JobResumeScoreRecord
         ).where(
-            JobResumeScoreRecord.resume_id
-            == resume.id
+            JobResumeScoreRecord.resume_id == resume.id,
+            JobResumeScoreRecord.job_id.in_(shown),
         )
     )
 
@@ -215,6 +240,7 @@ def rescore_corpus(
             JobEvaluationRecord.job_id
             == JobRecord.id,
         )
+        .where(_shown_jobs())
     ).all()
 
     scored = 0
@@ -308,8 +334,8 @@ def score_unscored_jobs(
     scored again, and remembers what it moved from.
 
     Bounded to active jobs that passed the gate, the ones the queue
-    shows, so a cycle costs what it found rather than the corpus; an
-    upload still rescores everything. ``limit`` caps one sweep so a
+    shows, so a cycle costs what it found rather than the corpus.
+    ``limit`` caps one sweep so a
     backlog drains over a few cycles instead of stalling one.
 
     Returns:

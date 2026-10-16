@@ -78,6 +78,7 @@ def test_demo_is_fictional_and_realistic(
                 JobResumeScoreRecord.job_id == JobRecord.id,
             )
             .where(
+                JobRecord.is_active.is_(True),
                 JobEvaluationRecord.eligibility_status == "PASS",
                 JobResumeScoreRecord.job_id.is_(None),
             )

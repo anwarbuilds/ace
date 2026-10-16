@@ -1215,11 +1215,11 @@ def create_app() -> FastAPI:
             get_session
         ),
     ) -> dict:
-        """Upload a resume and re-score the whole corpus.
+        """Upload a resume and re-score the jobs a page can show.
 
         Scoring is keyword overlap over already-stored text rather than
-        a model call, so the corpus is re-ranked in this request instead
-        of in a background job the user waits on.
+        a model call, so the queue and marked jobs are re-ranked in this
+        request instead of in a background job the user waits on.
         """
 
         payload = file.file.read(
