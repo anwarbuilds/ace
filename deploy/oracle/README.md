@@ -105,6 +105,18 @@ with the 755 tracked applications. Do not create another account. Sign in with
 the existing owner email and password. If the password is unknown, reset that
 same owner from a hidden prompt after the restore:
 
+If the desired daily login email differs from the restored owner email, rename
+the existing owner first. This preserves all product data, clears the previous
+Google binding and signs out earlier browser sessions:
+
+```bash
+cd /opt/ace
+docker compose -f deploy/oracle/compose.yaml run --rm api \
+  python -m backend.scripts.set_owner_email YOUR_DAILY_EMAIL
+```
+
+Then reset the password only when needed:
+
 ```bash
 cd /opt/ace
 docker compose -f deploy/oracle/compose.yaml run --rm api \

@@ -111,7 +111,7 @@ backup and owner input requirements.
   jobs, roughly 600 applications tracked, a 66 row answer bank. The scheduler
   polls continuously (five minute cycles; Google every 30 minutes) and alerts
   are one email per closed 15 minute pull.
-- Tests on `wine-rose-platform`: 1,190 backend tests (hermetic SQLite), 89 Next.js Playwright tests against fictional demo
+- Tests on `wine-rose-platform`: 1,191 backend tests (hermetic SQLite), 89 Next.js Playwright tests against fictional demo
   data, and 185 extension matcher cases. The retired single-file UI suite was removed; extension DOM tests remain.
 - Done this week: own-site readers for Atlassian, EA, Apple, Shopify, AMD, SIG,
   Booking.com, Groq, Google, Meta, Intuit, Arm, Synopsys and about 25 more

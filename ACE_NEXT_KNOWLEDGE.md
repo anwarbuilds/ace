@@ -153,6 +153,13 @@ development can leave it false; when Resend is configured, the email step is
 used regardless of this switch. This local fallback keeps fictional demo and
 browser testing usable without sending real mail.
 
+If the restored owner's email is not the desired daily login, run
+`python -m backend.scripts.set_owner_email NEW_EMAIL` against the restored
+target database. It renames the existing owner rather than creating another
+one, preserves all product data, clears an earlier Google subject, revokes
+browser sessions and consumes pending email codes. The address is deliberately
+not stored in this public document.
+
 Google sign-in uses the OpenID Connect authorization code flow. ACE requests
 only `openid email`. The browser flow uses short-lived HttpOnly state and nonce
 cookies. The API validates the Google signature, issuer, audience, expiration,
@@ -260,7 +267,7 @@ source and target equality is checked during final cutover after the scheduler
 write freeze.
 
 After the email verification implementation, the full local validation passed:
-1,190 backend tests, 89 Playwright browser tests, 185 extension matcher cases,
+1,191 backend tests, 89 Playwright browser tests, 185 extension matcher cases,
 TypeScript, ESLint, the production Next.js build, and the source-level
 forbidden-dash scan. The Playwright run used an isolated fictional SQLite
 database and covered the sign-in code prompt and password reset code form.

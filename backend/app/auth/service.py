@@ -177,6 +177,50 @@ def set_password(
     revoke_all_sessions(session, user, now=now)
 
 
+def set_owner_email(
+    session: Session,
+    user: UserRecord,
+    email: str,
+    *,
+    now: datetime,
+) -> None:
+    """Move the single owner login to a new verified email address.
+
+    Existing product data belongs to the database, not the email string, so
+    it stays in place. Browser sessions and pending email codes are revoked,
+    and a previous Google subject is cleared so the new address can bind on
+    its first verified Google sign-in.
+    """
+
+    email = _email(email)
+    if "@" not in email or len(email) > 320:
+        raise AuthRefused("invalid_email", "Enter a valid email address.")
+    if user.role != OWNER or not user.is_active:
+        raise AuthRefused("not_owner", "The active owner account was not found.")
+
+    existing = find_user(session, email)
+    if existing is not None and existing.id != user.id:
+        raise AuthRefused(
+            "email_exists",
+            "That email address already belongs to another account.",
+        )
+
+    if user.email == email:
+        return
+
+    user.email = email
+    user.google_subject = None
+    revoke_all_sessions(session, user, now=now)
+    session.execute(
+        update(AuthCodeRecord)
+        .where(
+            AuthCodeRecord.user_id == user.id,
+            AuthCodeRecord.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
+
+
 # ----------------------------------------------------------------------
 # Throttling
 # ----------------------------------------------------------------------

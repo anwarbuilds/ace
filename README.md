@@ -91,7 +91,7 @@ Everything between those two lists is what this repository contains.
 | **Passing the gate right now** | 989 |
 | **Curated target companies** | 411, of which 283 are reachable |
 | **Poll cadence** | 5 minutes, 6 sources concurrently |
-| **Tests** | 1,190 Python, 89 Playwright, 185 matcher cases |
+| **Tests** | 1,191 Python, 89 Playwright, 185 matcher cases |
 | **Continuously running since** | 2026-08-29 |
 
 ---
@@ -528,7 +528,7 @@ existing production database.
 ## Testing
 
 ```bash
-python -m pytest backend/tests -q        # 1,190 tests, plus browser skips when services are absent
+python -m pytest backend/tests -q        # 1,191 tests, plus browser skips when services are absent
 python -m pytest backend/tests -m browser # real Chrome, over DevTools protocol
 cd extension && node test-rules.js        # 185 matcher cases
 cd web && npx playwright test              # 89 browser tests against a demo database
@@ -562,7 +562,7 @@ backend/
     applications/   Reads a tracker sheet, matches rows to stored postings
     answers/        What each application question is, and the wordings forms use
     api/            FastAPI JSON API
-  tests/            1,190 tests, including extension DOM checks
+  tests/            1,191 tests, including extension DOM checks
   migrations/       Alembic, currently at 0041
 
 web/                Next.js application and its Playwright browser suite

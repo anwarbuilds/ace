@@ -918,6 +918,50 @@ def test_the_cli_refuses_mismatched_passwords(factory, monkeypatch) -> None:
         assert service.owner_exists(session) is False
 
 
+def test_owner_email_command_preserves_data_and_clears_old_auth(
+    factory, monkeypatch, capsys
+) -> None:
+    import backend.app.db.session as db_session
+    from backend.scripts import set_owner_email
+
+    old_email = "old-owner@example.com"
+    new_email = "new-owner@example.com"
+    with factory.begin() as session:
+        user = service.create_owner(
+            session, email=old_email, password=PASSWORD, now=NOW
+        )
+        user.google_subject = "old-google-subject"
+        service.start_session(
+            session,
+            user,
+            user_agent="test",
+            now=NOW,
+            lifetime=timedelta(days=1),
+        )
+        service.start_login_verification(session, user, now=NOW)
+
+    monkeypatch.setattr(db_session, "SessionLocal", factory)
+    assert set_owner_email.main([new_email]) == 0
+    assert "profile data were preserved" in capsys.readouterr().out
+
+    with factory() as session:
+        assert service.find_user(session, old_email) is None
+        user = service.find_user(session, new_email)
+        assert user is not None
+        assert user.google_subject is None
+        auth_session = session.scalar(
+            select(AuthSessionRecord).where(AuthSessionRecord.user_id == user.id)
+        )
+        assert auth_session is not None and auth_session.revoked_at is not None
+        pending = session.scalar(
+            select(AuthCodeRecord).where(
+                AuthCodeRecord.user_id == user.id,
+                AuthCodeRecord.used_at.is_(None),
+            )
+        )
+        assert pending is None
+
+
 
 # ----------------------------------------------------------------------
 # First-run setup in the browser
