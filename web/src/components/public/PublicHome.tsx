@@ -29,7 +29,7 @@ export function PublicHome() {
           </div>
           <div className="wine-home-micro"><i /> One private workspace. <b>•</b> Private by design</div>
         </div>
-        <div className="wine-art-caption"><span>01 / 03</span><b>DISCOVER · DECIDE · APPLY</b></div>
+        <div className="wine-art-caption"><b>DISCOVER · DECIDE · APPLY</b></div>
       </section>
 
       <section className="wine-preview-section" id="inside-ace">
