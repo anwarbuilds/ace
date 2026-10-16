@@ -122,9 +122,10 @@ Applications page combines those same two sources.
 ## Start and verify
 
 ```bash
-docker compose -f deploy/oracle/compose.yaml up -d --build
+docker compose -f deploy/oracle/compose.yaml up -d --build \
+  postgres migrate api web caddy
 docker compose -f deploy/oracle/compose.yaml ps
-docker compose -f deploy/oracle/compose.yaml logs --tail=100 migrate api web scheduler caddy
+docker compose -f deploy/oracle/compose.yaml logs --tail=100 migrate api web caddy
 curl -fsS "https://${ACE_DOMAIN}/healthz"
 ```
 
@@ -205,3 +206,10 @@ run the Resume Studio bridge, compare inventories, and test the cloud UI. Start
 the cloud scheduler only after parity succeeds. Leave the old database intact
 for rollback. Never run both schedulers against separate writable databases
 after cutover because they will diverge.
+
+Start the cloud scheduler only at that final step:
+
+```bash
+docker compose -f deploy/oracle/compose.yaml up -d --build scheduler
+docker compose -f deploy/oracle/compose.yaml logs --tail=100 scheduler
+```
