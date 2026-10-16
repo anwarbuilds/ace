@@ -1074,7 +1074,7 @@ CLEARANCE_BLOCKER_PATTERNS = (
     # Hyphen and space as well as slash: "TS-SCI" and "TS SCI" are the
     # same requirement written by a different recruiter.
     r"\bts\s*[/-]?\s*sci\b",
-    # Bare "TS clearance" — the SCI half is often dropped even though
+    # Bare "TS clearance": the SCI half is often dropped even though
     # the requirement is identical to "TS/SCI".
     r"\bts\s+clearance\b",
     r"\btop\s+secret\b",

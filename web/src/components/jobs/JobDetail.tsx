@@ -198,7 +198,7 @@ export function JobDetail({ job: served, resumeLabel }: { job: Job; resumeLabel:
             ) : null}
 
             <div className="card">
-              <p className="eyebrow">Why this is in your queue</p>
+              <p className="eyebrow">Why this is in your opportunities</p>
               <p className="why">
                 {why.join(" · ")}.
                 <br />

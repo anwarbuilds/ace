@@ -90,7 +90,7 @@ export default async function SkillsPage(props: PageProps<"/app/insights/skills"
                     </div>
                   ))
                 ) : (
-                  <p className="why">Upload a resume to see what your queue asks for.</p>
+                  <p className="why">Upload a resume to see what your opportunities ask for.</p>
                 )}
               </div>
               {gap.length ? (

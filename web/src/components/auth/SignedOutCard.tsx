@@ -20,9 +20,9 @@ function LockMark() {
 
 export function SignedOutCard() {
   return (
-    <AuthCard className="auth-signedout-panel">
+    <AuthCard className="auth-signedout-panel" aria-labelledby="signed-out-title">
       <LockMark />
-      <h1>You’re signed out</h1>
+      <h1 id="signed-out-title">You’re signed out</h1>
       <p className="auth-signedout-copy">
         Your session has ended securely. Sign back in to continue reviewing new pulls and tailoring resumes.
       </p>

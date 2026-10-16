@@ -39,7 +39,7 @@ export function Kpi({
   href,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   foot: ReactNode;
   tone?: "good" | "warn" | "bad";
   href?: string;

@@ -16,7 +16,7 @@ from datetime import (
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.db.models import JobMarkRecord
+from backend.app.db.models import ExternalApplicationRecord, JobMarkRecord
 
 
 REVIEW_STATES = (
@@ -272,12 +272,30 @@ def mark_counts(
             ):
                 open_applications += 1
 
+    external = session.execute(
+        select(
+            ExternalApplicationRecord.application_status,
+        )
+    ).all()
+
+    application_by_status = dict(by_status)
+    external_open = 0
+    for (status,) in external:
+        current = status or "applied"
+        application_by_status[current] = application_by_status.get(current, 0) + 1
+        if current not in CLOSED_STATUSES:
+            external_open += 1
+
     return {
         "saved": saved,
         "archived": archived,
         "applied": applied,
+        "applications_total": applied + len(external),
+        "applications_with_posting": applied,
+        "applications_without_posting": len(external),
         "open_applications": (
-            open_applications
+            open_applications + external_open
         ),
         "by_status": by_status,
+        "application_by_status": application_by_status,
     }

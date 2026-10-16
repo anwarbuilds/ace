@@ -77,7 +77,7 @@ export function ScoreRing({ score }: { score: number | null }) {
           <circle className="trk" cx="46" cy="46" r="40" fill="none" strokeWidth="6" strokeDasharray="2 6" />
         </svg>
         <span className="score-n" style={{ fontSize: 18 }}>
-          n/a
+          Pending
         </span>
       </div>
     );

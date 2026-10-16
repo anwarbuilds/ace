@@ -35,7 +35,7 @@ function jobStem(title: string): string {
   // Split on the raw title: cleaning turns "Agent - Legal" into
   // "Agent, Legal", and the vertical is what varies between reposts.
   const raw = (title || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
-  const parts = raw.split(/\s+[-–—]\s+/);
+  const parts = raw.split(/\s+[-\u2013\u2014]\s+/);
   return clean(parts.length > 1 ? parts[0] : raw).toLowerCase();
 }
 

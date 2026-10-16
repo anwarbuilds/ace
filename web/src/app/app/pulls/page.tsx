@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ApplicationMetric } from "@/components/applications/ApplicationCount";
 import { PullsAlerts } from "@/components/pulls/PullsLog";
 import { PullsTimeline } from "@/components/pulls/PullsTimeline";
 import { NavIcon } from "@/components/shell/NavIcon";
@@ -26,14 +27,6 @@ const STATE_TEXT = {
 
 function n(value: number): string {
   return value.toLocaleString("en-US");
-}
-
-function ageText(seconds: number | null): string {
-  if (seconds == null) return "never";
-  if (seconds < 60) return "just now";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
 }
 
 function Kpi({ label, value, foot, tone }: { label: string; value: string; foot: string; tone?: "good" | "warn" | "bad" }) {
@@ -120,12 +113,7 @@ export default async function PullsPageRoute({ searchParams }: PageProps<"/app/p
           foot={`Answered in 24 hours, of ${n(summary.sources_enabled)} enabled`}
           tone={summary.sources_succeeded < summary.sources_enabled ? "warn" : undefined}
         />
-        <Kpi
-          label="Last successful check"
-          value={ageText(status.age_seconds)}
-          foot={status.last_success_at ? `${clock(status.last_success_at, prefs.tz)} ${zone}, scheduler ${text.value.toLowerCase()}` : "Nothing has answered yet"}
-          tone={status.state === "live" ? "good" : status.state === "delayed" ? "warn" : "bad"}
-        />
+        <ApplicationMetric />
       </section>
 
       <div className="pull-grid">

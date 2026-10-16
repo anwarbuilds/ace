@@ -14,7 +14,7 @@ import {
 
 import { getJson, setCookie } from "@/lib/client";
 import { clean, undash } from "@/lib/format";
-import type { Job, MarkCounts, PullsResponse } from "@/lib/types";
+import type { ApplicationStatus, Job, MarkCounts, PullsResponse } from "@/lib/types";
 
 export type ThemeChoice = "dark" | "light" | "system";
 
@@ -34,7 +34,11 @@ interface AppState {
   setTheme: (t: ThemeChoice) => void;
   cycleTheme: () => void;
   marks: MarkCounts;
-  refreshMarks: () => void;
+  refreshMarks: () => Promise<void>;
+  settleMarks: () => void;
+  transitionApplication: (from: ApplicationStatus | null, to: ApplicationStatus | null) => void;
+  beginJobMutation: (id: number) => boolean;
+  endJobMutation: (id: number) => void;
   toast: (message: string, undo?: () => void) => void;
   /** Optimistic edits to jobs, keyed by id, laid over server data. */
   patches: Record<number, Partial<Job>>;
@@ -48,6 +52,7 @@ interface AppState {
 }
 
 const Ctx = createContext<AppState | null>(null);
+const CLOSED_APPLICATIONS = new Set<ApplicationStatus>(["accepted", "rejected", "withdrawn", "ghosted"]);
 
 export function useApp(): AppState {
   const v = useContext(Ctx);
@@ -127,7 +132,7 @@ function announceNewRoles(data: PullsResponse, onOpen: () => void): void {
 // No em dash reaches the screen, whatever a source wrote: text nodes and
 // the title, placeholder and aria-label attributes are rewritten as
 // they appear. What the user types (textareas) is theirs and left alone.
-const DASH_TEST = /[—―]|\s–\s/;
+const DASH_TEST = /[\u2014\u2015]|\s\u2013\s/;
 const ATTRS = ["title", "placeholder", "aria-label"];
 
 function undashTree(node: Node): void {
@@ -173,6 +178,8 @@ export function AppProvider({
   const [answersOpen, setAnswersOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingJobs = useRef(new Set<number>());
+  const marksChannel = useRef<BroadcastChannel | null>(null);
 
   // Server props are the truth after a refresh; local copies follow them.
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -210,11 +217,77 @@ export function AppProvider({
     toast(`Theme: ${THEME_LABEL[next]}`);
   }, [theme, setTheme, toast]);
 
-  const refreshMarks = useCallback(() => {
-    getJson<MarkCounts>("/api/marks")
-      .then(setMarks)
-      .catch(() => {});
+  const refreshMarks = useCallback(async () => {
+    try {
+      const fresh = await getJson<MarkCounts>("/api/marks");
+      // A focus or visibility refresh may have started just before an
+      // optimistic write. Keep the local transition until that write
+      // settles, then settleMarks fetches the authoritative count.
+      if (!pendingJobs.current.size) setMarks(fresh);
+    } catch {}
   }, []);
+
+  const settleMarks = useCallback(() => {
+    void refreshMarks();
+    marksChannel.current?.postMessage("changed");
+  }, [refreshMarks]);
+
+  const transitionApplication = useCallback((from: ApplicationStatus | null, to: ApplicationStatus | null) => {
+    if (from === to) return;
+    setMarks((current) => {
+      const jobStatuses = { ...current.by_status };
+      const applicationStatuses = { ...current.application_by_status };
+      if (from) {
+        jobStatuses[from] = Math.max(0, (jobStatuses[from] ?? 0) - 1);
+        applicationStatuses[from] = Math.max(0, (applicationStatuses[from] ?? 0) - 1);
+      }
+      if (to) {
+        jobStatuses[to] = (jobStatuses[to] ?? 0) + 1;
+        applicationStatuses[to] = (applicationStatuses[to] ?? 0) + 1;
+      }
+      const totalDelta = from ? (to ? 0 : -1) : to ? 1 : 0;
+      const openDelta = (to && !CLOSED_APPLICATIONS.has(to) ? 1 : 0) - (from && !CLOSED_APPLICATIONS.has(from) ? 1 : 0);
+      return {
+        ...current,
+        applied: Math.max(0, current.applied + totalDelta),
+        applications_total: Math.max(0, current.applications_total + totalDelta),
+        applications_with_posting: Math.max(0, current.applications_with_posting + totalDelta),
+        open_applications: Math.max(0, current.open_applications + openDelta),
+        by_status: jobStatuses,
+        application_by_status: applicationStatuses,
+      };
+    });
+  }, []);
+
+  const beginJobMutation = useCallback((id: number) => {
+    if (pendingJobs.current.has(id)) return false;
+    pendingJobs.current.add(id);
+    return true;
+  }, []);
+
+  const endJobMutation = useCallback((id: number) => {
+    pendingJobs.current.delete(id);
+  }, []);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === "function") {
+      const channel = new BroadcastChannel("ace-marks");
+      channel.onmessage = () => void refreshMarks();
+      marksChannel.current = channel;
+    }
+    const onFocus = () => void refreshMarks();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void refreshMarks();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      marksChannel.current?.close();
+      marksChannel.current = null;
+    };
+  }, [refreshMarks]);
 
   const patchJob = useCallback((id: number, patch: Partial<Job>) => {
     setPatches((p) => ({ ...p, [id]: { ...p[id], ...patch } }));
@@ -333,6 +406,10 @@ export function AppProvider({
       cycleTheme,
       marks,
       refreshMarks,
+      settleMarks,
+      transitionApplication,
+      beginJobMutation,
+      endJobMutation,
       toast,
       patches,
       patchJob,
@@ -352,6 +429,10 @@ export function AppProvider({
       cycleTheme,
       marks,
       refreshMarks,
+      settleMarks,
+      transitionApplication,
+      beginJobMutation,
+      endJobMutation,
       toast,
       patches,
       patchJob,

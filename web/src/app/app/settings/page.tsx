@@ -55,7 +55,7 @@ export default async function SettingsPage() {
             <div className="sect">
               <p className="eyebrow">Appearance</p>
               <ThemeChips />
-              <p className="why">Night is anthracite grey, Day its light version. System follows your operating system.</p>
+              <p className="why">Night uses wine and black. Day uses rose wine and white. System follows your operating system.</p>
             </div>
             {auth?.kind === "session" && auth.email ? (
               <SecuritySettings email={auth.email} sessions={sessions.items} tokens={tokens.items} when={when} />
@@ -71,10 +71,10 @@ export default async function SettingsPage() {
             <div className="sect">
               <p className="eyebrow">Your pipeline</p>
               <div className="cards3">
-                {stat(m?.applied, "Applied")}
+                {stat(m?.applications_total, "Applications")}
                 {stat(m?.open_applications, "Still open")}
-                {stat(m?.by_status.rejected, "Rejected")}
-                {stat(m?.by_status.interviewing, "Interviewing")}
+                {stat(m?.application_by_status.rejected, "Rejected")}
+                {stat(m?.application_by_status.interviewing, "Interviewing")}
               </div>
             </div>
             <div className="sect">

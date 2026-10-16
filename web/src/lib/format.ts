@@ -39,9 +39,9 @@ export const STATUS_LABEL: Record<ApplicationStatus, string> = {
 };
 
 // A dash the user never sees: em dash, horizontal bar, or an en dash
-// with spaces around it (which reads as one). "2–4 years" keeps its
+// with spaces around it. A compact numeric range keeps its range mark.
 // unspaced en dash, because that is a range, not a dash.
-const DASH = /\s*(?:[—―]+|\s–\s)\s*/g;
+const DASH = /\s*(?:[\u2014\u2015]+|\s\u2013\s)\s*/g;
 
 /** Replace any dash a source shipped with the punctuation it stood for. */
 export function undash(text: string): string {
@@ -55,7 +55,7 @@ export function undash(text: string): string {
 /** Normalise a posting title: no dashes, no doubled spaces. */
 export function clean(value: string | null | undefined): string {
   return undash(String(value ?? ""))
-    .replace(/\s*[—–]\s*/g, ", ")
+    .replace(/\s*[\u2014\u2013]\s*/g, ", ")
     // A hyphen with a space on each side is a dash too ("Agent - Legal").
     .replace(/\s+-\s+/g, ", ")
     .replace(/\s+([,;:])/g, "$1")

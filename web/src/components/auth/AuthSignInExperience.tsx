@@ -6,7 +6,6 @@ import { LoginForm } from "./LoginForm";
 import { SetupForm } from "./SetupForm";
 import { AuthCard } from "./AuthCard";
 import { AuthDialog } from "./AuthDialog";
-import { AuthLegalLinks } from "./AuthLegalLinks";
 import { AuthProviderButton } from "./AuthProviderButton";
 import { AuthWordmark } from "./AuthWordmark";
 import { ThemeAwareAuthLayout } from "./ThemeAwareAuthLayout";
@@ -41,18 +40,18 @@ export function AuthSignInExperience({
     else setDialog("create");
   }
 
-  const action = (
+  const action = !ownerExists ? (
     <button className="auth-create" type="button" onClick={openCreate}>
       Create account
     </button>
-  );
+  ) : null;
 
   return (
-    <ThemeAwareAuthLayout action={action}>
+    <ThemeAwareAuthLayout action={action} intro="Career intelligence">
       <AuthCard className="auth-signin-panel">
         <AuthWordmark compact linked={false} />
-        <h1>Career Intelligence<br />Always On</h1>
-        <p className="auth-tagline">Grow at your own pace.</p>
+        <h1>Welcome back</h1>
+        <p className="auth-tagline">Sign in to your ACE account.</p>
         <div className="auth-providers">
           <AuthProviderButton provider="google" featured onClick={() => setDialog("google")}>
             Continue with Google
@@ -65,7 +64,11 @@ export function AuthSignInExperience({
           </AuthProviderButton>
         </div>
         <div className="auth-or"><span>or</span></div>
-        <AuthLegalLinks />
+        <div className="auth-owner-only">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8.5 10V7.5a3.5 3.5 0 0 1 7 0V10" /></svg>
+          Owner-only access
+        </div>
+        <p className="auth-legal">Secure owner authentication is required. Public registration is disabled.</p>
       </AuthCard>
 
       {dialog === "email" ? (

@@ -20,8 +20,8 @@ ace is one person's private career engine. In priority order:
 2. **Make applying fast.** A Chrome extension ("ace autofill") fills
    application forms from an answer bank and never submits. Built, v1.20.0.
 3. **A professional web platform, not a prototype.** Real routes, pagination,
-   sign-in, a proper home page, a polished anthracite grey design in a night
-   and a day theme. The Next.js rebuild is complete on `next-app`; deployment
+   sign-in, a proper home page, and the approved Wine and Rose design in Night
+   and Day themes. The Next.js rebuild is complete on `wine-rose-platform`; deployment
    to the user's machine still needs approval.
 4. **A strong ATS resume system ("Resume Studio").** Resume versions, an ATS
    score and keyword gaps per job are built. Tailored versions and PDF and
@@ -56,9 +56,10 @@ excluded kinds unless the user asks.
   `backend/tests/browser/scans.py`. Port all of them to the new app.
 - The wordmark is **"ace"**, all lowercase. No logo tile, no caption, no
   tagline.
-- Palette is **anthracite grey (RAL 7016, #293133)**, not near-black. Night and
-  day versions, plus System. The user found the first version a bit light and asked for
-  both themes darker; never lighten. Red is budgeted: the active indicator, the one primary action.
+- The current palette is the locked **Wine and Rose V2** system. Night uses wine
+  and black; Day uses rose wine and white; System follows the operating system.
+  The implementation source is `design/ACE_WINE_ROSE_CODEX_IMPLEMENTATION_KIT/`.
+  Do not reinterpret its layout, artwork, colors, typography or spacing.
 - No upload or import of application spreadsheets (removed on request).
 - Every text pair must pass WCAG AA in both themes.
 
@@ -105,7 +106,7 @@ excluded kinds unless the user asks.
   jobs, roughly 600 applications tracked, a 66 row answer bank. The scheduler
   polls continuously (five minute cycles; Google every 30 minutes) and alerts
   are one email per closed 15 minute pull.
-- Tests on `next-app`: 1,172 backend tests (hermetic SQLite), 80 Next.js Playwright tests against fictional demo
+- Tests on `wine-rose-platform`: 1,172 backend tests (hermetic SQLite), 87 Next.js Playwright tests against fictional demo
   data, and 185 extension matcher cases. The retired single-file UI suite was removed; extension DOM tests remain.
 - Done this week: own-site readers for Atlassian, EA, Apple, Shopify, AMD, SIG,
   Booking.com, Groq, Google, Meta, Intuit, Arm, Synopsys and about 25 more
@@ -141,6 +142,13 @@ excluded kinds unless the user asks.
     informational page, with public `/terms` and `/privacy`; private `/app/*` routes and extension token scopes are
     unchanged. Canonical capture command: `cd web && API_ORIGIN=http://127.0.0.1:18000 npm start`, then
     `WEB_URL=http://127.0.0.1:3000 CHROMIUM_PATH=/usr/bin/google-chrome node scripts/capture-auth-screenshots.mjs`.
+  - **Approved Wine and Rose platform (2026-10-15, branch `wine-rose-platform`):** all public, auth and workspace
+    routes use the locked V2 Night and Day design. The home and auth views render the complete angular A as live
+    DOM artwork. Pulls remains the post-login home. Application totals now come from the backend's combined posting
+    and external application history, update optimistically across the shell, synchronize across tabs, persist after
+    refresh and roll back on save failure. `scripts/no_user_facing_dashes.py` scans production sources. Visual evidence
+    is kept locally under ignored `artifacts/wine-rose/`; implementation baseline and decisions are in
+    `docs/architecture/2026-10-15-wine-rose-baseline.md`.
   - **Account creation in the browser:** the first visit to `/login` (or the old UI) offers "Create your account"
     while no owner exists; refused afterwards; from a public address it needs `SETUP_TOKEN`. The web app listens on
     127.0.0.1 because Next's rewrites do not forward the browser's address.
@@ -348,7 +356,8 @@ Tests:
 ```
 .venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/browser   # 1172, hermetic
 node extension/test-rules.js                                                 # 185 cases
-cd web && npx playwright test                                                # 80 cases, fictional demo data
+cd web && npm run check:dashes && npm run typecheck && npm run lint && npm run build
+cd web && npx playwright test                                                # 87 cases, fictional demo data
 ACE_BROWSER_TEST_URL=http://127.0.0.1:8000 \
   .venv/bin/python -m pytest backend/tests/browser -q                        # ~4.5 min
 ```
@@ -413,6 +422,8 @@ deployable, and the live app only changes when the user pulls and rebuilds.
   Applications, Resume Studio, Skills under insights); Saved left the navigation, its data and route kept. Theme and
   time zone are cookies. SDE II targeting proposed, not active, pending the owner's approval of a dry run.
 
+- 2026-10-15: the approved Wine and Rose V2 demo supersedes the anthracite palette across the Next.js platform.
+  Pulls remains home, all metrics use real backend data, and application totals update optimistically and consistently.
 - 2026-10-10: darker anthracite (night and day); no drawn dashes; platform
   rebuild decided: one private user, Next.js and TypeScript, email and password,
   Render; phases above. Resume Studio will replace Resume and Skills.

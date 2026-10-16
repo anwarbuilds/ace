@@ -155,7 +155,7 @@ export default async function StudioOverviewPage() {
                   data.skills_gap.slice(0, 6).map((g) => (
                     <div className="gaprow" key={g.skill}>
                       <span>{g.skill}</span>
-                      <span className="gap-n">in {g.count} of your queue</span>
+                      <span className="gap-n">in {g.count} opportunities</span>
                       <Link className="link-btn" href={`/app/opportunities?q=${encodeURIComponent(g.skill)}`}>
                         View jobs
                       </Link>

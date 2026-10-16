@@ -13,13 +13,13 @@ const anon = base.extend({
 anon("a signed-out visit to the app goes to sign in", async ({ page }) => {
   await page.goto("/app/opportunities");
   await expect(page).toHaveURL(/\/login\?next=%2Fapp%2Fopportunities$/);
-  await expect(page.getByRole("heading", { name: "Career Intelligence Always On" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Career intelligence, always on." })).toBeVisible();
 });
 
 anon("the public home is available without a session", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Career Intelligence Always On" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
+  await expect(page.getByRole("heading", { name: "Career intelligence, always on." })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in", exact: true }).first()).toHaveAttribute("href", "/login");
 });
 
 anon("the API refuses an anonymous reader", async ({ request }) => {
@@ -37,15 +37,22 @@ anon("signed-out pages leak no private data in their HTML", async ({ page }) => 
 });
 
 for (const theme of ["dark", "light"] as const) {
-  anon(`the sign-in page renders cleanly in ${theme}`, async ({ page, context, baseURL }) => {
-    await setThemeCookies(context, baseURL!, theme);
-    const errors = watchErrors(page);
-    await page.goto("/login");
-    await expect(page.locator(".auth-wordmark").first()).toHaveText("ace");
-    expect(await page.evaluate(TEXT_SCAN)).toEqual([]);
-    expect(await page.evaluate(DRAWN_SCAN)).toEqual([]);
-    expect(errors).toEqual([]);
-  });
+  for (const route of ["/", "/login", "/signed-out"] as const) {
+    anon(`${route} renders cleanly in ${theme}`, async ({ page, context, baseURL }) => {
+      await setThemeCookies(context, baseURL!, theme);
+      const errors = watchErrors(page);
+      await page.goto(route);
+      await expect(page.locator(".auth-wordmark").first()).toHaveText("ace");
+      await expect(page.locator(".wine-art-a")).toBeVisible();
+      const art = await page.locator(".wine-art-a").boundingBox();
+      expect(art).not.toBeNull();
+      expect(art!.x).toBeGreaterThanOrEqual(0);
+      expect(art!.x + art!.width).toBeLessThanOrEqual(1440);
+      expect(await page.evaluate(TEXT_SCAN)).toEqual([]);
+      expect(await page.evaluate(DRAWN_SCAN)).toEqual([]);
+      expect(errors).toEqual([]);
+    });
+  }
 }
 
 anon("a wrong password says so and stays on the page", async ({ page }) => {

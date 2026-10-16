@@ -11,7 +11,7 @@ export default async function SignedOutPage() {
   if (status?.signed_in) redirect("/app/pulls");
 
   return (
-    <ThemeAwareAuthLayout>
+    <ThemeAwareAuthLayout intro="Private workspace">
       <SignedOutCard />
     </ThemeAwareAuthLayout>
   );

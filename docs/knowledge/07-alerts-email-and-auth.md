@@ -219,6 +219,13 @@ additive. Owner from `python -m backend.scripts.create_owner EMAIL`
 - "--reset" in UI text reads as a dash in Geist. UI copy names the
   command without flags.
 
+## Approved authentication presentation (2026-10-15)
+
+The secure owner session, CSRF checks, throttling, reset flow and extension pairing above remain unchanged. The public
+home, sign-in and signed-out routes now use the approved Wine and Rose V2 presentation in Night and Day themes. Email
+opens the real owner sign-in dialog. Google and Microsoft show honest unavailable dialogs because the backend has no
+OIDC providers. Signing out revokes the server session before rendering the signed-out success screen.
+
 ## Approved authentication surface (2026-10-15)
 
 The owner approved a separate cinematic Day and Night surface for authentication.

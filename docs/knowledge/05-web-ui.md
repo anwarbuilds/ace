@@ -153,7 +153,27 @@ Skills and Resume statistics, and is one click away in the Queue itself.
 
 ---
 
+## Wine and Rose V2 platform (2026-10-15)
+
+> **Status:** Current. Supersedes the anthracite palette and visual direction below. Historical interaction and data-integrity decisions still apply.
+
+The locked reference is `design/ACE_WINE_ROSE_CODEX_IMPLEMENTATION_KIT/references/ACE_Wine_Rose_Full_Platform_Demo_v2.html`.
+Night uses wine and black; Day uses rose wine and white. The cinematic public and authentication views include the full
+angular A, red lighting, reflective floor and lowercase `ace` wordmark. Workspace routes share the same tokens, sidebar,
+top bar, card treatment and typography while keeping their real controls and backend data.
+
+Pulls remains the first authenticated route. Application totals are authoritative backend data: marked postings plus
+external application history, counted once. A mark mutation updates all visible totals immediately, persists across
+refresh, synchronizes between tabs and rolls back if the write fails. A pending mutation cannot be overwritten by a
+slower refresh response.
+
+The source scanner `scripts/no_user_facing_dashes.py` covers production web, backend and extension source. Playwright
+also checks rendered text and drawn ornaments in both themes. Visual captures and matched comparisons live in the
+ignored `artifacts/wine-rose/` directory so fictional evidence never enters the public repository.
+
 ## Redesign: anthracite grey (2026-10-09/10)
+
+> **Status:** Superseded 2026-10-15 by 'Wine and Rose V2 platform' above.
 
 Supersedes the purple-and-gold palette below; the table-first layout,
 combined sorts, tiers and the job page as its own page all stand.

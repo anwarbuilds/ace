@@ -29,6 +29,7 @@ from backend.app.api.queries import (
 )
 from backend.app.db.base import Base
 from backend.app.db.models import (
+    ExternalApplicationRecord,
     JobEvaluationRecord,
     JobRecord,
 )
@@ -440,6 +441,34 @@ def test_marks_do_not_multiply_the_listing(
         assert len(
             page.items
         ) == 4
+
+
+def test_application_total_includes_external_history_once(
+    session_factory,
+) -> None:
+    with session_factory() as session:
+        job = add_job(session, index=1)
+        set_mark(session, job_id=job.id, application_status="interviewing", now=NOW)
+        session.add(
+            ExternalApplicationRecord(
+                company="Historical Systems",
+                title="Software Engineer",
+                match_key="historical systems software engineer",
+                applied_at=NOW - timedelta(days=30),
+                application_status="rejected",
+            )
+        )
+        session.flush()
+
+        counts = mark_counts(session)
+
+        assert counts["applied"] == 1
+        assert counts["applications_with_posting"] == 1
+        assert counts["applications_without_posting"] == 1
+        assert counts["applications_total"] == 2
+        assert counts["by_status"] == {"interviewing": 1}
+        assert counts["application_by_status"] == {"interviewing": 1, "rejected": 1}
+        assert counts["open_applications"] == 1
 
 
 def test_applying_records_a_status_not_just_a_date(

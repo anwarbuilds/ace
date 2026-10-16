@@ -9,7 +9,7 @@ export default function NotFound() {
         title="That opportunity could not be found"
         actions={
           <Link className="btn btn-secondary" href="/app/opportunities">
-            Back to queue
+            Back to opportunities
           </Link>
         }
       >

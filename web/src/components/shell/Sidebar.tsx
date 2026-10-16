@@ -20,7 +20,7 @@ const ENGINE: Record<string, string> = {
  *  works, each entry its own route. Icons only on a narrow screen. */
 export function Sidebar({ counts, email }: { counts: Record<string, number | null>; email: string | null }) {
   const path = usePathname();
-  const { lastPoll } = useApp();
+  const { lastPoll, marks } = useApp();
   const now = useNow();
   const state = liveState(lastPoll, now);
   const [collapsed, setCollapsed] = useState(false);
@@ -46,7 +46,7 @@ export function Sidebar({ counts, email }: { counts: Record<string, number | nul
     <aside className={`sb${collapsed ? " collapsed" : ""}`} aria-label="Application navigation">
       <div className="sb-brand-row">
         <Link className="sb-brand" href="/app/pulls" aria-label="ace, Pulls">
-          ace
+          <span>a</span>ce
         </Link>
         <button
           className="sb-collapse"
@@ -64,7 +64,7 @@ export function Sidebar({ counts, email }: { counts: Record<string, number | nul
           <nav className="sb-nav" aria-label={group.label}>
             {group.items.map((item) => {
               const on = isActive(item, path);
-              const count = counts[item.href];
+              const count = item.href === "/app/applications" ? marks.applications_total : counts[item.href];
               return (
                 <Link
                   key={item.href}

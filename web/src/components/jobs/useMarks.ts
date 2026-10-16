@@ -28,10 +28,11 @@ function current(j: Job, key: MarkKey): boolean {
 
 /** Marks with an optimistic update and a toast that can undo them. */
 export function useMarks(listPage?: string) {
-  const { patchJob, hideJob, refreshMarks, toast } = useApp();
+  const { patchJob, hideJob, settleMarks, transitionApplication, beginJobMutation, endJobMutation, toast } = useApp();
 
   const mark = useCallback(
     async (job: Job, key: MarkKey) => {
+      if (!beginJobMutation(job.id)) return;
       const was = current(job, key);
       const body: MarkBody =
         key === "saved"
@@ -67,6 +68,9 @@ export function useMarks(listPage?: string) {
               }
             : { review_state: was ? null : key };
       patchJob(job.id, guess);
+      const fromApplication = job.applied_at ? job.application_status ?? "applied" : null;
+      const toApplication = key === "applied" ? (was ? null : job.application_status ?? "applied") : fromApplication;
+      if (key === "applied") transitionApplication(fromApplication, toApplication);
 
       // Un-marking on the page that lists that mark takes the row away.
       const leaves =
@@ -79,15 +83,20 @@ export function useMarks(listPage?: string) {
       try {
         const res = await putMark(job.id, body);
         patchJob(job.id, fromResult(res));
-        refreshMarks();
+        settleMarks();
         toast(label, async () => {
+          if (!beginJobMutation(job.id)) return;
+          transitionApplication(toApplication, fromApplication);
           try {
             const back = await putMark(job.id, undoBody);
             patchJob(job.id, fromResult(back));
             if (leaves) hideJob(job.id, false);
-            refreshMarks();
+            settleMarks();
           } catch {
+            transitionApplication(fromApplication, toApplication);
             toast("Could not undo that change");
+          } finally {
+            endJobMutation(job.id);
           }
         });
       } catch {
@@ -97,36 +106,51 @@ export function useMarks(listPage?: string) {
           applied_at: job.applied_at,
           application_status: job.application_status,
         });
+        if (key === "applied") transitionApplication(toApplication, fromApplication);
         if (leaves) hideJob(job.id, false);
         toast("Could not save that change");
+      } finally {
+        endJobMutation(job.id);
       }
     },
-    [patchJob, hideJob, refreshMarks, toast, listPage],
+    [patchJob, hideJob, settleMarks, transitionApplication, beginJobMutation, endJobMutation, toast, listPage],
   );
 
   const setStatus = useCallback(
     async (job: Job, status: ApplicationStatus) => {
+      if (!beginJobMutation(job.id)) return;
       const was = job.application_status;
+      const fromApplication = job.applied_at ? was ?? "applied" : null;
+      const toApplication = status;
       patchJob(job.id, { application_status: status, applied_at: job.applied_at ?? new Date().toISOString() });
+      transitionApplication(fromApplication, toApplication);
       try {
         const res = await putMark(job.id, { application_status: status });
         patchJob(job.id, fromResult(res));
-        refreshMarks();
+        settleMarks();
         toast(`${STATUS_LABEL[status]} recorded`, async () => {
+          if (!beginJobMutation(job.id)) return;
+          transitionApplication(toApplication, fromApplication);
           try {
             const back = await putMark(job.id, was ? { application_status: was } : { applied: false });
             patchJob(job.id, fromResult(back));
-            refreshMarks();
+            settleMarks();
           } catch {
+            transitionApplication(fromApplication, toApplication);
             toast("Could not undo that change");
+          } finally {
+            endJobMutation(job.id);
           }
         });
       } catch {
         patchJob(job.id, { application_status: was, applied_at: job.applied_at });
+        transitionApplication(toApplication, fromApplication);
         toast("Could not record that status");
+      } finally {
+        endJobMutation(job.id);
       }
     },
-    [patchJob, refreshMarks, toast],
+    [patchJob, settleMarks, transitionApplication, beginJobMutation, endJobMutation, toast],
   );
 
   return { mark, setStatus };

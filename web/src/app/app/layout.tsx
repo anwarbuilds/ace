@@ -8,7 +8,17 @@ import { apiGetOr, authStatus, signInPath } from "@/lib/api";
 import { getPrefs, getPrevVisit } from "@/lib/prefs";
 import type { Answer, MarkCounts, SystemStatus } from "@/lib/types";
 
-const NO_MARKS: MarkCounts = { saved: 0, archived: 0, applied: 0, open_applications: 0, by_status: {} };
+const NO_MARKS: MarkCounts = {
+  saved: 0,
+  archived: 0,
+  applied: 0,
+  applications_total: 0,
+  applications_with_posting: 0,
+  applications_without_posting: 0,
+  open_applications: 0,
+  by_status: {},
+  application_by_status: {},
+};
 
 // The shell: sidebar, page header and the answers drawer. Layouts persist
 // across navigation, so this is read once per visit and again on each
@@ -29,7 +39,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
   if (status && !status.signed_in) redirect(await signInPath());
 
   const counts: Record<string, number | null> = {
-    "/app/applications": marks.applied || null,
+    "/app/applications": marks.applications_total || null,
     "/app/archive": marks.archived || null,
   };
 

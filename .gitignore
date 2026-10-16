@@ -83,3 +83,6 @@ ace-demo.db
 
 # Local design references (the approved prototype and directive); kept out of the public repo.
 /design/
+
+# Local browser comparison captures generated during visual review.
+/artifacts/

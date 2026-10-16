@@ -134,9 +134,15 @@ export interface PullsResponse {
 export interface MarkCounts {
   saved: number;
   archived: number;
+  /** Applications attached to a stored job. Kept for mark compatibility. */
   applied: number;
+  /** Complete durable history: stored-job marks plus external records. */
+  applications_total: number;
+  applications_with_posting: number;
+  applications_without_posting: number;
   open_applications: number;
   by_status: Partial<Record<ApplicationStatus, number>>;
+  application_by_status: Partial<Record<ApplicationStatus, number>>;
 }
 
 export interface MarkResult {

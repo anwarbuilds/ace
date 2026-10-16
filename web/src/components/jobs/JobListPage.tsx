@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ApplicationCount } from "@/components/applications/ApplicationCount";
 import { EmptyBox, StatusBadge } from "@/components/bits";
 import { Icon } from "@/components/Icon";
 import { Kpi } from "@/components/page/PageParts";
@@ -32,15 +33,15 @@ const TITLES: Record<ListPage, string> = {
   archive: "Archive",
 };
 const EYEBROW: Record<ListPage, string> = {
-  queue: "Daily workspace",
+  queue: "Discover and evaluate",
   saved: "Kept for later",
-  applied: "Daily workspace",
+  applied: "Your application pipeline",
   archive: "Career tools",
 };
 const SUBTITLE: Record<ListPage, string> = {
-  queue: "Every qualifying role ace holds, ranked your way. Nothing that passes your filters is hidden.",
+  queue: "All qualifying roles remain discoverable. Sort by fit and freshness without hiding eligible jobs.",
   saved: "Roles you starred before Saved left the navigation. Kept, never deleted.",
-  applied: "Everything you applied to, with its status and notes. Set a status from the job page as it moves.",
+  applied: "All applications tracked across software, machine learning and forward deployed engineering.",
   archive: "Roles you marked reviewed or not relevant. Restore any of them from its page.",
 };
 interface AppliedSummary {
@@ -111,7 +112,7 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
         <div className="eyebrow">{EYEBROW[page]}</div>
         <div className="head-row">
           <h1 className="h1">{TITLES[page]}</h1>
-          <span className="h1-count">{jobs.total.toLocaleString("en-US")}</span>
+          <span className="h1-count">{page === "applied" ? <ApplicationCount /> : jobs.total.toLocaleString("en-US")}</span>
           <span className="spacer" />
           {page === "applied" ? (
             <a
@@ -133,7 +134,7 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
         <p className="subtitle">{SUBTITLE[page]}</p>
         {applied ? (
           <section className="kpis head-kpis" aria-label="Applications summary">
-            <Kpi label="Applications" value={applied.total.toLocaleString("en-US")} foot={`${applied.without_posting} without a stored posting`} />
+            <Kpi label="Applications" value={<ApplicationCount />} foot={`${applied.without_posting} without a stored posting`} />
             <Kpi
               label="Waiting"
               value={(applied.by_status.applied ?? 0).toLocaleString("en-US")}

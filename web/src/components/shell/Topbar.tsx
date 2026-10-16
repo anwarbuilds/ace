@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { ago } from "@/lib/format";
+import { ApplicationCount } from "@/components/applications/ApplicationCount";
 
 import { THEME_LABEL, useApp, useNow } from "./AppProvider";
 import { LIVE_LABEL, liveState } from "./liveState";
@@ -25,7 +26,7 @@ export function Topbar() {
     <header className="tb">
       <div className="tb-crumb">
         <Link href="/app/pulls" className="tb-ace">
-          ace
+          <span>a</span>ce
         </Link>
         <span className="tb-sep" aria-hidden="true">
           /
@@ -48,6 +49,11 @@ export function Topbar() {
         >
           <NavIcon name={theme === "dark" ? "moon" : theme === "light" ? "sun" : "system"} />
         </button>
+        <Link className="tb-applied" href="/app/applications" aria-label="Open tracked applications">
+          <NavIcon name="send" size="sm" />
+          <span>Applied</span>
+          <strong><ApplicationCount /></strong>
+        </Link>
       </div>
     </header>
   );

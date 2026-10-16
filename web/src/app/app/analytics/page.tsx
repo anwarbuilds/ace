@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ApplicationCount } from "@/components/applications/ApplicationCount";
 import { Bars, DayColumns, Kpi, PageHero } from "@/components/page/PageParts";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGetOr } from "@/lib/api";
@@ -109,11 +110,11 @@ function BreakdownTable({
       </div>
       {rows.map((r) => (
         <Link key={r.key} className="db-tr" role="row" href={r.href}>
-          <span className="db-name">{r.label}</span>
-          <span className="db-num">{r.b.open}</span>
-          <span className="db-num">{r.b.applied}</span>
-          {r.b.open ? <ScoreBar b={r.b} /> : <span className="st-muted">none open</span>}
-          <span className="db-num">{r.b.high}</span>
+          <span className="db-name" role="cell">{r.label}</span>
+          <span className="db-num" role="cell">{r.b.open}</span>
+          <span className="db-num" role="cell">{r.b.applied}</span>
+          {r.b.open ? <span role="cell"><ScoreBar b={r.b} /></span> : <span className="st-muted" role="cell">none open</span>}
+          <span className="db-num" role="cell">{r.b.high}</span>
         </Link>
       ))}
     </div>
@@ -136,7 +137,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps<"/app/an
   if (!d) {
     return (
       <div className="pg">
-        <PageHero eyebrow="Daily workspace" title="Analytics" subtitle="The analysis could not be loaded. Check that the API is running, then reload." />
+        <PageHero eyebrow="Understand what works" title="Analytics" subtitle="The analysis could not be loaded. Check that the API is running, then reload." />
       </div>
     );
   }
@@ -149,13 +150,12 @@ export default async function AnalyticsPage({ searchParams }: PageProps<"/app/an
     <ScrollArea>
       <div className="pg">
         <PageHero
-          eyebrow="Daily workspace"
+          eyebrow="Understand what works"
           title="Analytics"
           subtitle={
             <>
-              Your applications, then what ace is finding and how your resume scores against it.{" "}
-              {d.resume ? `Scored against ${d.resume.label}.` : "No resume is used for matching yet."} Every bar opens the
-              records behind it.
+              Application performance, role distribution and stage progression. Every metric links to underlying records.{" "}
+              {d.resume ? `Resume fit uses ${d.resume.label}.` : "No resume is used for matching yet."}
             </>
           }
           actions={
@@ -189,7 +189,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps<"/app/an
         <section className="kpis" aria-label="Applications">
           <Kpi
             label="Applications"
-            value={a.total.toLocaleString("en-US")}
+            value={<ApplicationCount />}
             foot={`${a.with_posting} with a stored posting, ${a.without_posting} without`}
             href="/app/applications"
           />
@@ -315,11 +315,11 @@ export default async function AnalyticsPage({ searchParams }: PageProps<"/app/an
               </div>
               {d.top_companies.map((c) => (
                 <Link key={c.name} className="db-tr db-co" role="row" href={`/app/opportunities?company=${encodeURIComponent(c.name)}`}>
-                  <span className="db-name">{c.name}</span>
-                  <span className="st-muted">{TIER_LABEL[c.tier] || "Other"}</span>
-                  <span className="db-num">{c.open}</span>
-                  <span className="db-num">{c.best ?? "not scored"}</span>
-                  <span className="db-num">{c.applied}</span>
+                  <span className="db-name" role="cell">{c.name}</span>
+                  <span className="st-muted" role="cell">{TIER_LABEL[c.tier] || "Other"}</span>
+                  <span className="db-num" role="cell">{c.open}</span>
+                  <span className="db-num" role="cell">{c.best ?? "not scored"}</span>
+                  <span className="db-num" role="cell">{c.applied}</span>
                 </Link>
               ))}
             </div>
