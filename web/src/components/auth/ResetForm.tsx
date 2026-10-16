@@ -4,8 +4,8 @@ import { useState } from "react";
 
 import { authErrorText, sendJson } from "@/lib/client";
 
-export function ResetForm({ token }: { token: string }) {
-  const [error, setError] = useState(token ? "" : "This link is incomplete. Ask for a new one from the sign-in page.");
+export function ResetForm({ code: initialCode, email: initialEmail }: { code: string; email: string }) {
+  const [error, setError] = useState("");
   const [done, setDone] = useState(false);
 
   async function submit(form: FormData) {
@@ -15,7 +15,12 @@ export function ResetForm({ token }: { token: string }) {
       return;
     }
     try {
-      await sendJson("POST", "/api/auth/reset/confirm", { token, new_password: password }, { redirectOn401: false });
+      await sendJson(
+        "POST",
+        "/api/auth/reset/confirm",
+        { email: form.get("email"), code: form.get("code"), new_password: password },
+        { redirectOn401: false },
+      );
       setDone(true);
     } catch (err) {
       setError(authErrorText(err));
@@ -36,6 +41,24 @@ export function ResetForm({ token }: { token: string }) {
   return (
     <form className="auth-form" action={submit}>
       <div className="auth-field">
+        <label htmlFor="email">Email</label>
+        <input id="email" name="email" type="email" autoComplete="username" defaultValue={initialEmail} required />
+      </div>
+      <div className="auth-field">
+        <label htmlFor="code">Reset code</label>
+        <input
+          id="code"
+          name="code"
+          type="text"
+          autoComplete="one-time-code"
+          defaultValue={initialCode}
+          minLength={8}
+          maxLength={9}
+          placeholder="ABCD EFGH"
+          required
+        />
+      </div>
+      <div className="auth-field">
         <label htmlFor="password">New password</label>
         <input id="password" name="password" type="password" autoComplete="new-password" minLength={12} required />
       </div>
@@ -48,7 +71,7 @@ export function ResetForm({ token }: { token: string }) {
           {error}
         </p>
       ) : null}
-      <button className="btn btn-primary" type="submit" disabled={!token}>
+      <button className="btn btn-primary" type="submit">
         Set password
       </button>
     </form>

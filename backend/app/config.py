@@ -114,7 +114,11 @@ class Settings(BaseSettings):
     # A browser session lasts this long, then the owner signs in again.
     session_days: int = 30
 
-    # Where the Next.js app is served, for links in password reset mail.
+    # Fail closed when password sign-in cannot deliver its one-time email
+    # code. Keep false only for local development without a mail provider.
+    require_login_email_code: bool = False
+
+    # Where the Next.js app is served for OAuth redirects and web links.
     web_base_url: str = "http://localhost:3000"
 
     # Optional owner-only Google OpenID Connect. The owner account must

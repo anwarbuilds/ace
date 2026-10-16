@@ -15,8 +15,8 @@ uptime guarantee. Keep verified backups outside the VM.
 2. A domain or subdomain whose DNS A record points to the VM public IP.
 3. A Google Cloud Web application OAuth client, after the HTTPS domain works.
 4. The existing ACE database dump, transferred privately and never committed.
-5. Optional Resend credentials for alerts and an optional private Object
-   Storage bucket for offsite backups.
+5. Resend credentials for password sign-in and recovery codes. A private
+   Object Storage bucket for offsite backups remains optional.
 
 Put secrets directly into `.env` on the VM. Do not paste them into an issue,
 chat, commit or shell history.
@@ -45,7 +45,10 @@ openssl rand -hex 32
 ```
 
 Set `ACE_DOMAIN`, `PUBLIC_BASE_URL`, `WEB_BASE_URL`, database values and the
-time zone. Keep `ACE_AUTH=required`.
+time zone. Keep `ACE_AUTH=required` and `REQUIRE_LOGIN_EMAIL_CODE=true`. Set
+`RESEND_API_KEY` and a verified `MAIL_FROM` address before testing password
+sign-in. The deployment intentionally refuses password sign-in when a code
+cannot be delivered.
 
 ## Restore a private copy and verify it
 
@@ -104,7 +107,8 @@ docker compose -f deploy/oracle/compose.yaml logs --tail=100 migrate api web sch
 curl -fsS "https://${ACE_DOMAIN}/healthz"
 ```
 
-Open the site, sign in with the existing owner password, and confirm Pulls,
+Open the site, sign in with the existing owner password and the code delivered
+to the owner's email, and confirm Pulls,
 Applications, Analytics, Answers, Resume Studio and Settings show the expected
 real records. Keep the old scheduler running during this rehearsal so the old
 database remains authoritative.
@@ -127,7 +131,8 @@ docker compose -f deploy/oracle/compose.yaml up -d --force-recreate api
 
 ACE requests only `openid email`. It accepts only the verified email of the
 existing owner and binds the Google account subject on first success. Password
-sign-in remains available for recovery.
+sign-in and password recovery require a one-time email code. Google sign-in
+uses Google's verified email claim and does not send a second code.
 
 ## Backups
 

@@ -142,13 +142,28 @@ scope. Passwords use Argon2id. Browser sessions are stored as hashes, mutation
 requests require a per-session CSRF token, login attempts are throttled, and
 extension tokens can read only answers and work or education history.
 
+Password sign-in uses two steps in production. ACE verifies the password,
+sends an eight-character one-time code to the owner's email, and creates the
+browser session only after that code is confirmed. Sign-in and password reset
+codes expire after 10 minutes, are stored only as SHA-256 hashes, are single
+use, and have database-backed issue and guessing limits. Issuing a new code
+cancels the previous live code. Password recovery asks for the email code
+before accepting a new password, then revokes every existing browser session.
+
+`REQUIRE_LOGIN_EMAIL_CODE=true` is set in the Oracle deployment template. It
+makes password sign-in fail closed if Resend is unavailable or missing. Local
+development can leave it false; when Resend is configured, the email step is
+used regardless of this switch. This local fallback keeps fictional demo and
+browser testing usable without sending real mail.
+
 Google sign-in uses the OpenID Connect authorization code flow. ACE requests
 only `openid email`. The browser flow uses short-lived HttpOnly state and nonce
 cookies. The API validates the Google signature, issuer, audience, expiration,
 issued time, nonce and `email_verified` claim. The verified email must match the
 existing active owner. The first successful login binds Google's stable
 subject, and later logins must present the same subject. Google never creates
-an ACE user. Email and password sign-in remains available for recovery.
+an ACE user. Google already verifies ownership of the email address, so ACE
+does not send a second code after a successful Google callback.
 
 Required cloud values:
 
@@ -157,6 +172,9 @@ GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET
 GOOGLE_REDIRECT_URI=https://YOUR_DOMAIN/api/auth/google/callback
 WEB_BASE_URL=https://YOUR_DOMAIN
+REQUIRE_LOGIN_EMAIL_CODE=true
+RESEND_API_KEY
+MAIL_FROM
 ```
 
 Secrets belong only in the server `.env`, with mode 600. Never put them in this
@@ -244,6 +262,12 @@ exact comparison against a later live inventory correctly showed drift. Exact
 source and target equality is checked during final cutover after the scheduler
 write freeze.
 
+After the email verification implementation, the full local validation passed:
+1,190 backend tests, 89 Playwright browser tests, 185 extension matcher cases,
+TypeScript, ESLint, the production Next.js build, and the source-level
+forbidden-dash scan. The Playwright run used an isolated fictional SQLite
+database and covered the sign-in code prompt and password reset code form.
+
 `backend.scripts.data_inventory` writes only aggregate counts:
 
 ```bash
@@ -258,8 +282,9 @@ expected to add rows to the three Studio tables.
 
 Follow `deploy/oracle/README.md`. Keep the cloud scheduler stopped while the
 legacy scheduler remains authoritative. Verify HTTPS, password sign-in, Google
-sign-in, sign out, Pulls, application counts, Analytics, Resume Studio, Answers,
-Settings and extension pairing.
+sign-in, sign out, delivery of the password sign-in code, forgot-password code
+delivery, Pulls, application counts, Analytics, Resume Studio, Answers, Settings
+and extension pairing.
 
 ### Phase 3: final cutover
 
@@ -331,7 +356,7 @@ and live cutover require these owner actions:
 2. Create or identify the Oracle Cloud Always Free tenancy and home region.
 3. Choose a domain or subdomain and point it to the VM after provisioning.
 4. Create the Google OAuth Web client after HTTPS is available.
-5. Enter Oracle, Google, database and optional Resend secrets directly into the
+5. Enter Oracle, Google, database and required Resend secrets directly into the
    VM `.env`.
 6. Reauthenticate GitHub CLI locally.
 7. Approve the final scheduler write freeze and production cutover after the
@@ -348,6 +373,9 @@ and live cutover require these owner actions:
 - Added migration 0041 for a bound Google owner subject.
 - Added owner-only Google OpenID Connect with full token verification, secure
   cloud cookies and honest unavailable UI state when configuration is absent.
+- Added email verification codes for password sign-in and password recovery,
+  including expiration, single use, resend replacement, guessing limits and a
+  production fail-closed switch.
 - Added the idempotent legacy resume to Resume Studio bridge.
 - Added privacy-safe source and target inventory tooling.
 - Added the Oracle production Compose, Caddy HTTPS, backup script and operating

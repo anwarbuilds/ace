@@ -66,6 +66,11 @@ class LoginRequest(BaseModel):
     password: str = ""
 
 
+class LoginVerifyRequest(BaseModel):
+    email: str = ""
+    code: str = ""
+
+
 class SetupRequest(BaseModel):
     email: str = ""
     password: str = ""
@@ -82,7 +87,8 @@ class ResetRequest(BaseModel):
 
 
 class ResetConfirm(BaseModel):
-    token: str = ""
+    email: str = ""
+    code: str = ""
     new_password: str = ""
 
 
@@ -170,6 +176,10 @@ def _safe_next(value: str | None) -> str:
     return value
 
 
+def _display_code(code: str) -> str:
+    return f"{code[:4]} {code[4:]}"
+
+
 def _google_ready() -> bool:
     settings = get_settings()
     return google.configured(
@@ -216,6 +226,7 @@ def status(
             else None
         ),
         "reset_by_email": mail_configured(),
+        "email_verification": mail_configured(),
         "google_sign_in": _google_ready(),
         "setup_allowed": _setup_allowed(request),
         "setup_needs_token": bool(settings.setup_token)
@@ -426,15 +437,21 @@ def login(
             "No account yet. Reload this page to create one.",
         )
 
+    if get_settings().require_login_email_code and not mail_configured():
+        raise _refuse(
+            503,
+            "email_verification_unavailable",
+            "Email verification is temporarily unavailable. Try again later.",
+        )
+
+    now = _now()
     try:
-        created = service.login(
+        user = service.verify_login_password(
             session,
             email=payload.email,
             password=payload.password,
             ip=client_ip(request),
-            user_agent=request.headers.get("user-agent", ""),
-            now=_now(),
-            lifetime=_lifetime(),
+            now=now,
         )
     except service.AuthRefused as refused:
         # The attempt is recorded even though the request fails.
@@ -442,6 +459,88 @@ def login(
         LOGGER.info("login_refused reason=%s", refused.reason)
         raise _refuse(
             429 if refused.reason == "throttled" else 401,
+            refused.reason,
+            refused.message,
+        ) from None
+
+    if mail_configured():
+        try:
+            code = service.start_login_verification(session, user, now=now)
+        except service.AuthRefused as refused:
+            session.commit()
+            raise _refuse(429, refused.reason, refused.message) from None
+
+        delivered = send(
+            to=user.email,
+            subject="Your ace sign-in code",
+            text=(
+                f"Your ace sign-in code is {_display_code(code)}.\n\n"
+                "It expires in 10 minutes and can be used once.\n\n"
+                "If you did not try to sign in, you can ignore this message."
+            ),
+        )
+        if not delivered:
+            session.rollback()
+            LOGGER.error("login_code_delivery_failed user=%s", user.id)
+            raise _refuse(
+                503,
+                "email_delivery_failed",
+                "The verification email could not be sent. Try again in a moment.",
+            )
+
+        session.commit()
+        LOGGER.info("login_code_sent user=%s", user.id)
+        return {
+            "ok": True,
+            "verification_required": True,
+            "expires_in_seconds": int(service.LOGIN_CODE_TTL.total_seconds()),
+        }
+
+    created = service.start_session(
+        session,
+        user,
+        user_agent=request.headers.get("user-agent", ""),
+        now=now,
+        lifetime=_lifetime(),
+    )
+    session.commit()
+    _set_cookies(
+        response,
+        request,
+        token=created.token,
+        csrf=created.csrf,
+        max_age=int(_lifetime().total_seconds()),
+    )
+    LOGGER.info("login_ok user=%s", created.user.id)
+    return {
+        "ok": True,
+        "email": created.user.email,
+        "verification_required": False,
+    }
+
+
+@router.post("/api/auth/login/verify")
+def verify_login(
+    payload: LoginVerifyRequest,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> dict:
+    _json_only(request)
+    try:
+        created = service.finish_login_verification(
+            session,
+            email=payload.email,
+            code=payload.code,
+            ip=client_ip(request),
+            user_agent=request.headers.get("user-agent", ""),
+            now=_now(),
+            lifetime=_lifetime(),
+        )
+    except service.AuthRefused as refused:
+        session.commit()
+        raise _refuse(
+            429 if refused.reason == "throttled" else 400,
             refused.reason,
             refused.message,
         ) from None
@@ -454,7 +553,7 @@ def login(
         csrf=created.csrf,
         max_age=int(_lifetime().total_seconds()),
     )
-    LOGGER.info("login_ok user=%s", created.user.id)
+    LOGGER.info("login_verified user=%s", created.user.id)
     return {"ok": True, "email": created.user.email}
 
 
@@ -557,7 +656,7 @@ def reset_request(
     _json_only(request)
     answer = {
         "ok": True,
-        "message": "If that address has an account, a reset link is on its way.",
+        "message": "If that address has an account, a reset code is on its way.",
     }
 
     if not mail_configured():
@@ -568,20 +667,24 @@ def reset_request(
     started = service.start_reset(
         session, email=payload.email, ip=client_ip(request), now=_now()
     )
-    session.commit()
-
     if started is not None:
-        user, token = started
-        link = f"{get_settings().web_base_url.rstrip('/')}/login/reset?token={token}"
-        send(
+        user, code = started
+        delivered = send(
             to=user.email,
-            subject="Reset your ace password",
+            subject="Your ace password reset code",
             text=(
                 "Someone asked to reset the password for ace.\n\n"
-                f"Open this link within 30 minutes to choose a new one:\n{link}\n\n"
-                "If it was not you, ignore this message; nothing has changed."
+                f"Your password reset code is {_display_code(code)}.\n\n"
+                "It expires in 10 minutes and can be used once.\n\n"
+                "If it was not you, ignore this message. Nothing has changed."
             ),
         )
+        if not delivered:
+            session.rollback()
+            LOGGER.error("reset_code_delivery_failed user=%s", user.id)
+            return answer
+
+    session.commit()
 
     return answer
 
@@ -595,10 +698,20 @@ def reset_confirm(
     _json_only(request)
     try:
         service.finish_reset(
-            session, token=payload.token, password=payload.new_password, now=_now()
+            session,
+            email=payload.email,
+            code=payload.code,
+            password=payload.new_password,
+            ip=client_ip(request),
+            now=_now(),
         )
     except service.AuthRefused as refused:
-        raise _refuse(400, refused.reason, refused.message) from None
+        session.commit()
+        raise _refuse(
+            429 if refused.reason == "throttled" else 400,
+            refused.reason,
+            refused.message,
+        ) from None
     except WeakPassword as weak:
         raise _refuse(400, "weak_password", str(weak)) from None
     session.commit()

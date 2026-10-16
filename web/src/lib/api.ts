@@ -66,6 +66,7 @@ export interface AuthStatus {
   kind: "session" | "token" | "local" | null;
   email: string | null;
   reset_by_email: boolean;
+  email_verification: boolean;
   google_sign_in: boolean;
   setup_allowed: boolean;
   setup_needs_token: boolean;

@@ -48,11 +48,10 @@ def send(
     """Send one message. Returns whether it actually left.
 
     With no API key configured the message is logged instead. That is
-    deliberate rather than a stub: it keeps a self-hosted instance
-    recoverable without a mail provider, and it is how the reset flow
-    is exercised in development. The caller must not tell the user the
-    difference, or the response becomes an oracle for which addresses
-    have accounts.
+    deliberate rather than a stub for non-secret alert previews. Authentication
+    callers check ``mail_configured`` first and never pass a one-time code to
+    this fallback. The caller must not tell the user whether a reset address
+    exists, or the response becomes an account-discovery oracle.
     """
 
     settings = get_settings()

@@ -111,7 +111,7 @@ backup and owner input requirements.
   jobs, roughly 600 applications tracked, a 66 row answer bank. The scheduler
   polls continuously (five minute cycles; Google every 30 minutes) and alerts
   are one email per closed 15 minute pull.
-- Tests on `wine-rose-platform`: 1,184 backend tests (hermetic SQLite), 87 Next.js Playwright tests against fictional demo
+- Tests on `wine-rose-platform`: 1,190 backend tests (hermetic SQLite), 89 Next.js Playwright tests against fictional demo
   data, and 185 extension matcher cases. The retired single-file UI suite was removed; extension DOM tests remain.
 - Done this week: own-site readers for Atlassian, EA, Apple, Shopify, AMD, SIG,
   Booking.com, Groq, Google, Meta, Intuit, Arm, Synopsys and about 25 more
@@ -162,6 +162,11 @@ backup and owner input requirements.
     history into Resume Studio without changing the matcher's active resume or triggering a rescore. Aggregate-only
     inventory tooling and a single-VM Oracle Compose, Caddy and backup kit are in `deploy/oracle/`. The live legacy
     scheduler and database were not changed. See `ACE_NEXT_KNOWLEDGE.md` for the required rehearsal and cutover.
+  - **Email verification (2026-10-16):** production password sign-in now verifies an eight-character email code
+    before creating a session. Forgot password sends a separate code before accepting a replacement password. Both
+    code types expire after 10 minutes, are hashed, single use and throttled. Oracle sets
+    `REQUIRE_LOGIN_EMAIL_CODE=true`, which fails closed if Resend cannot deliver. Google OIDC continues to use its
+    verified email claim and does not add a second ACE email step.
   - **Account creation in the browser:** the first visit to `/login` (or the old UI) offers "Create your account"
     while no owner exists; refused afterwards; from a public address it needs `SETUP_TOKEN`. The web app listens on
     127.0.0.1 because Next's rewrites do not forward the browser's address.
@@ -327,9 +332,10 @@ redirect. Remaining: a signed-in overview at `/app`, the page by page parity rep
 the switch of FastAPI `/` (only with the owner's approval). The master brief's route names and phases are in
 `docs/architecture/2026-10-14-baseline-and-plan.md`; it supersedes the route list that used to be here.
 
-**Phase 2. Sign-in: done on `next-app`** (2026-10-14). Owner from the CLI, no sign-up; cookie sessions with CSRF;
-throttling; reset by email only when Resend is configured; extension pairing token limited to answers and history;
-rollback switch. Remaining from the brief: typed API (Pydantic response models and generated types).
+**Phase 2. Sign-in: done on `next-app`** (2026-10-14, extended 2026-10-16). Owner from the CLI, no sign-up; cookie
+sessions with CSRF; throttling; one-time email codes for production password sign-in and password recovery;
+extension pairing token limited to answers and history; rollback switch. Remaining from the brief: typed API
+(Pydantic response models and generated types).
 
 **Resume Studio foundation: done on `next-app`** (2026-10-14): knowledge base, versions, checker. Next: tailoring
 without AI (map requirements to verified facts, propose reorderings and wording drawn only from them, side-by-side

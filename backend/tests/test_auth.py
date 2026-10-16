@@ -45,6 +45,7 @@ from backend.app.config import get_settings
 from backend.app.db.base import Base
 from backend.app.db.models import (
     ApiTokenRecord,
+    AuthCodeRecord,
     AuthSessionRecord,
     UserRecord,
 )
@@ -264,6 +265,144 @@ def test_the_owner_signs_in_and_reads(client) -> None:
 
     assert client.get("/api/answers").status_code == 200
     assert client.get("/api/auth/status").json()["email"] == EMAIL
+
+
+def test_email_code_is_required_when_mail_is_configured(
+    client, factory, monkeypatch
+) -> None:
+    monkeypatch.setenv("RESEND_API_KEY", "test-key-not-real")
+    get_settings.cache_clear()
+    sent = []
+    monkeypatch.setattr(
+        "backend.app.api.routers.auth.send",
+        lambda **kwargs: sent.append(kwargs) or True,
+    )
+
+    password_step = _login(client)
+    assert password_step.status_code == 200
+    assert password_step.json()["verification_required"] is True
+    assert not client.cookies.get(SESSION_COOKIE)
+    assert len(sent) == 1
+    match = re.search(r"is ([A-Z0-9]{4} [A-Z0-9]{4})", sent[0]["text"])
+    assert match
+    code = match.group(1)
+
+    wrong = client.post(
+        "/api/auth/login/verify",
+        json={"email": EMAIL, "code": "AAAA AAAA"},
+    )
+    assert wrong.status_code == 400
+    assert not client.cookies.get(SESSION_COOKIE)
+
+    verified = client.post(
+        "/api/auth/login/verify",
+        json={"email": EMAIL, "code": code.lower()},
+    )
+    assert verified.status_code == 200
+    assert client.cookies.get(SESSION_COOKIE)
+    assert client.get("/api/answers").status_code == 200
+
+    replay = TestClient(client.app).post(
+        "/api/auth/login/verify",
+        json={"email": EMAIL, "code": code},
+    )
+    assert replay.status_code == 400
+
+    with factory() as session:
+        row = session.scalar(
+            select(AuthCodeRecord).where(
+                AuthCodeRecord.purpose == "login_verification"
+            )
+        )
+        assert row is not None and row.used_at is not None
+    get_settings.cache_clear()
+
+
+def test_failed_login_code_delivery_creates_no_session(
+    client, factory, monkeypatch
+) -> None:
+    monkeypatch.setenv("RESEND_API_KEY", "test-key-not-real")
+    get_settings.cache_clear()
+    monkeypatch.setattr("backend.app.api.routers.auth.send", lambda **kwargs: False)
+
+    response = _login(client)
+    assert response.status_code == 503
+    assert not client.cookies.get(SESSION_COOKIE)
+    with factory() as session:
+        assert session.scalar(select(AuthSessionRecord)) is None
+        assert session.scalar(
+            select(AuthCodeRecord).where(
+                AuthCodeRecord.purpose == "login_verification"
+            )
+        ) is None
+    get_settings.cache_clear()
+
+
+def test_required_email_verification_fails_closed_without_mail(
+    client, monkeypatch
+) -> None:
+    monkeypatch.setenv("REQUIRE_LOGIN_EMAIL_CODE", "true")
+    monkeypatch.setenv("RESEND_API_KEY", "")
+    get_settings.cache_clear()
+
+    response = _login(client)
+    assert response.status_code == 503
+    assert response.json()["detail"]["reason"] == "email_verification_unavailable"
+    assert not client.cookies.get(SESSION_COOKIE)
+    get_settings.cache_clear()
+
+
+def test_login_verification_code_expires(factory) -> None:
+    with factory.begin() as session:
+        user = service.create_owner(
+            session, email=EMAIL, password=PASSWORD, now=NOW
+        )
+        code = service.start_login_verification(session, user, now=NOW)
+
+    with factory.begin() as session, pytest.raises(service.AuthRefused):
+        service.finish_login_verification(
+            session,
+            email=EMAIL,
+            code=code,
+            ip="203.0.113.9",
+            user_agent="",
+            now=NOW + service.LOGIN_CODE_TTL + timedelta(seconds=1),
+            lifetime=timedelta(days=1),
+        )
+
+
+def test_new_login_code_cancels_the_previous_code(factory) -> None:
+    with factory.begin() as session:
+        user = service.create_owner(
+            session, email=EMAIL, password=PASSWORD, now=NOW
+        )
+        first = service.start_login_verification(session, user, now=NOW)
+        second = service.start_login_verification(
+            session, user, now=NOW + timedelta(seconds=1)
+        )
+
+    with factory.begin() as session, pytest.raises(service.AuthRefused):
+        service.finish_login_verification(
+            session,
+            email=EMAIL,
+            code=first,
+            ip="203.0.113.9",
+            user_agent="",
+            now=NOW + timedelta(seconds=2),
+            lifetime=timedelta(days=1),
+        )
+
+    with factory.begin() as session:
+        created = service.finish_login_verification(
+            session,
+            email=EMAIL,
+            code=second,
+            ip="203.0.113.9",
+            user_agent="",
+            now=NOW + timedelta(seconds=2),
+            lifetime=timedelta(days=1),
+        )
+    assert created.token
 
 
 def test_a_cookie_is_not_secure_on_plain_http_but_is_behind_https(client) -> None:
@@ -616,31 +755,80 @@ def test_reset_answers_the_same_for_any_address(client, monkeypatch) -> None:
 
     assert known.json() == unknown.json()
     assert len(sent) == 1 and sent[0]["to"] == EMAIL
-    assert "/login/reset?token=" in sent[0]["text"]
+    assert "password reset code is" in sent[0]["text"]
+    assert "/login/reset" not in sent[0]["text"]
 
 
-def test_a_reset_link_sets_the_password_once(factory) -> None:
+def test_a_reset_code_sets_the_password_once(factory) -> None:
     with factory.begin() as session:
         service.create_owner(session, email=EMAIL, password=PASSWORD, now=NOW)
-        user, token = service.start_reset(session, email=EMAIL, ip="203.0.113.9", now=NOW)
+        user, code = service.start_reset(session, email=EMAIL, ip="203.0.113.9", now=NOW)
         service.start_session(session, user, user_agent="", now=NOW, lifetime=timedelta(days=1))
 
     with factory.begin() as session:
-        service.finish_reset(session, token=token, password="a brand new passphrase", now=NOW)
+        service.finish_reset(
+            session,
+            email=EMAIL,
+            code=code.lower(),
+            password="a brand new passphrase",
+            ip="203.0.113.9",
+            now=NOW,
+        )
         assert service.active_sessions(session, user, now=NOW) == []
 
     with factory.begin() as session, pytest.raises(service.AuthRefused):
-        service.finish_reset(session, token=token, password="another new passphrase", now=NOW)
+        service.finish_reset(
+            session,
+            email=EMAIL,
+            code=code,
+            password="another new passphrase",
+            ip="203.0.113.9",
+            now=NOW,
+        )
 
 
-def test_a_reset_link_expires(factory) -> None:
+def test_a_reset_code_expires(factory) -> None:
     with factory.begin() as session:
         service.create_owner(session, email=EMAIL, password=PASSWORD, now=NOW)
-        _, token = service.start_reset(session, email=EMAIL, ip="203.0.113.9", now=NOW)
+        _, code = service.start_reset(session, email=EMAIL, ip="203.0.113.9", now=NOW)
 
     with factory.begin() as session, pytest.raises(service.AuthRefused):
-        service.finish_reset(session, token=token, password="a brand new passphrase",
-                             now=NOW + service.RESET_TTL + timedelta(seconds=1))
+        service.finish_reset(
+            session,
+            email=EMAIL,
+            code=code,
+            password="a brand new passphrase",
+            ip="203.0.113.9",
+            now=NOW + service.RESET_TTL + timedelta(seconds=1),
+        )
+
+
+def test_reset_code_http_flow_changes_password(client, monkeypatch) -> None:
+    monkeypatch.setenv("RESEND_API_KEY", "test-key-not-real")
+    get_settings.cache_clear()
+    sent = []
+    monkeypatch.setattr(
+        "backend.app.api.routers.auth.send",
+        lambda **kwargs: sent.append(kwargs) or True,
+    )
+
+    requested = client.post("/api/auth/reset/request", json={"email": EMAIL})
+    assert requested.status_code == 200
+    match = re.search(r"is ([A-Z0-9]{4} [A-Z0-9]{4})", sent[0]["text"])
+    assert match
+    changed = client.post(
+        "/api/auth/reset/confirm",
+        json={
+            "email": EMAIL,
+            "code": match.group(1),
+            "new_password": "a brand new passphrase",
+        },
+    )
+    assert changed.status_code == 200
+    assert _login(client, password="a brand new passphrase").json()[
+        "verification_required"
+    ] is True
+    get_settings.cache_clear()
 
 
 # ----------------------------------------------------------------------

@@ -60,7 +60,15 @@ MAX_PAIRING_FAILURES_PER_IP = 10
 
 PAIRING_TTL = timedelta(minutes=10)
 
-RESET_TTL = timedelta(minutes=30)
+LOGIN_CODE_TTL = timedelta(minutes=10)
+
+RESET_TTL = timedelta(minutes=10)
+
+MAX_CODE_FAILURES_PER_EMAIL = 5
+
+MAX_CODE_FAILURES_PER_IP = 20
+
+MAX_CODE_SENDS_PER_WINDOW = 5
 
 # last_seen_at is written at most this often, so reading a page does not
 # turn every request into a database write.
@@ -212,16 +220,14 @@ def _clear(session: Session, key: str) -> None:
 # ----------------------------------------------------------------------
 
 
-def login(
+def verify_login_password(
     session: Session,
     *,
     email: str,
     password: str,
     ip: str,
-    user_agent: str,
     now: datetime,
-    lifetime: timedelta,
-) -> NewSession:
+) -> UserRecord:
     email_key = "email:" + _email(email)
     ip_key = "ip:" + ip
 
@@ -247,8 +253,133 @@ def login(
 
     _clear(session, email_key)
     _record(session, [email_key], True, now)
+    return user
+
+
+def login(
+    session: Session,
+    *,
+    email: str,
+    password: str,
+    ip: str,
+    user_agent: str,
+    now: datetime,
+    lifetime: timedelta,
+) -> NewSession:
+    """Complete password-only login when email delivery is disabled.
+
+    Production HTTP login uses ``verify_login_password`` followed by a
+    one-time email code. This wrapper preserves local development and the
+    service API without creating a second authentication system.
+    """
+
+    user = verify_login_password(
+        session,
+        email=email,
+        password=password,
+        ip=ip,
+        now=now,
+    )
     return start_session(
         session, user, user_agent=user_agent, now=now, lifetime=lifetime
+    )
+
+
+def start_login_verification(
+    session: Session,
+    user: UserRecord,
+    *,
+    now: datetime,
+) -> str:
+    """Create the only live email code for a verified password login."""
+
+    send_key = f"login-code-send:{user.id}"
+    if _failures(session, send_key, now) >= MAX_CODE_SENDS_PER_WINDOW:
+        raise AuthRefused(
+            "throttled",
+            "Too many verification codes were requested. Wait 15 minutes, then try again.",
+        )
+
+    _record(session, [send_key], False, now)
+    session.execute(
+        update(AuthCodeRecord)
+        .where(
+            AuthCodeRecord.user_id == user.id,
+            AuthCodeRecord.purpose == "login_verification",
+            AuthCodeRecord.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
+    code = new_code()
+    session.add(
+        AuthCodeRecord(
+            code_hash=digest("login:" + code),
+            purpose="login_verification",
+            user_id=user.id,
+            created_at=now,
+            expires_at=now + LOGIN_CODE_TTL,
+        )
+    )
+    session.flush()
+    return code
+
+
+def finish_login_verification(
+    session: Session,
+    *,
+    email: str,
+    code: str,
+    ip: str,
+    user_agent: str,
+    now: datetime,
+    lifetime: timedelta,
+) -> NewSession:
+    """Consume an email code and create the browser session once."""
+
+    normal_email = _email(email)
+    email_key = "login-code-email:" + normal_email
+    ip_key = "login-code-ip:" + ip
+    if (
+        _failures(session, email_key, now) >= MAX_CODE_FAILURES_PER_EMAIL
+        or _failures(session, ip_key, now) >= MAX_CODE_FAILURES_PER_IP
+    ):
+        _record(session, [ip_key], False, now)
+        raise AuthRefused(
+            "throttled",
+            "Too many attempts. Wait 15 minutes, then try again.",
+        )
+
+    user = find_user(session, normal_email)
+    row = session.scalar(
+        select(AuthCodeRecord).where(
+            AuthCodeRecord.code_hash
+            == digest("login:" + normalise_code(code)),
+            AuthCodeRecord.purpose == "login_verification",
+        )
+    )
+    if (
+        user is None
+        or not user.is_active
+        or row is None
+        or row.user_id != user.id
+        or row.used_at is not None
+        or _aware(row.expires_at, now) <= now
+    ):
+        _record(session, [email_key, ip_key], False, now)
+        raise AuthRefused(
+            "invalid_code",
+            "That verification code is invalid or expired. Request a new code.",
+        )
+
+    row.used_at = now
+    _clear(session, email_key)
+    _record(session, [email_key], True, now)
+    return start_session(
+        session,
+        user,
+        user_agent=user_agent,
+        now=now,
+        lifetime=lifetime,
     )
 
 
@@ -521,7 +652,7 @@ def revoke_token(
 def start_reset(
     session: Session, *, email: str, ip: str, now: datetime
 ) -> tuple[UserRecord, str] | None:
-    """A reset token for the address, or None when there is no such
+    """A reset code for the address, or None when there is no such
     account. The caller answers the same either way."""
 
     key = "reset:" + ip
@@ -538,10 +669,19 @@ def start_reset(
     if user is None or not user.is_active:
         return None
 
-    token = new_token()
+    session.execute(
+        update(AuthCodeRecord)
+        .where(
+            AuthCodeRecord.user_id == user.id,
+            AuthCodeRecord.purpose == "password_reset",
+            AuthCodeRecord.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
+    code = new_code()
     session.add(
         AuthCodeRecord(
-            code_hash=digest("reset:" + token),
+            code_hash=digest("reset:" + code),
             purpose="password_reset",
             user_id=user.id,
             created_at=now,
@@ -549,29 +689,56 @@ def start_reset(
         )
     )
     session.flush()
-    return user, token
+    return user, code
 
 
 def finish_reset(
-    session: Session, *, token: str, password: str, now: datetime
+    session: Session,
+    *,
+    email: str,
+    code: str,
+    password: str,
+    ip: str,
+    now: datetime,
 ) -> UserRecord:
+    normal_email = _email(email)
+    email_key = "reset-code-email:" + normal_email
+    ip_key = "reset-code-ip:" + ip
+    if (
+        _failures(session, email_key, now) >= MAX_CODE_FAILURES_PER_EMAIL
+        or _failures(session, ip_key, now) >= MAX_CODE_FAILURES_PER_IP
+    ):
+        _record(session, [ip_key], False, now)
+        raise AuthRefused(
+            "throttled",
+            "Too many attempts. Wait 15 minutes, then try again.",
+        )
+
+    user = find_user(session, normal_email)
     row = session.scalar(
         select(AuthCodeRecord).where(
-            AuthCodeRecord.code_hash == digest("reset:" + token),
+            AuthCodeRecord.code_hash
+            == digest("reset:" + normalise_code(code)),
             AuthCodeRecord.purpose == "password_reset",
         )
     )
 
-    if row is None or row.used_at is not None or _aware(row.expires_at, now) <= now:
+    if (
+        user is None
+        or not user.is_active
+        or row is None
+        or row.user_id != user.id
+        or row.used_at is not None
+        or _aware(row.expires_at, now) <= now
+    ):
+        _record(session, [email_key, ip_key], False, now)
         raise AuthRefused(
-            "invalid_code", "This reset link has expired. Ask for a new one."
+            "invalid_code",
+            "That reset code is invalid or expired. Request a new code.",
         )
-
-    user = session.get(UserRecord, row.user_id)
-
-    if user is None or not user.is_active:
-        raise AuthRefused("invalid_code", "This reset link has expired.")
 
     set_password(session, user, password, now=now)
     row.used_at = now
+    _clear(session, email_key)
+    _record(session, [email_key], True, now)
     return user

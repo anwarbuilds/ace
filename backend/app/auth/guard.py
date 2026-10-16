@@ -58,6 +58,7 @@ PUBLIC = frozenset(
         "/api/auth/google/start",
         "/api/auth/google/callback",
         "/api/auth/login",
+        "/api/auth/login/verify",
         "/api/auth/logout",
         "/api/auth/reset/request",
         "/api/auth/reset/confirm",

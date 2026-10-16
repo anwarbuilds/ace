@@ -1425,7 +1425,7 @@ class ApiTokenRecord(Base):
 
 
 class AuthCodeRecord(Base):
-    """A one-time code: extension pairing or a password reset link.
+    """A one-time code for login, extension pairing, or password reset.
 
     Short-lived and single use. Only the hash is stored.
     """
@@ -1444,7 +1444,7 @@ class AuthCodeRecord(Base):
         unique=True,
     )
 
-    # pairing | password_reset
+    # pairing | login_verification | password_reset
     purpose: Mapped[str] = mapped_column(
         String(20),
         nullable=False,

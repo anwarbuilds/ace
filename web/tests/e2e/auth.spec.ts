@@ -65,6 +65,48 @@ anon("a wrong password says so and stays on the page", async ({ page }) => {
   await expect(page).toHaveURL(/\/login/);
 });
 
+anon("password sign-in shows the email verification step", async ({ page }) => {
+  await page.route("**/api/auth/login", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, verification_required: true, expires_in_seconds: 600 }),
+    });
+  });
+  await page.goto("/login");
+  await page.getByRole("button", { name: "Continue with Email" }).click();
+  await page.getByRole("textbox", { name: "Email", exact: true }).fill(OWNER.email);
+  await page.getByLabel("Password").fill(OWNER.password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByLabel("Verification code")).toBeVisible();
+  await expect(page.getByText(`We sent a sign-in code to ${OWNER.email}. It works for 10 minutes.`)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Verify and sign in" })).toBeVisible();
+});
+
+anon("a reset code can set a new password", async ({ page }) => {
+  let posted: Record<string, string> | undefined;
+  await page.route("**/api/auth/reset/confirm", async (route) => {
+    posted = route.request().postDataJSON() as Record<string, string>;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+  await page.goto(`/login/reset?email=${encodeURIComponent(OWNER.email)}&code=ABCD%20EFGH`);
+  await page.getByLabel("New password").fill("a brand new passphrase");
+  await page.getByLabel("Type it again").fill("a brand new passphrase");
+  await page.getByRole("button", { name: "Set password" }).click();
+
+  await expect(page.getByText("Password changed.")).toBeVisible();
+  expect(posted).toEqual({
+    email: OWNER.email,
+    code: "ABCD EFGH",
+    new_password: "a brand new passphrase",
+  });
+});
+
 anon("signing in returns to the page that was asked for", async ({ page }) => {
   await page.goto("/login?next=%2Fapp%2Fanswers");
   await page.getByRole("button", { name: "Continue with Email" }).click();

@@ -202,9 +202,16 @@ additive. Owner from `python -m backend.scripts.create_owner EMAIL`
   (a non-owner role is refused with 403). Multi-user needs re-keying
   `job_marks` and `external_applications` anyway (see above), so it
   belongs in the Phase 6 design, not here.
+- Password sign-in uses a one-time email code whenever `RESEND_API_KEY`
+  is set. Oracle also sets `REQUIRE_LOGIN_EMAIL_CODE=true`, so cloud
+  password sign-in fails closed if delivery is unavailable. The code is
+  eight characters, stored only as a hash, single use, valid for 10
+  minutes and protected by database-backed send and guessing limits.
 - Reset by email only when `RESEND_API_KEY` is set; otherwise no reset
-  token is created at all, because the mail fallback logs the message
-  body and would put a working link in the log.
+  code is created. Reset codes have the same hashing, expiration and
+  single-use rules. A successful reset revokes all browser sessions.
+- Google OIDC validates Google's verified email and therefore does not
+  add a second ACE email-code step.
 
 **Lessons.**
 - The Playwright `request` fixture does not share the browser context's
