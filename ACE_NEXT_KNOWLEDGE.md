@@ -64,11 +64,8 @@ resume text, answers, emails or job descriptions.
 | Resume Studio versions | 0 |
 
 This rehearsal snapshot represents 755 tracked applications through 708
-applied job marks plus 47 external application rows. The owner's estimate of roughly
-25,750 applications does not match those two production tables. Before cutover,
-confirm whether 25,750 refers to applications, job records, viewed roles, or a
-separate source that has not yet been imported. Do not synthesize missing rows
-or change the audited data to match an estimate.
+applied job marks plus 47 external application rows. This is the confirmed
+historical application total to preserve and verify during cutover.
 
 ## Architecture
 
@@ -351,15 +348,13 @@ rehearsal and review.
 The code can be completed and tested without sharing secrets. Cloud activation
 and live cutover require these owner actions:
 
-1. Confirm what the estimated 25,750 count represents and where those records
-   currently live.
-2. Create or identify the Oracle Cloud Always Free tenancy and home region.
-3. Choose a domain or subdomain and point it to the VM after provisioning.
-4. Create the Google OAuth Web client after HTTPS is available.
-5. Enter Oracle, Google, database and required Resend secrets directly into the
+1. Create or identify the Oracle Cloud Always Free tenancy and home region.
+2. Choose a domain or subdomain and point it to the VM after provisioning.
+3. Create the Google OAuth Web client after HTTPS is available.
+4. Enter Oracle, Google, database and required Resend secrets directly into the
    VM `.env`.
-6. Reauthenticate GitHub CLI locally.
-7. Approve the final scheduler write freeze and production cutover after the
+5. Reauthenticate GitHub CLI locally.
+6. Approve the final scheduler write freeze and production cutover after the
    rehearsal report is reviewed.
 
 ## Change log
@@ -376,6 +371,9 @@ and live cutover require these owner actions:
 - Added email verification codes for password sign-in and password recovery,
   including expiration, single use, resend replacement, guessing limits and a
   production fail-closed switch.
+- Confirmed that 755 is the complete historical application total to preserve:
+  708 applied job marks plus 47 external application rows. Removed the earlier
+  incorrect estimate from the migration plan.
 - Added the idempotent legacy resume to Resume Studio bridge.
 - Added privacy-safe source and target inventory tooling.
 - Added the Oracle production Compose, Caddy HTTPS, backup script and operating

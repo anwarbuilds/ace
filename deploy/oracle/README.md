@@ -98,6 +98,27 @@ three table counts are expected to be higher after the bridge. Compare the
 inventory immediately after restore and migrations first, then run the bridge
 and record a second inventory.
 
+## Owner account after restore
+
+The restored production database already contains the owner account together
+with the 755 tracked applications. Do not create another account. Sign in with
+the existing owner email and password. If the password is unknown, reset that
+same owner from a hidden prompt after the restore:
+
+```bash
+cd /opt/ace
+docker compose -f deploy/oracle/compose.yaml run --rm api \
+  python -m backend.scripts.create_owner YOUR_OWNER_EMAIL --reset
+```
+
+The password is entered twice without appearing in shell history or logs. If a
+restored database unexpectedly reports that no owner exists, stop and verify
+the dump and restore before creating anything.
+
+The migration inventory must show 708 `applied_job_marks` and 47
+`external_applications`, for 755 tracked applications in total. The
+Applications page combines those same two sources.
+
 ## Start and verify
 
 ```bash
