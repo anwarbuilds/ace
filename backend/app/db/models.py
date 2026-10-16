@@ -1285,6 +1285,16 @@ class UserRecord(Base):
         nullable=False,
     )
 
+    # Bound on the first successful owner-only Google OIDC sign-in.
+    # Email is checked as well, but the provider subject is the stable
+    # account identity and prevents a later email reassignment from
+    # silently becoming the ACE owner.
+    google_subject: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        unique=True,
+    )
+
 
 class AuthSessionRecord(Base):
     """One signed-in browser."""

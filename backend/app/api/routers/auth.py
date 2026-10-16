@@ -8,6 +8,7 @@ reveals whether an email address has an account.
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import (
     datetime,
     timedelta,
@@ -21,11 +22,13 @@ from fastapi import (
     Request,
     Response,
 )
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
-from backend.app.auth import service
+from backend.app.auth import google, service
 from backend.app.auth.crypto import (
     WeakPassword,
     same,
@@ -36,6 +39,7 @@ from backend.app.auth.guard import (
     SESSION_COOKIE,
     client_ip,
     current_owner,
+    is_local_peer,
     is_local_request,
     resolve,
 )
@@ -50,6 +54,11 @@ from backend.app.mail.sender import (
 LOGGER = logging.getLogger("ace.auth")
 
 router = APIRouter()
+
+GOOGLE_STATE_COOKIE = "ace_google_state"
+GOOGLE_NONCE_COOKIE = "ace_google_nonce"
+GOOGLE_NEXT_COOKIE = "ace_google_next"
+GOOGLE_FLOW_SECONDS = 600
 
 
 class LoginRequest(BaseModel):
@@ -110,7 +119,7 @@ def _secure(request: Request) -> bool:
 
     return (
         request.headers.get("x-forwarded-proto", "") == "https"
-        and is_local_request(request)
+        and is_local_peer(request)
     )
 
 
@@ -154,6 +163,37 @@ def _lifetime() -> timedelta:
     return timedelta(days=get_settings().session_days)
 
 
+def _safe_next(value: str | None) -> str:
+    value = (value or "").strip()
+    if not value.startswith("/") or value.startswith("//") or value.startswith("/\\"):
+        return "/app/pulls"
+    return value
+
+
+def _google_ready() -> bool:
+    settings = get_settings()
+    return google.configured(
+        settings.google_client_id,
+        settings.google_client_secret,
+        settings.google_redirect_uri,
+    )
+
+
+def _clear_google_cookies(response: Response) -> None:
+    for name in (GOOGLE_STATE_COOKIE, GOOGLE_NONCE_COOKIE, GOOGLE_NEXT_COOKIE):
+        response.delete_cookie(name, path="/api/auth/google")
+
+
+def _oauth_error(reason: str) -> RedirectResponse:
+    settings = get_settings()
+    response = RedirectResponse(
+        f"{settings.web_base_url.rstrip('/')}/login?oauth_error={reason}",
+        status_code=303,
+    )
+    _clear_google_cookies(response)
+    return response
+
+
 @router.get("/api/auth/status")
 def status(
     request: Request,
@@ -176,10 +216,138 @@ def status(
             else None
         ),
         "reset_by_email": mail_configured(),
+        "google_sign_in": _google_ready(),
         "setup_allowed": _setup_allowed(request),
         "setup_needs_token": bool(settings.setup_token)
         and not is_local_request(request),
     }
+
+
+@router.get("/api/auth/google/start")
+def google_start(
+    request: Request,
+    next: str = "/app/pulls",
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Begin owner-only Google OIDC without creating a new ACE account."""
+
+    settings = get_settings()
+    if not _google_ready():
+        return _oauth_error("not_configured")
+
+    owner = session.scalar(
+        select(UserRecord).where(
+            UserRecord.role == service.OWNER,
+            UserRecord.is_active.is_(True),
+        )
+    )
+    if owner is None:
+        return _oauth_error("owner_required")
+
+    try:
+        endpoint = google.authorization_endpoint()
+    except google.GoogleAuthError:
+        return _oauth_error("provider_unavailable")
+
+    state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    response = RedirectResponse(
+        google.authorization_url(
+            endpoint=endpoint,
+            client_id=settings.google_client_id,
+            redirect_uri=settings.google_redirect_uri,
+            state=state,
+            nonce=nonce,
+        ),
+        status_code=303,
+    )
+    secure = _secure(request)
+    for name, value in (
+        (GOOGLE_STATE_COOKIE, state),
+        (GOOGLE_NONCE_COOKIE, nonce),
+        (GOOGLE_NEXT_COOKIE, _safe_next(next)),
+    ):
+        response.set_cookie(
+            name,
+            value,
+            max_age=GOOGLE_FLOW_SECONDS,
+            path="/api/auth/google",
+            httponly=True,
+            secure=secure,
+            samesite="lax",
+        )
+    return response
+
+
+@router.get("/api/auth/google/callback")
+def google_callback(
+    request: Request,
+    code: str = "",
+    state: str = "",
+    error: str = "",
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Verify Google's identity, bind it to the owner, and sign in."""
+
+    expected_state = request.cookies.get(GOOGLE_STATE_COOKIE, "")
+    nonce = request.cookies.get(GOOGLE_NONCE_COOKIE, "")
+    if (
+        error
+        or not code
+        or not state
+        or not expected_state
+        or not same(state, expected_state)
+    ):
+        return _oauth_error("cancelled" if error else "invalid_response")
+    if not nonce or not _google_ready():
+        return _oauth_error("expired")
+
+    settings = get_settings()
+    try:
+        identity = google.authenticate(
+            code=code,
+            client_id=settings.google_client_id,
+            client_secret=settings.google_client_secret,
+            redirect_uri=settings.google_redirect_uri,
+            nonce=nonce,
+        )
+    except google.GoogleAuthError:
+        LOGGER.info("google_login_refused reason=identity_verification")
+        return _oauth_error("verification_failed")
+
+    owner = service.find_user(session, identity.email)
+    if owner is None or owner.role != service.OWNER or not owner.is_active:
+        LOGGER.info("google_login_refused reason=owner_mismatch")
+        return _oauth_error("owner_mismatch")
+    if owner.google_subject and not same(owner.google_subject, identity.subject):
+        LOGGER.info("google_login_refused reason=subject_mismatch user=%s", owner.id)
+        return _oauth_error("owner_mismatch")
+    if not owner.google_subject:
+        owner.google_subject = identity.subject
+
+    created = service.start_session(
+        session,
+        owner,
+        user_agent=request.headers.get("user-agent", ""),
+        now=_now(),
+        lifetime=_lifetime(),
+    )
+    session.commit()
+    destination = _safe_next(request.cookies.get(GOOGLE_NEXT_COOKIE))
+    response = RedirectResponse(
+        f"{settings.web_base_url.rstrip('/')}{destination}",
+        status_code=303,
+    )
+    _clear_google_cookies(response)
+    _set_cookies(
+        response,
+        request,
+        token=created.token,
+        csrf=created.csrf,
+        max_age=int(_lifetime().total_seconds()),
+    )
+    LOGGER.info("google_login_ok user=%s", owner.id)
+    return response
 
 
 def _setup_allowed(request: Request) -> bool:

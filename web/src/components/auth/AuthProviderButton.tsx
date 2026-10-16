@@ -50,17 +50,32 @@ export function AuthProviderButton({
   children,
   featured = false,
   onClick,
+  href,
 }: {
   provider: "google" | "microsoft" | "email";
   children: ReactNode;
   featured?: boolean;
-  onClick: () => void;
+  onClick?: () => void;
+  href?: string;
 }) {
-  return (
-    <button className={`auth-provider${featured ? " featured" : ""}`} type="button" onClick={onClick}>
+  const content = (
+    <>
       {ICONS[provider]}
       <span>{children}</span>
       <ArrowIcon />
+    </>
+  );
+  const className = `auth-provider${featured ? " featured" : ""}`;
+  if (href) {
+    return (
+      <a className={className} href={href}>
+        {content}
+      </a>
+    );
+  }
+  return (
+    <button className={className} type="button" onClick={onClick}>
+      {content}
     </button>
   );
 }

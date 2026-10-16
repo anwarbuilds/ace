@@ -117,6 +117,16 @@ class Settings(BaseSettings):
     # Where the Next.js app is served, for links in password reset mail.
     web_base_url: str = "http://localhost:3000"
 
+    # Optional owner-only Google OpenID Connect. The owner account must
+    # already exist and Google's verified email must match it exactly.
+    # The first successful sign-in binds the Google subject to that
+    # owner; later sign-ins must present the same subject.
+    google_client_id: str = ""
+
+    google_client_secret: str = ""
+
+    google_redirect_uri: str = ""
+
     # The interactive API docs list every route. Off unless asked for.
     api_docs: bool = False
 

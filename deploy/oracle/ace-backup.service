@@ -1,0 +1,15 @@
+[Unit]
+Description=Back up the ACE PostgreSQL database
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ace
+EnvironmentFile=/opt/ace/.env
+ExecStart=/opt/ace/deploy/oracle/backup.sh
+User=ubuntu
+Group=ubuntu
+
+[Install]
+WantedBy=multi-user.target

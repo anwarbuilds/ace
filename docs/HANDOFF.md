@@ -97,7 +97,12 @@ excluded kinds unless the user asks.
 - Commit author is the user's configured git identity. End commits with the
   attribution trailer the harness gives you.
 
-## 3. State on 2026-10-15
+## 3. State on 2026-10-16
+
+The current production migration record is `ACE_NEXT_KNOWLEDGE.md`. Read it
+before any database copy, Oracle deployment, Google OAuth setup or scheduler
+cutover. It records the aggregate live inventory, staged migration, rollback,
+backup and owner input requirements.
 
 - **Live** on the user's machine via `compose.yaml`: postgres (host port 5433),
   migrate, scheduler, web (port 8000, FastAPI serving the old UI at `/`). Built
@@ -106,7 +111,7 @@ excluded kinds unless the user asks.
   jobs, roughly 600 applications tracked, a 66 row answer bank. The scheduler
   polls continuously (five minute cycles; Google every 30 minutes) and alerts
   are one email per closed 15 minute pull.
-- Tests on `wine-rose-platform`: 1,173 backend tests (hermetic SQLite), 87 Next.js Playwright tests against fictional demo
+- Tests on `wine-rose-platform`: 1,184 backend tests (hermetic SQLite), 87 Next.js Playwright tests against fictional demo
   data, and 185 extension matcher cases. The retired single-file UI suite was removed; extension DOM tests remain.
 - Done this week: own-site readers for Atlassian, EA, Apple, Shopify, AMD, SIG,
   Booking.com, Groq, Google, Meta, Intuit, Arm, Synopsys and about 25 more
@@ -152,6 +157,11 @@ excluded kinds unless the user asks.
   - **Legacy backend parity (2026-10-15):** the one commit added to `main` after the branches diverged was carried
     forward. Resume activation now scores only active qualifying and marked jobs instead of the entire historical
     corpus. This preserves visible scores while avoiding the 45 minute live upload observed on the legacy system.
+  - **Production bridge (2026-10-16):** optional owner-only Google OIDC is wired to the existing owner and cannot
+    create an account; migration 0041 stores Google's stable subject. An idempotent bridge copies legacy resume
+    history into Resume Studio without changing the matcher's active resume or triggering a rescore. Aggregate-only
+    inventory tooling and a single-VM Oracle Compose, Caddy and backup kit are in `deploy/oracle/`. The live legacy
+    scheduler and database were not changed. See `ACE_NEXT_KNOWLEDGE.md` for the required rehearsal and cutover.
   - **Account creation in the browser:** the first visit to `/login` (or the old UI) offers "Create your account"
     while no owner exists; refused afterwards; from a public address it needs `SETUP_TOKEN`. The web app listens on
     127.0.0.1 because Next's rewrites do not forward the browser's address.

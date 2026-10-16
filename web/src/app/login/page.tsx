@@ -9,6 +9,7 @@ export const metadata = { title: "Sign in · ace" };
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const params = await searchParams;
   const next = safeNext(params.next);
+  const oauthError = Array.isArray(params.oauth_error) ? params.oauth_error[0] : params.oauth_error;
   const status = await authStatus();
 
   if (status?.signed_in) redirect(next);
@@ -17,6 +18,8 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
     <AuthSignInExperience
       next={next}
       apiAvailable={status !== null}
+      googleSignIn={status?.google_sign_in ?? false}
+      oauthError={oauthError ?? ""}
       ownerExists={status?.owner_exists ?? true}
       setupAllowed={status?.setup_allowed ?? false}
       setupNeedsToken={status?.setup_needs_token ?? false}

@@ -29,7 +29,7 @@ from sqlalchemy.pool import StaticPool
 
 from backend.app.api.deps import get_session
 from backend.app.api.main import create_app
-from backend.app.auth import service
+from backend.app.auth import google, service
 from backend.app.auth.crypto import (
     WeakPassword,
     hash_password,
@@ -138,6 +138,100 @@ def test_health_and_sign_in_stay_reachable(client) -> None:
     assert status["owner_exists"] is True
     assert status["signed_in"] is False
     assert status["email"] is None
+    assert status["google_sign_in"] is False
+
+
+def _enable_google(monkeypatch) -> None:
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "fictional-client")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "fictional-secret")
+    monkeypatch.setenv(
+        "GOOGLE_REDIRECT_URI", "https://ace.example/api/auth/google/callback"
+    )
+    monkeypatch.setenv("WEB_BASE_URL", "https://ace.example")
+    get_settings.cache_clear()
+
+
+def test_google_sign_in_binds_only_the_existing_owner(
+    client, factory, monkeypatch
+) -> None:
+    _enable_google(monkeypatch)
+    monkeypatch.setattr(
+        google,
+        "authorization_endpoint",
+        lambda: "https://accounts.google.com/o/oauth2/v2/auth",
+    )
+    started = client.get(
+        "/api/auth/google/start?next=/app/applications", follow_redirects=False
+    )
+    assert started.status_code == 303
+    assert started.headers["location"].startswith("https://accounts.google.com/")
+    state = client.cookies.get("ace_google_state")
+    monkeypatch.setattr(
+        google,
+        "authenticate",
+        lambda **kwargs: google.GoogleIdentity(
+            subject="stable-google-subject", email=EMAIL
+        ),
+    )
+    callback = client.get(
+        f"/api/auth/google/callback?code=one-time-code&state={state}",
+        follow_redirects=False,
+    )
+    assert callback.status_code == 303
+    assert callback.headers["location"] == "https://ace.example/app/applications"
+    assert client.cookies.get(SESSION_COOKIE)
+    with factory() as session:
+        assert (
+            service.find_user(session, EMAIL).google_subject
+            == "stable-google-subject"
+        )
+    get_settings.cache_clear()
+
+
+def test_google_sign_in_refuses_another_email(client, factory, monkeypatch) -> None:
+    _enable_google(monkeypatch)
+    monkeypatch.setattr(
+        google,
+        "authorization_endpoint",
+        lambda: "https://accounts.google.com/o/oauth2/v2/auth",
+    )
+    client.get("/api/auth/google/start", follow_redirects=False)
+    state = client.cookies.get("ace_google_state")
+    monkeypatch.setattr(
+        google,
+        "authenticate",
+        lambda **kwargs: google.GoogleIdentity(
+            subject="another-google-subject", email="another@example.com"
+        ),
+    )
+    callback = client.get(
+        f"/api/auth/google/callback?code=one-time-code&state={state}",
+        follow_redirects=False,
+    )
+    assert callback.headers["location"].endswith("oauth_error=owner_mismatch")
+    assert not client.cookies.get(SESSION_COOKIE)
+    with factory() as session:
+        assert service.find_user(session, EMAIL).google_subject is None
+    get_settings.cache_clear()
+
+
+def test_forwarded_https_from_the_local_proxy_sets_secure_cookies(
+    factory, monkeypatch
+) -> None:
+    with factory.begin() as session:
+        service.create_owner(session, email=EMAIL, password=PASSWORD, now=NOW)
+    app = _app(factory, monkeypatch)
+    local_proxy = _Peer(app, "127.0.0.1").client
+    response = local_proxy.post(
+        "/api/auth/login",
+        json={"email": EMAIL, "password": PASSWORD},
+        headers={
+            "X-Forwarded-Proto": "https",
+            "X-Forwarded-For": "198.51.100.20",
+        },
+    )
+    assert response.status_code == 200
+    assert all("Secure" in cookie for cookie in response.headers.get_list("set-cookie"))
 
 
 def test_api_docs_are_off_by_default(client) -> None:

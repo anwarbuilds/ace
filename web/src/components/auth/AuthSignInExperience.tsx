@@ -19,6 +19,8 @@ export function AuthSignInExperience({
   setupNeedsToken,
   resetByEmail,
   apiAvailable,
+  googleSignIn,
+  oauthError,
 }: {
   next: string;
   ownerExists: boolean;
@@ -26,6 +28,8 @@ export function AuthSignInExperience({
   setupNeedsToken: boolean;
   resetByEmail: boolean;
   apiAvailable: boolean;
+  googleSignIn: boolean;
+  oauthError: string;
 }) {
   const [dialog, setDialog] = useState<DialogKind>(null);
   const close = useCallback(() => setDialog(null), []);
@@ -40,6 +44,24 @@ export function AuthSignInExperience({
     else setDialog("create");
   }
 
+  function openGoogle() {
+    if (!apiAvailable) {
+      setDialog("offline");
+    } else {
+      setDialog("google");
+    }
+  }
+
+  const oauthMessage = oauthError
+    ? oauthError === "cancelled"
+      ? "Google sign-in was cancelled."
+      : oauthError === "owner_mismatch"
+        ? "That Google account is not the owner of this workspace."
+        : oauthError === "not_configured"
+          ? "Google sign-in has not been configured for this workspace."
+          : "Google sign-in could not be completed. Please try again or continue with Email."
+    : "";
+
   const action = !ownerExists ? (
     <button className="auth-create" type="button" onClick={openCreate}>
       Create account
@@ -52,8 +74,14 @@ export function AuthSignInExperience({
         <AuthWordmark compact linked={false} />
         <h1>Welcome back</h1>
         <p className="auth-tagline">Sign in to your ACE account.</p>
+        {oauthMessage ? <p className="auth-provider-error" role="alert">{oauthMessage}</p> : null}
         <div className="auth-providers">
-          <AuthProviderButton provider="google" featured onClick={() => setDialog("google")}>
+          <AuthProviderButton
+            provider="google"
+            featured
+            href={apiAvailable && googleSignIn ? `/api/auth/google/start?next=${encodeURIComponent(next)}` : undefined}
+            onClick={apiAvailable && googleSignIn ? undefined : openGoogle}
+          >
             Continue with Google
           </AuthProviderButton>
           <AuthProviderButton provider="microsoft" onClick={() => setDialog("microsoft")}>

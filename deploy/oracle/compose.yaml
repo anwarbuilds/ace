@@ -1,0 +1,106 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${ACE_DB_NAME}
+      POSTGRES_USER: ${ACE_DB_USER}
+      POSTGRES_PASSWORD: ${ACE_DB_PASSWORD}
+    volumes:
+      - ace_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ACE_DB_USER} -d ${ACE_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    env_file: ../../.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${ACE_DB_USER}:${ACE_DB_PASSWORD}@postgres:5432/${ACE_DB_NAME}
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  scheduler:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    env_file: ../../.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${ACE_DB_USER}:${ACE_DB_PASSWORD}@postgres:5432/${ACE_DB_NAME}
+    command: ["python", "-m", "backend.scripts.run_scheduler", "--log-level", "INFO"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-m", "backend.scripts.scheduler_health"]
+      interval: 5m
+      timeout: 30s
+      start_period: 3m
+      retries: 2
+
+  api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    env_file: ../../.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${ACE_DB_USER}:${ACE_DB_PASSWORD}@postgres:5432/${ACE_DB_NAME}
+    command: ["python", "-m", "uvicorn", "backend.app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  web:
+    build:
+      context: ../../web
+      dockerfile: Dockerfile
+    environment:
+      API_ORIGIN: http://api:8000
+      NODE_ENV: production
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      ACE_DOMAIN: ${ACE_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  ace_postgres_data:
+  caddy_data:
+  caddy_config:

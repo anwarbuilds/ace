@@ -91,7 +91,7 @@ Everything between those two lists is what this repository contains.
 | **Passing the gate right now** | 989 |
 | **Curated target companies** | 411, of which 283 are reachable |
 | **Poll cadence** | 5 minutes, 6 sources concurrently |
-| **Tests** | 1,172 Python, 80 Playwright, 185 matcher cases |
+| **Tests** | 1,184 Python, 87 Playwright, 185 matcher cases |
 | **Continuously running since** | 2026-08-29 |
 
 ---
@@ -508,6 +508,12 @@ docker compose ps             # scheduler reports healthy once it has polled
 docker compose logs -f scheduler
 ```
 
+For an always-running Oracle Cloud deployment, staged database restore,
+owner-only Google sign-in and backups, start with
+[`ACE_NEXT_KNOWLEDGE.md`](ACE_NEXT_KNOWLEDGE.md) and
+[`deploy/oracle/README.md`](deploy/oracle/README.md). Do not seed or replace an
+existing production database.
+
 > [!IMPORTANT]
 > `docker compose build` on its own restarts nothing. After a build, run
 > `docker compose up -d --force-recreate <service>` or the container keeps
@@ -522,10 +528,10 @@ docker compose logs -f scheduler
 ## Testing
 
 ```bash
-python -m pytest backend/tests -q        # 1,172 tests
+python -m pytest backend/tests -q        # 1,184 tests, plus browser skips when services are absent
 python -m pytest backend/tests -m browser # real Chrome, over DevTools protocol
 cd extension && node test-rules.js        # 185 matcher cases
-cd web && npx playwright test              # 78 browser tests against a demo database
+cd web && npx playwright test              # 87 browser tests against a demo database
 ```
 
 The browser suite drives a real Chrome instance against a running ACE, and skips rather than fails when Chrome or the server is absent, so a plain checkout stays green.
@@ -556,8 +562,8 @@ backend/
     applications/   Reads a tracker sheet, matches rows to stored postings
     answers/        What each application question is, and the wordings forms use
     api/            FastAPI JSON API
-  tests/            1,172 tests, including extension DOM checks
-  migrations/       Alembic, currently at 0028
+  tests/            1,184 tests, including extension DOM checks
+  migrations/       Alembic, currently at 0041
 
 web/                Next.js application and its Playwright browser suite
 
@@ -589,7 +595,10 @@ Running continuously against live employer boards since **2026-08-29**.
 | Production deployment, auth, backups | Planned |
 | Mobile client | Future |
 
-**Known limits, stated plainly:** Google and Meta render their boards client-side with no structured data and are not covered. Microsoft is blocked by a certificate hostname mismatch on their own careers API, and disabling verification to work around it was refused. 94 curated companies need a headless render step in discovery before they can be reached, which is new surface area in the scheduler path and has not been built.
+**Known limits, stated plainly:** some employer sites still refuse automated
+access or expose no permitted structured source. ACE records those coverage
+gaps and backs off rather than bypassing access controls. The Coverage page is
+the current source of truth because provider behavior changes over time.
 
 ---
 

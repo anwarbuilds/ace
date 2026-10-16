@@ -55,6 +55,8 @@ SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 PUBLIC = frozenset(
     {
         "/api/auth/status",
+        "/api/auth/google/start",
+        "/api/auth/google/callback",
         "/api/auth/login",
         "/api/auth/logout",
         "/api/auth/reset/request",
@@ -135,6 +137,18 @@ def client_ip(request: Request) -> str:
         return forwarded[-1]
 
     return peer or "unknown"
+
+
+def is_local_peer(request: Request) -> bool:
+    """True when the application is reached through a trusted local proxy.
+
+    Unlike ``is_local_request``, this deliberately ignores the original
+    browser address in X-Forwarded-For. It is used only to decide whether a
+    proxy's HTTPS signal is trustworthy, never to bypass authentication.
+    """
+
+    peer = request.client.host if request.client else ""
+    return _is_local(_ip(peer))
 
 
 def is_local_request(request: Request) -> bool:
