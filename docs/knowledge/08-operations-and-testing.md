@@ -245,3 +245,11 @@ revisions 0037 to 0040 that `main` lacks. Recovered in under a minute with `dock
 code had already been running against that schema. Before rebuilding, compare `select version_num from
 alembic_version` with the newest file in `backend/migrations/versions/`, and use `--no-deps` when the database is ahead.
 
+
+## The scheduler stopped with exit 137 and stayed down (2026-10-19)
+
+At 20:52 local the scheduler container ended with exit 137 (SIGKILL) mid-poll. Docker did not record an OOM kill, the
+kernel log has none, and nothing was logged on shutdown; with `restart: unless-stopped` it stayed down, which points to
+a stop from outside rather than a crash. The web container kept serving, so the app looked up while nothing was polled.
+Recovered with `docker start ace-scheduler-1`, which reuses the container and skips the `migrate` dependency that fails
+while the database is ahead of `main`. Check `last_poll_at` in `/api/stats`, not only `/healthz`, to tell if ace is live.
