@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { EmptyBox } from "@/components/bits";
+import { Kpi } from "@/components/page/PageParts";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { ScoreDial } from "@/components/studio/AssessmentView";
 import { StudioUpload } from "@/components/studio/StudioUpload";
@@ -57,65 +58,153 @@ export default async function StudioOverviewPage() {
     <ScrollArea>
       <div className="page">
         <div className="wrap">
-          <div className="cards3 sect">
-            <Link className="stat st-stat" href="/app/resume-studio/facts?status=verified">
-              <div className="stat-n m-high">{f.verified ?? 0}</div>
-              <div className="stat-l">Verified facts</div>
-            </Link>
-            <Link className="stat st-stat" href="/app/resume-studio/facts?status=review">
-              <div className="stat-n">{review}</div>
-              <div className="stat-l">Waiting for your review</div>
-            </Link>
-            <Link className="stat st-stat" href="/app/resume-studio/documents">
-              <div className="stat-n">{o.versions.length}</div>
-              <div className="stat-l">Resume versions</div>
-            </Link>
-            <Link className="stat st-stat" href="/app/resume-studio/history">
-              <div className="stat-n">{o.recent.length}</div>
-              <div className="stat-l">Recent checks</div>
-            </Link>
+          <div className="kpis studio-v2-kpis">
+            <Kpi
+              label="Base resume"
+              value={primary ? "1" : "0"}
+              foot={primary ? `${primary.label}, under your control` : "Choose a version for matching"}
+              href="/app/resume-studio/documents"
+            />
+            <Kpi
+              label="Resume versions"
+              value={o.versions.length.toLocaleString("en-US")}
+              foot={`${o.documents.length.toLocaleString("en-US")} source files stored`}
+              href="/app/resume-studio/documents"
+            />
+            <Kpi
+              label="Skills represented"
+              value={(r?.skills.length ?? 0).toLocaleString("en-US")}
+              foot={`${(f.verified ?? 0).toLocaleString("en-US")} verified facts in your profile`}
+              href="/app/resume-studio/facts?kind=skill"
+            />
+            <Kpi
+              label="Review status"
+              value={review ? review.toLocaleString("en-US") : "Ready"}
+              foot={review ? "Suggestions waiting for your review" : "You approve every change"}
+              tone={review ? "warn" : "good"}
+              href="/app/resume-studio/facts?status=review"
+            />
           </div>
 
-          <div className="sect st-split">
-            <div className="card st-card">
-              <p className="eyebrow">Resume used for matching</p>
-              {primary ? (
-                <>
-                  <h2 className="st-h2">{primary.label}</h2>
-                  <p className="why">
-                    Ranks every opportunity. Approved {shortDate(primary.approved_at ?? primary.created_at, tz)}.
-                  </p>
-                </>
-              ) : (
-                <p className="why">No version is used for matching yet. Choose one under Documents and versions.</p>
-              )}
-              <div className="controls" style={{ paddingLeft: 0 }}>
-                <StudioUpload label="Upload a resume" />
-                <StudioUpload kind="template" label="Upload a DOCX template" />
-                <Link className="btn btn-secondary btn-sm" href="/app/resume-studio/check">
+          <div className="studio-v2-grid">
+            <div className="studio-v2-column">
+              <section className="panel studio-v2-panel">
+                <div className="section-head">
+                  <h2>Resume library</h2>
+                  <Link className="link-btn" href="/app/resume-studio/documents">
+                    View all
+                  </Link>
+                </div>
+                <div className="studio-v2-library">
+                  {o.versions.slice(0, 4).map((version) => (
+                    <Link
+                      className={`studio-v2-entry${version.is_primary ? " selected" : ""}`}
+                      href="/app/resume-studio/documents"
+                      key={version.id}
+                    >
+                      <strong>{version.label}</strong>
+                      <small>
+                        {version.is_primary ? "Primary, source of truth" : version.kind === "master" ? "Master version" : "Tailored draft"}
+                      </small>
+                    </Link>
+                  ))}
+                </div>
+                <div className="studio-v2-actions">
+                  <StudioUpload label="Upload a resume" />
+                  <StudioUpload kind="template" label="Upload a DOCX template" />
+                </div>
+              </section>
+
+              <section className="panel studio-v2-panel">
+                <div className="section-head">
+                  <h2>Target role</h2>
+                  <Link className="link-btn" href="/app/resume-studio/history">
+                    History
+                  </Link>
+                </div>
+                {o.recent[0] ? (
+                  <>
+                    <p className="studio-v2-role">
+                      <strong>{clean(o.recent[0].job_title) || "Saved opportunity"}</strong>
+                      <span>{o.recent[0].job_company || "Pasted job description"}</span>
+                    </p>
+                    <div className="studio-v2-match">
+                      <ScoreDial value={o.recent[0].aggregate} size={76} />
+                      <div>
+                        <b>Estimated compatibility</b>
+                        <p>Explainable skill and experience fit based on your verified resume.</p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="why">Choose an opportunity to create your first evidence-based resume check.</p>
+                )}
+                <Link className="btn btn-primary btn-sm studio-v2-wide" href="/app/resume-studio/check">
                   Check against a job
                 </Link>
-              </div>
+              </section>
             </div>
-            <div className="card st-card">
-              <p className="eyebrow">Knowledge base</p>
-              <p className="why">
-                Facts are kept apart from wording. ace suggests them from your resume; only the ones you verify count
-                as evidence.
-              </p>
-              <div className="st-kinds">
-                {Object.entries(o.facts.by_kind).map(([k, n]) => (
-                  <Link key={k} className="st-kind" href={`/app/resume-studio/facts?kind=${k}`}>
-                    <span>{k}</span>
-                    <span className="st-kind-n">{n}</span>
-                  </Link>
-                ))}
+
+            <section className="studio-v2-preview">
+              <div className="section-head">
+                <h2>Resume preview</h2>
+                <span className="section-sub">Resume used for matching</span>
+              </div>
+              <div className="studio-v2-sheet">
+                <h3>{primary?.label || r?.label || "Resume profile"}</h3>
+                <p className="studio-v2-sheet-meta">
+                  {primary ? `Primary version, approved ${shortDate(primary.approved_at ?? primary.created_at, tz)}` : "Verified career profile"}
+                </p>
+                {primary?.body_text ? (
+                  <div className="studio-v2-body">{primary.body_text}</div>
+                ) : (
+                  <>
+                    <h4>Verified experience</h4>
+                    <p>
+                      {f.verified ?? 0} facts have been confirmed for matching. Suggested facts remain separate until
+                      you approve them.
+                    </p>
+                    <h4>Technical skills</h4>
+                    <p>{r?.skills.length ? r.skills.join(", ") : "Review the knowledge base to verify skills."}</p>
+                    <h4>Profile coverage</h4>
+                    <div className="studio-v2-fact-grid">
+                      {Object.entries(o.facts.by_kind).map(([kind, count]) => (
+                        <span key={kind}>
+                          <b>{kind}</b>
+                          <small>{count}</small>
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <p className="studio-v2-note">Previewed from your stored resume and verified knowledge base.</p>
+            </section>
+          </div>
+
+          <div className="sect studio-v2-knowledge">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Knowledge base</p>
+                <h2 className="st-h2">Facts you control</h2>
               </div>
               {review ? (
                 <Link className="btn btn-primary btn-sm" href="/app/resume-studio/facts?status=review">
                   Review {review} suggested
                 </Link>
               ) : null}
+            </div>
+            <p className="why">
+              Facts are kept apart from wording. ace suggests them from your resume; only the ones you verify count as
+              evidence.
+            </p>
+            <div className="st-kinds">
+              {Object.entries(o.facts.by_kind).map(([kind, count]) => (
+                <Link key={kind} className="st-kind" href={`/app/resume-studio/facts?kind=${kind}`}>
+                  <span>{kind}</span>
+                  <span className="st-kind-n">{count}</span>
+                </Link>
+              ))}
             </div>
           </div>
 

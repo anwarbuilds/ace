@@ -5,13 +5,26 @@ export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<Response> {
   const origin = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
+  const commit = process.env.ACE_BUILD_SHA ?? process.env.NEXT_PUBLIC_ACE_BUILD_SHA ?? "unversioned";
   try {
     const res = await fetch(`${origin}/healthz`, { cache: "no-store" });
-    return new Response(await res.text(), {
+    const text = await res.text();
+    let api: unknown = text;
+    try {
+      api = JSON.parse(text);
+    } catch {}
+    return Response.json({
+      status: res.ok ? "ok" : "api_down",
+      frontend: { commit },
+      api,
+    }, {
       status: res.status,
-      headers: { "content-type": res.headers.get("content-type") ?? "application/json" },
+      headers: { "X-Ace-Frontend-Commit": commit },
     });
   } catch {
-    return Response.json({ status: "api_down" }, { status: 502 });
+    return Response.json(
+      { status: "api_down", frontend: { commit }, api: null },
+      { status: 502, headers: { "X-Ace-Frontend-Commit": commit } },
+    );
   }
 }

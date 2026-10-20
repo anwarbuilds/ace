@@ -1,6 +1,11 @@
 "use client";
 
 import { useApp } from "@/components/shell/AppProvider";
+import type { ApplicationStatus } from "@/lib/types";
+
+function statusTotal(statuses: ApplicationStatus[], counts: Partial<Record<ApplicationStatus, number>>): number {
+  return statuses.reduce((total, status) => total + (counts[status] ?? 0), 0);
+}
 
 export function ApplicationCount() {
   const { marks } = useApp();
@@ -20,4 +25,39 @@ export function ApplicationMetric() {
       </div>
     </div>
   );
+}
+
+export function ApplicationStageCount({ statuses }: { statuses: ApplicationStatus[] }) {
+  const { marks } = useApp();
+  return <>{statusTotal(statuses, marks.application_by_status).toLocaleString("en-US")}</>;
+}
+
+export function ApplicationHeardBack() {
+  const { marks } = useApp();
+  const heard = statusTotal(
+    ["screening", "interviewing", "offer", "accepted", "rejected"],
+    marks.application_by_status,
+  );
+  const percent = marks.applications_total ? Math.round((100 * heard) / marks.applications_total) : 0;
+  return <>{percent}%</>;
+}
+
+export function ApplicationHeardBackFoot() {
+  const { marks } = useApp();
+  const heard = statusTotal(
+    ["screening", "interviewing", "offer", "accepted", "rejected"],
+    marks.application_by_status,
+  );
+  return <>{heard.toLocaleString("en-US")} of {marks.applications_total.toLocaleString("en-US")} have an answer</>;
+}
+
+export function ApplicationInterviewFoot() {
+  const { marks } = useApp();
+  const total = marks.applications_total;
+  const interviews = ["interviewing", "offer", "accepted"].reduce(
+    (sum, status) => sum + (marks.application_by_status[status as ApplicationStatus] ?? 0),
+    0,
+  );
+  if (!total) return <>None yet</>;
+  return <>{Math.round((interviews / total) * 100)}% of applications, by current status</>;
 }

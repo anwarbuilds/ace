@@ -133,13 +133,28 @@ Applications page combines those same two sources.
 
 ## Start and verify
 
+Build release images with the exact Git commit embedded in the web image and
+response headers. This command prepares images only and does not replace any
+running production container:
+
 ```bash
+deploy/oracle/prepare-release.sh
+```
+
+After reviewing the prepared release, start the approved commit with the same
+identifier:
+
+```bash
+export ACE_BUILD_SHA="$(git rev-parse HEAD)"
 docker compose -f deploy/oracle/compose.yaml up -d --build \
   postgres migrate api web caddy
 docker compose -f deploy/oracle/compose.yaml ps
 docker compose -f deploy/oracle/compose.yaml logs --tail=100 migrate api web caddy
 curl -fsS "https://${ACE_DOMAIN}/healthz"
 ```
+
+The health response and every Next.js response include the frontend commit.
+Compare it with `git rev-parse HEAD` before accepting the deployment.
 
 Open the site, sign in with the existing owner password and the code delivered
 to the owner's email, and confirm Pulls,

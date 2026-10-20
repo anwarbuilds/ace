@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { ApplicationCount } from "@/components/applications/ApplicationCount";
+import { ApplicationCount, ApplicationStageCount } from "@/components/applications/ApplicationCount";
 import { EmptyBox, StatusBadge } from "@/components/bits";
 import { Icon } from "@/components/Icon";
 import { Kpi } from "@/components/page/PageParts";
@@ -137,18 +137,18 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
             <Kpi label="Applications" value={<ApplicationCount />} foot={`${applied.without_posting} without a stored posting`} />
             <Kpi
               label="Waiting"
-              value={(applied.by_status.applied ?? 0).toLocaleString("en-US")}
+              value={<ApplicationStageCount statuses={["applied"]} />}
               foot="Applied, no answer yet"
             />
             <Kpi
               label="Interviews"
-              value={applied.interviews.toLocaleString("en-US")}
+              value={<ApplicationStageCount statuses={["interviewing", "offer", "accepted"]} />}
               foot="Interviewing, offer or accepted now"
               tone={applied.interviews ? "good" : undefined}
             />
             <Kpi
               label="No reply"
-              value={(applied.by_status.ghosted ?? 0).toLocaleString("en-US")}
+              value={<ApplicationStageCount statuses={["ghosted"]} />}
               foot="Marked no reply, never counted as rejected"
               href="/app/analytics"
             />

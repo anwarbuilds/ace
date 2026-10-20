@@ -33,6 +33,7 @@ export function useMarks(listPage?: string) {
   const mark = useCallback(
     async (job: Job, key: MarkKey) => {
       if (!beginJobMutation(job.id)) return;
+      let released = false;
       const was = current(job, key);
       const body: MarkBody =
         key === "saved"
@@ -83,20 +84,25 @@ export function useMarks(listPage?: string) {
       try {
         const res = await putMark(job.id, body);
         patchJob(job.id, fromResult(res));
+        endJobMutation(job.id);
+        released = true;
         settleMarks();
         toast(label, async () => {
           if (!beginJobMutation(job.id)) return;
           transitionApplication(toApplication, fromApplication);
+          let undoReleased = false;
           try {
             const back = await putMark(job.id, undoBody);
             patchJob(job.id, fromResult(back));
             if (leaves) hideJob(job.id, false);
+            endJobMutation(job.id);
+            undoReleased = true;
             settleMarks();
           } catch {
             transitionApplication(fromApplication, toApplication);
             toast("Could not undo that change");
           } finally {
-            endJobMutation(job.id);
+            if (!undoReleased) endJobMutation(job.id);
           }
         });
       } catch {
@@ -110,7 +116,7 @@ export function useMarks(listPage?: string) {
         if (leaves) hideJob(job.id, false);
         toast("Could not save that change");
       } finally {
-        endJobMutation(job.id);
+        if (!released) endJobMutation(job.id);
       }
     },
     [patchJob, hideJob, settleMarks, transitionApplication, beginJobMutation, endJobMutation, toast, listPage],
@@ -119,6 +125,7 @@ export function useMarks(listPage?: string) {
   const setStatus = useCallback(
     async (job: Job, status: ApplicationStatus) => {
       if (!beginJobMutation(job.id)) return;
+      let released = false;
       const was = job.application_status;
       const fromApplication = job.applied_at ? was ?? "applied" : null;
       const toApplication = status;
@@ -127,19 +134,24 @@ export function useMarks(listPage?: string) {
       try {
         const res = await putMark(job.id, { application_status: status });
         patchJob(job.id, fromResult(res));
+        endJobMutation(job.id);
+        released = true;
         settleMarks();
         toast(`${STATUS_LABEL[status]} recorded`, async () => {
           if (!beginJobMutation(job.id)) return;
           transitionApplication(toApplication, fromApplication);
+          let undoReleased = false;
           try {
             const back = await putMark(job.id, was ? { application_status: was } : { applied: false });
             patchJob(job.id, fromResult(back));
+            endJobMutation(job.id);
+            undoReleased = true;
             settleMarks();
           } catch {
             transitionApplication(fromApplication, toApplication);
             toast("Could not undo that change");
           } finally {
-            endJobMutation(job.id);
+            if (!undoReleased) endJobMutation(job.id);
           }
         });
       } catch {
@@ -147,7 +159,7 @@ export function useMarks(listPage?: string) {
         transitionApplication(toApplication, fromApplication);
         toast("Could not record that status");
       } finally {
-        endJobMutation(job.id);
+        if (!released) endJobMutation(job.id);
       }
     },
     [patchJob, settleMarks, transitionApplication, beginJobMutation, endJobMutation, toast],

@@ -150,6 +150,8 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      args:
+        ACE_BUILD_SHA: ${ACE_BUILD_SHA:-unversioned}
 
     environment:
       API_ORIGIN: http://api:8000

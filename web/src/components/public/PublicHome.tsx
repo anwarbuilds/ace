@@ -19,23 +19,23 @@ export function PublicHome() {
       <PublicHeader />
       <section className="wine-home-hero">
         <div className="wine-home-copy">
-          <div className="wine-kicker"><i /> A private career intelligence platform</div>
-          <h1>Career<br /><em>intelligence.</em></h1>
+          <div className="wine-kicker"><i /> A private career intelligence platform <strong>Always working</strong></div>
+          <h1>Career<br />intelligence,<br /><em>always on.</em></h1>
           <p className="wine-home-tag">Grow at your own pace.</p>
           <p className="wine-home-description">Discover the openings that matter, move from opportunity to application, and understand your progress without losing sight of what&apos;s next.</p>
           <div className="wine-home-actions">
             <Link className="wine-button primary" href="/login">Sign in to ace <NavIcon name="right" size="sm" /></Link>
             <a className="wine-button" href="#inside-ace">Preview Pulls <NavIcon name="right" size="sm" /></a>
           </div>
-          <div className="wine-home-micro"><i /> One private workspace. <b>•</b> Private by design</div>
+          <div className="wine-home-micro"><i /> Always working. One private workspace. <b>•</b> Illustration only</div>
         </div>
-        <div className="wine-art-caption"><b>DISCOVER · DECIDE · APPLY</b></div>
+        <div className="wine-art-caption"><span>01 / 03</span><b>DISCOVER · DECIDE · APPLY</b></div>
       </section>
 
       <section className="wine-preview-section" id="inside-ace">
         <div className="wine-section-heading">
           <div><span className="eyebrow">Inside ace</span><h2>A clearer way to work.</h2><p>Go straight into recent Pulls. Every opportunity and application has a place.</p></div>
-          <Link className="wine-button" href="/login?next=%2Fapp%2Fpulls">Open your workspace <NavIcon name="right" size="sm" /></Link>
+          <Link className="wine-button" href="/login?next=%2Fapp%2Fpulls">Open interactive workspace <NavIcon name="right" size="sm" /></Link>
         </div>
         <div className="wine-product-window" aria-label="Private Pulls workspace preview">
           <div className="wine-browser-bar"><span className="wine-browser-dots"><i /><i /><i /></span><b>ace / pulls</b><span><NavIcon name="lock" size="sm" /> Private workspace</span></div>

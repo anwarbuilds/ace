@@ -1,6 +1,12 @@
 import Link from "next/link";
 
-import { ApplicationCount } from "@/components/applications/ApplicationCount";
+import {
+  ApplicationCount,
+  ApplicationHeardBack,
+  ApplicationHeardBackFoot,
+  ApplicationInterviewFoot,
+  ApplicationStageCount,
+} from "@/components/applications/ApplicationCount";
 import { Bars, DayColumns, Kpi, PageHero } from "@/components/page/PageParts";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGetOr } from "@/lib/api";
@@ -121,10 +127,6 @@ function BreakdownTable({
   );
 }
 
-function pctOf(n: number, of: number): string {
-  return of ? `${Math.round((100 * n) / of)}%` : "no applications yet";
-}
-
 const STATUS_ORDER: ApplicationStatus[] = ["applied", "screening", "interviewing", "offer", "accepted", "rejected", "withdrawn", "ghosted"];
 
 export default async function AnalyticsPage({ searchParams }: PageProps<"/app/analytics">) {
@@ -193,12 +195,11 @@ export default async function AnalyticsPage({ searchParams }: PageProps<"/app/an
             foot={`${a.with_posting} with a stored posting, ${a.without_posting} without`}
             href="/app/applications"
           />
-          <Kpi label="Heard back" value={a.total ? pctOf(a.heard_back, a.total) : "0"} foot={`${a.heard_back} of ${a.total} have an answer`} />
+          <Kpi label="Heard back" value={<ApplicationHeardBack />} foot={<ApplicationHeardBackFoot />} />
           <Kpi
             label="Interviews"
-            value={a.interviews.toLocaleString("en-US")}
-            foot={a.total ? `${pctOf(a.interviews, a.total)} of applications, by current status` : "None yet"}
-            tone={a.interviews ? "good" : undefined}
+            value={<ApplicationStageCount statuses={["interviewing", "offer", "accepted"]} />}
+            foot={<ApplicationInterviewFoot />}
           />
           <Kpi
             label={`Applied, last ${d.filters.days} days`}

@@ -10,6 +10,7 @@ import type { NextConfig } from "next";
 // upgrade-insecure-requests, which would break plain http://localhost.
 // HTTPS and HSTS belong to the proxy in front (deploy/Caddyfile).
 const isDev = process.env.NODE_ENV === "development";
+const buildSha = process.env.ACE_BUILD_SHA || process.env.NEXT_PUBLIC_ACE_BUILD_SHA || "unversioned";
 const CSP = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
@@ -32,8 +33,14 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  deploymentId: buildSha === "unversioned" ? undefined : buildSha,
   async headers() {
-    return [{ source: "/:path*", headers: SECURITY_HEADERS }];
+    return [
+      {
+        source: "/:path*",
+        headers: [...SECURITY_HEADERS, { key: "X-Ace-Frontend-Commit", value: buildSha }],
+      },
+    ];
   },
   poweredByHeader: false,
   devIndicators: false,
