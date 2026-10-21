@@ -876,3 +876,13 @@ which needs the user's mailbox consent -- proposed, not built.
   Cloudflare), Citadel Securities (403), D. E. Shaw (sitemap lists ~78
   roles by slug, page content loads from disallowed `/recruit/`),
   LinkedIn (`User-agent: * Disallow: /`).
+
+## A Greenhouse posted date can predate the listing by days (2026-10-21)
+
+Asked whether ace missed a DoorDash new grad role (greenhouse `doordashusa`, job 8163709). Its `posted_at` (Greenhouse
+`first_published`) was Sep 4, ace first saw it on Sep 10, and ace had been reading the board since Sep 5, which looked
+like six days late. It was not: that week ace caught every new DoorDash posting within minutes, the read at 17:33 UTC on
+Sep 10 did not contain it and the read at 17:55 did. Greenhouse keeps `first_published` when a post is relisted (a Shift
+Lead first published in 2022 reappeared the same day), so it went public, or back up, on Sep 10. To judge lateness,
+compare `first_seen_at` with the board's neighbouring arrivals (the reads just before), never with `posted_at`. The
+caught-late audit is unaffected: it measures against the feed's first sighting.
