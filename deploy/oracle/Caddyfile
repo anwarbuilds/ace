@@ -1,5 +1,9 @@
-{$ACE_DOMAIN}, ace.161-153-89-170.sslip.io {
+{$ACE_DOMAIN} {
   encode zstd gzip
   reverse_proxy web:3000
   header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+}
+
+ace.161-153-89-170.sslip.io {
+  redir https://{$ACE_DOMAIN}{uri} permanent
 }
