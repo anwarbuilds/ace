@@ -1,0 +1,125 @@
+\pset format unaligned
+\pset tuples_only on
+
+WITH settled AS (
+    SELECT id
+    FROM poll_sessions
+    WHERE started_at <= :'cutoff'::timestamptz - interval '15 minutes'
+    ORDER BY started_at DESC
+    LIMIT 12
+)
+SELECT 'settled_sessions|' || count(*) || '|' ||
+       md5(string_agg(md5(to_jsonb(row_data)::text), '' ORDER BY id))
+FROM (
+    SELECT session.id, session.started_at, session.last_activity_at,
+           session.jobs_discovered, session.qualifying_discovered,
+           session.notified_at, session.boards_checked,
+           session.postings_checked, session.alert_status
+    FROM poll_sessions AS session
+    JOIN settled USING (id)
+) AS row_data;
+
+WITH settled AS (
+    SELECT id
+    FROM poll_sessions
+    WHERE started_at <= :'cutoff'::timestamptz - interval '15 minutes'
+    ORDER BY started_at DESC
+    LIMIT 12
+)
+SELECT 'settled_jobs|' || count(*) || '|' ||
+       md5(string_agg(md5(to_jsonb(row_data)::text), '' ORDER BY id))
+FROM (
+    SELECT job.id, job.source, job.source_account, job.external_id,
+           job.company, job.requisition_id, job.title, job.location,
+           job.description, job.official_url, job.posted_at,
+           job.source_updated_at, job.content_hash, job.first_seen_at,
+           job.last_seen_at, job.is_active, job.closed_at,
+           job.first_seen_session_id, job.employment_type
+    FROM jobs AS job
+    JOIN settled ON settled.id = job.first_seen_session_id
+) AS row_data;
+
+WITH settled AS (
+    SELECT id
+    FROM poll_sessions
+    WHERE started_at <= :'cutoff'::timestamptz - interval '15 minutes'
+    ORDER BY started_at DESC
+    LIMIT 12
+)
+SELECT 'settled_job_identity|' || count(*) || '|' ||
+       md5(string_agg(md5(to_jsonb(row_data)::text), '' ORDER BY id))
+FROM (
+    SELECT job.id, job.company, job.title, job.location,
+           job.first_seen_at, job.first_seen_session_id
+    FROM jobs AS job
+    JOIN settled ON settled.id = job.first_seen_session_id
+) AS row_data;
+
+WITH settled AS (
+    SELECT id
+    FROM poll_sessions
+    WHERE started_at <= :'cutoff'::timestamptz - interval '15 minutes'
+    ORDER BY started_at DESC
+    LIMIT 12
+)
+SELECT 'settled_qualifying_jobs|' || count(*) || '|' ||
+       coalesce(md5(string_agg(md5(to_jsonb(row_data)::text), '' ORDER BY id)), '')
+FROM (
+    SELECT job.id, job.company, job.title, job.location,
+           job.first_seen_at, job.first_seen_session_id,
+           evaluation.eligibility_status
+    FROM jobs AS job
+    JOIN settled ON settled.id = job.first_seen_session_id
+    JOIN job_evaluations AS evaluation ON evaluation.job_id = job.id
+    WHERE evaluation.eligibility_status = 'PASS'
+) AS row_data;
+
+WITH settled AS (
+    SELECT id
+    FROM poll_sessions
+    WHERE started_at <= :'cutoff'::timestamptz - interval '15 minutes'
+    ORDER BY started_at DESC
+    LIMIT 12
+)
+SELECT 'settled_evaluations|' || count(*) || '|' ||
+       md5(string_agg(md5(to_jsonb(row_data)::text), '' ORDER BY job_id))
+FROM (
+    SELECT evaluation.job_id, evaluation.eligibility_status,
+           evaluation.role_family, evaluation.role_priority,
+           evaluation.rule_version, evaluation.reason_codes,
+           evaluation.reasons, evaluation.required_experience_years,
+           evaluation.content_hash, evaluation.evaluated_at,
+           evaluation.is_early_career,
+           evaluation.requirements_verified, evaluation.is_new_grad
+    FROM job_evaluations AS evaluation
+    JOIN jobs AS job ON job.id = evaluation.job_id
+    JOIN settled ON settled.id = job.first_seen_session_id
+) AS row_data;
+
+SELECT 'enabled_sources|' || count(*) || '|' ||
+       md5(string_agg(md5(to_jsonb(row_data)::text), '' ORDER BY id))
+FROM (
+    SELECT source.id, source.source_type, source.source_account,
+           source.company_name, source.enabled,
+           source.poll_interval_seconds, source.discovery_source,
+           source.first_discovered_at, source.last_verified_at,
+           source.created_at, source.updated_at, source.source_host
+    FROM job_sources AS source
+    WHERE enabled
+) AS row_data;
+
+SELECT 'job_marks|' || count(*) || '|' ||
+       coalesce(md5(string_agg(md5(to_jsonb(row_data)::text), '' ORDER BY job_id)), '')
+FROM job_marks AS row_data;
+
+SELECT 'external_applications|' || count(*) || '|' ||
+       coalesce(md5(string_agg(md5(to_jsonb(row_data)::text), '' ORDER BY id)), '')
+FROM external_applications AS row_data;
+
+SELECT 'application_answers|' || count(*) || '|' ||
+       coalesce(md5(string_agg(md5(to_jsonb(row_data)::text), '' ORDER BY id)), '')
+FROM application_answers AS row_data;
+
+SELECT 'history_entries|' || count(*) || '|' ||
+       coalesce(md5(string_agg(md5(to_jsonb(row_data)::text), '' ORDER BY id)), '')
+FROM history_entries AS row_data;

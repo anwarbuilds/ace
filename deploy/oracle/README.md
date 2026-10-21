@@ -225,6 +225,52 @@ systemctl list-timers ace-backup.timer
 Perform a restore drill into a separate database before cutover and monthly
 afterward. A backup that has never been restored is unverified.
 
+## Parallel monitoring with the legacy scheduler
+
+During the owner comparison period, keep the legacy scheduler as the only
+discovery writer and keep the cloud scheduler stopped. The cloud API can use a
+separate migrated database while `sync-legacy-replica.sh` copies discovery
+results from the legacy database. User-managed application data is copied back
+to the legacy database first, with the newest `updated_at` value winning, so
+marks and application updates made through either interface remain consistent.
+
+Install the sync from the legacy host account that can access the local Docker
+socket and the cloud SSH key:
+
+```bash
+mkdir -p "$HOME/.local/state/ace-legacy-replica"
+chmod 700 "$HOME/.local/state/ace-legacy-replica"
+(crontab -l 2>/dev/null; printf '%s\n' \
+  '* * * * * /home/ubuntu/Documents/ace-next/deploy/oracle/sync-legacy-replica.sh >> /home/ubuntu/.local/state/ace-legacy-replica/cron.log 2>&1') \
+  | sort -u | crontab -
+```
+
+The cron entry attempts a sync every minute. `flock` permits only one active
+transaction, so a large polling batch can take longer without overlapping the
+next run. The cursor advances only after the cloud transaction succeeds. A
+five-minute replay overlap covers source transactions that commit just after a
+snapshot while carrying slightly earlier timestamps. All replayed writes are
+idempotent.
+
+Check the most recent successful boundary and log with:
+
+```bash
+cat "$HOME/.local/state/ace-legacy-replica/cursor"
+tail -n 20 "$HOME/.local/state/ace-legacy-replica/cron.log"
+```
+
+`replica-parity.psql` hashes the latest completed pull sessions, their complete
+job identities, qualifying opportunities, enabled sources and user-managed
+application data. Pass the successful cursor as `cutoff` when running it
+against both databases. Compare the output lines exactly. Full mutable job and
+evaluation hashes can temporarily differ while the legacy scheduler changes
+`last_seen_at` or `evaluated_at` after the completed replica snapshot. The job
+identity and qualifying-job hashes prove that the companies and opportunities
+shown for settled pulls are the same.
+
+Do not start the cloud scheduler during this monitoring mode. Removing the
+cron entry stops replication without changing either database.
+
 ## Cutover
 
 Cutover is the only stage that briefly stops writes. On the old machine, stop
