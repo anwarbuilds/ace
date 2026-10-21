@@ -879,10 +879,17 @@ which needs the user's mailbox consent -- proposed, not built.
 
 ## A Greenhouse posted date can predate the listing by days (2026-10-21)
 
-Asked whether ace missed a DoorDash new grad role (greenhouse `doordashusa`, job 8163709). Its `posted_at` (Greenhouse
-`first_published`) was Sep 4, ace first saw it on Sep 10, and ace had been reading the board since Sep 5, which looked
-like six days late. It was not: that week ace caught every new DoorDash posting within minutes, the read at 17:33 UTC on
-Sep 10 did not contain it and the read at 17:55 did. Greenhouse keeps `first_published` when a post is relisted (a Shift
-Lead first published in 2022 reappeared the same day), so it went public, or back up, on Sep 10. To judge lateness,
-compare `first_seen_at` with the board's neighbouring arrivals (the reads just before), never with `posted_at`. The
-caught-late audit is unaffected: it measures against the feed's first sighting.
+Asked why ace saw a DoorDash new grad role (greenhouse `doordashusa`, job 8163709) on Sep 10 when it was posted Sep 4.
+Timeline (UTC): `first_published` Sep 4 10:21; Simplify listed it Sep 4 14:54; ace registered the board from that list at
+16:53 but stored nothing from any board until Sep 5 16:00 (the scheduler was not yet running continuously); ace's first
+DoorDash read, Sep 5 17:38, did not contain it; it was absent from every read until Sep 10, between the 17:33 read and
+the 17:55 one. Those reads were complete (they caught other new DoorDash postings within minutes) and the reader then
+stored every posting a board listed. So DoorDash took it down after Sep 4 and put it back on Sep 10; `first_published`
+survives that. A posting missing from a Greenhouse board's list also answers 404 on its own URL (checked on two), so it
+was most likely not open to anyone in between. The feed lane ignores Simplify entries on boards ace reads itself
+(`is_included`), which did not matter here.
+
+Benchmark worth reusing: download Simplify's `listings.json` and compare its `date_posted` with ace's `first_seen_at`,
+counting from the later of that and the board's first read in ace. On 2026-10-21: 626 postings, 6 more than a day
+behind, 4 more than three days (this one among them); on boards ace already read, ace was ahead of Simplify on 73% (median
+1.7 hours). Never judge lateness from `posted_at` alone.
