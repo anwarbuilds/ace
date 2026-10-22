@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Avatar, EmptyBox } from "@/components/bits";
 import { useMarks } from "@/components/jobs/useMarks";
@@ -12,6 +12,9 @@ import { ago, clean, clock, expFit, familyLabel, timeRange, unscoredReason, UNSC
 import type { Job, JobPage, PullBucket, PullFilter } from "@/lib/types";
 
 const SHOWN = 20;
+
+interface CompanyEvidence { period: string; source: string; source_uri: string; metric_definition: string; approvals: number | null; denials: number | null; last_checked_at: string }
+interface CompanyDetail { company: string; status: string; petition_history: (CompanyEvidence & {legal_entity: string; report_version: string; first_seen_at: string; approval_rate: number | null})[] }
 
 function n(value: number): string {
   return value.toLocaleString("en-US");
@@ -46,7 +49,7 @@ function description(b: PullBucket): string {
   return parts.join(" ");
 }
 
-function JobLine({ job, tz }: { job: Job; tz: string }) {
+function JobLine({ job, tz, evidence, onCompanySelect }: { job: Job; tz: string; evidence?: CompanyEvidence; onCompanySelect: (name: string) => void }) {
   const { mark } = useMarks();
   const fit = expFit(job);
   const applied = Boolean(job.applied_at);
@@ -55,16 +58,18 @@ function JobLine({ job, tz }: { job: Job; tz: string }) {
     <div className={`job-line${dismissed ? " dim" : ""}`}>
       <Avatar name={job.company} />
       <div className="job-copy">
-        <Link className="job-title" href={`/app/jobs/${job.id}`}>
-          {clean(job.title)}
-        </Link>
+        <button className="job-company" onClick={() => onCompanySelect(job.company)}>
+          {clean(job.company)}
+        </button>
+        <Link className="job-title" href={`/app/jobs/${job.id}`}>{clean(job.title)}</Link>
         <div className="job-meta">
-          {[job.company, clean(job.location), familyLabel(job.role_family), fit.text === "Not stated" ? "Experience not stated" : fit.text].filter(Boolean).join(" · ")}
+          {[clean(job.location), familyLabel(job.role_family), fit.text === "Not stated" ? "Experience not stated" : fit.text].filter(Boolean).join(" · ")}
           {job.requirements_verified ? "" : " · requirements unverified"}
           {" · detected "}
           {clock(job.first_seen_at, tz)}
           {job.applied_before ? " · applied before" : ""}
         </div>
+        <div className="job-evidence">{evidence ? `${clean(evidence.period)} USCIS petition decisions: ${evidence.approvals ?? "Not available"} approved, ${evidence.denials ?? "Not available"} denied. Source: ${clean(evidence.source)}.` : "H-1B history: Not available"} <button onClick={() => onCompanySelect(job.company)}>Company insights</button></div>
       </div>
       {job.match_score == null ? (
         <span className="pscore dim" title={UNSCORED[unscoredReason(job)].long}>
@@ -105,10 +110,11 @@ function JobLine({ job, tz }: { job: Job; tz: string }) {
   );
 }
 
-function Results({ bucket, tz }: { bucket: PullBucket; tz: string }) {
+function Results({ bucket, tz, onCompanySelect }: { bucket: PullBucket; tz: string; onCompanySelect: (name: string) => void }) {
   const { patches, hidden } = useApp();
   const [page, setPage] = useState<JobPage | null>(null);
   const [failed, setFailed] = useState(false);
+  const [evidence, setEvidence] = useState<Record<string, CompanyEvidence>>({});
 
   useEffect(() => {
     if (bucket.new_qualifying === 0) return;
@@ -123,6 +129,17 @@ function Results({ bucket, tz }: { bucket: PullBucket; tz: string }) {
       live = false;
     };
   }, [bucket.id, bucket.new_qualifying]);
+
+  useEffect(() => {
+    if (!page?.items.length) return;
+    let live = true;
+    const params = new URLSearchParams();
+    for (const name of new Set(page.items.map((item) => item.company))) params.append("name", name);
+    getJson<{items: Record<string, CompanyEvidence>}>("/api/company-intelligence/batch", params)
+      .then((data) => { if (live) setEvidence(data.items); })
+      .catch(() => { if (live) setEvidence({}); });
+    return () => { live = false; };
+  }, [page]);
 
   if (bucket.new_qualifying === 0)
     return (
@@ -145,7 +162,7 @@ function Results({ bucket, tz }: { bucket: PullBucket; tz: string }) {
   return (
     <>
       {jobs.length ? (
-        jobs.map((j) => <JobLine key={j.id} job={j} tz={tz} />)
+        jobs.map((j) => <JobLine key={j.id} job={j} tz={tz} evidence={evidence[j.company]} onCompanySelect={onCompanySelect} />)
       ) : (
         <div className="pull-empty">
           {bucket.qualifying_open_now === 0
@@ -164,6 +181,32 @@ function Results({ bucket, tz }: { bucket: PullBucket; tz: string }) {
   );
 }
 
+function CompanyInsightDialog({ company, onClose }: { company: string; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const [detail, setDetail] = useState<CompanyDetail | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const element = ref.current;
+    element?.showModal();
+    return () => { if (element?.open) element.close(); };
+  }, []);
+  useEffect(() => {
+    let live = true;
+    getJson<CompanyDetail>("/api/company-intelligence", new URLSearchParams({ name: company }))
+      .then((value) => { if (live) setDetail(value); })
+      .catch(() => { if (live) setFailed(true); });
+    return () => { live = false; };
+  }, [company]);
+  return <dialog ref={ref} className="company-dialog" onClose={onClose} aria-label={`Company intelligence for ${clean(company)}`}>
+    <div className="company-dialog-head"><div><div className="eyebrow">Company intelligence</div><h2>{clean(company)}</h2></div><button className="btn ghost" onClick={() => ref.current?.close()} aria-label="Close company intelligence">Close</button></div>
+    {failed ? <p>Company evidence could not be loaded. Try again later.</p> : !detail ? <p>Loading verified company evidence</p> : detail.petition_history.length ? <>
+      {detail.petition_history.map((report) => <div className="company-report" key={`${report.source_uri}:${report.period}:${report.report_version}`}><h3>{clean(report.legal_entity)} · {clean(report.period)}</h3><p>{clean(report.metric_definition)}. Approved: {report.approvals ?? "Not available"}. Denied: {report.denials ?? "Not available"}. Approval rate: {report.approval_rate == null ? "Not available" : `${Math.round(report.approval_rate * 100)}%`}.</p><p>Source: <a href={report.source_uri} rel="noreferrer" target="_blank">{clean(report.source)}</a>. Checked: {new Date(report.last_checked_at).toLocaleDateString("en-US")}.</p></div>)}
+    </> : <p>H-1B petition history: Not available. No verified official report is connected to this company.</p>}
+    <p>Company workforce sponsorship rate: Not available. Petition decisions do not predict sponsorship for a specific job.</p>
+    <Link className="btn" href={`/app/company/${encodeURIComponent(company)}`}>Open company page</Link>
+  </dialog>;
+}
+
 /** The windows, newest first. Each opens to the jobs it found, loaded
  *  when opened, so the page itself stays one request. */
 export function PullsTimeline({
@@ -179,6 +222,7 @@ export function PullsTimeline({
 }) {
   const firstHit = buckets.find((b) => b.new_qualifying > 0);
   const [open, setOpen] = useState<Set<number>>(() => new Set(firstHit && isToday ? [firstHit.id] : []));
+  const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const toggle = useCallback(
     (id: number) =>
       setOpen((prev) => {
@@ -274,13 +318,14 @@ export function PullsTimeline({
               </button>
               {isOpen ? (
                 <div className="pull-results" id={`pull-results-${b.id}`}>
-                  <Results bucket={b} tz={tz} />
+                  <Results bucket={b} tz={tz} onCompanySelect={setSelectedCompany} />
                 </div>
               ) : null}
             </section>
           </div>
         );
       })}
+      {selectedCompany ? <CompanyInsightDialog key={selectedCompany} company={selectedCompany} onClose={() => setSelectedCompany(null)} /> : null}
     </div>
   );
 }

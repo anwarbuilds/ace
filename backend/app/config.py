@@ -131,6 +131,14 @@ class Settings(BaseSettings):
 
     google_redirect_uri: str = ""
 
+    # Separate opt-in Gmail read-only authorization. Reuse no sign-in grant.
+    gmail_client_id: str = ""
+    gmail_client_secret: str = ""
+    gmail_redirect_uri: str = ""
+    # A Fernet key supplied privately by the owner, never committed.
+    gmail_token_key: str = ""
+    gmail_auto_outcomes_allowed: bool = False
+
     # The interactive API docs list every route. Off unless asked for.
     api_docs: bool = False
 

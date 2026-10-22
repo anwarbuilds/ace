@@ -7,7 +7,6 @@ test("old route names redirect to the new ones", async ({ page }) => {
     ["/app/queue", "/app/opportunities"],
     ["/app", "/app/pulls"],
     ["/app/activity", "/app/pulls"],
-    ["/app/dashboard", "/app/analytics"],
     ["/app/applied", "/app/applications"],
     ["/app/resume", "/app/resume-studio"],
     ["/app/skills", "/app/insights/skills"],

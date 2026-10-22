@@ -951,6 +951,101 @@ class ExternalApplicationRecord(Base):
     )
 
 
+class ApplicationEventRecord(Base):
+    """Append-only evidence and corrections for an existing application."""
+
+    __tablename__ = "application_events"
+    __table_args__ = (
+        UniqueConstraint("dedupe_key", name="uq_application_events_dedupe"),
+        Index("ix_application_events_target", "application_key", "recorded_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BIGINT_ID, primary_key=True, autoincrement=True)
+    application_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    previous_status: Mapped[str | None] = mapped_column(String(24))
+    new_status: Mapped[str | None] = mapped_column(String(24))
+    occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    actor: Mapped[str] = mapped_column(String(24), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    gmail_message_id: Mapped[int | None] = mapped_column(BIGINT_ID, ForeignKey("gmail_messages.id"))
+    undo_of_id: Mapped[int | None] = mapped_column(BIGINT_ID, ForeignKey("application_events.id"))
+    dedupe_key: Mapped[str] = mapped_column(String(180), nullable=False)
+
+
+class GmailConnectionRecord(Base):
+    """Separate, opt-in Gmail grant; never shares the Google sign-in scope."""
+
+    __tablename__ = "gmail_connections"
+    __table_args__ = (UniqueConstraint("owner_id", name="uq_gmail_connections_owner"),)
+
+    id: Mapped[int] = mapped_column(BIGINT_ID, primary_key=True, autoincrement=True)
+    owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    encrypted_refresh_token: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    scope: Mapped[str] = mapped_column(String(255), nullable=False)
+    state: Mapped[str] = mapped_column(String(24), nullable=False, server_default="paused")
+    history_id: Mapped[str | None] = mapped_column(String(80))
+    preview_baseline_history_id: Mapped[str | None] = mapped_column(String(80))
+    preview_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(String(120))
+    auto_outcomes_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class GmailMessageRecord(Base):
+    """Minimum retained evidence; no raw email body or HTML is stored."""
+
+    __tablename__ = "gmail_messages"
+    __table_args__ = (
+        UniqueConstraint("connection_id", "gmail_id", name="uq_gmail_messages_identity"),
+        Index("ix_gmail_messages_review", "connection_id", "decision"),
+    )
+
+    id: Mapped[int] = mapped_column(BIGINT_ID, primary_key=True, autoincrement=True)
+    connection_id: Mapped[int] = mapped_column(BIGINT_ID, ForeignKey("gmail_connections.id"), nullable=False)
+    gmail_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    thread_id: Mapped[str | None] = mapped_column(String(128))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    sender: Mapped[str] = mapped_column(String(320), nullable=False)
+    subject: Mapped[str] = mapped_column(String(500), nullable=False)
+    snippet: Mapped[str] = mapped_column(String(500), nullable=False)
+    classification: Mapped[str] = mapped_column(String(40), nullable=False)
+    requisition_id: Mapped[str | None] = mapped_column(String(120))
+    decision: Mapped[str] = mapped_column(String(24), nullable=False)
+    candidate_keys: Mapped[list | None] = mapped_column(JSON_PAYLOAD)
+    decision_reason: Mapped[str] = mapped_column(String(300), nullable=False)
+    selected_application_key: Mapped[str | None] = mapped_column(String(80))
+    parser_version: Mapped[str] = mapped_column(String(24), nullable=False)
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class CompanyPetitionReportRecord(Base):
+    """Verified official legal-entity report, never a job probability."""
+
+    __tablename__ = "company_petition_reports"
+    __table_args__ = (
+        UniqueConstraint("source_uri", "legal_entity", "period", "report_version", name="uq_company_petition_report"),
+        Index("ix_company_petition_alias", "ace_company"),
+    )
+
+    id: Mapped[int] = mapped_column(BIGINT_ID, primary_key=True, autoincrement=True)
+    ace_company: Mapped[str] = mapped_column(String(255), nullable=False)
+    legal_entity: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    source_uri: Mapped[str] = mapped_column(Text, nullable=False)
+    metric_definition: Mapped[str] = mapped_column(String(200), nullable=False)
+    period: Mapped[str] = mapped_column(String(60), nullable=False)
+    report_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    petition_approvals: Mapped[int | None] = mapped_column(Integer)
+    petition_denials: Mapped[int | None] = mapped_column(Integer)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    entity_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+
+
 class ApplicationAnswerRecord(Base):
     """One answer the user gives on most application forms.
 

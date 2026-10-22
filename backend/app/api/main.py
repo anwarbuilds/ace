@@ -75,8 +75,10 @@ from backend.app.api.queries import (
     list_jobs,
 )
 from backend.app.db.models import (
+    ApplicationEventRecord,
     ApplicationAnswerRecord,
     HistoryEntryRecord,
+    JobMarkRecord,
     JobRecord,
 )
 from backend.app.persistence.openings import (
@@ -1856,6 +1858,9 @@ def create_app() -> FastAPI:
                 ),
             )
 
+        before = session.get(JobMarkRecord, job_id)
+        before_status = before.application_status if before else None
+        before_applied = before.applied_at if before else None
         record = set_mark(
             session,
             job_id=job_id,
@@ -1874,6 +1879,20 @@ def create_app() -> FastAPI:
                 payload.status_note
             ),
         )
+
+        if before_status != record.application_status or bool(before_applied) != bool(record.applied_at):
+            from uuid import uuid4
+
+            session.add(ApplicationEventRecord(
+                application_key=f"job:{job_id}",
+                kind={"interviewing": "interview", "screening": "recruiter_reply", "rejected": "rejection"}.get(record.application_status, record.application_status or "cleared"),
+                previous_status=before_status,
+                new_status=record.application_status,
+                occurred_at=record.status_changed_at or record.applied_at,
+                actor="owner",
+                reason="Owner updated the application in ACE",
+                dedupe_key=f"owner:{uuid4().hex}",
+            ))
 
         session.commit()
 
@@ -2227,6 +2246,8 @@ def create_app() -> FastAPI:
         companies,
         dashboard,
         export,
+        intelligence,
+        inbox,
         pulls,
         studio,
         system,
@@ -2236,6 +2257,8 @@ def create_app() -> FastAPI:
         auth,
         companies,
         dashboard,
+        intelligence,
+        inbox,
         system,
         export,
         pulls,

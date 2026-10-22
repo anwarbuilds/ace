@@ -7,16 +7,74 @@ brand. Counts only; the roles themselves come from /api/jobs?company=.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
-from backend.app.db.models import JobEvaluationRecord, JobMarkRecord, JobRecord
+from backend.app.db.models import CompanyPetitionReportRecord, JobEvaluationRecord, JobMarkRecord, JobRecord
 from backend.app.intelligence.companies import classify_company
 
 
 router = APIRouter()
+
+
+@router.get("/api/company-intelligence/batch")
+def company_intelligence_batch(name: list[str] = Query(default=[]), session: Session = Depends(get_session)) -> dict:
+    """Compact verified evidence for the visible Pull rows, never fuzzy joined."""
+    names = list(dict.fromkeys(value[:255] for value in name if value))[:30]
+    if not names:
+        return {"items": {}}
+    rows = session.scalars(
+        select(CompanyPetitionReportRecord)
+        .where(CompanyPetitionReportRecord.ace_company.in_(names), CompanyPetitionReportRecord.entity_verified.is_(True))
+        .order_by(CompanyPetitionReportRecord.period.desc())
+    ).all()
+    items = {}
+    for row in rows:
+        items.setdefault(row.ace_company, {
+            "period": row.period, "source": row.source_name, "source_uri": row.source_uri,
+            "metric_definition": row.metric_definition, "approvals": row.petition_approvals,
+            "denials": row.petition_denials, "last_checked_at": row.last_checked_at.isoformat(),
+        })
+    return {"items": items}
+
+
+@router.get("/api/company-intelligence")
+def company_intelligence(name: str = Query(..., min_length=1, max_length=255), session: Session = Depends(get_session)) -> dict:
+    """Only explicitly resolved official legal-entity evidence is shown."""
+    reports = session.scalars(
+        select(CompanyPetitionReportRecord)
+        .where(CompanyPetitionReportRecord.ace_company == name, CompanyPetitionReportRecord.entity_verified.is_(True))
+        .order_by(CompanyPetitionReportRecord.period.desc())
+        .limit(20)
+    ).all()
+    return {
+        "company": name,
+        "petition_history": [
+            {
+                "legal_entity": r.legal_entity,
+                "source": r.source_name,
+                "source_uri": r.source_uri,
+                "metric_definition": r.metric_definition,
+                "period": r.period,
+                "report_version": r.report_version,
+                "approvals": r.petition_approvals,
+                "denials": r.petition_denials,
+                "approval_rate": (
+                    r.petition_approvals / (r.petition_approvals + r.petition_denials)
+                    if r.metric_definition == "USCIS I-129 petition decisions"
+                    and r.petition_approvals is not None and r.petition_denials is not None
+                    and r.petition_approvals + r.petition_denials > 0 else None
+                ),
+                "first_seen_at": r.first_seen_at.isoformat(),
+                "last_checked_at": r.last_checked_at.isoformat(),
+            }
+            for r in reports
+        ],
+        "hiring_sponsorship_rate": None,
+        "status": "verified" if reports else "unavailable",
+    }
 
 
 @router.get("/api/companies")

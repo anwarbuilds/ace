@@ -105,6 +105,16 @@ def test_backend_home_redirects_to_the_web_app(client) -> None:
     assert response.headers["location"] == "http://localhost:3000/app/pulls"
 
 
+def test_inbox_is_owner_only_and_automation_is_off_without_a_grant(client) -> None:
+    assert client.get("/api/inbox/connection").status_code == 401
+    assert _login(client).status_code == 200
+    status = client.get("/api/inbox/connection").json()
+    assert status["available"] is False
+    assert status["connected"] is False
+    assert status["auto_outcomes_enabled"] is False
+    assert client.post("/api/inbox/backfill", json={"days": 30}, headers=_csrf(client)).status_code == 409
+
+
 # ----------------------------------------------------------------------
 # Anonymous callers
 # ----------------------------------------------------------------------

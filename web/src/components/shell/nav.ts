@@ -25,6 +25,8 @@ export const NAV: NavGroup[] = [
       { href: "/app/opportunities", label: "Opportunities", short: "Jobs", icon: "briefcase", also: ["/app/jobs", "/app/saved"] },
       { href: "/app/applications", label: "Applications", short: "Applied", icon: "send" },
       { href: "/app/analytics", label: "Analytics", short: "Analytics", icon: "chart" },
+      { href: "/app/dashboard", label: "Career Dashboard", short: "Dashboard", icon: "chart" },
+      { href: "/app/applications/inbox", label: "Inbox Intelligence", short: "Inbox", icon: "send" },
     ],
   },
   {
@@ -50,6 +52,7 @@ export const ALL_ITEMS: NavItem[] = NAV.flatMap((g) => g.items);
 const under = (path: string, href: string) => path === href || path.startsWith(`${href}/`);
 
 export function isActive(item: NavItem, path: string): boolean {
+  if (item.href === "/app/applications" && under(path, "/app/applications/inbox")) return false;
   return under(path, item.href) || (item.also ?? []).some((h) => under(path, h));
 }
 

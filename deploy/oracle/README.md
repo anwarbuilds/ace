@@ -178,7 +178,7 @@ URL, and recreate the API container:
 docker compose -f deploy/oracle/compose.yaml up -d --force-recreate api
 ```
 
-ACE requests only `openid email`. It accepts only the verified email of the
+ACE requests only `openid email profile`. It accepts only the verified email of the
 existing owner and binds the Google account subject on first success. Password
 sign-in and password recovery require a one-time email code. Google sign-in
 uses Google's verified email claim and does not send a second code.

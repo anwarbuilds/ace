@@ -99,6 +99,8 @@ export default async function PullsPageRoute({ searchParams }: PageProps<"/app/p
         </div>
       </div>
 
+      <div className="company-first-note"><strong>Company first. Relevant role second.</strong> Scan employers first, then review the matched role and verified sponsorship history in context.</div>
+
       <section className="kpis" aria-label="Last 24 hours">
         <Kpi label="Newly detected postings" value={n(summary.new_postings)} foot="First seen in the last 24 hours" />
         <Kpi

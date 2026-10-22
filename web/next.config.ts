@@ -34,6 +34,7 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  experimental: { useTypeScriptCli: false },
   deploymentId: buildSha === "unversioned" ? undefined : buildSha,
   async headers() {
     return [
@@ -51,7 +52,6 @@ const nextConfig: NextConfig = {
     return [
       { source: "/app/queue", destination: "/app/opportunities", permanent: false },
       { source: "/app/activity", destination: "/app/pulls", permanent: false },
-      { source: "/app/dashboard", destination: "/app/analytics", permanent: false },
       { source: "/app/applied", destination: "/app/applications", permanent: false },
       { source: "/app/resume", destination: "/app/resume-studio", permanent: false },
       { source: "/app/skills", destination: "/app/insights/skills", permanent: false },
