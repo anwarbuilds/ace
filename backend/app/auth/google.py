@@ -1,7 +1,7 @@
 """Google OpenID Connect for ACE's single owner account.
 
 The browser uses the authorization code flow. ACE requests only
-``openid email`` and never receives Google API access beyond identity.
+``openid email profile`` and never receives Google API access beyond identity.
 Discovery and signing keys come from Google's published OIDC metadata;
 the ID token signature, issuer, audience, expiry, nonce and verified
 email are all checked before a local session is created.
@@ -39,6 +39,7 @@ class GoogleAuthError(ValueError):
 class GoogleIdentity:
     subject: str
     email: str
+    name: str = ""
 
 
 def configured(client_id: str, client_secret: str, redirect_uri: str) -> bool:
@@ -59,7 +60,7 @@ def authorization_url(
         {
             "client_id": client_id,
             "response_type": "code",
-            "scope": "openid email",
+            "scope": "openid email profile",
             "redirect_uri": redirect_uri,
             "state": state,
             "nonce": nonce,
@@ -178,7 +179,12 @@ def verify_id_token(
         or "@" not in email
     ):
         raise GoogleAuthError("Google did not return a usable owner identity.")
-    return GoogleIdentity(subject=subject, email=email.strip().lower())
+    name = claims.get("name")
+    return GoogleIdentity(
+        subject=subject,
+        email=email.strip().lower(),
+        name=name.strip() if isinstance(name, str) else "",
+    )
 
 
 def authenticate(

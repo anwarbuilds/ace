@@ -9,6 +9,19 @@ test("the overview shows the matching resume and the knowledge base", async ({ p
   await expect(page.locator("h1")).toHaveText("Resume Studio");
   await expect(page.getByText("Resume used for matching")).toBeVisible();
   await expect(page.locator(".tab", { hasText: "Knowledge base" })).toBeVisible();
+  await expect(page.locator(".studio-v2-sheet")).toHaveCount(0);
+  await expect(page.getByText("alex-rivera-resume.docx", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Download original file" })).toBeVisible();
+});
+
+test("the signed-in identity replaces the generic workspace label", async ({ page }) => {
+  await page.goto("/app/settings#account");
+  await expect(page.getByRole("heading", { name: "Your ACE identity" })).toBeVisible();
+  await expect(page.locator(".sb-user-t")).toHaveText("Demo");
+  await expect(page.locator(".sb-user-s")).toHaveText("demo@ace.example");
+  await expect(page.getByLabel("Full name")).toBeVisible();
+  await expect(page.getByText("Personal workspace")).toHaveCount(0);
+  await expect(page.getByText("Private, owner")).toHaveCount(0);
 });
 
 test("verifying a suggested fact can be undone", async ({ page }) => {

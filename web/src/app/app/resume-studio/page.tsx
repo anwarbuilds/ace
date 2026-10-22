@@ -4,6 +4,7 @@ import { EmptyBox } from "@/components/bits";
 import { Kpi } from "@/components/page/PageParts";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { ScoreDial } from "@/components/studio/AssessmentView";
+import { ResumeDocumentPreview } from "@/components/studio/ResumeDocumentPreview";
 import { StudioUpload } from "@/components/studio/StudioUpload";
 import { apiGetOr } from "@/lib/api";
 import { clean, shortDate } from "@/lib/format";
@@ -38,6 +39,10 @@ export default async function StudioOverviewPage() {
   const total = (s.match_high ?? 0) + (s.match_medium ?? 0) + (s.match_minimal ?? 0) + (s.match_unscored ?? 0);
   const primary = o?.primary;
   const r = data.resume;
+  const previewDocument = o
+    ? (primary?.document_id ? o.documents.find((document) => document.id === primary.document_id) : null) ??
+      o.documents.find((document) => document.kind === "resume")
+    : null;
 
   if (!o || (!o.documents.length && !primary)) {
     return (
@@ -150,35 +155,20 @@ export default async function StudioOverviewPage() {
                 <h2>Resume preview</h2>
                 <span className="section-sub">Resume used for matching</span>
               </div>
-              <div className="studio-v2-sheet">
-                <h3>{primary?.label || r?.label || "Resume profile"}</h3>
-                <p className="studio-v2-sheet-meta">
-                  {primary ? `Primary version, approved ${shortDate(primary.approved_at ?? primary.created_at, tz)}` : "Verified career profile"}
-                </p>
-                {primary?.body_text ? (
-                  <div className="studio-v2-body">{primary.body_text}</div>
-                ) : (
-                  <>
-                    <h4>Verified experience</h4>
-                    <p>
-                      {f.verified ?? 0} facts have been confirmed for matching. Suggested facts remain separate until
-                      you approve them.
-                    </p>
-                    <h4>Technical skills</h4>
-                    <p>{r?.skills.length ? r.skills.join(", ") : "Review the knowledge base to verify skills."}</p>
-                    <h4>Profile coverage</h4>
-                    <div className="studio-v2-fact-grid">
-                      {Object.entries(o.facts.by_kind).map(([kind, count]) => (
-                        <span key={kind}>
-                          <b>{kind}</b>
-                          <small>{count}</small>
-                        </span>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-              <p className="studio-v2-note">Previewed from your stored resume and verified knowledge base.</p>
+              {previewDocument ? (
+                <ResumeDocumentPreview
+                  documentId={previewDocument.id}
+                  filename={previewDocument.filename}
+                  mediaType={previewDocument.media_type}
+                />
+              ) : (
+                <div className="studio-v2-document-unavailable">
+                  <strong>No source file is attached to this version</strong>
+                  <p>Upload the original resume to preview it here.</p>
+                  <StudioUpload label="Upload resume" primary />
+                </div>
+              )}
+              <p className="studio-v2-note">Showing the original resume stored in Resume Studio.</p>
             </section>
           </div>
 

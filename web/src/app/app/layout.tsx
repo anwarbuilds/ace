@@ -55,7 +55,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
         Skip to content
       </a>
       <div className="shell">
-        <Sidebar counts={counts} email={status?.email ?? null} />
+        <Sidebar counts={counts} displayName={status?.display_name ?? null} email={status?.email ?? null} />
         <div className="shell-main">
           <Topbar />
           {status === null ? (

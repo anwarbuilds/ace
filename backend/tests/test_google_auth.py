@@ -41,6 +41,7 @@ def _token(**changes):
         "aud": CLIENT_ID,
         "sub": "google-owner-subject",
         "email": "OWNER@EXAMPLE.COM",
+        "name": "Alex Rivera",
         "email_verified": True,
         "nonce": NONCE,
         "iat": int(NOW.timestamp()) - 10,
@@ -74,6 +75,7 @@ def test_verified_google_owner_identity_is_accepted() -> None:
     )
     assert identity.subject == "google-owner-subject"
     assert identity.email == "owner@example.com"
+    assert identity.name == "Alex Rivera"
 
 
 @pytest.mark.parametrize(

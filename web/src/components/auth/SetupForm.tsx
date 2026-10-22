@@ -21,7 +21,12 @@ export function SetupForm({ next, needsToken }: { next: string; needsToken: bool
       await sendJson(
         "POST",
         "/api/auth/setup",
-        { email: form.get("email"), password, setup_token: form.get("token") ?? "" },
+        {
+          display_name: form.get("display_name"),
+          email: form.get("email"),
+          password,
+          setup_token: form.get("token") ?? "",
+        },
         { redirectOn401: false },
       );
       window.location.assign(next);
@@ -35,8 +40,12 @@ export function SetupForm({ next, needsToken }: { next: string; needsToken: bool
   return (
     <form className="auth-form" action={submit}>
       <div className="auth-field">
+        <label htmlFor="display_name">Full name</label>
+        <input id="display_name" name="display_name" type="text" autoComplete="name" maxLength={120} required autoFocus />
+      </div>
+      <div className="auth-field">
         <label htmlFor="email">Email</label>
-        <input id="email" name="email" type="email" autoComplete="username" required autoFocus />
+        <input id="email" name="email" type="email" autoComplete="username" required />
       </div>
       <div className="auth-field">
         <label htmlFor="password">Password, 12 or more characters</label>

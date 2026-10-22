@@ -72,9 +72,14 @@ class LoginVerifyRequest(BaseModel):
 
 
 class SetupRequest(BaseModel):
+    display_name: str = ""
     email: str = ""
     password: str = ""
     setup_token: str = ""
+
+
+class AccountUpdate(BaseModel):
+    display_name: str = ""
 
 
 class PasswordChange(BaseModel):
@@ -189,6 +194,16 @@ def _google_ready() -> bool:
     )
 
 
+def _account(user: UserRecord) -> dict:
+    return {
+        "display_name": user.display_name,
+        "email": user.email,
+        "role": user.role,
+        "created_at": user.created_at.isoformat(),
+        "google_connected": bool(user.google_subject),
+    }
+
+
 def _clear_google_cookies(response: Response) -> None:
     for name in (GOOGLE_STATE_COOKIE, GOOGLE_NONCE_COOKIE, GOOGLE_NEXT_COOKIE):
         response.delete_cookie(name, path="/api/auth/google")
@@ -222,6 +237,11 @@ def status(
         "kind": principal.kind if principal else ("local" if local else None),
         "email": (
             principal.user.email
+            if principal and principal.user and principal.kind == "session"
+            else None
+        ),
+        "display_name": (
+            principal.user.display_name
             if principal and principal.user and principal.kind == "session"
             else None
         ),
@@ -335,6 +355,11 @@ def google_callback(
         return _oauth_error("owner_mismatch")
     if not owner.google_subject:
         owner.google_subject = identity.subject
+    if not owner.display_name and identity.name:
+        try:
+            service.set_display_name(owner, identity.name)
+        except service.AuthRefused:
+            LOGGER.info("google_profile_name_ignored user=%s", owner.id)
 
     created = service.start_session(
         session,
@@ -395,7 +420,11 @@ def setup(
 
     try:
         user = service.create_owner(
-            session, email=payload.email, password=payload.password, now=_now()
+            session,
+            email=payload.email,
+            password=payload.password,
+            display_name_value=payload.display_name,
+            now=_now(),
         )
     except WeakPassword as weak:
         raise _refuse(400, "weak_password", str(weak)) from None
@@ -418,7 +447,30 @@ def setup(
         max_age=int(_lifetime().total_seconds()),
     )
     LOGGER.info("owner_created_from_web user=%s", user.id)
-    return {"ok": True, "email": user.email}
+    return {"ok": True, "email": user.email, "display_name": user.display_name}
+
+
+@router.get("/api/auth/account")
+def account(user: UserRecord = Depends(current_owner)) -> dict:
+    """Return the authenticated owner's workspace identity."""
+
+    return _account(user)
+
+
+@router.patch("/api/auth/account")
+def update_account(
+    payload: AccountUpdate,
+    session: Session = Depends(get_session),
+    user: UserRecord = Depends(current_owner),
+) -> dict:
+    """Update presentation fields without changing sign-in credentials."""
+
+    try:
+        service.set_display_name(user, payload.display_name)
+    except service.AuthRefused as refused:
+        raise _refuse(400, refused.reason, refused.message) from None
+    session.commit()
+    return _account(user)
 
 
 @router.post("/api/auth/login")

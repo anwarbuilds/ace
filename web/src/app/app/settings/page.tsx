@@ -1,4 +1,5 @@
 import { ThemeChips } from "@/components/pages/ThemeChips";
+import { AccountSettings, type AccountProfile } from "@/components/pages/AccountSettings";
 import { SecuritySettings, type SessionRow, type TokenRow } from "@/components/pages/SecuritySettings";
 import { UploadResume } from "@/components/pages/UploadResume";
 import { ScrollArea } from "@/components/shell/ScrollArea";
@@ -10,13 +11,14 @@ import type { Facets, MarkCounts, ResumeResponse, SystemStatus } from "@/lib/typ
 export const metadata = { title: "Settings · ace" };
 
 export default async function SettingsPage() {
-  const [facets, data, m, system, { tz }, auth, sessions, tokens] = await Promise.all([
+  const [facets, data, m, system, { tz }, auth, account, sessions, tokens] = await Promise.all([
     apiGetOr<Facets | null>("/api/facets", null),
     apiGetOr<ResumeResponse>("/api/resume", { resume: null, skills_gap: [] }),
     apiGetOr<MarkCounts | null>("/api/marks", null),
     apiGetOr<SystemStatus | null>("/api/system", null),
     getPrefs(),
     authStatus(),
+    apiGetOr<AccountProfile | null>("/api/auth/account", null),
     apiGetOr<{ items: SessionRow[] }>("/api/auth/sessions", { items: [] }),
     apiGetOr<{ items: TokenRow[] }>("/api/extension/tokens", { items: [] }),
   ]);
@@ -52,6 +54,12 @@ export default async function SettingsPage() {
       <ScrollArea>
         <div className="page">
           <div className="wrap">
+            {auth?.kind === "session" && account ? (
+              <AccountSettings
+                account={account}
+                joined={`${shortDate(account.created_at, tz)} ${clock(account.created_at, tz)}`}
+              />
+            ) : null}
             <div className="sect">
               <p className="eyebrow">Appearance</p>
               <ThemeChips />

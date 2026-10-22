@@ -171,7 +171,7 @@ def test_google_sign_in_binds_only_the_existing_owner(
         google,
         "authenticate",
         lambda **kwargs: google.GoogleIdentity(
-            subject="stable-google-subject", email=EMAIL
+            subject="stable-google-subject", email=EMAIL, name="Alex Rivera"
         ),
     )
     callback = client.get(
@@ -182,10 +182,9 @@ def test_google_sign_in_binds_only_the_existing_owner(
     assert callback.headers["location"] == "https://ace.example/app/applications"
     assert client.cookies.get(SESSION_COOKIE)
     with factory() as session:
-        assert (
-            service.find_user(session, EMAIL).google_subject
-            == "stable-google-subject"
-        )
+        owner = service.find_user(session, EMAIL)
+        assert owner.google_subject == "stable-google-subject"
+        assert owner.display_name == "Alex Rivera"
     get_settings.cache_clear()
 
 
@@ -265,6 +264,33 @@ def test_the_owner_signs_in_and_reads(client) -> None:
 
     assert client.get("/api/answers").status_code == 200
     assert client.get("/api/auth/status").json()["email"] == EMAIL
+
+
+def test_the_owner_can_read_and_update_the_account_identity(client) -> None:
+    _login(client)
+
+    account = client.get("/api/auth/account")
+    assert account.status_code == 200
+    assert account.json()["email"] == EMAIL
+    assert account.json()["display_name"] == ""
+
+    updated = client.patch(
+        "/api/auth/account",
+        json={"display_name": "  Alex   Rivera  "},
+        headers=_csrf(client),
+    )
+    assert updated.status_code == 200
+    assert updated.json()["display_name"] == "Alex Rivera"
+    status = client.get("/api/auth/status").json()
+    assert status["display_name"] == "Alex Rivera"
+
+    refused = client.patch(
+        "/api/auth/account",
+        json={"display_name": ""},
+        headers=_csrf(client),
+    )
+    assert refused.status_code == 400
+    assert refused.json()["detail"]["reason"] == "invalid_name"
 
 
 def test_email_code_is_required_when_mail_is_configured(
@@ -978,9 +1004,14 @@ def test_the_first_visit_creates_the_account_and_signs_in(factory, monkeypatch) 
     weak = local.post("/api/auth/setup", json={"email": EMAIL, "password": "short"})
     assert weak.status_code == 400
 
-    made = local.post("/api/auth/setup", json={"email": EMAIL, "password": PASSWORD})
+    made = local.post(
+        "/api/auth/setup",
+        json={"display_name": "Alex Rivera", "email": EMAIL, "password": PASSWORD},
+    )
     assert made.status_code == 200
+    assert made.json()["display_name"] == "Alex Rivera"
     assert local.get("/api/answers").status_code == 200
+    assert local.get("/api/auth/status").json()["display_name"] == "Alex Rivera"
     get_settings.cache_clear()
 
 

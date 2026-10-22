@@ -18,12 +18,28 @@ const ENGINE: Record<string, string> = {
 
 /** The application's navigation: three groups in the order the owner
  *  works, each entry its own route. Icons only on a narrow screen. */
-export function Sidebar({ counts, email }: { counts: Record<string, number | null>; email: string | null }) {
+function accountName(displayName: string | null, email: string | null): string {
+  if (displayName?.trim()) return displayName.trim();
+  const local = email?.split("@", 1)[0]?.replace(/[._-]+/g, " ").trim();
+  if (!local) return "My account";
+  return local.replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+export function Sidebar({
+  counts,
+  displayName,
+  email,
+}: {
+  counts: Record<string, number | null>;
+  displayName: string | null;
+  email: string | null;
+}) {
   const path = usePathname();
   const { lastPoll, marks } = useApp();
   const now = useNow();
   const state = liveState(lastPoll, now);
   const [collapsed, setCollapsed] = useState(false);
+  const name = accountName(displayName, email);
 
   useEffect(() => {
     try {
@@ -83,15 +99,15 @@ export function Sidebar({ counts, email }: { counts: Record<string, number | nul
         </div>
       ))}
       <div className="sb-bottom">
-        <div className="sb-user">
+        <Link className="sb-user" href="/app/settings#account" aria-label={`My account, ${name}`}>
           <div className="sb-avatar" aria-hidden="true">
-            {(email ?? "ace").slice(0, 1).toUpperCase()}
+            {name.slice(0, 1).toUpperCase()}
           </div>
           <div>
-            <div className="sb-user-t">Personal workspace</div>
-            <div className="sb-user-s">Private, owner</div>
+            <div className="sb-user-t">{name}</div>
+            <div className="sb-user-s">{email ?? "Account settings"}</div>
           </div>
-        </div>
+        </Link>
         <div className={`sb-engine s-${state}`} suppressHydrationWarning>
           <i className="pulse" aria-hidden="true" />
           {ENGINE[state]}

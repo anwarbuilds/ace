@@ -1255,6 +1255,16 @@ class UserRecord(Base):
         unique=True,
     )
 
+    # The name shown throughout the workspace. Existing installations can
+    # leave it blank until the owner saves My Account or signs in with a
+    # provider that supplies a verified profile name.
+    display_name: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        default="",
+        server_default="",
+    )
+
     password_hash: Mapped[str] = mapped_column(
         Text,
         nullable=False,

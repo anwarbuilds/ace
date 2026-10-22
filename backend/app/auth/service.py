@@ -103,6 +103,17 @@ def _email(value: str) -> str:
     return value.strip().lower()
 
 
+def display_name(value: str) -> str:
+    """Return a compact, safe name for workspace chrome and account pages."""
+
+    normalized = " ".join(value.split())
+    if not normalized:
+        raise AuthRefused("invalid_name", "Enter your full name.")
+    if len(normalized) > 120 or any(ord(character) < 32 for character in normalized):
+        raise AuthRefused("invalid_name", "Enter a name with 120 characters or fewer.")
+    return normalized
+
+
 def find_user(session: Session, email: str) -> UserRecord | None:
     return session.scalar(
         select(UserRecord).where(UserRecord.email == _email(email))
@@ -131,6 +142,7 @@ def create_owner(
     email: str,
     password: str,
     now: datetime,
+    display_name_value: str = "",
 ) -> UserRecord:
     """Create the one owner. Refused if an owner already exists: there is
     no second account to create, and no open sign-up."""
@@ -150,6 +162,7 @@ def create_owner(
 
     user = UserRecord(
         email=email,
+        display_name=display_name(display_name_value) if display_name_value.strip() else "",
         password_hash=hash_password(password),
         role=OWNER,
         is_active=True,
@@ -159,6 +172,12 @@ def create_owner(
     session.add(user)
     session.flush()
     return user
+
+
+def set_display_name(user: UserRecord, value: str) -> None:
+    """Update profile presentation without changing sign-in credentials."""
+
+    user.display_name = display_name(value)
 
 
 def set_password(
