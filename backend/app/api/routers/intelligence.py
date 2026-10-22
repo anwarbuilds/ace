@@ -203,13 +203,13 @@ def intelligence(days: int = Query(90, ge=7, le=365), family: str | None = Query
         .join(JobEvaluationRecord, JobEvaluationRecord.job_id == JobRecord.id)
         .where(JobRecord.first_seen_at >= now - timedelta(days=days), JobEvaluationRecord.eligibility_status == "PASS")
         .order_by(JobRecord.first_seen_at.desc())
-        .limit(501)
+        .limit(101)
     )
     if family:
         skills_query = skills_query.where(JobEvaluationRecord.role_family == family)
     skill_rows = session.execute(skills_query).all()
     skill_counts: Counter = Counter()
-    for title, description in skill_rows[:500]:
+    for title, description in skill_rows[:100]:
         skill_counts.update(extract_skills(f"{title}\n{description or ''}"))
     verified_companies = session.scalar(select(func.count(func.distinct(CompanyPetitionReportRecord.ace_company))).where(CompanyPetitionReportRecord.entity_verified.is_(True))) or 0
     return {
@@ -238,13 +238,13 @@ def intelligence(days: int = Query(90, ge=7, le=365), family: str | None = Query
         "roles": [{"family": role, **counts} for role, counts in sorted(roles.items(), key=lambda x: -x[1]["submitted"])],
         "companies": [{"name": company, **counts} for company, counts in sorted(companies.items(), key=lambda x: (-x[1]["submitted"], -x[1].get("open_qualified", 0)))[:20]],
         "observed_qualified_by_family": [{"family": role or "Unknown", "count": n} for role, n in source_rows],
-        "observed_skill_demand": {"items": [{"skill": skill, "count": count} for skill, count in skill_counts.most_common(12)], "sample_size": min(len(skill_rows), 500), "status": "partial" if len(skill_rows) > 500 else "fresh_sample"},
+        "observed_skill_demand": {"items": [{"skill": skill, "count": count} for skill, count in skill_counts.most_common(12)], "sample_size": min(len(skill_rows), 100), "status": "partial" if len(skill_rows) > 100 else "fresh_sample"},
         "verified_petition_companies": verified_companies,
         "metric_definitions": {
             "total_submitted": "Applied job marks plus external application records, regardless of current status.",
             "current_pending": "Submitted records without a confirmed accepted, rejected or withdrawn current status. No reply remains pending.",
             "meaningful_responses_recorded": "Distinct applications with a recorded recruiter, assessment, interview or offer event. Historical coverage begins with the event ledger.",
             "observed_qualified": "Unique ACE postings first seen in this period that passed the eligibility gate. This is not a national hiring rate.",
-            "observed_skill_demand": "Skills explicitly named in the newest 500 qualifying ACE posting descriptions, or all such postings if fewer. Coverage is partial when more exist.",
+            "observed_skill_demand": "Skills explicitly named in the newest 100 qualifying ACE posting descriptions, or all such postings if fewer. Coverage is partial when more exist.",
         },
     }
