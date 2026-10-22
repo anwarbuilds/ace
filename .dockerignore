@@ -1,6 +1,10 @@
 .git
 .gitignore
 .env
+.aws
+.codex
+.agents
+.github
 .venv
 .pytest_cache
 **/__pycache__
@@ -8,5 +12,14 @@
 **/*.pyo
 .vscode
 docs
+design
+ACE_NEXT_KNOWLEDGE.md
+CLAUDE.md
+private-backups
+artifacts
+**/*.dump
+**/*.dump.gz
+**/*.sqlite
+**/*.db
 /tmp
 web
