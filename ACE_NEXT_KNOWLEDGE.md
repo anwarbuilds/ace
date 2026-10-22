@@ -1,12 +1,136 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-16
+Last updated: 2026-10-22
 
 This is the continuity document for the production migration from the legacy
 ACE runtime to ACE Next. It contains architecture, verified state, operating
 commands, migration controls, deployment steps and remaining owner actions.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
+
+## Instructions for a new Codex chat
+
+Treat this file as the continuity source for ACE. Read it completely before
+changing code or operating production. Then inspect the current Git status and
+diff because this document records known state but never overrides newer code
+or an explicit owner instruction.
+
+For any interface work, also read the entire approved implementation prompt and
+inspect every page of the interactive V2 reference in both themes:
+
+```text
+design/ACE_WINE_ROSE_CODEX_IMPLEMENTATION_KIT/CODEX_IMPLEMENTATION_PROMPT.md
+design/ACE_WINE_ROSE_CODEX_IMPLEMENTATION_KIT/ACCEPTANCE_CHECKLIST.md
+design/ACE_WINE_ROSE_CODEX_IMPLEMENTATION_KIT/references/ACE_Wine_Rose_Full_Platform_Demo_v2.html
+```
+
+The approved V2 reference has 12 pages: Home, Sign in, Signed out, Pulls,
+Opportunities, Applications, Analytics, Resume Studio, Autofill Extension,
+Archive, Coverage and Settings. Night and Day are both required. Prototype
+navigation, fictional data and the cursor tour must never ship.
+
+Before every task:
+
+1. Read repository instructions, including `web/AGENTS.md` for frontend work.
+2. Inspect `git status`, the relevant diff and recent commits. Preserve unrelated
+   owner edits. Never use reset, checkout, clean or force push to discard them.
+3. Audit the existing implementation before rebuilding anything. Preserve all
+   working authentication, jobs, applications, resumes, scheduler, API and
+   Chrome extension behavior.
+4. Make the smallest complete change, validate it locally and report exact
+   results. Do not claim production success from a local development server.
+5. Never deploy, migrate production, change DNS, start or stop schedulers, or
+   perform destructive data work without the owner's explicit approval for that
+   specific operation. Prepare a reviewable result before requesting approval.
+
+## Non-negotiable owner requirements
+
+- The legacy ACE checkout and database are the rollback system. Keep them
+  running and untouched during the monitoring period.
+- The legacy scheduler is the only discovery writer. The cloud scheduler must
+  remain stopped until the owner explicitly approves final cutover.
+- ACE Next must mirror the legacy pulls, jobs, companies, opportunities, marks
+  and application data through the replica workflow. Never hide or explain away
+  a mismatch. Trace it through the data model, API query and replica boundary.
+- Production data must come from the real backend. Never use counts, jobs,
+  names, scores, health or resume content from the visual demo.
+- Pulls is the authenticated landing page.
+- Marking Applied must update the opportunity, navigation count, Applications,
+  Pulls, Analytics and all other totals immediately, persist after refresh and
+  roll back if the save fails. Avoid duplicate application counts.
+- Use only the final Wine and Rose V2 design. Do not revive the anthracite
+  prototype, old homepage, earlier auth prototypes or automatic cursor tour.
+- Night uses deep wine and black. Day uses rose wine and bright white. Preserve
+  the exact component geometry, hierarchy, gradients, artwork, typography,
+  backgrounds, spacing and lowercase `ace` wordmark. The complete artistic A
+  must fit within the desktop viewport on public and signed-out pages.
+- No user-facing Unicode em dash is allowed. Avoid en dash punctuation and
+  dash-like ornaments. Run static and browser checks across dynamic states.
+- Do not expose secrets, personal data, resume text, answers, database dumps or
+  session cookies in Git, logs, screenshots, issues or chat.
+
+## Current live state on 2026-10-22
+
+The canonical production URL is `https://ace.opik.net`. Dynu provides the
+hostname. Caddy terminates valid HTTPS and redirects the temporary sslip host to
+the Dynu hostname. Users should always be directed to `ace.opik.net`.
+
+The cloud host is the Oracle VM at `161.153.89.170`. The deployment checkout is
+`/opt/ace`, accessed as `ubuntu` with the local key `~/.ssh/ace_oracle`. Do not
+print or copy the key. Production uses `deploy/oracle/compose.yaml` and a mode
+600 `/opt/ace/.env`.
+
+The active branch is `wine-rose-platform`. The remote is
+`https://github.com/anwarbuilds/ace.git`. Local, GitHub and the deployed checkout
+were all verified at commit:
+
+```text
+132235c29212feb43f50f59245d540628172c43b
+Show real resume files and owner identity
+```
+
+The response header `X-Ace-Frontend-Commit` and `/healthz` both reported that
+full SHA after deployment. Alembic is at `0043 (head)`. PostgreSQL, FastAPI,
+Next.js and Caddy were healthy. The migration job exited successfully. The
+cloud scheduler was stopped and remained stopped.
+
+The exact cause of the previously stale cloud interface was a deployment
+checkout/build mismatch. Production was still at `16c1c82` while the approved
+local and GitHub work had advanced through `bff2293` and `132235c`. A successful
+local build or Git push did not update `/opt/ace` or replace its containers. The
+fix was to push the approved branch, fast-forward `/opt/ace`, build images with
+the SHA embedded, run migration 0043 and recreate only the production database
+container, migration, API, web and Caddy dependency set. The named PostgreSQL
+volume remained attached and the data inventory was verified afterward.
+
+Latest privacy-safe production inventory after deployment and a successful
+legacy replica replay:
+
+| Data | Verified count |
+| --- | ---: |
+| Jobs | 904,107 |
+| Active jobs | 640,223 |
+| Poll sessions | 2,511 |
+| Source states | 2,320 |
+| Job sources | 2,385 |
+| Job marks | 1,141 |
+| Applied job marks | 821 |
+| External applications | 47 |
+| Application answers | 71 |
+| Resume documents | 5 |
+| Resume versions | 5 |
+| Resumes | 5 |
+| Career facts | 52 |
+| Users | 1 |
+
+Counts continue changing because the legacy scheduler is live and the replica
+runs continuously. Compare settled pull boundaries instead of treating this
+table as a frozen expected value.
+
+The local file `ACE_NEXT_KNOWLEDGE.md` had intentional owner continuity edits
+before the latest deployment and was kept out of commit `132235c`. Do not
+discard this file merely because Git reports it modified. Review and commit it
+only when the owner requests that documentation change to be committed.
 
 ## Product objective
 
@@ -95,10 +219,12 @@ same-origin `/api/*` calls to FastAPI, so the browser does not need CORS. Caddy
 terminates HTTPS. Only ports 80 and 443 are public. PostgreSQL and FastAPI stay
 inside Docker's private network.
 
-Docker services use `restart: unless-stopped`. On the Oracle VM, the scheduler
-continues running when the laptop is asleep. The scheduler persists its source
+Docker services use `restart: unless-stopped`. The scheduler persists its source
 state, respects per-source intervals, backs off on refusals and resumes from
-the last successful poll after a restart.
+the last successful poll after a restart. During the current monitoring phase,
+that description applies to the legacy scheduler. The Oracle scheduler service
+is intentionally stopped so the two databases never have competing discovery
+writers.
 
 ## Data ownership and compatibility
 
@@ -116,8 +242,10 @@ The new UI reads real API aggregates. It does not use the fictional demo counts
 in production. Demo data is created only by `backend.scripts.seed_demo` in a
 separate database.
 
-Migration 0041 adds nullable `users.google_subject`. Existing password sign-in
-and all existing data remain valid when Google is not configured.
+Migration 0041 adds nullable `users.google_subject`. Migration 0042 repairs the
+Pulls telemetry columns needed by the V2 API. Migration 0043 adds the owner's
+non-null `display_name` with a safe blank default. Existing password sign-in and
+all existing data remain valid when Google is not configured.
 
 The legacy resume bridge copies every `resumes` row into a Resume Studio
 document and approved master version. It preserves the text, label, timestamp
@@ -161,21 +289,23 @@ browser sessions and consumes pending email codes. The address is deliberately
 not stored in this public document.
 
 Google sign-in uses the OpenID Connect authorization code flow. ACE requests
-only `openid email`. The browser flow uses short-lived HttpOnly state and nonce
-cookies. The API validates the Google signature, issuer, audience, expiration,
+only `openid email profile`. The browser flow uses short-lived HttpOnly state
+and nonce cookies. The API validates the Google signature, issuer, audience, expiration,
 issued time, nonce and `email_verified` claim. The verified email must match the
 existing active owner. The first successful login binds Google's stable
 subject, and later logins must present the same subject. Google never creates
 an ACE user. Google already verifies ownership of the email address, so ACE
-does not send a second code after a successful Google callback.
+does not send a second code after a successful Google callback. A verified
+Google profile name fills a blank display name. It never changes the owner's
+email or authentication scope.
 
 Required cloud values:
 
 ```text
 GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET
-GOOGLE_REDIRECT_URI=https://YOUR_DOMAIN/api/auth/google/callback
-WEB_BASE_URL=https://YOUR_DOMAIN
+GOOGLE_REDIRECT_URI=https://ace.opik.net/api/auth/google/callback
+WEB_BASE_URL=https://ace.opik.net
 REQUIRE_LOGIN_EMAIL_CODE=true
 RESEND_API_KEY
 MAIL_FROM
@@ -187,6 +317,40 @@ file, GitHub, an issue or chat.
 Sign out revokes the server session and routes to the approved signed-out page.
 The Chrome extension must be paired again after moving to a different ACE
 origin unless its existing token and endpoint are intentionally migrated.
+
+## Owner identity and real Resume Studio documents
+
+Commit `132235c` replaced the generic sidebar identity with the authenticated
+owner's display name and email. Setup now requires a full name. Settings has a
+real My Account form backed by `GET /api/auth/account` and
+`PATCH /api/auth/account`. The sidebar reacts to that persisted account state.
+An existing owner created before migration 0043 starts with a blank display
+name. Enter it in Settings or complete a fresh Google sign-in to populate it.
+
+Resume Studio no longer fabricates a paper-like preview from extracted fields.
+For a stored PDF, the page loads the authenticated document-content endpoint
+and embeds the actual bytes through a short-lived browser Blob URL. Content
+Security Policy explicitly permits same-origin and Blob frames. DOCX and other
+non-PDF files show an honest download action because browsers cannot reliably
+render them without conversion. Never substitute a generated dummy PDF for a
+stored source document. The preview remains protected by the existing owner
+session and does not expose a storage path publicly.
+
+Key implementation files:
+
+```text
+backend/app/api/routers/auth.py
+backend/app/auth/google.py
+backend/app/auth/service.py
+backend/app/db/models.py
+backend/migrations/versions/0043_add_owner_display_name.py
+web/src/components/pages/AccountSettings.tsx
+web/src/components/shell/Sidebar.tsx
+web/src/components/studio/ResumeDocumentPreview.tsx
+web/src/app/app/resume-studio/page.tsx
+web/src/app/app/settings/page.tsx
+web/next.config.ts
+```
 
 ## Applications and counters
 
@@ -241,6 +405,23 @@ npm run build
 npx playwright test
 ```
 
+The latest account and real-document change passed a focused backend suite of
+24 tests, TypeScript, ESLint, the production Next.js build, the source-level
+forbidden-dash scan with zero hits, a disposable SQLite migration rehearsal
+from 0042 to 0043, and focused Playwright runs in Night and Day. A temporary
+generated PDF stored only in the disposable test database was rendered through
+the real content path. Production then passed `/healthz`, container health,
+schema and aggregate inventory checks.
+
+Review screenshots are stored locally and contain no credentials:
+
+```text
+artifacts/account-resume-validation/dark/resume-studio.png
+artifacts/account-resume-validation/light/resume-studio.png
+artifacts/account-resume-validation/dark/settings.png
+artifacts/account-resume-validation/light/settings.png
+```
+
 ## Safe migration procedure
 
 The migration has four phases.
@@ -290,6 +471,65 @@ sign-in, sign out, delivery of the password sign-in code, forgot-password code
 delivery, Pulls, application counts, Analytics, Resume Studio, Answers, Settings
 and extension pairing.
 
+This is the current phase. The local legacy host runs this cron every minute:
+
+```text
+* * * * * /home/ubuntu/Documents/ace-next/deploy/oracle/sync-legacy-replica.sh >> /home/ubuntu/.local/state/ace-legacy-replica/cron.log 2>&1
+```
+
+The replication script first copies newer user-managed application state from
+cloud to legacy, then copies legacy discovery state to cloud. Timestamp guards
+make newer edits win. A file lock prevents overlap, a five-minute replay overlap
+covers transaction boundaries, all writes are idempotent, and the cursor moves
+only after the cloud transaction commits. Relevant files:
+
+```text
+backend/scripts/legacy_replica.py
+deploy/oracle/sync-legacy-replica.sh
+deploy/oracle/replica-parity.psql
+/home/ubuntu/.local/state/ace-legacy-replica/cursor
+/home/ubuntu/.local/state/ace-legacy-replica/cron.log
+```
+
+During deployment on 2026-10-22, recreating the API container removed the
+temporary `/tmp/legacy_replica.py` helper during one active sync. That run failed
+safely, the cursor stayed at the prior boundary, and the next cron run replayed
+the interval and advanced successfully through `2026-10-22T00:23:01Z`. This is
+expected recovery behavior. After future API replacement, always verify that a
+subsequent log entry says `ACE legacy replica synchronized through ...` and that
+the cursor advanced. Never edit the cursor forward by hand.
+
+`replica-parity.psql` compares settled pull sessions, complete job identities,
+qualifying opportunities, enabled sources and user-managed application data.
+Use the same successful cursor as the cutoff on both databases and compare the
+output lines exactly. Mutable job and evaluation hashes may change beyond that
+cutoff while the legacy scheduler is polling.
+
+### Safe production release during monitoring
+
+Production deployment requires explicit owner approval each time. Before asking
+for it, commit the complete change, run applicable tests, confirm the diff does
+not contain secrets or unrelated owner edits, and prepare the exact commit SHA.
+
+After approval:
+
+1. Push `wine-rose-platform` without force.
+2. On the VM, confirm `/opt/ace` has no conflicting tracked changes.
+3. Fetch and fast-forward to the exact approved SHA.
+4. Run `deploy/oracle/prepare-release.sh`. It builds `migrate`, `api` and `web`
+   images and does not change running containers.
+5. Set `ACE_BUILD_SHA` to the full approved SHA and bring up only `postgres`,
+   `migrate`, `api`, `web` and `caddy`. Do not include `scheduler`.
+6. Verify the migration exited zero, schema is at head, API/web/PostgreSQL are
+   healthy, the cloud scheduler is stopped, `https://ace.opik.net/healthz`
+   reports OK, and `X-Ace-Frontend-Commit` matches the approved SHA.
+7. Run the privacy-safe data inventory. Check the replica log and cursor after
+   the next completed sync.
+
+Do not use an unversioned web image. Do not assume a Git push deployed anything.
+Do not run `docker compose down`, remove a volume, restore a dump, downgrade a
+migration or alter the legacy stack as part of a normal frontend release.
+
 ### Phase 3: final cutover
 
 1. Stop only the legacy scheduler.
@@ -331,6 +571,82 @@ CLI is configured. The deployment kit includes a 14-day Object Storage
 lifecycle rule and a 15 GiB upload ceiling, leaving headroom inside Oracle's
 published 20 GB Always Free Object Storage allowance.
 
+## Deferred post-launch retention plan
+
+Do not implement or run this cleanup during migration. Keep the legacy and ACE
+Next databases complete through rehearsal, cutover and the rollback window.
+Implement this plan only after ACE Next is live, its scheduler and application
+history have been verified, and a tested backup exists.
+
+The owner approved a bounded hot-job retention policy to control PostgreSQL
+growth without losing application history. The expiration clock is based on a
+job's confirmed closure, never its posted date. A posting more than 30 days old
+can still be open and must remain available.
+
+Aggregate read-only measurements on 2026-10-19:
+
+| Data | Count or size |
+| --- | ---: |
+| Total jobs | 845,152 |
+| Active jobs | 616,701 |
+| Active jobs older than 30 days by posted or first-seen time | 253,713 |
+| Closed, unmarked jobs closed more than 30 days ago | 11,379 |
+| Job marks | 1,049 |
+| Applied job marks | 756 |
+| `jobs` total relation size | 2,115 MB |
+| `job_evaluations` total relation size | 411 MB |
+| `job_resume_scores` total relation size | 180 MB |
+| Whole PostgreSQL database | 2,731 MB |
+
+The active backlog must be audited before pruning. The largest groups of
+active jobs older than 30 days were Workday 131,192, Oracle Recruiting 40,625,
+Greenhouse 34,892 and SmartRecruiters 24,478. Some may be legitimately open;
+others may expose source-specific closure gaps. Never infer closure merely from
+age, and never mass-close from an empty, partial, refused or failed response.
+
+Retention rules approved for later implementation:
+
+- Keep every active job, regardless of age.
+- Keep full job details forever for applied jobs and every application status,
+  including screening, interviewing, offer, rejected and withdrawn. The 756
+  applied records are negligible compared with the job corpus and remain useful
+  application evidence.
+- Keep saved jobs and jobs referenced by tailored resume versions or resume
+  assessments.
+- Protect every manually authoritative mark from automated deletion.
+- Delete an unmarked job only after the source has confidently confirmed it
+  closed and it has then remained closed for 30 days.
+- Delete derived evaluations and resume scores with an eligible deleted job.
+- Preserve a compact tombstone before deleting an unmarked job. It must retain
+  source, source account, external ID, company, title, content hash, first seen,
+  last seen and closed time so an old posting cannot silently return as new.
+- Preserve historical analytics in daily aggregate rollups by source, company,
+  eligibility and job state before individual history is pruned.
+- Keep scheduler source state permanently. Give temporary employer-page
+  readings and operational logs their own bounded retention windows.
+
+Implementation order after launch:
+
+1. Audit old active records and correct source-specific closure detection.
+2. Add explicit protected-job predicates and tests.
+3. Add compact tombstones and teach discovery to consult them.
+4. Add daily historical metric rollups and make analytics use them where
+   retention would otherwise change historical totals.
+5. Add a cleanup command whose default is dry-run and whose report gives counts
+   by reason and protected category.
+6. Prove that all applied, saved, manually marked and resume-linked jobs are
+   excluded from deletion.
+7. Take and restore-test a backup before the first real cleanup.
+8. Delete in bounded batches, then run `VACUUM (ANALYZE)`. Use a separately
+   planned compaction operation only if disk space must be returned to the
+   filesystem; ordinary deletion and vacuum primarily make space reusable by
+   PostgreSQL.
+
+This policy reduces disk, index, backup and query growth. It does not reduce
+the external polling work required to discover jobs, which remains controlled
+through source intervals, conditional HTTP requests, backoff and bounded
+concurrency.
+
 ## Git and GitHub
 
 The configured remote is `https://github.com/anwarbuilds/ace.git`. The working
@@ -338,33 +654,57 @@ branch is `wine-rose-platform`. Never commit `.env`, database dumps, private
 screenshots or personal data. Run a secret and personal-data diff review before
 push.
 
-At the 2026-10-16 audit, GitHub CLI authentication for `anwarbuilds` was
-invalid. Local work can be committed, but pushing requires the owner to run:
+Git push over the configured HTTPS remote was working on 2026-10-22. Do not
+assume credentials remain valid forever; diagnose an actual authentication
+failure if one occurs. Do not force-push. Do not merge this branch to `main`
+until the owner completes the multi-day legacy comparison and explicitly
+approves that merge.
 
-```bash
-gh auth login -h github.com
-gh auth status
-git push -u origin wine-rose-platform
-```
+## Outstanding owner decisions and monitoring
 
-Do not force-push. Merge to the deployment branch only after the migration
-rehearsal and review.
+Cloud infrastructure, Dynu DNS, HTTPS and Google OAuth are configured. The
+remaining operational decision is final cutover. The owner wants to monitor
+legacy ACE and ACE Next for several days and see matching settled pulls,
+companies, opportunities and application state before relying on ACE Next.
 
-## Information still needed from the owner
+Until that approval:
 
-The code can be completed and tested without sharing secrets. Cloud activation
-and live cutover require these owner actions:
-
-1. Create or identify the Oracle Cloud Always Free tenancy and home region.
-2. Choose a domain or subdomain and point it to the VM after provisioning.
-3. Create the Google OAuth Web client after HTTPS is available.
-4. Enter Oracle, Google, database and required Resend secrets directly into the
-   VM `.env`.
-5. Reauthenticate GitHub CLI locally.
-6. Approve the final scheduler write freeze and production cutover after the
-   rehearsal report is reviewed.
+1. Keep the legacy scheduler and database running.
+2. Keep the Oracle scheduler stopped.
+3. Keep the minute replica active and investigate every failed or stale cursor.
+4. Compare both systems at the same completed pull boundary, not at different
+   wall-clock moments while a sync is still running.
+5. Preserve the legacy checkout, database and rollback route.
+6. Do not merge ACE Next to legacy `main` or declare cutover complete.
+7. Ask for explicit approval before the final scheduler freeze, final parity
+   check, cloud scheduler start or any production redeployment.
 
 ## Change log
+
+### 2026-10-22
+
+- Recorded the canonical Dynu production URL, Oracle deployment path, deployed
+  SHA, migration revision, health evidence and post-deployment aggregate data
+  inventory.
+- Recorded the exact stale-interface cause: the production checkout and images
+  had not advanced with the approved branch.
+- Documented the one-writer monitoring architecture, minute replication flow,
+  parity boundary rules and safe retry observed during API replacement.
+- Documented real stored PDF rendering, non-PDF download behavior, My Account,
+  persisted display names and verified Google profile-name import.
+- Added the safe release procedure and reaffirmed that normal releases must not
+  start the cloud scheduler or alter the legacy stack.
+- Replaced obsolete cloud-provisioning actions with the current multi-day
+  parity-monitoring and final-cutover decisions.
+
+### 2026-10-19
+
+- Recorded the owner-approved post-launch job retention plan.
+- Confirmed that applied records must not be deleted through the current
+  `job_marks.job_id` cascading foreign key.
+- Replaced the proposed posting-age deletion rule with confirmed-closure plus
+  30 days, protected full application history, tombstones and analytics
+  rollups. No cleanup was executed.
 
 ### 2026-10-16
 
