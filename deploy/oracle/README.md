@@ -1,11 +1,11 @@
 # ACE on Oracle Cloud Always Free
 
-Current production status, 2026-10-23: the owner-approved cutover is complete.
-The Oracle scheduler is the sole discovery writer, the legacy scheduler is
-stopped, and the laptop replica cron is disabled. The parallel-monitoring and
-cutover steps below document the completed migration; do not run them again
-while Oracle is writing. See `ACE_NEXT_KNOWLEDGE.md` for current operation and
-rollback rules.
+Current production status, 2026-10-23: the owner requires both the legacy and
+Oracle schedulers to run for independent comparison. They write to separate
+databases. The laptop cross-database replica cron is disabled because numeric
+job IDs have diverged; do not turn it back on without reconciliation. The
+parallel-monitoring and cutover steps below describe earlier migration modes,
+not the current operating state. See `ACE_NEXT_KNOWLEDGE.md` for current rules.
 
 This deployment keeps PostgreSQL, FastAPI, Next.js and the scheduler on one
 Ampere A1 VM. Caddy is the only public container. PostgreSQL and FastAPI have
@@ -232,7 +232,7 @@ systemctl list-timers ace-backup.timer
 Perform a restore drill into a separate database before cutover and monthly
 afterward. A backup that has never been restored is unverified.
 
-## Historical parallel monitoring with the legacy scheduler
+## Historical replicated monitoring with the legacy scheduler
 
 During the owner comparison period, keep the legacy scheduler as the only
 discovery writer and keep the cloud scheduler stopped. The cloud API can use a
@@ -278,14 +278,15 @@ shown for settled pulls are the same.
 Do not start the cloud scheduler during this monitoring mode. Removing the
 cron entry stops replication without changing either database.
 
-## Cutover
+## Historical one-writer cutover procedure
 
 Cutover is the only stage that briefly stops writes. On the old machine, stop
 only the scheduler, take a final dump, restore it to the VM, run migrations,
 run the Resume Studio bridge, compare inventories, and test the cloud UI. Start
 the cloud scheduler only after parity succeeds. Leave the old database intact
-for rollback. Never run both schedulers against separate writable databases
-after cutover because they will diverge.
+for rollback. This procedure assumed one discovery writer. The current
+owner-requested comparison runs both schedulers independently with the
+cross-database replica disabled; their databases will diverge by design.
 
 Start the cloud scheduler only at that final step:
 
