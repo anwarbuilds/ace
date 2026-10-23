@@ -164,6 +164,7 @@ export default async function PullsPageRoute({ searchParams }: PageProps<"/app/p
             tz={prefs.tz}
             filter={filter}
             isToday={isToday}
+            date={data.date}
           />
         </div>
 

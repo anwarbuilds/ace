@@ -1230,6 +1230,7 @@ a.db-tr:hover{background:var(--surface-2)}
 .job-company:hover{text-decoration:underline}
 .job-title{display:block;font-size:12.5px;font-weight:690;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);text-decoration:none}
 .job-title:hover{text-decoration:underline}
+.job-tags{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:6px}
 .job-evidence{font-size:11px;color:var(--text-muted);margin-top:5px}
 .job-evidence a{color:var(--accent);font-weight:700;margin-left:8px}
 .job-evidence button{color:var(--accent-text);font-weight:700;margin-left:8px;font-size:inherit}

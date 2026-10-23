@@ -8,7 +8,7 @@ import { useMarks } from "@/components/jobs/useMarks";
 import { useApp, withPatch } from "@/components/shell/AppProvider";
 import { NavIcon } from "@/components/shell/NavIcon";
 import { getJson } from "@/lib/client";
-import { ago, clean, clock, expFit, familyLabel, timeRange, unscoredReason, UNSCORED } from "@/lib/format";
+import { ago, beforeNote, clean, clock, expFit, familyLabel, shortDate, timeRange, unscoredReason, UNSCORED } from "@/lib/format";
 import type { Job, JobPage, PullBucket, PullFilter } from "@/lib/types";
 
 const SHOWN = 20;
@@ -63,11 +63,18 @@ function JobLine({ job, tz, evidence, onCompanySelect }: { job: Job; tz: string;
         </button>
         <Link className="job-title" href={`/app/jobs/${job.id}`}>{clean(job.title)}</Link>
         <div className="job-meta">
-          {[clean(job.location), familyLabel(job.role_family), fit.text === "Not stated" ? "Experience not stated" : fit.text].filter(Boolean).join(" · ")}
+          {[clean(job.location), familyLabel(job.role_family)].filter(Boolean).join(" · ")}
           {job.requirements_verified ? "" : " · requirements unverified"}
           {" · detected "}
           {clock(job.first_seen_at, tz)}
-          {job.applied_before ? " · applied before" : ""}
+        </div>
+        <div className="job-tags">
+          <span className={fit.cls}>{fit.text}</span>
+          {job.applied_before && !applied ? (
+            <span className="badge before" title={beforeNote(job, tz)}>
+              Applied before {"·"} {shortDate(job.applied_before.applied_at, tz)}
+            </span>
+          ) : null}
         </div>
         <div className="job-evidence">{evidence ? `${clean(evidence.period)} USCIS petition decisions: ${evidence.approvals ?? "Not available"} approved, ${evidence.denials ?? "Not available"} denied. Source: ${clean(evidence.source)}.` : "H-1B history: Not available"} <button onClick={() => onCompanySelect(job.company)}>Company insights</button></div>
       </div>
@@ -187,8 +194,7 @@ function CompanyInsightDialog({ company, onClose }: { company: string; onClose: 
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     const element = ref.current;
-    element?.showModal();
-    return () => { if (element?.open) element.close(); };
+    if (element && !element.open) element.showModal();
   }, []);
   useEffect(() => {
     let live = true;
@@ -214,25 +220,49 @@ export function PullsTimeline({
   tz,
   filter,
   isToday,
+  date,
 }: {
   buckets: PullBucket[];
   tz: string;
   filter: PullFilter;
   isToday: boolean;
+  date: string;
 }) {
   const firstHit = buckets.find((b) => b.new_qualifying > 0);
   const [open, setOpen] = useState<Set<number>>(() => new Set(firstHit && isToday ? [firstHit.id] : []));
+  const [restored, setRestored] = useState(false);
+  const storageKey = `ace.pulls.open:${date}`;
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
-  const toggle = useCallback(
-    (id: number) =>
-      setOpen((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return next;
-      }),
-    [],
-  );
+
+  // Keep the exact windows the owner left open, including an intentionally
+  // closed latest window. A new pull must not discard an earlier open one.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw !== null) {
+        const saved: unknown = JSON.parse(raw);
+        if (Array.isArray(saved)) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setOpen(new Set(saved.filter((id): id is number => Number.isSafeInteger(id) && id > 0)));
+        }
+      }
+    } catch {}
+    setRestored(true);
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!restored) return;
+    try { localStorage.setItem(storageKey, JSON.stringify([...open])); } catch {}
+  }, [open, restored, storageKey]);
+
+  const toggle = useCallback((id: number) => {
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   // "Latest pull" in the header jumps here and opens it.
   useEffect(() => {
