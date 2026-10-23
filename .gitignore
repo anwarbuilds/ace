@@ -86,3 +86,6 @@ ace-demo.db
 
 # Local browser comparison captures generated during visual review.
 /artifacts/
+
+# Read-only comparison snapshots can contain real job titles and links.
+/private-reports/

@@ -43,14 +43,26 @@ if [[ -s "${cursor_file}" ]]; then
 else
   since_time="$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
 fi
-printf 'ACE legacy replica starting: %s through %s\n' \
-  "${since_time}" "${until_time}"
-
 ssh_args=(
   -o BatchMode=yes
   -o ConnectTimeout=15
   -i "${ssh_key}"
 )
+
+# This historical ID-based replica is safe only while legacy is the sole
+# discovery writer. Independent schedulers allocate overlapping job IDs.
+# Fail closed if Oracle discovery is active, including on a manual invocation.
+phase="independent-writer safety guard"
+cloud_scheduler_running="$(
+  ssh "${ssh_args[@]}" "${remote_host}" \
+    "docker inspect -f '{{.State.Running}}' '${ACE_REPLICA_CLOUD_SCHEDULER:-oracle-scheduler-1}'"
+)"
+if [[ "${cloud_scheduler_running}" != "false" ]]; then
+  printf 'Refusing ID-based replica while Oracle scheduler is active or unknown.\n' >&2
+  exit 2
+fi
+printf 'ACE legacy replica starting: %s through %s\n' \
+  "${since_time}" "${until_time}"
 
 ssh "${ssh_args[@]}" "${remote_host}" \
   "mkdir -p '${remote_state}' && chmod 700 '${remote_state}'"

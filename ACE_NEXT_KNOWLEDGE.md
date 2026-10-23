@@ -736,6 +736,35 @@ The owner wants both legacy and Oracle discovery running until they trust ACE
 Next. Monitor scheduler health and comparable source/time-window outcomes on
 both sites. Keep the old replica cron disabled because discovery IDs diverged.
 Application changes on one site do not sync to the other in this mode.
+The owner clarified on 2026-10-23 that they will record new applications in
+ACE Next only. Legacy is an independent discovery validation backup. Do not
+merge job rows across databases, because doing so would mask missed results.
+On 2026-10-23 both scheduler containers were healthy and both health endpoints
+returned 200. A read-only job-identity inventory found 944,901 common jobs,
+4,157 cloud-only jobs, 119 legacy-only jobs, and 497 numeric job IDs that point
+to different jobs in the two databases. The historical ID-based replica now
+has a fail-closed guard when Oracle discovery is running. The private inventory
+tool in `backend/scripts/discovery_inventory.py` makes this check repeatable.
+`backend/scripts/discovery_parity.py` and
+`deploy/oracle/compare-independent-discovery.sh` now produce a private,
+read-only report of source coverage, fifteen-minute Pulls, qualifying jobs,
+unmatched identities, and eligibility differences. The first live report
+compared from 08:45 to 09:25 Pacific and found 244 legacy-only and 352
+ACE Next-only recent jobs, with no different eligibility decisions among jobs
+discovered by both. All four qualifying unmatched jobs were still awaiting a
+source check by the other engine, so none was established as a missed job.
+One hour later, a second comparison found that 238 of those 244 legacy-only
+jobs and 271 of those 352 ACE Next-only jobs had appeared on both sides. The
+latest report is `private-reports/latest/report.md` and its complete JSON is
+next to it; the folder is private and Git-ignored. A local read-only cron
+checks every 15 minutes and produces a full report at most every four hours,
+including after a laptop reconnect. It neither changes database rows nor
+starts or stops discovery schedulers. The former crontab was saved under
+`~/.local/state/ace-discovery-parity/` for rollback. The old replica cron
+remains absent.
+Legacy has no `sources_attempted` column; the report uses the shared
+`boards_checked` measure and labels unavailable attempts as not recorded.
+See `deploy/oracle/README.md` for the read-only comparison command and report.
 The backup timer is active, but Object Storage offsite backup is not configured.
 Arrange an offsite copy if protection against loss of the Oracle VM is desired.
 The Pulls badges, expanded-window persistence, and source-count fixes remain a

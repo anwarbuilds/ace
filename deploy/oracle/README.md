@@ -7,6 +7,58 @@ job IDs have diverged; do not turn it back on without reconciliation. The
 parallel-monitoring and cutover steps below describe earlier migration modes,
 not the current operating state. See `ACE_NEXT_KNOWLEDGE.md` for current rules.
 
+On 2026-10-23 a read-only comparison by `(source, source_account, external_id)`
+found 944,901 shared job identities, 4,157 cloud-only identities, and 119
+legacy-only identities. Among rows with the same numeric ID, 497 IDs referred
+to different jobs. These are snapshot counts, not permanent totals. The old
+replica now refuses to run whenever the Oracle scheduler is active, including
+when invoked manually. Its cron entry remains absent.
+
+The owner clarified that ACE Next is the only place they will record new
+applications. Legacy remains an independent discovery validation backup, not
+a second application writer. Keep both job databases separate: importing
+legacy-only jobs into ACE Next would hide a discovery miss, and importing
+cloud-only jobs into legacy would hide the comparison signal.
+
+`deploy/oracle/compare-independent-discovery.sh` exports read-only snapshots
+and complete hashed job-identity inventories from both databases. It writes a
+private Markdown report and complete JSON result under `private-reports/`,
+which is ignored by Git. A single run takes roughly one minute and transfers
+about 40 MB of compressed inventories. It never changes job, application,
+source, or scheduler rows. Run it when the laptop is awake and connected:
+
+```bash
+bash deploy/oracle/compare-independent-discovery.sh 2026-10-23T15:45:00Z
+```
+
+The argument marks the start of the independent comparison. The report uses
+Pacific local time for display and UTC internally. Open
+`private-reports/latest/report.md`; `report.json` contains every difference.
+The script compares each job by `(source, source_account, external_id)`, shows
+enabled source differences, fifteen-minute Pull counts, qualifying jobs, and
+eligibility differences. An unmatched job is classified by whether the other
+side had checked its source by the comparison cutoff. That classification is
+a review lead, not proof of a scheduler defect: postings can change between
+polls. Legacy lacks the new `sources_attempted` column, so the report shows
+"not recorded" for that metric and uses `boards_checked` for the comparable
+source count.
+
+The local read-only monitor checks every 15 minutes while the laptop is on and
+creates a fresh comparison at most once every four hours. Thus it catches up
+within 15 minutes after the laptop reconnects if the last comparison is older
+than four hours. It uses `flock` to prevent overlapping runs. Only the small
+report files are retained; transferred inventories are removed after each
+successful comparison. The monitor log is
+`~/.local/state/ace-discovery-parity/monitor.log`. To stop only this monitor,
+remove its `compare-independent-discovery.sh` line from the user crontab; do
+not change either discovery scheduler.
+
+No cross-database catch-up is needed for the owner's comparison workflow.
+Oracle discovery remains on 24/7; legacy discovers whenever its laptop is on.
+Only ACE Next is used for application actions. Keep the historical ID-based
+replica disabled. The private report is the synchronization of evidence, with
+each engine's observations preserved separately.
+
 This deployment keeps PostgreSQL, FastAPI, Next.js and the scheduler on one
 Ampere A1 VM. Caddy is the only public container. PostgreSQL and FastAPI have
 no public host ports. Docker restarts the scheduler after a process failure or
