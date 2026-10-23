@@ -92,8 +92,22 @@ def test_stale_scheduler_reads_stalled_in_the_response(factory) -> None:
     assert out.status.state == "stalled"
     assert out.status.age_seconds == 7200
     assert out.status.sources_enabled == 1
+    assert out.status.sources_polled == 1
     # Two hours ago is still inside the last 24 hours.
     assert out.summary.sources_succeeded == 1
+
+
+def test_sources_polling_matches_legacy_registered_board_count(factory) -> None:
+    with factory.begin() as session:
+        session.add_all(_source("answered", NOW - timedelta(days=2)))
+        session.add(JobSourceRecord(source_type="greenhouse", source_account="never-read", company_name="Never Read", enabled=True))
+
+    with factory() as session:
+        out = build_pulls(session, zone=PT, now=NOW)
+
+    assert out.status.sources_enabled == 2
+    assert out.status.sources_polled == 1
+    assert out.summary.sources_succeeded == 0
 
 
 # --- windows ------------------------------------------------------------

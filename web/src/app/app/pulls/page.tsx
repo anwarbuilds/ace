@@ -110,10 +110,10 @@ export default async function PullsPageRoute({ searchParams }: PageProps<"/app/p
           tone={summary.new_qualifying ? "good" : undefined}
         />
         <Kpi
-          label="Sources checked"
-          value={n(summary.sources_succeeded)}
-          foot={`Answered in 24 hours, of ${n(summary.sources_enabled)} enabled`}
-          tone={summary.sources_succeeded < summary.sources_enabled ? "warn" : undefined}
+          label="Sources polling"
+          value={n(status.sources_polled)}
+          foot={`of ${n(status.sources_enabled)} enabled. ${n(summary.sources_succeeded)} answered in the last 24 hours`}
+          tone={status.sources_polled < status.sources_enabled ? "warn" : undefined}
         />
         <ApplicationMetric />
       </section>
@@ -226,8 +226,9 @@ export default async function PullsPageRoute({ searchParams }: PageProps<"/app/p
           <div className="panel">
             <h3>What the numbers mean</h3>
             <p className="quiet-note">
-              <b>Sources checked</b> counts each board once per window, however often it was read. <b>Answered</b> and{" "}
-              <b>failed</b> can both include a board that failed and then recovered. <b>Postings observed</b> is what the
+              <b>Sources polling</b> counts enabled boards with poll history. <b>Boards read</b> counts successful
+              boards once per window. <b>Attempted</b> and <b>failed</b> can both include a board that later recovered.
+              <b>Postings observed</b> is what the
               boards held, mostly seen before; <b>new</b> is first seen in that window.
             </p>
             <div className="alerts-row">

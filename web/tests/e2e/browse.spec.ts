@@ -8,8 +8,14 @@ test("home is Pulls: windows newest first, quiet ones included, and a window ope
   await expect(page.locator(".sb-link[aria-current=page]")).toContainText("Pulls");
   await expect(page.locator(".pull-entry").first()).toBeVisible();
   await expect(page.locator(".pull-entry.quiet").first()).toBeVisible();
-  // Checked, answered and failed are separate numbers.
-  await expect(page.locator(".pull-stats").first()).toContainText("sources checked");
+  // Legacy poll history and successful boards are distinct from recent attempts.
+  const stats = await (await page.request.get("/api/stats")).json();
+  const sourceKpi = page.locator(".kpi", { hasText: "Sources polling" });
+  await expect(sourceKpi.locator(".kpi-n")).toHaveText(stats.sources_polled.toLocaleString("en-US"));
+  await expect(sourceKpi.locator(".kpi-f")).toContainText(
+    `of ${stats.sources_enabled.toLocaleString("en-US")} enabled`,
+  );
+  await expect(page.locator(".pull-stats").first()).toContainText("boards read");
   await expect(page.locator(".pull-stats").first()).toContainText("failed");
   const hit = page.locator(".pull-entry:not(.quiet)").nth(1).locator(".pull-summary");
   await hit.click();

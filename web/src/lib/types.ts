@@ -299,6 +299,7 @@ export interface PullsPage {
     delayed_after_seconds: number;
     stalled_after_seconds: number;
     sources_enabled: number;
+    sources_polled: number;
   };
   summary: {
     window_start: string;

@@ -8,6 +8,8 @@ which the scheduler finished an attempt has one row in poll_sessions.
 What each number means, so none is passed off as another:
 
 - sources_enabled: boards configured and switched on. Not a check.
+- sources_polled: enabled boards with a source state, matching the legacy
+  Sources polling figure. It is not a 24-hour freshness count.
 - sources_succeeded: distinct boards read successfully in the window,
   each once however often it was read (poll_sessions.boards_checked).
 - sources_attempted, poll_attempts, failed_checks: recorded from
@@ -71,6 +73,7 @@ class PullStatus(BaseModel):
     delayed_after_seconds: int
     stalled_after_seconds: int
     sources_enabled: int
+    sources_polled: int
 
 
 class PullSummary(BaseModel):
@@ -220,6 +223,19 @@ def build_pulls(
         )
         or 0
     )
+    polled = int(
+        session.scalar(
+            select(func.count())
+            .select_from(JobSourceRecord)
+            .join(
+                SourceState,
+                (JobSourceRecord.source_type == SourceState.source)
+                & (JobSourceRecord.source_account == SourceState.source_account),
+            )
+            .where(JobSourceRecord.enabled.is_(True))
+        )
+        or 0
+    )
 
     last_success = last_poll_completed_at(session)
 
@@ -230,6 +246,7 @@ def build_pulls(
         delayed_after_seconds=int(DELAYED_AFTER.total_seconds()),
         stalled_after_seconds=int(STALLED_AFTER.total_seconds()),
         sources_enabled=enabled,
+        sources_polled=polled,
     )
 
     # The last 24 hours. Windows are summed for arrivals (each identity

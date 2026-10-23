@@ -288,7 +288,6 @@ export function PullsTimeline({
     <div className="timeline">
       {buckets.map((b, i) => {
         const isOpen = open.has(b.id);
-        const checked = b.sources_attempted ?? b.sources_succeeded;
         return (
           <div className={`pull-entry${b.new_qualifying ? "" : " quiet"}${b.failed_checks ? " warn" : ""}`} key={b.id} id={`pull-${b.id}`}>
             <div className="pull-when">
@@ -307,11 +306,11 @@ export function PullsTimeline({
                   <div className="pull-description">{description(b)}</div>
                   <div className="pull-stats">
                     <span>
-                      <b>{n(checked)}</b> {b.sources_attempted == null ? "sources answered" : "sources checked"}
+                      <b>{n(b.sources_succeeded)}</b> boards read
                     </span>
                     {b.sources_attempted != null ? (
                       <span>
-                        <b>{n(b.sources_succeeded)}</b> answered
+                        <b>{n(b.sources_attempted)}</b> attempted
                       </span>
                     ) : null}
                     {b.failed_checks != null ? (
