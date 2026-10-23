@@ -140,15 +140,15 @@ cd /opt/ace
 set -a
 . ./.env
 set +a
-docker compose -f deploy/oracle/compose.yaml up -d postgres
+docker compose --env-file .env -f deploy/oracle/compose.yaml up -d postgres
 gzip -dc /path/to/ace-production.dump.gz | docker compose \
-  -f deploy/oracle/compose.yaml exec -T postgres \
+  --env-file .env -f deploy/oracle/compose.yaml exec -T postgres \
   pg_restore --clean --if-exists --no-owner --no-acl \
   -U "$ACE_DB_USER" -d "$ACE_DB_NAME"
-docker compose -f deploy/oracle/compose.yaml run --rm migrate
-docker compose -f deploy/oracle/compose.yaml run --rm api \
+docker compose --env-file .env -f deploy/oracle/compose.yaml run --rm migrate
+docker compose --env-file .env -f deploy/oracle/compose.yaml run --rm api \
   python -m backend.scripts.backfill_resume_studio --apply
-docker compose -f deploy/oracle/compose.yaml run --rm api \
+docker compose --env-file .env -f deploy/oracle/compose.yaml run --rm api \
   python -m backend.scripts.data_inventory --compare /path/to/ace-before.json
 ```
 
@@ -170,7 +170,7 @@ Google binding and signs out earlier browser sessions:
 
 ```bash
 cd /opt/ace
-docker compose -f deploy/oracle/compose.yaml run --rm api \
+docker compose --env-file .env -f deploy/oracle/compose.yaml run --rm api \
   python -m backend.scripts.set_owner_email YOUR_DAILY_EMAIL
 ```
 
@@ -178,7 +178,7 @@ Then reset the password only when needed:
 
 ```bash
 cd /opt/ace
-docker compose -f deploy/oracle/compose.yaml run --rm api \
+docker compose --env-file .env -f deploy/oracle/compose.yaml run --rm api \
   python -m backend.scripts.create_owner YOUR_OWNER_EMAIL --reset
 ```
 
@@ -205,10 +205,10 @@ identifier:
 
 ```bash
 export ACE_BUILD_SHA="$(git rev-parse HEAD)"
-docker compose -f deploy/oracle/compose.yaml up -d --build \
+docker compose --env-file .env -f deploy/oracle/compose.yaml up -d --no-build \
   postgres migrate api web caddy
-docker compose -f deploy/oracle/compose.yaml ps
-docker compose -f deploy/oracle/compose.yaml logs --tail=100 migrate api web caddy
+docker compose --env-file .env -f deploy/oracle/compose.yaml ps
+docker compose --env-file .env -f deploy/oracle/compose.yaml logs --tail=100 migrate api web caddy
 curl -fsS "https://${ACE_DOMAIN}/healthz"
 ```
 
@@ -234,7 +234,7 @@ Add the client ID and secret to `.env`, set `GOOGLE_REDIRECT_URI` to that exact
 URL, and recreate the API container:
 
 ```bash
-docker compose -f deploy/oracle/compose.yaml up -d --force-recreate api
+docker compose --env-file .env -f deploy/oracle/compose.yaml up -d --force-recreate api
 ```
 
 ACE requests only `openid email profile`. It accepts only the verified email of the
@@ -343,6 +343,6 @@ cross-database replica disabled; their databases will diverge by design.
 Start the cloud scheduler only at that final step:
 
 ```bash
-docker compose -f deploy/oracle/compose.yaml up -d --build scheduler
-docker compose -f deploy/oracle/compose.yaml logs --tail=100 scheduler
+docker compose --env-file .env -f deploy/oracle/compose.yaml up -d --build scheduler
+docker compose --env-file .env -f deploy/oracle/compose.yaml logs --tail=100 scheduler
 ```

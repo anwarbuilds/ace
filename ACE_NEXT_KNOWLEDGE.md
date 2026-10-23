@@ -85,6 +85,32 @@ source identities and time windows; exact total counts are not an appropriate
 parity signal in independent-discovery mode. Do not merge the databases or
 re-enable the old replica without a new reconciliation plan.
 
+### Application release on 2026-10-23
+
+At `2026-10-23T23:10Z`, the owner-approved application release
+`b8e30b0b4261257fea25fb8e46f03912c6811990` became live at
+`https://ace.opik.net`. It includes Pulls `Early career`, `3 yrs max` and
+`Applied before` badges, expanded-window persistence and the corrected
+legacy-style sources-polling count. The public health endpoint returned OK
+with that exact frontend commit. PostgreSQL, API and web were healthy, migration
+was `0044 (head)`, and the privacy-safe inventory showed 963,970 jobs, 2,631
+Pull sessions, 1,180 marks and one user. Both schedulers continued writing
+fresh Pulls. The cloud scheduler retained its original container ID and stayed
+healthy. The legacy scheduler was healthy; the historical replica cron stayed
+disabled. The daily cloud backup timer remained active, with the verified
+`ace-20261023T144522Z.dump.gz` backup present.
+
+The first activation command omitted `docker compose --env-file .env`, causing
+Compose to substitute blank database variables and begin recreating services.
+That run was interrupted, then the same approved release was activated with
+the explicit environment file. The database volume was not removed. Migration
+exited zero and the post-release inventory and live health checks succeeded.
+Always pass `--env-file .env` for the Oracle Compose file; its location under
+`deploy/oracle/` does not automatically select the repository-root `.env`.
+The deployment commands in `deploy/oracle/README.md` were corrected locally
+after this incident; check Git status before assuming that documentation fix
+has been pushed to the VM.
+
 Earlier on 2026-10-23, the owner approved a cutover, but then clarified that
 this did not authorize stopping legacy discovery during the comparison period.
 Oracle discovery was briefly stopped and legacy discovery was restarted; Oracle
@@ -102,9 +128,9 @@ signal.
 During the temporary cutover, the cloud scheduler `oracle-scheduler-1` was rebuilt from deployed commit
 `204f30c5c3712bc31ad89cbbfcafb19ca0f8f762`, started at
 `2026-10-23T14:57:01Z`, and was healthy with fresh source successes after
-startup. The production app and `/opt/ace` remain at that commit. Its database
-is at migration `0044`. The pending local Pulls fixes at `5f8ebff` and
-`d89fb6b` have not been deployed by this cutover.
+startup. The production app and `/opt/ace` stayed at that commit until the
+later application release above. Its database was at migration `0044`. The
+Pulls fixes at `5f8ebff` and `d89fb6b` were not deployed by this cutover.
 At `2026-10-23T15:00:19Z`, the cloud had created Pull session 2,599 and had
 172 source successes since scheduler startup. The stopped legacy database
 remained at Pull session 2,598, proving the new window was cloud-generated.
@@ -586,7 +612,9 @@ After approval:
 4. Run `deploy/oracle/prepare-release.sh`. It builds `migrate`, `api` and `web`
    images and does not change running containers.
 5. Set `ACE_BUILD_SHA` to the full approved SHA and bring up only the required
-   `postgres`, `migrate`, `api`, `web` and `caddy` services. Do not recreate the
+   `postgres`, `migrate`, `api`, `web` and `caddy` services using
+   `docker compose --env-file .env -f deploy/oracle/compose.yaml up -d --no-build`.
+   Do not recreate the
    scheduler as part of an ordinary web/API release; leave both discovery
    schedulers running against their respective databases.
 6. Verify the migration exited zero, schema is at head, API/web/PostgreSQL are
@@ -767,8 +795,8 @@ Legacy has no `sources_attempted` column; the report uses the shared
 See `deploy/oracle/README.md` for the read-only comparison command and report.
 The backup timer is active, but Object Storage offsite backup is not configured.
 Arrange an offsite copy if protection against loss of the Oracle VM is desired.
-The Pulls badges, expanded-window persistence, and source-count fixes remain a
-separate, undeployed application release requiring explicit owner approval.
+The Pulls badges, expanded-window persistence, and source-count fixes were
+deployed in `b8e30b0b4261257fea25fb8e46f03912c6811990` on 2026-10-23.
 Do not merge ACE Next to legacy `main` without separate approval.
 
 ## Change log
