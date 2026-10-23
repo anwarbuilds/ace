@@ -1,5 +1,12 @@
 # ACE on Oracle Cloud Always Free
 
+Current production status, 2026-10-23: the owner-approved cutover is complete.
+The Oracle scheduler is the sole discovery writer, the legacy scheduler is
+stopped, and the laptop replica cron is disabled. The parallel-monitoring and
+cutover steps below document the completed migration; do not run them again
+while Oracle is writing. See `ACE_NEXT_KNOWLEDGE.md` for current operation and
+rollback rules.
+
 This deployment keeps PostgreSQL, FastAPI, Next.js and the scheduler on one
 Ampere A1 VM. Caddy is the only public container. PostgreSQL and FastAPI have
 no public host ports. Docker restarts the scheduler after a process failure or
@@ -225,7 +232,7 @@ systemctl list-timers ace-backup.timer
 Perform a restore drill into a separate database before cutover and monthly
 afterward. A backup that has never been restored is unverified.
 
-## Parallel monitoring with the legacy scheduler
+## Historical parallel monitoring with the legacy scheduler
 
 During the owner comparison period, keep the legacy scheduler as the only
 discovery writer and keep the cloud scheduler stopped. The cloud API can use a

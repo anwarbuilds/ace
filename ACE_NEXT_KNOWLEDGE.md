@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-22
+Last updated: 2026-10-23
 
 This is the continuity document for the production migration from the legacy
 ACE runtime to ACE Next. It contains architecture, verified state, operating
@@ -46,12 +46,11 @@ Before every task:
 ## Non-negotiable owner requirements
 
 - The legacy ACE checkout and database are the rollback system. Keep them
-  running and untouched during the monitoring period.
-- The legacy scheduler is the only discovery writer. The cloud scheduler must
-  remain stopped until the owner explicitly approves final cutover.
-- ACE Next must mirror the legacy pulls, jobs, companies, opportunities, marks
-  and application data through the replica workflow. Never hide or explain away
-  a mismatch. Trace it through the data model, API query and replica boundary.
+  intact. Its scheduler has been stopped since the owner-approved cutover.
+- The Oracle scheduler is now the only discovery writer. Never run both
+  schedulers at once. The laptop's minute replica cron has been disabled.
+- Investigate any data mismatch through the data model and API query. The
+  historical replica workflow is no longer active after cutover.
 - Production data must come from the real backend. Never use counts, jobs,
   names, scores, health or resume content from the visual demo.
 - Pulls is the authenticated landing page.
@@ -69,7 +68,56 @@ Before every task:
 - Do not expose secrets, personal data, resume text, answers, database dumps or
   session cookies in Git, logs, screenshots, issues or chat.
 
-## Current live state on 2026-10-22
+## Current live state on 2026-10-23
+
+The owner approved final cutover on 2026-10-23. Oracle is now the sole discovery
+writer. The legacy scheduler `ace-scheduler-1` is stopped, its database and
+checkout are intact for rollback, and the minute replica cron entry is removed.
+The previous crontab is saved under
+`/home/ubuntu/.local/state/ace-legacy-replica/crontab-before-cutover-20261023`.
+Do not restart the legacy scheduler or replica cron while Oracle is writing.
+The legacy web container remains available for rollback inspection, but its
+database no longer syncs with Oracle. Make new application and job marks only
+at `https://ace.opik.net`; writes through the legacy site would diverge.
+
+The cloud scheduler `oracle-scheduler-1` was rebuilt from deployed commit
+`204f30c5c3712bc31ad89cbbfcafb19ca0f8f762`, started at
+`2026-10-23T14:57:01Z`, and was healthy with fresh source successes after
+startup. The production app and `/opt/ace` remain at that commit. Its database
+is at migration `0044`. The pending local Pulls fixes at `5f8ebff` and
+`d89fb6b` have not been deployed by this cutover.
+At `2026-10-23T15:00:19Z`, the cloud had created Pull session 2,599 and had
+172 source successes since scheduler startup. The stopped legacy database
+remained at Pull session 2,598, proving the new window was cloud-generated.
+
+A fresh cloud backup at
+`/opt/ace/private-backups/ace-20261023T144522Z.dump.gz` passed gzip and archive
+checks and a full restore drill into a temporary database. The restored copy
+contained 944,431 jobs, 2,597 Pull sessions, 2,444 job sources, one user, and
+migration `0044`. The temporary database was removed. The supplied daily
+`ace-backup.timer` is enabled and active. Offsite Object Storage is not
+configured, so cloud backups currently reside on the VM; the intact legacy
+database is the separate rollback copy.
+
+After the legacy scheduler stopped, a final sync through
+`2026-10-23T14:51:26Z` used the running legacy web container because the stopped
+scheduler container could not execute the replica helper. The final parity
+query matched all documented aggregate lines. A further full-corpus check
+found 3,300 stale `jobs.source_updated_at` values in the cloud replica. Those
+timestamps alone were copied from the frozen legacy database in one guarded
+transaction, and final parity, full source-state and source-catalog hashes,
+job counts/content hashes and all shared Pull-session fields matched afterward.
+The inactive replica script can miss a full-job update when an ATS-provided
+`source_updated_at` predates the sync interval; repair this selection rule
+before ever resuming that workflow.
+
+The public `https://ace.opik.net/healthz` returned HTTP 200 after cutover with
+frontend SHA `204f30c5c3712bc31ad89cbbfcafb19ca0f8f762`; API, web, database
+and scheduler were healthy. Continue monitoring fresh Oracle Pull windows and
+backup timer executions. The cloud VM remains a single host and is not an
+absolute uptime guarantee.
+
+## Historical live state on 2026-10-22
 
 The canonical production URL is `https://ace.opik.net`. Dynu provides the
 hostname. Caddy terminates valid HTTPS and redirects the temporary sslip host to
@@ -123,9 +171,9 @@ legacy replica replay:
 | Career facts | 52 |
 | Users | 1 |
 
-Counts continue changing because the legacy scheduler is live and the replica
-runs continuously. Compare settled pull boundaries instead of treating this
-table as a frozen expected value.
+These historical counts changed while the legacy scheduler and replica were
+active. Compare settled pull boundaries instead of treating this table as a
+frozen expected value.
 
 The local file `ACE_NEXT_KNOWLEDGE.md` had intentional owner continuity edits
 before the latest deployment and was kept out of commit `132235c`. Do not
@@ -147,7 +195,8 @@ features are added, but the old data is not discarded or regenerated.
 ## Repositories and runtime state
 
 The legacy checkout is `/home/ubuntu/Documents/ace` on branch `main`. Its
-Docker stack is the current local production system. As audited on 2026-10-16:
+Docker stack is preserved for rollback. As audited on 2026-10-16, before
+cutover:
 
 - PostgreSQL 16 is healthy and published locally on port 5433.
 - The legacy web service is available on port 8000.
@@ -159,9 +208,9 @@ The new checkout is `/home/ubuntu/Documents/ace-next` on branch
 backend logic, Resume Studio, owner authentication, extension pairing, the
 Pulls-first workspace and the Oracle deployment kit.
 
-Do not stop, rebuild or migrate the legacy stack during development. Do not run
-the new scheduler against a separate writable copy and treat both copies as
-authoritative. Final cutover has one short write freeze and a rollback path.
+Do not rebuild or migrate the legacy stack during development. Keep its
+scheduler stopped while Oracle writes. Never treat both databases as
+authoritative discovery writers.
 
 ## Verified production data inventory
 
@@ -221,10 +270,8 @@ inside Docker's private network.
 
 Docker services use `restart: unless-stopped`. The scheduler persists its source
 state, respects per-source intervals, backs off on refusals and resumes from
-the last successful poll after a restart. During the current monitoring phase,
-that description applies to the legacy scheduler. The Oracle scheduler service
-is intentionally stopped so the two databases never have competing discovery
-writers.
+the last successful poll after a restart. Oracle now runs that scheduler; the
+legacy scheduler remains manually stopped so there is one discovery writer.
 
 ## Data ownership and compatibility
 
@@ -463,7 +510,7 @@ python -m backend.scripts.data_inventory --compare /tmp/ace-before.json
 The compare must run before Resume Studio backfill because that bridge is
 expected to add rows to the three Studio tables.
 
-### Phase 2: cloud rehearsal
+### Historical phase 2: cloud rehearsal
 
 Follow `deploy/oracle/README.md`. Keep the cloud scheduler stopped while the
 legacy scheduler remains authoritative. Verify HTTPS, password sign-in, Google
@@ -471,7 +518,8 @@ sign-in, sign out, delivery of the password sign-in code, forgot-password code
 delivery, Pulls, application counts, Analytics, Resume Studio, Answers, Settings
 and extension pairing.
 
-This is the current phase. The local legacy host runs this cron every minute:
+Before cutover, the local legacy host ran this cron every minute. It was
+removed on 2026-10-23:
 
 ```text
 * * * * * /home/ubuntu/Documents/ace-next/deploy/oracle/sync-legacy-replica.sh >> /home/ubuntu/.local/state/ace-legacy-replica/cron.log 2>&1
@@ -505,7 +553,7 @@ Use the same successful cursor as the cutoff on both databases and compare the
 output lines exactly. Mutable job and evaluation hashes may change beyond that
 cutoff while the legacy scheduler is polling.
 
-### Safe production release during monitoring
+### Safe production release after cutover
 
 Production deployment requires explicit owner approval each time. Before asking
 for it, commit the complete change, run applicable tests, confirm the diff does
@@ -518,37 +566,36 @@ After approval:
 3. Fetch and fast-forward to the exact approved SHA.
 4. Run `deploy/oracle/prepare-release.sh`. It builds `migrate`, `api` and `web`
    images and does not change running containers.
-5. Set `ACE_BUILD_SHA` to the full approved SHA and bring up only `postgres`,
-   `migrate`, `api`, `web` and `caddy`. Do not include `scheduler`.
+5. Set `ACE_BUILD_SHA` to the full approved SHA and bring up only the required
+   `postgres`, `migrate`, `api`, `web` and `caddy` services. Do not recreate the
+   scheduler as part of an ordinary web/API release; leave it running.
 6. Verify the migration exited zero, schema is at head, API/web/PostgreSQL are
-   healthy, the cloud scheduler is stopped, `https://ace.opik.net/healthz`
+   healthy, the cloud scheduler is running and healthy, `https://ace.opik.net/healthz`
    reports OK, and `X-Ace-Frontend-Commit` matches the approved SHA.
-7. Run the privacy-safe data inventory. Check the replica log and cursor after
-   the next completed sync.
+7. Run the privacy-safe data inventory and confirm fresh cloud scheduler writes.
 
 Do not use an unversioned web image. Do not assume a Git push deployed anything.
 Do not run `docker compose down`, remove a volume, restore a dump, downgrade a
 migration or alter the legacy stack as part of a normal frontend release.
 
-### Phase 3: final cutover
+### Historical phase 3: final cutover, completed 2026-10-23
 
-1. Stop only the legacy scheduler.
-2. Take the final dump and inventory.
-3. Restore to cloud and run migrations.
-4. Compare aggregate inventories.
-5. Run the Resume Studio bridge.
-6. Start API, web and Caddy, then verify the owner workflow.
-7. Start the cloud scheduler.
-8. Confirm fresh poll sessions and scheduler health.
-9. Keep the old database intact and scheduler stopped during the rollback
-   window.
+The existing cloud database had been continuously replicated and already
+included the cloud-only owner and Resume Studio data. Cutover used a verified
+cloud backup and isolated restore drill, disabled the minute cron, stopped the
+legacy scheduler, ran one final sync, repaired the 3,300 stale source-update
+timestamps, confirmed parity, then started the cloud scheduler. The legacy
+database remains intact with its scheduler stopped for rollback. No full
+restore was applied over the live cloud database.
 
 ### Phase 4: rollback if required
 
-Stop the cloud scheduler, return DNS to the old service if it was changed, and
-restart the old scheduler against the untouched old database. Do not merge two
-databases that both accepted writes after cutover without a separate conflict
-analysis.
+Stop the cloud scheduler first. If the old system must resume discovery, restart
+only the old scheduler against its intact database and decide explicitly how
+cloud-side application changes are transferred back. Do not run both schedulers
+or merge two databases that accepted writes after cutover without a separate
+conflict analysis. Do not re-enable the old replica cron until its stale
+source-update selection rule is repaired and a one-writer plan is approved.
 
 ## Oracle Free Tier operation
 
@@ -662,24 +709,27 @@ approves that merge.
 
 ## Outstanding owner decisions and monitoring
 
-Cloud infrastructure, Dynu DNS, HTTPS and Google OAuth are configured. The
-remaining operational decision is final cutover. The owner wants to monitor
-legacy ACE and ACE Next for several days and see matching settled pulls,
-companies, opportunities and application state before relying on ACE Next.
-
-Until that approval:
-
-1. Keep the legacy scheduler and database running.
-2. Keep the Oracle scheduler stopped.
-3. Keep the minute replica active and investigate every failed or stale cursor.
-4. Compare both systems at the same completed pull boundary, not at different
-   wall-clock moments while a sync is still running.
-5. Preserve the legacy checkout, database and rollback route.
-6. Do not merge ACE Next to legacy `main` or declare cutover complete.
-7. Ask for explicit approval before the final scheduler freeze, final parity
-   check, cloud scheduler start or any production redeployment.
+Final cutover was approved and completed on 2026-10-23. Monitor Oracle scheduler
+health and fresh Pull windows while the laptop is off. Keep the legacy checkout
+and database intact, its scheduler stopped, and the old replica cron disabled.
+The backup timer is active, but Object Storage offsite backup is not configured.
+Arrange an offsite copy if protection against loss of the Oracle VM is desired.
+The Pulls badges, expanded-window persistence, and source-count fixes remain a
+separate, undeployed application release requiring explicit owner approval.
+Do not merge ACE Next to legacy `main` without separate approval.
 
 ## Change log
+
+### 2026-10-23
+
+- Recorded the owner-approved one-writer cutover to Oracle discovery, final
+  replica cursor, parity evidence and intact legacy rollback copy.
+- Recorded the fresh cloud backup, successful isolated restore drill and active
+  daily backup timer. Offsite backup remains unconfigured.
+- Recorded the replica edge case affecting 3,300 source-update timestamps and
+  its guarded, timestamp-only repair before the cloud scheduler started.
+- Clarified that normal app releases must leave the now-running cloud scheduler
+  healthy and that the pending Pulls UI release remains separate.
 
 ### 2026-10-22
 
