@@ -71,6 +71,10 @@ Before every task:
 
 ## Current live state on 2026-10-24
 
+The currently deployed production application commit is
+`11a7fd4c74e3333ea76c4fe1e9eecba0615279c6`; schema is `0049 (head)`.
+The latest deployment details are in the owner account release section below.
+
 The owner clarified that the legacy site must keep discovering jobs until they
 are confident in ACE Next. **Both `ace-scheduler-1` and `oracle-scheduler-1`
 are running and healthy, each against its own PostgreSQL database.** The
@@ -139,6 +143,29 @@ local `extension/` folder. The owner must reload its card at
 `chrome://extensions` and reopen or refresh any application tab to use
 extension version `1.25.0`. A website deployment cannot update an unpacked
 browser extension by itself.
+
+### Owner account release on 2026-10-24
+
+The owner approved the account upgrade, including removal of the email line
+beneath the sidebar name. Production was fast-forwarded to
+`11a7fd4c74e3333ea76c4fe1e9eecba0615279c6`. Before activation, a
+fresh private backup,
+`private-backups/ace-pre-owner-profile-20261024T215213Z.dump.gz`, passed a
+complete gzip check and PostgreSQL archive-list check. The migration, API and
+web images built for the exact commit. Only PostgreSQL, migration, API, web
+and Caddy were included in Compose activation. Migration exited zero at
+`0049 (head)`.
+
+At `2026-10-24T21:57Z`, the public health endpoint returned HTTP 200 and
+`X-Ace-Frontend-Commit` matched the deployed SHA. The API, web, PostgreSQL
+and cloud scheduler were healthy. The cloud scheduler kept its prior container
+ID. The privacy-safe inventory showed 968,903 jobs, 2,722 Pull sessions,
+871 applied job marks, 47 external applications and one owner. The legacy
+scheduler was healthy. Cloud and legacy source-state successes were recorded
+at `21:57:55Z` and `21:57:54Z` respectively. The old replica cron remains
+absent. Anonymous requests to the account and photo endpoints returned 401.
+Authenticated Settings and photo interactions were validated locally with an
+isolated demo database, not with the owner's production session.
 
 ### SmartRecruiters screening autofill release details
 
@@ -895,16 +922,15 @@ Do not merge ACE Next to legacy `main` without separate approval.
 
 ## Change log
 
-### 2026-10-24, local change awaiting release approval
+### 2026-10-24, owner account release
 
 - Extended the existing owner account with first name, last name, phone number
   and a private profile photo. Added an additive migration (0049), owner-only
   profile endpoints, and current-password plus email-code verification for
   changing the ACE sign-in address. Gmail connection remains separate.
-- This account change is local only. It has not been pushed, migrated or
-  deployed. See `docs/architecture/2026-10-24-owner-profile.md` for release
-  and rollback details. Both discovery schedulers and databases remain as
-  described above.
+- Deployed the account change at the approved commit shown above. See
+  `docs/architecture/2026-10-24-owner-profile.md` for behavior and rollback
+  details. Both discovery schedulers and databases remain independent.
 
 ### 2026-10-23
 
