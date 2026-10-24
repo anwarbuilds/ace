@@ -237,13 +237,33 @@
       return !(index === 0 && !option.value);
     });
 
-    var index = aceChooseOption(
+    var index = chooseMatchedOption(
+      select,
       offered.map(function (option) { return option.textContent; }),
       wanted,
       alts
     );
 
     return index >= 0 ? offered[index] : null;
+  }
+
+  function chooseMatchedOption(field, options, wanted, alts) {
+    var name = answerNameFor(aceQuestionFor(field), kindOf(field));
+    if (name === "Field of study") {
+      // The saved major must beat a nearby but different major. If no
+      // exact saved wording exists, the approved Workday wording may
+      // beat a fuzzy match, but only when it occurs once in the list.
+      var candidates = [wanted].concat(alts || []);
+      for (var i = 0; i < candidates.length; i++) {
+        var exact = options.map(aceNormalise).reduce(function (found, text, at) {
+          if (text === aceNormalise(candidates[i])) found.push(at);
+          return found;
+        }, []);
+        if (exact.length === 1) return exact[0];
+        if (exact.length > 1) return -1;
+      }
+    }
+    return aceChooseOption(options, wanted, alts);
   }
 
   /* What shape of answer this control can accept.
@@ -385,6 +405,23 @@
       // separately in fillComboboxes, which can actually see its
       // options.
       return false;
+    }
+
+    if (field.tagName === "INPUT" &&
+        (field.type === "date" || field.type === "month")) {
+      var date = String(value || "").trim();
+      var us = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(date);
+      var usMonth = /^(\d{1,2})\/(\d{4})$/.exec(date);
+      if (field.type === "date" && us) {
+        date = us[3] + "-" + us[1].padStart(2, "0") + "-" +
+          us[2].padStart(2, "0");
+      } else if (field.type === "month" && usMonth) {
+        date = usMonth[2] + "-" + usMonth[1].padStart(2, "0");
+      }
+      if (field.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+      if (field.type === "month" && !/^\d{4}-\d{2}$/.test(date)) return false;
+      setNatively(field, date);
+      return field.value === date;
     }
 
     setNatively(field, value);
@@ -643,7 +680,7 @@
           lastFill.push({
           field: touched,
           previous: previous,
-          wrote: value,
+          wrote: touched.value,
           ticked: aceIsChoiceControl(touched)
         });
 
@@ -790,7 +827,8 @@
 
       var isChoice =
         field.tagName === "SELECT" ||
-        aceIsChoiceControl(field);
+        aceIsChoiceControl(field) ||
+        field.type === "date" || field.type === "month";
 
       if (!fillOne(field, value, aliases[name])) {
         if (isChoice && unmatched.indexOf(name) < 0) unmatched.push(name);
@@ -802,7 +840,7 @@
       lastFill.push({
         field: touched,
         previous: previous,
-        wrote: value,
+        wrote: touched.value,
         ticked: aceIsChoiceControl(touched)
       });
 
@@ -1183,7 +1221,7 @@
         return option.textContent;
       });
 
-      var index = aceChooseOption(texts, value, alts);
+      var index = chooseMatchedOption(field, texts, value, alts);
 
       if (index < 0) {
         closeListbox(field);
@@ -1268,7 +1306,7 @@
               node.textContent;
           });
 
-          var index = aceChooseOption(texts, value, alts);
+          var index = chooseMatchedOption(field, texts, value, alts);
           if (index < 0) return { matched: false };
 
           press(results[index]);
@@ -1318,7 +1356,7 @@
         return option.textContent;
       });
 
-      var index = aceChooseOption(texts, value, alts);
+      var index = chooseMatchedOption(field, texts, value, alts);
 
       if (index < 0) {
         // No option fits. Closed rather than left open with nothing
@@ -2278,9 +2316,26 @@
           // Board (e.g., LinkedIn, Indeed, Glassdoor)", and knowing
           // those are the same thing is not the user's job.
           aliases[item.label] = item.aliases || [];
+          if (item.label === "Field of study" &&
+              aceNormalise(item.value) === "computer science") {
+            // Workday uses this catalogue wording for the same major.
+            // The saved wording is still tried first, so an exact
+            // Computer Science option wins when the form offers one.
+            aliases[item.label] = aliases[item.label].concat(
+              "Computer and Information Science"
+            );
+          }
           known += 1;
         }
       });
+
+      var authorized = aceIntent(answers["Work authorisation"]);
+      var sponsorship = aceIntent(answers["Need sponsorship in future"]);
+      if (authorized && sponsorship) {
+        answers["Sponsorship follow-up from answers 1 and 2"] =
+          authorized === "no" || sponsorship === "yes" ? "Yes" : "No";
+        aliases["Sponsorship follow-up from answers 1 and 2"] = [];
+      }
 
       // Today is not something the bank can hold. A form asking you to
       // date your own acknowledgement wants the day you are signing it,

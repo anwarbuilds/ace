@@ -566,6 +566,25 @@ QUESTIONS: tuple[Question, ...] = (
         hint="Yes if you will need sponsorship later, even if not now.",
     ),
     _yes_no(
+        "Work authorization through spouse visa",
+        hint="Only for authorization based on H-4, L-2 or another spouse visa. "
+        "This is separate from whether you may work in the US now.",
+    ),
+    _yes_no(
+        "Eligible for bilateral visa classification",
+        hint="Only for eligibility under a named bilateral visa agreement. "
+        "Review the countries and visa types in the employer's question.",
+    ),
+    _yes_no(
+        "Currently on F-1 student visa",
+        hint="Your current status, which may change. Review before each application.",
+    ),
+    Question(
+        "Maximum OPT or CPT authorization end date",
+        hint="Use MM/DD/YYYY. Include a STEM extension only if eligible, "
+        "and update this date if your authorization changes.",
+    ),
+    _yes_no(
         "On a temporary work visa",
         hint="Asked separately from your current authorisation. H-1B, "
         "L-1 and TN are what forms usually mean.",
@@ -618,6 +637,12 @@ QUESTIONS: tuple[Question, ...] = (
     _yes_no(
         "Previously employed by PwC",
         hint="Only for questions naming PwC, even on another employer's form.",
+    ),
+    _yes_no(
+        "Big Four employment in prior 18 months",
+        hint="Current or former employment with EY, PwC, Deloitte or KPMG "
+        "within the stated 18-month window. Different from ever "
+        "working at any one of them.",
     ),
     _yes_no("Related to an employee here"),
     _yes_no(

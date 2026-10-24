@@ -10,6 +10,8 @@ global.CSS = { escape: function (value) { return value; } };
 
 eval(require("fs").readFileSync(__dirname + "/fields.js", "utf8"));
 
+var failures = 0;
+
 var CASES = [
   // Sponsorship reads as two near-identical questions, and Greenhouse
   // says "immigration sponsorship", which the first rules missed.
@@ -79,6 +81,33 @@ var CASES = [
   ["will you now, or in the future, require sponsorship for "
    + "employment visa status?", "Need sponsorship in future"]
 ];
+
+var WORKDAY_CASES = [
+  ["Are you legally authorized to work in the United States?", "choice", "Work authorisation"],
+  ["Is your current U.S. work authorization based on your status as a spouse of an H-1B, L-1, or E-1/E-2/E-3 visa holder? Do you hold H-4, L-2, or spousal status?", "choice", "Work authorization through spouse visa"],
+  ["Will you need ExampleCo to sponsor you for a visa now or in the future?", "choice", "Need sponsorship in future"],
+  ["Did you answer \"No\" to Question 1 (you are not legally authorized to work in the United States) or \"Yes\" to Question 2 (you will need ExampleCo to sponsor you for a visa)?", "choice", "Sponsorship follow-up from answers 1 and 2"],
+  ["Are you eligible for any visa classification based on your home country's bilateral agreement with the United States?", "choice", "Eligible for bilateral visa classification"],
+  ["Are you currently in the United States on an F-1 student visa?", "choice", "Currently on F-1 student visa"],
+  ["What is the maximum end date on your authorized period for optional practical training or curricular practical training?", "text", "Maximum OPT or CPT authorization end date"],
+  ["Do you currently live in or are you able to relocate to the location this job is advertised in?", "choice", "Willing to relocate"],
+  ["This position requires employees to work onsite at the office at least four days per week. Are you able to meet this requirement?", "choice", "Willing to work onsite"],
+  ["Can you confirm that you meet the minimum qualification for years of professional work experience for this role?", "choice", null],
+  ["Are you a current or former (prior 18 months) employee of EY, PwC, Deloitte or KPMG?", "choice", "Big Four employment in prior 18 months"],
+  ["Please acknowledge this by entering today's date.", "text", "Today's date"],
+  ["Have you ever worked for PwC?", "choice", "Previously employed by PwC"],
+];
+
+WORKDAY_CASES.forEach(function (entry) {
+  var got = aceAnswerNameFor(aceNormalise(entry[0]), entry[1], [
+    "Previously employed by PwC"
+  ]);
+  if (got !== entry[2]) {
+    failures += 1;
+    console.log("FAIL Workday " + JSON.stringify(entry[0]) +
+      " got " + JSON.stringify(got) + ", want " + JSON.stringify(entry[2]));
+  }
+});
 
 /* Every question on one real Dell application, which runs on Oracle's
    Candidate Experience and asks twenty-two of them as Yes/No pairs.
@@ -475,7 +504,6 @@ var ALIAS_CASES = [
    "H-1B", ["h 1b", "h1b", "h 1 b"], 2]
 ];
 
-var failures = 0;
 
 /* ServiceNow's SmartRecruiters screening page. These are categories,
    not a fixture containing the applicant's personal answers. A named
@@ -705,7 +733,8 @@ NAME_CASES.forEach(function (c) {
 
 var total = CASES.length + OPTION_CASES.length + DELL_CASES.length +
   ALIAS_CASES.length + HISTORY_ROLE_CASES.length + DATE_CASES.length +
-  NAME_CASES.length + SCREENING_CASES.length + EMPLOYER_CASES.length;
+  NAME_CASES.length + SCREENING_CASES.length + EMPLOYER_CASES.length +
+  WORKDAY_CASES.length;
 
 console.log(
   failures

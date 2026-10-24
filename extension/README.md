@@ -33,6 +33,15 @@ matching employer in ACE. A prefilled date is left alone. If a prefilled
 employer cannot be matched uniquely to saved history, ACE leaves its dates
 for manual review.
 
+On Workday, Field of Study is selected from the site's own results. A saved
+Computer Science answer also matches the site's Computer and Information
+Science option when that is the only matching choice. Work authorization,
+sponsorship, spouse visa status, F-1 status, bilateral visa eligibility, the
+OPT or CPT end date, and recent Big Four employment remain separate answers.
+The follow-up that explicitly asks whether Question 1 was No or Question 2
+was Yes is calculated only when both underlying answers are saved. A minimum
+experience requirement for a particular role stays for manual review.
+
 If ACE runs somewhere other than `http://localhost:8000`, set the
 address from the toolbar icon.
 

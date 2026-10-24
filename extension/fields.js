@@ -68,6 +68,23 @@ var ACE_RULES = [
   // later, and they are not the same question.
   // ------------------------------------------------------------------
 
+  { answer: "Work authorization through spouse visa", type: ACE_YESNO,
+    all: ["work authorization", "spouse"],
+    any: ["work authorization based on your status as a spouse",
+          "spousal status", "visa holder"] },
+  { answer: "Sponsorship follow-up from answers 1 and 2", type: ACE_YESNO,
+    all: ["did you answer", "question 1", "question 2"],
+    any: ["did you answer no to question 1", "sponsor", "sponsorship"] },
+  { answer: "Eligible for bilateral visa classification", type: ACE_YESNO,
+    any: ["visa classification based on your home country s bilateral agreement",
+          "eligible for any visa classification based on"] },
+  { answer: "Currently on F-1 student visa", type: ACE_YESNO,
+    any: ["currently in the united states on an f-1 student visa",
+          "currently on an f-1 student visa", "f-1 student visa"] },
+  { answer: "Maximum OPT or CPT authorization end date", type: ACE_TEXT,
+    all: ["maximum end date", "practical training"],
+    any: ["optional practical training", "curricular practical training"] },
+
   // "Future" has to be tested before the plain form or it never
   // matches, and both are now scored so the longer phrase wins anyway.
   { answer: "Need sponsorship in future", type: ACE_YESNO,
@@ -178,6 +195,9 @@ var ACE_RULES = [
           "worked for this company", "worked for your company",
           "worked for our company", "employed by this company",
           "employed by your company", "employed by our company"] },
+  { answer: "Big Four employment in prior 18 months", type: ACE_YESNO,
+    all: ["prior 18 months", "ey", "pwc", "deloitte", "kpmg"],
+    any: ["employee", "employed"] },
   { answer: "ServiceNow RiseUp graduate", type: ACE_YESNO,
     all: ["riseup", "servicenow"],
     any: ["graduate", "nextgen"] },
@@ -458,7 +478,8 @@ var ACE_RULES = [
           "able to relocate", "relocate", "relocation"] },
   { answer: "Willing to work onsite", type: ACE_YESNO,
     any: ["willing to work from", "local office", "onsite and in person",
-          "work in office", "work from the office", "commute to",
+          "work in office", "work from the office", "work onsite",
+          "onsite at the office", "at least four days per week", "commute to",
           // A hybrid schedule is the same question for someone willing
           // to be in an office, and it is how most of these are now
           // worded.
@@ -566,7 +587,7 @@ function aceIsAutocomplete(field) {
 function aceIsWorkdayPrompt(field) {
   return (
     field.tagName === "INPUT" &&
-    field.getAttribute("data-automation-id") === "searchBox" &&
+    field.type !== "hidden" && field.type !== "file" &&
     !!field.closest('[data-automation-id="multiSelectContainer"]')
   );
 }
@@ -1019,6 +1040,24 @@ function aceNamedEmployerAnswer(question, availableNames) {
    the broad ones they would otherwise be swallowed by. */
 function aceAnswerNameFor(question, kind, availableNames) {
   if (!question) return null;
+
+  // This is a logical question about two earlier answers, not another
+  // request for the work-authorization answer quoted inside it.
+  if (acePhraseIn(question, "did you answer") &&
+      acePhraseIn(question, "question 1") &&
+      acePhraseIn(question, "question 2") &&
+      (acePhraseIn(question, "sponsor") ||
+       acePhraseIn(question, "sponsorship"))) {
+    return "Sponsorship follow-up from answers 1 and 2";
+  }
+
+  // The answer depends on the particular role's required years. A
+  // global Yes saved after one application would be false for another.
+  if (acePhraseIn(question, "minimum qualification") &&
+      acePhraseIn(question, "experience") &&
+      (acePhraseIn(question, "role") || acePhraseIn(question, "position"))) {
+    return null;
+  }
 
   // A typed name here is a legal signature, and a privacy declaration
   // is an attestation. The person must choose those themselves.

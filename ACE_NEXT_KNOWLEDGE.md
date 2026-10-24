@@ -138,6 +138,23 @@ checkout, the owner can reload it locally at `chrome://extensions` and then
 reload already-open Workday application tabs; no web deployment is needed for
 this extension-only fix.
 
+### Pending Workday education and screening autofill work
+
+The local extension update `1.24.0` selects a Workday Field of Study result
+rather than leaving uncommitted search text. For saved `Computer Science`, it
+can select Workday's `Computer and Information Science` option when that is
+the unique match. Migration `0046` adds five distinct answer rows blank:
+spouse-based work authorization, bilateral visa eligibility, current F-1
+status, maximum OPT/CPT authorization end date, and Big Four employment in
+the prior 18 months. The extension derives the numbered authorization and
+sponsorship follow-up only from both saved underlying answers. Existing
+answers cover work authorization, future sponsorship, relocation and onsite
+availability. The role-specific minimum-experience confirmation remains
+manual because it can change with each job. Native date inputs receive ISO
+values and are confirmed before ACE reports success. Screenshot values were
+not committed or written to production. This update is local only, with no
+push, deployment or production migration yet.
+
 Earlier on 2026-10-23, the owner approved a cutover, but then clarified that
 this did not authorize stopping legacy discovery during the comparison period.
 Oracle discovery was briefly stopped and legacy discovery was restarted; Oracle
