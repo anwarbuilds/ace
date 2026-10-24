@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-23
+Last updated: 2026-10-24
 
 This is the continuity document for the production migration from the legacy
 ACE runtime to ACE Next. It contains architecture, verified state, operating
@@ -69,7 +69,7 @@ Before every task:
 - Do not expose secrets, personal data, resume text, answers, database dumps or
   session cookies in Git, logs, screenshots, issues or chat.
 
-## Current live state on 2026-10-23
+## Current live state on 2026-10-24
 
 The owner clarified that the legacy site must keep discovering jobs until they
 are confident in ACE Next. **Both `ace-scheduler-1` and `oracle-scheduler-1`
@@ -107,11 +107,40 @@ the explicit environment file. The database volume was not removed. Migration
 exited zero and the post-release inventory and live health checks succeeded.
 Always pass `--env-file .env` for the Oracle Compose file; its location under
 `deploy/oracle/` does not automatically select the repository-root `.env`.
-The deployment commands in `deploy/oracle/README.md` were corrected locally
-after this incident; check Git status before assuming that documentation fix
-has been pushed to the VM.
+The deployment commands in `deploy/oracle/README.md` were corrected after
+this incident. That correction reached the VM with the 2026-10-24 release.
 
-### Pending SmartRecruiters screening autofill work
+### Autofill application release on 2026-10-24
+
+The owner approved deploying the local autofill batch. Branch
+`wine-rose-platform` was pushed, and `/opt/ace` was fast-forwarded to
+`d1202fd1e590bc290e88c059109bb35ff114796c`. A fresh pre-release cloud
+backup, `private-backups/ace-pre-autofill-20261024T172503Z.dump.gz`, passed
+gzip and PostgreSQL archive-list checks. The versioned API, migration and web
+images were built, then only PostgreSQL, migration, API, web and Caddy were
+included in the activation command. Migration exited zero at `0048 (head)`.
+At `2026-10-24T17:29Z`, `https://ace.opik.net/healthz` returned 200 with that
+exact frontend commit. API, web, PostgreSQL and both independent discovery
+schedulers were healthy; the Oracle scheduler kept its prior container ID.
+The laptop's cross-database replica cron remained absent. The privacy-safe
+cloud inventory showed 968,535 jobs, 2,704 Pull sessions, 871 applied job
+marks, 47 external applications and one user. Cloud and legacy source states
+both showed fresh writes after the release.
+
+Migrations `0045` through `0048` added 33 blank answer rows. A separate
+guarded transaction then saved 32 exact answers supplied in the owner's
+screenshots, only where the matching row was still blank. No existing answer
+was overwritten. The answer bank then had 104 rows, 98 filled. The owner
+explicitly chose to leave `Eligible for bilateral visa classification` blank
+for manual review. No personal answer text was committed to Git.
+
+The web and API are live, but Chrome's unpacked extension is loaded from the
+local `extension/` folder. The owner must reload its card at
+`chrome://extensions` and reopen or refresh any application tab to use
+extension version `1.25.0`. A website deployment cannot update an unpacked
+browser extension by itself.
+
+### SmartRecruiters screening autofill release details
 
 The owner supplied screenshots of ServiceNow screening questions and asked for
 careful reuse across small wording and employer-name changes. The local
@@ -119,26 +148,20 @@ extension update `1.22.0` adds narrow rules for those questions and a dynamic
 `Previously employed by Company Name` template. Named employers require a
 separate saved answer. Government questions with different time windows,
 export-control residency, and the ServiceNow RiseUp program have separate bank
-rows. Migration `0045` adds those rows blank; it neither infers values from
-screenshots nor changes existing answers. Signatures and privacy declarations
-remain manual. This work is local and is not yet pushed, deployed, or migrated
-in production. After an approved release, the owner must fill any desired new
-blank rows in ACE Answers and reload the unpacked Chrome extension.
+rows. Migration `0045` added those rows blank before the guarded one-time
+answer save described above. Signatures and privacy declarations remain manual.
 
-### Pending Workday history date autofill work
+### Workday history date autofill release details
 
 The local extension update `1.23.0` writes native month inputs using their
 required `YYYY-MM` value while Workday displays them as `MM/YYYY`. It matches
 prefilled employers to saved work history before filling dates, leaves
 unmatched or ambiguous jobs alone, and never overwrites an existing date.
 An isolated Chromium test covers current and past jobs, out-of-order history,
-manually entered dates, and an unmatched employer. This work is local and has
-not been pushed or deployed. If Chrome's unpacked extension points to this
-checkout, the owner can reload it locally at `chrome://extensions` and then
-reload already-open Workday application tabs; no web deployment is needed for
-this extension-only fix.
+manually entered dates, and an unmatched employer. The owner must reload the
+unpacked extension and the Workday application tab to use this change.
 
-### Pending Workday education and screening autofill work
+### Workday education and screening autofill release details
 
 The local extension update `1.24.0` selects a Workday Field of Study result
 rather than leaving uncommitted search text. For saved `Computer Science`, it
@@ -152,10 +175,10 @@ answers cover work authorization, future sponsorship, relocation and onsite
 availability. The role-specific minimum-experience confirmation remains
 manual because it can change with each job. Native date inputs receive ISO
 values and are confirmed before ACE reports success. Screenshot values were
-not committed or written to production. This update is local only, with no
-push, deployment or production migration yet.
+not committed to Git. The owner-supplied values were saved separately after
+the approved production deployment, except for bilateral visa eligibility.
 
-### Pending Meijer and Verizon Workday screening autofill work
+### Meijer and Verizon Workday screening autofill release details
 
 The local extension update `1.25.0` adds precise matching for the three
 Meijer Workday screening pages. Migration `0047` adds 11 blank answer rows for
@@ -167,9 +190,9 @@ work authorization, future sponsorship, relocation and hybrid work. The
 extension selects the exact `18 years or older` option only when the saved
 adult-status answer is Yes; it leaves narrower age bands for the owner.
 Tests cover all three page shapes and prove unrelated broad answers leave
-these narrower questions blank. Screenshot values were not committed or
-written to production. This update remains local, with no push, deployment
-or production migration yet.
+these narrower questions blank. Screenshot values were not committed to Git;
+the exact saved answers were written to the private production answer bank
+after migration.
 
 The same local update covers the Verizon Workday question page. Migration
 `0048` adds eight blank rows for authorization to work for any US employer,
@@ -179,8 +202,8 @@ ties to an employee, a family board member, personal US military service and
 spouse US military service. Future sponsorship and adult status use their
 existing saved answers. Matching and browser tests keep each distinct fact
 separate, including when only a broader answer has been saved. The owner's
-answers shown in screenshots remain outside source code and production is
-unchanged.
+answers shown in screenshots remain outside source code. The bilateral visa
+eligibility answer remains blank at the owner's direction.
 
 Earlier on 2026-10-23, the owner approved a cutover, but then clarified that
 this did not authorize stopping legacy discovery during the comparison period.
