@@ -2,7 +2,7 @@
 
 Every private route must refuse an anonymous caller; the owner's browser
 must get in with a cookie and a CSRF header; the extension must get in
-with its token, and only to read answers and history. Fictional
+with its token, and only to read answers and history or manage approved memory. Fictional
 addresses and passwords only.
 """
 
@@ -771,7 +771,7 @@ def test_the_extension_pairs_and_reads_answers_and_history(client) -> None:
     assert extension.get("/api/auth/status", headers=bearer).json()["kind"] == "token"
 
 
-def test_the_extension_token_reads_nothing_else_and_changes_nothing(client) -> None:
+def test_the_extension_token_cannot_change_legacy_data(client) -> None:
     token = _pair(client)
     extension = TestClient(client.app)
     bearer = {"Authorization": f"Bearer {token}"}
@@ -782,10 +782,43 @@ def test_the_extension_token_reads_nothing_else_and_changes_nothing(client) -> N
     assert extension.get("/api/extension/tokens", headers=bearer).status_code == 403
 
 
-def test_the_extension_scope_is_read_only_by_construction() -> None:
+def test_the_extension_read_scope_is_narrow() -> None:
     assert EXTENSION_PATHS == {
-        "/api/answers", "/api/history/work", "/api/history/education", "/api/auth/status"
+        "/api/answers", "/api/history/work", "/api/history/education", "/api/auth/status",
+        "/api/extension/memory",
     }
+
+
+def test_extension_memory_is_idempotent_and_protects_sensitive_questions(client) -> None:
+    token = _pair(client)
+    extension = TestClient(client.app)
+    bearer = {"Authorization": f"Bearer {token}"}
+    item = {
+        "concept": "distributed_design_tradeoff",
+        "question": "Explain a distributed systems design tradeoff you faced",
+        "answer": "Synthetic reviewed answer",
+        "answer_type": "text",
+        "source_host": "jobs.example",
+    }
+    first = extension.put("/api/extension/memory", json=item, headers=bearer)
+    assert first.status_code == 200, first.text
+    again = extension.put("/api/extension/memory", json=item, headers=bearer)
+    assert again.json()["id"] == first.json()["id"]
+    assert again.json()["revision"] == first.json()["revision"] == 1
+    listed = extension.get("/api/extension/memory", headers=bearer).json()["items"]
+    assert len(listed) == 1 and listed[0]["answer"] == item["answer"]
+    used_path = "/api/extension/memory/" + str(first.json()["id"]) + "/used"
+    assert extension.post(used_path, headers=bearer).status_code == 200
+    assert extension.get("/api/extension/memory", headers=bearer).json()["items"][0]["last_used_at"]
+    changed = dict(item, answer="Revised synthetic answer", expected_revision=1)
+    assert extension.put("/api/extension/memory", json=changed, headers=bearer).json()["revision"] == 2
+    assert extension.put("/api/extension/memory", json=changed, headers=bearer).status_code == 409
+    sensitive = dict(item, concept="sponsor", question="Will you need visa sponsorship?")
+    assert extension.put("/api/extension/memory", json=sensitive, headers=bearer).status_code == 422
+    for question in ["Please acknowledge this by entering today's date.", "Have you signed a non-competition agreement?"]:
+        assert extension.put("/api/extension/memory", json=dict(sensitive, question=question), headers=bearer).status_code == 422
+    assert extension.delete("/api/extension/memory/" + str(first.json()["id"]), headers=bearer).status_code == 200
+    assert extension.get("/api/extension/memory", headers=bearer).json()["items"] == []
 
 
 def test_a_pairing_code_works_once(client) -> None:

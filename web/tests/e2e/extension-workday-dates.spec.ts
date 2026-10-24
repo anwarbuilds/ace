@@ -71,6 +71,7 @@ test("Workday month inputs receive the right dates for each saved job", async ({
 
   const extensionRoot = path.resolve(process.cwd(), "../extension");
   await page.addScriptTag({ path: path.join(extensionRoot, "fields.js") });
+  await page.addScriptTag({ path: path.join(extensionRoot, "memory.js") });
   await page.addScriptTag({ path: path.join(extensionRoot, "content.js") });
   await expect.poll(() => page.evaluate(() => Boolean(document.querySelector(".ace-root")))).toBe(true);
   await page.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", {

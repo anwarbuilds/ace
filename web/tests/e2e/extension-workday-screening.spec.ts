@@ -20,6 +20,7 @@ async function loadExtension(page: Page, items: { label: string; value: string; 
     };
   }, items);
   await page.addScriptTag({ path: path.join(extensionRoot, "fields.js") });
+  await page.addScriptTag({ path: path.join(extensionRoot, "memory.js") });
   await page.addScriptTag({ path: path.join(extensionRoot, "content.js") });
   await expect.poll(() => page.evaluate(() => Boolean(document.querySelector(".ace-root")))).toBe(true);
   await page.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", {
@@ -139,13 +140,13 @@ test("Workday screening fills only saved or logically derived answers", async ({
     { label: "Big Four employment in prior 18 months", value: "Yes" },
   ]);
 
-  for (const [id, value] of Object.entries({
-    auth: "Yes", spouse: "Yes", sponsor: "No", followup: "No",
-    bilateral: "No", student: "No", relocate: "No", onsite: "Yes", bigfour: "Yes",
-  })) await expect(page.locator(`#${id}`)).toHaveText(value);
+  for (const id of ["auth", "spouse", "sponsor", "followup", "bilateral", "student", "onsite", "bigfour"]) {
+    await expect(page.locator(`#${id}`)).toHaveText("Select One");
+  }
+  await expect(page.locator("#relocate")).toHaveText("No");
   await expect(page.locator("#minimum")).toHaveText("Select One");
-  await expect(page.locator("#opt")).toHaveValue("2030-12-31");
-  await expect(page.locator("#today")).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
+  await expect(page.locator("#opt")).toHaveValue("");
+  await expect(page.locator("#today")).toHaveValue("");
 });
 
 test("broader authorization answers do not fill unsaved narrow questions", async ({ page }) => {

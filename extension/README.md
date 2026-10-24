@@ -1,120 +1,36 @@
-# ACE Autofill
+# ACE Apply Studio V4
 
-Fills the fields every application form asks for, from the answer bank
-in your local ACE instance. It fills and stops: nothing here submits a
-form, and nothing overwrites a box that already has something in it.
+Apply Studio runs inside the existing ACE Chrome extension. It fills application fields and stops. You review every field and submit the employer application yourself. Filling never marks a job Applied in ACE.
 
-Runs on every site and decides per page, rather than from a list of
-supported hosts. The list could not be made to hold: most companies
-self-host their board and Oracle gives every tenant its own subdomain,
-so a substantial share of one real user's applications went through 19
-hosts a list did not name.
+## Install or reload
 
-## Install
+1. Open `chrome://extensions` and turn on **Developer mode**.
+2. Choose **Load unpacked** and select `/home/ubuntu/Documents/ace-next/extension` if ACE is not installed yet. If it is already installed, click **Reload** on its card.
+3. Reload any employer tabs that were open before the extension reload. Chrome injects the updated content script when a tab loads.
+4. Open the ACE toolbar icon, set the ACE address to `https://ace.opik.net` if this browser uses the cloud instance, then pair it with a fresh code from ACE's Autofill Extension page. A local ACE instance uses `http://localhost:8000` instead.
 
-1. Open `chrome://extensions`
-2. Turn on **Developer mode**, top right
-3. **Load unpacked**, and choose this `extension` folder
-4. Fill your answers in ACE first, under Answers. An empty bank fills
-   nothing.
+The V4 Answer Memory API needs database migration `0050_extension_answer_memory` on the ACE server before approvals can be saved. Reloading the unpacked extension alone does not deploy that API or migration.
 
-ACE itself has to be running, since the answers are read from it.
+If the Memory tab says the server needs the V4 update, the extension has loaded but the selected ACE server has not. Check the ACE address in the toolbar popup. After the server update, use **Retry connection** in Memory. You do not need to reload the employer page for that retry.
 
-For a question naming a past employer, save a separate row in ACE Answers
-as `Previously employed by Company Name`. The extension matches that name
-in the question. A blank row or a question naming a different company stays
-unanswered. Government questions with different time windows, export-control
-questions, and program-specific questions also have separate rows. Never
-infer their answers from a broader saved fact. Electronic signatures and
-privacy declarations remain for the applicant to complete manually.
+## Using Apply Studio
 
-Workday work-history From and To month fields use the dates saved for the
-matching employer in ACE. A prefilled date is left alone. If a prefilled
-employer cannot be matched uniquely to saved history, ACE leaves its dates
-for manual review.
+- **Fill** applies known, approved answers to empty fields. It never overwrites a manual answer. **Alt+A** is the keyboard shortcut.
+- The **Review** tab lists unknown questions, protected questions, and saved answers that do not match an employer's offered choices. Enter an answer and choose **Approve and fill**. A reusable answer is saved to Answer Memory immediately before it is applied. Sensitive and company-specific answers are used only on this form.
+- The **Memory** tab shows approved reusable answers. You can search, edit, or delete them. A saved answer can match a carefully recognized equivalent question without reloading the employer page.
+- The **Activity** tab records local fill actions and provides **Undo** and field diagnostics. Answer values are not logged there.
+- The Day and Night themes can be switched from the panel header. The preference persists in Chrome.
+- New form questions are detected as they appear. **Scan fields** refreshes the view manually.
+- **Auto-fill known** can be turned off in Overview if you want Fill to be the only trigger. It affects only known answers and never submits.
 
-On Workday, Field of Study is selected from the site's own results. A saved
-Computer Science answer also matches the site's Computer and Information
-Science option when that is the only matching choice. Work authorization,
-sponsorship, spouse visa status, F-1 status, bilateral visa eligibility, the
-OPT or CPT end date, and recent Big Four employment remain separate answers.
-The follow-up that explicitly asks whether Question 1 was No or Question 2
-was Yes is calculated only when both underlying answers are saved. A minimum
-experience requirement for a particular role stays for manual review.
+The existing answer bank, work and education history, pairing, supported form controls, and application tracking remain separate. Work authorization, sponsorship, legal declarations, and company-specific questions stay in Review even when a broad or previous answer exists. If ACE cannot verify a dropdown choice, it leaves that field for review.
 
-Meijer Workday questions have separate saved answers for recruiting texts,
-contract work, prior employment, recruiter contact, current contractor
-status, residence in its six-state footprint, current visa description,
-AI engineering experience, Azure AI years, AI coding tools and current OPT
-status. The specific age-range option `18 years or older` can be selected
-from a saved `At least 18 years old` Yes; narrower age bands remain manual.
-Broader employment, consent or total-experience answers never substitute for
-the Meijer-specific rows.
+## Local checks
 
-Verizon Workday questions distinguish authorization for any US employer from
-general work authorization, current employer visa sponsorship from future
-sponsorship, a combined government-employment question from federal-only or
-state-only history, and agreements covering both non-compete and
-non-solicitation terms. Family or close personal ties to an employee, family
-ties to a board member, personal military service and spouse military service
-each have a separate answer. Save those values in ACE Answers before using
-autofill. A broader saved answer leaves these narrower fields blank.
+From the repository root, run `node extension/test-rules.js` and `node extension/test-memory.js`. The browser regression tests live in `web/tests/e2e/extension-*.spec.ts`.
 
-If ACE runs somewhere other than `http://localhost:8000`, set the
-address from the toolbar icon.
+## Release and rollback
 
-## After changing anything in this folder
+Before a future deployment, take the normal PostgreSQL backup and verify that it can be restored. Apply migration `0050` before loading V4 in Chrome. The migration only creates `extension_answer_memory`; it does not alter the existing answer bank or application data.
 
-Open `chrome://extensions` and press **Reload** on the ACE card. An
-unpacked extension keeps running the build Chrome last read, so
-editing a file here changes nothing until it is reloaded.
-
-A tab that was already open then still has no content script in it,
-whatever the manifest says, because a content script only injects
-while a page is loading. Either reload the tab, or press **Fill this
-page** in the toolbar popup, which injects on demand.
-
-## How it works
-
-A panel appears at the **top right** of a form saying how many fields
-it can fill, and listing them before it touches anything. Top right
-rather than bottom right because a form's own Submit button is almost
-always at the bottom, and a fixed panel over it blocks the one click
-that matters most.
-
-Click **Fill**, or press **Alt+A**. It reports what it filled, what it
-left alone because there was already a value, and which questions it
-had no answer for, so you know exactly what is left to do by hand.
-**Undo** puts everything back.
-
-Dropdowns drawn as buttons -- Workday's "Select One" -- are opened, and
-the matching option is clicked, the same way as an autocomplete. **Undo**
-cannot put those back to "Select One"; it leaves them as chosen.
-
-Nothing typed by you is ever overwritten, with one exception: a name box
-that holds only your own name in capitals or in lower case, as a site
-copies it from a résumé header, gets your name the way the bank writes
-it.
-
-**Nothing on the page is marked.** Fields it fills look exactly like
-fields you typed, the way a browser's own autofill behaves. The panel
-is the record of what was done; the form is left alone.
-
-The panel itself is mounted in a shadow root, so the employer's
-stylesheet cannot reach it and its own styles cannot leak out onto
-their form.
-
-Matching is on the question text a person reads, not on the field's
-`name` attribute, because those are generated and differ between
-tenants. A question it cannot identify is left empty rather than
-guessed at: a wrong answer in a form you are about to send an employer
-is worse than a blank one.
-
-## Adding a question it misses
-
-Add a rule to `ACE_RULES` in `fields.js`. `answer` must be the exact
-label of a row in your ACE answer bank. Narrower questions go above the
-broader ones they would otherwise be swallowed by, which is why the
-sponsorship rules are ordered the way they are.
-
-Reload the extension from `chrome://extensions` afterwards.
+If V4 needs to be rolled back, reload the previous unpacked extension version and restore the previous backend application while leaving the additive memory table in place. That preserves any answers approved during V4 use. If schema rollback is required, export `extension_answer_memory` first and then run `alembic downgrade 0049`; that downgrade drops only the V4 table and its saved answers. Do not run the downgrade against production without a verified backup and explicit authorization.

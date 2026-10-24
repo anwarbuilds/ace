@@ -75,6 +75,7 @@ EXTENSION_PATHS = frozenset(
         "/api/history/work",
         "/api/history/education",
         "/api/auth/status",
+        "/api/extension/memory",
     }
 )
 
@@ -241,11 +242,18 @@ def require_auth(
         raise _refuse(403, "not_owner", "This account cannot read ace.")
 
     if principal.kind == "token":
-        if request.method != "GET" or path not in EXTENSION_PATHS:
+        memory_write = (
+            (path == "/api/extension/memory" and request.method == "PUT") or
+            (path.startswith("/api/extension/memory/") and request.method == "DELETE" and
+             path.rsplit("/", 1)[-1].isdigit()) or
+            (path.startswith("/api/extension/memory/") and path.endswith("/used") and
+             request.method == "POST" and path.split("/")[-2].isdigit())
+        )
+        if not memory_write and (request.method != "GET" or path not in EXTENSION_PATHS):
             raise _refuse(
                 403,
                 "scope",
-                "The extension may only read answers and history.",
+                "The extension may only read answers and history or manage approved memory.",
             )
 
     elif request.method not in SAFE_METHODS:

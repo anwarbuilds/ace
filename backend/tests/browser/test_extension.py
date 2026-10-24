@@ -52,6 +52,7 @@ def fixture_filler(
         )
         for name in (
             "fields.js",
+            "memory.js",
             "content.js",
         )
     )
@@ -509,6 +510,7 @@ def _boot_form(
         )
         for name in (
             "fields.js",
+            "memory.js",
             "content.js",
         )
     )

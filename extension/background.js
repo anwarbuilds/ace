@@ -5,8 +5,9 @@
 
    ACE asks who is calling. The extension proves it with its own token,
    made once by pairing (a code shown in ACE, Settings, typed into the
-   popup) and kept in chrome.storage.local. The token may only read the
-   answer bank and the work and education history. */
+   popup) and kept in chrome.storage.local. The token may read the
+   answer bank and history, and manage only the separate, owner-approved
+   Answer Memory resource. */
 
 const DEFAULT_BASE = "http://localhost:8000";
 
@@ -38,6 +39,23 @@ function getJson(path) {
           return response.json();
         })
         .then(resolve, reject);
+    });
+  });
+}
+
+function memoryRequest(method, path, payload) {
+  return new Promise(function (resolve, reject) {
+    withConfig(function (base, token) {
+      fetch(base + path, {
+        method: method,
+        cache: "no-store",
+        headers: Object.assign({ "Content-Type": "application/json" }, authHeaders(token)),
+        body: payload ? JSON.stringify(payload) : undefined,
+      }).then(function (response) {
+        if (response.status === 401) throw new Error("unpaired");
+        if (!response.ok) throw new Error("Memory save failed (HTTP " + response.status + ")");
+        return response.json();
+      }).then(resolve, reject);
     });
   });
 }
@@ -87,6 +105,40 @@ function pair(code, respond) {
 
 chrome.runtime.onMessage.addListener(
   function (message, sender, respond) {
+    if (message && message.type === "memory") {
+      getJson("/api/extension/memory").then(function (data) {
+        respond({ ok: true, items: data.items || [] });
+      }, function (error) {
+        respond({ ok: false, error: String(error.message || error) });
+      });
+      return true;
+    }
+
+    if (message && message.type === "memorySave") {
+      memoryRequest("PUT", "/api/extension/memory", message.item).then(function (data) {
+        respond({ ok: true, item: data });
+      }, function (error) {
+        respond({ ok: false, error: String(error.message || error) });
+      });
+      return true;
+    }
+
+    if (message && message.type === "memoryDelete" && Number.isSafeInteger(message.id)) {
+      memoryRequest("DELETE", "/api/extension/memory/" + message.id).then(function (data) {
+        respond({ ok: true, item: data });
+      }, function (error) {
+        respond({ ok: false, error: String(error.message || error) });
+      });
+      return true;
+    }
+    if (message && message.type === "memoryUsed" && Number.isSafeInteger(message.id)) {
+      memoryRequest("POST", "/api/extension/memory/" + message.id + "/used").then(function () {
+        respond({ ok: true });
+      }, function () {
+        respond({ ok: false });
+      });
+      return true;
+    }
     if (message && message.type === "history") {
       Promise.all([
         fetchItems("/api/history/work"),

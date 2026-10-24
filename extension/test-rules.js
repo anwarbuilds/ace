@@ -28,6 +28,7 @@ var CASES = [
   ["last name*", "Last name"],
   ["full name", "Full name"],
   ["email*", "Email"],
+  ["Email address", "Email"],
   ["phone*", "Phone"],
   ["country*", "Country"],
   ["location (city)*", "City"],

@@ -1086,6 +1086,23 @@ class ApplicationAnswerRecord(Base):
     )
 
 
+class ExtensionAnswerMemoryRecord(Base):
+    """Owner-approved reusable answers, separate from the legacy answer bank."""
+
+    __tablename__ = "extension_answer_memory"
+
+    id: Mapped[int] = mapped_column(BIGINT_ID, primary_key=True, autoincrement=True)
+    concept: Mapped[str] = mapped_column(String(180), nullable=False, unique=True)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+    answer_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    reuse_policy: Mapped[str] = mapped_column(String(24), nullable=False, server_default="reusable")
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    source_host: Mapped[str] = mapped_column(String(255), nullable=False, server_default="")
+    approved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class HistoryEntryRecord(Base):
     """One job or one degree, for the repeating blocks forms ask for.
 

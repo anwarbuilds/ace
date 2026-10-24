@@ -18,7 +18,52 @@
 
   var answers = {};
   var aliases = {};
+  var memory = [];
+  var memoryAvailable = false;
+  var studioTab = "overview";
+  var studioTheme = "day";
+  var autoKnown = true;
+  var skippedQuestions = new Set();
+  var activity = [];
+  var studioError = "";
+  var reviewQuestion = "";
+  var editConcept = "";
+  var studioFields = [];
+  function activityNote(label, count) {
+    activity.unshift({ label: label, count: count || 0, at: new Date().toLocaleTimeString() });
+    activity = activity.slice(0, 35);
+    if (chrome.storage && chrome.storage.local) chrome.storage.local.set({ aceStudioActivity: activity });
+  }
+  function memoryFailure(error) {
+    var message = String(error || "");
+    if (message.indexOf("404") >= 0) return "Answer Memory needs the ACE server V4 update. Existing answers are safe.";
+    if (message.indexOf("unpaired") >= 0 || message.indexOf("401") >= 0) return "ACE is not paired. Check the ACE address and pair this browser again.";
+    return "Answer Memory cannot reach ACE right now. Check the ACE address and try again.";
+  }
+  function loadMemory(done) {
+    chrome.runtime.sendMessage({ type: "memory" }, function (reply) {
+      if (chrome.runtime.lastError || !reply || !reply.ok) {
+        memoryAvailable = false;
+        studioError = memoryFailure(reply && reply.error || chrome.runtime.lastError && chrome.runtime.lastError.message);
+      } else {
+        memory.forEach(function (item) { delete answers["Memory:" + item.concept]; });
+        memory = Array.isArray(reply.items) ? reply.items : [];
+        memory.forEach(function (item) {
+          answers["Memory:" + item.concept] = item.answer;
+          aliases["Memory:" + item.concept] = [];
+        });
+        memoryAvailable = true;
+        if (studioError.indexOf("Answer Memory") === 0) studioError = "";
+      }
+      var existing = document.querySelector(".ace-root");
+      if (existing && !dismissed) renderStudio(existing.shadowRoot.querySelector(".ace-panel"));
+      if (done) done();
+    });
+  }
   function answerNameFor(question, kind) {
+    if (aceMemory.policy(question) === "sensitive" || aceMemory.policy(question) === "company") return null;
+    var saved = aceMemory.resolve(question, kind === "yesno" ? "yesno" : kind === "choice" ? "choice" : "text", memory);
+    if (saved) return "Memory:" + saved.concept;
     return aceAnswerNameFor(question, kind, Object.keys(answers));
   }
   // Work and study history, most recent first. Kept apart from answers
@@ -1726,7 +1771,9 @@
       var question = aceQuestionFor(fields[i]);
       if (!question) continue;
 
-      var name = answerNameFor(question, kindOf(fields[i]));
+      // Detection may count a recognized sensitive question even though
+      // V4 will hold its answer for Review.
+      var name = aceAnswerNameFor(question, kindOf(fields[i]));
       if (!name) continue;
 
       recognised += 1;
@@ -1752,6 +1799,18 @@
      else. A shadow root ends it: nothing the page declares crosses
      the boundary, in either direction. */
   var PANEL_CSS = "/* Deliberately narrow selectors and a high stacking context: this\n   panel lives inside somebody else's stylesheet and must neither\n   inherit from it nor be painted over by it. */\n/* Anchored top-right, not bottom-right: a form's own Submit control\n   is almost always at the bottom of the page, and a fixed panel\n   sitting on top of it blocks the one click the user needs most. */\n/* Anthracite grey, as the ace web app is: charcoal surfaces at night,\n   their light version by day, one red action, green for what was\n   filled, amber for what still needs you. */\n.ace-panel{\n  --bg:#232A2C;--head:rgba(241,243,243,.025);--line:rgba(241,243,243,.08);--line2:rgba(241,243,243,.14);\n  --text:#F1F3F3;--sec:#B8C0C2;--muted:#A7B0B2;--hover:rgba(241,243,243,.06);\n  --ok:#5BE083;--warn:#F7B84B;--accent:#E50914;--accent-hi:#F6121D;\n  --shadow:0 24px 64px rgba(14,18,19,.5),0 2px 6px rgba(14,18,19,.3),inset 0 1px 0 rgba(255,255,255,.06);\n  position:fixed;right:18px;top:18px;z-index:2147483647;\n  width:340px;max-height:min(72vh,580px);display:flex;flex-direction:column;\n  background:var(--bg);color:var(--text);border:1px solid var(--line2);border-radius:16px;\n  box-shadow:var(--shadow);\n  font:13px/1.5 \"Geist\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif;\n  letter-spacing:-.003em;-webkit-font-smoothing:antialiased;\n  overflow:hidden}\n@media (prefers-color-scheme:light){\n  .ace-panel{\n    --bg:#ECF0F0;--head:rgba(31,38,40,.035);--line:rgba(31,38,40,.1);--line2:rgba(31,38,40,.18);\n    --text:#1F2628;--sec:#3F4A4D;--muted:#4E5A5D;--hover:rgba(31,38,40,.055);\n    --ok:#0E6532;--warn:#7A4900;--accent:#D90B15;--accent-hi:#E50914;\n    --shadow:0 24px 64px rgba(41,49,51,.18),0 2px 6px rgba(41,49,51,.08)}\n}\n.ace-panel *{box-sizing:border-box;font-family:inherit}\n\n.ace-head{display:flex;align-items:center;gap:11px;padding:14px 14px 13px 16px;\n  border-bottom:1px solid var(--line);background:var(--head)}\n.ace-mark{font-size:17px;font-weight:700;letter-spacing:-.055em;line-height:1;color:var(--text);\n  padding-right:11px;border-right:1px solid var(--line2);flex:0 0 auto}\n.ace-title{font-weight:650;font-size:13.5px;letter-spacing:-.01em}\n.ace-sub{font-size:11.5px;color:var(--muted);margin-top:1px}\n.ace-ver{margin-left:auto;font-size:10px;color:var(--muted);letter-spacing:.02em;flex:0 0 auto;\n  font-family:ui-monospace,\"SF Mono\",Menlo,monospace;padding:2px 7px;border-radius:99px;\n  background:var(--hover)}\n.ace-x{margin-left:4px;background:none;border:0;color:var(--muted);cursor:pointer;\n  font-size:18px;line-height:1;width:28px;height:28px;border-radius:8px;flex:0 0 auto}\n.ace-x:hover{background:var(--hover);color:var(--text)}\n\n.ace-body{overflow-y:auto;padding:6px 0 8px;flex:1 1 auto}\n.ace-body::-webkit-scrollbar{width:10px}\n.ace-body::-webkit-scrollbar-thumb{background:var(--line2);border-radius:99px;\n  border:3px solid transparent;background-clip:content-box}\n\n.ace-group{font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;\n  color:var(--muted);padding:12px 16px 5px}\n.ace-item{display:flex;gap:10px;align-items:flex-start;padding:6px 16px}\n.ace-item:hover{background:var(--hover)}\n.ace-item .k{color:var(--sec);font-size:12px;flex:0 0 42%;word-break:break-word}\n.ace-item .v{color:var(--text);font-size:12px;font-weight:500;flex:1 1 auto;word-break:break-word}\n.ace-item.done .v{color:var(--ok)}\n.ace-item.miss .v{color:var(--warn)}\n.ace-item.skip .v{color:var(--muted);font-weight:400}\n\n.ace-foot{padding:12px 14px;border-top:1px solid var(--line);display:flex;gap:8px;\n  align-items:center;background:var(--head)}\n.ace-btn{background:var(--accent);color:#FFFFFF;border:0;height:36px;padding:0 16px;border-radius:10px;\n  font-weight:650;font-size:13px;cursor:pointer;\n  box-shadow:0 8px 20px -8px rgba(229,9,20,.55),inset 0 1px 0 rgba(255,255,255,.18);\n  transition:background .12s,transform .12s}\n.ace-btn:hover{background:var(--accent-hi)}\n.ace-btn:active{transform:scale(.97)}\n.ace-btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line2);box-shadow:none}\n.ace-btn.ghost:hover{background:var(--hover)}\n.ace-link{background:none;border:0;padding:0;margin-left:auto;font-size:11.5px;\n  color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:3px;font-family:inherit}\n.ace-link:hover{color:var(--text)}\n.ace-note{font-size:11.5px;color:var(--sec)}\n.ace-note.warn{color:var(--warn)}\n\n\n@media (prefers-reduced-motion:no-preference){\n  .ace-panel{animation:ace-in .22s cubic-bezier(.34,1.3,.64,1)}\n  @keyframes ace-in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}\n}";
+  PANEL_CSS += `
+  .ace-panel{--base:#fffafb;--surface:#fff;--soft:#faedf2;--ink:#271722;--secondary:#765969;--muted:#947a87;--line:#ecdbe3;--wine:#96254d;--wine2:#b23e6e;--mint:#157e60;--mintbg:#e9f7f0;--amber:#995520;--amberbg:#fff3e4;right:10px;top:10px;width:min(480px,calc(100vw - 20px));height:calc(100vh - 20px);max-height:none;background:var(--base);color:var(--ink);border:1px solid var(--line);border-radius:15px;box-shadow:0 12px 38px rgba(106,39,67,.16);font:13px/1.48 Inter,system-ui,sans-serif}
+  .ace-panel.night{--base:#100c11;--surface:#1b131c;--soft:#2d202d;--ink:#fff4fa;--secondary:#d2b9c6;--muted:#a78c9c;--line:#503545;--wine:#f077a7;--wine2:#e75d91;--mint:#85dabc;--mintbg:#1b3e34;--amber:#ffc189;--amberbg:#3c3025}
+  .ace-panel button,.ace-panel input,.ace-panel textarea{font:inherit}.ace-panel button{cursor:pointer}.ace-panel button:focus-visible,.ace-panel input:focus-visible,.ace-panel textarea:focus-visible{outline:3px solid #e995ba;outline-offset:2px}
+  .studio-head{padding:17px 18px 14px;background:var(--surface);border-bottom:1px solid var(--line)}.studio-top{display:flex;align-items:center;gap:9px}.studio-logo{font-size:24px;font-weight:900;letter-spacing:-.09em;line-height:1;color:var(--ink)}.studio-logo:first-letter{color:var(--wine)}.studio-live{margin-left:auto;font-size:10px;font-weight:800;background:var(--mintbg);color:var(--mint);padding:6px 9px;border-radius:20px}.studio-icon{border:1px solid var(--line);background:var(--surface);color:var(--secondary);border-radius:9px;padding:6px 9px}.studio-company{display:flex;gap:11px;align-items:center;margin-top:17px}.studio-glyph{width:37px;height:37px;display:grid;place-items:center;border-radius:10px;background:var(--soft);color:var(--wine);font-weight:800}.studio-company strong{font-size:13px}.studio-company small{display:block;color:var(--muted);font-size:11px}.studio-tagline{font-size:11px;color:var(--secondary);margin:13px 0 0}.studio-button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;vertical-align:middle}
+  .studio-company{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:10px}.studio-company>div{min-width:0;flex:1}.studio-company strong,.studio-company small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.studio-page-pill{background:var(--surface);border:1px solid var(--line);border-radius:20px;color:var(--secondary);padding:4px 7px;font-size:10px;white-space:nowrap}
+  .studio-icon{width:34px;height:34px;display:grid;place-items:center;padding:0}.studio-icon svg,.studio-button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.studio-button svg{margin-right:5px}.studio-memory-status{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 14px}
+  .studio-source{align-items:center}.studio-source>span:nth-child(2){flex:1}.studio-source strong{display:block;color:var(--ink);font-size:11px}.studio-source small{display:block;color:var(--muted);font-size:10px}.studio-source-icon{width:28px;height:28px;display:grid;place-items:center;flex:0 0 auto;border-radius:8px;background:var(--soft);color:var(--wine);font-size:16px}.studio-source-count{float:right;background:var(--mintbg);color:var(--mint);border-radius:5px;padding:3px 6px;font-size:10px;font-weight:750}
+  .studio-tabs{display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border-bottom:1px solid var(--line);padding:0 8px}.studio-tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);font-size:11px;font-weight:750;padding:13px 1px}.studio-tabs button.active{color:var(--wine);border-bottom-color:var(--wine)}
+  .studio-scroll{overflow-y:auto;flex:1;padding:18px 17px 24px}.studio-eyebrow{font-size:10px;font-weight:850;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin:0 0 10px}.studio-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px;margin:0 0 13px}.studio-card h2{font-size:15px;letter-spacing:-.025em;margin:0 0 6px}.studio-card p{color:var(--secondary);font-size:11px;line-height:1.55;margin:5px 0}.studio-hero h2{font-size:18px}.studio-progress{height:7px;background:var(--soft);border-radius:20px;overflow:hidden;margin:15px 0 8px}.studio-progress i{display:block;height:100%;background:linear-gradient(90deg,var(--wine),var(--wine2))}.studio-between{display:flex;justify-content:space-between;align-items:center;gap:8px}.studio-between span{font-size:11px;color:var(--muted)}.studio-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.studio-metric{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px}.studio-metric b{font-size:20px;display:block}.studio-metric span{font-size:10px;color:var(--secondary)}.studio-source{display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--line);padding:10px 0;font-size:11px}.studio-source:first-of-type{border:0}.studio-source b{color:var(--wine)}.studio-pill{display:inline-block;border-radius:20px;padding:4px 7px;background:var(--amberbg);color:var(--amber);font-size:10px;font-weight:750}.studio-pill.good{background:var(--mintbg);color:var(--mint)}.studio-actions{display:flex;gap:7px;margin-top:10px}.studio-button{background:var(--surface);border:1px solid var(--line);border-radius:9px;color:var(--ink);padding:8px 11px;font-size:11px;font-weight:750}.studio-button.wine{background:linear-gradient(115deg,#91234b,#bb4772);color:white;border-color:#91234b}.night .studio-button.wine{background:linear-gradient(115deg,#a63766,#d15488)}.studio-button.small{padding:6px 9px}.studio-question{font-size:12px;font-weight:800;color:var(--ink);margin:9px 0}.studio-search,.studio-input{width:100%;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);padding:10px}.studio-input{min-height:85px;resize:vertical}.studio-checkline{font-size:11px;color:var(--secondary);display:flex;align-items:flex-start;gap:7px;margin:9px 0}.studio-error{border:1px solid var(--amber);color:var(--amber);background:var(--amberbg);padding:10px;border-radius:9px;font-size:11px;margin-bottom:12px}.studio-foot{background:var(--surface);border-top:1px solid var(--line);padding:12px 16px}.studio-foot-actions{display:flex;gap:8px}.studio-foot-actions button{flex:1}.studio-foot small{display:block;text-align:center;color:var(--muted);font-size:10px;margin-top:9px}.studio-modal{padding:15px;background:var(--surface);border-top:1px solid var(--line)}.studio-modal label{display:block;font-size:11px;font-weight:750;margin-bottom:6px}.studio-empty{color:var(--muted);font-size:12px;padding:16px;text-align:center}.studio-receipt{font-size:10px;color:var(--muted);margin-top:6px}.studio-memory-answer{white-space:pre-wrap;word-break:break-word}.studio-activity{border-left:2px solid var(--line);padding:0 0 15px 13px;font-size:11px}.studio-activity strong{display:block}.studio-activity small{color:var(--muted)}
+  @media(max-width:520px){.ace-panel{right:0;top:0;width:100vw;height:100vh;border-radius:0}.studio-scroll{padding:14px 12px}.studio-head{padding:14px 12px}}
+  `;
 
   function panel() {
     var existing = document.querySelector(".ace-root");
@@ -1950,50 +2009,111 @@
   }
 
   function showPreview(host) {
-    var plan = preview();
-    pending = plan;
+    pending = preview();
+    renderStudio(host);
+  }
 
-    if (!plan.willFill.length && !plan.noOption.length) {
-      if (!looksLikeForm()) {
-        close();
-        return;
-      }
+  function collectStudioFields() {
+    var seen = new Set();
+    studioFields = [];
+    fillable().forEach(function (field) {
+      var question = aceQuestionFor(field);
+      if (!question) return;
+      var kind = kindOf(field);
+      var key = aceMemory.norm(question) + "|" + kind;
+      if (seen.has(key)) return;
+      seen.add(key);
+      var group = aceIsChoiceControl(field) ? groupMembers(field) : [field];
+      var answered = !group.every(aceIsEmpty);
+      var name = answerNameFor(question, kind);
+      var explicitLabel = field.id ? document.querySelector('label[for="' + CSS.escape(field.id) + '"]') : null;
+      var display = explicitLabel ? aceTextWithoutControls(explicitLabel) : field.getAttribute("aria-label") || question;
+      studioFields.push({ field: field, question: question, kind: kind, key: key,
+        display: display, answered: answered, name: name, protected: aceMemory.policy(question),
+        source: name && name.indexOf("Memory:") === 0 ? "Answer Memory" : "Profile and answers" });
+    });
+    return studioFields;
+  }
 
-      render(host, shell(
-        "Nothing to fill",
-        "Every field ACE knows already has a value.",
-        "",
-        '<span class="ace-note">' +
-          plan.noAnswer.length + ' question' +
-          (plan.noAnswer.length === 1 ? "" : "s") +
-          ' ACE has no answer for</span>'
-      ));
-      return;
-    }
+  function needsStudioReview(field) {
+    return !field.answered && !skippedQuestions.has(field.key) &&
+      (!field.name || !!(pending && pending.noOption.some(function (item) { return item[0] === field.name; })));
+  }
 
-    var body =
-      (plan.willFill.length
-        ? '<div class="ace-group">Will fill</div>' + rows(plan.willFill, "")
-        : "") +
-      (plan.noOption.length
-        ? '<div class="ace-group">Your answer matches no option</div>' +
-          rows(plan.noOption, "miss")
-        : "") +
-      (plan.noAnswer.length
-        ? '<div class="ace-group">Left for you</div>' +
-          rows(plan.noAnswer.slice(0, 12), "skip")
-        : "");
+  function studioOverview(fields) {
+    var total = fields.length;
+    var completed = fields.filter(function (f) { return f.answered; }).length;
+    var filled = fields.filter(function (f) { return lastFill.some(function (x) { return x.field === f.field; }); }).length;
+    var needs = fields.filter(needsStudioReview).length;
+    var profile = fields.filter(function (f) { return f.answered && f.name && f.source !== "Answer Memory" && lastFill.some(function (x) { return x.field === f.field; }); }).length;
+    var remembered = fields.filter(function (f) { return f.answered && f.source === "Answer Memory" && lastFill.some(function (x) { return x.field === f.field; }); }).length;
+    var pct = total ? Math.round(completed / total * 100) : 0;
+    return '<p class="studio-eyebrow">Your application assistant</p>' +
+      '<section class="studio-card studio-hero"><div class="studio-between"><h2>' + (filled ? 'Known answers filled. Review the rest.' : needs ? 'Known answers ready. Review the rest.' : 'Review your application') + '</h2><span class="studio-pill good">Live</span></div>' +
+      '<p>ACE entered approved answers and protected ' + needs + ' question' + (needs === 1 ? '' : 's') + ' for your review.</p><div class="studio-progress"><i style="width:' + pct + '%"></i></div><div class="studio-between"><span>' + completed + ' of ' + total + ' fields completed</span><strong>' + pct + '%</strong></div></section>' +
+      '<div class="studio-metrics"><div class="studio-metric"><b>' + filled + '</b><span>Filled by ACE</span></div><div class="studio-metric"><b>' + needs + '</b><span>Needs review</span></div><div class="studio-metric"><b>' + memory.length + '</b><span>In Memory</span></div></div>' +
+      '<section class="studio-card"><h2>✓ &nbsp;Filled from trusted sources <span class="studio-source-count">' + filled + ' fields</span></h2><p>Visible answers remain editable on the employer form. ACE never touches the final submit button.</p><div class="studio-source"><span class="studio-source-icon">✓</span><span><strong>Profile</strong><small>Verified identity and saved answers</small></span><b>' + profile + ' fields</b></div><div class="studio-source"><span class="studio-source-icon">□</span><span><strong>Answer Memory</strong><small>Previously approved reusable answers</small></span><b>' + remembered + ' fields</b></div><div class="studio-source"><span class="studio-source-icon">△</span><span><strong>User review required</strong><small>No fill without enough evidence</small></span><b>' + needs + ' fields</b></div></section>' +
+      '<section class="studio-card"><div class="studio-between"><h2>Answer Memory</h2><button class="studio-button small" data-ace="tab:memory">Browse memory</button></div><p>Approved reusable answers can match equivalent questions on another application.</p></section>' +
+      '<section class="studio-card"><div class="studio-between"><h2>Needs your input</h2><span class="studio-pill">' + needs + ' open</span></div><p>New, company-specific and sensitive questions stay in Review.</p><button class="studio-button small" data-ace="tab:review">Open review</button></section>' +
+      '<section class="studio-card"><h2>Current form</h2><p>' + esc(plain(document.title || location.hostname)) + '</p><p>Detected on ' + esc(location.hostname) + '. No resume attachment is claimed by ACE.</p><button class="studio-button small" data-ace="auto">Auto-fill known: ' + (autoKnown ? 'On' : 'Off') + '</button></section>';
+  }
 
-    render(host, shell(
-      "Fill " + plan.willFill.length + " field" +
-        (plan.willFill.length === 1 ? "" : "s"),
-      "Review before filling. ACE never submits.",
-      body,
-      '<button class="ace-btn" data-ace="fill">Fill</button>' +
-      '<span class="ace-note">or press Alt+A</span>' +
-      '<button class="ace-link" data-ace="copy">Copy what ACE sees</button>' +
-      '<span class="ace-note ace-copied"></span>'
-    ));
+  function studioReview(fields) {
+    var open = fields.filter(needsStudioReview);
+    var html = '<div class="studio-between"><h2>Review queue</h2><span class="studio-pill">' + open.length + ' open</span></div><p>Only your approved answers are saved.</p>';
+    if (!open.length) return html + '<div class="studio-empty">No questions waiting for review.</div>';
+    return html + open.map(function (f) {
+      var index = fields.indexOf(f);
+      var why = f.protected === "sensitive" ? "Sensitive question. Confirm for this application only." :
+        f.protected === "company" ? "Company-specific answer. Reuse is disabled." :
+        f.name ? "A saved answer did not match the choices offered here." : "No approved matching answer yet.";
+      var active = reviewQuestion === f.key;
+      return '<article class="studio-card"><span class="studio-pill">' + (f.protected === "reusable" ? 'New question' : 'Review required') + '</span><div class="studio-question">' + esc(plain(f.display)) + '</div><p>' + why + '</p>' +
+        (active ? '<label for="studio-answer">Your answer</label><textarea id="studio-answer" class="studio-input" aria-label="Your answer"></textarea>' +
+          (f.protected === "reusable" ? '<label class="studio-checkline"><input id="studio-reuse" type="checkbox" checked> Save reusable answer to Memory</label>' : '<p>This answer is used once and is not saved to Memory.</p>') +
+          '<div class="studio-actions"><button class="studio-button wine" data-ace="approve:' + index + '">Approve and fill</button><button class="studio-button" data-ace="cancel-review">Cancel</button></div>' :
+          '<div class="studio-actions"><button class="studio-button wine" data-ace="answer:' + index + '">Answer and approve</button><button class="studio-button" data-ace="skip:' + index + '">Skip for now</button></div>') + '</article>';
+    }).join("");
+  }
+
+  function studioMemory() {
+    var search = "";
+    var input = panel().querySelector(".studio-search");
+    if (input) search = input.value.toLowerCase();
+    var entries = memory.filter(function (m) { return (m.question + " " + m.answer).toLowerCase().indexOf(search) >= 0; });
+    return '<div class="studio-between"><h2>Answer Memory</h2><span class="studio-pill good">' + memory.length + ' approved</span></div><p>Reviewed answers available to equivalent, safe questions.</p><div class="studio-memory-status"><span class="studio-pill ' + (memoryAvailable ? 'good' : '') + '">' + (memoryAvailable ? 'Connected' : 'Unavailable') + '</span><button class="studio-button small" data-ace="retry-memory">Retry connection</button></div><input class="studio-search" type="search" placeholder="Search approved answers" value="' + esc(search) + '">' +
+      (entries.length ? entries.map(function (m) {
+        return '<article class="studio-card"><span class="studio-pill good">Reusable and approved</span><div class="studio-question">' + esc(plain(m.question)) + '</div><p class="studio-memory-answer">' + esc(plain(m.answer)) + '</p><p class="studio-receipt">Approved on ' + esc(m.source_host || 'an application') + '. Revision ' + m.revision + '</p>' +
+          (m.last_used_at ? '<p class="studio-receipt">Last used ' + esc(new Date(m.last_used_at).toLocaleDateString()) + '</p>' : '') +
+          (editConcept === m.concept ? '<textarea id="studio-memory-edit" class="studio-input" aria-label="Edit answer">' + esc(m.answer) + '</textarea><div class="studio-actions"><button class="studio-button wine" data-ace="save-edit:' + m.id + '">Save</button><button class="studio-button" data-ace="cancel-edit">Cancel</button></div>' : '<div class="studio-actions"><button class="studio-button" data-ace="edit:' + m.id + '">Edit</button><button class="studio-button" data-ace="delete:' + m.id + '">Delete</button></div>') + '</article>';
+      }).join("") : '<div class="studio-empty">' + (memoryAvailable ? 'No approved answers match this search.' : 'Memory will appear here when ACE is connected and updated.') + '</div>');
+  }
+
+  function studioActivity() {
+    return '<h2>Activity and evidence</h2><p>Local actions on this form. Answer values are not logged.</p>' +
+      (activity.length ? activity.map(function (event) { return '<div class="studio-activity"><strong>' + esc(event.label) + '</strong><small>' + esc(event.at) + (event.count ? ' · ' + event.count + ' fields' : '') + '</small></div>'; }).join("") : '<div class="studio-empty">No activity on this form yet.</div>') +
+      '<button class="studio-button small" data-ace="undo"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h9a6 6 0 0 1 0 12h-2"/></svg>Undo last fill</button> <button class="studio-button small" data-ace="copy">Copy field diagnostics</button><span class="ace-copied studio-receipt"></span>';
+  }
+
+  function renderStudio(host) {
+    var previous = host.querySelector(".studio-scroll");
+    var scroll = previous ? previous.scrollTop : 0;
+    var fields = collectStudioFields();
+    var open = fields.filter(needsStudioReview).length;
+    var titleParts = document.title.split(/\s[|·]\s/);
+    var employer = (titleParts.length > 1 ? titleParts[titleParts.length - 1] : location.hostname.replace(/^www\./, "")) || "Application form";
+    var body = studioTab === "review" ? studioReview(fields) : studioTab === "memory" ? studioMemory() : studioTab === "activity" ? studioActivity() : studioOverview(fields);
+    host.classList.toggle("night", studioTheme === "night");
+    var legacyStatus = lastResult ? 'Filled ' + lastResult.filled.length + ' fields' : 'Fill ' + (pending ? pending.willFill.length : 0) + ' fields';
+    var themeLabel = studioTheme === "day" ? "Switch to Night theme" : "Switch to Day theme";
+    var themeSvg = studioTheme === "day" ? '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"/></svg>' : '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>';
+    render(host, '<span class="ace-title" style="display:none">' + legacyStatus + '</span><header class="studio-head"><div class="studio-top"><span class="studio-logo">ace</span><span class="studio-live">● Form detected</span><button class="studio-icon" data-ace="theme" aria-label="' + themeLabel + '" title="' + themeLabel + '">' + themeSvg + '</button><button class="studio-icon" data-ace="close" aria-label="Close" title="Close">×</button></div><div class="studio-company"><span class="studio-glyph">' + esc(employer.charAt(0).toUpperCase()) + '</span><div><strong>' + esc(plain(employer)) + '</strong><small>' + esc(plain(document.title || 'Application form')) + '</small></div><span class="studio-page-pill">On this page</span></div><p class="studio-tagline">ACE fills. You review. You submit.</p></header>' +
+      '<nav class="studio-tabs" aria-label="Apply Studio sections">' + ["overview", "review", "memory", "activity"].map(function (tab) { return '<button data-ace="tab:' + tab + '" class="' + (studioTab === tab ? 'active' : '') + '">' + tab.charAt(0).toUpperCase() + tab.slice(1) + (tab === "review" && open ? ' ' + open : '') + '</button>'; }).join("") + '</nav>' +
+      '<div class="studio-scroll">' + (studioError ? '<div class="studio-error">' + esc(studioError) + '</div>' : '') + body + '</div>' +
+      '<footer class="studio-foot"><div class="studio-foot-actions"><button class="studio-button wine" data-ace="fill"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg> Fill</button><button class="studio-button" data-ace="scan"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg> Scan fields</button></div><small>No auto-submit. Employer submission is always manual.</small></footer>');
+    host.querySelector(".studio-scroll").scrollTop = scroll;
+    var searchBox = host.querySelector(".studio-search");
+    if (searchBox) searchBox.addEventListener("input", function () { renderStudio(host); var next = host.querySelector(".studio-search"); next.focus(); next.setSelectionRange(searchBox.value.length, searchBox.value.length); });
   }
 
   /* What ACE sees on this page, as text the user can paste.
@@ -2144,33 +2264,16 @@
   }
 
   function showResult(host, result) {
-    var body =
-      (result.filled.length
-        ? '<div class="ace-group">Filled</div>' +
-          rows(result.filled.map(function (name) {
-            return [name, tidy(answers[name])];
-          }), "done")
-        : "") +
-      (result.unmatched.length
-        ? '<div class="ace-group">Reword these in ACE</div>' +
-          rows(result.unmatched.map(function (name) {
-            return [name, tidy(answers[name])];
-          }), "miss")
-        : "");
-
-    render(host, shell(
-      "Filled " + result.filled.length + " field" +
-        (result.filled.length === 1 ? "" : "s"),
-      "Check it before you submit.",
-      body,
-      '<button class="ace-btn ghost" data-ace="undo">Undo</button>' +
-      (result.already
-        ? '<span class="ace-note">' + result.already +
-          ' already had a value</span>'
-        : "") +
-      '<button class="ace-link" data-ace="copy">Copy what ACE sees</button>' +
-      '<span class="ace-note ace-copied"></span>'
-    ));
+    activityNote("Fields filled by ACE", result.filled.length);
+    if (result.unmatched.length) activityNote("Options needing review", result.unmatched.length);
+    result.filled.forEach(function (name) {
+      if (name.indexOf("Memory:") !== 0) return;
+      var row = memory.find(function (m) { return m.concept === name.slice(7); });
+      if (!row) return;
+      row.last_used_at = new Date().toISOString();
+      chrome.runtime.sendMessage({ type: "memoryUsed", id: row.id }, function () {});
+    });
+    renderStudio(host);
   }
 
   /* The questions on screen, as one string.
@@ -2239,6 +2342,8 @@
     if (location.href !== lastHref || movedOn()) {
       lastResult = null;
       lastFill = [];
+      skippedQuestions.clear();
+      reviewQuestion = "";
     }
 
     // A new step of an application is a new page to the user, who asked
@@ -2272,10 +2377,12 @@
       dismissed = false;
     }
 
-    lastSignature = formSignature();
+    var currentSignature = formSignature();
+    var signatureChanged = currentSignature !== lastSignature;
+    lastSignature = currentSignature;
 
     if (filling) return;
-    if (lastResult) return;
+    if (lastResult && !signatureChanged) return;
     if (dismissed) return;
 
     showPreview(panel());
@@ -2364,18 +2471,31 @@
         aliases["City and state"] = [];
       }
 
-      if (!known) {
-        render(panel(), shell(
-          "No answers saved yet",
-          "Fill them in once in ACE and they land here.",
-          "",
-          ""
-        ));
-        return;
-      }
+      if (!known) studioError = "No answers saved yet. Add answers in ACE or approve questions in Review.";
 
       loaded = true;
       lastHref = location.href;
+      var prefsReady = !(chrome.storage && chrome.storage.local);
+      if (prefsReady) autoKnown = false; // Browser fixtures without Chrome storage use explicit Fill.
+      var memoryReady = false;
+      var historyReady = false;
+      function fillWhenReady() {
+        if (prefsReady && memoryReady && historyReady && autoKnown) runFill();
+      }
+
+      if (chrome.storage && chrome.storage.local) chrome.storage.local.get({ aceStudioTheme: "day", aceAutoKnown: true, aceStudioActivity: [] }, function (prefs) {
+        studioTheme = prefs.aceStudioTheme === "night" ? "night" : "day";
+        autoKnown = !!prefs.aceAutoKnown;
+        activity = Array.isArray(prefs.aceStudioActivity) ? prefs.aceStudioActivity.slice(0, 35) : [];
+        prefsReady = true;
+        refresh();
+        fillWhenReady();
+      });
+
+      loadMemory(function () {
+        memoryReady = true;
+        fillWhenReady();
+      });
 
       // Fetched after the answers rather than in parallel: a page with
       // no repeating section is the common case, and the panel should
@@ -2384,13 +2504,13 @@
       chrome.runtime.sendMessage(
         { type: "history" },
         function (reply) {
-          if (chrome.runtime.lastError) return;
-          if (!reply || !reply.ok) return;
-
-          histories.work = reply.work || [];
-          histories.education = reply.education || [];
-
+          if (!chrome.runtime.lastError && reply && reply.ok) {
+            histories.work = reply.work || [];
+            histories.education = reply.education || [];
+          }
+          historyReady = true;
           refresh();
+          fillWhenReady();
         }
       );
 
@@ -2486,6 +2606,167 @@
       return;
     }
 
+    if (action.indexOf("tab:") === 0) {
+      studioTab = action.slice(4);
+      renderStudio(panel());
+      return;
+    }
+
+    if (action === "retry-memory") {
+      loadMemory();
+      return;
+    }
+
+    if (action === "theme") {
+      studioTheme = studioTheme === "day" ? "night" : "day";
+      if (chrome.storage && chrome.storage.local) chrome.storage.local.set({ aceStudioTheme: studioTheme });
+      renderStudio(panel());
+      return;
+    }
+
+    if (action === "auto") {
+      autoKnown = !autoKnown;
+      if (chrome.storage && chrome.storage.local) chrome.storage.local.set({ aceAutoKnown: autoKnown });
+      activityNote("Auto-fill known answers " + (autoKnown ? "enabled" : "disabled"));
+      renderStudio(panel());
+      return;
+    }
+
+    if (action === "scan") {
+      lastResult = null;
+      activityNote("Form scanned", fillable().length);
+      renderStudio(panel());
+      return;
+    }
+
+    if (action.indexOf("answer:") === 0) {
+      var answerField = studioFields[Number(action.slice(7))];
+      if (!answerField) return;
+      reviewQuestion = answerField.key;
+      renderStudio(panel());
+      var answerBox = panel().querySelector("#studio-answer");
+      if (answerBox) answerBox.focus();
+      return;
+    }
+
+    if (action === "cancel-review") {
+      reviewQuestion = "";
+      renderStudio(panel());
+      return;
+    }
+
+    if (action.indexOf("skip:") === 0) {
+      var skipField = studioFields[Number(action.slice(5))];
+      if (!skipField) return;
+      skippedQuestions.add(skipField.key);
+      activityNote("Question skipped for now");
+      renderStudio(panel());
+      return;
+    }
+
+    if (action.indexOf("approve:") === 0) {
+      var chosen = studioFields[Number(action.slice(8))];
+      var valueBox = panel().querySelector("#studio-answer");
+      var value = valueBox ? valueBox.value.trim() : "";
+      if (!chosen || !value) { studioError = "Enter an answer before approval."; renderStudio(panel()); return; }
+      var save = chosen.protected === "reusable" && !!panel().querySelector("#studio-reuse:checked");
+      function applyApproved() {
+        if (!chosen.field.isConnected || !aceIsEmpty(chosen.field)) {
+          studioError = "This field changed. Review the employer form before filling.";
+          renderStudio(panel());
+          return;
+        }
+        filling = true;
+        var outcome = aceIsAutocomplete(chosen.field)
+          ? fillOneCombobox(chosen.field, value, [])
+          : Promise.resolve({ matched: fillOne(chosen.field, value, []) });
+        outcome.then(function (result) {
+          filling = false;
+          if (!result || !result.matched) {
+            studioError = "The employer field did not accept this answer. Fill it manually.";
+            renderStudio(panel());
+            return;
+          }
+          lastFill.push({ field: lastPicked || chosen.field, previous: "", wrote: value, ticked: aceIsChoiceControl(chosen.field) });
+          reviewQuestion = "";
+          studioError = "";
+          activityNote(save ? "Answer approved and saved" : "Answer approved for this form");
+          renderStudio(panel());
+        }, function () {
+          filling = false;
+          studioError = "The employer field did not accept this answer. Fill it manually.";
+          renderStudio(panel());
+        });
+      }
+      if (!save) { applyApproved(); return; }
+      var concept = aceMemory.concept(chosen.question);
+      chrome.runtime.sendMessage({ type: "memorySave", item: {
+        concept: concept, question: chosen.display, answer: value,
+        answer_type: chosen.kind, source_host: location.hostname
+      } }, function (reply) {
+        if (chrome.runtime.lastError || !reply || !reply.ok) {
+          studioError = memoryFailure(reply && reply.error || chrome.runtime.lastError && chrome.runtime.lastError.message) + " The field remains for review because its answer was not saved.";
+          renderStudio(panel());
+          return;
+        }
+        var old = memory.find(function (m) { return m.concept === concept; });
+        if (old) { old.answer = value; old.question = chosen.display; old.revision = reply.item.revision; }
+        else memory.push({ id: reply.item.id, concept: concept, question: chosen.display,
+          answer: value, answer_type: chosen.kind, reuse_policy: "reusable", revision: reply.item.revision,
+          source_host: location.hostname });
+        answers["Memory:" + concept] = value;
+        aliases["Memory:" + concept] = [];
+        applyApproved();
+      });
+      return;
+    }
+
+    if (action.indexOf("edit:") === 0) {
+      var editRow = memory.find(function (m) { return m.id === Number(action.slice(5)); });
+      if (editRow) editConcept = editRow.concept;
+      renderStudio(panel());
+      return;
+    }
+
+    if (action === "cancel-edit") { editConcept = ""; renderStudio(panel()); return; }
+
+    if (action.indexOf("save-edit:") === 0) {
+      var row = memory.find(function (m) { return m.id === Number(action.slice(10)); });
+      var editBox = panel().querySelector("#studio-memory-edit");
+      if (!row || !editBox || !editBox.value.trim()) return;
+      var updated = editBox.value.trim();
+      chrome.runtime.sendMessage({ type: "memorySave", item: {
+        concept: row.concept, question: row.question, answer: updated,
+        answer_type: row.answer_type, source_host: row.source_host,
+        expected_revision: row.revision
+      } }, function (reply) {
+        if (chrome.runtime.lastError || !reply || !reply.ok) {
+          studioError = memoryFailure(reply && reply.error || chrome.runtime.lastError && chrome.runtime.lastError.message) + " The previous answer is still saved.";
+        } else {
+          row.answer = updated; row.revision = reply.item.revision;
+          answers["Memory:" + row.concept] = updated;
+          editConcept = ""; studioError = ""; activityNote("Answer Memory updated");
+        }
+        renderStudio(panel());
+      });
+      return;
+    }
+
+    if (action.indexOf("delete:") === 0) {
+      var id = Number(action.slice(7));
+      chrome.runtime.sendMessage({ type: "memoryDelete", id: id }, function (reply) {
+        if (chrome.runtime.lastError || !reply || !reply.ok) studioError = memoryFailure(reply && reply.error || chrome.runtime.lastError && chrome.runtime.lastError.message) + " The answer was not deleted.";
+        else {
+          var deleted = memory.find(function (m) { return m.id === id; });
+          if (deleted) delete answers["Memory:" + deleted.concept];
+          memory = memory.filter(function (m) { return m.id !== id; });
+          activityNote("Answer removed from Memory"); studioError = "";
+        }
+        renderStudio(panel());
+      });
+      return;
+    }
+
     if (action === "fill") {
       runFill();
       return;
@@ -2499,7 +2780,8 @@
     if (action === "undo") {
       undo();
       lastResult = null;
-      close();
+      activityNote("Last fill undone");
+      renderStudio(panel());
     }
   }
 

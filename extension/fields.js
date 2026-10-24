@@ -432,7 +432,8 @@ var ACE_RULES = [
     any: ["city and state", "city state", "city/state", "city & state",
           "city and state of residence"] },
   { answer: "Address", type: ACE_TEXT,
-    any: ["street", "address line", "address"] },
+    any: ["street", "address line", "address"],
+    not: ["email", "e-mail"] },
   { answer: "Location", type: ACE_TEXT,
     any: ["current location", "where are you located", "location"],
     // Greenhouse labels a city box "Location (City)". The parenthetical

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ace autofill",
-  "version": "1.25.0",
+  "version": "1.26.0",
   "description": "Fills application forms from the answer bank in your ACE instance. It never submits anything.",
   "permissions": [
     "storage",
@@ -26,6 +26,7 @@
       ],
       "js": [
         "fields.js",
+        "memory.js",
         "content.js"
       ],
       "run_at": "document_idle",

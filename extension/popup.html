@@ -1,15 +1,13 @@
 <meta charset="utf-8">
 <title>ace autofill</title>
 <style>
-/* Anthracite grey, as the ace web app is. */
-:root{--bg:#1F2628;--s1:#293133;--s2:#2F383A;--line:rgba(241,243,243,.1);--line2:rgba(241,243,243,.16);
-  --text:#F1F3F3;--sec:#B8C0C2;--muted:#A7B0B2;--hover:rgba(241,243,243,.07);--ring:rgba(241,243,243,.06);
-  --accent:#E50914;--accent-hi:#F6121D;--ok:#5BE083;--warn:#F7B84B}
-/* By day, the light version of the same grey. */
+:root{--bg:#100c11;--s1:#1b131c;--s2:#2d202d;--line:#503545;--line2:#674858;
+  --text:#fff4fa;--sec:#d2b9c6;--muted:#a78c9c;--hover:rgba(248,109,165,.09);--ring:rgba(248,109,165,.13);
+  --accent:#a63766;--accent-hi:#bf4578;--ok:#85dabc;--warn:#ffc189}
 @media (prefers-color-scheme:light){
-  :root{--bg:#E2E7E7;--s1:#ECF0F0;--s2:#DDE3E3;--line:rgba(31,38,40,.11);--line2:rgba(31,38,40,.2);
-    --text:#1F2628;--sec:#3F4A4D;--muted:#4E5A5D;--hover:rgba(31,38,40,.06);--ring:rgba(31,38,40,.07);
-    --accent:#D90B15;--accent-hi:#E50914;--ok:#0E6532;--warn:#7A4900}
+  :root{--bg:#fffafb;--s1:#fff;--s2:#faedf2;--line:#ecdbe3;--line2:#e6cbd7;
+    --text:#271722;--sec:#765969;--muted:#947a87;--hover:rgba(153,29,79,.07);--ring:rgba(153,29,79,.1);
+    --accent:#96254d;--accent-hi:#b23e6e;--ok:#157e60;--warn:#995520}
 }
 *{box-sizing:border-box}
 body{margin:0;width:300px;background:var(--bg);color:var(--text);
@@ -53,7 +51,7 @@ input:focus{outline:none;border-color:var(--line2);box-shadow:0 0 0 3px var(--ri
   <div class="s" id="answers"></div>
   <div class="s" id="page"></div>
 </div>
-<button id="fill" class="btn">Fill this page</button>
+<button id="fill" class="btn">Fill</button>
 <details id="connection">
   <summary>Connection</summary>
   <label for="base">ace address</label>

@@ -11,6 +11,7 @@ second, divergent source of truth.
 
 import csv
 import io
+import re
 from datetime import (
     datetime,
     timezone,
@@ -32,7 +33,7 @@ from fastapi.responses import (
 from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.app.api.marks import (
     APPLICATION_STATUSES,
@@ -77,6 +78,7 @@ from backend.app.api.queries import (
 from backend.app.db.models import (
     ApplicationEventRecord,
     ApplicationAnswerRecord,
+    ExtensionAnswerMemoryRecord,
     HistoryEntryRecord,
     JobMarkRecord,
     JobRecord,
@@ -192,6 +194,15 @@ class AnswerBank(BaseModel):
     """The whole answer bank, as submitted by the editor."""
 
     items: list[AnswerItem] = []
+
+
+class ExtensionMemoryInput(BaseModel):
+    concept: str = Field(min_length=3, max_length=180)
+    question: str = Field(min_length=3, max_length=2000)
+    answer: str = Field(min_length=1, max_length=10000)
+    answer_type: str = Field(pattern="^(text|choice|yesno)$")
+    source_host: str = Field(default="", max_length=255)
+    expected_revision: int | None = None
 
 
 class HistoryItem(BaseModel):
@@ -1503,6 +1514,67 @@ def create_app() -> FastAPI:
                 for row in rows
             ],
         }
+
+    @app.get("/api/extension/memory")
+    def get_extension_memory(session: Session = Depends(get_session)) -> dict:
+        rows = session.scalars(select(ExtensionAnswerMemoryRecord).order_by(ExtensionAnswerMemoryRecord.id)).all()
+        return {"items": [{
+            "id": row.id, "concept": row.concept, "question": row.question,
+            "answer": row.answer, "answer_type": row.answer_type,
+            "reuse_policy": row.reuse_policy, "revision": row.revision,
+            "source_host": row.source_host,
+            "approved_at": row.approved_at.isoformat(),
+            "last_used_at": row.last_used_at.isoformat() if row.last_used_at else None,
+        } for row in rows]}
+
+    @app.put("/api/extension/memory")
+    def put_extension_memory(payload: ExtensionMemoryInput, session: Session = Depends(get_session)) -> dict:
+        # The extension token may write only this narrow, idempotent resource.
+        # An explicit approval in the extension is still required before this call.
+        question = payload.question.strip()
+        if re.search(
+            r"\b(visa|sponsor(?:ship|ed|ing)?|work authori[sz]\w*|authorization to work|authorisation to work|authorized to work|authorised to work|right to work|citizen\w*|immigration|opt|cpt|practical training|f-?1|h-?1b|disability|veteran|ethnic\w*|race|gender|age|at least 18|18 years old|birth|criminal|felon|government|military|board of directors|export control|signature|certif\w*|attest\w*|privacy|consent\w*|acknowledg\w*|declar\w*|agree\w*|authoriz\w*|authoris\w*|salary|compensation|non.?compet\w*|non.?solicit\w*|signed|subject to any agreement|conflict of interest)\b",
+            question, re.I,
+        ) or re.search(r"\b(why do you want to|why are you interested in|what makes you want to join|ever worked|previously worked|formerly worked|been employed|currently employed|previously employed|employee of|employed at|employed with|worked at|worked for|contracted with|contractor at|contractor for|current contractor|current or former|applied to|applied for|recruiters?|agencies|referred by|our footprint|our 6.state footprint|this hybrid schedule|onsite at the office at least|family members|relatives|personal relationship|work at [a-z]|work for [a-z])\b", question, re.I):
+            raise HTTPException(status_code=422, detail="This question requires review on each application.")
+        concept = payload.concept.strip()
+        row = session.scalar(select(ExtensionAnswerMemoryRecord).where(ExtensionAnswerMemoryRecord.concept == concept))
+        if row:
+            if payload.expected_revision is not None and payload.expected_revision != row.revision:
+                raise HTTPException(status_code=409, detail="This answer changed. Refresh memory before editing.")
+            if row.answer != payload.answer.strip() or row.question != question:
+                row.answer = payload.answer.strip()
+                row.question = question
+                row.answer_type = payload.answer_type
+                row.source_host = payload.source_host
+                row.revision += 1
+                row.approved_at = datetime.now(timezone.utc)
+        else:
+            row = ExtensionAnswerMemoryRecord(
+                concept=concept, question=question, answer=payload.answer.strip(),
+                answer_type=payload.answer_type, source_host=payload.source_host,
+            )
+            session.add(row)
+        session.commit()
+        session.refresh(row)
+        return {"id": row.id, "revision": row.revision, "saved": True}
+
+    @app.delete("/api/extension/memory/{memory_id}")
+    def delete_extension_memory(memory_id: int, session: Session = Depends(get_session)) -> dict:
+        row = session.get(ExtensionAnswerMemoryRecord, memory_id)
+        if row:
+            session.delete(row)
+            session.commit()
+        return {"deleted": bool(row)}
+
+    @app.post("/api/extension/memory/{memory_id}/used")
+    def mark_extension_memory_used(memory_id: int, session: Session = Depends(get_session)) -> dict:
+        row = session.get(ExtensionAnswerMemoryRecord, memory_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Memory answer not found.")
+        row.last_used_at = datetime.now(timezone.utc)
+        session.commit()
+        return {"recorded": True}
 
     @app.put(
         "/api/answers"

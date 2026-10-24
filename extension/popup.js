@@ -102,7 +102,7 @@ function explainMissing(tab) {
     function (granted) {
       pageLine.textContent = granted
         ? "ACE has not loaded into this tab yet. Reload the page, " +
-          "or press Fill this page."
+          "or press Fill."
         : "Chrome runs ACE here only when you click it. For the panel " +
           "to appear by itself: chrome://extensions, ace autofill, " +
           "Details, Site access: On all sites.";
@@ -229,7 +229,7 @@ function fillActivePage() {
     chrome.scripting.executeScript(
       {
         target: { tabId: tab.id },
-        files: ["fields.js", "content.js"],
+        files: ["fields.js", "memory.js", "content.js"],
       },
       function () {
         fillButton.disabled = false;

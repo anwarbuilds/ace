@@ -39,6 +39,7 @@ test("screening autofill uses only saved matching answers", async ({ page }) => 
 
   const extensionRoot = path.resolve(process.cwd(), "../extension");
   await page.addScriptTag({ path: path.join(extensionRoot, "fields.js") });
+  await page.addScriptTag({ path: path.join(extensionRoot, "memory.js") });
   await page.addScriptTag({ path: path.join(extensionRoot, "content.js") });
   await expect.poll(() => page.evaluate(() => Boolean(document.querySelector(".ace-root")))).toBe(true);
   await page.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", {
@@ -49,8 +50,7 @@ test("screening autofill uses only saved matching answers", async ({ page }) => 
   )).toMatch(/^Filled/);
 
   await expect(page.locator("#school")).toHaveValue("Example University");
-  await expect(page.locator("#employer")).toHaveValue("No");
-  for (const id of ["pwc", "federal", "conflict", "signature"]) {
+  for (const id of ["employer", "pwc", "federal", "conflict", "signature"]) {
     await expect(page.locator(`#${id}`)).toHaveValue("");
   }
   await expect(page.locator("#privacy")).not.toBeChecked();
