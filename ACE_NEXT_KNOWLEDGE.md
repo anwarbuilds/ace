@@ -155,6 +155,33 @@ values and are confirmed before ACE reports success. Screenshot values were
 not committed or written to production. This update is local only, with no
 push, deployment or production migration yet.
 
+### Pending Meijer and Verizon Workday screening autofill work
+
+The local extension update `1.25.0` adds precise matching for the three
+Meijer Workday screening pages. Migration `0047` adds 11 blank answer rows for
+recruiting-text consent; Meijer group contractor and employment history;
+Meijer recruiter contact, current contractor status and six-state residence;
+current visa description and OPT status; AI engineering tools, Azure AI
+experience range and AI coding tools. Existing saved answers still handle
+work authorization, future sponsorship, relocation and hybrid work. The
+extension selects the exact `18 years or older` option only when the saved
+adult-status answer is Yes; it leaves narrower age bands for the owner.
+Tests cover all three page shapes and prove unrelated broad answers leave
+these narrower questions blank. Screenshot values were not committed or
+written to production. This update remains local, with no push, deployment
+or production migration yet.
+
+The same local update covers the Verizon Workday question page. Migration
+`0048` adds eight blank rows for authorization to work for any US employer,
+current visa sponsorship, combined federal/state/local government employment,
+combined non-compete and non-solicitation agreements, family or close personal
+ties to an employee, a family board member, personal US military service and
+spouse US military service. Future sponsorship and adult status use their
+existing saved answers. Matching and browser tests keep each distinct fact
+separate, including when only a broader answer has been saved. The owner's
+answers shown in screenshots remain outside source code and production is
+unchanged.
+
 Earlier on 2026-10-23, the owner approved a cutover, but then clarified that
 this did not authorize stopping legacy discovery during the comparison period.
 Oracle discovery was briefly stopped and legacy discovery was restarted; Oracle

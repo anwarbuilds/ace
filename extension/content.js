@@ -249,10 +249,9 @@
 
   function chooseMatchedOption(field, options, wanted, alts) {
     var name = answerNameFor(aceQuestionFor(field), kindOf(field));
-    if (name === "Field of study") {
-      // The saved major must beat a nearby but different major. If no
-      // exact saved wording exists, the approved Workday wording may
-      // beat a fuzzy match, but only when it occurs once in the list.
+    if (name === "Field of study" || name === "Age range from adult status") {
+      // A saved major must beat a nearby but different major. An adult
+      // answer may only select an exact 18+ option, never an age band.
       var candidates = [wanted].concat(alts || []);
       for (var i = 0; i < candidates.length; i++) {
         var exact = options.map(aceNormalise).reduce(function (found, text, at) {
@@ -262,6 +261,7 @@
         if (exact.length === 1) return exact[0];
         if (exact.length > 1) return -1;
       }
+      if (name === "Age range from adult status") return -1;
     }
     return aceChooseOption(options, wanted, alts);
   }
@@ -2335,6 +2335,11 @@
         answers["Sponsorship follow-up from answers 1 and 2"] =
           authorized === "no" || sponsorship === "yes" ? "Yes" : "No";
         aliases["Sponsorship follow-up from answers 1 and 2"] = [];
+      }
+
+      if (aceIntent(answers["At least 18 years old"]) === "yes") {
+        answers["Age range from adult status"] = "18 years or older";
+        aliases["Age range from adult status"] = ["18 or older", "18+"];
       }
 
       // Today is not something the bank can hold. A form asking you to

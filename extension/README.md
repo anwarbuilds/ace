@@ -42,6 +42,24 @@ The follow-up that explicitly asks whether Question 1 was No or Question 2
 was Yes is calculated only when both underlying answers are saved. A minimum
 experience requirement for a particular role stays for manual review.
 
+Meijer Workday questions have separate saved answers for recruiting texts,
+contract work, prior employment, recruiter contact, current contractor
+status, residence in its six-state footprint, current visa description,
+AI engineering experience, Azure AI years, AI coding tools and current OPT
+status. The specific age-range option `18 years or older` can be selected
+from a saved `At least 18 years old` Yes; narrower age bands remain manual.
+Broader employment, consent or total-experience answers never substitute for
+the Meijer-specific rows.
+
+Verizon Workday questions distinguish authorization for any US employer from
+general work authorization, current employer visa sponsorship from future
+sponsorship, a combined government-employment question from federal-only or
+state-only history, and agreements covering both non-compete and
+non-solicitation terms. Family or close personal ties to an employee, family
+ties to a board member, personal military service and spouse military service
+each have a separate answer. Save those values in ACE Answers before using
+autofill. A broader saved answer leaves these narrower fields blank.
+
 If ACE runs somewhere other than `http://localhost:8000`, set the
 address from the toolbar icon.
 

@@ -84,13 +84,25 @@ var ACE_RULES = [
   { answer: "Maximum OPT or CPT authorization end date", type: ACE_TEXT,
     all: ["maximum end date", "practical training"],
     any: ["optional practical training", "curricular practical training"] },
+  { answer: "Currently on OPT student visa", type: ACE_YESNO,
+    any: ["currently on an opt student visa",
+          "currently on opt student visa", "on an opt student visa"] },
+  { answer: "Current visa or sponsorship description", type: ACE_TEXT,
+    any: ["please list the type of your current visa/sponsorship",
+          "type of your current visa/sponsorship",
+          "current visa or sponsorship type"] },
+  { answer: "Currently require employer visa sponsorship", type: ACE_YESNO,
+    all: ["currently require sponsorship", "employment visa"],
+    any: ["currently require sponsorship for an employment visa"] },
 
   // "Future" has to be tested before the plain form or it never
   // matches, and both are now scored so the longer phrase wins anyway.
   { answer: "Need sponsorship in future", type: ACE_YESNO,
     any: ["in the future require", "future require", "future need",
           "sponsorship in the future", "now or in the future",
-          "future require sponsorship", "in the future need sponsorship"] },
+          "future require sponsorship", "in the future need sponsorship",
+          "will you in the future need", "future need employer immigration sponsorship",
+          "visa sponsorship at some time in the future"] },
   { answer: "Need sponsorship now", type: ACE_YESNO,
     // "immigration sponsorship" is the wording Greenhouse actually
     // uses, and the shorter phrase alone never matched it.
@@ -104,6 +116,9 @@ var ACE_RULES = [
           "work authorisation", "legally authorized", "legally authorised",
           "right to work", "eligible to work",
           "authorization documentation", "authorisation documentation"] },
+  { answer: "Authorized to work for any US employer", type: ACE_YESNO,
+    all: ["authorized to work", "any employer"],
+    any: ["authorized to work for any employer"] },
 
   // On a temporary work visa is asked alongside the two above and is a
   // different fact again: student work authorisation is authorisation
@@ -153,6 +168,9 @@ var ACE_RULES = [
           "local government"],
     not: ["past 5 years", "past five years", "immediate family",
           "quasi-governmental"] },
+  { answer: "Federal state or local government employment", type: ACE_YESNO,
+    all: ["previously been employed", "federal", "state", "local government"],
+    any: ["currently employed or have you previously been employed"] },
   { answer: "Federal government employment in last 5 years",
     type: ACE_YESNO,
     all: ["federal government", "employee"],
@@ -188,6 +206,9 @@ var ACE_RULES = [
     any: ["non-compete", "non compete", "noncompete", "non-competition",
           "restrictive covenant", "restrict your employment",
           "preclude or restrict"] },
+  { answer: "Agreement restricting work for employer", type: ACE_YESNO,
+    all: ["non-competition", "non-solicitation", "restrict"],
+    any: ["employee non-solicitation customer non-solicitation"] },
   { answer: "Previously employed by this company", type: ACE_YESNO,
     any: ["former employee of this company", "former employee of your company",
           "former employee of our company",
@@ -198,6 +219,18 @@ var ACE_RULES = [
   { answer: "Big Four employment in prior 18 months", type: ACE_YESNO,
     all: ["prior 18 months", "ey", "pwc", "deloitte", "kpmg"],
     any: ["employee", "employed"] },
+  { answer: "Previously contracted with Meijer group", type: ACE_YESNO,
+    all: ["meijer", "fresh thyme", "serv-u-success"],
+    any: ["previously been contracted", "previously contracted"] },
+  { answer: "Previously worked for Meijer or Fresh Thyme", type: ACE_YESNO,
+    all: ["meijer", "fresh thyme"],
+    any: ["previously worked for", "worked for meijer or fresh thyme"] },
+  { answer: "Discussed Meijer opportunities with recruiters", type: ACE_YESNO,
+    all: ["meijer", "recruiters"],
+    any: ["presented opportunities", "spoken to any recruiters"] },
+  { answer: "Current contractor at Meijer or another client", type: ACE_YESNO,
+    all: ["current contractor", "meijer"],
+    any: ["another client", "at meijer"] },
   { answer: "ServiceNow RiseUp graduate", type: ACE_YESNO,
     all: ["riseup", "servicenow"],
     any: ["graduate", "nextgen"] },
@@ -243,6 +276,19 @@ var ACE_RULES = [
           "family member who works",
           "know anyone who works",
           "with an employee of", "relationship with an employee"] },
+  { answer: "Family or close personal relationship with employee here",
+    type: ACE_YESNO,
+    all: ["family members", "close personal relationship", "employed by"],
+    any: ["family members or persons with whom you have/had a close personal relationship"] },
+  { answer: "Family member on employer board", type: ACE_YESNO,
+    all: ["family members", "board of directors"],
+    any: ["part of", "serving on", "member of"] },
+  { answer: "Personally served in US military", type: ACE_YESNO,
+    all: ["you", "served in the u s military"],
+    any: ["currently serving", "previously served"] },
+  { answer: "Spouse served in US military", type: ACE_YESNO,
+    all: ["spouse", "u s military"],
+    any: ["active military spouse", "spouse previously served"] },
   { answer: "Government official", type: ACE_YESNO,
     any: ["are you a current government official",
           "are you a government official"],
@@ -287,6 +333,9 @@ var ACE_RULES = [
           "artificial intelligence in the recruitment",
           "artificial intelligence in the hiring"],
     not: ["experience", "familiar", "proficien"] },
+  { answer: "Consent to recruiting text messages", type: ACE_YESNO,
+    all: ["text messages", "candidate invitations"],
+    any: ["authorize enabling", "notifications"] },
   { answer: "Agree to the terms shown", type: ACE_YESNO,
     any: ["screenshot", "please confirm your acceptance",
           "confirm your acceptance", "hereby provide my consent",
@@ -468,6 +517,9 @@ var ACE_RULES = [
   { answer: "At least 18 years old", type: ACE_YESNO,
     any: ["at least 18", "18 years of age", "18 years old", "over 18",
           "age of 18", "legal working age"] },
+  { answer: "Live in Meijer six-state footprint", type: ACE_YESNO,
+    all: ["live in our footprint", "michigan", "kentucky"],
+    any: ["ohio", "wisconsin", "illinois", "indiana"] },
   { answer: "Role is located in the US", type: ACE_YESNO,
     any: ["role you are applying for located", "role located in",
           "position located in", "job located in"] },
@@ -490,6 +542,15 @@ var ACE_RULES = [
   { answer: "Enterprise software experience", type: ACE_YESNO,
     any: ["enterprise software environment", "enterprise software",
           "enterprise environment"] },
+  { answer: "AI-assisted engineering tools experience", type: ACE_YESNO,
+    all: ["ai-assisted engineering tools", "github copilot"],
+    any: ["prompt engineering", "context/prompt engineering"] },
+  { answer: "Years building AI features on Azure", type: ACE_TEXT,
+    all: ["ai or agentic features", "microsoft azure stack"],
+    any: ["how many years of experience", "years of experience"] },
+  { answer: "AI coding assistance tools used", type: ACE_TEXT,
+    all: ["ai to assist with writing code", "llm"],
+    any: ["which llm", "experience using ai"] },
   { answer: "Visa type", type: ACE_CHOICE,
     any: ["visa type", "confirm your visa", "type of visa",
           "visa status", "which visa"] },
@@ -526,7 +587,8 @@ var ACE_RULES = [
   { answer: "Race or ethnicity", type: ACE_CHOICE,
     any: ["race", "ethnicity", "hispanic", "latino", "latinx"] },
   { answer: "Veteran status", type: ACE_CHOICE,
-    any: ["veteran", "military service", "armed forces"] },
+    any: ["veteran", "military service", "armed forces"],
+    not: ["spouse"] },
   { answer: "Disability status", type: ACE_CHOICE,
     any: ["disability", "disabled"],
     not: ["accommodation"] },
@@ -1014,6 +1076,11 @@ function aceNamedEmployerAnswer(question, availableNames) {
     if (!acePhraseIn(question, company)) return;
     mentioned += 1;
 
+    // A saved answer about one employer does not answer a question
+    // that names that employer and then another one with "or".
+    var escaped = company.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(escaped + "\\s+or\\s+").test(question)) return;
+
     var named = ["worked at ", "worked for ", "employed by ",
                  "employee of ", "employee at ",
                  "former employee of ", "former employee at "].some(
@@ -1040,6 +1107,12 @@ function aceNamedEmployerAnswer(question, availableNames) {
    the broad ones they would otherwise be swallowed by. */
 function aceAnswerNameFor(question, kind, availableNames) {
   if (!question) return null;
+
+  // An adult-status Yes can only answer the exact adult option, not an
+  // arbitrary age bracket such as 18-24 or 25-34.
+  if (acePhraseIn(question, "please indicate your current age range")) {
+    return "Age range from adult status";
+  }
 
   // This is a logical question about two earlier answers, not another
   // request for the work-authorization answer quoted inside it.

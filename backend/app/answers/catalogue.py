@@ -562,8 +562,18 @@ QUESTIONS: tuple[Question, ...] = (
         hint="Yes only if you need sponsorship to start.",
     ),
     _yes_no(
+        "Currently require employer visa sponsorship",
+        hint="Asked as a current visa sponsorship need. Keep separate from a "
+        "future sponsorship need and review when status changes.",
+    ),
+    _yes_no(
         "Need sponsorship in future",
         hint="Yes if you will need sponsorship later, even if not now.",
+    ),
+    _yes_no(
+        "Authorized to work for any US employer",
+        hint="Only for questions that explicitly say any employer. A narrower "
+        "work authorisation answer does not establish this.",
     ),
     _yes_no(
         "Work authorization through spouse visa",
@@ -585,6 +595,14 @@ QUESTIONS: tuple[Question, ...] = (
         "and update this date if your authorization changes.",
     ),
     _yes_no(
+        "Currently on OPT student visa",
+        hint="Separate from being on an F-1 student visa. Review as status changes.",
+    ),
+    Question(
+        "Current visa or sponsorship description",
+        hint="Short current description for a free-text form field. Update if your status changes.",
+    ),
+    _yes_no(
         "On a temporary work visa",
         hint="Asked separately from your current authorisation. H-1B, "
         "L-1 and TN are what forms usually mean.",
@@ -603,6 +621,11 @@ QUESTIONS: tuple[Question, ...] = (
     # --- Background ---
     _yes_no("Employed by the federal government"),
     _yes_no("Employed by state or local government"),
+    _yes_no(
+        "Federal state or local government employment",
+        hint="Ever employed by any of these US government levels. Separate "
+        "from federal-only, state-only and five-year questions.",
+    ),
     _yes_no(
         "Federal government employment in last 5 years",
         hint="The five-year window is narrower than ever having worked "
@@ -629,6 +652,11 @@ QUESTIONS: tuple[Question, ...] = (
     _yes_no("Involuntarily discharged from a job"),
     _yes_no("Criminal conviction"),
     _yes_no("Bound by a non-compete"),
+    _yes_no(
+        "Agreement restricting work for employer",
+        hint="Covers non-compete and employee or customer non-solicitation "
+        "agreements together. Answer this combined question separately.",
+    ),
     _yes_no("Previously employed by this company"),
     _yes_no(
         "Previously employed by ServiceNow",
@@ -644,7 +672,44 @@ QUESTIONS: tuple[Question, ...] = (
         "within the stated 18-month window. Different from ever "
         "working at any one of them.",
     ),
+    _yes_no(
+        "Previously contracted with Meijer group",
+        hint="Only for the question naming Meijer, Fresh Thyme and Serv-u-Success. "
+        "Contract work is separate from employment.",
+    ),
+    _yes_no(
+        "Previously worked for Meijer or Fresh Thyme",
+        hint="Only for the question naming both companies. Do not reuse a "
+        "contractor answer.",
+    ),
+    _yes_no(
+        "Discussed Meijer opportunities with recruiters",
+        hint="Whether a recruiter or agency has already presented Meijer roles.",
+    ),
+    _yes_no(
+        "Current contractor at Meijer or another client",
+        hint="Current contractor status for this specific Meijer question.",
+    ),
     _yes_no("Related to an employee here"),
+    _yes_no(
+        "Family or close personal relationship with employee here",
+        hint="Includes relatives and close personal relationships, not just "
+        "family ties. Review for each employer.",
+    ),
+    _yes_no(
+        "Family member on employer board",
+        hint="A board of directors relationship is separate from a "
+        "relationship with an ordinary employee.",
+    ),
+    _yes_no(
+        "Personally served in US military",
+        hint="Your own current or past service, separate from spouse service "
+        "and voluntary veteran status.",
+    ),
+    _yes_no(
+        "Spouse served in US military",
+        hint="A spouse's current or past service, separate from your own.",
+    ),
     _yes_no(
         "Employer relationship with this company",
         hint="Whether your employer resells for, or works with, the "
@@ -687,6 +752,11 @@ QUESTIONS: tuple[Question, ...] = (
         hint="Whether an employer may use AI tools in reviewing your "
         "application, as Medtronic asks.",
     ),
+    _yes_no(
+        "Consent to recruiting text messages",
+        hint="Only for recruiting invitations and notifications by text. "
+        "Separate from email and marketing consent.",
+    ),
     # --- Education ---
     Question("University"),
     Question(
@@ -704,6 +774,20 @@ QUESTIONS: tuple[Question, ...] = (
         hint="Whether you completed ServiceNow RiseUp, formerly NextGen.",
     ),
     Question("Years of experience"),
+    _yes_no(
+        "AI-assisted engineering tools experience",
+        hint="Experience with engineering tools such as GitHub Copilot and "
+        "prompt or context engineering.",
+    ),
+    Question(
+        "Years building AI features on Azure",
+        hint="Use the exact range offered by the form. Keep separate from "
+        "your total software experience.",
+    ),
+    Question(
+        "AI coding assistance tools used",
+        hint="For free-text questions asking which coding assistants or LLMs you used.",
+    ),
     _yes_no("Recent graduate"),
     # --- Languages ---
     Question(
@@ -734,6 +818,11 @@ QUESTIONS: tuple[Question, ...] = (
     _yes_no("At least 18 years old"),
     _yes_no("Role is located in the US"),
     _yes_no("Willing to relocate"),
+    _yes_no(
+        "Live in Meijer six-state footprint",
+        hint="Only for Meijer's Michigan, Ohio, Indiana, Illinois, Wisconsin "
+        "and Kentucky footprint. Review if your residence changes.",
+    ),
     _yes_no("Willing to work onsite"),
     _yes_no("Willing to travel"),
     _yes_no("Driving licence"),

@@ -109,6 +109,63 @@ WORKDAY_CASES.forEach(function (entry) {
   }
 });
 
+var MEIJER_CASES = [
+  ["Are you legally authorized to work in the country in which this position is located?", "choice", "Work authorisation"],
+  ["Do you now or will you in the future need employer immigration sponsorship for work authorization?", "choice", "Need sponsorship in future"],
+  ["Please indicate your current age range.", "choice", "Age range from adult status"],
+  ["I authorize enabling text messages for candidate invitations and notifications. I understand standard data or text charges may apply.", "choice", "Consent to recruiting text messages"],
+  ["Have you previously been contracted with Meijer, Fresh Thyme, or Serv-u-Success?", "choice", "Previously contracted with Meijer group"],
+  ["Have you previously worked for Meijer or Fresh Thyme?", "choice", "Previously worked for Meijer or Fresh Thyme"],
+  ["Have you spoken to any recruiters/agencies that have presented opportunities at Meijer?", "choice", "Discussed Meijer opportunities with recruiters"],
+  ["Are you a current contractor at Meijer or another client?", "choice", "Current contractor at Meijer or another client"],
+  ["Do you live in our footprint? [Michigan, Ohio, Indiana, Illinois, Wisconsin, Kentucky]", "choice", "Live in Meijer six-state footprint"],
+  ["If not within our 6-state footprint, are you willing to relocate?", "choice", "Willing to relocate"],
+  ["Will you now or in the future require sponsorship to continue working in the United States?", "choice", "Need sponsorship in future"],
+  ["Please list the type of your current visa/sponsorship.", "text", "Current visa or sponsorship description"],
+  ["Do you have experience with AI-assisted engineering tools such as GitHub Copilot and context/prompt engineering?", "choice", "AI-assisted engineering tools experience"],
+  ["How many years of experience do you have building AI or agentic features on the Microsoft Azure stack?", "choice", "Years building AI features on Azure"],
+  ["Do you have any experience using AI to assist with writing code? If so, which LLM(s)?", "text", "AI coding assistance tools used"],
+  ["Are you currently on an OPT Student Visa?", "choice", "Currently on OPT student visa"],
+  ["Are you able to work this hybrid schedule?", "choice", "Willing to work onsite"],
+  ["Have you previously worked for PwC?", "choice", "Previously employed by PwC"],
+  ["What is your age range?", "choice", null],
+];
+
+MEIJER_CASES.forEach(function (entry) {
+  var got = aceAnswerNameFor(aceNormalise(entry[0]), entry[1], [
+    "Previously employed by PwC"
+  ]);
+  if (got !== entry[2]) {
+    failures += 1;
+    console.log("FAIL Meijer " + JSON.stringify(entry[0]) +
+      " got " + JSON.stringify(got) + ", want " + JSON.stringify(entry[2]));
+  }
+});
+
+var VERIZON_CASES = [
+  ["Are you currently authorized to work for any employer in the U.S.?", "choice", "Authorized to work for any US employer"],
+  ["Do you currently require sponsorship for an employment visa in order to work in the U.S.? (Sponsorship includes H-1B, J-1 and F-1 OPT STEM.)", "choice", "Currently require employer visa sponsorship"],
+  ["Will you require visa sponsorship at some time in the future in order to continue work in the U.S.?", "choice", "Need sponsorship in future"],
+  ["Are you at least 18 years old?", "choice", "At least 18 years old"],
+  ["Do you have any family members or persons with whom you have/had a close personal relationship who are employed by Verizon?", "choice", "Family or close personal relationship with employee here"],
+  ["Have you signed or are you subject to any non-competition, employee non-solicitation, customer non-solicitation or any agreement that could restrict or prevent you from working at Verizon?", "choice", "Agreement restricting work for employer"],
+  ["Are you currently employed, or have you previously been employed, by the United States Federal, State or Local government?", "choice", "Federal state or local government employment"],
+  ["Do you have any family members who are part of Verizon Communication Inc's Board of Directors?", "choice", "Family member on employer board"],
+  ["Are you currently serving or have you previously served in the U.S. Military?", "choice", "Personally served in US military"],
+  ["Are you currently an active military spouse, or has your spouse previously served in the U.S. Military?", "choice", "Spouse served in US military"],
+  ["Are you legally authorized to work in the United States?", "choice", "Work authorisation"],
+  ["Are you subject to a non-compete agreement?", "choice", "Bound by a non-compete"],
+];
+
+VERIZON_CASES.forEach(function (entry) {
+  var got = aceAnswerNameFor(aceNormalise(entry[0]), entry[1], []);
+  if (got !== entry[2]) {
+    failures += 1;
+    console.log("FAIL Verizon " + JSON.stringify(entry[0]) +
+      " got " + JSON.stringify(got) + ", want " + JSON.stringify(entry[2]));
+  }
+});
+
 /* Every question on one real Dell application, which runs on Oracle's
    Candidate Experience and asks twenty-two of them as Yes/No pairs.
 
@@ -559,6 +616,15 @@ EMPLOYER_CASES.forEach(function (entry) {
   }
 });
 
+var oneEmployerInGroup = aceAnswerNameFor(
+  aceNormalise("Have you ever worked for PwC or ServiceNow?"),
+  "choice", ["Previously employed by PwC"]
+);
+if (oneEmployerInGroup !== null) {
+  failures += 1;
+  console.log("FAIL one saved employer cannot answer a two-employer question");
+}
+
 OPTION_CASES.forEach(function (entry) {
   var got = aceChooseOption(entry[0], entry[1]);
 
@@ -734,7 +800,7 @@ NAME_CASES.forEach(function (c) {
 var total = CASES.length + OPTION_CASES.length + DELL_CASES.length +
   ALIAS_CASES.length + HISTORY_ROLE_CASES.length + DATE_CASES.length +
   NAME_CASES.length + SCREENING_CASES.length + EMPLOYER_CASES.length +
-  WORKDAY_CASES.length;
+  WORKDAY_CASES.length + MEIJER_CASES.length + VERIZON_CASES.length + 1;
 
 console.log(
   failures
