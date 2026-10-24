@@ -638,11 +638,18 @@ function fakeField(placeholder) {
     return n === "placeholder" ? placeholder : null; } };
 }
 
+function fakeTypedField(type) {
+  return { type: type, getAttribute: function () { return null; } };
+}
+
 var DATE_CASES = [
   [CURRENT, "startDate", "MM/YYYY", "01/2026"],
   [PAST, "startDate", "MM/YYYY", "05/2021"],
   [PAST, "endDate", "MM/YYYY", "12/2024"],
   [PAST, "startDate", "YYYY-MM", "2021-05"],
+  [CURRENT, "startDate", fakeTypedField("month"), "2026-01"],
+  [PAST, "endDate", fakeTypedField("month"), "2024-12"],
+  [PAST, "startDate", fakeTypedField("date"), "2021-05-01"],
   [PAST, "startDate", "MM/DD/YYYY", "05/01/2021"],
   // No placeholder at all: the shape every form seen so far uses.
   [PAST, "endDate", null, "12/2024"],
@@ -652,7 +659,10 @@ var DATE_CASES = [
 ];
 
 DATE_CASES.forEach(function (c) {
-  var got = aceHistoryValue(c[0], c[1], fakeField(c[2]));
+  var got = aceHistoryValue(
+    c[0], c[1], typeof c[2] === "string" || c[2] == null
+      ? fakeField(c[2]) : c[2]
+  );
 
   if (got !== c[3]) {
     failures += 1;

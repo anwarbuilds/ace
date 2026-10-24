@@ -28,6 +28,11 @@ questions, and program-specific questions also have separate rows. Never
 infer their answers from a broader saved fact. Electronic signatures and
 privacy declarations remain for the applicant to complete manually.
 
+Workday work-history From and To month fields use the dates saved for the
+matching employer in ACE. A prefilled date is left alone. If a prefilled
+employer cannot be matched uniquely to saved history, ACE leaves its dates
+for manual review.
+
 If ACE runs somewhere other than `http://localhost:8000`, set the
 address from the toolbar icon.
 

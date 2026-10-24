@@ -125,6 +125,19 @@ remain manual. This work is local and is not yet pushed, deployed, or migrated
 in production. After an approved release, the owner must fill any desired new
 blank rows in ACE Answers and reload the unpacked Chrome extension.
 
+### Pending Workday history date autofill work
+
+The local extension update `1.23.0` writes native month inputs using their
+required `YYYY-MM` value while Workday displays them as `MM/YYYY`. It matches
+prefilled employers to saved work history before filling dates, leaves
+unmatched or ambiguous jobs alone, and never overwrites an existing date.
+An isolated Chromium test covers current and past jobs, out-of-order history,
+manually entered dates, and an unmatched employer. This work is local and has
+not been pushed or deployed. If Chrome's unpacked extension points to this
+checkout, the owner can reload it locally at `chrome://extensions` and then
+reload already-open Workday application tabs; no web deployment is needed for
+this extension-only fix.
+
 Earlier on 2026-10-23, the owner approved a cutover, but then clarified that
 this did not authorize stopping legacy discovery during the comparison period.
 Oracle discovery was briefly stopped and legacy discovery was restarted; Oracle

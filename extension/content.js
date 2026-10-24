@@ -511,6 +511,44 @@
     return owned;
   }
 
+  function historyEntryForBlock(kind, block, index) {
+    var entries = histories[kind] || [];
+    if (kind !== "work") return entries[index] || null;
+
+    // A resume import can list jobs in a different order from ACE's
+    // saved history. When Workday already names the employer, use that
+    // identity before putting dates into its otherwise blank fields.
+    var employer = block.fields.find(function (slot) {
+      return slot.role === "employer";
+    });
+    var shown = employer && String(employer.field.value || "").trim();
+    if (!shown) return entries[index] || null;
+
+    function key(value) {
+      return String(value || "").toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+    }
+
+    var matches = entries.filter(function (entry) {
+      return key(entry.employer) === key(shown);
+    });
+    if (matches.length === 1) return matches[0];
+    if (!matches.length) return null;
+
+    // Two roles at one employer need their titles to distinguish them.
+    // If the title is absent or still ambiguous, leave the dates blank.
+    var title = block.fields.find(function (slot) {
+      return slot.role === "jobTitle";
+    });
+    var shownTitle = title && String(title.field.value || "").trim();
+    if (!shownTitle) return null;
+
+    matches = matches.filter(function (entry) {
+      return key(entry.job_title) === key(shownTitle);
+    });
+    return matches.length === 1 ? matches[0] : null;
+  }
+
   /* The stored history value for a field inside a history block, or
      null when its block has no entry behind it. Undefined when the
      field belongs to no block. */
@@ -524,7 +562,7 @@
         block.fields.forEach(function (slot) {
           if (found !== undefined || slot.field !== field) return;
 
-          var entry = (histories[kind] || [])[index];
+          var entry = historyEntryForBlock(kind, block, index);
 
           found = entry
             ? aceHistoryValue(entry, slot.role, field)
@@ -563,7 +601,7 @@
     var reported = {};
 
     historyBlocks(kind).forEach(function (block, index) {
-      var entry = entries[index];
+      var entry = historyEntryForBlock(kind, block, index);
       if (!entry) return;
 
       block.fields.forEach(function (slot) {
@@ -594,6 +632,11 @@
         var previous = slot.field.value;
 
         if (!fillOne(slot.field, value)) return;
+
+        // Native date controls reject an invalid string without an
+        // exception. Do not claim a history date was filled if the
+        // browser left the control empty.
+        if (!aceIsChoiceControl(slot.field) && !slot.field.value) return;
 
         var touched = lastPicked || slot.field;
 

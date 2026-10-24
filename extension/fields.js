@@ -1539,6 +1539,12 @@ function aceFormatHistoryDate(month, year, field) {
   var hint = "";
 
   if (field) {
+    // Chrome displays a native month control as MM/YYYY, but its value
+    // property only accepts YYYY-MM. Writing the displayed format is
+    // silently rejected, leaving Workday's required From/To fields blank.
+    if (field.type === "month") return year + "-" + mm;
+    if (field.type === "date") return year + "-" + mm + "-01";
+
     hint = (
       (field.getAttribute("placeholder") || "") + " " +
       (field.getAttribute("aria-label") || "")
