@@ -895,6 +895,17 @@ Do not merge ACE Next to legacy `main` without separate approval.
 
 ## Change log
 
+### 2026-10-24, local change awaiting release approval
+
+- Extended the existing owner account with first name, last name, phone number
+  and a private profile photo. Added an additive migration (0049), owner-only
+  profile endpoints, and current-password plus email-code verification for
+  changing the ACE sign-in address. Gmail connection remains separate.
+- This account change is local only. It has not been pushed, migrated or
+  deployed. See `docs/architecture/2026-10-24-owner-profile.md` for release
+  and rollback details. Both discovery schedulers and databases remain as
+  described above.
+
 ### 2026-10-23
 
 - Restored the owner's intended comparison mode after they clarified that

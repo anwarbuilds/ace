@@ -22,6 +22,7 @@ MarkupSafe==3.0.3
 packaging==26.3
 pdfminer.six==20250506
 pdfplumber==0.11.7
+Pillow==12.3.0
 pluggy==1.6.0
 psycopg-binary==3.3.4
 psycopg==3.3.4

@@ -12,6 +12,7 @@ from datetime import (
     datetime,
     timedelta,
 )
+import re
 
 from sqlalchemy import (
     delete,
@@ -61,6 +62,8 @@ MAX_PAIRING_FAILURES_PER_IP = 10
 PAIRING_TTL = timedelta(minutes=10)
 
 LOGIN_CODE_TTL = timedelta(minutes=10)
+
+EMAIL_CHANGE_TTL = timedelta(minutes=10)
 
 RESET_TTL = timedelta(minutes=10)
 
@@ -178,6 +181,110 @@ def set_display_name(user: UserRecord, value: str) -> None:
     """Update profile presentation without changing sign-in credentials."""
 
     user.display_name = display_name(value)
+
+
+def set_profile(user: UserRecord, *, first_name: str, last_name: str, phone_number: str) -> None:
+    """Save identity fields on the existing owner, with one display name."""
+
+    first = " ".join(first_name.split())
+    last = " ".join(last_name.split())
+    for value in (first, last):
+        if not value or len(value) > 80 or any(ord(char) < 32 for char in value):
+            raise AuthRefused("invalid_name", "Enter your first and last name, up to 80 characters each.")
+    phone = " ".join(phone_number.split())
+    if phone and (
+        len(phone) > 32
+        or not re.fullmatch(r"\+?[0-9(). -]+", phone)
+        or not 7 <= sum(char.isdigit() for char in phone) <= 20
+    ):
+        raise AuthRefused("invalid_phone", "Enter a phone number with 7 to 20 digits, or leave it blank.")
+
+    user.first_name = first
+    user.last_name = last
+    user.phone_number = phone
+    user.display_name = display_name(f"{first} {last}")
+
+
+def start_email_change(
+    session: Session, user: UserRecord, *, email: str, password: str, now: datetime
+) -> str:
+    """Send a code to a new address after checking the current password."""
+
+    email = _email(email)
+    if not email or email == user.email or not _valid_email(email):
+        raise AuthRefused("invalid_email", "Enter a different valid email address.")
+    if find_user(session, email):
+        raise AuthRefused("email_exists", "That address is already used by an account.")
+    password_key = f"email-change-password:{user.id}"
+    if _failures(session, password_key, now) >= MAX_FAILURES_PER_EMAIL:
+        raise AuthRefused("throttled", "Too many attempts. Wait 15 minutes, then try again.")
+    if not verify_password(user.password_hash, password):
+        _record(session, [password_key], False, now)
+        raise AuthRefused("wrong_password", "Enter your current password to change the sign-in email.")
+    _clear(session, password_key)
+
+    key = f"email-change-send:{user.id}"
+    if _failures(session, key, now) >= MAX_CODE_SENDS_PER_WINDOW:
+        raise AuthRefused("throttled", "Too many codes requested. Wait 15 minutes, then try again.")
+    _record(session, [key], False, now)
+    session.execute(
+        update(AuthCodeRecord)
+        .where(
+            AuthCodeRecord.user_id == user.id,
+            AuthCodeRecord.purpose == "email_change",
+            AuthCodeRecord.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
+    code = new_code()
+    session.add(AuthCodeRecord(
+        code_hash=digest("email-change:" + code),
+        purpose="email_change",
+        target_email=email,
+        user_id=user.id,
+        created_at=now,
+        expires_at=now + EMAIL_CHANGE_TTL,
+    ))
+    session.flush()
+    return code
+
+
+def finish_email_change(
+    session: Session, user: UserRecord, *, email: str, code: str, ip: str, now: datetime
+) -> None:
+    """Consume a unique code, move the login, and revoke browser sessions."""
+
+    email = _email(email)
+    key = f"email-change-attempt:{user.id}:{ip}"
+    owner_key = f"email-change-attempt:{user.id}"
+    if (_failures(session, key, now) >= MAX_CODE_FAILURES_PER_IP
+            or _failures(session, owner_key, now) >= MAX_CODE_FAILURES_PER_EMAIL):
+        raise AuthRefused("throttled", "Too many attempts. Wait 15 minutes, then try again.")
+    row = session.scalar(
+        select(AuthCodeRecord).where(
+            AuthCodeRecord.user_id == user.id,
+            AuthCodeRecord.purpose == "email_change",
+            AuthCodeRecord.code_hash == digest("email-change:" + normalise_code(code)),
+        )
+    )
+    if (
+        row is None or row.used_at is not None or row.target_email != email
+        or _aware(row.expires_at, now) <= now
+    ):
+        _record(session, [key, owner_key], False, now)
+        raise AuthRefused("invalid_code", "That code is invalid or expired. Request a new one.")
+    row.used_at = now
+    set_owner_email(session, user, email, now=now)
+    _clear(session, key)
+    _clear(session, owner_key)
+
+
+def _valid_email(email: str) -> bool:
+    return (
+        len(email) <= 320
+        and bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email))
+        and not any(ord(char) < 32 for char in email)
+    )
 
 
 def set_password(

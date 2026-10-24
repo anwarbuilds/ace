@@ -1360,6 +1360,13 @@ class UserRecord(Base):
         server_default="",
     )
 
+    first_name: Mapped[str] = mapped_column(String(80), nullable=False, default="", server_default="")
+    last_name: Mapped[str] = mapped_column(String(80), nullable=False, default="", server_default="")
+    phone_number: Mapped[str] = mapped_column(String(32), nullable=False, default="", server_default="")
+    avatar_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
+    avatar_content_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    avatar_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     password_hash: Mapped[str] = mapped_column(
         Text,
         nullable=False,
@@ -1554,6 +1561,8 @@ class AuthCodeRecord(Base):
         String(20),
         nullable=False,
     )
+
+    target_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
 
     user_id: Mapped[int] = mapped_column(
         Integer,

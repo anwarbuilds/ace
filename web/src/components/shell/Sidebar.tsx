@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -29,10 +30,12 @@ export function Sidebar({
   counts,
   displayName,
   email,
+  avatarUpdatedAt,
 }: {
   counts: Record<string, number | null>;
   displayName: string | null;
   email: string | null;
+  avatarUpdatedAt: string | null;
 }) {
   const path = usePathname();
   const { lastPoll, marks } = useApp();
@@ -101,11 +104,11 @@ export function Sidebar({
       <div className="sb-bottom">
         <Link className="sb-user" href="/app/settings#account" aria-label={`My account, ${name}`}>
           <div className="sb-avatar" aria-hidden="true">
-            {name.slice(0, 1).toUpperCase()}
+            {avatarUpdatedAt ? <Image src={`/api/auth/account/avatar?v=${encodeURIComponent(avatarUpdatedAt)}`}
+              alt="" width={30} height={30} unoptimized /> : name.slice(0, 1).toUpperCase()}
           </div>
           <div>
             <div className="sb-user-t">{name}</div>
-            <div className="sb-user-s">{email ?? "Account settings"}</div>
           </div>
         </Link>
         <div className={`sb-engine s-${state}`} suppressHydrationWarning>

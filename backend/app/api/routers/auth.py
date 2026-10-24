@@ -18,9 +18,11 @@ from datetime import (
 from fastapi import (
     APIRouter,
     Depends,
+    File,
     HTTPException,
     Request,
     Response,
+    UploadFile,
 )
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -29,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
 from backend.app.auth import google, service
+from backend.app.auth.avatar import InvalidAvatar, MAX_UPLOAD_BYTES, prepare_avatar
 from backend.app.auth.crypto import (
     WeakPassword,
     same,
@@ -79,7 +82,20 @@ class SetupRequest(BaseModel):
 
 
 class AccountUpdate(BaseModel):
-    display_name: str = ""
+    display_name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    phone_number: str | None = None
+
+
+class EmailChangeStart(BaseModel):
+    email: str = ""
+    current_password: str = ""
+
+
+class EmailChangeConfirm(BaseModel):
+    email: str = ""
+    code: str = ""
 
 
 class PasswordChange(BaseModel):
@@ -197,6 +213,10 @@ def _google_ready() -> bool:
 def _account(user: UserRecord) -> dict:
     return {
         "display_name": user.display_name,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone_number": user.phone_number,
+        "avatar_updated_at": user.avatar_updated_at.isoformat() if user.avatar_updated_at else None,
         "email": user.email,
         "role": user.role,
         "created_at": user.created_at.isoformat(),
@@ -244,6 +264,11 @@ def status(
             principal.user.display_name
             if principal and principal.user and principal.kind == "session"
             else None
+        ),
+        "avatar_updated_at": (
+            principal.user.avatar_updated_at.isoformat()
+            if principal and principal.user and principal.kind == "session"
+            and principal.user.avatar_updated_at else None
         ),
         "reset_by_email": mail_configured(),
         "email_verification": mail_configured(),
@@ -463,14 +488,122 @@ def update_account(
     session: Session = Depends(get_session),
     user: UserRecord = Depends(current_owner),
 ) -> dict:
-    """Update presentation fields without changing sign-in credentials."""
+    """Update the existing owner's identity without changing sign-in credentials."""
 
     try:
-        service.set_display_name(user, payload.display_name)
+        if payload.first_name is not None or payload.last_name is not None:
+            service.set_profile(
+                user,
+                first_name=payload.first_name if payload.first_name is not None else user.first_name,
+                last_name=payload.last_name if payload.last_name is not None else user.last_name,
+                phone_number=payload.phone_number if payload.phone_number is not None else user.phone_number,
+            )
+        elif payload.phone_number is not None:
+            service.set_profile(
+                user, first_name=user.first_name, last_name=user.last_name,
+                phone_number=payload.phone_number,
+            )
+        elif payload.display_name is not None:
+            service.set_display_name(user, payload.display_name)
+        else:
+            raise service.AuthRefused("no_changes", "Enter a name or phone number to save.")
     except service.AuthRefused as refused:
         raise _refuse(400, refused.reason, refused.message) from None
     session.commit()
     return _account(user)
+
+
+@router.get("/api/auth/account/avatar")
+def account_avatar(user: UserRecord = Depends(current_owner)) -> Response:
+    if not user.avatar_data or not user.avatar_content_type:
+        raise _refuse(404, "no_avatar", "No profile photo has been uploaded.")
+    return Response(
+        content=user.avatar_data,
+        media_type=user.avatar_content_type,
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
+@router.put("/api/auth/account/avatar")
+async def upload_account_avatar(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    user: UserRecord = Depends(current_owner),
+) -> dict:
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    try:
+        image = prepare_avatar(data)
+    except InvalidAvatar as refused:
+        raise _refuse(400, "invalid_avatar", str(refused)) from None
+    user.avatar_data = image
+    user.avatar_content_type = "image/jpeg"
+    user.avatar_updated_at = _now()
+    session.commit()
+    return _account(user)
+
+
+@router.delete("/api/auth/account/avatar")
+def delete_account_avatar(
+    session: Session = Depends(get_session),
+    user: UserRecord = Depends(current_owner),
+) -> dict:
+    user.avatar_data = None
+    user.avatar_content_type = None
+    user.avatar_updated_at = None
+    session.commit()
+    return _account(user)
+
+
+@router.post("/api/auth/account/email/start")
+def start_account_email_change(
+    payload: EmailChangeStart,
+    session: Session = Depends(get_session),
+    user: UserRecord = Depends(current_owner),
+) -> dict:
+    if not mail_configured():
+        raise _refuse(503, "email_unavailable", "Email verification is unavailable. Try again later.")
+    try:
+        code = service.start_email_change(
+            session, user, email=payload.email,
+            password=payload.current_password, now=_now(),
+        )
+    except service.AuthRefused as refused:
+        session.commit()
+        raise _refuse(429 if refused.reason == "throttled" else 400, refused.reason, refused.message) from None
+    delivered = send(
+        to=payload.email.strip().lower(),
+        subject="Verify your new ace email",
+        text=(
+            f"Your ace email change code is {_display_code(code)}.\n\n"
+            "It expires in 10 minutes. If you did not request this, ignore it."
+        ),
+    )
+    if not delivered:
+        session.rollback()
+        raise _refuse(503, "email_unavailable", "Could not send the code. Try again later.")
+    session.commit()
+    return {"ok": True, "message": "A verification code was sent to the new address."}
+
+
+@router.post("/api/auth/account/email/confirm")
+def confirm_account_email_change(
+    payload: EmailChangeConfirm,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+    user: UserRecord = Depends(current_owner),
+) -> dict:
+    try:
+        service.finish_email_change(
+            session, user, email=payload.email, code=payload.code,
+            ip=client_ip(request), now=_now(),
+        )
+    except service.AuthRefused as refused:
+        session.commit()
+        raise _refuse(429 if refused.reason == "throttled" else 400, refused.reason, refused.message) from None
+    session.commit()
+    _clear_cookies(response)
+    return {"ok": True, "message": "Email verified. Sign in with the new address."}
 
 
 @router.post("/api/auth/login")

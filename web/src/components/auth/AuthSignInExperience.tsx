@@ -21,6 +21,7 @@ export function AuthSignInExperience({
   apiAvailable,
   googleSignIn,
   oauthError,
+  emailChanged,
 }: {
   next: string;
   ownerExists: boolean;
@@ -30,6 +31,7 @@ export function AuthSignInExperience({
   apiAvailable: boolean;
   googleSignIn: boolean;
   oauthError: string;
+  emailChanged: boolean;
 }) {
   const [dialog, setDialog] = useState<DialogKind>(null);
   const close = useCallback(() => setDialog(null), []);
@@ -74,6 +76,7 @@ export function AuthSignInExperience({
         <AuthWordmark compact linked={false} />
         <h1>Welcome back</h1>
         <p className="auth-tagline">Sign in to your ACE account.</p>
+        {emailChanged ? <p className="auth-status">Email verified. Sign in with your new address.</p> : null}
         {oauthMessage ? <p className="auth-provider-error" role="alert">{oauthMessage}</p> : null}
         <div className="auth-providers">
           <AuthProviderButton

@@ -17,9 +17,11 @@ test("the overview shows the matching resume and the knowledge base", async ({ p
 test("the signed-in identity replaces the generic workspace label", async ({ page }) => {
   await page.goto("/app/settings#account");
   await expect(page.getByRole("heading", { name: "Your ACE identity" })).toBeVisible();
-  await expect(page.locator(".sb-user-t")).toHaveText("Demo");
-  await expect(page.locator(".sb-user-s")).toHaveText("demo@ace.example");
-  await expect(page.getByLabel("Full name")).toBeVisible();
+  const account = await page.request.get("/api/auth/account");
+  await expect(page.locator(".sb-user-t")).toHaveText((await account.json()).display_name);
+  await expect(page.locator(".sb-user-s")).toHaveCount(0);
+  await expect(page.getByLabel("First name")).toBeVisible();
+  await expect(page.getByLabel("Last name")).toBeVisible();
   await expect(page.getByText("Personal workspace")).toHaveCount(0);
   await expect(page.getByText("Private, owner")).toHaveCount(0);
 });

@@ -7,6 +7,7 @@ addresses and passwords only.
 """
 
 import re
+from io import BytesIO
 from datetime import (
     datetime,
     timedelta,
@@ -14,6 +15,7 @@ from datetime import (
 )
 
 import pytest
+from PIL import Image
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy import (
@@ -301,6 +303,98 @@ def test_the_owner_can_read_and_update_the_account_identity(client) -> None:
     )
     assert refused.status_code == 400
     assert refused.json()["detail"]["reason"] == "invalid_name"
+
+
+def test_owner_profile_fields_are_saved_without_changing_login(client) -> None:
+    _login(client)
+    saved = client.patch(
+        "/api/auth/account",
+        json={"first_name": "  Alex ", "last_name": " Rivera ", "phone_number": "+1 (206) 555-0199"},
+        headers=_csrf(client),
+    )
+    assert saved.status_code == 200
+    assert saved.json()["display_name"] == "Alex Rivera"
+    assert saved.json()["phone_number"] == "+1 (206) 555-0199"
+    assert saved.json()["email"] == EMAIL
+    assert client.get("/api/auth/status").json()["display_name"] == "Alex Rivera"
+    invalid = client.patch(
+        "/api/auth/account",
+        json={"first_name": "Alex", "last_name": "Rivera", "phone_number": "call me"},
+        headers=_csrf(client),
+    )
+    assert invalid.status_code == 400
+    assert client.get("/api/auth/account").json()["phone_number"] == "+1 (206) 555-0199"
+
+
+def test_profile_photo_is_private_stripped_and_removable(client) -> None:
+    assert client.get("/api/auth/account/avatar").status_code == 401
+    _login(client)
+    photo = BytesIO()
+    image = Image.new("RGB", (900, 600), (123, 42, 88))
+    image.save(photo, format="PNG", pnginfo=None)
+    missing_csrf = client.put("/api/auth/account/avatar",
+        files={"file": ("photo.png", photo.getvalue(), "image/png")})
+    assert missing_csrf.status_code == 403
+    uploaded = client.put("/api/auth/account/avatar",
+        files={"file": ("photo.png", photo.getvalue(), "image/png")}, headers=_csrf(client))
+    assert uploaded.status_code == 200
+    assert uploaded.json()["avatar_updated_at"]
+    fetched = client.get("/api/auth/account/avatar")
+    assert fetched.status_code == 200
+    assert fetched.headers["content-type"] == "image/jpeg"
+    assert "no-store" in fetched.headers["cache-control"]
+    with Image.open(BytesIO(fetched.content)) as resized:
+        assert resized.size == (512, 341)
+        assert not resized.getexif()
+    bad = client.put("/api/auth/account/avatar",
+        files={"file": ("bad.svg", b"<svg></svg>", "image/svg+xml")}, headers=_csrf(client))
+    assert bad.status_code == 400
+    assert client.get("/api/auth/account/avatar").content == fetched.content
+    removed = client.delete("/api/auth/account/avatar", headers=_csrf(client))
+    assert removed.status_code == 200
+    assert removed.json()["avatar_updated_at"] is None
+    assert client.get("/api/auth/account/avatar").status_code == 404
+
+
+def test_verified_email_change_revokes_sessions_and_preserves_profile(
+    client, factory, monkeypatch
+) -> None:
+    _login(client)
+    client.patch("/api/auth/account",
+        json={"first_name": "Alex", "last_name": "Rivera", "phone_number": "2065550199"},
+        headers=_csrf(client))
+    with factory.begin() as session:
+        user = service.find_user(session, EMAIL)
+        user.google_subject = "google-owner-subject"
+    monkeypatch.setenv("RESEND_API_KEY", "test-key-not-real")
+    get_settings.cache_clear()
+    sent = []
+    monkeypatch.setattr("backend.app.api.routers.auth.send",
+        lambda **kwargs: sent.append(kwargs) or True)
+    wrong = client.post("/api/auth/account/email/start",
+        json={"email": "new@example.com", "current_password": "wrong"},
+        headers=_csrf(client))
+    assert wrong.status_code == 400
+    assert not sent
+    started = client.post("/api/auth/account/email/start",
+        json={"email": "new@example.com", "current_password": PASSWORD},
+        headers=_csrf(client))
+    assert started.status_code == 200
+    assert sent[0]["to"] == "new@example.com"
+    code = re.search(r"([A-Z2-9]{4}) ([A-Z2-9]{4})", sent[0]["text"]).group(0)
+    invalid = client.post("/api/auth/account/email/confirm",
+        json={"email": "another@example.com", "code": code}, headers=_csrf(client))
+    assert invalid.status_code == 400
+    confirmed = client.post("/api/auth/account/email/confirm",
+        json={"email": "new@example.com", "code": code}, headers=_csrf(client))
+    assert confirmed.status_code == 200
+    assert client.get("/api/auth/account").status_code == 401
+    with factory() as session:
+        user = service.find_user(session, "new@example.com")
+        assert user and user.display_name == "Alex Rivera"
+        assert user.google_subject is None
+        assert service.find_user(session, EMAIL) is None
+    get_settings.cache_clear()
 
 
 def test_email_code_is_required_when_mail_is_configured(
