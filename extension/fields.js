@@ -100,11 +100,21 @@ var ACE_RULES = [
     any: ["u s citizen", "us citizen", "united states citizen",
           "citizen or permanent resident", "permanent resident",
           "green card"],
-    not: ["embargo", "dual citizen", "trade"] },
+    not: ["embargo", "dual citizen", "trade", "cuba", "syria",
+          "iran", "north korea", "crimea", "donetsk", "luhansk"] },
   // Dell asks this one at length. It is not a citizenship question in
   // the ordinary sense and must not be answered from one.
   { answer: "Citizen of an embargoed country", type: ACE_YESNO,
     any: ["trade embargo", "embargoed country", "embargo"] },
+  // This asks about both citizenship and lawful permanent residence in
+  // a named set of territories. Neither of the two citizenship rows
+  // above answers the entire question.
+  { answer: "Citizen or permanent resident of restricted regions",
+    type: ACE_YESNO,
+    all: ["cuba", "north korea"],
+    any: ["citizen or lawful permanent resident",
+          "citizen or permanent resident"],
+    not: ["u s citizen", "united states citizen"] },
 
   // ------------------------------------------------------------------
   // Background, clearance and prior employment
@@ -117,10 +127,36 @@ var ACE_RULES = [
     any: ["employed by the u s government", "employed by the us government",
           "employed by the federal government", "federal government",
           "u s government", "us government"],
-    not: ["state or local", "state and local"] },
+    not: ["state or local", "state and local", "past 5 years",
+          "past five years", "financial interests", "immediate family",
+          "contract competition", "external employment", "participating",
+          "negotiations", "matter involving"] },
   { answer: "Employed by state or local government", type: ACE_YESNO,
     any: ["state or local government", "state and local government",
-          "local government"] },
+          "local government"],
+    not: ["past 5 years", "past five years", "immediate family",
+          "quasi-governmental"] },
+  { answer: "Federal government employment in last 5 years",
+    type: ACE_YESNO,
+    all: ["federal government", "employee"],
+    any: ["past 5 years", "past five years"] },
+  { answer: "Federal government conflict with employer", type: ACE_YESNO,
+    all: ["current employee", "federal government"],
+    any: ["financial interests", "contract competition",
+          "external employment", "participating directly or indirectly"] },
+  { answer: "Government employment in last 5 years", type: ACE_YESNO,
+    all: ["past 5 years"],
+    any: ["quasi-governmental", "municipal government entity",
+          "governmental entity in another country"],
+    not: ["immediate family"] },
+  { answer: "Immediate family government employment in last 5 years",
+    type: ACE_YESNO,
+    all: ["immediate family", "past 5 years"],
+    any: ["governmental entity", "federal state local municipal"] },
+  { answer: "Government contract suspension or debarment", type: ACE_YESNO,
+    all: ["government entity"],
+    any: ["suspended/debarred", "suspension/debarment",
+          "declared ineligible for award of a contract"] },
   { answer: "Involuntarily discharged from a job", type: ACE_YESNO,
     any: ["involuntarily discharged", "involuntarily separated",
           "discharged or separated", "terminated for cause",
@@ -136,9 +172,15 @@ var ACE_RULES = [
           "restrictive covenant", "restrict your employment",
           "preclude or restrict"] },
   { answer: "Previously employed by this company", type: ACE_YESNO,
-    any: ["previously worked for", "previously been employed by",
-          "ever worked for", "former employee", "worked here before",
-          "previously applied"] },
+    any: ["former employee of this company", "former employee of your company",
+          "former employee of our company",
+          "worked here before", "ever worked here",
+          "worked for this company", "worked for your company",
+          "worked for our company", "employed by this company",
+          "employed by your company", "employed by our company"] },
+  { answer: "ServiceNow RiseUp graduate", type: ACE_YESNO,
+    all: ["riseup", "servicenow"],
+    any: ["graduate", "nextgen"] },
   // ------------------------------------------------------------------
   // Conflict of interest
   //
@@ -933,6 +975,37 @@ function aceAnswerTypeFor(name) {
   return null;
 }
 
+/* A named employer needs its own saved answer. A generic answer about
+   "this company" cannot truthfully answer a question about PwC on a
+   ServiceNow application. The bank may hold a row named "Previously
+   employed by X" for any X; matching the employer name is exact at
+   word boundaries, and an ambiguous question stays unanswered. */
+function aceNamedEmployerAnswer(question, availableNames) {
+  var matches = [];
+  var mentioned = 0;
+
+  (availableNames || []).forEach(function (label) {
+    var prefix = "Previously employed by ";
+    if (label.indexOf(prefix) !== 0) return;
+
+    var company = aceNormalise(label.slice(prefix.length));
+    if (!company || company === "this company") return;
+    if (!acePhraseIn(question, company)) return;
+    mentioned += 1;
+
+    var named = ["worked at ", "worked for ", "employed by ",
+                 "employee of ", "employee at ",
+                 "former employee of ", "former employee at "].some(
+      function (cue) { return acePhraseIn(question, cue + company); }
+    );
+    if (!named) return;
+
+    matches.push(label);
+  });
+
+  return mentioned === 1 && matches.length === 1 ? matches[0] : null;
+}
+
 /* Which stored answer this question is asking for, or null.
 
    `kind` is what the control can hold, from aceFieldKind. Passing it is
@@ -944,8 +1017,18 @@ function aceAnswerTypeFor(name) {
    you are applying for located" on a real Dell question about where the
    role is. Ties keep list order, so the narrow rules still sit above
    the broad ones they would otherwise be swallowed by. */
-function aceAnswerNameFor(question, kind) {
+function aceAnswerNameFor(question, kind, availableNames) {
   if (!question) return null;
+
+  // A typed name here is a legal signature, and a privacy declaration
+  // is an attestation. The person must choose those themselves.
+  if (["signature field", "electronic signature", "electronically signing",
+       "privacy notice", "privacy acknowledgement"].some(function (phrase) {
+    return acePhraseIn(question, phrase);
+  })) return null;
+
+  var namedEmployer = aceNamedEmployerAnswer(question, availableNames);
+  if (namedEmployer) return namedEmployer;
 
   var best = null;
   var bestScore = 0;
@@ -962,6 +1045,10 @@ function aceAnswerNameFor(question, kind) {
     if (rule.needs && rule.needs !== kind) continue;
 
     if (rule.not && rule.not.some(function (word) {
+      return acePhraseIn(question, word);
+    })) continue;
+
+    if (rule.all && !rule.all.every(function (word) {
       return acePhraseIn(question, word);
     })) continue;
 

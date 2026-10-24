@@ -20,6 +20,14 @@ hosts a list did not name.
 
 ACE itself has to be running, since the answers are read from it.
 
+For a question naming a past employer, save a separate row in ACE Answers
+as `Previously employed by Company Name`. The extension matches that name
+in the question. A blank row or a question naming a different company stays
+unanswered. Government questions with different time windows, export-control
+questions, and program-specific questions also have separate rows. Never
+infer their answers from a broader saved fact. Electronic signatures and
+privacy declarations remain for the applicant to complete manually.
+
 If ACE runs somewhere other than `http://localhost:8000`, set the
 address from the toolbar icon.
 

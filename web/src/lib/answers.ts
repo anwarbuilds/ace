@@ -16,6 +16,7 @@ export const ANSWER_SECTIONS: [string, string[]][] = [
       "Visa type",
       "US citizen or permanent resident",
       "Citizen of an embargoed country",
+      "Citizen or permanent resident of restricted regions",
       "Security clearance",
     ],
   ],
@@ -24,10 +25,17 @@ export const ANSWER_SECTIONS: [string, string[]][] = [
     [
       "Employed by the federal government",
       "Employed by state or local government",
+      "Federal government employment in last 5 years",
+      "Federal government conflict with employer",
+      "Government employment in last 5 years",
+      "Immediate family government employment in last 5 years",
+      "Government contract suspension or debarment",
       "Involuntarily discharged from a job",
       "Criminal conviction",
       "Bound by a non-compete",
       "Previously employed by this company",
+      "Previously employed by ServiceNow",
+      "Previously employed by PwC",
       "Related to an employee here",
       "Employer relationship with this company",
       "Relative owns a competing business",
@@ -48,6 +56,7 @@ export const ANSWER_SECTIONS: [string, string[]][] = [
       "Graduation date",
       "Years of experience",
       "Recent graduate",
+      "ServiceNow RiseUp graduate",
       "Language",
       "Language fluency",
       "Fluent in this language",
@@ -85,6 +94,12 @@ export function answerSections<T extends Pick<Answer, "label">>(answers: T[]): [
     for (const label of labels)
       for (const a of answers)
         if (a.label === label && !seen.has(a)) {
+          seen.add(a);
+          rows.push(a);
+        }
+    if (title === "Background")
+      for (const a of answers)
+        if (a.label.startsWith("Previously employed by ") && !seen.has(a)) {
           seen.add(a);
           rows.push(a);
         }

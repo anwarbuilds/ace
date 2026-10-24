@@ -2015,6 +2015,40 @@ def test_an_oracle_yes_no_is_answered_and_an_answered_one_is_kept(
     ) == 1
 
 
+def test_named_employer_and_narrow_government_questions_do_not_borrow_answers(page) -> None:
+    """A saved answer for one employer or time frame cannot fill another."""
+
+    _boot_form(
+        page,
+        '<form>'
+        '<label for="school">What school do you most recently attend?</label><input id="school">'
+        '<label for="employer">Have you ever worked at ServiceNow in any capacity?</label><input id="employer">'
+        '<label for="pwc">Are you currently employed or have you ever been employed by PwC?</label><input id="pwc">'
+        '<label for="federal">Within the past 5 years, have you ever been an employee of the U.S. Federal Government?</label><input id="federal">'
+        '<label for="conflict">Are you a current employee of the U.S. Federal Government participating in a matter involving ServiceNow or its financial interests?</label><input id="conflict">'
+        '<label for="signature">Name (Signature Field)</label><input id="signature">'
+        '<label for="privacy">You declare that you have read and understand the privacy notice of ServiceNow</label><input id="privacy" type="checkbox">'
+        '</form>',
+        [
+            {"label": "University", "value": "Example University", "aliases": []},
+            {"label": "Previously employed by ServiceNow", "value": "No", "aliases": []},
+            {"label": "Employed by the federal government", "value": "Yes", "aliases": []},
+            {"label": "Full name", "value": "Example Person", "aliases": []},
+        ],
+    )
+
+    _fill_and_wait(page)
+
+    assert page.eval("document.getElementById('school').value") == "Example University"
+    assert page.eval("document.getElementById('employer').value") == "No"
+    for field_id in ("pwc", "federal", "conflict", "signature", "privacy"):
+        assert page.eval(
+            f"document.getElementById('{field_id}').value"
+            if field_id != "privacy" else
+            "document.getElementById('privacy').checked"
+        ) in ("", False), field_id
+
+
 # Workday's phone block: the country code is a picker holding a pill,
 # its search box hidden, and not beside Phone Number in any order ACE
 # reads; Phone Extension sits underneath.

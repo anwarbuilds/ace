@@ -111,6 +111,20 @@ The deployment commands in `deploy/oracle/README.md` were corrected locally
 after this incident; check Git status before assuming that documentation fix
 has been pushed to the VM.
 
+### Pending SmartRecruiters screening autofill work
+
+The owner supplied screenshots of ServiceNow screening questions and asked for
+careful reuse across small wording and employer-name changes. The local
+extension update `1.22.0` adds narrow rules for those questions and a dynamic
+`Previously employed by Company Name` template. Named employers require a
+separate saved answer. Government questions with different time windows,
+export-control residency, and the ServiceNow RiseUp program have separate bank
+rows. Migration `0045` adds those rows blank; it neither infers values from
+screenshots nor changes existing answers. Signatures and privacy declarations
+remain manual. This work is local and is not yet pushed, deployed, or migrated
+in production. After an approved release, the owner must fill any desired new
+blank rows in ACE Answers and reload the unpacked Chrome extension.
+
 Earlier on 2026-10-23, the owner approved a cutover, but then clarified that
 this did not authorize stopping legacy discovery during the comparison period.
 Oracle discovery was briefly stopped and legacy discovery was restarted; Oracle

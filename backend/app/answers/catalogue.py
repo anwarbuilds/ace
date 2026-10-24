@@ -575,14 +575,50 @@ QUESTIONS: tuple[Question, ...] = (
         "Citizen of an embargoed country",
         hint="Cuba, Iran, North Korea, Syria and parts of Ukraine.",
     ),
+    _yes_no(
+        "Citizen or permanent resident of restricted regions",
+        hint="Answer this exact export-control question separately. "
+        "Citizenship and lawful permanent residence are both included.",
+    ),
     _yes_no("Security clearance"),
     # --- Background ---
     _yes_no("Employed by the federal government"),
     _yes_no("Employed by state or local government"),
+    _yes_no(
+        "Federal government employment in last 5 years",
+        hint="The five-year window is narrower than ever having worked "
+        "for the federal government.",
+    ),
+    _yes_no(
+        "Federal government conflict with employer",
+        hint="Current federal work involving this employer, its financial "
+        "interests, or outside-employment negotiations.",
+    ),
+    _yes_no(
+        "Government employment in last 5 years",
+        hint="State, local, municipal, foreign or quasi-governmental "
+        "employment in the stated five-year window.",
+    ),
+    _yes_no(
+        "Immediate family government employment in last 5 years",
+        hint="About a spouse or child, not your own work history.",
+    ),
+    _yes_no(
+        "Government contract suspension or debarment",
+        hint="Suspension, debarment or ineligibility for a government contract.",
+    ),
     _yes_no("Involuntarily discharged from a job"),
     _yes_no("Criminal conviction"),
     _yes_no("Bound by a non-compete"),
     _yes_no("Previously employed by this company"),
+    _yes_no(
+        "Previously employed by ServiceNow",
+        hint="Only for questions naming ServiceNow. Keep separate from PwC.",
+    ),
+    _yes_no(
+        "Previously employed by PwC",
+        hint="Only for questions naming PwC, even on another employer's form.",
+    ),
     _yes_no("Related to an employee here"),
     _yes_no(
         "Employer relationship with this company",
@@ -638,6 +674,10 @@ QUESTIONS: tuple[Question, ...] = (
     Question("Field of study"),
     Question("GPA"),
     Question("Graduation date"),
+    _yes_no(
+        "ServiceNow RiseUp graduate",
+        hint="Whether you completed ServiceNow RiseUp, formerly NextGen.",
+    ),
     Question("Years of experience"),
     _yes_no("Recent graduate"),
     # --- Languages ---
@@ -711,12 +751,24 @@ _BY_LABEL = {
 def question_for(
     label: str,
 ) -> Question | None:
-    """Return the catalogue entry for a label, or None if it is the
-    user's own question rather than one ACE ships."""
+    """Return a known question shape, including named-employer rows."""
 
-    return _BY_LABEL.get(
-        label
-    )
+    known = _BY_LABEL.get(label)
+    if known is not None:
+        return known
+
+    # A named employer is a reusable question category, but the
+    # answer cannot be shared between employers. Let the owner add a
+    # row for each one they encounter and answer it with a Yes/No toggle.
+    prefix = "Previously employed by "
+    if label.startswith(prefix) and label[len(prefix):].strip():
+        return _yes_no(
+            label,
+            hint="Used only when the form explicitly names "
+            + label[len(prefix):].strip() + ".",
+        )
+
+    return None
 
 
 def options_for(

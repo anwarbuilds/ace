@@ -109,7 +109,7 @@ var DELL_CASES = [
    "Need sponsorship in future"],
   ["are you currently working for, or have you ever worked for, "
    + "medtronic, covidien, or any of its subsidiaries? select one required",
-   "choice", "Previously employed by this company"],
+   "choice", null],
   ["medtronic uses ai-based tools in the recruitment process. these tools "
    + "provide insights to aid recruiters, but it does not determine hiring "
    + "decisions. by selecting \u201cyes\u201d, you consent to the use of ai "
@@ -477,6 +477,60 @@ var ALIAS_CASES = [
 
 var failures = 0;
 
+/* ServiceNow's SmartRecruiters screening page. These are categories,
+   not a fixture containing the applicant's personal answers. A named
+   employer needs a matching saved row; a similar generic fact is not
+   enough to fill a legal or employment disclosure. */
+var SCREENING_CASES = [
+  ["What school do you currently attend or most recently attended? If unlisted, please select Other", "choice", "University"],
+  ["Expected Graduation Date?", "choice", "Graduation date"],
+  ["What is your major? If unlisted, please select Other", "choice", "Field of study"],
+  ["Are you legally authorized to work in the country in which you are applying for a role?", "yesno", "Work authorisation"],
+  ["Do you now, or will you in the future, require visa sponsorship to work for ServiceNow in the country of hire?", "yesno", "Need sponsorship in future"],
+  ["Are you a citizen or lawful permanent resident of Cuba, Syria, Iran, North Korea, or the Crimea, Donetsk, or Luhansk regions of Ukraine?", "choice", "Citizen or permanent resident of restricted regions"],
+  ["A. Within the past 5 years, have you ever been an employee of the U.S. Federal Government?", "yesno", "Federal government employment in last 5 years"],
+  ["B. Are you a current employee of the U.S. Federal Government who is either participating, directly or indirectly, in a matter involving ServiceNow or its financial interests?", "yesno", "Federal government conflict with employer"],
+  ["C. Within the past 5 years, have you ever been an employee of a state, local, or municipal government entity in the U.S., or any governmental or quasi-governmental entity in another country?", "yesno", "Government employment in last 5 years"],
+  ["D. Within the past 5 years, has a member of your Immediate Family ever been an employee of a federal, state, local, municipal, provincial or quasi-governmental entity?", "yesno", "Immediate family government employment in last 5 years"],
+  ["E. Are you currently, or have you been previously, suspended/debarred, proposed for suspension/debarment, or declared ineligible for award of a contract by any Government entity?", "yesno", "Government contract suspension or debarment"],
+  ["Are you a graduate of the RiseUp with ServiceNow (formerly NextGen) Program?", "choice", "ServiceNow RiseUp graduate"],
+  ["Name (Signature Field)", "text", null],
+  ["You declare that you have read and understand the privacy notice of ServiceNow", "yesno", null],
+  ["Are you a citizen or permanent resident of the United States?", "yesno", "US citizen or permanent resident"],
+  ["Have you ever worked for this company?", "yesno", "Previously employed by this company"],
+  ["Are you a former employee of our company?", "yesno", "Previously employed by this company"],
+  ["Have you ever worked at Acme?", "choice", null],
+  ["Are you a former employee of PwC?", "yesno", null],
+];
+
+SCREENING_CASES.forEach(function (entry) {
+  var got = aceAnswerNameFor(aceNormalise(entry[0]), entry[1]);
+  if (got !== entry[2]) {
+    failures += 1;
+    console.log("FAIL  screening " + JSON.stringify(entry[0]) +
+      " got " + JSON.stringify(got) + " want " + JSON.stringify(entry[2]));
+  }
+});
+
+var EMPLOYER_CASES = [
+  ["Have you ever worked at ServiceNow in any capacity?", "Previously employed by ServiceNow"],
+  ["Are you currently employed or have you ever been employed by PwC?", "Previously employed by PwC"],
+  ["Are you a former employee of PwC?", "Previously employed by PwC"],
+  ["Have you ever been an employee of ServiceNow?", "Previously employed by ServiceNow"],
+  ["Have you ever been employed by PwC or ServiceNow?", null],
+];
+
+EMPLOYER_CASES.forEach(function (entry) {
+  var got = aceAnswerNameFor(aceNormalise(entry[0]), "choice", [
+    "Previously employed by ServiceNow", "Previously employed by PwC"
+  ]);
+  if (got !== entry[1]) {
+    failures += 1;
+    console.log("FAIL  named employer " + JSON.stringify(entry[0]) +
+      " got " + JSON.stringify(got) + " want " + JSON.stringify(entry[1]));
+  }
+});
+
 OPTION_CASES.forEach(function (entry) {
   var got = aceChooseOption(entry[0], entry[1]);
 
@@ -641,7 +695,7 @@ NAME_CASES.forEach(function (c) {
 
 var total = CASES.length + OPTION_CASES.length + DELL_CASES.length +
   ALIAS_CASES.length + HISTORY_ROLE_CASES.length + DATE_CASES.length +
-  NAME_CASES.length;
+  NAME_CASES.length + SCREENING_CASES.length + EMPLOYER_CASES.length;
 
 console.log(
   failures

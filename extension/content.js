@@ -18,6 +18,9 @@
 
   var answers = {};
   var aliases = {};
+  function answerNameFor(question, kind) {
+    return aceAnswerNameFor(question, kind, Object.keys(answers));
+  }
   // Work and study history, most recent first. Kept apart from answers
   // because they are a list, not a value: the second block on a form
   // asks the same questions as the first and must get a different job.
@@ -699,7 +702,7 @@
       var question = aceQuestionFor(field);
       if (!question) return;
 
-      var name = aceAnswerNameFor(question, kindOf(field));
+      var name = answerNameFor(question, kindOf(field));
 
       if (!name) {
         // Only worth reporting once per question, and only for things
@@ -1310,7 +1313,7 @@
       var question = aceQuestionFor(neighbour);
       if (!question) return false;
 
-      return aceAnswerNameFor(question, kindOf(neighbour)) === wantedName;
+      return answerNameFor(question, kindOf(neighbour)) === wantedName;
     });
   }
 
@@ -1334,7 +1337,7 @@
 
     if (!aceIsAutocomplete(field) || !question) return false;
 
-    return aceAnswerNameFor(question, kindOf(field)) === "Country" &&
+    return answerNameFor(question, kindOf(field)) === "Country" &&
       aceNeighbours(field, "Phone");
   }
 
@@ -1417,7 +1420,7 @@
           var question = aceQuestionFor(field);
           if (!question) return;
 
-          var name = aceAnswerNameFor(question, kindOf(field));
+          var name = answerNameFor(question, kindOf(field));
           if (!name) return;
 
           var value = answers[name];
@@ -1642,7 +1645,7 @@
       var question = aceQuestionFor(fields[i]);
       if (!question) continue;
 
-      var name = aceAnswerNameFor(question, kindOf(fields[i]));
+      var name = answerNameFor(question, kindOf(fields[i]));
       if (!name) continue;
 
       recognised += 1;
@@ -1778,7 +1781,7 @@
       var question = aceQuestionFor(field);
       if (!question) return;
 
-      var name = aceAnswerNameFor(question, kindOf(field));
+      var name = answerNameFor(question, kindOf(field));
       var label = question.split(" | ")[0].slice(0, 44);
 
       if (!name) {
@@ -1979,7 +1982,7 @@
         return;
       }
 
-      var name = aceAnswerNameFor(question, kindOf(field));
+      var name = answerNameFor(question, kindOf(field));
 
       var shape = aceIsListboxButton(field)
         ? "dropdown"
@@ -2445,7 +2448,7 @@
         var question = aceQuestionFor(field);
         if (!question) return;
 
-        if (aceAnswerNameFor(question, kindOf(field))) {
+        if (answerNameFor(question, kindOf(field))) {
           recognised += 1;
         }
       });
