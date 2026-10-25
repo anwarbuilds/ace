@@ -2419,6 +2419,17 @@ Do not merge ACE Next to legacy `main` without separate approval.
 
 ### 2026-10-25, second speed round
 
+- Released with owner approval at 2026-10-25T22:29Z: `/healthz` reported
+  `269cb32fde277e49d31bc78fc821e403bdc8c4b3`; backup service ran first;
+  migrate, api and web were recreated and healthy; scheduler untouched.
+  `time_pages.py` afterwards, in ms (before in brackets): `/api/stats` 89
+  (216), `/api/jobs` 99 (97), page 2 slowest 89 (216), `/api/intelligence`
+  401 (2,542), `/api/coverage` 963 (3,365, the first read after a restart
+  computes the snapshot), `/api/dashboard` 83 (68), `/api/facets` 138 (146),
+  `/api/system` 139 (79, measured right after the API restart). That run
+  still timed Applications' old requests and the badge's one-row page; the
+  script now times what the pages ask for. The image's copy of the script
+  updates with the next release; until then pipe it from a checkout.
 - Production timings from `backend/scripts/time_pages.py` led to: two-pass
   job totals, list pages that fetch only what they show, a count-only jobs
   route for the new-since badge, a 6.4x faster exact skill extractor, a
