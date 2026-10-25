@@ -167,8 +167,11 @@ Website-only release, after owner approval for that SHA (restarts only `web`;
 API, database and schedulers keep running):
 
 ```bash
-cd /opt/ace && test -z "$(git status --porcelain --untracked-files=no)" && git fetch origin wine-rose-platform && git merge --ff-only <full-sha> && deploy/oracle/prepare-release.sh && export ACE_BUILD_SHA="$(git rev-parse HEAD)" && docker compose --env-file .env -f deploy/oracle/compose.yaml up -d --no-build --no-deps web && curl -fsS https://ace.opik.net/healthz
+cd /opt/ace && test -z "$(git status --porcelain --untracked-files=no)" && git fetch origin wine-rose-platform && git merge --ff-only <full-sha> && deploy/oracle/prepare-release.sh && export ACE_BUILD_SHA="$(git rev-parse HEAD)" && docker compose --env-file .env -f deploy/oracle/compose.yaml up -d --no-build --no-deps web && sleep 15 && curl -fsS https://ace.opik.net/healthz
 ```
+
+Without the wait, the check can hit the web container while it is still
+starting and print a 502 although the release succeeded (2026-10-25).
 
 The untracked `private-backups/` folder on the VM is expected and does not
 block a release. The VM banner said "System restart required" on 2026-10-24;
@@ -2783,6 +2786,7 @@ Do not merge ACE Next to legacy `main` without separate approval.
   above the Pulls figures, and the "Discovery engine online" line at the
   foot of the sidebar, with their styles. The top bar's live status still
   says when a source last answered.
+  Released website-only; `/healthz` reported `922640f` at 2026-10-25T22:58Z.
 
 ### 2026-10-25, approved Analytics production release and continuity
 
