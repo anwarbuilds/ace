@@ -2475,6 +2475,13 @@ Do not merge ACE Next to legacy `main` without separate approval.
 
 ## Change log
 
+### 2026-10-25, two Pulls and sidebar elements removed
+
+- At the owner's request: the "Company first. Relevant role second." note
+  above the Pulls figures, and the "Discovery engine online" line at the
+  foot of the sidebar, with their styles. The top bar's live status still
+  says when a source last answered.
+
 ### 2026-10-25, second speed round
 
 - Released with owner approval at 2026-10-25T22:29Z: `/healthz` reported

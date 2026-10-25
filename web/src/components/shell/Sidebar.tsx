@@ -5,17 +5,9 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { useApp, useNow } from "./AppProvider";
-import { liveState } from "./liveState";
+import { useApp } from "./AppProvider";
 import { NAV, isActive } from "./nav";
 import { NavIcon } from "./NavIcon";
-
-const ENGINE: Record<string, string> = {
-  live: "Discovery engine online",
-  delayed: "Discovery engine delayed",
-  stalled: "Discovery engine stopped",
-  unknown: "No check recorded yet",
-};
 
 /** The application's navigation: three groups in the order the owner
  *  works, each entry its own route. Icons only on a narrow screen. */
@@ -38,9 +30,7 @@ export function Sidebar({
   avatarUpdatedAt: string | null;
 }) {
   const path = usePathname();
-  const { lastPoll, marks } = useApp();
-  const now = useNow();
-  const state = liveState(lastPoll, now);
+  const { marks } = useApp();
   const [collapsed, setCollapsed] = useState(false);
   const name = accountName(displayName, email);
 
@@ -112,10 +102,6 @@ export function Sidebar({
             <div className="sb-user-t">{name}</div>
           </div>
         </Link>
-        <div className={`sb-engine s-${state}`} suppressHydrationWarning>
-          <i className="pulse" aria-hidden="true" />
-          {ENGINE[state]}
-        </div>
       </div>
     </aside>
   );

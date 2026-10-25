@@ -1160,7 +1160,6 @@ html[data-navigating] .main.content{opacity:.62;cursor:progress;transition:opaci
 .sb-user>div:last-child{min-width:0}
 .sb-avatar{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--raised);color:var(--text);font-size:var(--text-label);font-weight:var(--weight-emphasis)}
 .sb-user-t{font-size:var(--text-label);font-weight:var(--weight-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sb-engine{display:flex;align-items:center;gap:8px;color:var(--text-secondary);font-size:var(--text-small);padding:6px 0}
 .sb.collapsed{padding-left:9px;padding-right:9px}
 .sb.collapsed .sb-brand-row{margin-left:9px;margin-right:9px;justify-content:center}
 .sb.collapsed .sb-brand{font-size:21px}
@@ -1281,8 +1280,6 @@ html[data-navigating] .main.content{opacity:.62;cursor:progress;transition:opaci
 .job-evidence a{color:var(--accent);font-weight:var(--weight-strong);margin-left:8px}
 .job-evidence button{color:var(--accent-text);font-weight:var(--weight-strong);margin-left:8px;font-size:inherit}
 .job-evidence button:hover{text-decoration:underline}
-.company-first-note{padding:13px 16px;margin:0 0 16px;border:1px solid var(--border);border-radius:10px;background:var(--accent-soft);font-size:var(--text-label);color:var(--text-secondary)}
-.company-first-note strong{color:var(--text)}
 .company-report{padding:16px 0;border-top:1px solid var(--border-subtle)}
 .company-report h3{margin:0 0 6px;color:var(--accent-text)}
 .company-report a{color:var(--accent-text);text-decoration:underline}
