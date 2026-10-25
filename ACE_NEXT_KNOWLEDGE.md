@@ -107,14 +107,13 @@ Before every task:
 
 ## Current working state on 2026-10-25
 
-The local working branch is `wine-rose-platform`. The local documentation HEAD
-is `a1e59ff`; its latest extension code commit is `cb7bb5e`. The branch is
-three commits ahead of and three commits behind `origin/wine-rose-platform`.
-It contains the
-existing extension's V4 Answer Memory implementation (`2e7c1dc`), Focus Mode
-V5.1 (`4ce3570`) and the approved visual and Workday listing correction
-(`cb7bb5e`). The extension manifest is `1.27.0`. These two V5.1 commits are
-local and have not been deployed or published. An unpacked installation must
+The working branch is `wine-rose-platform`, reconciled on GitHub on
+2026-10-25: it holds the website typography release (`54e939a`, `61debd6`,
+`8d84141`), Focus Mode V5.1 rebased on top of it (`559ee84`, `5b8ab4b`, the
+pushed equivalents of local `4ce3570` and `cb7bb5e`), this continuity work and
+the V5.1 typography pass. It contains the existing extension's V4 Answer Memory
+implementation (`2e7c1dc`). The extension manifest is `1.27.0`. The V5.1
+extension has not been published; it runs as an unpacked installation. An unpacked installation must
 be reloaded at `chrome://extensions`; employer tabs must then be refreshed.
 The owner has seen a V5.1 interface before the final visual correction and
 reported that its compact card differed from the approved reference. The
@@ -144,13 +143,15 @@ rule cases passed, `node extension/test-memory.js` passed,
 fixtures, not the owner's live authenticated employer pages or the actual
 unpacked MV3 installation.
 
-The tracked `origin/wine-rose-platform` has three typography commits not on
-this local branch (`54e939a`, `61debd6`, `8d84141`). It records an approved
-self-hosted Inter website release at frontend commit `61debd6` and extension
-typography changes. Conversely, origin lacks the two local V5.1 commits. Do
-not overwrite either line of work; inspect both histories and reconcile them
-before a future push or extension release. The production typography release
-is recorded by that agent's commit, not independently checked in this session.
+The website typography (self-hosted Inter, one token scale, sentence case
+labels, tabular numbers) is live at frontend commit `61debd6`, verified from
+outside on 2026-10-24. The extension shares it: Inter ships in
+`extension/fonts/`, the panel registers it as `ace-inter` with the FontFace API
+when a panel opens, and the V5.1 card takes the website's weights and its 11.5px
+floor through one typography-only block after the approved V5.1 rules. The job
+line under the wordmark keeps its approved 11px. A local clone whose
+`wine-rose-platform` still points at `a1e59ff` holds pre-rebase copies of the
+V5.1 commits; move it to the GitHub tip rather than merging the two copies.
 
 The V4 code added additive migration `0050` and authenticated
 `/api/extension/memory` endpoints for approved reusable answers, with pairing
@@ -2133,6 +2134,25 @@ deployed in `b8e30b0b4261257fea25fb8e46f03912c6811990` on 2026-10-23.
 Do not merge ACE Next to legacy `main` without separate approval.
 
 ## Change log
+
+### 2026-10-25, reconciliation and V5.1 typography
+
+- Combined the remote typography line with the V5.1 line on GitHub: the rebased
+  V5.1 commits, the local continuity commit and this consolidated document are
+  all on `wine-rose-platform`. Nothing from either line was dropped.
+- Applied the website typography to the V5.1 card: packaged Inter instead of an
+  uninstalled "Inter" fallback, the wordmark weight and tracking, an 11.5px
+  floor, website weights and tabular numbers. Type properties only; the 318px
+  width, drag, dock, Review and motivation exclusion are unchanged.
+- Checks: 258 rule cases, the memory safety cases and 19 Chrome extension tests
+  (including the seven V5.1 tests) passed. Served over HTTP with the packaged
+  font, the card rendered `ace-inter` in Day and Night without page errors. The
+  compact card is 355px tall in Inter, against 347px in the approved reference.
+- The shared local repository holds a broken Codex checkpoint ref that makes
+  `git fetch` fail with "bad object"; pushing still works. Fetch into a separate
+  clone, or remove that one dangling ref with the owner's approval.
+- Pasting a multi-line block that starts with `ssh` loses the following lines
+  during login. Run a remote release as one `ssh host '...'` command.
 
 ### 2026-10-25, standalone continuity consolidation
 

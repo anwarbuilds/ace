@@ -1821,7 +1821,7 @@
   PANEL_CSS += `
   /* Typography: the website's approved Refined scale (web/src/app/globals.css), in px
      because rem in here would follow the employer page's root size. */
-  .ace-panel{--font-ui:"ace-inter","Inter",ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";--text-small:12px;--text-meta:12.5px;--text-label:13px;--text-button:13.5px;--text-nav:14px;--text-card:15.5px;--text-section:19px;--text-metric:25px;--weight-regular:400;--weight-medium:500;--weight-semibold:590;--weight-strong:620;--weight-heading:650;--weight-emphasis:680;--weight-wordmark:760;--leading-heading:1.3;--leading-body:1.52;--leading-relaxed:1.6;--tracking-section:-.025em;--tracking-card:-.018em;--tracking-body:-.008em;--tracking-metric:-.04em;--tracking-label:.005em;--tracking-wordmark:-.082em}
+  .ace-panel{--font-ui:"ace-inter","Inter",ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";--text-tick:11.5px;--text-small:12px;--text-meta:12.5px;--text-label:13px;--text-button:13.5px;--text-nav:14px;--text-card:15.5px;--text-section:19px;--text-metric:25px;--weight-regular:400;--weight-medium:500;--weight-semibold:590;--weight-strong:620;--weight-heading:650;--weight-emphasis:680;--weight-wordmark:760;--leading-heading:1.3;--leading-body:1.52;--leading-relaxed:1.6;--tracking-section:-.025em;--tracking-card:-.018em;--tracking-body:-.008em;--tracking-metric:-.04em;--tracking-label:.005em;--tracking-wordmark:-.082em}
   .ace-panel{--base:#fffafb;--surface:#fff;--soft:#faedf2;--ink:#271722;--secondary:#765969;--muted:#947a87;--line:#ecdbe3;--wine:#96254d;--wine2:#b23e6e;--mint:#157e60;--mintbg:#e9f7f0;--amber:#995520;--amberbg:#fff3e4;right:10px;top:10px;width:min(480px,calc(100vw - 20px));height:calc(100vh - 20px);max-height:none;background:var(--base);color:var(--ink);border:1px solid var(--line);border-radius:15px;box-shadow:0 12px 38px rgba(106,39,67,.16);font:var(--text-nav)/var(--leading-body) var(--font-ui);letter-spacing:var(--tracking-body)}
   .ace-panel.night{--base:#100c11;--surface:#1b131c;--soft:#2d202d;--ink:#fff4fa;--secondary:#d2b9c6;--muted:#a78c9c;--line:#503545;--wine:#f077a7;--wine2:#e75d91;--mint:#85dabc;--mintbg:#1b3e34;--amber:#ffc189;--amberbg:#3c3025}
   .ace-panel button,.ace-panel input,.ace-panel textarea{font:inherit}.ace-panel button{cursor:pointer}.ace-panel button:focus-visible,.ace-panel input:focus-visible,.ace-panel textarea:focus-visible{outline:3px solid #e995ba;outline-offset:2px}
@@ -1885,6 +1885,21 @@
   .focus-panel .focus-dock-body{min-height:49px}.focus-panel .focus-dock-status strong{font-size:12px}.focus-panel .focus-dock-status small{font-size:11px}
   .focus-panel,.focus-panel .studio-head,.focus-panel .studio-scroll,.focus-panel .focus-question,.focus-panel .focus-status,.focus-panel .studio-foot{cursor:grab}.focus-panel button,.focus-panel input,.focus-panel textarea,.focus-panel select{cursor:pointer}.focus-panel input,.focus-panel textarea{cursor:text}
   @media(max-width:520px){.focus-panel .studio-scroll{padding:12px}.ace-panel.focus-panel.focus-review{max-height:calc(100dvh - 24px)}}
+  `;
+
+  PANEL_CSS += `
+  /* Typography: the website's approved Refined scale on the V5.1 card. Type
+     properties only; the approved V5.1 geometry and colours stay as they are.
+     The packaged Inter face, the website's 11.5px floor and its weights. The
+     job line under the wordmark keeps its approved 11px so it is not cut off. */
+  .ace-panel.focus-panel{font-family:var(--font-ui);letter-spacing:var(--tracking-body)}
+  .focus-panel .studio-logo{font-weight:var(--weight-wordmark);letter-spacing:var(--tracking-wordmark)}
+  .focus-panel .studio-live,.focus-panel .studio-pill{font-size:var(--text-tick);font-weight:var(--weight-semibold)}
+  .focus-panel .studio-tabs button,.focus-panel .studio-eyebrow,.focus-panel .studio-card p,.focus-panel .focus-subtitle,.focus-panel .focus-progress,.focus-panel .focus-chip,.focus-panel .focus-status p,.focus-panel .focus-status strong,.focus-panel .focus-question p,.focus-panel .studio-scroll>label,.focus-panel .focus-hint,.focus-panel .studio-checkline,.focus-panel .focus-stays,.focus-panel .studio-foot small,.focus-panel .focus-utility button,.focus-panel .focus-dock-status small{font-size:var(--text-tick)}
+  .focus-panel .focus-status span{font-size:var(--text-tick);font-weight:var(--weight-strong)}
+  .focus-panel .focus-stays{font-weight:var(--weight-medium)}
+  .focus-panel .studio-button,.focus-panel .studio-button.wine,.focus-panel.night .studio-button.wine{font-weight:var(--weight-semibold)}
+  .focus-panel .focus-progress,.focus-panel .focus-status span,.focus-panel .studio-pill,.focus-panel .studio-metric b,.focus-panel .studio-source-count{font-variant-numeric:tabular-nums}
   `;
 
   /* Inter, the face the website uses. A shadow root cannot declare its own
