@@ -61,12 +61,24 @@ test("Focus Mode V5.1 mirrors choices, protects motivation, stays open and never
   const panel = page.locator(".ace-root .ace-panel");
   await expect(panel).toHaveClass(/focus-compact/);
   await expect(panel.getByRole("button", { name: "Fill", exact: true })).toBeVisible();
+  await expect(panel.locator(".focus-compact-title")).toHaveText("You're in control.");
+  await expect(panel.locator(".focus-status")).toContainText("ACE never submits the employer form.");
+  await expect(panel.getByRole("button", { name: "Scan fields" }).locator("svg path")).toHaveCount(1);
+  await expect(panel).toHaveCSS("border-radius", "16px");
+  await expect(panel).toHaveCSS("width", "318px");
   await panel.screenshot({ path: path.join(captures, "compact-day.png") });
   await page.locator("#motivation").fill("My own specific reason for applying.");
   await panel.getByRole("button", { name: "Fill", exact: true }).click();
   await expect(page.locator("#name")).toHaveValue("Example Applicant");
   await expect(page.locator("#motivation")).toHaveValue("My own specific reason for applying.");
   await panel.getByRole("button", { name: /Review/ }).click();
+  await panel.getByRole("button", { name: "Switch to Night theme" }).click();
+  await panel.getByRole("button", { name: "Overview" }).click();
+  await page.mouse.move(0, 0);
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await panel.screenshot({ path: path.join(captures, "compact-night.png") });
+  await panel.getByRole("button", { name: /Review/ }).click();
+  await panel.getByRole("button", { name: "Switch to Day theme" }).click();
   await expect(panel).toHaveClass(/focus-review/);
   await expect(panel.getByText("3 open")).toBeVisible();
   await expect(panel.getByText(/Why do you want to work at Cobalt/)).toHaveCount(0);
@@ -107,7 +119,7 @@ test("Focus Mode V5.1 mirrors choices, protects motivation, stays open and never
   await panel.getByRole("button", { name: "Overview" }).click();
   await panel.getByRole("button", { name: "Scan fields" }).click();
   await expect(page.locator("#motivation")).toHaveValue("My own specific reason for applying.");
-  await panel.screenshot({ path: path.join(captures, "compact-night.png") });
+  await panel.screenshot({ path: path.join(captures, "compact-night-after-review.png") });
   const before = await panel.boundingBox();
   const logo = panel.locator(".studio-logo");
   const logoBox = await logo.boundingBox();
@@ -258,4 +270,36 @@ test("Employer motivation text is never read by ACE during Fill, Scan or rerende
   expect(evidence.stacks, evidence.stacks.join("\n\n")).toHaveLength(0);
   await expect(page.locator("#motivation")).toHaveValue("Applicant-owned private answer");
   await expect(panel.getByText(/What interests you about joining Cobalt/)).toHaveCount(0);
+});
+
+test("Workday search listings do not show an application Review card", async ({ page }) => {
+  const origin = "https://selinc.wd1.myworkdaysite.com";
+  await page.route(`${origin}/**`, route => route.fulfill({ status: 200, contentType: "text/html", body: "<html><body></body></html>" }));
+  await page.goto(`${origin}/en-US/SEL/Search-For-Jobs`);
+  await page.setContent(`<main id="workday-page"><h1>Search For Jobs</h1><form>
+    <label for="name">Full name</label><input id="name">
+    <label for="email">Email address</label><input id="email">
+    <label for="role">Current role</label><input id="role">
+    <label for="sponsor">Will you need visa sponsorship?</label><select id="sponsor"><option value="">Select one</option><option>Yes</option><option>No</option></select>
+    <label for="source">How did you hear about this position?</label><select id="source"><option value="">Select one</option><option>Website</option></select>
+  </form></main>`);
+  await page.evaluate(() => {
+    const w = window as typeof window & { chrome: unknown; __aceWake?: (message: { type: string }, sender: unknown, respond: (reply: unknown) => void) => void };
+    w.chrome = { runtime: { lastError: null, onMessage: { addListener(handler: typeof w.__aceWake) { w.__aceWake = handler; } }, getURL: (v: string) => v, getManifest: () => ({ version: "1.27.0" }), sendMessage: (m: { type: string }, cb: (v: unknown) => void) => cb(m.type === "answers" ? { ok: true, items: [] } : m.type === "history" ? { ok: true, work: [], education: [] } : { ok: true, items: [] }) } };
+  });
+  for (const file of ["fields.js", "memory.js", "content.js"]) await page.addScriptTag({ path: path.join(extensionRoot, file) });
+  await expect(page.locator(".ace-root")).toHaveCount(0);
+  await page.evaluate(() => (window as typeof window & { __aceWake: (message: { type: string }, sender: unknown, respond: (reply: unknown) => void) => void }).__aceWake({ type: "wake" }, {}, () => {}));
+  await expect(page.locator(".ace-root .focus-compact")).toBeVisible();
+  await page.evaluate(() => {
+    history.pushState({}, "", "/en-US/SEL/job/Engineer/apply/autofillWithResume");
+    document.getElementById("workday-page")!.appendChild(document.createElement("div"));
+  });
+  await expect(page.locator(".ace-root .focus-compact")).toBeVisible();
+  await page.waitForTimeout(650); // Let the debounced Workday route observer register /apply/.
+  await page.evaluate(() => {
+    history.pushState({}, "", "/en-US/SEL/Search-For-Jobs");
+    document.getElementById("workday-page")!.appendChild(document.createElement("div"));
+  });
+  await expect(page.locator(".ace-root")).toHaveCount(0);
 });

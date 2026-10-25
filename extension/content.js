@@ -86,6 +86,7 @@
   var historyOwned = null;
   var lastFill = [];
   var loaded = false;
+  var manualListingOpen = false;
   // The element fillOne actually ticked, which for a group is not
   // the one it was handed.
   var lastPicked = null;
@@ -1768,7 +1769,15 @@
     return false;
   }
 
+  function isWorkdayListing() {
+    return /\.myworkday(?:jobs|site)\.com$/i.test(location.hostname) &&
+      !/\/apply(?:\/|$)/i.test(location.pathname);
+  }
+
   function looksLikeApplication() {
+    // Workday job search and posting pages can contain several filters that
+    // resemble application questions. Only its /apply/ flow is an application.
+    if (isWorkdayListing()) return false;
     if (!looksLikeForm()) return false;
 
     var recognised = 0;
@@ -1851,6 +1860,31 @@
   .focus-panel .focus-compact-title{font-size:16px;font-weight:800;margin:2px 0 3px;color:var(--ink)}.focus-panel .focus-compact-copy{font-size:11px;color:var(--secondary);margin:0 0 12px}.focus-panel .focus-status{display:flex;justify-content:space-between;gap:7px;border:1px solid var(--line);background:var(--soft);border-radius:10px;padding:10px;margin:10px 0}.focus-panel .focus-status strong{font-size:11px}.focus-panel .focus-status small{display:block;font-size:10px;color:var(--secondary)}.focus-panel .focus-compact-actions{display:flex;gap:7px}.focus-panel .focus-compact-actions button{flex:1}.focus-panel .focus-utility{display:flex;justify-content:space-between;gap:7px;margin-top:12px}.focus-panel .focus-utility button{font-size:10px;background:none;border:0;color:var(--secondary);padding:3px}
   .focus-panel .focus-drag-surface{cursor:grab}.focus-panel.dragging,.focus-panel.dragging *{cursor:grabbing!important;user-select:none!important}
   @media(max-width:520px){.ace-panel.focus-panel{height:auto;max-height:calc(100dvh - 24px);border-radius:16px}.ace-panel.focus-panel.focus-review{max-height:calc(100dvh - 24px)}}
+  `;
+  // Geometry, colors and borders from the approved V5.1 interactive card.
+  // Keep these overrides scoped to Focus Mode so the legacy fallback shell is unchanged.
+  PANEL_CSS += `
+  .ace-panel.focus-panel{--surface:#fffdfd;--soft:#fbf3f7;--ink:#2d1b27;--secondary:#715967;--muted:#927c89;--line:#ebdce4;--wine:#96294f;--mint:#167655;--mintbg:#eaf7f0;--amber:#975a28;--amberbg:#fff4e5;box-sizing:border-box;background:var(--surface);box-shadow:0 18px 54px rgba(54,21,36,.13),0 2px 10px rgba(54,21,36,.06);border:1px solid var(--line);border-radius:16px;font:12px/1.5 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .ace-panel.focus-panel.night{--surface:#1b131c;--soft:#281d29;--ink:#fff5fa;--secondary:#d8c1cc;--muted:#b198a7;--line:#503848;--wine:#f07aa9;--mint:#8ad5b2;--mintbg:#19362b;--amber:#ffcc93;--amberbg:#3a2b22;background:var(--surface);box-shadow:0 16px 58px rgba(0,0,0,.4)}
+  .ace-panel.focus-panel.focus-review{max-height:min(79vh,735px)}.ace-panel.focus-panel.focus-workspace{max-height:min(83vh,820px)}
+  .focus-panel .studio-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px 10px;background:var(--surface)}.focus-panel .focus-brand{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}.focus-panel .focus-brand-top{display:flex;align-items:center;gap:9px}.focus-panel .focus-head-controls{display:flex;align-items:center;gap:3px;flex:none}
+  .focus-panel .studio-logo{font-size:22px;font-weight:780;letter-spacing:-.09em}.focus-panel .studio-live{font-size:10px;font-weight:650;padding:4px 8px;border-radius:20px}
+  .focus-panel .studio-icon{width:29px;height:29px;border-radius:8px;color:var(--secondary)}.focus-panel .studio-icon:hover{background:var(--soft);color:var(--wine)}.focus-panel .studio-icon svg{width:16px;height:16px;stroke-width:1.85}
+  .focus-panel .focus-grip{margin-left:0}.focus-panel .focus-grip svg{width:15px;height:15px}
+  .focus-panel .studio-tagline{font-size:11px;line-height:1.25;margin:0;max-width:250px}
+  .focus-panel .studio-scroll{padding:16px;scrollbar-width:thin}
+  .focus-panel .studio-foot{padding:9px 16px 11px;background:var(--surface)}.focus-panel .studio-foot small{display:flex;align-items:center;gap:6px;text-align:left;font-size:10.5px;line-height:1.5;margin:0;color:var(--muted)}.focus-panel .studio-foot small svg{width:14px;height:14px;stroke:var(--mint);stroke-width:1.85;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .focus-panel .studio-button{font-size:12px;line-height:1.2;font-weight:630;border-radius:9px;padding:11px 12px;background:var(--surface);border:1px solid var(--line);color:var(--ink)}.focus-panel .studio-button.wine,.focus-panel.night .studio-button.wine{background:#97294f;border-color:#95254f;color:white;font-weight:650}.focus-panel .studio-button.wine:hover{background:#842145}.focus-panel .studio-button svg{width:15px;height:15px;stroke-width:1.85;margin:0}
+  .focus-panel .focus-compact-title{font-weight:690;font-size:16px;line-height:1.25;letter-spacing:-.025em;margin:0 0 4px}.focus-panel .focus-compact-copy{font-size:12px;line-height:1.5;margin:0;color:var(--secondary)}
+  .focus-panel .focus-status{display:flex;align-items:center;gap:8px;background:var(--soft);border:0;border-radius:11px;padding:10px 11px;margin:14px 0}.focus-panel .focus-status svg{width:17px;height:17px;fill:none;stroke:var(--mint);stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;flex:none}.focus-panel .focus-status p{margin:0;font-size:11px;color:var(--secondary);line-height:1.4;flex:1}.focus-panel .focus-status strong{font-size:11px;color:var(--ink);font-weight:650}.focus-panel .focus-status span{font-size:10px;color:var(--wine);font-weight:690;white-space:nowrap}
+  .focus-panel .focus-compact-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.focus-panel .focus-compact-actions button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:39px}
+  .focus-panel .focus-utility{display:flex;justify-content:space-between;gap:7px;margin-top:13px}.focus-panel .focus-utility button{display:inline-flex;align-items:center;gap:4px;font-size:11px;line-height:1.3;font-weight:620;color:var(--secondary);padding:4px 0}.focus-panel .focus-utility button:hover{color:var(--wine)}.focus-panel .focus-utility svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round}
+  .focus-panel .focus-title-row h2{font-size:16px;font-weight:690;letter-spacing:-.025em}.focus-panel .focus-subtitle{font-size:11px;line-height:1.55;margin:4px 0 12px}.focus-panel .focus-progress{font-size:10.5px;margin-bottom:12px}.focus-panel .focus-chip{font-size:11px;padding:8px 10px;border-radius:8px}.focus-panel .focus-question{padding:13px;border-radius:11px}.focus-panel .focus-question .studio-question{font-size:13px;font-weight:680;line-height:1.45;margin:0 0 8px}.focus-panel .focus-question p{font-size:11px;line-height:1.55}.focus-panel .focus-question .studio-pill{background:none;padding:0;margin-bottom:8px;border-radius:0}
+  .focus-panel .studio-search,.focus-panel .studio-input{font-size:12px;line-height:1.55;border-radius:8px;padding:10px}.focus-panel .studio-input{min-height:82px}.focus-panel .studio-scroll>label{font-size:11px;font-weight:620}.focus-panel .focus-hint{font-size:10.5px;line-height:1.55}.focus-panel .studio-checkline{font-size:11px;line-height:1.5}.focus-panel .focus-stays{font-size:10.5px;font-weight:570;padding:8px 10px}.focus-panel .studio-actions{display:flex;flex-wrap:nowrap;gap:8px}.focus-panel .studio-actions button{flex:1;min-width:0;white-space:nowrap;font-weight:600}
+  .focus-panel .studio-pill{font-size:10px;font-weight:680;padding:5px 8px;border-radius:7px}
+  .focus-panel .focus-dock-body{min-height:49px}.focus-panel .focus-dock-status strong{font-size:12px}.focus-panel .focus-dock-status small{font-size:11px}
+  .focus-panel,.focus-panel .studio-head,.focus-panel .studio-scroll,.focus-panel .focus-question,.focus-panel .focus-status,.focus-panel .studio-foot{cursor:grab}.focus-panel button,.focus-panel input,.focus-panel textarea,.focus-panel select{cursor:pointer}.focus-panel input,.focus-panel textarea{cursor:text}
+  @media(max-width:520px){.focus-panel .studio-scroll{padding:12px}.ace-panel.focus-panel.focus-review{max-height:calc(100dvh - 24px)}}
   `;
 
   /* Inter, the face the website uses. A shadow root cannot declare its own
@@ -2264,11 +2298,11 @@
   function focusCompact(fields) {
     var open = fields.filter(function (field) { return needsStudioReview(field) || skippedQuestions.has(field.key); }).length;
     var filled = lastFill.filter(function (entry) { return entry.field && entry.field.isConnected; }).length;
-    return '<p class="studio-eyebrow">Your application assistant</p><h2 class="focus-compact-title">You\'re in control</h2>' +
-      '<p class="focus-compact-copy">Fill known answers, then review each remaining question on this form.</p>' +
-      '<div class="focus-status"><span><strong>' + filled + ' filled</strong><small>Approved answers</small></span><span><strong>' + open + ' to review</strong><small>Needs your decision</small></span></div>' +
-      '<div class="focus-compact-actions"><button class="studio-button wine" data-ace="fill">Fill</button><button class="studio-button" data-ace="tab:review">Review' + (open ? ' ' + open : '') + '</button></div>' +
-      '<div class="focus-utility"><button data-ace="scan">Scan fields</button><button data-ace="workspace">Open memory &amp; activity</button></div>';
+    return '<h2 class="focus-compact-title">You\'re in control.</h2>' +
+      '<p class="focus-compact-copy">' + filled + ' known answers filled. ' + (open ? open + ' question' + (open === 1 ? ' needs' : 's need') + ' you.' : 'ACE review is clear.') + '</p>' +
+      '<div class="focus-status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><p><strong>Ready to review</strong><br>ACE never submits the employer form.</p><span>' + open + ' open</span></div>' +
+      '<div class="focus-compact-actions"><button class="studio-button wine" data-ace="fill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Fill</button><button class="studio-button" data-ace="tab:review">Review ' + open + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div>' +
+      '<div class="focus-utility"><button data-ace="scan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9V5h4M15 5h4v4M19 15v4h-4M9 19H5v-4M7 12h10"/></svg>Scan fields</button><button data-ace="workspace">Open memory &amp; activity<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div>';
   }
 
   function focusGrip() {
@@ -2353,6 +2387,7 @@
     var open = fields.filter(function (field) { return needsStudioReview(field) || skippedQuestions.has(field.key); }).length;
     var titleParts = document.title.split(/\s[|·]\s/);
     var employer = (titleParts.length > 1 ? titleParts[titleParts.length - 1] : location.hostname.replace(/^www\./, "")) || "Application form";
+    var role = titleParts.length > 1 ? titleParts[0] : document.title || 'Application form';
     var body = focusMode === 'review' ? studioReview(fields) : focusMode === 'compact' ? focusCompact(fields) :
       studioTab === "memory" ? studioMemory() : studioTab === "activity" ? studioActivity() : studioOverview(fields);
     host.className = 'ace-panel focus-panel focus-' + focusMode + (studioTheme === 'night' ? ' night' : '');
@@ -2362,10 +2397,10 @@
     if (focusMode === 'dock') {
       render(host, '<div class="focus-dock-body">' + focusGrip() + '<span class="studio-logo">ace</span><span class="focus-dock-status"><strong>' + lastFill.length + ' filled · ' + open + ' to review</strong><small>Form detected · No auto-submit</small></span><button class="focus-dock-open" data-ace="expand" aria-label="Expand ACE">⌄</button></div>');
     } else {
-      render(host, '<span class="ace-title" style="display:none">' + legacyStatus + '</span><header class="studio-head"><div class="studio-top"><span class="studio-logo">ace</span><span class="studio-live">● Form detected</span>' + focusGrip() + '<button class="studio-icon" data-ace="theme" aria-label="' + themeLabel + '" title="' + themeLabel + '">' + themeSvg + '</button><button class="studio-icon" data-ace="minimize" aria-label="Minimize ACE" title="Minimize ACE">⌄</button></div><p class="studio-tagline">' + esc(plain(employer)) + ' · ' + esc(plain(document.title || 'Application form')) + '</p></header>' +
+      render(host, '<span class="ace-title" style="display:none">' + legacyStatus + '</span><header class="studio-head"><div class="focus-brand"><div class="focus-brand-top"><span class="studio-logo">ace</span><span class="studio-live">● Form detected</span></div><p class="studio-tagline">' + esc(plain(employer)) + ' · ' + esc(plain(role)) + '</p></div><div class="focus-head-controls">' + focusGrip() + '<button class="studio-icon focus-theme" data-ace="theme" aria-label="' + themeLabel + '" title="' + themeLabel + '">' + themeSvg + '</button><button class="studio-icon" data-ace="minimize" aria-label="Minimize ACE" title="Minimize ACE"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></div></header>' +
         (focusMode === 'workspace' ? '<nav class="studio-tabs" aria-label="ACE sections">' + ["overview", "review", "memory", "activity"].map(function (tab) { return '<button data-ace="tab:' + tab + '" class="' + (studioTab === tab ? 'active' : '') + '">' + tab.charAt(0).toUpperCase() + tab.slice(1) + '</button>'; }).join('') + '</nav>' : '') +
         '<div class="studio-scroll">' + (studioError ? '<div class="studio-error">' + esc(studioError) + '</div>' : '') + body + '</div>' +
-        '<footer class="studio-foot">' + (focusMode === 'workspace' ? '<div class="studio-foot-actions"><button class="studio-button wine" data-ace="fill">Fill</button><button class="studio-button" data-ace="scan">Scan fields</button></div>' : '') + '<small>ACE fills. You review. You submit.</small></footer>');
+        '<footer class="studio-foot">' + (focusMode === 'workspace' ? '<div class="studio-foot-actions"><button class="studio-button wine" data-ace="fill">Fill</button><button class="studio-button" data-ace="scan">Scan fields</button></div>' : '') + '<small><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>ACE fills. You review. You submit.</small></footer>');
       host.querySelector(".studio-scroll").scrollTop = scroll;
     }
     positionFocus(host);
@@ -2590,6 +2625,15 @@
 
   function refresh() {
     if (!loaded) return;
+
+    // Workday routes between an application and Search For Jobs without a
+    // document reload. A deliberate toolbar Wake still overrides this guard.
+    if (!isWorkdayListing()) manualListingOpen = false;
+    if (isWorkdayListing() && !manualListingOpen) {
+      var listingPanel = document.querySelector('.ace-root');
+      if (listingPanel) listingPanel.remove();
+      return;
+    }
 
     // Many boards route client-side between postings without a full
     // reload -- the same DOM-mutation signal that re-triggers refresh()
@@ -3123,6 +3167,7 @@
         // than any heuristic: run whether or not the page looked like
         // an application, and undo an earlier dismissal.
         dismissed = false;
+        manualListingOpen = isWorkdayListing();
 
         if (loaded) {
           lastResult = null;
