@@ -845,7 +845,7 @@ a `JIT:` block in a plan for a small result is the tell. A thin progress bar wou
 dimming and skeleton blocks. Details and numbers: `ACE_NEXT_KNOWLEDGE.md`, Speed and responsiveness.
 
 
-## Four-tab approved Analytics redesign (2026-10-25, local only)
+## Four-tab approved Analytics redesign (2026-10-25)
 
 The Pixel-Lock package supersedes the older Analytics layout for this route.
 Overview, Outcomes, Role and resume, and Companies use the new read-only
@@ -856,4 +856,9 @@ unknowns. Pulls gains only reviewed local company icons and the historical
 calendar above its original side cards. See
 `docs/architecture/2026-10-25-analytics-redesign.md` for the implementation,
 fictional screenshot captures, acceptance comparison and actual test results.
-No production release occurred in this session.
+Released with the owner's explicit approval at 2026-10-25T23:41Z as
+`340b175251a8040f3eedad9553c3f6f965657698`. Matching API and web are healthy.
+The verified private backup preceded activation; no migration or scheduler
+operation ran. Read-only production totals, deduplication, cohorts and
+drilldowns passed; all 11 public logo hashes matched. Actual Gmail connections
+and petition reports are both zero, so these panels correctly remain unavailable.

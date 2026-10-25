@@ -1,10 +1,38 @@
-# Approved Analytics implementation and local validation
+# Approved Analytics implementation, validation and release
 
 This change implements the four-tab Analytics package under the local,
 Git-ignored `design/ace-analytics-pixel-lock/` directory. It is based on
 `9cbafd7e06beac85bb7767de45b3232d84964ec3`, also verified as the remote branch
-head during this task. No deployment, production migration, scheduler operation,
-Gmail consent change, extension publication, or production data write occurred.
+head during implementation. No production operation occurred during that phase.
+The later owner-approved production release is recorded below.
+
+## Production release, 2026-10-25
+
+The owner explicitly requested deployment. The implementation was rebased onto
+`4f41949` to preserve the other session's performance updates, committed and
+pushed as `340b175251a8040f3eedad9553c3f6f965657698`. After integration, 112 focused
+backend tests, TypeScript, ESLint, production build and dash checks passed.
+Analytics code and styles are unchanged from the earlier browser-tested version.
+The browser suite was not repeated because of the documented cooling issue.
+
+At 23:41Z, public health reported that exact SHA and API status ok. Only API and
+web were rebuilt and replaced, both healthy. Scheduler, PostgreSQL and Caddy
+retained their existing container IDs. Schema remained at `0050`; no migration,
+Gmail consent change, extension publication or destructive data operation ran.
+
+Before activation, a fresh 437 MB private backup passed gzip integrity and
+PostgreSQL archive listing. It and rollback image IDs are under
+`private-backups/analytics-release-20261025T233637Z/` on the VM. Eight protected
+table counts and applied-mark counts matched before/after inventories.
+
+Read-only production checks verified 919 unique applications against existing
+mark totals, four date ranges, cohort partitions, pagination deduplication and
+outcome drilldowns. The in-process API returned 200 with no-store. The diagnostic
+forced every database connection read-only and created no session. Public
+checks verified the health SHA, all 11 cached logo hashes, private API 401s and
+sign-in redirects for all four tabs. Production has zero Gmail connections and
+zero petition reports. These unavailable states remain truthful. Signed-in
+production browser rendering and live mailbox sync were not exercised.
 
 ## Implementation and data boundaries
 
@@ -203,8 +231,9 @@ of five illustrative groups, so it is taller despite the matching row treatment.
   with zero hits, and `git diff --check`.
 - **PASS:** No changes to the Chrome extension, Career Dashboard route or
   components, existing intelligence read model, auth, migrations or scheduler.
-- **NOT VERIFIED:** Production runtime, Gmail consent/sync, actual production
-  petition evidence, and final owner visual acceptance. No production release.
+- **PRODUCTION:** Released and checked as recorded above. Gmail consent/sync,
+  actual petition evidence and final owner visual acceptance remain unavailable
+  or unverified. Production has no Gmail connection or petition reports.
 
 The 45-test run is recorded in
 `artifacts/analytics-validation/playwright-final.log`. The final 390-pixel mobile recheck also passed after the typography-token adjustment. The final focused drilldown recheck passed after event-type normalization, including its 390-pixel layout and zero browser errors. Temporary API, web and watchdog processes were stopped after verification.

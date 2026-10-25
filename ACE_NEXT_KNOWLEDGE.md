@@ -124,10 +124,13 @@ changes; the owner requirements above still control.
 - Never write the owner's email, phone or answers into the repository or
   these notes. Fictional fixtures only.
 
-### Production access without agent SSH
+### Production access
 
-The agent's SSH to the Oracle VM is refused by its permission classifier, so
-the owner runs production commands. Give exactly one line they paste in
+Earlier sessions had SSH refused by their permission classifier. On 2026-10-25
+the owner's explicit Analytics deployment request was completed through the
+configured SSH connection with approved escalated commands. Recheck actual
+access rather than assuming those earlier refusals persist. When the owner
+must run a production command, give exactly one line they paste in
 their laptop terminal, in the form `ssh -i ~/.ssh/ace_oracle
 ubuntu@161.153.89.170 'cd /opt/ace && ...'`. A multi-line paste that starts
 with `ssh` loses the following lines; `cd: /opt/ace: No such file or
@@ -377,10 +380,13 @@ After the first release (JIT off) it measured, in ms: `/api/stats` 216,
 
 ## Current working state on 2026-10-25
 
-### Approved Analytics redesign, local work on 2026-10-25
+### Approved Analytics redesign, released on 2026-10-25
 
 The four-tab Analytics design in `design/ace-analytics-pixel-lock/` is implemented
-locally from `9cbafd7`. It is not deployed. `/api/analytics` is a new authenticated,
+from `9cbafd7`, then rebased onto the newer performance updates at `4f41949`.
+The owner explicitly requested production deployment. At 2026-10-25T23:41Z,
+production health reported release `340b175251a8040f3eedad9553c3f6f965657698`.
+`/api/analytics` is a new authenticated,
 no-store, read-only projection over the existing Inbox application identities,
 marks, external applications, outcome ledger and reviewed petition reports.
 It adds submission-date/role filters, local Monday-to-Sunday weeks, undo-aware
@@ -388,8 +394,9 @@ outcome deduplication and official employer-year evidence. Chart drilldowns use
 `/app/applications/analytics`, a read-only filtered Applications child view backed
 by the same projection, with links to existing job application controls. Career Dashboard's
 existing read model, the extension and discovery are unchanged. No schema or
-migration change is needed. A later approved release needs matching API and web
-images because the redesigned page reads the new endpoint.
+migration change is needed. Matching API and web images were built and activated
+with `--no-build --no-deps --wait`; both were healthy. PostgreSQL, Caddy and the
+scheduler retained their existing container IDs. Production remained at `0050`.
 
 The current schema does not record submitted resume versions, application
 channels or complete observation coverage. Analytics explicitly reports those
@@ -405,8 +412,23 @@ Local validation passed 89 focused backend tests, 45 Playwright tests, a final
 filtered-record/mobile recheck, TypeScript, lint, production build and a zero-hit
 dash scan. All four tabs have 1672x941 Day and Night comparison captures.
 The fictional capture database is `/tmp/ace-analytics-fictional.db`; artifacts
-remain ignored in `artifacts/analytics-validation/`. No production, scheduler,
-Gmail consent, extension publication, or destructive data operation was run.
+remain ignored in `artifacts/analytics-validation/`. After integration, 112 focused
+backend tests, TypeScript, lint, build and dash checks passed. The browser suite
+was not repeated because of the documented laptop cooling issue.
+
+A fresh 437 MB private backup in
+`private-backups/analytics-release-20261025T233637Z/database.dump.gz` passed gzip
+integrity and PostgreSQL archive listing before activation. Previous image IDs
+and before/after aggregate inventories are retained beside it. Eight protected
+table counts and the applied-mark count matched. A production diagnostic forced
+all connections read-only: 919 unique applications matched existing mark totals;
+four date ranges, cohort partitions, pagination deduplication and outcome
+drilldowns passed. The in-process API returned 200 with no-store. Public checks
+verified the exact SHA, all 11 logo hashes, API 401s and sign-in redirects for
+all four tabs. Actual production tables have zero Gmail connections and zero
+petition reports, so those unavailable states are accurate. No Gmail consent,
+migration, scheduler operation, extension publication or destructive data
+operation ran. Signed-in production browser rendering was not exercised.
 
 
 The working branch is `wine-rose-platform`, reconciled on GitHub on
