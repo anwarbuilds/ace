@@ -181,9 +181,12 @@ END $$;
 SQL
 ```
 
-If the owner cannot sign in meanwhile: **Continue with email** asks for the
-password and then an emailed code; **Forgot password** sends a reset code.
-`backend.scripts.set_owner_email` changes the owner's sign-in address.
+If the owner cannot sign in meanwhile: **Continue with email** takes the
+password. On 2026-10-25 the live `/api/auth/status` reported
+`email_verification: false` and `reset_by_email: false`, so production asks
+for no emailed code and has no emailed password reset (mail is not
+configured there). `backend.scripts.set_owner_email` changes the owner's
+sign-in address.
 
 ### Local Git layout
 
