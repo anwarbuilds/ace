@@ -922,6 +922,17 @@ Do not merge ACE Next to legacy `main` without separate approval.
 
 ## Change log
 
+### 2026-10-24, typography release
+
+- Released the approved Refined typography (self-hosted Inter, one type scale) at commit `61debd6`. Its website
+  build is identical to `54e939a`; the extension commit on top changes no web files. Only the web container was
+  recreated (`up -d --no-build --no-deps web`); API, migrate, scheduler, PostgreSQL and Caddy were not touched.
+- Verified from outside: `/healthz` ok with frontend commit `61debd6`, the Inter file served (352,240 bytes,
+  `font/woff2`), signed-out `/app/pulls` still redirects to sign-in, and the public pages render Inter in Day and
+  Night with no console errors and no forbidden dashes.
+- Pasting a multi-line block that starts with `ssh` loses the following lines during login. Run a remote release as
+  one `ssh -i ~/.ssh/ace_oracle ubuntu@<vm> '...'` command instead.
+
 ### 2026-10-24, owner account release
 
 - Extended the existing owner account with first name, last name, phone number
