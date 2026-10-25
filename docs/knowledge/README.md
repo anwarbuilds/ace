@@ -1,7 +1,7 @@
 # ace knowledge set
 
 Everything learned building ace, from the first week to now, split by topic so a session reads only what it needs.
-Start with `../HANDOFF.md` (current state, rules, plan; it loads automatically through the root `CLAUDE.md`), then open
+Start with `../../ACE_NEXT_KNOWLEDGE.md` (current verified state) and `../HANDOFF.md` (rules and plan; both load through the root `CLAUDE.md`), then open
 a topic file when you work in that area. Reading all of it is about 53k tokens; do not.
 
 | File | Covers | Read when | Size |
@@ -11,7 +11,7 @@ a topic file when you work in that area. Reading all of it is about 53k tokens; 
 | `02-sources-and-scheduler.md` | Adapters, polling, conditional HTTP, retries, identity and diffing, Eightfold, Amazon, description decoding, scheduler concurrency | you touch a reader or the scheduler, or a source misbehaves | ~5k |
 | `03-coverage-and-discovery.md` | Recall audits, board discovery, unreachable companies, feeds vs employer boards, the aggregator that was removed, the 2026-10 sweeps and own-site readers (Apple, Google, Meta, Atlassian, EA, Shopify and more) | a company or role was missed, you add a reader, or you ask whether a site may be read | ~12k |
 | `04-matching-and-applications.md` | Resume matching (lexical, then related-skill credit), marks, application status, the old sheet import and its lessons, CSV export | you touch scores, marks, statuses or the export (and for the resume scoring gap) | ~6k |
-| `05-web-ui.md` | What each screen is for, the triage design, sorts, filters, pulls, activity log, both redesigns (anthracite grey is current), browser-test lessons for the UI | you change the old UI or build the Next.js replacement | ~8k |
+| `05-web-ui.md` | What each screen is for, the triage design, sorts, filters, pulls, activity log, historical redesigns (Wine and Rose is current), browser-test lessons for the UI | you change the old UI or build the Next.js replacement | ~8k |
 | `06-extension-autofill.md` | The matcher, the answer bank, the panel, phone and country widgets, repeating blocks, multi-page forms, what real forms taught (Dell, DoorDash, Handshake, JazzHR, Ashby) | you change anything that touches a live application form | ~11k |
 | `07-alerts-email-and-auth.md` | Freshness, the removed email subsystem, one alert per pull, email client quirks, why sign-in was built then removed | you touch alerts or Resend, or you start the sign-in work | ~2k |
 | `08-operations-and-testing.md` | Operational gotchas (build before up, UTC, restarts, generic plans), incidents, and browser-test craft | you deploy, restart, debug the scheduler or write browser tests | ~3k |
@@ -59,7 +59,7 @@ These are the habits the whole history teaches. Each is an entry you can read fo
 
 1. Append a dated entry to the topic file it belongs to; add a Status line to anything it supersedes.
 2. Update `docs/HANDOFF.md` section 3 (state) if the state changed, and the plan if the plan changed. Keep it under 450 lines.
-3. Commit those docs with the code, and push. A fresh session sees only what is on GitHub.
+3. Commit those docs with the code. Push only when authorized and after reconciling any concurrent branch work. A remote session sees only what is on GitHub; a local session can read local commits.
 4. Keep personal data out. This repo is public: no names, contact details, application history, answers or secrets.
 
 ## What is deliberately not here

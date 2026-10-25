@@ -1,10 +1,13 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-24
+Last updated: 2026-10-25
 
-This is the continuity document for the production migration from the legacy
-ACE runtime to ACE Next. It contains architecture, verified state, operating
-commands, migration controls, deployment steps and remaining owner actions.
+This is the continuity document for ACE Next and its independent legacy
+comparison system. It contains architecture, verified state, extension status,
+operating commands, migration controls, deployment steps and remaining owner
+actions. `docs/HANDOFF.md` and the topic files in `docs/knowledge/` retain the
+longer engineering history. Dated observations below are historical evidence,
+not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
@@ -28,6 +31,24 @@ The approved V2 reference has 12 pages: Home, Sign in, Signed out, Pulls,
 Opportunities, Applications, Analytics, Resume Studio, Autofill Extension,
 Archive, Coverage and Settings. Night and Day are both required. Prototype
 navigation, fictional data and the cursor tour must never ship.
+
+For Chrome extension work, the latest approved design is **ACE Focus Mode
+V5.1**, with the final employer-motivation exception. Read these files before
+editing the extension and compare its Day and Night captures with the final
+reference:
+
+```text
+design/ace-focus-v5.1/START_HERE.md
+design/ace-focus-v5.1/docs/CODEX_FULL_IMPLEMENTATION_PROMPT.md
+design/ace-focus-v5.1/docs/ACCEPTANCE_CHECKLIST.md
+design/ace-focus-v5.1/docs/ENGINEERING_GUARDRAILS.md
+design/ace-focus-v5.1/references/ACE_Focus_Mode_V5_1_Approved_Final_Interactive.html
+design/ace-focus-v5.1/references/screenshots/
+```
+
+This supersedes the V4 extension *interface* reference. It does not supersede
+the V4 Answer Memory API or erase stored answers. The final screenshot
+correction is local commit `cb7bb5e`, not a production website release.
 
 Before every task:
 
@@ -68,17 +89,88 @@ Before every task:
   dash-like ornaments. Run static and browser checks across dynamic states.
 - Do not expose secrets, personal data, resume text, answers, database dumps or
   session cookies in Git, logs, screenshots, issues or chat.
+- ACE may fill supported application fields but must never submit an employer
+  application or mark a job Applied merely because it filled. The owner reviews
+  and submits every application on the employer site.
+- Company-specific motivation prompts such as "Why this company?" stay entirely
+  on the employer form. ACE must not suggest, fill, capture, review, count,
+  remember or reuse the answer. Keep historical data intact but exclude it from
+  automatic reuse.
+- Only genuinely equivalent, approved general answers may be reused. Unknown
+  questions enter Review. Authorization, sponsorship, citizenship, legal
+  declarations and company-specific questions need appropriate per-application
+  review. Do not infer a sensitive answer from a broad answer.
 
-## Current live state on 2026-10-24
+## Current working state on 2026-10-25
 
-The currently deployed production application commit is
-`11a7fd4c74e3333ea76c4fe1e9eecba0615279c6`; schema is `0049 (head)`.
-The latest deployment details are in the owner account release section below.
+The local working branch is `wine-rose-platform`; its latest extension code
+commit is `cb7bb5e`. It contains the
+existing extension's V4 Answer Memory implementation (`2e7c1dc`), Focus Mode
+V5.1 (`4ce3570`) and the approved visual and Workday listing correction
+(`cb7bb5e`). The extension manifest is `1.27.0`. These two V5.1 commits are
+local and have not been deployed or published. An unpacked installation must
+be reloaded at `chrome://extensions`; employer tabs must then be refreshed.
+The owner has seen a V5.1 interface before the final visual correction and
+reported that its compact card differed from the approved reference. The
+correction is committed locally, but no owner screenshot of the corrected
+installation is recorded here.
+
+The approved V5.1 extension runs inside the existing MV3 extension. It has a
+compact draggable card, visible six-dot handle, remembered position, manual
+minimized dock, Day and Night Wine and Rose themes, **Fill**, persistent Review,
+Review Complete or Review Paused, Answer Memory and Activity workspace, manual
+Scan fields, dynamic field detection, existing resume/pairing support and
+Alt+A. Review mirrors exact native select, radio, checkbox and multiple-select
+options, and mirrors supported custom Workday listboxes once their options are
+exposed by the employer page. Unsupported custom controls stay on the
+employer form for manual completion. ACE never submits or marks Applied.
+Workday listing and search routes outside `/apply/` stay quiet, including after
+single-page navigation back from an application. The toolbar Wake override
+remains available.
+
+The latest local visual comparison used fictional Chrome fixtures: the
+approved Night compact reference and corrected extension compact capture were
+both 318 by 332 pixels. Local artifacts are ignored under
+`artifacts/extension-v5.1/`; do not commit private employer screenshots. Final
+local checks: seven Playwright Chrome extension tests passed, 258 extension
+rule cases passed, `node extension/test-memory.js` passed,
+`node --check extension/content.js` passed and `git diff --check` passed. These verify local
+fixtures, not the owner's live authenticated employer pages or the actual
+unpacked MV3 installation.
+
+The tracked `origin/wine-rose-platform` has three typography commits not on
+this local branch (`54e939a`, `61debd6`, `8d84141`). It records an approved
+self-hosted Inter website release at frontend commit `61debd6` and extension
+typography changes. Conversely, origin lacks the two local V5.1 commits. Do
+not overwrite either line of work; inspect both histories and reconcile them
+before a future push or extension release. The production typography release
+is recorded by that agent's commit, not independently checked in this session.
+
+The V4 code added additive migration `0050` and authenticated
+`/api/extension/memory` endpoints for approved reusable answers, with pairing
+and existing answer-bank compatibility. The owner explicitly approved a V4
+backend deployment and migration, but this branch has no post-deployment
+health/migration record for it. Current production migration version and live
+Memory API status are **unverified here**. A read-only verification is required
+before calling Memory operational in production or attempting another
+migration. DNS was unavailable from this session, so even the public health
+endpoint could not be checked. The last independently verified core API and
+database release in this file remains `11a7fd4` at migration `0049`; the
+separate website typography release is newer. This distinction matters when
+debugging an empty Memory workspace.
+
+## Last verified core live state on 2026-10-24
+
+The last independently verified core API and database application commit in
+this document is `11a7fd4c74e3333ea76c4fe1e9eecba0615279c6`; schema was
+`0049 (head)` at that verification. The owner account release section below
+has its evidence. The newer website typography release and unverified V4
+deployment state are recorded above.
 
 The owner clarified that the legacy site must keep discovering jobs until they
-are confident in ACE Next. **Both `ace-scheduler-1` and `oracle-scheduler-1`
-are running and healthy, each against its own PostgreSQL database.** The
-minute cross-database replica cron is disabled. Do not restart it while both
+are confident in ACE Next. At this verification, **both `ace-scheduler-1` and
+`oracle-scheduler-1` were running and healthy, each against its own PostgreSQL
+database.** The minute cross-database replica cron was disabled. Do not restart it while both
 schedulers run: Oracle produced 4,441 jobs and four Pull sessions during the
 temporary cutover interval, so numeric IDs can now collide with future legacy
 rows. The previous crontab is saved under
@@ -921,6 +1013,16 @@ deployed in `b8e30b0b4261257fea25fb8e46f03912c6811990` on 2026-10-23.
 Do not merge ACE Next to legacy `main` without separate approval.
 
 ## Change log
+
+### 2026-10-25, continuity and Focus Mode V5.1
+
+- Recorded the V4 Answer Memory code and additive migration 0050, the locally
+  implemented V5.1 extension, and the final visual and Workday listing fix.
+- Distinguished local Chrome fixture results from live employer-form and
+  production API verification. The V4 production migration and Memory API
+  remain unverified in this record despite the owner's deployment approval.
+- Recorded the other agent's three typography commits on the tracked remote
+  branch so future work can reconcile them with the two local V5.1 commits.
 
 ### 2026-10-24, typography release
 
