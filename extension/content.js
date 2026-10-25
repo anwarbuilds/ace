@@ -21,6 +21,12 @@
   var memory = [];
   var memoryAvailable = false;
   var studioTab = "overview";
+  var focusMode = "compact";
+  var focusPosition = null;
+  var reviewSeen = new Set();
+  var approvedQuestions = new Set();
+  var customOptions = new Map();
+  var reviewDrafts = new Map();
   var studioTheme = "day";
   var autoKnown = true;
   var skippedQuestions = new Set();
@@ -47,7 +53,11 @@
         studioError = memoryFailure(reply && reply.error || chrome.runtime.lastError && chrome.runtime.lastError.message);
       } else {
         memory.forEach(function (item) { delete answers["Memory:" + item.concept]; });
-        memory = Array.isArray(reply.items) ? reply.items : [];
+        // Keep historical records on the server, but never surface or reuse
+        // an employer-motivation answer in this extension.
+        memory = (Array.isArray(reply.items) ? reply.items : []).filter(function (item) {
+          return !aceMemory.isEmployerMotivation(item.question);
+        });
         memory.forEach(function (item) {
           answers["Memory:" + item.concept] = item.answer;
           aliases["Memory:" + item.concept] = [];
@@ -61,7 +71,7 @@
     });
   }
   function answerNameFor(question, kind) {
-    if (aceMemory.policy(question) === "sensitive" || aceMemory.policy(question) === "company") return null;
+    if (aceMemory.policy(question) !== "reusable") return null;
     var saved = aceMemory.resolve(question, kind === "yesno" ? "yesno" : kind === "choice" ? "choice" : "text", memory);
     if (saved) return "Memory:" + saved.concept;
     return aceAnswerNameFor(question, kind, Object.keys(answers));
@@ -237,7 +247,7 @@
         if (field.type === "hidden" || field.type === "file") return false;
         if (field.type === "submit" || field.type === "button") return false;
         if (!field.offsetParent && field.type !== "radio") return false;
-        if (aceShouldSkip(field)) return false;
+        if (aceShouldSkip(field) || aceMemory.isEmployerMotivation(aceQuestionFor(field))) return false;
         return true;
       }
     );
@@ -256,7 +266,7 @@
       function (field) {
         if (field.disabled || !field.offsetParent) return false;
         if (field.type === "submit") return false;
-        return aceIsChoiceControl(field);
+        return aceIsChoiceControl(field) && !aceMemory.isEmployerMotivation(aceQuestionFor(field));
       }
     );
 
@@ -266,7 +276,7 @@
       document.querySelectorAll('button[aria-haspopup="listbox"]'),
       function (field) {
         if (field.disabled || !field.offsetParent) return false;
-        return !aceShouldSkip(field);
+        return !aceShouldSkip(field) && !aceMemory.isEmployerMotivation(aceQuestionFor(field));
       }
     );
 
@@ -1814,6 +1824,34 @@
   .studio-scroll{overflow-y:auto;flex:1;padding:18px 17px 24px}.studio-eyebrow{font-size:var(--text-label);font-weight:var(--weight-semibold);letter-spacing:var(--tracking-label);color:var(--muted);margin:0 0 10px}.studio-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px;margin:0 0 13px}.studio-card h2{font-size:var(--text-card);font-weight:var(--weight-heading);letter-spacing:var(--tracking-card);line-height:var(--leading-heading);margin:0 0 6px}.studio-card p{color:var(--secondary);font-size:var(--text-label);line-height:var(--leading-relaxed);margin:5px 0}.studio-hero h2{font-size:var(--text-section);letter-spacing:var(--tracking-section)}.studio-progress{height:7px;background:var(--soft);border-radius:20px;overflow:hidden;margin:15px 0 8px}.studio-progress i{display:block;height:100%;background:linear-gradient(90deg,var(--wine),var(--wine2))}.studio-between{display:flex;justify-content:space-between;align-items:center;gap:8px}.studio-between span{font-size:var(--text-meta);color:var(--muted)}.studio-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.studio-metric{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px}.studio-metric b{font-size:var(--text-metric);font-weight:var(--weight-emphasis);letter-spacing:var(--tracking-metric);line-height:1.2;font-variant-numeric:tabular-nums;display:block}.studio-metric span{font-size:var(--text-small);color:var(--secondary)}.studio-source{display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--line);padding:10px 0;font-size:var(--text-label)}.studio-source:first-of-type{border:0}.studio-source b{color:var(--wine)}.studio-pill{display:inline-block;border-radius:20px;padding:4px 7px;background:var(--amberbg);color:var(--amber);font-size:var(--text-small);font-weight:var(--weight-semibold)}.studio-pill.good{background:var(--mintbg);color:var(--mint)}.studio-actions{display:flex;gap:7px;margin-top:10px}.studio-button{background:var(--surface);border:1px solid var(--line);border-radius:9px;color:var(--ink);padding:8px 11px;font-size:var(--text-button);font-weight:var(--weight-semibold)}.studio-button.wine{background:linear-gradient(115deg,#91234b,#bb4772);color:white;border-color:#91234b}.night .studio-button.wine{background:linear-gradient(115deg,#a63766,#d15488)}.studio-button.small{padding:6px 9px}.studio-question{font-size:var(--text-button);font-weight:var(--weight-strong);color:var(--ink);margin:9px 0}.studio-search,.studio-input{width:100%;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);padding:10px}.studio-input{min-height:85px;resize:vertical}.studio-checkline{font-size:var(--text-meta);color:var(--secondary);display:flex;align-items:flex-start;gap:7px;margin:9px 0}.studio-error{border:1px solid var(--amber);color:var(--amber);background:var(--amberbg);padding:10px;border-radius:9px;font-size:var(--text-label);margin-bottom:12px}.studio-foot{background:var(--surface);border-top:1px solid var(--line);padding:12px 16px}.studio-foot-actions{display:flex;gap:8px}.studio-foot-actions button{flex:1}.studio-foot small{display:block;text-align:center;color:var(--muted);font-size:var(--text-small);margin-top:9px}.studio-modal{padding:15px;background:var(--surface);border-top:1px solid var(--line)}.studio-modal label{display:block;font-size:var(--text-label);font-weight:var(--weight-semibold);margin-bottom:6px}.studio-empty{color:var(--muted);font-size:var(--text-label);padding:16px;text-align:center}.studio-receipt{font-size:var(--text-small);color:var(--muted);margin-top:6px}.studio-memory-answer{white-space:pre-wrap;word-break:break-word}.studio-activity{border-left:2px solid var(--line);padding:0 0 15px 13px;font-size:var(--text-label)}.studio-activity strong{display:block;font-weight:var(--weight-strong)}.studio-activity small{color:var(--muted)}
   @media(max-width:520px){.ace-panel{right:0;top:0;width:100vw;height:100vh;border-radius:0}.studio-scroll{padding:14px 12px}.studio-head{padding:14px 12px}}
   `;
+  PANEL_CSS += `
+  .ace-panel.focus-panel{--base:#fffafb;--surface:#fff;--soft:#faf1f5;--ink:#2d1d28;--secondary:#765d6b;--muted:#987d8d;--line:#ecdce5;--wine:#96254d;--wine2:#b23e6e;--mint:#157e60;--mintbg:#e9f7f0;--amber:#995520;--amberbg:#fff3e4;position:fixed;right:auto;bottom:auto;width:min(318px,calc(100vw - 24px));height:auto;max-height:min(74vh,670px);font:12px/1.47 Inter,system-ui,sans-serif;border-radius:16px;box-shadow:0 16px 48px rgba(70,29,50,.16);overflow:hidden;background:var(--surface)}
+  .ace-panel.focus-panel.night{--base:#100c11;--surface:#1d151e;--soft:#2a1d29;--ink:#fff4fa;--secondary:#d2b9c6;--muted:#aa91a1;--line:#503545;--wine:#f077a7;--wine2:#e75d91;--mint:#85dabc;--mintbg:#1b3e34;--amber:#ffc189;--amberbg:#3c3025;box-shadow:0 20px 54px rgba(0,0,0,.5)}
+  .ace-panel.focus-panel.focus-review{width:min(348px,calc(100vw - 24px));max-height:min(79vh,720px)}
+  .ace-panel.focus-panel.focus-workspace{width:min(371px,calc(100vw - 24px));max-height:min(83vh,760px)}
+  .ace-panel.focus-panel.focus-dock{width:min(305px,calc(100vw - 24px));max-height:none}
+  .focus-panel .studio-head{padding:12px 13px 10px;background:var(--surface)}
+  .focus-panel .studio-top{gap:7px}.focus-panel .studio-logo{font-size:23px;line-height:1}.focus-panel .studio-live{margin-left:0;font-size:10px;padding:3px 7px;font-weight:700}
+  .focus-panel .studio-icon{border:0;background:transparent;width:26px;height:26px;padding:4px;border-radius:7px}.focus-panel .studio-icon svg{width:15px;height:15px}
+  .focus-panel .focus-grip{margin-left:auto;cursor:grab;touch-action:none;user-select:none}.focus-panel .focus-grip svg{stroke:none;fill:currentColor;width:14px;height:19px}
+  .focus-panel .studio-company{display:none}.focus-panel .studio-tagline{margin:4px 0 0;color:var(--secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10.5px}
+  .focus-panel .studio-tabs{grid-template-columns:repeat(4,1fr);padding:0 7px}.focus-panel .studio-tabs button{padding:9px 0;font-size:10px}
+  .focus-panel .studio-scroll{padding:13px 12px 14px;min-height:0;overflow-y:auto}.focus-panel .studio-eyebrow{font-size:9px;margin-bottom:7px}.focus-panel .studio-card{padding:12px;border-radius:12px;margin-bottom:9px}
+  .focus-panel .studio-card h2{font-size:14px}.focus-panel .studio-card p{font-size:11px}.focus-panel .studio-metrics{gap:5px}.focus-panel .studio-metric{padding:8px}.focus-panel .studio-metric b{font-size:17px}
+  .focus-panel .studio-foot{padding:10px 12px}.focus-panel .studio-foot small{font-size:9px;margin-top:6px}.focus-panel .studio-foot-actions button{height:35px}
+  .focus-panel .studio-button{border-radius:9px}.focus-panel .studio-button.wine{background:linear-gradient(100deg,#91234b,#b23e6e)}.focus-panel.night .studio-button.wine{background:linear-gradient(100deg,#9b2b59,#ca4b7e)}
+  .focus-panel .focus-title-row{display:flex;justify-content:space-between;align-items:center;gap:8px}.focus-panel .focus-title-row h2{font-size:15px;line-height:1.25;margin:0;color:var(--ink)}
+  .focus-panel .focus-subtitle{font-size:11px;color:var(--secondary);margin:5px 0 12px}.focus-panel .focus-progress{display:flex;align-items:center;gap:7px;color:var(--secondary);font-size:10px;white-space:nowrap;margin-bottom:12px}.focus-panel .focus-progress i{flex:1;height:5px;background:var(--line);border-radius:10px;overflow:hidden}.focus-panel .focus-progress b{height:100%;display:block;background:var(--wine)}
+  .focus-panel .focus-chips{display:flex;gap:5px;overflow:auto;margin-bottom:10px;padding-bottom:2px}.focus-panel .focus-chip{border:1px solid var(--line);background:var(--surface);color:var(--secondary);border-radius:8px;padding:7px 8px;font-size:10px;white-space:nowrap;max-width:145px;overflow:hidden;text-overflow:ellipsis;flex:none}.focus-panel .focus-chip.active{border-color:var(--wine);color:var(--wine);background:var(--soft)}
+  .focus-panel .focus-question{background:var(--soft);border-color:var(--line)}.focus-panel .focus-question .studio-question{margin:7px 0 4px;font-size:12px}.focus-panel .focus-question p{margin:0;color:var(--secondary)}
+  .focus-panel .studio-search,.focus-panel .studio-input{font-size:11px;min-height:38px;margin-top:5px;border-color:var(--line);background:var(--surface)}.focus-panel .studio-input{min-height:74px}
+  .focus-panel .studio-scroll>label{font-size:10px;font-weight:750;color:var(--secondary)}.focus-panel .focus-hint{font-size:10px;color:var(--muted);line-height:1.45;margin:7px 0}.focus-panel .studio-checkline{margin:9px 0;font-size:10px}.focus-panel .studio-checkline input{accent-color:var(--wine)}
+  .focus-panel .focus-stays{background:var(--soft);border:1px solid var(--line);border-radius:9px;color:var(--mint);font-size:10px;padding:8px;margin:11px 0}.focus-panel .focus-complete{background:var(--mintbg);color:var(--mint);border-radius:9px;padding:12px;line-height:1.5;margin:10px 0}
+  .focus-panel .studio-actions{flex-wrap:wrap}.focus-panel .studio-actions button{flex:1}.focus-panel .focus-dock-body{display:flex;align-items:center;gap:8px;padding:9px 10px;min-height:49px}.focus-panel .focus-dock-status{min-width:0;flex:1}.focus-panel .focus-dock-status strong{display:block;font-size:10px;white-space:nowrap}.focus-panel .focus-dock-status small{display:block;font-size:9px;color:var(--muted);white-space:nowrap}.focus-panel .focus-dock-open{background:var(--soft);border:0;border-radius:8px;color:var(--secondary);width:30px;height:30px}
+  .focus-panel .focus-compact-title{font-size:16px;font-weight:800;margin:2px 0 3px;color:var(--ink)}.focus-panel .focus-compact-copy{font-size:11px;color:var(--secondary);margin:0 0 12px}.focus-panel .focus-status{display:flex;justify-content:space-between;gap:7px;border:1px solid var(--line);background:var(--soft);border-radius:10px;padding:10px;margin:10px 0}.focus-panel .focus-status strong{font-size:11px}.focus-panel .focus-status small{display:block;font-size:10px;color:var(--secondary)}.focus-panel .focus-compact-actions{display:flex;gap:7px}.focus-panel .focus-compact-actions button{flex:1}.focus-panel .focus-utility{display:flex;justify-content:space-between;gap:7px;margin-top:12px}.focus-panel .focus-utility button{font-size:10px;background:none;border:0;color:var(--secondary);padding:3px}
+  .focus-panel .focus-drag-surface{cursor:grab}.focus-panel.dragging,.focus-panel.dragging *{cursor:grabbing!important;user-select:none!important}
+  @media(max-width:520px){.ace-panel.focus-panel{height:auto;max-height:calc(100dvh - 24px);border-radius:16px}.ace-panel.focus-panel.focus-review{max-height:calc(100dvh - 24px)}}
+  `;
 
   /* Inter, the face the website uses. A shadow root cannot declare its own
      font faces, so the face is added to the page's document, under a name no
@@ -1862,6 +1900,56 @@
     // crosses a shadow boundary is retargeted to the host, so a
     // document-level closest("[data-ace]") would find nothing.
     root.addEventListener("click", onAceClick, true);
+    root.addEventListener("change", function (event) {
+      var mirror = event.target.closest('[data-mirror]');
+      if (!mirror) return;
+      var chosen = studioFields[Number(mirror.getAttribute('data-mirror'))];
+      if (!chosen || aceMemory.isEmployerMotivation(chosen.question) || !chosen.field.isConnected) return;
+      if (chosen.field.tagName === 'SELECT' && chosen.field.multiple) {
+        var wanted = Array.from(mirror.selectedOptions).map(function (option) { return option.value; });
+        Array.from(chosen.field.options).forEach(function (option) { option.selected = wanted.indexOf(option.value) >= 0; });
+        chosen.field.dispatchEvent(new Event('input', { bubbles: true }));
+        chosen.field.dispatchEvent(new Event('change', { bubbles: true }));
+        var selectedValues = Array.from(chosen.field.selectedOptions).map(function (option) { return option.value; });
+        if (selectedValues.join('|') !== wanted.join('|')) studioError = 'The employer field did not accept these options. Choose them on the form.';
+      } else if (chosen.field.tagName === 'SELECT' && mirror.value) {
+        setNatively(chosen.field, mirror.value);
+        if (chosen.field.value !== mirror.value) studioError = 'The employer field did not accept this option. Choose it on the form.';
+      } else if (aceIsListboxButton(chosen.field) && mirror.value) {
+        filling = true;
+        var opened = listboxOpenedBy(chosen.field, []);
+        var resultPromise;
+        if (opened) {
+          var exact = Array.from(opened.querySelectorAll('[role=option]')).filter(function (option) {
+            return String(option.textContent || '').trim() === mirror.value;
+          });
+          if (exact.length === 1) press(exact[0]);
+          resultPromise = Promise.resolve({ matched: exact.length === 1 && !aceIsEmpty(chosen.field) });
+        } else resultPromise = fillOneListbox(chosen.field, mirror.value, []);
+        resultPromise.then(function (result) {
+          filling = false;
+          if (!result || !result.matched) studioError = 'The employer field did not accept this option. Choose it on the form.';
+          renderStudio(panel());
+        }, function () {
+          filling = false;
+          studioError = 'The employer field did not accept this option. Choose it on the form.';
+          renderStudio(panel());
+        });
+        return;
+      } else if (aceIsChoiceControl(chosen.field) && mirror.value) {
+        var members = groupMembers(chosen.field);
+        var option = members.find(function (member) { return aceOptionLabel(member) === mirror.value; });
+        if (option && !aceIsChosen(option)) option.click();
+        if (!option || !aceIsChosen(option)) studioError = 'The employer field did not accept this option. Choose it on the form.';
+      }
+      renderStudio(panel());
+    });
+    root.addEventListener('input', function (event) {
+      if (event.target && event.target.id === 'studio-answer' && event.target.tagName === 'TEXTAREA' && reviewQuestion) {
+        reviewDrafts.set(reviewQuestion, event.target.value);
+      }
+    });
+    installFocusDrag(root);
 
     document.body.appendChild(host);
 
@@ -2050,6 +2138,7 @@
       var group = aceIsChoiceControl(field) ? groupMembers(field) : [field];
       var answered = !group.every(aceIsEmpty);
       var name = answerNameFor(question, kind);
+      if ((!name || !answers[name]) && !approvedQuestions.has(key) && !skippedQuestions.has(key)) reviewSeen.add(key);
       var explicitLabel = field.id ? document.querySelector('label[for="' + CSS.escape(field.id) + '"]') : null;
       var display = explicitLabel ? aceTextWithoutControls(explicitLabel) : field.getAttribute("aria-label") || question;
       studioFields.push({ field: field, question: question, kind: kind, key: key,
@@ -2060,8 +2149,9 @@
   }
 
   function needsStudioReview(field) {
-    return !field.answered && !skippedQuestions.has(field.key) &&
-      (!field.name || !!(pending && pending.noOption.some(function (item) { return item[0] === field.name; })));
+    return !approvedQuestions.has(field.key) && !skippedQuestions.has(field.key) &&
+      (reviewSeen.has(field.key) || (!field.answered &&
+        (!field.name || !answers[field.name] || !!(pending && pending.noOption.some(function (item) { return item[0] === field.name; })))));
   }
 
   function studioOverview(fields) {
@@ -2078,26 +2168,78 @@
       '<div class="studio-metrics"><div class="studio-metric"><b>' + filled + '</b><span>Filled by ACE</span></div><div class="studio-metric"><b>' + needs + '</b><span>Needs review</span></div><div class="studio-metric"><b>' + memory.length + '</b><span>In Memory</span></div></div>' +
       '<section class="studio-card"><h2>✓ &nbsp;Filled from trusted sources <span class="studio-source-count">' + filled + ' fields</span></h2><p>Visible answers remain editable on the employer form. ACE never touches the final submit button.</p><div class="studio-source"><span class="studio-source-icon">✓</span><span><strong>Profile</strong><small>Verified identity and saved answers</small></span><b>' + profile + ' fields</b></div><div class="studio-source"><span class="studio-source-icon">□</span><span><strong>Answer Memory</strong><small>Previously approved reusable answers</small></span><b>' + remembered + ' fields</b></div><div class="studio-source"><span class="studio-source-icon">△</span><span><strong>User review required</strong><small>No fill without enough evidence</small></span><b>' + needs + ' fields</b></div></section>' +
       '<section class="studio-card"><div class="studio-between"><h2>Answer Memory</h2><button class="studio-button small" data-ace="tab:memory">Browse memory</button></div><p>Approved reusable answers can match equivalent questions on another application.</p></section>' +
-      '<section class="studio-card"><div class="studio-between"><h2>Needs your input</h2><span class="studio-pill">' + needs + ' open</span></div><p>New, company-specific and sensitive questions stay in Review.</p><button class="studio-button small" data-ace="tab:review">Open review</button></section>' +
+      '<section class="studio-card"><div class="studio-between"><h2>Needs your input</h2><span class="studio-pill">' + needs + ' open</span></div><p>New and protected questions stay in Review. Complete company motivation on the employer form.</p><button class="studio-button small" data-ace="tab:review">Open review</button></section>' +
       '<section class="studio-card"><h2>Current form</h2><p>' + esc(plain(document.title || location.hostname)) + '</p><p>Detected on ' + esc(location.hostname) + '. No resume attachment is claimed by ACE.</p><button class="studio-button small" data-ace="auto">Auto-fill known: ' + (autoKnown ? 'On' : 'Off') + '</button></section>';
   }
 
   function studioReview(fields) {
     var open = fields.filter(needsStudioReview);
-    var html = '<div class="studio-between"><h2>Review queue</h2><span class="studio-pill">' + open.length + ' open</span></div><p>Only your approved answers are saved.</p>';
-    if (!open.length) return html + '<div class="studio-empty">No questions waiting for review.</div>';
-    return html + open.map(function (f) {
-      var index = fields.indexOf(f);
-      var why = f.protected === "sensitive" ? "Sensitive question. Confirm for this application only." :
-        f.protected === "company" ? "Company-specific answer. Reuse is disabled." :
-        f.name ? "A saved answer did not match the choices offered here." : "No approved matching answer yet.";
-      var active = reviewQuestion === f.key;
-      return '<article class="studio-card"><span class="studio-pill">' + (f.protected === "reusable" ? 'New question' : 'Review required') + '</span><div class="studio-question">' + esc(plain(f.display)) + '</div><p>' + why + '</p>' +
-        (active ? '<label for="studio-answer">Your answer</label><textarea id="studio-answer" class="studio-input" aria-label="Your answer"></textarea>' +
-          (f.protected === "reusable" ? '<label class="studio-checkline"><input id="studio-reuse" type="checkbox" checked> Save reusable answer to Memory</label>' : '<p>This answer is used once and is not saved to Memory.</p>') +
-          '<div class="studio-actions"><button class="studio-button wine" data-ace="approve:' + index + '">Approve and fill</button><button class="studio-button" data-ace="cancel-review">Cancel</button></div>' :
-          '<div class="studio-actions"><button class="studio-button wine" data-ace="answer:' + index + '">Answer and approve</button><button class="studio-button" data-ace="skip:' + index + '">Skip for now</button></div>') + '</article>';
-    }).join("");
+    var total = reviewSeen.size;
+    var done = Array.from(reviewSeen).filter(function (key) { return approvedQuestions.has(key); }).length;
+    var skipped = fields.filter(function (field) { return skippedQuestions.has(field.key) && !approvedQuestions.has(field.key); }).length;
+    var selected = open.find(function (f) { return f.key === reviewQuestion; }) || open[0];
+    if (selected) reviewQuestion = selected.key;
+    var html = '<div class="focus-title-row"><h2>' + (open.length ? 'Review questions' : skipped ? 'Review paused' : 'Review complete') + '</h2>' +
+      (open.length || skipped ? '<span class="studio-pill">' + (open.length + skipped) + ' open</span>' : '') + '</div>' +
+      '<p class="focus-subtitle">' + (open.length ? 'Keep answering here, or on the employer form.' : skipped ?
+        'Skipped questions still need your decision on this application.' :
+        'ACE\'s review queue is complete. Finish any company-motivation answer on the employer form before submitting manually.') + '</p>' +
+      '<div class="focus-progress"><span>' + done + ' of ' + total + ' answered</span><i><b style="width:' + (total ? Math.round(done / total * 100) : 100) + '%"></b></i><span>' + (open.length + skipped) + ' left</span></div>';
+    if (!selected && skipped) return html + '<div class="focus-complete">' + skipped + ' skipped question' + (skipped === 1 ? '' : 's') + ' remain. ACE has not submitted anything.</div>' +
+      '<p class="focus-stays">✓ &nbsp;Review stays open until you minimize ACE.</p><div class="studio-actions"><button class="studio-button wine" data-ace="resume-review">Resume review</button><button class="studio-button" data-ace="show-form">Check employer form</button></div><div class="focus-utility"><button data-ace="tab:overview">Overview</button><button data-ace="workspace">Memory &amp; activity</button></div>';
+    if (!selected) return html + '<div class="focus-complete">All ACE-managed review questions have been addressed. ACE has not submitted anything.</div>' +
+      '<p class="focus-stays">✓ &nbsp;Review stays open until you minimize ACE.</p><div class="studio-actions"><button class="studio-button" data-ace="show-form">Check employer form</button><button class="studio-button" data-ace="minimize">Minimize when ready</button></div><div class="focus-utility"><button data-ace="tab:overview">Overview</button><button data-ace="workspace">Memory &amp; activity</button></div>';
+    html += '<div class="focus-chips">' + open.slice(0, 6).map(function (f, at) {
+      return '<button class="focus-chip ' + (f.key === selected.key ? 'active' : '') + '" data-ace="question:' + fields.indexOf(f) + '">' + (at + 1) + '. ' + esc(tidy(plain(f.display))) + '</button>';
+    }).join('') + '</div>';
+    var index = fields.indexOf(selected);
+    var current = reviewValue(selected);
+    var isChoice = selected.field.tagName === 'SELECT' || aceIsChoiceControl(selected.field);
+    var control = '';
+    if (selected.field.tagName === 'SELECT') {
+      control = '<label for="studio-answer">Exact employer options</label><select id="studio-answer" class="studio-search" aria-label="Exact employer options" data-mirror="' + index + '"' + (selected.field.multiple ? ' multiple size="4"' : '') + '>' + (selected.field.multiple ? '' : '<option value=""' + (current ? '' : ' selected') + '>Choose an option</option>') +
+        Array.from(selected.field.options).filter(function (option, at) { return !(at === 0 && isPlaceholderText(option.textContent)); }).map(function (option) {
+          return '<option value="' + esc(option.value) + '"' + ((selected.field.multiple ? option.selected : option.value === current) ? ' selected' : '') + '>' + esc(plain(option.textContent)) + '</option>';
+        }).join('') + '</select>';
+    } else if (aceIsChoiceControl(selected.field)) {
+      var choices = groupMembers(selected.field);
+      control = '<label for="studio-answer">Exact employer options</label><select id="studio-answer" class="studio-search" aria-label="Exact employer options" data-mirror="' + index + '"><option value="">Select an option</option>' +
+        choices.map(function (choice) { var option = aceOptionLabel(choice); return '<option value="' + esc(option) + '"' + (option === current ? ' selected' : '') + '>' + esc(plain(option)) + '</option>'; }).join('') + '</select>';
+    } else if (aceIsListboxButton(selected.field) && customOptions.has(selected.key)) {
+      control = '<label for="studio-answer">Exact employer options</label><select id="studio-answer" class="studio-search" aria-label="Exact employer options" data-mirror="' + index + '"><option value="">Choose an option</option>' +
+        customOptions.get(selected.key).map(function (option) {
+          return '<option value="' + esc(option) + '"' + (option === current ? ' selected' : '') + '>' + esc(plain(option)) + '</option>';
+        }).join('') + '</select>';
+    } else if (selected.field.tagName === 'BUTTON' || aceIsAutocomplete(selected.field)) {
+      control = '<p>Choose this option on the employer form. ACE will show it here when the form reports a selected value.</p>';
+    } else {
+      control = '<label for="studio-answer">Your answer</label><textarea id="studio-answer" class="studio-input" aria-label="Your answer">' + esc(current || reviewDrafts.get(selected.key) || '') + '</textarea>';
+    }
+    var why = selected.protected === 'reusable' ? 'New question. Review this answer before saving.' :
+      'Protected question. Confirm for this application only.';
+    html += '<article class="studio-card focus-question"><span class="studio-pill ' + (selected.protected === 'reusable' ? 'good' : '') + '">' +
+      (selected.protected === 'reusable' ? 'New question' : 'Review required') + (isChoice ? ' · Dropdown' : '') + '</span><div class="studio-question">' + esc(plain(selected.display)) + '</div><p>' + why + '</p></article>' +
+      control + '<p class="focus-hint">Select here or on the employer page. ACE checks the employer control before approval.</p>' +
+      (selected.protected === 'reusable' && !selected.field.multiple ? '<label class="studio-checkline"><input id="studio-reuse" type="checkbox" checked> Remember this approved answer for equivalent questions</label>' :
+        '<p class="focus-hint">Used for this application only. It is not saved to Memory.</p>') +
+      '<p class="focus-stays">✓ &nbsp;Review stays open until you minimize ACE.</p>' +
+      '<div class="studio-actions"><button class="studio-button wine" data-ace="approve:' + index + '">Approve &amp; fill</button><button class="studio-button" data-ace="show-form">Show on form</button><button class="studio-button" data-ace="skip:' + index + '">Skip</button></div><div class="focus-utility"><button data-ace="tab:overview">Overview</button><button data-ace="workspace">Memory &amp; activity</button></div>';
+    return html;
+  }
+
+  function reviewValue(item) {
+    var field = item.field;
+    if (!field || !field.isConnected) return '';
+    if (field.tagName === 'SELECT') return field.multiple
+      ? Array.from(field.selectedOptions).map(function (option) { return String(option.textContent || '').trim(); }).join(', ')
+      : aceIsEmpty(field) ? '' : field.value;
+    if (aceIsChoiceControl(field)) {
+      var chosen = groupMembers(field).find(aceIsChosen);
+      return chosen ? aceOptionLabel(chosen) : '';
+    }
+    if (aceIsListboxButton(field)) return aceIsEmpty(field) ? '' : String(field.textContent || '').trim();
+    if (aceIsAutocomplete(field)) return aceIsEmpty(field) ? '' : String(field.value || '').trim();
+    return String(field.value || '').trim();
   }
 
   function studioMemory() {
@@ -2119,24 +2261,115 @@
       '<button class="studio-button small" data-ace="undo"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h9a6 6 0 0 1 0 12h-2"/></svg>Undo last fill</button> <button class="studio-button small" data-ace="copy">Copy field diagnostics</button><span class="ace-copied studio-receipt"></span>';
   }
 
+  function focusCompact(fields) {
+    var open = fields.filter(function (field) { return needsStudioReview(field) || skippedQuestions.has(field.key); }).length;
+    var filled = lastFill.filter(function (entry) { return entry.field && entry.field.isConnected; }).length;
+    return '<p class="studio-eyebrow">Your application assistant</p><h2 class="focus-compact-title">You\'re in control</h2>' +
+      '<p class="focus-compact-copy">Fill known answers, then review each remaining question on this form.</p>' +
+      '<div class="focus-status"><span><strong>' + filled + ' filled</strong><small>Approved answers</small></span><span><strong>' + open + ' to review</strong><small>Needs your decision</small></span></div>' +
+      '<div class="focus-compact-actions"><button class="studio-button wine" data-ace="fill">Fill</button><button class="studio-button" data-ace="tab:review">Review' + (open ? ' ' + open : '') + '</button></div>' +
+      '<div class="focus-utility"><button data-ace="scan">Scan fields</button><button data-ace="workspace">Open memory &amp; activity</button></div>';
+  }
+
+  function focusGrip() {
+    return '<button class="studio-icon focus-grip" data-focus-grip="1" type="button" aria-label="Move ACE with pointer or arrow keys" title="Drag ACE. Double-click to reset position"><svg viewBox="0 0 18 24" aria-hidden="true"><circle cx="5" cy="5" r="1.5"/><circle cx="12" cy="5" r="1.5"/><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="5" cy="19" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>';
+  }
+
+  function positionFocus(host) {
+    var x = focusPosition ? focusPosition.x * Math.max(0, innerWidth - host.offsetWidth) : Math.max(12, innerWidth - host.offsetWidth - 18);
+    var y = focusPosition ? focusPosition.y * Math.max(0, innerHeight - host.offsetHeight) : 18;
+    host.style.left = Math.max(0, Math.min(x, innerWidth - host.offsetWidth)) + 'px';
+    host.style.top = Math.max(0, Math.min(y, innerHeight - host.offsetHeight)) + 'px';
+  }
+
+  function saveFocusPosition(host) {
+    focusPosition = {
+      x: Math.max(0, Math.min(1, parseFloat(host.style.left) / Math.max(1, innerWidth - host.offsetWidth))),
+      y: Math.max(0, Math.min(1, parseFloat(host.style.top) / Math.max(1, innerHeight - host.offsetHeight)))
+    };
+    if (chrome.storage && chrome.storage.local) chrome.storage.local.set({ aceFocusPosition: focusPosition });
+  }
+
+  function installFocusDrag(root) {
+    var gesture = null;
+    root.addEventListener('pointerdown', function (event) {
+      var host = root.querySelector('.ace-panel.focus-panel');
+      if (!host || !host.contains(event.target) || event.button !== 0) return;
+      var grip = event.target.closest('[data-focus-grip]');
+      if (!grip && (event.target.closest('button,input,textarea,select,a,label,[contenteditable]') || event.pointerType === 'touch')) return;
+      gesture = { id: event.pointerId, x: event.clientX, y: event.clientY,
+        left: host.offsetLeft, top: host.offsetTop, moved: false };
+    });
+    root.addEventListener('pointermove', function (event) {
+      if (!gesture || gesture.id !== event.pointerId) return;
+      var host = root.querySelector('.ace-panel.focus-panel');
+      if (!host) return;
+      var dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
+      if (!gesture.moved && Math.hypot(dx, dy) < 5) return;
+      if (!gesture.moved) host.setPointerCapture(event.pointerId);
+      gesture.moved = true;
+      host.classList.add('dragging');
+      host.style.left = Math.max(0, Math.min(innerWidth - host.offsetWidth, gesture.left + dx)) + 'px';
+      host.style.top = Math.max(0, Math.min(innerHeight - host.offsetHeight, gesture.top + dy)) + 'px';
+      event.preventDefault();
+    });
+    function finish(event) {
+      if (!gesture || gesture.id !== event.pointerId) return;
+      var host = root.querySelector('.ace-panel.focus-panel');
+      if (host && gesture.moved) {
+        saveFocusPosition(host);
+        host.classList.remove('dragging');
+      }
+      gesture = null;
+    }
+    root.addEventListener('pointerup', finish);
+    root.addEventListener('pointercancel', finish);
+    root.addEventListener('dblclick', function (event) {
+      if (!event.target.closest('[data-focus-grip]')) return;
+      focusPosition = null;
+      if (chrome.storage && chrome.storage.local) chrome.storage.local.remove('aceFocusPosition');
+      positionFocus(root.querySelector('.ace-panel.focus-panel'));
+    });
+    root.addEventListener('keydown', function (event) {
+      if (!event.target.closest('[data-focus-grip]') || !/^Arrow/.test(event.key)) return;
+      var host = root.querySelector('.ace-panel.focus-panel');
+      var step = event.shiftKey ? 24 : 10;
+      var dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
+      var dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
+      host.style.left = Math.max(0, Math.min(innerWidth - host.offsetWidth, host.offsetLeft + dx)) + 'px';
+      host.style.top = Math.max(0, Math.min(innerHeight - host.offsetHeight, host.offsetTop + dy)) + 'px';
+      saveFocusPosition(host); event.preventDefault();
+    });
+    window.addEventListener('resize', function () {
+      var host = root.querySelector('.ace-panel.focus-panel');
+      if (host) positionFocus(host);
+    });
+  }
+
   function renderStudio(host) {
     var previous = host.querySelector(".studio-scroll");
     var scroll = previous ? previous.scrollTop : 0;
     var fields = collectStudioFields();
-    var open = fields.filter(needsStudioReview).length;
+    var open = fields.filter(function (field) { return needsStudioReview(field) || skippedQuestions.has(field.key); }).length;
     var titleParts = document.title.split(/\s[|·]\s/);
     var employer = (titleParts.length > 1 ? titleParts[titleParts.length - 1] : location.hostname.replace(/^www\./, "")) || "Application form";
-    var body = studioTab === "review" ? studioReview(fields) : studioTab === "memory" ? studioMemory() : studioTab === "activity" ? studioActivity() : studioOverview(fields);
-    host.classList.toggle("night", studioTheme === "night");
+    var body = focusMode === 'review' ? studioReview(fields) : focusMode === 'compact' ? focusCompact(fields) :
+      studioTab === "memory" ? studioMemory() : studioTab === "activity" ? studioActivity() : studioOverview(fields);
+    host.className = 'ace-panel focus-panel focus-' + focusMode + (studioTheme === 'night' ? ' night' : '');
     var legacyStatus = lastResult ? 'Filled ' + lastResult.filled.length + ' fields' : 'Fill ' + (pending ? pending.willFill.length : 0) + ' fields';
     var themeLabel = studioTheme === "day" ? "Switch to Night theme" : "Switch to Day theme";
     var themeSvg = studioTheme === "day" ? '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"/></svg>' : '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>';
-    render(host, '<span class="ace-title" style="display:none">' + legacyStatus + '</span><header class="studio-head"><div class="studio-top"><span class="studio-logo">ace</span><span class="studio-live">● Form detected</span><button class="studio-icon" data-ace="theme" aria-label="' + themeLabel + '" title="' + themeLabel + '">' + themeSvg + '</button><button class="studio-icon" data-ace="close" aria-label="Close" title="Close">×</button></div><div class="studio-company"><span class="studio-glyph">' + esc(employer.charAt(0).toUpperCase()) + '</span><div><strong>' + esc(plain(employer)) + '</strong><small>' + esc(plain(document.title || 'Application form')) + '</small></div><span class="studio-page-pill">On this page</span></div><p class="studio-tagline">ACE fills. You review. You submit.</p></header>' +
-      '<nav class="studio-tabs" aria-label="Apply Studio sections">' + ["overview", "review", "memory", "activity"].map(function (tab) { return '<button data-ace="tab:' + tab + '" class="' + (studioTab === tab ? 'active' : '') + '">' + tab.charAt(0).toUpperCase() + tab.slice(1) + (tab === "review" && open ? ' ' + open : '') + '</button>'; }).join("") + '</nav>' +
-      '<div class="studio-scroll">' + (studioError ? '<div class="studio-error">' + esc(studioError) + '</div>' : '') + body + '</div>' +
-      '<footer class="studio-foot"><div class="studio-foot-actions"><button class="studio-button wine" data-ace="fill"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg> Fill</button><button class="studio-button" data-ace="scan"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg> Scan fields</button></div><small>No auto-submit. Employer submission is always manual.</small></footer>');
-    host.querySelector(".studio-scroll").scrollTop = scroll;
-    var searchBox = host.querySelector(".studio-search");
+    if (focusMode === 'dock') {
+      render(host, '<div class="focus-dock-body">' + focusGrip() + '<span class="studio-logo">ace</span><span class="focus-dock-status"><strong>' + lastFill.length + ' filled · ' + open + ' to review</strong><small>Form detected · No auto-submit</small></span><button class="focus-dock-open" data-ace="expand" aria-label="Expand ACE">⌄</button></div>');
+    } else {
+      render(host, '<span class="ace-title" style="display:none">' + legacyStatus + '</span><header class="studio-head"><div class="studio-top"><span class="studio-logo">ace</span><span class="studio-live">● Form detected</span>' + focusGrip() + '<button class="studio-icon" data-ace="theme" aria-label="' + themeLabel + '" title="' + themeLabel + '">' + themeSvg + '</button><button class="studio-icon" data-ace="minimize" aria-label="Minimize ACE" title="Minimize ACE">⌄</button></div><p class="studio-tagline">' + esc(plain(employer)) + ' · ' + esc(plain(document.title || 'Application form')) + '</p></header>' +
+        (focusMode === 'workspace' ? '<nav class="studio-tabs" aria-label="ACE sections">' + ["overview", "review", "memory", "activity"].map(function (tab) { return '<button data-ace="tab:' + tab + '" class="' + (studioTab === tab ? 'active' : '') + '">' + tab.charAt(0).toUpperCase() + tab.slice(1) + '</button>'; }).join('') + '</nav>' : '') +
+        '<div class="studio-scroll">' + (studioError ? '<div class="studio-error">' + esc(studioError) + '</div>' : '') + body + '</div>' +
+        '<footer class="studio-foot">' + (focusMode === 'workspace' ? '<div class="studio-foot-actions"><button class="studio-button wine" data-ace="fill">Fill</button><button class="studio-button" data-ace="scan">Scan fields</button></div>' : '') + '<small>ACE fills. You review. You submit.</small></footer>');
+      host.querySelector(".studio-scroll").scrollTop = scroll;
+    }
+    positionFocus(host);
+    var searchBox = host.querySelector(".studio-search[type=search]");
     if (searchBox) searchBox.addEventListener("input", function () { renderStudio(host); var next = host.querySelector(".studio-search"); next.focus(); next.setSelectionRange(searchBox.value.length, searchBox.value.length); });
   }
 
@@ -2363,6 +2596,13 @@
     // also fires on that navigation. A new set of questions gets a new
     // preview, and the previous page's undo cannot apply to fields that
     // are no longer in the document.
+    var newApplicationStep = location.href !== lastHref || stepReplaced();
+    if (newApplicationStep) {
+      reviewSeen.clear();
+      approvedQuestions.clear();
+      customOptions.clear();
+      reviewDrafts.clear();
+    }
     if (location.href !== lastHref || movedOn()) {
       lastResult = null;
       lastFill = [];
@@ -2507,10 +2747,12 @@
         if (prefsReady && memoryReady && historyReady && autoKnown) runFill();
       }
 
-      if (chrome.storage && chrome.storage.local) chrome.storage.local.get({ aceStudioTheme: "day", aceAutoKnown: true, aceStudioActivity: [] }, function (prefs) {
+      if (chrome.storage && chrome.storage.local) chrome.storage.local.get({ aceStudioTheme: "day", aceAutoKnown: true, aceStudioActivity: [], aceFocusPosition: null }, function (prefs) {
         studioTheme = prefs.aceStudioTheme === "night" ? "night" : "day";
         autoKnown = !!prefs.aceAutoKnown;
         activity = Array.isArray(prefs.aceStudioActivity) ? prefs.aceStudioActivity.slice(0, 35) : [];
+        focusPosition = prefs.aceFocusPosition && typeof prefs.aceFocusPosition.x === 'number' && typeof prefs.aceFocusPosition.y === 'number'
+          ? prefs.aceFocusPosition : null;
         prefsReady = true;
         refresh();
         fillWhenReady();
@@ -2630,8 +2872,27 @@
       return;
     }
 
+    if (action === 'minimize') { focusMode = 'dock'; renderStudio(panel()); return; }
+    if (action === 'expand') { focusMode = studioTab === 'review' ? 'review' : 'compact'; renderStudio(panel()); return; }
+    if (action === 'workspace') { focusMode = 'workspace'; studioTab = 'memory'; renderStudio(panel()); return; }
+    if (action === 'resume-review') { skippedQuestions.clear(); renderStudio(panel()); return; }
+    if (action === 'show-form') {
+      var target = studioFields.find(function (f) { return f.key === reviewQuestion; });
+      if (target && target.field && target.field.isConnected) {
+        target.field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        try { target.field.focus({ preventScroll: true }); } catch (error) { /* Employer widget may reject focus. */ }
+      }
+      return;
+    }
+    if (action.indexOf('question:') === 0) {
+      var item = studioFields[Number(action.slice(9))];
+      if (item) reviewQuestion = item.key;
+      renderStudio(panel()); return;
+    }
+
     if (action.indexOf("tab:") === 0) {
       studioTab = action.slice(4);
+      focusMode = studioTab === 'review' ? 'review' : studioTab === 'overview' ? 'compact' : 'workspace';
       renderStudio(panel());
       return;
     }
@@ -2691,41 +2952,66 @@
     if (action.indexOf("approve:") === 0) {
       var chosen = studioFields[Number(action.slice(8))];
       var valueBox = panel().querySelector("#studio-answer");
-      var value = valueBox ? valueBox.value.trim() : "";
-      if (!chosen || !value) { studioError = "Enter an answer before approval."; renderStudio(panel()); return; }
-      var save = chosen.protected === "reusable" && !!panel().querySelector("#studio-reuse:checked");
+      if (!chosen || aceMemory.isEmployerMotivation(chosen.question)) return;
+      var value = valueBox && valueBox.multiple
+        ? Array.from(valueBox.selectedOptions).map(function (option) { return String(option.textContent || '').trim(); }).join(', ')
+        : valueBox ? valueBox.value.trim() : reviewValue(chosen);
+      if (!value || !chosen.field.isConnected) { studioError = "Choose an answer here or on the employer form before approval."; renderStudio(panel()); return; }
+      var save = chosen.protected === "reusable" && !chosen.field.multiple && !!panel().querySelector("#studio-reuse:checked");
       function applyApproved() {
-        if (!chosen.field.isConnected || !aceIsEmpty(chosen.field)) {
+        if (!chosen.field.isConnected) {
           studioError = "This field changed. Review the employer form before filling.";
           renderStudio(panel());
           return;
         }
+        var existing = reviewValue(chosen);
+        if (existing && existing !== value) {
+          studioError = "The employer field has a different answer. Review it on the form.";
+          renderStudio(panel()); return;
+        }
+        if (existing === value) { finishApproval(); return; }
+        if (chosen.field.multiple) {
+          studioError = "The employer field did not accept all selected options. Choose them on the form.";
+          renderStudio(panel()); return;
+        }
         filling = true;
-        var outcome = aceIsAutocomplete(chosen.field)
+        var outcome = aceIsListboxButton(chosen.field)
+          ? fillOneListbox(chosen.field, value, [])
+          : aceIsAutocomplete(chosen.field)
           ? fillOneCombobox(chosen.field, value, [])
           : Promise.resolve({ matched: fillOne(chosen.field, value, []) });
         outcome.then(function (result) {
           filling = false;
-          if (!result || !result.matched) {
+          if (!result || !result.matched || aceIsEmpty(chosen.field)) {
             studioError = "The employer field did not accept this answer. Fill it manually.";
             renderStudio(panel());
             return;
           }
           lastFill.push({ field: lastPicked || chosen.field, previous: "", wrote: value, ticked: aceIsChoiceControl(chosen.field) });
-          reviewQuestion = "";
-          studioError = "";
-          activityNote(save ? "Answer approved and saved" : "Answer approved for this form");
-          renderStudio(panel());
+          finishApproval();
         }, function () {
           filling = false;
           studioError = "The employer field did not accept this answer. Fill it manually.";
           renderStudio(panel());
         });
       }
+      function finishApproval() {
+        approvedQuestions.add(chosen.key);
+        reviewDrafts.delete(chosen.key);
+        reviewQuestion = "";
+        studioError = "";
+        activityNote(save ? "Answer approved and saved" : "Answer approved for this form");
+        renderStudio(panel());
+      }
       if (!save) { applyApproved(); return; }
       var concept = aceMemory.concept(chosen.question);
+      var memoryValue = chosen.field.tagName === 'SELECT'
+        ? String(chosen.field.options[chosen.field.selectedIndex] && chosen.field.options[chosen.field.selectedIndex].textContent || value).trim()
+        : aceIsChoiceControl(chosen.field) && chosen.field.type === 'checkbox' && groupMembers(chosen.field).length === 1
+        ? 'Yes'
+        : value;
       chrome.runtime.sendMessage({ type: "memorySave", item: {
-        concept: concept, question: chosen.display, answer: value,
+        concept: concept, question: chosen.display, answer: memoryValue,
         answer_type: chosen.kind, source_host: location.hostname
       } }, function (reply) {
         if (chrome.runtime.lastError || !reply || !reply.ok) {
@@ -2734,11 +3020,11 @@
           return;
         }
         var old = memory.find(function (m) { return m.concept === concept; });
-        if (old) { old.answer = value; old.question = chosen.display; old.revision = reply.item.revision; }
+        if (old) { old.answer = memoryValue; old.question = chosen.display; old.revision = reply.item.revision; }
         else memory.push({ id: reply.item.id, concept: concept, question: chosen.display,
-          answer: value, answer_type: chosen.kind, reuse_policy: "reusable", revision: reply.item.revision,
+          answer: memoryValue, answer_type: chosen.kind, reuse_policy: "reusable", revision: reply.item.revision,
           source_host: location.hostname });
-        answers["Memory:" + concept] = value;
+        answers["Memory:" + concept] = memoryValue;
         aliases["Memory:" + concept] = [];
         applyApproved();
       });
@@ -2877,6 +3163,42 @@
 
     waitForApplication();
   })();
+
+  // Employer-owned motivation fields are screened by label before any
+  // control value can be observed. Other review controls mirror user edits.
+  document.addEventListener('change', function (event) {
+    var field = event.target;
+    if (!loaded || filling || !field || field.closest && field.closest('.ace-root')) return;
+    if (!field.matches || !field.matches('input,textarea,select,button')) return;
+    if (aceMemory.isEmployerMotivation(aceQuestionFor(field))) return;
+    if (focusMode === 'review') setTimeout(function () {
+      var host = document.querySelector('.ace-root');
+      if (host && host.shadowRoot) renderStudio(host.shadowRoot.querySelector('.ace-panel'));
+    }, 60);
+  }, true);
+
+  // A Workday-style listbox may not expose options until the applicant
+  // opens it. Mirror only the actual menu associated with that control.
+  document.addEventListener('click', function (event) {
+    var field = event.target && event.target.closest && event.target.closest('button[aria-haspopup="listbox"]');
+    if (!field || !loaded) return;
+    var question = aceQuestionFor(field);
+    if (aceMemory.isEmployerMotivation(question)) return;
+    var before = shownListboxes();
+    setTimeout(function () {
+      var box = listboxOpenedBy(field, before);
+      if (!box) return;
+      var options = Array.from(box.querySelectorAll('[role=option]')).filter(function (option) {
+        return option.getAttribute('aria-disabled') !== 'true';
+      }).map(function (option) { return String(option.textContent || '').trim(); }).filter(Boolean);
+      if (!options.length) return;
+      customOptions.set(aceMemory.norm(question) + '|' + kindOf(field), options);
+      if (focusMode === 'review') {
+        var host = document.querySelector('.ace-root');
+        if (host && host.shadowRoot) renderStudio(host.shadowRoot.querySelector('.ace-panel'));
+      }
+    }, 100);
+  }, true);
 
   /* Start only once the page looks like an application.
 

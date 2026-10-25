@@ -11,7 +11,7 @@ assert.equal(memory.resolve(equivalent, "choice", saved), null);
 assert.equal(memory.policy("Do you have authorization to work in the US?"), "sensitive");
 assert.equal(memory.policy("Will you require sponsorship in the future?"), "sensitive");
 assert.equal(memory.policy("Have you ever worked at Cedarcloud?"), "company");
-assert.equal(memory.policy("Why do you want to join Cedarcloud?"), "company");
+assert.equal(memory.policy("Why do you want to join Cedarcloud?"), "employer_motivation");
 assert.equal(memory.policy("Have you applied to Cedarcloud before?"), "company");
 assert.equal(memory.policy("Do you have relatives employed at Cedarcloud?"), "company");
 assert.equal(memory.policy("Please acknowledge this by entering today's date."), "sensitive");
@@ -19,4 +19,19 @@ assert.equal(memory.resolve("Why do you want to join Northstar Labs?", "text", s
 assert.equal(memory.resolve("Do you have authorization to work in the US?", "text", saved), null);
 assert.equal(memory.equivalent("Did you work in Python?", "Did you not work in Python?", "text", "text"), false);
 assert.equal(memory.resolve(equivalent, "text", saved.concat(saved)), null);
-console.log("all 14 memory safety cases pass");
+for (const question of [
+  "Why this company?",
+  "Why do you want to work at Cobalt Systems?",
+  "What interests you about joining us?",
+  "What excites you about working at Northstar Labs?",
+  "Please describe your motivation for applying here",
+]) {
+  assert.equal(memory.isEmployerMotivation(question), true, question);
+  assert.equal(memory.resolve(question, "text", [{ ...saved[0], question }]), null);
+}
+for (const question of [
+  "Why did you choose Terraform instead of Pulumi?",
+  "Why was eventual consistency appropriate?",
+  "Explain a technical design tradeoff you faced",
+]) assert.equal(memory.isEmployerMotivation(question), false, question);
+console.log("memory safety cases pass");

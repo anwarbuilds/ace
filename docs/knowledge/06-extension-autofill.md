@@ -882,3 +882,15 @@ toolbar popup now use the same face and scale.
 Checks: `test-rules.js`, `test-memory.js` and the `web/tests/e2e/extension-*.spec.ts` tests pass. Those tests stub
 `chrome.runtime.getURL`, so they cover the fallback path; serving the extension folder over HTTP showed the face loading
 in Day and Night with no page errors.
+
+## Focus Mode V5.1 keeps employer motivation on the employer form (2026-10-24)
+
+The V4 full-height panel used a generic textarea for every unknown question. That made a dropdown require the applicant to choose once on the employer form and type the answer again in ACE. It also pulled company-motivation prompts into Review, where ACE had no business storing a response.
+
+The existing content script now renders the approved compact Wine and Rose Focus card, a persistent Review state, optional Workspace and a minimized dock. The shadow-root panel remains part of the original MV3 extension and keeps its answer bank, pairing, history and form adapters. Dragging works from the six-dot grip and non-interactive card surfaces; position is normalized to the viewport and stored in Chrome. The same approved answer is never interpreted as employer submission.
+
+`aceMemory.isEmployerMotivation()` classifies question labels before the form scanner can read input values. Scan, Fill, diagnostics, Review and progress all share `fillable()`, which excludes these fields. Historical Memory rows are filtered in the extension without deleting them. The classifier has cases for employer-specific variants and counterexamples for ordinary technical `why` questions.
+
+Review mirrors native select and choice options exactly. If a Workday-style listbox exposes its actual options when the applicant opens it, ACE mirrors those choices and verifies that the employer control accepted the selection. Inaccessible custom controls remain on the employer form. Approved reusable answers use the existing V4 API; protected questions are per-application only. Review stays open after approval and Skip; skipped questions show `Review paused`, not a false completion.
+
+The extension-only upgrade requires no schema migration. Browser fixtures cover Day and Night, narrow widths, drag, dock, dropdown synchronization, motivation exclusion, dynamic questions, Memory and the no-submit invariant. The older V4 browser regression was updated for the approved interface while retaining its behavioral checks. No production deployment or extension publication was performed in this implementation step.

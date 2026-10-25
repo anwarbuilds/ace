@@ -99,6 +99,8 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
+**2026-10-24 extension update:** ACE Focus Mode V5.1 is implemented locally in the existing MV3 extension on `wine-rose-platform`. The panel is a compact floating card with Review, Workspace, a minimized dock, free dragging, persisted position, Day/Night themes, native and supported listbox option mirroring, and persistent Review completion. Employer-motivation questions are excluded from scan, fill, Review, Memory reuse and progress; older records are retained on the server. This update requires no database migration and has not been deployed or published. See `extension/README.md` and `web/tests/e2e/extension-focus-v5.spec.ts` for usage and browser verification.
+
 The current production migration record is `ACE_NEXT_KNOWLEDGE.md`. Read it
 before any database copy, Oracle deployment, Google OAuth setup or scheduler
 cutover. It records the aggregate live inventory, staged migration, rollback,

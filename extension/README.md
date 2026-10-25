@@ -1,36 +1,38 @@
-# ACE Apply Studio V4
+# ACE Focus Mode V5.1
 
-Apply Studio runs inside the existing ACE Chrome extension. It fills application fields and stops. You review every field and submit the employer application yourself. Filling never marks a job Applied in ACE.
+Focus Mode runs inside the existing ACE Chrome extension. It fills supported fields and stops. You review the employer form and submit it yourself. Filling never marks an application Applied.
 
 ## Install or reload
 
 1. Open `chrome://extensions` and turn on **Developer mode**.
-2. Choose **Load unpacked** and select `/home/ubuntu/Documents/ace-next/extension` if ACE is not installed yet. If it is already installed, click **Reload** on its card.
-3. Reload any employer tabs that were open before the extension reload. Chrome injects the updated content script when a tab loads.
-4. Open the ACE toolbar icon, set the ACE address to `https://ace.opik.net` if this browser uses the cloud instance, then pair it with a fresh code from ACE's Autofill Extension page. A local ACE instance uses `http://localhost:8000` instead.
+2. If ACE is already installed, click **Reload** on its card. Otherwise choose **Load unpacked** and select `/home/ubuntu/Documents/ace-next/extension`.
+3. Reload employer application tabs that were open before the extension reload. Chrome injects new content scripts on page load.
+4. In the ACE toolbar popup, set the address to `https://ace.opik.net` for the cloud account, then pair it with a fresh code from the ACE Autofill Extension page. A local ACE instance uses `http://localhost:8000`.
 
-The V4 Answer Memory API needs database migration `0050_extension_answer_memory` on the ACE server before approvals can be saved. Reloading the unpacked extension alone does not deploy that API or migration.
+Focus Mode uses the existing V4 Answer Memory API. No new database migration or pairing step is required for V5.1.
 
-If the Memory tab says the server needs the V4 update, the extension has loaded but the selected ACE server has not. Check the ACE address in the toolbar popup. After the server update, use **Retry connection** in Memory. You do not need to reload the employer page for that retry.
+## Use Focus Mode
 
-## Using Apply Studio
-
-- **Fill** applies known, approved answers to empty fields. It never overwrites a manual answer. **Alt+A** is the keyboard shortcut.
-- The **Review** tab lists unknown questions, protected questions, and saved answers that do not match an employer's offered choices. Enter an answer and choose **Approve and fill**. A reusable answer is saved to Answer Memory immediately before it is applied. Sensitive and company-specific answers are used only on this form.
-- The **Memory** tab shows approved reusable answers. You can search, edit, or delete them. A saved answer can match a carefully recognized equivalent question without reloading the employer page.
-- The **Activity** tab records local fill actions and provides **Undo** and field diagnostics. Answer values are not logged there.
-- The Day and Night themes can be switched from the panel header. The preference persists in Chrome.
-- New form questions are detected as they appear. **Scan fields** refreshes the view manually.
-- **Auto-fill known** can be turned off in Overview if you want Fill to be the only trigger. It affects only known answers and never submits.
-
-The existing answer bank, work and education history, pairing, supported form controls, and application tracking remain separate. Work authorization, sponsorship, legal declarations, and company-specific questions stay in Review even when a broad or previous answer exists. If ACE cannot verify a dropdown choice, it leaves that field for review.
+- The compact assistant shows **Fill** and **Review**. **Fill** only writes approved answers into empty, supported fields. **Alt+A** also starts Fill.
+- **Review** stays open while you answer, approve, or skip. It shows the employer's exact options for native selects and supported choice controls. For a Workday-style listbox, open it once on the employer form so ACE can read the offered choices. An unsupported control stays on the employer form for manual completion.
+- A choice made on the employer form appears in Review. A supported choice made in Review updates the employer control. **Approve & fill** confirms the answer. Safe, reusable answers can be saved to Answer Memory. Sensitive answers are for the current application only.
+- Company-motivation prompts, including "Why this company?" and equivalent wording, belong entirely on the employer form. ACE does not fill, review, capture, or remember those answers. Historical records remain stored but are excluded from reuse.
+- **Open memory & activity** opens the wider Workspace. Memory can be searched, edited, and deleted. Activity has **Undo** and field diagnostics. Answer values are not logged.
+- Drag ACE from its six-dot grip or another non-interactive area. Arrow keys move it when the grip is focused. Double-click the grip to reset its position. The position is saved in Chrome. **Minimize ACE** creates a small dock; **Expand ACE** restores the card.
+- New form questions are detected automatically. **Scan fields** is a manual fallback. The Day/Night control is in the card header. The existing answer bank, history, resume features, pairing, and site adapters remain in place.
 
 ## Local checks
 
-From the repository root, run `node extension/test-rules.js` and `node extension/test-memory.js`. The browser regression tests live in `web/tests/e2e/extension-*.spec.ts`.
+From the repository root:
+
+```sh
+node extension/test-rules.js
+node extension/test-memory.js
+node --check extension/content.js
+```
+
+The Chrome interaction tests are `web/tests/e2e/extension-focus-v5.spec.ts` and `web/tests/e2e/extension-v4.spec.ts`.
 
 ## Release and rollback
 
-Before a future deployment, take the normal PostgreSQL backup and verify that it can be restored. Apply migration `0050` before loading V4 in Chrome. The migration only creates `extension_answer_memory`; it does not alter the existing answer bank or application data.
-
-If V4 needs to be rolled back, reload the previous unpacked extension version and restore the previous backend application while leaving the additive memory table in place. That preserves any answers approved during V4 use. If schema rollback is required, export `extension_answer_memory` first and then run `alembic downgrade 0049`; that downgrade drops only the V4 table and its saved answers. Do not run the downgrade against production without a verified backup and explicit authorization.
+This change is extension-only. It requires no schema migration. Keep a copy of the previous unpacked extension folder or use the previous Git commit, reload it from `chrome://extensions`, then reload employer tabs to roll back. Existing answers and application records remain on the ACE server. Do not remove the V4 Answer Memory table as part of a V5.1 rollback.

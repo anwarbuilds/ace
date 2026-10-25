@@ -80,16 +80,12 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
   await panel.getByRole("button", { name: /Review/ }).click();
   await expect(panel.getByText("Explain a distributed systems design tradeoff you faced")).toBeVisible();
   await panel.screenshot({ path: path.join(captures, "v4-review-day.png") });
-  const tradeoff = panel.locator(".studio-card").filter({ hasText: "Explain a distributed systems design tradeoff you faced" });
-  await tradeoff.getByRole("button", { name: "Answer and approve" }).click();
   await panel.getByRole("textbox", { name: "Your answer" }).fill("Synthetic approved architecture answer.");
-  await panel.getByRole("button", { name: "Approve and fill" }).click();
+  await panel.getByRole("button", { name: "Approve & fill" }).click();
   await expect(page.locator("#tradeoff")).toHaveValue("Synthetic approved architecture answer.");
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __memory: unknown[] }).__memory.length)).toBe(1);
-  const sponsorship = panel.locator(".studio-card").filter({ hasText: "Will you now or later need visa sponsorship?" });
-  await sponsorship.getByRole("button", { name: "Answer and approve" }).click();
-  await panel.getByRole("textbox", { name: "Your answer" }).fill("Yes");
-  await panel.getByRole("button", { name: "Approve and fill" }).click();
+  await panel.getByRole("combobox", { name: "Exact employer options" }).selectOption("Yes");
+  await panel.getByRole("button", { name: "Approve & fill" }).click();
   await expect(page.locator("#sponsor")).toHaveValue("Yes");
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __memory: unknown[] }).__memory.length)).toBe(1);
   await page.locator("form").evaluate(form => {
@@ -102,7 +98,7 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
     form.append(label, select);
   });
   await expect(page.locator("#sponsor-again")).toHaveValue("");
-  await panel.getByRole("button", { name: "Memory" }).click();
+  await panel.getByRole("button", { name: "Memory & activity" }).click();
   await expect(panel.getByText("Synthetic approved architecture answer.")).toBeVisible();
   await panel.screenshot({ path: path.join(captures, "v4-memory-day.png") });
   await page.locator("form").evaluate(form => {
@@ -117,7 +113,7 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __aceInternals: { formSignature: () => string } }).__aceInternals.formSignature().includes("describe a difficult distributed"))).toBe(true);
   await panel.getByRole("button", { name: /Fill$/ }).click();
   await expect(page.locator("#equivalent")).toHaveValue("Synthetic approved architecture answer.");
-  await expect(panel.getByText("Cedarcloud Labs", { exact: true })).toBeVisible();
+  await expect(panel.getByText(/Cedarcloud Labs/).first()).toBeVisible();
   await page.locator("#email").fill("manual@example.invalid");
   await panel.getByRole("button", { name: "Scan fields" }).click();
   await panel.getByRole("button", { name: /Fill$/ }).click();
@@ -141,7 +137,8 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
   await page.screenshot({ path: path.join(captures, "v4-full-page-night.png") });
   await panel.getByRole("button", { name: /Review/ }).click();
   await panel.screenshot({ path: path.join(captures, "v4-review-night.png") });
-  await panel.getByRole("button", { name: "Activity" }).click();
+  await panel.getByRole("button", { name: "Memory & activity" }).click();
+  await panel.getByRole("button", { name: "Activity", exact: true }).click();
   await expect(panel.getByRole("button", { name: "Undo last fill" }).locator("svg")).toBeVisible();
   await panel.screenshot({ path: path.join(captures, "v4-activity-night.png") });
   expect(errors).toEqual([]);
@@ -171,12 +168,11 @@ test("Memory explains an outdated server and reconnects without a page reload", 
   const panel = page.locator(".ace-root .ace-panel");
   await expect(panel.getByText("Answer Memory needs the ACE server V4 update. Existing answers are safe.")).toBeVisible();
   await panel.getByRole("button", { name: /Review/ }).click();
-  await panel.locator(".studio-card").filter({ hasText: "Explain a distributed systems design tradeoff you faced" }).getByRole("button", { name: "Answer and approve" }).click();
   await panel.getByRole("textbox", { name: "Your answer" }).fill("Synthetic answer that cannot be saved yet");
-  await panel.getByRole("button", { name: "Approve and fill" }).click();
+  await panel.getByRole("button", { name: "Approve & fill" }).click();
   await expect(page.locator("#question")).toHaveValue("");
   await expect(panel.getByText(/field remains for review because its answer was not saved/)).toBeVisible();
-  await panel.getByRole("button", { name: "Memory", exact: true }).click();
+  await panel.getByRole("button", { name: "Memory & activity" }).click();
   await expect(panel.getByText("Unavailable", { exact: true })).toBeVisible();
   await page.evaluate(() => { (window as typeof window & { __memoryOffline: boolean }).__memoryOffline = false; });
   await panel.getByRole("button", { name: "Retry connection" }).click();
