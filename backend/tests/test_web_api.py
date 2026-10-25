@@ -4,6 +4,7 @@ The web application must never disagree with what ACE decided, and must
 never invent an apply link.
 """
 
+from dataclasses import replace
 from datetime import (
     datetime,
     timedelta,
@@ -1370,3 +1371,109 @@ def test_stats_match_bands_cover_every_qualifying_job(
     assert stats["match_medium"] == 1
     assert stats["match_minimal"] == 1
     assert stats["match_unscored"] == 2
+
+
+@pytest.mark.parametrize(
+    "selection",
+    [
+        {},
+        {"early_career_only": True},
+        {"verified_only": True},
+        {"max_age_days": 3},
+        {"early_career_only": True, "verified_only": True, "max_age_days": 3},
+    ],
+)
+def test_stats_tiles_equal_the_lists_they_describe(
+    session_factory,
+    selection,
+) -> None:
+    """Each tile counts what its list would show.
+
+    The tiles share one scan and narrow it per tile, so every tile must
+    still equal the total of the list with that tile's filters applied,
+    whatever the user has selected.
+    """
+
+    from backend.app.db.models import (
+        JobResumeScoreRecord,
+        ResumeRecord,
+    )
+
+    with session_factory.begin() as session:
+        resume = ResumeRecord(
+            label="active",
+            filename="active.pdf",
+            content_hash="c" * 8,
+            raw_text="Python.",
+            extracted_skills=["python"],
+            is_active=True,
+            uploaded_at=NOW,
+        )
+        session.add(resume)
+        session.flush()
+
+        shapes = [
+            # (age_days, early career, readable, score)
+            (0, True, True, 90),
+            (0, False, True, 50),
+            (2, True, False, None),
+            (5, False, True, 10),
+            (5, True, True, 75),
+            (9, False, False, 60),
+            (None, True, True, 95),
+            (20, False, True, None),
+        ]
+
+        for index, (age, early, readable, score) in enumerate(shapes, start=1):
+            job = add_job(session, external_id=str(index), age_days=age)
+            session.query(JobEvaluationRecord).filter(
+                JobEvaluationRecord.job_id == job.id
+            ).update(
+                {
+                    "is_early_career": early,
+                    "requirements_verified": readable,
+                }
+            )
+            if score is not None:
+                session.add(
+                    JobResumeScoreRecord(
+                        job_id=job.id,
+                        resume_id=resume.id,
+                        score=score,
+                        matched_skills=["python"],
+                        missing_skills=[],
+                        related_skills=[],
+                        algorithm_version="test",
+                        scored_at=NOW,
+                    )
+                )
+
+        add_job(session, external_id="99", status="REJECT", age_days=0)
+
+    base = JobFilters(resume_id=resume.id, **selection)
+
+    def total(**change) -> int:
+        with session_factory() as session:
+            return list_jobs(
+                session,
+                filters=replace(base, **change),
+                now=NOW,
+            ).total
+
+    with session_factory() as session:
+        stats = build_stats(session, filters=base, now=NOW)
+
+    assert stats["qualifying_active_jobs"] == total()
+    assert stats["posted_today"] == total(max_age_days=1)
+    assert stats["posted_last_7_days"] == total(max_age_days=7)
+    assert stats["labelled_new_grad"] == total(early_career_only=True)
+    assert stats["verified_jobs"] == total(verified_only=True)
+    assert stats["match_high"] == total(min_match=70)
+    assert stats["match_high"] + stats["match_medium"] == total(min_match=45)
+    assert (
+        stats["match_high"]
+        + stats["match_medium"]
+        + stats["match_minimal"]
+        + stats["match_unscored"]
+        == stats["qualifying_active_jobs"]
+    )

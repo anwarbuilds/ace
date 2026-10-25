@@ -91,6 +91,7 @@ export function Sidebar({
                   href={item.href}
                   aria-current={on ? "page" : undefined}
                   title={item.label}
+                  prefetch={item.href === "/logout" ? false : undefined}
                 >
                   <NavIcon name={item.icon} />
                   <span className="sb-text">{item.label}</span>

@@ -437,6 +437,24 @@ def sponsorship_refusals(
     toward "mostly fine".
     """
 
+    # PostgreSQL asks the stored list whether it holds the code. Turning
+    # every reason list into text to search it took 797 ms over the
+    # 659,000 readable active postings; containment took 558 ms and found
+    # the same 189 employers. SQLite, which runs the tests and the demo,
+    # keeps the text search.
+    if session.get_bind().dialect.name == "postgresql":
+        refuses = JobEvaluationRecord.reason_codes.contains(
+            [
+                "SPONSORSHIP_BLOCKER"
+            ]
+        )
+    else:
+        refuses = JobEvaluationRecord.reason_codes.cast(
+            sa.Text
+        ).like(
+            "%SPONSORSHIP_BLOCKER%"
+        )
+
     rows = session.execute(
         sa.select(
             # Grouped case-insensitively. Boards write the same
@@ -453,11 +471,7 @@ def sponsorship_refusals(
             ),
             sa.func.count()
             .filter(
-                JobEvaluationRecord.reason_codes.cast(
-                    sa.Text
-                ).like(
-                    "%SPONSORSHIP_BLOCKER%"
-                )
+                refuses
             )
             .label(
                 "refusing"
@@ -513,6 +527,8 @@ def sponsorship_refusals(
 
 def coverage(
     session: Session,
+    *,
+    sponsorship: list[dict] | None = None,
 ) -> dict:
     """Report which curated companies ACE can and cannot reach.
 
@@ -640,8 +656,14 @@ def coverage(
                 JobSourceRecord
             )
         ),
-        "sponsorship": sponsorship_refusals(
-            session
+        # The API passes a recent snapshot: this statistic covers every
+        # readable posting and changes slowly. Computed here otherwise.
+        "sponsorship": (
+            sponsorship
+            if sponsorship is not None
+            else sponsorship_refusals(
+                session
+            )
         ),
         # ACE's own account of its misses: roles a feed listed before
         # ACE saw them at the source, and companies it reads only

@@ -24,13 +24,14 @@ from fastapi import (
     File,
     HTTPException,
     Query,
+    Request,
     UploadFile,
 )
 from fastapi.responses import (
     RedirectResponse,
     Response,
 )
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.orm import Session
 
 from pydantic import BaseModel, Field
@@ -41,9 +42,11 @@ from backend.app.api.marks import (
     mark_counts,
     set_mark,
 )
+from backend.app.api.snapshot import Snapshot
 from backend.app.coverage.service import (
     add_source,
     coverage as coverage_report,
+    sponsorship_refusals,
 )
 from backend.app.answers.catalogue import (
     aliases_for,
@@ -71,6 +74,7 @@ from backend.app.api.queries import (
     JobFilters,
     build_facets,
     build_stats,
+    count_jobs,
     last_poll_completed_at,
     list_discovery_runs,
     list_jobs,
@@ -574,6 +578,18 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if docs else None,
     )
 
+    # Coverage's employers that will not sponsor are counted over every
+    # readable posting, about 659,000 of them, and change only as new
+    # ones arrive. The page reads a snapshot at most ten minutes old,
+    # refreshed in the background, instead of waiting for the count.
+    from backend.app.db.session import SessionLocal
+
+    app.state.sponsorship = Snapshot(
+        sponsorship_refusals,
+        max_age=600,
+        sessions=SessionLocal,
+    )
+
     @app.middleware("http")
     async def add_no_store(
         request,
@@ -805,6 +821,13 @@ def create_app() -> FastAPI:
             default=0,
             ge=0,
         ),
+        count_only: bool = Query(
+            default=False,
+            description=(
+                "Only the total, for a "
+                "badge; no page is read."
+            ),
+        ),
     ) -> dict:
         """Return one filtered page of jobs."""
 
@@ -829,69 +852,87 @@ def create_app() -> FastAPI:
             else resume.id
         )
 
+        filters = JobFilters(
+            statuses=_split_csv(
+                status
+            ),
+            families=_split_csv(
+                family
+            ),
+            priorities=_split_csv(
+                priority
+            ),
+            companies=_split_csv(
+                company
+            ),
+            exclude_companies=(
+                _split_csv(
+                    exclude_company
+                )
+            ),
+            sources=_split_csv(
+                source
+            ),
+            search=q,
+            max_age_days=(
+                max_age_days
+            ),
+            active_only=active_only,
+            early_career_only=(
+                early_career_only
+            ),
+            experience_fit_only=(
+                experience_fit_only
+            ),
+            new_grad_only=(
+                new_grad_only
+            ),
+            verified_only=verified_only,
+            resume_id=resume_id,
+            session_id=session_id,
+            min_match=min_match,
+            since=since,
+            max_detected_age_days=(
+                max_detected_age_days
+            ),
+            max_opening_age_days=(
+                None
+                if include_old
+                else OLD_OPENING_DAYS
+            ),
+            tiers=_split_csv(
+                tier
+            ),
+            mark=(
+                mark
+                if mark
+                in MARK_FILTERS
+                else None
+            ),
+            sort=normalized_sort,
+            limit=limit,
+            offset=offset,
+        )
+
+        if count_only:
+            total = count_jobs(
+                session,
+                filters=filters,
+            )
+
+            return {
+                "items": [],
+                "total": total,
+                "limit": 0,
+                "offset": offset,
+                "has_more": total > offset,
+                "sort": normalized_sort,
+                "resume_id": resume_id,
+            }
+
         page = list_jobs(
             session,
-            filters=JobFilters(
-                statuses=_split_csv(
-                    status
-                ),
-                families=_split_csv(
-                    family
-                ),
-                priorities=_split_csv(
-                    priority
-                ),
-                companies=_split_csv(
-                    company
-                ),
-                exclude_companies=(
-                    _split_csv(
-                        exclude_company
-                    )
-                ),
-                sources=_split_csv(
-                    source
-                ),
-                search=q,
-                max_age_days=(
-                    max_age_days
-                ),
-                active_only=active_only,
-                early_career_only=(
-                    early_career_only
-                ),
-                experience_fit_only=(
-                    experience_fit_only
-                ),
-                new_grad_only=(
-                    new_grad_only
-                ),
-                verified_only=verified_only,
-                resume_id=resume_id,
-                session_id=session_id,
-                min_match=min_match,
-                since=since,
-                max_detected_age_days=(
-                    max_detected_age_days
-                ),
-                max_opening_age_days=(
-                    None
-                    if include_old
-                    else OLD_OPENING_DAYS
-                ),
-                tiers=_split_csv(
-                    tier
-                ),
-                mark=(
-                    mark
-                    if mark
-                    in MARK_FILTERS
-                    else None
-                ),
-                sort=normalized_sort,
-                limit=limit,
-                offset=offset,
-            ),
+            filters=filters,
         )
 
         return {
@@ -1303,7 +1344,29 @@ def create_app() -> FastAPI:
             session
         )
 
+        # When ACE first saw anything: these were sent before it, which
+        # is why no posting is stored. Read here so the Applications
+        # page needs no queue statistics to say so.
+        corpus_started = session.scalar(
+            select(
+                func.min(
+                    JobRecord.first_seen_at
+                )
+            )
+        )
+
         return {
+            "corpus_started_at": (
+                None
+                if corpus_started is None
+                else (
+                    corpus_started
+                    if corpus_started.tzinfo
+                    else corpus_started.replace(
+                        tzinfo=timezone.utc
+                    )
+                ).isoformat()
+            ),
             "items": [
                 {
                     "id": row.id,
@@ -1795,6 +1858,7 @@ def create_app() -> FastAPI:
         "/api/coverage"
     )
     def get_coverage(
+        request: Request,
         session: Session = Depends(
             get_session
         ),
@@ -1808,7 +1872,10 @@ def create_app() -> FastAPI:
         """
 
         return coverage_report(
-            session
+            session,
+            sponsorship=request.app.state.sponsorship.get(
+                session
+            ),
         )
 
     @app.post(

@@ -221,6 +221,12 @@ sign-in address.
   watchdog that stops the tests at 95 C on `x86_pkg_temp`. Its pattern
   must not appear in your own command line, or `pkill -f` ends your
   shell too. Never run the browser suite and the backend suite at once.
+- A third shutdown came at 15:10 even with one worker and the watchdog: the
+  CPU went from 62 to 95 C within a minute. Do not run the browser suite on
+  this laptop until its cooling is fixed. Verify with the backend suite,
+  typecheck, lint, build and signed-in `curl` fetches of the changed pages
+  (log in through `/api/auth/login` with a cookie jar). A reboot also
+  empties `/tmp`, so recreate scratch folders before starting servers.
 - Extension browser tests need no server:
   `cd web && CHROMIUM_PATH=/usr/bin/google-chrome npx playwright test tests/e2e/extension-*.spec.ts`
   (22 tests, about 25 seconds). Pair with `node extension/test-rules.js`,
@@ -325,6 +331,46 @@ scale as production):
   `/` shortcut through `aria-keyshortcuts`, and its field draws no second
   focus outline inside the box's ring.
 
+Second round, from production timings. `backend/scripts/time_pages.py` times
+every request each page makes, in-process and read-only, printing only
+paths, sizes and milliseconds. The owner pipes it from the laptop:
+`ssh -i ~/.ssh/ace_oracle ubuntu@161.153.89.170 'cd /opt/ace && docker compose --env-file .env -f deploy/oracle/compose.yaml exec -T api python -' < /home/ubuntu/Documents/ace-next/backend/scripts/time_pages.py`.
+After the first release (JIT off) it measured, in ms: `/api/stats` 216,
+`/api/jobs` 97, the new-since count 111, `/api/facets` 146, `/api/dashboard`
+68, `/api/system` 79, `/api/pulls` 44, `/api/intelligence` 2,542 and
+`/api/coverage` 3,365. Fixes that followed:
+
+- `build_stats` counts its five tiles in one pass and the three score
+  bands in a second, with conditional counts (`count(CASE WHEN ...)`), in
+  place of eight scans. Identical on real data (1,328, 4, 325, 681, 1,155;
+  750, 268, 14); 107 ms down to 43 ms locally.
+  `test_stats_tiles_equal_the_lists_they_describe` checks each tile against
+  its own list under five filter selections.
+- List pages ask only for what they show: Applications drops `/api/stats`
+  (it never showed the queue totals) and `/api/dashboard` (it used two
+  numbers that `/api/marks` already holds); `/api/applications/external`
+  now returns `corpus_started_at`. Saved and Archive need only `/api/jobs`.
+- `/api/jobs?count_only=true` returns the total without reading a page;
+  the new-since badge uses it. `count_jobs` is the one count both share.
+- `extract_skills` skips an alias whose required text is absent from the
+  case-folded posting, then lets the regex decide boundaries. Four
+  non-ASCII characters fold to ASCII letters under `re.IGNORECASE` (U+0130,
+  U+0131, U+017F, U+212A) and are translated first. Zero differences over
+  4,000 real postings, 6.4x faster; the Career Dashboard ran it over 100
+  descriptions in 1.4 s. `test_skill_extraction.py` proves the fold table
+  over the BMP and each regex alias's required text from its parsed pattern.
+- The Career Dashboard gathers passing jobs first (a `MATERIALIZED` CTE on
+  PostgreSQL) before taking the 100 newest: 177 ms to 51 ms, same rows.
+- Coverage: sponsorship refusals use JSONB containment on PostgreSQL
+  (797 to 558 ms, same 189 employers) and the API keeps them as a
+  `Snapshot` (`backend/app/api/snapshot.py`): at most ten minutes old,
+  refreshed in a background thread, so only the first read after a restart
+  waits. Reachability and dark boards stay live.
+- Prefetch: with `loading.tsx` everywhere, Next prefetched every visible
+  link, 39 requests per page load, including each job row, whose
+  `generateMetadata` called `/api/jobs/{id}`. Job links and sign-out now
+  use `prefetch={false}`: 23 requests and no job lookups per load.
+
 ## Current working state on 2026-10-25
 
 The working branch is `wine-rose-platform`, reconciled on GitHub on
@@ -390,16 +436,11 @@ the owner ran it is not recorded, so check before running it again.
 
 The V4 code added additive migration `0050` and authenticated
 `/api/extension/memory` endpoints for approved reusable answers, with pairing
-and existing answer-bank compatibility. The owner explicitly approved a V4
-backend deployment and migration, but this branch has no post-deployment
-health/migration record for it. Current production migration version and live
-Memory API status are **unverified here**. A read-only verification is required
-before calling Memory operational in production or attempting another
-migration. DNS was unavailable from this session, so even the public health
-endpoint could not be checked. The last independently verified core API and
-database release in this file remains `11a7fd4` at migration `0049`; the
-separate website typography release is newer. This distinction matters when
-debugging an empty Memory workspace.
+and existing answer-bank compatibility. Production reached migration `0050`
+with the speed release on 2026-10-25 (`46d8738`): the owner's release output
+printed `alembic_version` 0050 after a fresh backup. The Memory API itself
+has not been exercised in production from here, so verify it read-only
+before calling Memory operational.
 
 ## Last verified core live state on 2026-10-24
 
@@ -1133,9 +1174,9 @@ infer a narrow sensitive answer from a broad saved answer.
 
 V4 added migration 0050 and authenticated `/api/extension/memory` behavior for
 approved reusable answers, with existing answer-bank and pairing compatibility.
-Production activation of migration 0050 and live Memory behavior remains
-unverified in this continuity record. Verify read-only before relying on it or
-running another migration.
+Production applied migration 0050 on 2026-10-25 (owner's release output);
+live Memory behavior is not yet exercised there. Verify read-only before
+relying on it.
 
 ### Resume Studio
 
@@ -1528,10 +1569,11 @@ Alembic history is additive from 0001 through 0050:
   precise Workday answers; 0047 Meijer Workday answers; 0048 Verizon Workday
   answers; 0049 owner profile; 0050 extension Answer Memory.
 
-The last independently verified production schema in this file is 0049. The
-presence of local 0050 is not proof that production is at 0050. Always read
-`alembic_version` before planning a migration, rehearse from a current backup,
-and follow the safe migration procedure later in this file.
+The latest production schema recorded in this file is 0050, printed by the
+owner's release on 2026-10-25. A local migration file is never proof of what
+production runs. Always read `alembic_version` before planning a migration,
+rehearse from a current backup, and follow the safe migration procedure later
+in this file.
 
 ### Frontend architecture and current route map
 
@@ -2375,6 +2417,20 @@ Do not merge ACE Next to legacy `main` without separate approval.
 
 ## Change log
 
+### 2026-10-25, second speed round
+
+- Production timings from `backend/scripts/time_pages.py` led to: two-pass
+  job totals, list pages that fetch only what they show, a count-only jobs
+  route for the new-since badge, a 6.4x faster exact skill extractor, a
+  passing-first Career Dashboard query, JSONB containment plus a background
+  snapshot for Coverage's sponsorship list, and no prefetch for job links or
+  sign-out. Details under Speed and responsiveness.
+- Checks: 1,252 backend tests (new: totals per filter, count-only route,
+  external start date, skill extractor proofs, dashboard skills, snapshot,
+  sponsorship list), TypeScript, ESLint, dash scan, production build, and
+  signed-in fetches of every changed page on fictional data. The browser
+  suite was not rerun: the laptop shut down a third time under it.
+
 ### 2026-10-25, speed, search history and search box
 
 - Released with owner approval: `https://ace.opik.net/healthz` and the
@@ -2382,9 +2438,9 @@ Do not merge ACE Next to legacy `main` without separate approval.
   `46d8738e29334ea228d6767858f3fd294a9b9dee` from 2026-10-25T21:22Z, API
   ok, signed-out pages answering in about 0.23 s. The owner ran the
   one-line release (backup service, prepare-release, `up` of postgres,
-  migrate, api, web and caddy; scheduler untouched). Not yet confirmed
-  from here: the printed `alembic_version` (whether 0050 is now applied)
-  and signed-in page timings, which need the owner's session.
+  migrate, api, web and caddy; scheduler untouched). Their output showed
+  migrate, api and web recreated and healthy, and `alembic_version`
+  `0050`: migration 0050 (Answer Memory) is applied in production.
 - JIT off for app database connections and one fewer stats query; list
   pages fetch in parallel; every workspace route has a loading screen;
   same-route clicks dim the page. Details in the working notes above.

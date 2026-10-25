@@ -104,6 +104,8 @@ excluded kinds unless the user asks.
 
 **2026-10-24 extension update:** ACE Focus Mode V5.1 is implemented locally in the existing MV3 extension on `wine-rose-platform`. The panel is a compact floating card with Review, Workspace, a minimized dock, free dragging, persisted position, Day/Night themes, native and supported listbox option mirroring, and persistent Review completion. Employer-motivation questions are excluded from scan, fill, Review, Memory reuse and progress; older records are retained on the server. This update requires no database migration and has not been deployed or published. See `extension/README.md` and `web/tests/e2e/extension-focus-v5.spec.ts` for usage and browser verification.
 
+**2026-10-25 speed, second round:** production timings (`backend/scripts/time_pages.py`) showed `/api/stats` 216 ms, Career Dashboard 2.5 s and Coverage 3.4 s; totals now take two passes, list pages fetch only what they show, skill extraction is 6.4x faster with identical results, Coverage's sponsorship list is a background snapshot, and job links no longer prefetch. Production is at migration 0050.
+
 **2026-10-25 speed:** PostgreSQL JIT cost about 0.5 s per queue query; app connections now turn it off, every workspace route has a loading screen, same-route clicks dim the page, and no text field outside sign-in keeps browser history. See `ACE_NEXT_KNOWLEDGE.md`, Speed and responsiveness.
 
 **2026-10-25 theme sync and Close:** the V5.1 card follows the computer's Day or Night setting until the owner picks one (`aceStudioThemeMode`), and has a Close X in the header and dock that reuses the existing dismiss path. 22 Chrome extension tests pass. Reload the unpacked extension to use it.

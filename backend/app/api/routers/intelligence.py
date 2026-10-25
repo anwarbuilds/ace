@@ -198,15 +198,21 @@ def intelligence(days: int = Query(90, ge=7, le=365), family: str | None = Query
     email_review = session.scalar(
         select(func.count(GmailMessageRecord.id)).where(GmailMessageRecord.decision.in_(("review", "exact_preview")))
     ) or 0
+    # Passing jobs are a few thousand of nearly a million, so they are
+    # gathered first and only then sorted by age. Walking every job
+    # newest first until 101 passed took 177 ms on the real corpus;
+    # this takes 51 ms and returns the same rows.
+    passing = select(JobEvaluationRecord.job_id).where(JobEvaluationRecord.eligibility_status == "PASS")
+    if family:
+        passing = passing.where(JobEvaluationRecord.role_family == family)
+    passing = passing.cte("passing").prefix_with("MATERIALIZED", dialect="postgresql")
     skills_query = (
         select(JobRecord.title, JobRecord.description)
-        .join(JobEvaluationRecord, JobEvaluationRecord.job_id == JobRecord.id)
-        .where(JobRecord.first_seen_at >= now - timedelta(days=days), JobEvaluationRecord.eligibility_status == "PASS")
+        .join(passing, passing.c.job_id == JobRecord.id)
+        .where(JobRecord.first_seen_at >= now - timedelta(days=days))
         .order_by(JobRecord.first_seen_at.desc())
         .limit(101)
     )
-    if family:
-        skills_query = skills_query.where(JobEvaluationRecord.role_family == family)
     skill_rows = session.execute(skills_query).all()
     skill_counts: Counter = Counter()
     for title, description in skill_rows[:100]:

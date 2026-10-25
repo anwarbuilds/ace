@@ -433,6 +433,80 @@ COMPILED_SKILLS: dict[
 }
 
 
+# Characters other than ASCII letters that re.IGNORECASE matches to an
+# ASCII letter, mapped to that letter: the dotted and dotless i, the long
+# s and the Kelvin sign. str.lower() leaves them alone, so the substring
+# test below folds them first. Found by testing every code point, and
+# pinned by test_skill_extraction.
+_FOLD_TO_ASCII = str.maketrans(
+    {
+        "\u0130": "i",
+        "\u0131": "i",
+        "\u017f": "s",
+        "\u212a": "k",
+    }
+)
+
+_REGEX_SYNTAX = re.compile(
+    r"[.^$*+?{}\[\]\\|()]"
+)
+
+# Text that every match of an alias written with regex syntax must
+# contain: a run of plain characters outside any optional or repeated
+# part. test_skill_extraction derives the runs from each pattern and
+# checks every entry, and that no such alias is missing.
+_PATTERN_REQUIRES: dict[str, str] = {
+    r"c\+\+": "c++",
+    r"node\.js": "node.js",
+    r"express\.js": "express.js",
+    r"react\.js": "react.js",
+    r"next\.js": "next.js",
+    r"vue\.js": "vue.js",
+    r"hugging ?face": "hugging",
+    r"on-?call": "call",
+    r"single sign-?on": "single sign",
+    r"large[- ]scale": "large",
+    r"high[- ]throughput": "throughput",
+    r"horizontal(?:ly)? scal\w+": "horizontal",
+    r"high[- ]availability": "availability",
+    r"fault[- ]toleran\w+": "toleran",
+    r"resilien\w+": "resilien",
+    r"low[- ]latency": "latency",
+    r"real[- ]time": "real",
+    r"latency[- ]sensitive": "sensitive",
+    r"event[- ]driven": "driven",
+    r"pub/?sub": "pub",
+    r"publish[- ]subscribe": "subscribe",
+    r"data modell?ing": "data model",
+    r"\biac\b": "iac",
+    r"helm charts?": "helm chart",
+    r"a/b test\w*": "a/b test",
+}
+
+# What each alias needs to find in the lowercased text before its
+# pattern can match. Most aliases are absent from a given posting, and a
+# substring test settles that far faster than a case-insensitive
+# regular expression: one Career Dashboard load ran 216 patterns over
+# 100 real descriptions in 1.4 s. None, for an alias with regex syntax
+# that has no entry above, means its pattern always runs.
+_REQUIRED_TEXT: dict[
+    str,
+    tuple[str | None, ...],
+] = {
+    skill: tuple(
+        _PATTERN_REQUIRES.get(alias)
+        if _REGEX_SYNTAX.search(
+            alias
+        )
+        else alias.lower()
+        for alias in aliases
+    )
+    for skill, aliases in (
+        SKILL_ALIASES.items()
+    )
+}
+
+
 def extract_skills(
     text: str,
 ) -> frozenset[str]:
@@ -441,12 +515,27 @@ def extract_skills(
     if not text:
         return frozenset()
 
+    folded = text.translate(
+        _FOLD_TO_ASCII
+    ).lower()
+
     found: set[str] = set()
 
     for skill, patterns in (
         COMPILED_SKILLS.items()
     ):
-        for pattern in patterns:
+        for pattern, required in zip(
+            patterns,
+            _REQUIRED_TEXT[skill],
+        ):
+            # Absent text cannot match; the pattern still decides
+            # word boundaries wherever the text is present.
+            if (
+                required is not None
+                and required not in folded
+            ):
+                continue
+
             if pattern.search(
                 text
             ):

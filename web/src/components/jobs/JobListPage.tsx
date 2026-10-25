@@ -19,7 +19,7 @@ import {
   type RawParams,
 } from "@/lib/listState";
 import { getPrefs, getPrevVisit } from "@/lib/prefs";
-import type { ExternalApplication, JobPage, PullsResponse, Stats } from "@/lib/types";
+import type { ExternalApplication, JobPage, MarkCounts, PullsResponse, Stats } from "@/lib/types";
 
 import { JobTable } from "./JobTable";
 import { ListControls } from "./ListControls";
@@ -44,14 +44,13 @@ const SUBTITLE: Record<ListPage, string> = {
   applied: "All applications tracked across software, machine learning and forward deployed engineering.",
   archive: "Roles you marked reviewed or not relevant. Restore any of them from its page.",
 };
-interface AppliedSummary {
-  total: number;
-  heard_back: number;
-  interviews: number;
-  offers: number;
-  by_status: Record<string, number>;
-  without_posting: number;
+interface ExternalPage {
+  items: ExternalApplication[];
+  corpus_started_at?: string | null;
 }
+const NO_PULLS: PullsResponse = { last_poll_at: null, sessions: [] };
+const NO_STATS: Stats = { last_poll_at: null };
+const NO_EXTERNAL: ExternalPage = { items: [], corpus_started_at: null };
 const BASE: Record<ListPage, string> = {
   queue: "/app/opportunities",
   saved: "/app/saved",
@@ -67,35 +66,35 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
   const [prefs, prevVisit] = await Promise.all([getPrefs(), getPrevVisit()]);
   const tz = prefs.tz;
 
-  const pullsRequest = apiGetOr<PullsResponse>(
-    "/api/sessions",
-    { last_poll_at: null, sessions: [] },
-    { limit: "30" },
-  );
+  // Each list asks only for what it shows. The totals, the pulls and the
+  // count of new roles belong to Opportunities; Applications takes its
+  // counts from the marks; Saved and Archive need the jobs alone.
+  const queue = page === "queue";
+  const pullsRequest = queue
+    ? apiGetOr<PullsResponse>("/api/sessions", NO_PULLS, { limit: "30" })
+    : Promise.resolve(NO_PULLS);
   // Only Latest discoveries with no pull chosen needs the newest pull
   // before it can ask for its jobs; every other list asks at once rather
   // than waiting a round trip for an answer it does not use.
-  const needsLatest = page === "queue" && state.view === "latest" && state.session == null;
+  const needsLatest = queue && state.view === "latest" && state.session == null;
   const jobsRequest = (needsLatest ? pullsRequest : Promise.resolve(null)).then((p) =>
     apiGet<JobPage>("/api/jobs", jobsParams(state, { prevVisit, latestPullId: p?.sessions[0]?.id ?? null })),
   );
 
-  const [pulls, jobs, stats, newCount, external, summary] = await Promise.all([
+  const [pulls, jobs, stats, newCount, external, marks] = await Promise.all([
     pullsRequest,
     jobsRequest,
-    apiGetOr<Stats>("/api/stats", { last_poll_at: null }, filterParams(state)),
-    page === "queue" && prevVisit
-      ? apiGetOr<JobPage | null>("/api/jobs", null, { since: prevVisit.toISOString(), limit: "1" })
+    queue ? apiGetOr<Stats>("/api/stats", NO_STATS, filterParams(state)) : Promise.resolve(NO_STATS),
+    queue && prevVisit
+      ? apiGetOr<JobPage | null>("/api/jobs", null, { since: prevVisit.toISOString(), count_only: "true" })
       : Promise.resolve(null),
-    page === "applied"
-      ? apiGetOr<{ items: ExternalApplication[] }>("/api/applications/external", { items: [] })
-      : Promise.resolve({ items: [] as ExternalApplication[] }),
-    page === "applied"
-      ? apiGetOr<{ applied: AppliedSummary } | null>("/api/dashboard", null)
-      : Promise.resolve(null),
+    page === "applied" ? apiGetOr<ExternalPage>("/api/applications/external", NO_EXTERNAL) : Promise.resolve(NO_EXTERNAL),
+    page === "applied" ? apiGetOr<MarkCounts | null>("/api/marks", null) : Promise.resolve(null),
   ]);
   const latest = pulls.sessions[0] ?? null;
-  const applied = summary?.applied ?? null;
+  const interviews = marks
+    ? (["interviewing", "offer", "accepted"] as const).reduce((n, s) => n + (marks.application_by_status[s] ?? 0), 0)
+    : 0;
 
   const newSince = newCount?.total ?? 0;
   const href = (change: Parameters<typeof listHref>[2]) => listHref(base, state, change);
@@ -140,9 +139,9 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
           ) : null}
         </div>
         <p className="subtitle">{SUBTITLE[page]}</p>
-        {applied ? (
+        {marks ? (
           <section className="kpis head-kpis" aria-label="Applications summary">
-            <Kpi label="Applications" value={<ApplicationCount />} foot={`${applied.without_posting} without a stored posting`} />
+            <Kpi label="Applications" value={<ApplicationCount />} foot={`${marks.applications_without_posting} without a stored posting`} />
             <Kpi
               label="Waiting"
               value={<ApplicationStageCount statuses={["applied"]} />}
@@ -152,7 +151,7 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
               label="Interviews"
               value={<ApplicationStageCount statuses={["interviewing", "offer", "accepted"]} />}
               foot="Interviewing, offer or accepted now"
-              tone={applied.interviews ? "good" : undefined}
+              tone={interviews ? "good" : undefined}
             />
             <Kpi
               label="No reply"
@@ -196,8 +195,8 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
             <div className="ext-head">From your history</div>
             <div className="ext-note">
               Applications to postings ace never stored, because they were sent or closed{" "}
-              {stats.corpus_started_at
-                ? `before ace started watching on ${shortDate(stats.corpus_started_at, tz)}. `
+              {external.corpus_started_at
+                ? `before ace started watching on ${shortDate(external.corpus_started_at, tz)}. `
                 : "before ace started watching. "}
               There is no live posting to open, so these are a record only.
             </div>

@@ -82,7 +82,7 @@ export function AssessmentView({ a, versionLabel }: { a: Assessment; versionLabe
           </p>
           <h2 className="st-h2">
             {a.job_source === "stored" && a.job_id ? (
-              <Link href={`/app/jobs/${a.job_id}`}>
+              <Link href={`/app/jobs/${a.job_id}`} prefetch={false}>
                 {a.job_company ? `${a.job_company}, ` : ""}
                 {clean(a.job_title) || "Job"}
               </Link>

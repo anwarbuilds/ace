@@ -359,7 +359,7 @@ export function JobTable({
                 <CompanyCell name={j.company} tier={tier} />
               </td>
               <td className="c-title">
-                <Link className="j-title" href={`/app/jobs/${j.id}`} onClick={(e) => e.stopPropagation()}>
+                <Link className="j-title" href={`/app/jobs/${j.id}`} prefetch={false} onClick={(e) => e.stopPropagation()}>
                   {clean(j.title)}
                 </Link>
                 {exportCaveat(j) ? (

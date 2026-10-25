@@ -61,7 +61,7 @@ function JobLine({ job, tz, evidence, onCompanySelect }: { job: Job; tz: string;
         <button className="job-company" onClick={() => onCompanySelect(job.company)}>
           {clean(job.company)}
         </button>
-        <Link className="job-title" href={`/app/jobs/${job.id}`}>{clean(job.title)}</Link>
+        <Link className="job-title" href={`/app/jobs/${job.id}`} prefetch={false}>{clean(job.title)}</Link>
         <div className="job-meta">
           {[clean(job.location), familyLabel(job.role_family)].filter(Boolean).join(" · ")}
           {job.requirements_verified ? "" : " · requirements unverified"}
@@ -109,7 +109,7 @@ function JobLine({ job, tz, evidence, onCompanySelect }: { job: Job; tz: string;
         >
           <NavIcon name="x" size="sm" />
         </button>
-        <Link className="sub-btn" href={`/app/jobs/${job.id}`}>
+        <Link className="sub-btn" href={`/app/jobs/${job.id}`} prefetch={false}>
           <span className="sub-t">Details</span> <NavIcon name="right" size="sm" />
         </Link>
       </div>

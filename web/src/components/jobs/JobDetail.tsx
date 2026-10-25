@@ -242,7 +242,7 @@ export function JobDetail({ job: served, resumeLabel }: { job: Job; resumeLabel:
               ) : job.applied_before ? (
                 <p className="why" style={{ margin: "0 0 12px" }}>
                   <b>Applied before.</b> {beforeNote(job, tz)} This posting is not marked applied.{" "}
-                  <Link className="link-btn" href={`/app/jobs/${job.applied_before.job_id}`}>
+                  <Link className="link-btn" href={`/app/jobs/${job.applied_before.job_id}`} prefetch={false}>
                     See that application
                   </Link>
                 </p>
