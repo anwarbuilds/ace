@@ -104,6 +104,9 @@ before any database copy, Oracle deployment, Google OAuth setup or scheduler
 cutover. It records the aggregate live inventory, staged migration, rollback,
 backup and owner input requirements.
 
+- **Typography refresh (2026-10-24, branch `typography-refresh`, not merged or deployed):** the approved Refined
+  typography only: self-hosted Inter (SIL OFL), one token scale in `web/src/app/globals.css`, sentence case labels,
+  tabular numbers, colour emoji fallbacks. Layout, colours and text unchanged. Evidence method: `docs/knowledge/05`.
 - **Live** on the user's machine via `compose.yaml`: postgres (host port 5433),
   migrate, scheduler, web (port 8000, FastAPI serving the old UI at `/`). Built
   from the tree at commit 4f516ef. The user's machine is the only deployment.
@@ -262,7 +265,8 @@ MEDIUM at 45 and above, otherwise MINIMAL, null is "not scored".
 
 ## 6. Design system (source of truth: `:root` blocks at the top of `index.html`)
 
-Fonts: Geist and Geist Mono. Sidebar 244 px, gutter 32 px. Radii 5, 7, 9, 14,
+Fonts: Inter for the interface (self-hosted, typography tokens in `globals.css`), Geist Mono for code and keys
+only. Sidebar 244 px, gutter 32 px. Radii 5, 7, 9, 14,
 20. Motion 110, 170, 280 ms; ease-out `cubic-bezier(.2,0,0,1)`.
 
 | Token | Night | Day |

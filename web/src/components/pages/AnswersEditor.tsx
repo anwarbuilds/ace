@@ -193,7 +193,7 @@ function HistoryBlock({
         {year("End year", entry.end_year, "end_year")}
       </div>
       <div className="hist-wide">
-        <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Description</label>
+        <label style={{ display: "block", fontSize: "var(--text-label)", fontWeight: "var(--weight-medium)", color: "var(--text-muted)", marginBottom: 4 }}>Description</label>
         <textarea
           placeholder="What you did there. Pasted once, filled every time."
           value={entry.description}

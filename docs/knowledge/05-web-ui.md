@@ -785,3 +785,48 @@ Opportunities so old bookmarks do not break. FastAPI no longer serves `static/in
 
 Production builds use the Geist files already installed with Next through `next/font/local`. This avoids a Google
 Fonts request during a build and keeps the rendered typography identical in disconnected containers.
+
+> **Status:** the interface face changed to self-hosted Inter on 2026-10-24 (next entry). Geist Mono still comes from
+> the Next package and now sets only code, key hints and pairing codes.
+
+## The approved Refined typography: Inter and one token scale (2026-10-24)
+
+The owner approved the "Refined" mode of a typography reference (kept locally in the ignored `design/` folder; its
+"Dense comparison" mode is the before picture, not a target) and then narrowed the task: typography and emoji only,
+with no layout, colour, component or text changes.
+
+- **One face.** Inter 4.1 from rsms/inter (SIL OFL 1.1, no Reserved Font Name), vendored unmodified as
+  `web/src/app/fonts/InterVariable.woff2` with its licence and loaded by `next/font/local`: preloaded, `display: swap`,
+  with a metric-matched Arial fallback so text does not jump. No build contacts a font service. Colour emoji fonts close
+  the stack, so emoji in job and company data render in colour.
+- **One scale.** `--text-*`, `--weight-*`, `--leading-*` and `--tracking-*` tokens at the top of `globals.css`, in rem
+  (pixels in the comments), so a larger browser text size is honoured. Every typographic declaration names a token. A
+  script mapped 651 declarations, each against its exact old value, and a rule by rule comparison found no
+  non-typographic declaration changed. Night and Day share the scale; only colour differs.
+- **Sentence case by removing CSS.** Labels were written in sentence case and only uppercased by `text-transform`, so
+  sentence case needed no text change. `HIGH`, `MEDIUM` and `MINIMAL` are capitals in their text and stay so; company
+  initials keep their capital treatment.
+- **Numbers** use Inter's tabular figures instead of a monospace face.
+
+What the larger text broke, and the smallest fix for each:
+
+- The sidebar grew from 886 to 920 px and scrolled at 900 px of height. Nav items and group labels keep their old
+  19.5 and 15 px line boxes (`--leading-nav`, `--leading-compact`).
+- Pulls rows truncated the role and lost the detection time from the meta line. Both now wrap, as the reference does.
+- Analytics bar labels truncated, so they stay at 12 px; the phone breadcrumb clipped "Career Dashboard", so the crumb
+  "ace" takes the wordmark's tracking.
+
+Accepted: rows built to wrap (the Pulls stats line, some button rows on a phone or at 200 percent zoom, tag clouds)
+wrap a line sooner, and fixed table cells keep their ellipsis. Inter is wider than Geist at the same size, so shrinking
+buttons to 13 px did not prevent those wraps; measuring showed it before guessing.
+
+How it was checked, reusable for any purely visual change: build the old and new trees side by side against one demo
+API, then (1) diff every non-typographic computed style element by element (32,023 elements, no colour, border,
+background, display or position change; only `auto` margins and Chrome's font-relative `<option>` gap moved), (2)
+compare clipping and overflow per viewport, keyed by text content rather than rendered text (rendered text changes with
+`text-transform`), and (3) compare how many lines each wrapping flex row uses.
+
+Found, not changed (layout): at 720 px (200 percent zoom) the Pulls job text column is 8 to 71 px wide because the row
+actions only wrap below 650 px; Applications scrolls sideways at 390 px; phone pages keep 44 px side padding because a
+later rule overrides the 16 px phone padding. `web/tests/e2e/typography.spec.ts` pins the face, the minimum size, sentence
+case, tabular figures and company first.

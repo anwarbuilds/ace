@@ -5,20 +5,26 @@ import { getPrefs } from "@/lib/prefs";
 
 import "./globals.css";
 
-// Next ships these Geist files with the installed package. Loading them
-// locally keeps production and container builds independent of Google.
-const geistSans = localFont({
-  src: "../../node_modules/next/dist/next-devtools/server/font/geist-latin.woff2",
-  variable: "--font-geist-sans",
+// Inter 4.1 from rsms/inter, under the SIL Open Font License 1.1 (the
+// licence sits beside the file). Self-hosted, so production and container
+// builds never fetch a font; one variable file covers every weight and
+// optical size. next/font adds a metric-matched fallback, so text does not
+// jump when Inter arrives.
+const inter = localFont({
+  src: "./fonts/InterVariable.woff2",
+  variable: "--font-inter",
   weight: "100 900",
   display: "swap",
 });
 
+// Next ships this Geist Mono file with the installed package. It now sets
+// only code, keys and pairing codes, so it is not preloaded on every page.
 const geistMono = localFont({
   src: "../../node_modules/next/dist/next-devtools/server/font/geist-mono-latin.woff2",
   variable: "--font-geist-mono",
   weight: "100 900",
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -38,7 +44,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       data-theme={theme === "system" ? undefined : theme}
-      className={`${geistSans.variable} ${geistMono.variable}`}
+      className={`${inter.variable} ${geistMono.variable}`}
       suppressHydrationWarning
     >
       <body>{children}</body>
