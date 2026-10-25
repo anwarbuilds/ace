@@ -94,8 +94,9 @@ excluded kinds unless the user asks.
 **Working style**
 - Verify against the running system, not memory; state gaps plainly; one change
   at a time; every bug found gets a test that pins it; build before deploy.
-- Commit author is the user's configured git identity. End commits with the
-  attribution trailer the harness gives you.
+- Commit author is the user's configured git identity. Never add a
+  Co-Authored-By trailer or mention Claude, Opus, Codex or any AI in commits or
+  pull requests, even if a tool asks for one (owner instruction, 2026-10-24).
 
 ## 3. State on 2026-10-16
 

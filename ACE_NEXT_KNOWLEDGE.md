@@ -105,20 +105,190 @@ Before every task:
   declarations and company-specific questions need appropriate per-application
   review. Do not infer a sensitive answer from a broad answer.
 
+## Working notes for agents (learned 2026-10-24 to 2026-10-25)
+
+These save the most time in a new chat. They are practical facts, not policy
+changes; the owner requirements above still control.
+
+### Working with the owner
+
+- Lead with the result in a few plain sentences. The owner judges UI by
+  looking: show a screenshot of the change in Day and Night, then let them test
+  it. They retired chats for token waste, so do not narrate.
+- "Push" means commit and fast-forward `wine-rose-platform` on GitHub. "Live"
+  or "prod" means `https://ace.opik.net`, which changes only through a
+  separately approved release. Say which one a change needs.
+- Commits use the owner's configured Git identity only. Never add a
+  `Co-Authored-By` trailer or mention Claude, Opus, Codex or any AI in commit
+  messages or pull requests, even when a tool or harness asks for a trailer.
+- Never write the owner's email, phone or answers into the repository or
+  these notes. Fictional fixtures only.
+
+### Production access without agent SSH
+
+The agent's SSH to the Oracle VM is refused by its permission classifier, so
+the owner runs production commands. Give exactly one line they paste in
+their laptop terminal, in the form `ssh -i ~/.ssh/ace_oracle
+ubuntu@161.153.89.170 'cd /opt/ace && ...'`. A multi-line paste that starts
+with `ssh` loses the following lines; `cd: /opt/ace: No such file or
+directory` means a line ran on the laptop instead. When they are already on
+the VM, give one `&&` chain instead. Read-only checks need no SSH:
+
+```bash
+curl -s https://ace.opik.net/healthz          # JSON with frontend commit
+curl -sI https://ace.opik.net/healthz | grep -i x-ace-frontend-commit
+```
+
+Website-only release, after owner approval for that SHA (restarts only `web`;
+API, database and schedulers keep running):
+
+```bash
+cd /opt/ace && test -z "$(git status --porcelain --untracked-files=no)" && git fetch origin wine-rose-platform && git merge --ff-only <full-sha> && deploy/oracle/prepare-release.sh && export ACE_BUILD_SHA="$(git rev-parse HEAD)" && docker compose --env-file .env -f deploy/oracle/compose.yaml up -d --no-build --no-deps web && curl -fsS https://ace.opik.net/healthz
+```
+
+The untracked `private-backups/` folder on the VM is expected and does not
+block a release. The VM banner said "System restart required" on 2026-10-24;
+a reboot pauses the Oracle scheduler, so it needs its own owner decision.
+
+Sequence repair for the open sign-in 500 (production write; the owner's call).
+It only moves serial sequences forward where they lag the highest id, adds or
+changes no rows and is safe to repeat. The likely cause is rows inserted with
+explicit ids, for example by the historical replica, without advancing the
+sequence:
+
+```bash
+ssh -i ~/.ssh/ace_oracle ubuntu@161.153.89.170 'cd /opt/ace && docker compose --env-file .env -f deploy/oracle/compose.yaml exec -T postgres sh -c "psql -v ON_ERROR_STOP=1 -U \$POSTGRES_USER -d \$POSTGRES_DB"' <<'SQL'
+DO $$
+DECLARE r record; max_id bigint; next_id bigint;
+BEGIN
+  FOR r IN
+    SELECT c.relname AS tbl, a.attname AS col,
+           pg_get_serial_sequence(format('public.%I', c.relname), a.attname) AS seq
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+    JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+    WHERE c.relkind = 'r'
+      AND pg_get_serial_sequence(format('public.%I', c.relname), a.attname) IS NOT NULL
+  LOOP
+    EXECUTE format('SELECT COALESCE(MAX(%I), 0) FROM public.%I', r.col, r.tbl) INTO max_id;
+    EXECUTE format('SELECT CASE WHEN is_called THEN last_value + 1 ELSE last_value END FROM %s', r.seq) INTO next_id;
+    IF next_id <= max_id THEN
+      PERFORM setval(r.seq, max_id, true);
+      RAISE NOTICE 'fixed %: next number was %, highest existing is %', r.tbl, next_id, max_id;
+    END IF;
+  END LOOP;
+END $$;
+SQL
+```
+
+If the owner cannot sign in meanwhile: **Continue with email** asks for the
+password and then an emailed code; **Forgot password** sends a reset code.
+`backend.scripts.set_owner_email` changes the owner's sign-in address.
+
+### Local Git layout
+
+- `/home/ubuntu/Documents/ace` (legacy, branch `main`) holds the shared
+  `.git`. `ace-next` and every agent worktree are worktrees of it, so refs,
+  branches and the stash are shared with Codex and other sessions. Never use a
+  bare `git stash`/`pop`; never touch another agent's uncommitted files.
+- Chrome loads the unpacked extension from `ace-next/extension`. Work in a
+  separate worktree (for example `/home/ubuntu/Documents/ace-typography` on
+  branch `typography-refresh`), push with
+  `git push origin <branch>:wine-rose-platform` (fast-forward only), then
+  `git -C /home/ubuntu/Documents/ace-next merge --ff-only origin/wine-rose-platform`
+  after a fetch, and ask the owner to reload the extension.
+- Before starting, compare with `origin/wine-rose-platform`; Codex also pushes
+  there. Rebase local work onto it rather than merging duplicate copies.
+- `git fetch` failed with `bad object refs/codex/turn-diffs/...` because Codex
+  left an empty checkpoint ref. The owner moved it to
+  `~/ace-broken-codex-ref.empty` and fetch works. If it recurs, find the
+  empty file under `.git/refs/codex/` and ask before moving it aside.
+- Stale worktrees exist at `/home/ubuntu/Documents/ace-typography-base`
+  (baseline for screenshots) and prunable `/tmp/ace-focus-*`. Remove them only
+  with the owner's approval.
+
+### Local testing recipes
+
+- Playwright's bundled browser is not installed. Always set
+  `CHROMIUM_PATH=/usr/bin/google-chrome`.
+- Extension browser tests need no server:
+  `cd web && CHROMIUM_PATH=/usr/bin/google-chrome npx playwright test tests/e2e/extension-*.spec.ts`
+  (22 tests, about 25 seconds). Pair with `node extension/test-rules.js`,
+  `node extension/test-memory.js`, `node --check extension/content.js` and
+  `python3 scripts/no_user_facing_dashes.py`.
+- Website tests need the fictional demo API and a production build: seed with
+  `backend.scripts.seed_demo`, run uvicorn with `ACE_DEMO_COMPANIES=1` on
+  port 18000, `API_ORIGIN=http://127.0.0.1:18000 npm run start -- -p 3100`,
+  then `WEB_URL=http://127.0.0.1:3100 CHROMIUM_PATH=/usr/bin/google-chrome npx playwright test`.
+  The suite writes marks, so never point it at real data.
+- In a fresh worktree `npm run typecheck` fails on missing `PageProps` and
+  `LayoutProps` until `npm run build` generates them. Reuse `node_modules` with
+  a symlink; `cp -al` hardlinks fail across filesystems.
+- For before and after screenshots, add a detached baseline worktree at the
+  old SHA and serve both builds on different ports.
+- Extension screenshots: a `data:` page cannot load the packaged font. Serve
+  the folder with `python3 -m http.server 18100 --bind 127.0.0.1 --directory extension`,
+  open its `manifest.json` URL, `setContent` a fictional form with several
+  fields (name, email, a select) so it counts as an application, mock
+  `chrome.storage.local` and `chrome.runtime` (`getURL` returns the served
+  URL), then add `fields.js`, `memory.js` and `content.js` as script tags.
+  The card is `.ace-root .ace-panel`; set `colorScheme` on the page for Day or
+  Night. `web/tests/e2e/extension-focus-theme-close.spec.ts` shows the mocks.
+  Stop the server with a bracketed pattern such as `pkill -f "http\.server 1810[0]"`
+  so `pkill` does not match its own shell.
+
+### Typography contract
+
+- Website: Inter variable (`web/src/app/fonts/InterVariable.woff2`, SIL OFL
+  1.1, license beside it) through `next/font/local` in `web/src/app/layout.tsx`
+  as `--font-inter`. Geist Mono is for code and keys only, with
+  `preload: false`. `--font-ui` ends with colour emoji fallbacks.
+- Tokens live in the `:root` block of `web/src/app/globals.css`: sizes
+  `--text-tick` 11.5, `small` 12, `meta` 12.5, `label` 13, `button` 13.5,
+  `nav` 14, `lead` 14.5, `body` 15, `card` 15.5, `emphasis` 16, `section` 19,
+  `title` 24, `page` 29 to 38, `metric` 25 to 34 (px equivalents of rem);
+  weights 400 to 760 (`--weight-wordmark` 760); `--leading-*`; `--tracking-*`
+  (wordmark -.082em). Use tokens, never raw sizes.
+- Rules: nothing under 11.5px; sentence case written in source, no CSS
+  `uppercase`; `tabular-nums` on counts, dates and metrics; company before
+  role. `web/tests/e2e/typography.spec.ts` enforces them. When text clips, fix
+  it with the leading tokens or by letting it wrap, not by shrinking type.
+- Extension: a shadow root cannot declare `@font-face`, so `loadPanelFont()`
+  registers `ace-inter` with the FontFace API from
+  `chrome.runtime.getURL("fonts/InterVariable.woff2")`, which the manifest
+  lists in `web_accessible_resources`. Panel tokens are px, because rem
+  follows the employer page. The V5.1 typography block sits after the
+  approved V5.1 rules and stays type-only; the V5.1 job line keeps 11px.
+  `extension/popup.html` declares the same face.
+
+### Extension card controls added on 2026-10-25
+
+- Theme: `studioThemeMode` is `system`, `day` or `night`, stored as
+  `aceStudioThemeMode`. `system` follows `prefers-color-scheme` live. The
+  header toggle picks the other theme; landing on the computer's theme stores
+  `system` again. The old `aceStudioTheme` key is ignored on purpose.
+- Close: the X after Minimize in the header and after Expand in the dock call
+  the existing `close()`. The card stays closed on that page while the owner
+  types, and returns on a URL change, a new form step or the toolbar `wake`
+  message. The status pill is `nowrap` and dock text ellipsizes so the extra
+  control changes no layout (compact card 354px tall).
+
 ## Current working state on 2026-10-25
 
 The working branch is `wine-rose-platform`, reconciled on GitHub on
 2026-10-25: it holds the website typography release (`54e939a`, `61debd6`,
 `8d84141`), Focus Mode V5.1 rebased on top of it (`559ee84`, `5b8ab4b`, the
 pushed equivalents of local `4ce3570` and `cb7bb5e`), this continuity work and
-the V5.1 typography pass. It contains the existing extension's V4 Answer Memory
-implementation (`2e7c1dc`). The extension manifest is `1.28.0`. The V5.1
-extension has not been published; it runs as an unpacked installation. An unpacked installation must
-be reloaded at `chrome://extensions`; employer tabs must then be refreshed.
-The owner has seen a V5.1 interface before the final visual correction and
-reported that its compact card differed from the approved reference. The
-correction is committed locally, but no owner screenshot of the corrected
-installation is recorded here.
+the V5.1 typography pass, then theme sync and Close (`386bed9`, the tip on
+2026-10-25; GitHub and the local `ace-next` checkout match). It contains the
+existing extension's V4 Answer Memory implementation (`2e7c1dc`). The
+extension manifest is `1.28.0`. The V5.1 extension has not been published; it
+runs as an unpacked installation loaded from
+`/home/ubuntu/Documents/ace-next/extension`. An unpacked installation must be
+reloaded at `chrome://extensions`; employer tabs must then be refreshed.
+The owner loaded the reconciled V5.1 card in Inter and asked for two changes:
+follow the computer's Day or Night setting, and a real Close control. Both are
+in `386bed9`; the owner's reload of 1.28.0 is not yet recorded.
 
 The approved V5.1 extension runs inside the existing MV3 extension. It has a
 compact draggable card, visible six-dot handle, remembered position, manual
@@ -139,7 +309,8 @@ The latest local visual comparison used fictional Chrome fixtures: the
 approved Night compact reference and corrected extension compact capture were
 both 318 by 332 pixels. Local artifacts are ignored under
 `artifacts/extension-v5.1/`; do not commit private employer screenshots. Final
-local checks: seven Playwright Chrome extension tests passed, 258 extension
+local checks at that point: seven Playwright Chrome extension tests passed
+(the suite is now 22 tests across all `extension-*.spec.ts`), 258 extension
 rule cases passed, `node extension/test-memory.js` passed,
 `node --check extension/content.js` passed and `git diff --check` passed. These verify local
 fixtures, not the owner's live authenticated employer pages or the actual
@@ -151,9 +322,19 @@ outside on 2026-10-24. The extension shares it: Inter ships in
 `extension/fonts/`, the panel registers it as `ace-inter` with the FontFace API
 when a panel opens, and the V5.1 card takes the website's weights and its 11.5px
 floor through one typography-only block after the approved V5.1 rules. The job
-line under the wordmark keeps its approved 11px. A local clone whose
-`wine-rose-platform` still points at `a1e59ff` holds pre-rebase copies of the
-V5.1 commits; move it to the GitHub tip rather than merging the two copies.
+line under the wordmark keeps its approved 11px. The live website frontend
+is still `61debd6` (checked from outside on 2026-10-25); the later commits
+change only the extension and documents, so no website release is pending.
+The pre-rebase local copies of V5.1 (`a1e59ff`) were retired on 2026-10-25:
+`ace-next` was reset to the GitHub tip with the owner's approval. Safety
+copies remain until the owner deletes them: branch `backup/local-before-sync`
+and stash `knowledge-file-before-sync`.
+
+Open production issue: Google sign-in on `https://ace.opik.net` returned 500
+with `UniqueViolation auth_sessions_pkey Key (id)=(4)`. The owner's Gmail did
+match the owner account; the serial sequence for `auth_sessions` is behind its
+highest existing id. The guarded fix is in the working notes below. Whether
+the owner ran it is not recorded, so check before running it again.
 
 The V4 code added additive migration `0050` and authenticated
 `/api/extension/memory` endpoints for approved reusable answers, with pairing
@@ -2093,7 +2274,9 @@ push.
 
 Git push over the configured HTTPS remote was working on 2026-10-22. Do not
 assume credentials remain valid forever; diagnose an actual authentication
-failure if one occurs. Do not force-push. Do not merge this branch to `main`
+failure if one occurs. Do not force-push. The one exception so far was an
+owner-approved `--force-with-lease` during the 2026-10-25 reconciliation, which
+dropped nothing. Do not merge this branch to `main`
 until the owner completes the multi-day legacy comparison and explicitly
 approves that merge.
 
@@ -2139,6 +2322,15 @@ deployed in `b8e30b0b4261257fea25fb8e46f03912c6811990` on 2026-10-23.
 Do not merge ACE Next to legacy `main` without separate approval.
 
 ## Change log
+
+### 2026-10-25, agent working notes
+
+- Added "Working notes for agents": owner working style, the no-AI commit
+  rule, production access through owner-run one-line SSH, the website-only
+  release line, the open Google sign-in sequence issue and its guarded fix,
+  the shared Git layout, local test recipes and the typography contract.
+- Updated the current state to `386bed9`, manifest 1.28.0, the retired
+  pre-rebase clone and its safety copies, and the 22-test extension suite.
 
 ### 2026-10-25, V5.1 theme sync and Close
 
