@@ -2,24 +2,29 @@
 
 Last updated: 2026-10-25
 
-This is the continuity document for ACE Next and its independent legacy
-comparison system. It contains architecture, verified state, extension status,
-operating commands, migration controls, deployment steps and remaining owner
-actions. `docs/HANDOFF.md` and the topic files in `docs/knowledge/` retain the
-longer engineering history. Dated observations below are historical evidence,
-not a claim that a service is healthy now.
+This is the single, standalone continuity document for ACE Next and its
+independent legacy comparison system. A new chat should be able to understand
+the product, architecture, safety boundaries, verified state, extension,
+operations, migration history, deployment controls and remaining work by
+reading this file alone. `docs/HANDOFF.md` and `docs/knowledge/` remain useful
+historical evidence, but they are optional archives rather than required
+context. Dated observations below are evidence from that date, not a claim that
+a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
 ## Instructions for a new Codex chat
 
 Treat this file as the continuity source for ACE. Read it completely before
-changing code or operating production. Then inspect the current Git status and
-diff because this document records known state but never overrides newer code
-or an explicit owner instruction.
+changing code or operating production. Inspect the current Git status, diff and
+recent commits afterward because this document records known state but never
+overrides newer code or an explicit owner instruction. Topic documents can be
+consulted for dated incident narratives, but a normal new session does not need
+them to understand the platform.
 
-For any interface work, also read the entire approved implementation prompt and
-inspect every page of the interactive V2 reference in both themes:
+The complete website design contract is summarized in this file. For a task
+that requires pixel-level comparison, the following files are the retained
+visual evidence and exact interactive reference:
 
 ```text
 design/ACE_WINE_ROSE_CODEX_IMPLEMENTATION_KIT/CODEX_IMPLEMENTATION_PROMPT.md
@@ -32,10 +37,9 @@ Opportunities, Applications, Analytics, Resume Studio, Autofill Extension,
 Archive, Coverage and Settings. Night and Day are both required. Prototype
 navigation, fictional data and the cursor tour must never ship.
 
-For Chrome extension work, the latest approved design is **ACE Focus Mode
-V5.1**, with the final employer-motivation exception. Read these files before
-editing the extension and compare its Day and Night captures with the final
-reference:
+The complete extension behavior contract is also summarized below. The latest
+approved design is **ACE Focus Mode V5.1**, with the final employer-motivation
+exception. These files remain the pixel-level visual evidence:
 
 ```text
 design/ace-focus-v5.1/START_HERE.md
@@ -103,8 +107,10 @@ Before every task:
 
 ## Current working state on 2026-10-25
 
-The local working branch is `wine-rose-platform`; its latest extension code
-commit is `cb7bb5e`. It contains the
+The local working branch is `wine-rose-platform`. The local documentation HEAD
+is `a1e59ff`; its latest extension code commit is `cb7bb5e`. The branch is
+three commits ahead of and three commits behind `origin/wine-rose-platform`.
+It contains the
 existing extension's V4 Answer Memory implementation (`2e7c1dc`), Focus Mode
 V5.1 (`4ce3570`) and the approved visual and Workday listing correction
 (`cb7bb5e`). The extension manifest is `1.27.0`. These two V5.1 commits are
@@ -450,11 +456,1119 @@ The production result must preserve all historical data and behavior from the
 legacy ACE system. The UI changes, and new Resume Studio and Google sign-in
 features are added, but the old data is not discarded or regenerated.
 
+## Standalone platform specification
+
+This section consolidates the durable product and engineering knowledge that
+was previously spread across the handoff and topic files. Later sections add
+dated production evidence, exact release history and operating procedures.
+
+### Product priorities and vocabulary
+
+ACE serves one primary owner. Its priorities, in order, are:
+
+1. Find every eligible opening as early as practical, with high recall and low
+   noise, from approved employer sources.
+2. Make applying faster with safe form filling, while leaving review and final
+   submission entirely to the owner.
+3. Preserve a complete, trustworthy application history and resume knowledge
+   base.
+4. Present the system as a polished, accessible portfolio-grade platform using
+   the approved Wine and Rose design.
+5. Run continuously in the cloud without losing the intact legacy fallback.
+
+Important terms:
+
+- A **source** is one employer board, ATS tenant, official site reader or
+  approved feed account with its own polling state and interval.
+- A **job identity** is `(source, source_account, external_id)`. Numeric database
+  IDs are internal and are not portable between the legacy and Oracle systems.
+- A **content hash** is the SHA-256 identity of the posting content used to
+  detect a real update without changing job identity.
+- **PASS** and **REJECT** are the only eligibility outcomes. The former STRETCH
+  tier was removed because the owner wants one actionable opportunities list.
+- **Unverified** means the source did not provide enough description text for
+  every requirement rule. It is an honest state, not a rejection.
+- A **Pull** is a user-facing discovery window. Current Pulls group activity in
+  15-minute windows. They are not a claim that every source polls every 15
+  minutes.
+- **Marks** are saved, reviewed, dismissed and applied state. Applied records
+  also carry status and notes. The application stages are Applied, Screening,
+  Interviewing, Offer, Accepted, Rejected, Withdrawn and No reply.
+- Company tiers are BIG_TECH, TOP_TIER, ESTABLISHED and OTHER. Tiers order and
+  explain results; they do not decide eligibility.
+- Matching scores rank an already eligible job. Scores never decide whether a
+  job is included.
+
+### End-to-end data flow
+
+```text
+approved employer boards and feeds
+              |
+              v
+provider adapters and discovery readers
+              |
+              v
+authoritative snapshot, identity and content diff
+              |
+              v
+versioned deterministic eligibility gate
+              |
+              v
+resume scoring, Pull grouping and application state
+              |
+              v
+PostgreSQL -> FastAPI -> Next.js -> owner browser
+                    \-> paired Chrome extension
+                    \-> optional alert email
+```
+
+The scheduler is the only discovery writer within each database. It stores all
+postings, including rejected and closed records, so new rules can be evaluated
+over history. FastAPI exposes owner-authorized JSON. Next.js proxies same-origin
+`/api/*` requests to FastAPI at runtime. Caddy terminates HTTPS in production.
+The extension uses a separately paired least-privilege token.
+
+### Eligibility gate and role rules
+
+The gate is deterministic, versioned and reproducible. It must not read the
+clock, network or random state. The current default candidate profile is
+`early-career`; the optional `sde2` profile may be enabled only after the owner
+reviews its dry run.
+
+The default profile admits:
+
+- US locations, including Remote US and unambiguous US city or state forms.
+  Bare `US` is matched on token boundaries so it does not match words such as
+  Houston. Remote Americas or North America can include the US after explicit
+  foreign-country checks.
+- Full-time software engineering, machine learning and forward deployed
+  engineering roles.
+- New graduate, junior, associate, entry-level and otherwise unlabeled roles
+  when the posting states no disqualifying requirement. Silence is unknown, not
+  rejection.
+- Bounded experience ranges when the candidate meets the lower bound. For
+  example, `2 to 10 years` can pass on its floor, though it is not labeled new
+  grad. An open-ended `3+ years` is rejected in the default profile. A stated
+  requirement of 4 or more years is rejected.
+- Roles silent about sponsorship. Only an explicit refusal to sponsor or a
+  true work-authorization blocker rejects.
+
+The gate rejects:
+
+- internships, working-student roles and spelling variants such as intership;
+- contract, contractor, freelance, temporary, fixed-term, contract-to-hire and
+  AI-trainer work, including a structured employment type when the source
+  provides it;
+- senior, staff, management, hardware and broad security-role titles according
+  to the current title rules;
+- data engineering and data science while
+  `INCLUDE_NEW_GRAD_DATA_ROLES = False`;
+- postings outside the US scope;
+- explicit sponsorship refusal;
+- ITAR, explicit US-person or citizenship requirements, or language requiring
+  access without a license. Ordinary export-control language is not itself a
+  citizenship requirement.
+
+New grad is narrower than early career. `is_new_grad` is based on explicit
+title signals such as new grad, university graduate, campus and graduation
+year. It is stored and used for filtering and ordering. It must not be inferred
+from the broader early-career label.
+
+The `sde2` profile differs only by admitting open-ended `3+ years`; it still
+rejects 4+, 5+, senior, staff, manager and higher-level roles. Run
+`python -m backend.scripts.gate_dry_run --profile sde2` before any switch.
+
+Every gate change requires:
+
+1. Update the versioned candidate profile or `ELIGIBILITY_RULE_VERSION`.
+2. Add focused tests for both inclusion and false-positive boundaries.
+3. Measure the read-only corpus impact.
+4. Re-evaluate stale stored decisions. Current PASS rows are refreshed first;
+   the full historical backfill runs afterward.
+
+Do not copy the gate into an adapter or SQL filter. The real gate is the single
+source of truth.
+
+### Sources, adapters, scheduler and persistence
+
+Current adapter families include Greenhouse, Lever, Ashby, Workday,
+SmartRecruiters, Workable, Eightfold classic and PCSX, Jibe, Avature, Apple,
+Google, Atlassian, Shopify, Gem, IBM, Amazon, Oracle Recruiting, ByteDance,
+RippleMatch, Simplify, sitemap readers and related official-site readers.
+Respect each host's robots policy and refusals.
+
+Source rules:
+
+- There is one fetch path per provider. Diagnostic scripts use the same real
+  adapter contract so tuple shapes and cleanup logic cannot drift.
+- A complete successful snapshot is authoritative for lifecycle. Never return
+  a partial page set after a transient failure because missing rows would be
+  marked closed.
+- Workday and SmartRecruiters can expose a cheap list plus costly detail calls.
+  Detail fetches may be predicated through the real title gate, but every list
+  item must still be emitted for lifecycle.
+- Use conditional HTTP where supported. A 304 advances success state but does
+  not rediff the body. Force an unconditional refresh at least every six hours
+  so a bad ETag cannot hide updates indefinitely.
+- Retry transient 429, 500, 502, 503, 504 and connection failures with bounded,
+  jittered backoff and `Retry-After` limits. Do not retry a real 404 as if it
+  were transient.
+- A 401, 403, 405, 429, bot challenge or CSRF-protected API is a refusal. Back
+  off. Do not bypass it, rotate around it or restart repeatedly.
+- Never mass-close jobs after an empty, partial, refused or failed response.
+- Scheduler polling is bounded and concurrent. Slow sources continue in a
+  persistent pool while other due sources run. A source cannot start twice.
+- Restarts resume from persisted `last_success_at`; they do not make every
+  source immediately due. Shared-edge providers such as Eightfold are paced.
+- Poll intervals are per source and can differ widely. Amazon and expensive
+  boards poll less often than ordinary boards.
+- New sources are re-read from the database between cycles and do not require a
+  process restart.
+
+Source lanes:
+
+- Lane A: employer ATS or official-site readers with full descriptions.
+- Lane B: curated early-career feeds when employer descriptions are unavailable;
+  these are browse-only and clearly unverified.
+- Lane C: RippleMatch, the one approved exception where the apply link is the
+  recruiting platform because some early-career roles exist only there.
+
+The official employer posting is the apply target everywhere else. An
+aggregator that links only to itself is not acceptable coverage.
+
+Persistence rules:
+
+- Stable identity is `(source, source_account, external_id)`.
+- A title, location, description or employment-type change updates the same job
+  and must alter the content hash.
+- `job_evaluations` and `job_resume_scores` are derived, rebuildable tables.
+  They carry input hashes and algorithm/rule versions so stale rows are
+  detectable.
+- PostgreSQL is production. Tests use a JSON fallback and SQLite where
+  appropriate, so structural PostgreSQL behavior needs explicit tests.
+- Long source-provided values such as multi-location strings use unbounded text
+  where truncation could change gate meaning.
+
+### Discovery coverage and recall
+
+The most dangerous failure is silence: a missed posting produces no exception.
+Coverage must be measured against independent employer lists, source audits and
+the owner's known examples, not inferred from a healthy-looking queue.
+
+Discovery can identify an ATS board from an employer's own careers page or from
+approved feed links, then register it for direct reading. A feed hit must not
+prevent the employer board from being read. A board that stops answering is a
+company ACE has stopped reading, even if old jobs remain in the database.
+
+Known unreachable or deliberately untouched sources include sites whose
+robots policy or bot protection refuses access. Historical examples include
+Tesla, Citadel, Citadel Securities, D. E. Shaw, LinkedIn and Equinix. IBM uses
+its permitted site-search API rather than bypassing its careers WAF. Cloud IPs
+can be treated differently from a home connection, so refusal rates must be
+measured after deployment.
+
+The owner currently compares independent legacy and Oracle discovery. Compare
+source identity, official posting identity and aligned time windows. Do not
+compare numeric IDs or demand identical totals. A recent private comparison
+showed most one-sided jobs converging after an hour and no different
+eligibility decision on shared jobs; that was evidence for one window, not a
+permanent guarantee.
+
+### Resume matching and applications
+
+Resume matching is lexical and deterministic, with approved related-skill
+partial credit. It is not a semantic model and never invents evidence. Matching
+states are:
+
+- `scored`: a current usable score exists;
+- `pending`: the eligible job is waiting for a scoring sweep;
+- `no_description`: source requirements were not readable;
+- `insufficient`: too little recognized requirement text for a responsible
+  score;
+- `no_resume`: there is no active resume.
+
+The scheduler scores active PASS jobs missing a current score, changed since
+scoring or scored by an older algorithm, in bounded batches. One failure is
+logged and retried later; it does not receive an invented score.
+
+Application history comes from applied `job_marks` plus
+`external_applications`. Marked pages bypass current gate and active filters so
+closed or now-ineligible jobs never vanish from the owner's own history.
+Application totals include historical submitted stages, not only rows whose
+current label is exactly Applied. Avoid double-counting the same application
+through marks and external rows.
+
+Marking Applied must:
+
+- update the row and every visible total immediately;
+- synchronize other tabs and surfaces;
+- persist through the authenticated API and survive refresh and sign-in;
+- roll back the optimistic state and counters if the save fails;
+- prevent duplicate mutations and stale race outcomes.
+
+The spreadsheet import UI was intentionally removed. CSV export remains.
+Legacy preview/import API routes may remain unused, but no interface should
+revive the daily spreadsheet workflow without a new owner decision.
+
+An unmarked listing can show `Applied before` when an earlier applied posting
+has matching company/title and compatible location. This is derived at read
+time and never copies the mark. Requisition numbers explain whether the new
+posting may be a distinct opening. ACE shows the resemblance and lets the
+owner decide.
+
+### API and key data domains
+
+The browser uses authenticated JSON with `Cache-Control: no-store`. Important
+API families include:
+
+- jobs, details, facets, stats and Pull windows;
+- marks, application stages, notes, external applications and CSV export;
+- answer bank, work history and education history;
+- active resume, matching, Resume Studio documents, facts, versions and
+  assessments;
+- coverage and source registration;
+- owner account, sessions, email-code flows and Google callback;
+- extension pairing and Answer Memory;
+- health and safe operational status.
+
+Core durable data includes jobs, sources, source states, evaluations, scores,
+Pull sessions, marks, external applications, answers, work/education history,
+legacy resumes, Resume Studio tables, users, browser sessions, extension tokens
+and email-code records. Do not replace real aggregates with demo fixtures.
+
+### Website product and design contract
+
+The website is a real Next.js App Router product, not an iframe or screenshot.
+The final approved reference is Wine and Rose V2. Older purple/gold,
+anthracite, gray, alternate auth and homepage concepts are historical and must
+not return.
+
+Required routes and contracts:
+
+- `/`: public cinematic home with no private owner data.
+- `/login`: real owner sign-in using the approved split composition.
+- `/signed-out`: shown only after a real session is invalidated.
+- `/app/pulls`: authenticated landing page and truthful 15-minute discovery
+  windows.
+- `/app/opportunities`: eligible-job search, filters, sorting, official links,
+  evidence and durable actions.
+- `/app/jobs/[id]`: job details, matching evidence, eligibility explanation and
+  application actions, including closed jobs.
+- `/app/applications`: real application history, stages, dates, notes, filters
+  and export.
+- `/app/analytics`: real discovery, application and resume-fit metrics.
+- `/app/dashboard`: Career Dashboard for combined application intelligence.
+- `/app/applications/inbox`: owner-controlled Gmail Inbox Intelligence,
+  evidence review and outcome reconciliation. This route is present in the
+  current code, but live Gmail authorization is not recorded as configured.
+- `/app/resume-studio`: documents, knowledge, versions, ATS checker and history.
+- `/app/extension`: pairing, token revocation, setup and answer-memory access.
+- `/app/archive`: historical reviewed and dismissed state.
+- `/app/coverage`: source coverage, unsupported/refused sources and add-source
+  workflow.
+- `/app/settings`: theme, owner account, session security and existing
+  preferences.
+
+Old Browse and Companies routes redirect to Opportunities. Saved data still
+exists even though Saved is secondary and not in primary navigation. Pulls is
+home; the separate Career Dashboard does not replace it. Supporting routes
+also exist for Saved, Answers, skill insights, company detail, Resume Studio
+subpages, More and sign-out. Do not replace Pulls with a generic Dashboard or
+Queue. The owner rejected a global Search or Jump command palette.
+
+Locked identity and themes:
+
+- The wordmark is exactly lowercase `ace`, with the `a` in wine and `ce` in the
+  theme foreground. No logo tile, uppercase mark, subtitle or tagline.
+- Night is black and deep wine. Day is rose wine and bright white.
+- Primary V2 tokens are Night/Day respectively: base `#09070b`/`#fff9fb`, side
+  `#120c13`/`#fff6f9`, canvas `#191019`/`#fffafd`, surface
+  `#251825`/`#ffffff`, raised `#302131`/`#fff0f5`, hover
+  `#3d283b`/`#fee8ef`, edge `#574050`/`#e9d3de`, text
+  `#fff7fa`/`#27131f`, muted `#cfbcc6`/`#745a69`, sub
+  `#ab8b9e`/`#946b80`, accent `#a62957`/`#97244f`, accent-high
+  `#c93b70`/`#b63566`.
+- Public and auth screens use the full angular sculptural A, reflective light
+  trails, floor reflection and glass depth. The whole A must remain visible on
+  desktop. Scale or reflow deliberately on smaller screens rather than clipping
+  it.
+- Use the shared semantic token layer on all pages. Do not let individual pages
+  fall back to gray, generic red, purple, navy or framework defaults.
+- Required review sizes include 1440x900, 1600x900, 1280x800, 1024px tablet and
+  390px phone, in Night and Day, without horizontal overflow.
+- Functional text must meet WCAG AA. Keyboard order, focus visibility,
+  reduced-motion behavior, loading, empty, unavailable and failure states must
+  be honest.
+
+There must be no visible Unicode em dash and no en dash used as punctuation in
+the website, extension, generated email or assistant-authored user-facing copy.
+Also avoid decorative pseudo-elements that visually imitate dash punctuation.
+Static scans are necessary but not sufficient; rendered pages, dynamic toasts,
+dialogs, labels, placeholders, accessible names and pseudo-content must be
+tested in both themes.
+
+The V2 demo contains fictional navigation and data for visual review only.
+Never ship its DESIGN DEMO selector, hash router, Preview workspace bypass,
+sample names, hardcoded counts, fake health, fake scores or simulated saves.
+
+### Pulls metric contract
+
+Pulls must distinguish:
+
+- distinct sources checked from raw attempts and retries;
+- postings inspected from newly discovered postings;
+- newly discovered from updated or re-seen postings;
+- qualifying opportunities from all observed jobs;
+- failed, skipped, blocked and zero-result checks;
+- no check telemetry recorded from a successful check with zero new jobs.
+
+The source of truth is backend telemetry with exact time boundaries and display
+timezone conversion. Older windows without telemetry say `not recorded` rather
+than showing zero. Health indicators must disclose freshness and never show a
+reassuring success state when the backend has not confirmed one.
+
+### Chrome extension and Answer Memory
+
+The extension is Manifest V3. Important implementation areas are
+`extension/content.js`, `fields.js`, `background.js`, the popup/side panel,
+storage, pairing and rule tests. The current local manifest version is 1.27.0.
+The approved interface is ACE Focus Mode V5.1; older extension interfaces are
+historical.
+
+V5.1 behavior:
+
+- Default to a compact floating card around 318px wide, not a full-height panel
+  covering the form.
+- Preserve Overview, Review, Memory, Activity, Fill, Scan fields, resume use,
+  pairing and Alt+A.
+- Use the lowercase `ace` wordmark, Wine and Rose Day/Night themes, clean
+  outline icons and a visible six-dot grip.
+- Provide compact, optional wider workspace and a manually chosen minimized
+  dock.
+- Drag freely from eligible non-interactive card and dock surfaces. Do not steal
+  clicks, typing, text selection or scrolling from form controls. Use a movement
+  threshold, clamp to the visible viewport, persist normalized position, allow
+  handle keyboard movement and reset on handle double-click.
+- Never auto-minimize after Fill, approval, skip, a detected question or Review
+  completion. Review remains open and ends in a persistent truthful completion
+  state until the user chooses Minimize.
+- Detect dynamic fields with restrained, debounced observers and retain manual
+  Scan fields as a fallback.
+- Job listing and search routes must remain quiet. In particular, Workday
+  listing/search routes outside `/apply/` stay quiet after SPA navigation. The
+  toolbar Wake override remains available.
+
+Review mirrors the real employer control for eligible questions: native select,
+radio, checkbox, multiple-select, text, textarea and only supported custom
+widgets with their actual choices. Page-to-ACE and ACE-to-page synchronization
+must verify the employer control's real selected value. Unsupported or
+ambiguous custom controls remain manual. Never display a generic text box for a
+native select and never report success without reading the actual state back.
+
+ACE fills; the owner reviews; the owner submits. Extension code must never call
+`form.submit()`, `requestSubmit()`, synthesize a submit event, click an employer
+Submit control, irreversibly advance a form, or mark a job Applied because Fill
+ran. Applied state needs a separate explicit owner action.
+
+Employer-specific motivation questions are entirely employer-page-owned. This
+includes `Why this company?`, `Why do you want to join us?`, `What interests you
+about joining [company]?` and materially equivalent questions. For them ACE:
+
+- leaves the original employer field visible, editable and untouched;
+- does not fill, suggest, mirror, capture, observe, log or send the answer;
+- excludes the question from Review, progress denominators, Memory and
+  Activity;
+- does not change the field during Fill, Scan, navigation, theme changes,
+  dragging, minimizing or dynamic rerender;
+- retains historical server records but excludes them from automatic reuse;
+- may show only a truthful reminder to finish employer-owned questions on the
+  employer form.
+
+Classification uses the question label and employer context, never the answer.
+It must distinguish company motivation from technical questions such as `Why
+did you choose eventual consistency?`. One shared predicate must guard scan,
+fill, queue, observability, status counts, activity and memory retrieval.
+
+Unknown ordinary questions enter Review. Only genuinely equivalent approved
+general answers may be reused when type, options, scope and context align.
+Authorization, sponsorship, citizenship, legal declarations, compensation and
+self-identification require conservative, per-application handling. Never
+infer a narrow sensitive answer from a broad saved answer.
+
+V4 added migration 0050 and authenticated `/api/extension/memory` behavior for
+approved reusable answers, with existing answer-bank and pairing compatibility.
+Production activation of migration 0050 and live Memory behavior remains
+unverified in this continuity record. Verify read-only before relying on it or
+running another migration.
+
+### Resume Studio
+
+Resume Studio is deterministic and has no generative AI. Its backend lives in
+`backend/app/studio/`; routes are under `/api/studio`. Migration 0039 created
+documents, career facts with audit events, versions and assessments.
+
+- Original document bytes are retained as uploaded.
+- PDFs render through an authenticated content endpoint and short-lived browser
+  Blob URL. DOCX and other formats show an honest download action when the
+  browser cannot render them reliably.
+- Facts are separate from wording. Parsed facts begin as suggested; owner-entered
+  facts begin verified. Retirement marks a fact deprecated rather than deleting
+  it. Only verified facts count as evidence.
+- The first resume becomes primary only if no primary exists. Making a version
+  primary copies its text into the legacy matching table and triggers the
+  established rescore behavior.
+- The ATS checker reports an `Estimated ace compatibility score`, not an
+  employer ATS score. Algorithm `ats-2026-10-14-v1` weights requirement evidence
+  45, parseability 20, hard fit 20 and content quality 15.
+- Evidence used in experience, project or summary text receives full credit;
+  skills-list-only evidence receives 0.75; approved related evidence receives
+  0.5; preferred requirements weigh half.
+- A posting under 400 characters, unverified, or naming fewer than three skills
+  is insufficient job data and gets no aggregate score. A resume under 200
+  characters is unreadable. Neither condition is represented as zero.
+- The checker gives evidence quotes, line numbers, findings, unknowns and
+  prioritized recommendations. Hard fit reuses the real gate diagnostically and
+  never filters the Resume Studio result.
+
+Not yet built: the full no-AI tailoring workflow, side-by-side approval diff,
+owner-template DOCX/PDF export and durable background jobs. Future tailoring
+may only reorder or reword verified facts and must never invent experience.
+
+### Alerting, time and privacy
+
+Alert email is one message per completed Pull, not one email per job. Delivery
+uses Resend only when configured. Missing mail configuration must be reported
+honestly and must not block discovery. Email clients are not browsers, so email
+markup and text need their own tests.
+
+Instants are stored in UTC. Every human-facing date is formatted in the owner's
+configured display timezone. Historical CSV drift proved that UTC storage and
+local calendar dates are separate concerns.
+
+The public repository must never contain real resumes, answer values, owner
+email, phone, profile photo, application text, employer screenshots, database
+dumps, tokens, secrets or session cookies. Fixtures are fictional. Extension
+diagnostics carry no answer values. Private reports and artifacts stay ignored.
+
+### Testing and operational doctrine
+
+Durable rules learned from prior incidents:
+
+1. Verify the running system, database and exact commit. A local build or Git
+   push is not a deployment.
+2. Build every affected image before `up`, including migrate. Containers bake
+   source; a host-side edit does not change a running image.
+3. Use `docker compose --env-file .env` with the Oracle compose file. Omitting
+   it once substituted blank database variables and began recreating services.
+4. Do not run `docker compose down`, remove volumes or recreate the scheduler
+   during an ordinary web/API release.
+5. Production mutations, migrations, deployments, scheduler changes, DNS,
+   extension publication and destructive data work need explicit owner approval
+   for that operation.
+6. Tests against live servers must wait for committed writes and must not wait
+   on a stale UI flag. Restarting a server mid-browser-suite invalidates the run.
+7. Never guess which rows are test data. Use isolated fictional databases.
+8. An unpacked extension must be reloaded at `chrome://extensions`, then target
+   employer tabs must be refreshed or reopened.
+9. Use exact source/time-window parity rather than aggregate reassurance.
+10. Every found bug receives a regression test that reproduces its real shape.
+
+Current validation families include backend unit/integration tests, Next.js
+TypeScript and ESLint, production build, Playwright with fictional data,
+extension matcher and memory tests, Chrome-extension browser tests, forbidden
+dash scans, migration rehearsal, private inventory checks and production health
+verification. Report actual results and distinguish local fixtures from live
+production evidence.
+
+### Historical failures that define current safeguards
+
+- Bare `US`, city-only locations and country/state code collisions caused false
+  location decisions. Boundary-aware parsing and country expansion now have
+  corpus tests.
+- Experience extraction once ignored intervening words and range ceilings.
+  Open-ended minimums and bounded ranges now have separate semantics.
+- A structured contract flag was discarded before persistence and omitted from
+  content hashing and a backfill reconstruction. Eligibility-relevant fields
+  must cross every persistence and reconstruction boundary.
+- Double-encoded HTML entities hid requirements from phrase rules. All adapters
+  share fixed-point decoding; do not add another hand-rolled decoder.
+- One incomplete paginated response could have closed hundreds of jobs. Partial
+  snapshots are never authoritative.
+- Repeated restarts caused a shared ATS edge to refuse ACE. Restarts resume
+  persisted schedules and refusals back off.
+- Waiting for the slowest source delayed every other source. Slow workers now
+  continue without holding the scheduling loop.
+- A `varchar(500)` location failed a whole board. Do not truncate meaning-bearing
+  source data.
+- Feed coverage once prevented direct-board coverage, and an aggregator returned
+  only its own links. Reachability and ownership of the apply URL are separate
+  checks.
+- URL normalization once removed Greenhouse job IDs in query parameters and
+  confidently matched the wrong application. Remove only known tracking
+  parameters; ambiguity is safer than a false identity.
+- Marked pages once inherited PASS and active-only filters, hiding the owner's
+  history. User-owned marks bypass those discovery filters.
+- A UI held several copies of one job and updated only one, so Applied looked
+  unsaved until refresh. Mutations must update every cache surface or invalidate
+  a shared source of truth.
+- Resume scores were written only on upload and silently went stale. Event-driven
+  bounded scoring now handles new jobs, changed content, changed rules and changed
+  algorithms.
+- Source counts and activity labels repeatedly described new jobs as all jobs
+  checked. Metric labels must match the exact query population.
+- Browser fixtures once tested a substitute instead of the real extension.
+  Extension tests must load the actual manifest and content scripts.
+- Real forms exposed custom widgets, repeating blocks, delayed fields, phone
+  country ordering and multi-page navigation. The employer DOM, not a generic
+  form model, is the specification.
+### Known limitations and future work
+
+- Both discovery systems are intentionally independent today. Application state
+  entered in ACE Next does not synchronize back to legacy.
+- Offsite Object Storage backup is not configured; backups on the Oracle VM do
+  not protect against loss of that VM.
+- Some sources refuse home or cloud access, and no bypass is permitted.
+- Borderline source and job behavior can change as providers alter undocumented
+  APIs. Coverage audits remain continuous work.
+- Production V4 Memory status needs read-only verification.
+- The local branch and tracked remote have divergent work that must be
+  reconciled before push or release.
+- Resume Studio tailoring and export remain later scope.
+- The SDE II profile remains off until the owner approves its dry run.
+- Post-launch retention is designed but must not run until backup, restore,
+  closure detection, tombstones, rollups and protected-job predicates are all
+  proven.
+
+## Code-verified implementation map
+
+This section is the implementation index a new chat should use before touching
+code. It was reconciled against the repository on 2026-10-25. It records the
+important boundaries and contracts without copying secrets or private rows.
+
+When facts conflict, use this order:
+
+1. The owner's newest explicit instruction controls product intent and
+   authorization.
+2. The current working tree, migrations and tests control implementation facts.
+3. The newest dated, independently verified entry in this file controls claims
+   about production state.
+4. Older sections and archived topic documents are historical evidence only.
+
+Never infer that code is deployed because it exists locally, that a migration
+ran because its file exists, or that production is healthy because an older
+check passed.
+
+### Repository and technology map
+
+The repository is one product with four execution surfaces:
+
+```text
+backend/                 Python domain logic, scheduler and FastAPI
+backend/migrations/      Alembic schema history 0001 through 0050
+web/                     Next.js App Router owner website
+extension/               Manifest V3 Chrome autofill extension
+deploy/oracle/           production Compose, Caddy, backup and parity tools
+scripts/                 repository-wide validation helpers
+design/                  approved website and extension visual evidence
+docs/                    historical plans, audits and incident evidence
+```
+
+The core runtime technologies are PostgreSQL 16, SQLAlchemy, Alembic, FastAPI,
+Uvicorn, Next.js 16.4.2, React 19.2.8, TypeScript 5, Tailwind CSS 4, Playwright
+1.56, Chrome Manifest V3, Docker Compose and Caddy. Python dependencies are
+pinned in `backend/requirements.txt`; frontend dependencies and commands are in
+`web/package.json`. Do not introduce another framework for an existing layer
+without a product-level reason.
+
+### Backend layers and ownership
+
+The backend is organized by responsibility:
+
+- `backend/app/adapters/` contains provider readers for Amazon, Apple, Ashby,
+  Atlassian, Avature, ByteDance, Eightfold, Eightfold PCSX, Gem, Google,
+  Greenhouse, IBM, Jibe, Lever, Oracle Recruiting, RippleMatch, Shopify,
+  Simplify, sitemap jobs, SmartRecruiters, Workable and Workday. Shared HTML
+  text decoding, conditional HTTP cache and retry behavior also live here.
+- `backend/app/discovery/` detects boards, follows approved feed links, defines
+  providers and the watchlist, and registers discovered sources.
+- `backend/app/scheduling/` owns the source catalog, registry, dispatch,
+  due-time runtime and one-source poll service. It does not own provider parsing
+  or eligibility policy.
+- `backend/app/workflows/source_snapshot.py` connects authoritative snapshot
+  persistence to deterministic evaluation.
+- `backend/app/persistence/` owns hashing, stable openings, source lifecycle,
+  Pull sessions, evaluation materialization and repository operations.
+- `backend/app/evaluation/` owns the eligibility decision and alert freshness.
+  `backend/app/intelligence/` owns role, company and eligibility vocabulary.
+- `backend/app/matching/` parses requirements, recognizes skills and computes
+  resume scores. `backend/app/applications/` owns application import matching,
+  prior-application evidence and application service behavior.
+- `backend/app/coverage/` audits employer coverage, cadence, reachability,
+  probing, diagnosis and safe recovery.
+- `backend/app/verification/` records employer-page evidence without bypassing
+  refused sources.
+- `backend/app/auth/` owns password security, sessions, CSRF, Google owner
+  identity, avatar processing and request guards.
+- `backend/app/inbox/` owns Gmail read-only access and conservative evidence
+  reconciliation. `backend/app/intelligence/` also supplies combined dashboard
+  aggregates and action vocabulary.
+- `backend/app/studio/` owns resume documents, facts, sections, versions,
+  legacy bridging and deterministic ATS assessments.
+- `backend/app/answers/`, `alerts/` and `mail/` own answer catalogue behavior,
+  Pull alert composition and Resend delivery respectively.
+- `backend/app/api/main.py` contains the established jobs, marks, resumes,
+  answers, history, coverage and source endpoints. `backend/app/api/routers/`
+  contains auth, Pulls, Studio, company intelligence, dashboard, inbox,
+  combined intelligence, owner export and system routes.
+- `backend/app/db/models.py` is the ORM schema map. `db/session.py` creates
+  sessions and `db/base.py` defines shared SQLAlchemy metadata.
+- `backend/scripts/` contains explicit operational and audit entry points. A
+  script is not automatically scheduled merely because it exists.
+
+One-source polling follows this transaction boundary:
+
+```text
+fetch external source with no database transaction held
+                    |
+                    v
+begin one database transaction
+                    |
+                    v
+reconcile source and posting lifecycle
+                    |
+                    v
+evaluate changed jobs and materialize read models
+                    |
+                    v
+commit, then expose through FastAPI
+```
+
+A conditional `not modified` result advances source success state and confirms
+the previous full count without re-evaluating unchanged rows. A failed or
+partial fetch never becomes an authoritative empty snapshot. The runtime uses
+bounded concurrency of six, keeps slow workers alive across cycle boundaries,
+prevents a source from running twice, serializes shared Eightfold edges, checks
+in-flight work frequently, runs maintenance every six hours and exponentially
+backs off refusal statuses 401, 403, 405 and 429 up to six hours.
+
+### HTTP, authorization and request boundaries
+
+FastAPI is the authorization authority. In production `ACE_AUTH=required`.
+`/healthz` and the explicit sign-in/setup flows are the narrow exceptions;
+private product routes require either the owner's browser session or an API
+token whose scope permits that route. `ACE_AUTH=disabled` is a local/private
+rollback mode with network-origin safeguards, not a public no-auth mode.
+
+Browser authentication uses an opaque session cookie whose token is stored
+hashed in PostgreSQL. Mutations also require the per-session CSRF value. The
+browser client reads the CSRF cookie and sends it as `X-CSRF-Token`. Passwords
+use Argon2id. Login, reset and email-change codes are hashed, expiring, single
+use and rate limited. Extension tokens are separate, revocable and
+least-privilege. Google owner sign-in and Gmail read-only consent are separate
+OAuth grants and must never reuse each other's token or scope.
+
+Server-rendered Next.js reads forward only the owner session cookie to FastAPI,
+use `cache: no-store`, and redirect a 401 to sign-in with the original safe
+destination. Browser mutations use the same-origin `/api/*` proxy. That proxy
+reads `API_ORIGIN` at request time, forwards method, query, safe headers and
+body, strips hop-by-hop headers, preserves multiple `Set-Cookie` values and
+returns an honest 502 when FastAPI is unavailable. This runtime proxy avoids a
+previous build-time origin bug and means the browser needs no CORS exception.
+
+### Complete backend API inventory
+
+The endpoint inventory below is code-verified. `/api/studio` is the router
+prefix for every Studio suffix listed in its row.
+
+| Domain | Method and path | Purpose |
+| --- | --- | --- |
+| Health | `GET /healthz` | Process and dependency health suitable for service checks. |
+| Root | `GET /` | Redirects to the website entry surface. |
+| Jobs | `GET /api/jobs`, `GET /api/jobs/{job_id}` | Filtered paginated listings and one durable job detail. |
+| Jobs | `GET /api/facets`, `GET /api/stats` | Facet counts and real aggregates over the same filters. |
+| Pulls | `GET /api/sessions`, `GET /api/pulls` | Legacy session list and the truthful Pulls read model. |
+| Resume | `GET /api/resume`, `POST /api/resume` | Active legacy resume metadata/text path and upload. |
+| Marks | `GET /api/marks`, `PUT /api/marks/{job_id}` | Counts and partial saved/review/applied/status/note mutation. |
+| Applications | `GET /api/applications/external`, `GET /api/applications/export.csv` | External history and CSV export. |
+| Legacy import | `POST /api/applications/preview`, `POST /api/applications/import` | Preserved API compatibility; no current spreadsheet UI. |
+| Answers | `GET /api/answers`, `PUT /api/answers` | Whole owner answer bank. |
+| History | `GET /api/history/{kind}`, `PUT /api/history/{kind}` | Ordered work or education history. |
+| Sources | `GET /api/coverage`, `POST /api/sources` | Coverage read model and owner-requested source discovery. |
+| Memory | `GET /api/extension/memory`, `PUT /api/extension/memory` | List and create/update reusable extension memories. |
+| Memory | `DELETE /api/extension/memory/{memory_id}`, `POST /api/extension/memory/{memory_id}/used` | Delete or record use of one memory. |
+| Auth | `GET /api/auth/status`, `POST /api/auth/setup` | Auth mode, owner/session state and first owner setup. |
+| Auth | `POST /api/auth/login`, `POST /api/auth/login/verify`, `POST /api/auth/logout` | Password start, email-code confirmation and session revocation. |
+| Auth | `GET /api/auth/google/start`, `GET /api/auth/google/callback` | Owner-only Google OpenID Connect. |
+| Account | `GET /api/auth/account`, `PATCH /api/auth/account` | Owner profile read/update. |
+| Account | `GET /api/auth/account/avatar`, `PUT /api/auth/account/avatar`, `DELETE /api/auth/account/avatar` | Private processed owner avatar. |
+| Account | `POST /api/auth/account/email/start`, `POST /api/auth/account/email/confirm` | Password-protected verified email change. |
+| Security | `GET /api/auth/sessions`, `POST /api/auth/sessions/revoke-others`, `POST /api/auth/password` | Session inventory, revoke others and password change. |
+| Recovery | `POST /api/auth/reset/request`, `POST /api/auth/reset/confirm` | Email-code password recovery. |
+| Pairing | `POST /api/extension/pairing`, `POST /api/extension/pair` | Create and redeem a short-lived extension pairing code. |
+| Pairing | `GET /api/extension/tokens`, `DELETE /api/extension/tokens/{token_id}` | List and revoke extension tokens. |
+| Company | `GET /api/companies`, `GET /api/company-intelligence`, `GET /api/company-intelligence/batch` | Company lists and evidence-backed company intelligence. |
+| Dashboard | `GET /api/dashboard` | Career Dashboard aggregate. |
+| Intelligence | `GET /api/intelligence`, `GET /api/intelligence/actions`, `POST /api/intelligence/actions` | Combined metrics and owner action queue. |
+| Inbox | `GET /api/inbox/connection`, `PATCH /api/inbox/connection`, `DELETE /api/inbox/connection` | Gmail connection state, settings and disconnect. |
+| Inbox | `GET /api/inbox/google/start`, `GET /api/inbox/google/callback` | Separate Gmail read-only OAuth. |
+| Inbox | `POST /api/inbox/sync`, `POST /api/inbox/backfill` | Owner-triggered incremental sync and preview-only backfill. |
+| Inbox | `GET /api/inbox/messages`, `GET /api/inbox/applications`, `GET /api/inbox/events` | Evidence, reconciled applications and event ledger. |
+| Inbox | `PATCH /api/inbox/messages/{message_id}/decision`, `PATCH /api/inbox/automation` | Review decision and tightly gated automation preference. |
+| Inbox | `POST /api/inbox/review`, `POST /api/inbox/events/{event_id}/undo` | Apply reviewed evidence or undo one event. |
+| Inbox | `DELETE /api/inbox/snippets` | Purge retained message snippets. |
+| Studio | `GET /api/studio` | Resume Studio overview. |
+| Studio | `POST /api/studio/documents`, `GET /api/studio/documents/{document_id}`, `GET /api/studio/documents/{document_id}/file` | Upload, inspect and privately download original documents. |
+| Studio | `GET /api/studio/facts`, `POST /api/studio/facts`, `PATCH /api/studio/facts/{fact_id}`, `GET /api/studio/facts/{fact_id}/history` | Fact ledger and audit history. |
+| Studio | `GET /api/studio/versions/{version_id}`, `POST /api/studio/versions`, `POST /api/studio/versions/{version_id}/primary` | Resume versions and primary selection. |
+| Studio | `POST /api/studio/check`, `GET /api/studio/assessments`, `GET /api/studio/assessments/{assessment_id}` | Deterministic ATS assessment creation and history. |
+| Export | `GET /api/export.json` | Owner data export. |
+| System | `GET /api/system` | Safe operational state for owner UI. |
+
+Interactive API docs are off by default through `API_DOCS=false`. Do not expose
+them merely for convenience in production.
+
+### Database schema and durable ownership
+
+All current ORM models live in `backend/app/db/models.py`. The important table
+contracts are:
+
+| Table | Durable responsibility |
+| --- | --- |
+| `jobs` | Stable source identity, company, requisition, title, location, description, official URL, posting/update times, employment type, content hash, first/last seen, active/closed state and Pull association. |
+| `source_states` | Per source/account initialization, last success, count, ETag, Last-Modified, unchanged state and last full fetch. |
+| `job_sources` | Configured source type/account/host/company, enabled state, interval, discovery provenance and verification timestamps. |
+| `job_evaluations` | One materialized decision per job with PASS/REJECT state, family, priority, rule version, reasons, experience evidence, early-career/new-grad flags, verification and input hash. |
+| `resumes` | Legacy resume bytes/text metadata, content hash, skills, active flag and upload time. |
+| `job_resume_scores` | Job/resume score, matched/missing/related skills, previous score, algorithm version and score time. |
+| `poll_sessions` | Pull start/activity, discovered and qualifying counts, boards/postings checked, raw attempts/failures, notification and alert state. |
+| `job_marks` | Saved, review, applied, application status, timestamps and owner note for a stored job. |
+| `external_applications` | Applications with no attached posting, including company/title matching key, applied date, status, URL and timestamps. |
+| `application_events` | Append-oriented status evidence with previous/new value, actor, reason, Gmail link, undo and dedupe metadata. |
+| `gmail_connections` | Encrypted Gmail grant state, cursor and owner-controlled automation settings. |
+| `gmail_messages` | Deduplicated message evidence and review state. |
+| `company_petition_reports` | Reviewed USCIS employer petition evidence, never guessed workforce sponsorship. |
+| `application_answers` | Ordered answer bank entries and precise screening fields accumulated through migrations. |
+| `extension_answer_memory` | Revisioned reusable question concept, answer, type, source context, use count and timestamps. |
+| `history_entries` | Ordered work and education blocks used by the extension. |
+| `source_probes` | Reachability and diagnostic probe history. |
+| `employer_page_readings` | Employer-page verification evidence. |
+| `users` | Single owner identity, profile, avatar, password hash, role and optional bound Google subject. |
+| `auth_sessions` | Hashed browser sessions, CSRF material, expiration, activity and revocation. |
+| `api_tokens` | Hashed, scoped, revocable extension tokens. |
+| `auth_codes` | Hashed login, reset and email-change codes with expiration and consumption. |
+| `login_attempts` | Persistent throttling evidence. |
+| `resume_documents` | Original Resume Studio uploads and extracted metadata/text. |
+| `career_facts` | Suggested, verified or retired career facts separate from resume prose. |
+| `career_fact_events` | Fact audit ledger. |
+| `resume_versions` | Versioned resume text and primary status. |
+| `resume_assessments` | Deterministic job/resume assessment results and evidence. |
+
+Stable job identity is the unique source tuple, never the integer `jobs.id`.
+User-owned application, auth, resume and answer tables are protected state and
+must not be regenerated during a discovery backfill. Evaluation and score rows
+are derived, but their version and input hashes must remain reproducible.
+
+### Complete migration ledger
+
+Alembic history is additive from 0001 through 0050:
+
+- 0001 jobs/source state; 0002 notification outbox; 0003 job sources; 0004
+  source host; 0005 notification digests.
+- 0006 evaluations; 0007 early-career flag; 0008 requirements verification;
+  0009 resume matching; 0010 source HTTP cache; 0011 wider job identity; 0012
+  last full fetch.
+- 0013 Pull sessions; 0014 related-skill credit; 0015 marks; 0016 previous match
+  score; 0017 application status; 0018 external applications.
+- 0019 answers; 0020 extended answers; 0021 answer ordering; 0022 relocation and
+  onsite answers; 0023 employment type; 0024 standard answers; 0025 normalized
+  choice answers; 0026 work/education history.
+- 0027 source probes; 0028 new-grad flag; 0029 Pull notification time; 0030
+  PayPal answers; 0031 company/title index; 0032 unbounded job location; 0033
+  employer-page readings; 0034 posting-link index; 0035 Pull check counts; 0036
+  locale-independent posting-link index; 0037 Pull alert state.
+- 0038 owner authentication; 0039 Resume Studio; 0040 Pull telemetry; 0041
+  Google owner identity; 0042 Pull telemetry repair; 0043 owner display name.
+- 0044 combined intelligence evidence; 0045 precise screening answers; 0046
+  precise Workday answers; 0047 Meijer Workday answers; 0048 Verizon Workday
+  answers; 0049 owner profile; 0050 extension Answer Memory.
+
+The last independently verified production schema in this file is 0049. The
+presence of local 0050 is not proof that production is at 0050. Always read
+`alembic_version` before planning a migration, rehearse from a current backup,
+and follow the safe migration procedure later in this file.
+
+### Frontend architecture and current route map
+
+The website is a server-first Next.js App Router application. Page modules
+perform authenticated no-store reads on the server. Interactive client
+components use the same-origin API proxy for mutation. Shared types and helpers
+live under `web/src/lib/`; reusable UI and behavior live under
+`web/src/components/`.
+
+This repository uses Next.js 16.4.2, whose APIs and conventions may differ from
+older model knowledge. Before frontend implementation, read `web/AGENTS.md` and
+the relevant installed guide under `web/node_modules/next/dist/docs/`. Preserve
+the generated Next.js instruction block in `web/AGENTS.md` because the dev
+server will restore it.
+
+Current page routes in code are:
+
+- Public and auth: `/`, `/login`, `/login/reset`, `/logout`, `/signed-out`,
+  `/privacy`, `/terms` and the web `/healthz` route.
+- Daily workspace: `/app` redirects to the authenticated home, `/app/pulls`,
+  `/app/opportunities`, `/app/jobs/[id]`, `/app/applications`,
+  `/app/analytics`, `/app/dashboard` and `/app/applications/inbox`.
+- Career tools: `/app/resume-studio`, `/app/resume-studio/check`,
+  `/app/resume-studio/documents`, `/app/resume-studio/documents/[id]`,
+  `/app/resume-studio/facts`, `/app/resume-studio/history` and
+  `/app/resume-studio/history/[id]`; `/app/extension`, `/app/answers`,
+  `/app/insights/skills` and `/app/archive`.
+- Supporting state: `/app/saved`, `/app/company/[name]`, `/app/coverage`,
+  `/app/settings`, `/app/more` and `/app/sign-out`.
+
+The actual sidebar order is Pulls, Opportunities, Applications, Analytics,
+Career Dashboard and Inbox Intelligence; then Resume Studio, Autofill Extension
+and Archive; then Coverage and Settings. Pulls remains the authenticated home.
+Opportunities also owns job details and Saved navigation state. Resume Studio
+owns skill insights. Extension owns Answers.
+
+Key frontend boundaries:
+
+- `components/shell/AppProvider.tsx` owns Day/Night/System theme persistence,
+  mark counts, optimistic application transitions, per-job mutation guards,
+  route-local job patches/hiding, toasts and undo, Answers dock/menu state,
+  cross-tab `BroadcastChannel` refresh, focus/visibility refresh, desktop Pull
+  notifications, browser timezone persistence, legacy hash job redirects and
+  the runtime visible-dash guard.
+- `components/shell/nav.ts`, `Sidebar.tsx`, `Topbar.tsx` and `Live.tsx` own the
+  workspace shell. Do not duplicate navigation arrays in pages.
+- `components/jobs/JobListPage.tsx`, `JobTable.tsx`, `ListControls.tsx`,
+  `JobDetail.tsx` and `useMarks.ts` own the shared job/application list and
+  mutation experience.
+- `lib/listState.ts` is the single parser/serializer for filters, at most three
+  sort keys and pagination. State lives in the URL so bookmark, Back and
+  refresh preserve the exact view. Defaults are new grad first, unapplied first
+  and best match. Marked pages bypass the recent-only housekeeping filter.
+- `proxy.ts` records visits separated by at least 30 minutes, forwards the
+  current safe destination and previous-visit time to server components, and
+  supports `New since your last visit` without a client-only race.
+- `components/pulls/` owns the timeline/log; `components/studio/` owns Studio;
+  `components/inbox/` and `components/intelligence/` own the evidence and
+  dashboard surfaces; `components/auth/` owns all public authentication states.
+- `lib/api.ts` is the server read client. Browser mutation helpers attach CSRF,
+  parse structured failures and redirect cleanly on session loss.
+
+Never add a second local state copy for application counts without updating the
+shared mutation contract. A successful mark must settle against the server;
+failed optimistic changes must roll back; all tabs must converge.
+
+### Combined Intelligence and Gmail evidence contract
+
+Migration 0044 added the application event ledger, Gmail connection/message
+evidence and petition-report evidence. Career Dashboard and Inbox Intelligence
+are preserved current features, not demo-only pages.
+
+Gmail authorization is owner opt-in and `gmail.readonly`. It uses separate
+client credentials, state, nonce, PKCE and an encrypted refresh token. Backfill
+is preview-only. Incremental sync uses the Gmail history cursor. The owner can
+pause, disconnect, purge snippets, review a decision, correct evidence and undo
+an event. `backend/scripts/sync_gmail.py` is a one-shot command; this file does
+not record a production timer for it.
+
+Automatic outcomes require both the global
+`GMAIL_AUTO_OUTCOMES_ALLOWED=true` and the connection's owner-approved setting.
+The default is false. A candidate email must have explicit newest unquoted
+outcome text, an exact requisition, exactly one matching application, aligned
+DMARC, an employer-matching sender host, a submission before the email, no
+newer state and no protected terminal-state conflict. Shared ATS senders or
+personal mail alone are insufficient. Backfill never auto-writes status.
+
+Metrics are deliberately conservative:
+
+- Lifetime submitted combines applied job marks and external applications
+  without double counting.
+- Current pending excludes Accepted, Rejected and Withdrawn.
+- Response, online assessment, interview and offer require distinct event
+  evidence.
+- Response rate uses only sufficiently mature dated applications, currently 30
+  days or older, and is unavailable when the denominator is incomplete.
+- Median response time requires reliable dated evidence.
+- Qualified postings observed by ACE are not a national market rate.
+- H-1B rate is shown only from verified USCIS I-129 approvals divided by
+  approvals plus denials. DOL LCA counts are not USCIS petition outcomes and
+  neither source proves that a specific job will sponsor.
+
+Live Gmail credentials, consent, sync and petition imports are not recorded as
+verified in this document. Do not present these integrations as active until a
+read-only production check proves them.
+
+### Chrome extension implementation map
+
+The unpacked extension consists of:
+
+- `manifest.json`: MV3 declaration, version 1.27.0, storage/activeTab/scripting
+  permissions, localhost host access and optional HTTPS host access.
+- `background.js`: stores endpoint/token, pairs with ACE, performs authenticated
+  answer/history/memory calls, validates message senders and brokers runtime
+  messages. Secrets stay in `chrome.storage.local`, never in page DOM.
+- `fields.js`: question extraction, field/control shapes, answer matching,
+  employer-specific screening rules, option matching, repeating history blocks,
+  date mapping, phone/country ordering and deterministic matcher utilities.
+- `memory.js`: normalized concepts, equivalence and reuse policy, including the
+  shared employer-motivation exclusion predicate.
+- `content.js`: native and React value setters, fill planning, combobox/listbox
+  and Workday adapters, undo, the Focus Mode shadow DOM UI, Review/Memory/
+  Activity flows, dynamic observation, SPA quieting, diagnostics and draggable
+  position behavior.
+- `popup.html` and `popup.js`: ACE address, pair/unpair, answer access and manual
+  injection/fill controls for the active tab.
+- `test-rules.js` and `test-memory.js`: fast deterministic rule suites. Real
+  Chrome interaction tests live in `web/tests/e2e/extension-*.spec.ts`.
+
+Persistent Chrome keys currently include `base`, `token`, `aceStudioActivity`,
+`aceFocusPosition`, `aceStudioTheme` and `aceAutoKnown`. Changing a key requires
+backward-compatible read/migration behavior or an explicit owner-approved reset.
+
+The content scripts run at `document_idle` in all frames. They must use native
+setters and the events expected by the employer framework, then read the real
+control state back before declaring success. Field detection must handle
+rerenders and step replacement without unbounded observers. Diagnostics may
+describe controls and failures but never answer values. The extension can fill
+and undo supported fields only. It cannot submit, irreversibly advance, infer
+Applied, or own company-motivation answers.
+
+### Deployment topology and configuration
+
+The Oracle production Compose stack is:
+
+```text
+internet -> Caddy :80/:443 -> Next.js web :3000
+                              -> FastAPI api :8000
+                                       |
+                                       v
+                                 PostgreSQL 16
+                                       ^
+                                       |
+                              scheduler and migrate
+```
+
+`postgres` owns the named database volume. `migrate` runs `alembic upgrade
+head` as a one-shot prerequisite. `scheduler` runs the long-lived scheduler and
+has a semantic health command every five minutes. `api` runs Uvicorn and has a
+health check. `web` receives the release SHA as a build argument. Caddy is the
+only public entry point. Services use `restart: unless-stopped` and dependency
+health/completion gates. Local Compose binds PostgreSQL 5433, API 8000 and web
+3000 to loopback. Production commands must include
+`docker compose --env-file .env -f deploy/oracle/compose.yaml ...`.
+
+Backend environment contract:
+
+- Required: `DATABASE_URL`.
+- Auth: `ACE_AUTH`, `SETUP_TOKEN`, `SESSION_DAYS`,
+  `REQUIRE_LOGIN_EMAIL_CODE` and `WEB_BASE_URL`.
+- Owner Google sign-in: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
+  `GOOGLE_REDIRECT_URI`.
+- Gmail: separate `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`,
+  `GMAIL_REDIRECT_URI`, `GMAIL_TOKEN_KEY` and
+  `GMAIL_AUTO_OUTCOMES_ALLOWED`.
+- Alerts: `RESEND_API_KEY`, `MAIL_FROM`, `ALERT_EMAIL` and `PUBLIC_BASE_URL`.
+- Discovery/rendering: `MAX_ALERT_POSTING_AGE_DAYS` default 10,
+  `ALERT_ON_UNKNOWN_POSTING_AGE` default false, `DISPLAY_TIMEZONE` default
+  `America/Los_Angeles`, and deployment profile `ACE_TARGET_PROFILE` default
+  `early-career` in the Oracle template.
+- Operations: `API_DOCS`, `ACE_DOMAIN`, database name/user/password and optional
+  `OCI_BACKUP_BUCKET` with `ACE_BACKUP_MAX_REMOTE_BYTES`, currently 15 GiB in
+  the template.
+- Frontend runtime: `API_ORIGIN` points Next.js to FastAPI. It must be supplied
+  at runtime, not assumed to have been baked into the build.
+
+Secrets stay only in the private server `.env` with restrictive permissions.
+Never copy them into this knowledge file. `deploy/oracle/backup.sh`, its systemd
+service/timer, release preparation, independent-discovery comparison, parity
+query and disabled legacy-replica tools are operational assets. The existence
+of the replica script does not authorize re-enabling replication.
+
+### Operational scripts and verification surface
+
+Important backend commands are intentionally explicit:
+
+- `run_scheduler.py` and `scheduler_health.py` operate and assess discovery.
+- `source_health.py`, `probe_coverage.py`, `coverage_benchmark.py`,
+  `discovery_inventory.py`, `discovery_parity.py`, `discover_sources.py` and
+  `discover_boards.py` measure reachability and coverage.
+- `gate_dry_run.py` and `rejection_audit.py` measure eligibility changes before
+  activation.
+- `backfill_job_evaluations.py`, `backfill_decode_descriptions.py`,
+  `backfill_resume_studio.py` and `repair_applied_date_drift.py` are controlled
+  data repairs/backfills, not routine startup hooks.
+- `data_inventory.py`, persistence smoke scripts and source snapshot smoke
+  scripts verify database behavior without printing private content.
+- `create_owner.py` and `set_owner_email.py` mutate owner identity and require
+  deliberate use against the intended database.
+- `import_petition_reports.py` accepts only reviewed official evidence.
+- `sync_gmail.py` performs a one-shot inbox sync; no production timer is
+  implied.
+- `legacy_replica.py` is historical. It stays inactive during independent
+  comparison.
+
+Backend tests cover every adapter family, adapter contracts, eligibility and
+candidate profiles, hashing/persistence, scheduler timing and refusals,
+discovery/coverage/parity, Pull telemetry, matching/scoring, application marks
+and prior applications, auth and Google, Gmail reconciliation, petition data,
+Resume Studio, migrations and API behavior. Frontend Playwright suites cover
+auth, account/profile, navigation, responsive V2 visuals, jobs, marks,
+applications, keyboard behavior, Studio, Combined Intelligence and real
+extension fixtures. Extension rule and memory suites run directly in Node.
+
+The normal validation ladder is:
+
+```bash
+.venv/bin/python -m pytest backend/tests -q
+node extension/test-rules.js
+node extension/test-memory.js
+node --check extension/content.js
+python scripts/no_user_facing_dashes.py
+cd web
+npm run typecheck
+npm run lint
+npm run build
+npx playwright test
+```
+
+Choose focused tests while iterating, then expand in proportion to risk. Record
+the exact command, result, fixture type and environment. A skipped live test is
+not a pass. A local fictional browser fixture is not a production employer-form
+verification.
+
+### Change checklist for future chats
+
+Before changing a subsystem, a future chat should answer all of these from this
+file and the current code:
+
+1. Which durable table, API route, page, extension message or scheduler worker
+   owns the behavior?
+2. Is the fact code-local, historically verified in production, or currently
+   unverified?
+3. Which owner safety invariant could the change affect: data preservation,
+   no-submit, no-motivation capture, single-owner auth, source respect,
+   independent schedulers or design fidelity?
+4. Does the change require a migration, backfill, deployment, scheduler action,
+   external OAuth consent or destructive operation that needs explicit owner
+   approval?
+5. Which focused regression reproduces the real failure shape, and which wider
+   suites must still pass?
+6. How will production be verified read-only after release without exposing
+   private content?
+
+Update this same file whenever an architecture contract, deployment truth,
+schema head, production verification, owner decision or major remaining risk
+changes. Do not create a competing continuity file.
+
 ## Repositories and runtime state
 
 The legacy checkout is `/home/ubuntu/Documents/ace` on branch `main`. Its
-Docker stack is preserved for rollback. As audited on 2026-10-16, before
-cutover:
+Docker stack and database are preserved. As audited on 2026-10-16, before the
+later independent-comparison decision:
 
 - PostgreSQL 16 is healthy and published locally on port 5433.
 - The legacy web service is available on port 8000.
@@ -466,9 +1580,13 @@ The new checkout is `/home/ubuntu/Documents/ace-next` on branch
 backend logic, Resume Studio, owner authentication, extension pairing, the
 Pulls-first workspace and the Oracle deployment kit.
 
-Do not rebuild or migrate the legacy stack during development. Keep its
-scheduler stopped while Oracle writes. Never treat both databases as
-authoritative discovery writers.
+Do not rebuild or migrate the legacy stack during ordinary development. The
+current owner decision is that both legacy and Oracle schedulers keep running,
+each against its own PostgreSQL database, so their discovery results can be
+compared. The databases are independent writers and their numeric IDs have
+diverged. Keep the old cross-database replica cron disabled. Do not merge rows,
+restart replication, or stop either scheduler without a new explicit owner
+decision and a reconciliation plan.
 
 ## Verified production data inventory
 
@@ -570,7 +1688,9 @@ python -m backend.scripts.backfill_resume_studio --apply
 ACE has one owner. There is no public registration and no second-user data
 scope. Passwords use Argon2id. Browser sessions are stored as hashes, mutation
 requests require a per-session CSRF token, login attempts are throttled, and
-extension tokens can read only answers and work or education history.
+extension tokens can read answers and work or education history plus manage
+approved Answer Memory. They cannot access jobs, applications, resumes, owner
+profile or other private API families.
 
 Password sign-in uses two steps in production. ACE verifies the password,
 sends an eight-character one-time code to the owner's email, and creates the
@@ -1014,6 +2134,31 @@ Do not merge ACE Next to legacy `main` without separate approval.
 
 ## Change log
 
+### 2026-10-25, standalone continuity consolidation
+
+- Made this file the single standalone platform handoff for new chats. The
+  topic documents remain optional historical archives rather than required
+  startup reading.
+- Added a code-verified implementation map covering repository boundaries,
+  backend modules, polling transactions, auth and HTTP boundaries, every API
+  family, all durable tables, migrations 0001 through 0050, every current page
+  route, client state ownership, Combined Intelligence, Gmail safeguards,
+  extension modules and storage, Compose topology, environment settings,
+  operational scripts, test surfaces and a future-change checklist.
+- Reconciled the V2 baseline with current Career Dashboard and Inbox
+  Intelligence routes while preserving Pulls as the authenticated home, and
+  corrected the extension token description to include approved Answer Memory
+  operations.
+- Consolidated product vocabulary, the gate, discovery lifecycle, persistence,
+  coverage, matching, applications, API domains, the complete website contract,
+  Pulls metrics, Focus Mode V5.1, Answer Memory, Resume Studio, privacy,
+  testing, operational doctrine, historical safeguards and known limitations.
+- Corrected the stale lower-section instruction to stop one scheduler. The
+  current owner decision is two independent discovery systems, separate
+  databases and no cross-database replication.
+- Recorded local documentation HEAD `a1e59ff` and the three-ahead,
+  three-behind branch divergence that must be reconciled before any push.
+
 ### 2026-10-25, continuity and Focus Mode V5.1
 
 - Recorded the V4 Answer Memory code and additive migration 0050, the locally
@@ -1024,16 +2169,14 @@ Do not merge ACE Next to legacy `main` without separate approval.
 - Recorded the other agent's three typography commits on the tracked remote
   branch so future work can reconcile them with the two local V5.1 commits.
 
-### 2026-10-24, typography release
+### 2026-10-24, typography release recorded on the remote branch
 
-- Released the approved Refined typography (self-hosted Inter, one type scale) at commit `61debd6`. Its website
-  build is identical to `54e939a`; the extension commit on top changes no web files. Only the web container was
-  recreated (`up -d --no-build --no-deps web`); API, migrate, scheduler, PostgreSQL and Caddy were not touched.
-- Verified from outside: `/healthz` ok with frontend commit `61debd6`, the Inter file served (352,240 bytes,
-  `font/woff2`), signed-out `/app/pulls` still redirects to sign-in, and the public pages render Inter in Day and
-  Night with no console errors and no forbidden dashes.
-- Pasting a multi-line block that starts with `ssh` loses the following lines during login. Run a remote release as
-  one `ssh -i ~/.ssh/ace_oracle ubuntu@<vm> '...'` command instead.
+- Commit `8d84141` records a website-only Inter typography release at frontend
+  commit `61debd6`. Its recorded checks covered `/healthz`, the served font,
+  sign-in routing, public Day and Night rendering, console output and forbidden
+  dashes. That release did not recreate API, migration, scheduler, PostgreSQL or
+  Caddy. Its extension typography work is on the remote branch and is not yet
+  reconciled into this local V5.1 branch.
 
 ### 2026-10-24, owner account release
 
