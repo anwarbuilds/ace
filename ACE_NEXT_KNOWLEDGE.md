@@ -2786,7 +2786,7 @@ Do not merge ACE Next to legacy `main` without separate approval.
   above the Pulls figures, and the "Discovery engine online" line at the
   foot of the sidebar, with their styles. The top bar's live status still
   says when a source last answered.
-  Released website-only; `/healthz` reported `922640f` at 2026-10-25T22:58Z.
+  Released website-only; `/healthz` reported `922640f` by 2026-10-25T23:58Z.
 
 ### 2026-10-25, approved Analytics production release and continuity
 
