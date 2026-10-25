@@ -37,6 +37,26 @@ Opportunities, Applications, Analytics, Resume Studio, Autofill Extension,
 Archive, Coverage and Settings. Night and Day are both required. Prototype
 navigation, fictional data and the cursor tour must never ship.
 
+For Analytics specifically, the final approved four-tab Pixel-Lock package
+supersedes V2's older Analytics layout. It preserves the existing V2 shell,
+Wine and Rose themes and Inter typography. Read all of:
+
+```text
+design/ace-analytics-pixel-lock/START_HERE.md
+design/ace-analytics-pixel-lock/docs/IMPLEMENTATION_SPEC.md
+design/ace-analytics-pixel-lock/docs/ACCEPTANCE_CHECKLIST.md
+design/ace-analytics-pixel-lock/docs/TEST_PLAN.md
+design/ace-analytics-pixel-lock/references/screenshots/01_Overview_APPROVED.png
+design/ace-analytics-pixel-lock/references/screenshots/02_Outcomes_APPROVED.png
+design/ace-analytics-pixel-lock/references/screenshots/03_Role_and_Resume_APPROVED.png
+design/ace-analytics-pixel-lock/references/screenshots/04_Companies_APPROVED.png
+```
+
+These four PNGs are the Analytics visual source of truth at 1672 by 941.
+The package stays Git-ignored locally; a fresh clone may not contain it. Do not
+substitute a generic dashboard, add tabs or copy illustrative numbers into
+production. The four tabs are Overview, Outcomes, Role and resume, and Companies.
+
 The complete extension behavior contract is also summarized below. The latest
 approved design is **ACE Focus Mode V5.1**, with the final employer-motivation
 exception. These files remain the pixel-level visual evidence:
@@ -83,8 +103,9 @@ Before every task:
 - Marking Applied must update the opportunity, navigation count, Applications,
   Pulls, Analytics and all other totals immediately, persist after refresh and
   roll back if the save fails. Avoid duplicate application counts.
-- Use only the final Wine and Rose V2 design. Do not revive the anthracite
-  prototype, old homepage, earlier auth prototypes or automatic cursor tour.
+- Use Wine and Rose V2, with the approved Pixel-Lock Analytics page override.
+  Do not revive the anthracite prototype, old homepage, earlier auth prototypes
+  or automatic cursor tour.
 - Night uses deep wine and black. Day uses rose wine and bright white. Preserve
   the exact component geometry, hierarchy, gradients, artwork, typography,
   backgrounds, spacing and lowercase `ace` wordmark. The complete artistic A
@@ -135,7 +156,7 @@ their laptop terminal, in the form `ssh -i ~/.ssh/ace_oracle
 ubuntu@161.153.89.170 'cd /opt/ace && ...'`. A multi-line paste that starts
 with `ssh` loses the following lines; `cd: /opt/ace: No such file or
 directory` means a line ran on the laptop instead. When they are already on
-the VM, give one `&&` chain instead. Read-only checks need no SSH:
+the VM, give one `&&` chain instead. Public health checks need no SSH:
 
 ```bash
 curl -s https://ace.opik.net/healthz          # JSON with frontend commit
@@ -430,14 +451,30 @@ petition reports, so those unavailable states are accurate. No Gmail consent,
 migration, scheduler operation, extension publication or destructive data
 operation ran. Signed-in production browser rendering was not exercised.
 
+Public health was checked again at 2026-10-25T23:52Z: the frontend still
+reported `340b175251a8040f3eedad9553c3f6f965657698` and API status was ok.
+The deployed checkout and images remain at that release. Documentation-only
+commit `8e604e7` was subsequently pushed to `wine-rose-platform`; later knowledge
+edits do not require a container rebuild. A newer GitHub documentation SHA must
+not be mistaken for an undeployed runtime change.
 
-The working branch is `wine-rose-platform`, reconciled on GitHub on
-2026-10-25: it holds the website typography release (`54e939a`, `61debd6`,
-`8d84141`), Focus Mode V5.1 rebased on top of it (`559ee84`, `5b8ab4b`, the
-pushed equivalents of local `4ce3570` and `cb7bb5e`), this continuity work and
-the V5.1 typography pass, then theme sync and Close (`386bed9`, the tip on
-2026-10-25; GitHub and the local `ace-next` checkout match). It contains the
-existing extension's V4 Answer Memory implementation (`2e7c1dc`). The
+During this knowledge update, another session pushed owner-requested UI cleanup
+`922640f73a00c445139771347b2b3a1cb4ccba0a`: removing the Pulls company-first
+explanatory note and the sidebar discovery-engine footer line. It preserves
+company-first ordering and the topbar live-status control. At 23:57Z public
+health still reported the Analytics release `340b175`, so this separate UI
+cleanup was not yet live at that check. Preserve it when updating the branch;
+this knowledge-only task does not activate another release.
+
+The working branch is `wine-rose-platform`. At the start of this knowledge
+update, local HEAD and GitHub matched `8e604e7` with a clean working tree.
+The two newer performance commits, `269cb32` and `4f41949`, were preserved by
+rebasing Analytics before its fast-forward push. There is no outstanding branch
+divergence from that work. The branch also retains the website typography
+commits (`54e939a`, `61debd6`, `8d84141`), the reconciled Focus Mode V5.1
+commits (`559ee84`, `5b8ab4b`, equivalents of local `4ce3570` and `cb7bb5e`),
+the V5.1 typography pass and theme sync/Close (`386bed9`). It contains the
+existing V4 Answer Memory implementation (`2e7c1dc`). The
 extension manifest is `1.28.0`. The V5.1 extension has not been published; it
 runs as an unpacked installation loaded from
 `/home/ubuntu/Documents/ace-next/extension`. An unpacked installation must be
@@ -473,14 +510,15 @@ fixtures, not the owner's live authenticated employer pages or the actual
 unpacked MV3 installation.
 
 The website typography (self-hosted Inter, one token scale, sentence case
-labels, tabular numbers) is live at frontend commit `61debd6`, verified from
-outside on 2026-10-24. The extension shares it: Inter ships in
+labels, tabular numbers) first went live at frontend commit `61debd6`, verified
+from outside on 2026-10-24. It remains in the newer Analytics release above.
+The extension shares it: Inter ships in
 `extension/fonts/`, the panel registers it as `ace-inter` with the FontFace API
 when a panel opens, and the V5.1 card takes the website's weights and its 11.5px
 floor through one typography-only block after the approved V5.1 rules. The job
-line under the wordmark keeps its approved 11px. The live website frontend
-is still `61debd6` (checked from outside on 2026-10-25); the later commits
-change only the extension and documents, so no website release is pending.
+line under the wordmark keeps its approved 11px. The live website frontend is
+now `340b175`, including both speed releases and Analytics. Later documentation
+updates do not change the running website.
 The pre-rebase local copies of V5.1 (`a1e59ff`) were retired on 2026-10-25:
 `ace-next` was reset to the GitHub tip with the owner's approval. Safety
 copies remain until the owner deletes them: branch `backup/local-before-sync`
@@ -500,13 +538,13 @@ printed `alembic_version` 0050 after a fresh backup. The Memory API itself
 has not been exercised in production from here, so verify it read-only
 before calling Memory operational.
 
-## Last verified core live state on 2026-10-24
+## Historical core live state on 2026-10-24
 
-The last independently verified core API and database application commit in
-this document is `11a7fd4c74e3333ea76c4fe1e9eecba0615279c6`; schema was
-`0049 (head)` at that verification. The owner account release section below
-has its evidence. The newer website typography release and unverified V4
-deployment state are recorded above.
+At that verification the core API and database application commit was
+`11a7fd4c74e3333ea76c4fe1e9eecba0615279c6`; schema was `0049 (head)`.
+The owner account release section below has its evidence. This is historical:
+the speed release subsequently applied `0050`, and the Analytics release above
+verified `0050` read-only. Live extension Memory behavior remains unverified.
 
 The owner clarified that the legacy site must keep discovering jobs until they
 are confident in ACE Next. At this verification, **both `ace-scheduler-1` and
@@ -1062,6 +1100,8 @@ API families include:
 - active resume, matching, Resume Studio documents, facts, versions and
   assessments;
 - coverage and source registration;
+- submission-filtered Analytics, exact application drilldowns and reviewed
+  outcome/sponsorship evidence;
 - owner account, sessions, email-code flows and Google callback;
 - extension pairing and Answer Memory;
 - health and safe operational status.
@@ -1091,11 +1131,15 @@ Required routes and contracts:
   application actions, including closed jobs.
 - `/app/applications`: real application history, stages, dates, notes, filters
   and export.
-- `/app/analytics`: real discovery, application and resume-fit metrics.
+- `/app/analytics`: the approved four-tab application Analytics interface,
+  using `/api/analytics`, separate from Career Dashboard.
+- `/app/applications/analytics`: read-only application records matching the
+  exact Analytics selection, with links to existing stored-job controls.
 - `/app/dashboard`: Career Dashboard for combined application intelligence.
 - `/app/applications/inbox`: owner-controlled Gmail Inbox Intelligence,
   evidence review and outcome reconciliation. This route is present in the
-  current code, but live Gmail authorization is not recorded as configured.
+  current code. The 2026-10-25 production check found zero Gmail connections;
+  Google sign-in does not mean Gmail is connected.
 - `/app/resume-studio`: documents, knowledge, versions, ATS checker and history.
 - `/app/extension`: pairing, token revocation, setup and answer-memory access.
 - `/app/archive`: historical reviewed and dismissed state.
@@ -1291,8 +1335,10 @@ Durable rules learned from prior incidents:
 
 1. Verify the running system, database and exact commit. A local build or Git
    push is not a deployment.
-2. Build every affected image before `up`, including migrate. Containers bake
-   source; a host-side edit does not change a running image.
+2. Build every affected image before `up`. Containers bake source; a host-side
+   edit does not change a running image. Build `migrate` when an approved schema
+   release needs it. A schema-free API/web release uses `--no-deps` and does not
+   run migration or recreate unrelated services.
 3. Use `docker compose --env-file .env` with the Oracle compose file. Omitting
    it once substituted blank database variables and began recreating services.
 4. Do not run `docker compose down`, remove volumes or recreate the scheduler
@@ -1366,8 +1412,17 @@ production evidence.
 - Borderline source and job behavior can change as providers alter undocumented
   APIs. Coverage audits remain continuous work.
 - Production V4 Memory status needs read-only verification.
-- The local branch and tracked remote have divergent work that must be
-  reconciled before push or release.
+- Recheck branch and remote before each change; the earlier divergence was
+  reconciled and the 2026-10-25 Analytics release preserved both speed commits.
+- Actual submitted resume versions, application channels and complete response
+  observation coverage are not stored. These remain unavailable, not inferred.
+- Production had zero Gmail connections and zero petition reports at the
+  Analytics release. Live mailbox sync, actual official evidence imports,
+  signed-in production visual review and final owner visual acceptance remain
+  outstanding. No OAuth consent or import is authorized by this documentation.
+- Browser validation on this laptop is suspended until cooling is fixed. The
+  successful fictional Analytics captures and test logs are already retained;
+  do not repeat heavy Chrome runs merely to refresh documentation.
 - Resume Studio tailoring and export remain later scope.
 - The SDE II profile remains off until the owner approves its dry run.
 - Post-launch retention is designed but must not run until backup, restore,
@@ -1453,7 +1508,7 @@ The backend is organized by responsibility:
   Pull alert composition and Resend delivery respectively.
 - `backend/app/api/main.py` contains the established jobs, marks, resumes,
   answers, history, coverage and source endpoints. `backend/app/api/routers/`
-  contains auth, Pulls, Studio, company intelligence, dashboard, inbox,
+  contains Analytics, auth, Pulls, Studio, company intelligence, dashboard, inbox,
   combined intelligence, owner export and system routes.
 - `backend/app/db/models.py` is the ORM schema map. `db/session.py` creates
   sessions and `db/base.py` defines shared SQLAlchemy metadata.
@@ -1542,7 +1597,8 @@ prefix for every Studio suffix listed in its row.
 | Pairing | `POST /api/extension/pairing`, `POST /api/extension/pair` | Create and redeem a short-lived extension pairing code. |
 | Pairing | `GET /api/extension/tokens`, `DELETE /api/extension/tokens/{token_id}` | List and revoke extension tokens. |
 | Company | `GET /api/companies`, `GET /api/company-intelligence`, `GET /api/company-intelligence/batch` | Company lists and evidence-backed company intelligence. |
-| Dashboard | `GET /api/dashboard` | Career Dashboard aggregate. |
+| Dashboard | `GET /api/dashboard` | Preserved discovery/resume-fit/application aggregate used by the former Analytics page. |
+| Analytics | `GET /api/analytics` | Read-only submission-date/role-filtered application metrics, evidence, official petition series and exact paginated drilldowns with `records=1`. |
 | Intelligence | `GET /api/intelligence`, `GET /api/intelligence/actions`, `POST /api/intelligence/actions` | Combined metrics and owner action queue. |
 | Inbox | `GET /api/inbox/connection`, `PATCH /api/inbox/connection`, `DELETE /api/inbox/connection` | Gmail connection state, settings and disconnect. |
 | Inbox | `GET /api/inbox/google/start`, `GET /api/inbox/google/callback` | Separate Gmail read-only OAuth. |
@@ -1628,7 +1684,9 @@ Alembic history is additive from 0001 through 0050:
   answers; 0049 owner profile; 0050 extension Answer Memory.
 
 The latest production schema recorded in this file is 0050, printed by the
-owner's release on 2026-10-25. A local migration file is never proof of what
+owner's speed release and verified again read-only during the Analytics release
+on 2026-10-25. All four existing Inbox/petition tables were present. Analytics
+added no schema or migration. A local migration file is never proof of what
 production runs. Always read `alembic_version` before planning a migration,
 rehearse from a current backup, and follow the safe migration procedure later
 in this file.
@@ -1653,7 +1711,8 @@ Current page routes in code are:
   `/privacy`, `/terms` and the web `/healthz` route.
 - Daily workspace: `/app` redirects to the authenticated home, `/app/pulls`,
   `/app/opportunities`, `/app/jobs/[id]`, `/app/applications`,
-  `/app/analytics`, `/app/dashboard` and `/app/applications/inbox`.
+  `/app/analytics`, `/app/applications/analytics`, `/app/dashboard` and
+  `/app/applications/inbox`.
 - Career tools: `/app/resume-studio`, `/app/resume-studio/check`,
   `/app/resume-studio/documents`, `/app/resume-studio/documents/[id]`,
   `/app/resume-studio/facts`, `/app/resume-studio/history` and
@@ -1691,12 +1750,188 @@ Key frontend boundaries:
 - `components/pulls/` owns the timeline/log; `components/studio/` owns Studio;
   `components/inbox/` and `components/intelligence/` own the evidence and
   dashboard surfaces; `components/auth/` owns all public authentication states.
+- `components/analytics/`, `lib/analytics.ts` and the Analytics route stylesheet
+  own the approved four-tab page and its refresh/filter/chart behavior. They
+  read the shared backend projection and do not own another mutation ledger.
 - `lib/api.ts` is the server read client. Browser mutation helpers attach CSRF,
   parse structured failures and redirect cleanly on session loss.
 
 Never add a second local state copy for application counts without updating the
 shared mutation contract. A successful mark must settle against the server;
 failed optimistic changes must roll back; all tabs must converge.
+
+### Approved Analytics implementation contract
+
+Analytics is a separate read projection. Do not replace Career Dashboard's
+`/api/intelligence` or its existing components with the new Analytics model.
+The Analytics change itself did not modify Career Dashboard, the extension,
+authentication, discovery, scheduler or migrations. The deployed release also
+preserves the independently approved performance updates already on the branch.
+
+| Tab | Implemented modules and accuracy rules |
+| --- | --- |
+| Overview | Submission timeline, current-week submissions, current application statuses and verified outcome evidence. Historical event types and latest status are separate measures. |
+| Outcomes | Exact heading `Applications old enough to evaluate`, 30-day observation explanation, confirmed/pending/unknown cohorts, response timing and Inbox evidence review. Unanswered applications stay pending. |
+| Role and resume | Outcomes by recorded role family, actual submitted-resume attribution, captured channels and comparable combinations. Missing attribution is `Not recorded`; combinations remain unavailable without at least five age-qualified applications per combination, complete attribution and comparable evidence. |
+| Companies | Companies in application history, employer outcome history, official employer-year petition evidence, trends, source-linked evidence and authentic icons. Missing evidence remains unavailable. Historical petitions do not establish current hiring, sponsorship for an opening or new graduate eligibility. |
+
+Read-model and filtering rules:
+
+- `backend/app/api/routers/analytics.py` reuses Inbox `_identities`: `job:<id>`
+  for applied marks and `external:<id>` for existing external records. It never
+  fuzzy-merges separate applications or drops closed/now-ineligible marked jobs.
+- `GET /api/analytics` is authenticated and no-store. Query parameters include
+  `days=14|30|90|all|custom`, `start`, `end`, `family`, `tz` and `company`.
+  The normal default is 30 days. Custom requires both dates. Invalid timezone,
+  reversed/future dates and ranges over 100 years return 422.
+- Date filters describe submission dates in the display IANA timezone, not
+  response dates. Role families come from existing applied-job evaluations;
+  missing role attribution remains Unknown. All-time totals include undated
+  history, with explicit disclosure; undated applications do not enter dated
+  series or age-qualified cohorts.
+- Current-week activity always means the current local Monday through Sunday
+  week, including when viewing another historical range. Future days are zero.
+  The role selection still applies. Its drilldown uses exact Monday-to-today
+  custom bounds. Lifetime Applied remains owned by the existing shell.
+- The timeline uses daily points for selections under 100 days and monthly
+  points for longer ranges. Daily charts can display daily or 7-day totals.
+  Tab, dates, role, company-evidence selection and interval are URL-backed.
+- `records=1` on the same endpoint returns exact unique application rows and
+  `record_total`, default 50/max 100 per page. Additional filters are `status`,
+  `company`, `evidence=positive|rejection|online_assessment|interview|response`,
+  `eligible=1`, `timed=1`, `offset` and `limit`. The company parameter selects
+  the sponsorship panel in the normal projection and filters rows in records
+  mode. It does not silently filter the other normal Analytics metrics.
+- `/app/applications/analytics` shares that projection and preserves timezone
+  in its URL. Charts, metrics, cohorts, status, role and company links open the
+  matching selection. Stored jobs link to their existing application controls;
+  external history stays read-only. Original Applications mutations, lifetime
+  counts, filters and full-history CSV remain intact.
+- `AnalyticsRefresh` listens to the existing settled `ace-marks`
+  BroadcastChannel, focus and visibility events and refreshes the server read.
+  It creates no second optimistic count, competing ledger or background sync.
+
+Evidence rules:
+
+- Only owner-confirmed and `verified_automation` events contribute. Undo removes
+  the original event. Preview, review, unsupported actors, future events and
+  events preceding submission are excluded. Duplicate event types count once
+  per application. Automatic submission receipts are not meaningful replies.
+- A Gmail message must have one non-undone application target, match its
+  selected identity and have a manual/automatic decision. Competing targets
+  exclude it even if the other application is outside the selected date range.
+- Existing owner-confirmed legacy stages remain evidence without invented
+  response timestamps. A screening stage explained by an assessment or other
+  positive event does not manufacture another recruiter reply. A standalone
+  screening fallback is labeled screening.
+- Cohort partitions are disjoint: confirmed positive, confirmed rejection,
+  pending and other/unknown. A later explicit rejection takes precedence in the
+  cohort partition; the event chart may still show its earlier positive reply,
+  with the overlap explained. Withdrawn applications with no outcome sit in
+  other/unknown. No reply stays pending at every age.
+- Response timing uses the first reliable dated outcome after submission.
+  Missing timestamps produce no invented duration. Rates remain null because
+  the schema has no complete observation-coverage attestation. A connection,
+  successful sync or single event cannot establish a complete denominator.
+- Submitted resume versions and channels are absent from the schema. Never
+  assign today's primary resume to history, infer channel from an ATS/provider
+  or sender, rank unknown combinations or imply causal resume effectiveness.
+- Inbox links use `decision=review|exact_preview|ambiguous`. Filtering happens
+  before the existing 100-message limit so older pending evidence is reachable.
+  Ambiguity means multiple candidate application keys, not a guessed match.
+  Conservative reconciliation, review/corrections, audit and undo are preserved.
+  Reading Analytics never authorizes Gmail, starts sync or changes permissions.
+
+Company evidence and Pulls:
+
+- Company identities remain exact strings. Reviewed records require verified
+  legal-entity mapping and official HTTPS source hosts: `uscis.gov`,
+  `www.uscis.gov`, `dol.gov`, `www.dol.gov` or `flag.dol.gov`. USCIS I-129
+  metrics additionally require a USCIS host. The UI links stored reviewed
+  evidence; it does not scrape/import sponsorship data during a page read.
+- A newer revision replaces the earlier entity/metric/fiscal-year record.
+  USCIS approvals and denials must both be known and nonnegative. If any
+  included legal entity has incomplete year counts, that company-year aggregate
+  is suppressed. A zero denominator has no rate. DOL LCAs remain a different
+  metric; neither measure is hires, total employment or new graduate policy.
+- Eleven official-site favicons are cached locally: Google, Apple, Microsoft,
+  Stripe, Amazon, NVIDIA, Adobe, IBM, Salesforce, Meta and ServiceNow.
+  `web/public/company-logos/provenance.json` records official source URLs,
+  verification date and SHA-256. Exact reviewed names select an asset. Unknown
+  identities and failed images use a neutral monogram, including failures that
+  occur before React hydration. No runtime third-party logo lookup discloses
+  the owner's application history.
+- Pulls uses the same icons beside prominent company names and retains
+  company-first/role-second ordering. Its calendar sits above both unchanged
+  original right-side cards. Date links preserve the Pulls filter; Today resets
+  the visible month; future dates are unavailable. Existing metrics, polling,
+  monitoring, expansion and application controls remain.
+
+Implementation files:
+
+| Path | Responsibility |
+| --- | --- |
+| `backend/app/api/routers/analytics.py`, `backend/app/api/main.py` | Projection and authenticated route registration. |
+| `backend/app/api/routers/inbox.py` | Review filtering before the message limit. |
+| `web/src/app/app/analytics/page.tsx`, `analytics.css` | Server reads, four-tab route and approved page styling. |
+| `web/src/components/analytics/AnalyticsView.tsx`, `AnalyticsCharts.tsx` | Four layouts, charts, evidence states, accessible chart disclosures and links. |
+| `web/src/components/analytics/AnalyticsFilters.tsx`, `AnalyticsRefresh.tsx` | URL controls and settled mark refresh. |
+| `web/src/lib/analytics.ts` | Projection types and shared drilldown URL builder. |
+| `web/src/app/app/applications/analytics/page.tsx`, `loading.tsx` | Exact filtered application records and route loading. |
+| `web/src/components/inbox/InboxIntelligence.tsx` | Existing Inbox deep-filter UI. |
+| `web/src/components/CompanyLogo.tsx`, `web/public/company-logos/` | Reviewed local icons, provenance and fallback. |
+| `web/src/components/pulls/PullsCalendar.tsx`, `PullsTimeline.tsx`, `web/src/app/app/pulls/page.tsx` | Calendar insertion and icon replacement. |
+| `web/src/app/globals.css` | Shared icon/calendar styling using existing theme/type tokens. |
+| `backend/scripts/seed_analytics_demo.py` | Rich fictional fixture restricted to `/tmp/ace-analytics-fictional.db`; never production. |
+| `backend/tests/test_analytics_read.py`, `web/tests/e2e/analytics-redesign.spec.ts`, `web/tests/e2e/marks.spec.ts` | Data invariants, visual/interaction coverage and updated marks expectations. |
+| `scripts/compare_analytics_screenshots.py` | Native-size reference/capture comparisons and diagnostic differences. |
+
+Validation and acceptance evidence:
+
+- Initial focused backend validation passed 89 tests covering Analytics, Inbox
+  reconciliation/persistence, petitions, marks, Pulls and web API. After rebasing
+  onto the two speed commits, the expanded set passed 112 tests, also covering
+  external applications, count-only jobs, snapshots, skills and sponsorship
+  coverage. TypeScript, ESLint, Next.js build, zero-hit dash scan and whitespace
+  checks passed both before release and after integration. Production shipped
+  dependencies had zero reported audit vulnerabilities.
+- The completed fictional Playwright run passed 45 tests in 6.7 minutes: 18
+  Analytics, 20 existing combined-intelligence and 7 existing marks tests. Final
+  drilldown/mobile checks also passed after evidence normalization. The initial
+  interrupted run is not counted. The rebased Analytics code/styles were
+  unchanged; Chrome was not rerun on the overheated laptop for deployment.
+- Checks cover privacy/no-store, disconnected Gmail, deduplication, undo,
+  dates/roles, exact filtered records, chart disclosures, review links, official
+  logo/failure fallback, petition semantics, cross-tab marks, keyboard/theme
+  controls, Pulls calendar/cards and no browser errors. Responsive checks cover
+  1672, 1600, 1440, 1280, 1024 and 390 pixels, plus 836 CSS pixels as a
+  200-percent reflow equivalent for the 1672-pixel reference.
+- All four tabs have native 1672x941 Day/Night PNGs in the ignored directory
+  `artifacts/analytics-validation/`: `light-` and `dark-` followed by
+  `overview.png`, `outcomes.png`, `role-resume.png` or `companies.png`.
+  Full-page variants, four mobile captures, drilldown captures,
+  `comparison-contact-sheet.png`, `comparison-{tab}.png`, `difference-{tab}.png`,
+  `comparison-metrics.json`, screenshot hash manifest, `playwright-final.log`,
+  `playwright-drilldown-final.log` and `changed-files.txt` are retained there.
+- Native screenshot dimensions and icon hashes were verified. Raw pixel error
+  is diagnostic, not an acceptance percentage. Existing shell geometry, real
+  counts, seven fixture role families instead of five illustrative rows,
+  unavailable rates/attribution and real disconnected/evidence states explain
+  intentional differences. Overview, Outcomes and Companies were refined
+  against the references. No claim of identical illustrative data is made.
+- The acceptance comparison is recorded in
+  `docs/architecture/2026-10-25-analytics-redesign.md`. All four approved module
+  compositions, functional data/filter behavior, conservative evidence,
+  preserved shell/Pulls controls, themes and accessibility were locally
+  verified. Owner visual acceptance, signed-in production browser rendering,
+  live Gmail sync and real petition imports remain unverified/unavailable.
+  No invented test fixture may be imported to make a production panel look full.
+- Local API, web and temperature-watch processes were stopped after validation.
+  Scratch Chrome wrappers, release/smoke scripts and the fictional database
+  under `/tmp` are disposable and can disappear after reboot. Reconstruct them
+  from the committed code and documented procedure rather than assuming they
+  are installed tools. Production rollback metadata is retained privately on
+  the VM, separately from these local scratch files.
 
 ### Combined Intelligence and Gmail evidence contract
 
@@ -1726,17 +1961,20 @@ Metrics are deliberately conservative:
 - Current pending excludes Accepted, Rejected and Withdrawn.
 - Response, online assessment, interview and offer require distinct event
   evidence.
-- Response rate uses only sufficiently mature dated applications, currently 30
-  days or older, and is unavailable when the denominator is incomplete.
+- Analytics age-qualified cohorts use the exact 30-day threshold. Response
+  rates additionally require complete observation coverage, which the current
+  schema does not attest. The implemented Analytics rates are therefore null
+  and shown as Unavailable, even when individual verified outcomes exist.
 - Median response time requires reliable dated evidence.
 - Qualified postings observed by ACE are not a national market rate.
 - H-1B rate is shown only from verified USCIS I-129 approvals divided by
   approvals plus denials. DOL LCA counts are not USCIS petition outcomes and
   neither source proves that a specific job will sponsor.
 
-Live Gmail credentials, consent, sync and petition imports are not recorded as
-verified in this document. Do not present these integrations as active until a
-read-only production check proves them.
+The Analytics production check found zero Gmail connections and zero petition
+reports. Live credentials, consent and sync have not been exercised. Preserve
+the truthful disconnected/unavailable states; do not present these integrations
+as active or populate their tables from the fictional browser fixture.
 
 ### Chrome extension implementation map
 
@@ -1842,6 +2080,10 @@ Important backend commands are intentionally explicit:
   data repairs/backfills, not routine startup hooks.
 - `data_inventory.py`, persistence smoke scripts and source snapshot smoke
   scripts verify database behavior without printing private content.
+- `time_pages.py` times requests read-only in-process without a login session.
+  Its Analytics entry still calls the former `/api/dashboard`; update that
+  diagnostic entry to the new `/api/analytics` reads before using its Analytics
+  timing as evidence for the redesigned page. Other page timings remain useful.
 - `create_owner.py` and `set_owner_email.py` mutate owner identity and require
   deliberate use against the intended database.
 - `import_petition_reports.py` accepts only reviewed official evidence.
@@ -1927,7 +2169,7 @@ diverged. Keep the old cross-database replica cron disabled. Do not merge rows,
 restart replication, or stop either scheduler without a new explicit owner
 decision and a reconciliation plan.
 
-## Verified production data inventory
+## Historical production data inventory, 2026-10-16
 
 The 2026-10-16 audit used aggregate read-only queries. It did not read or print
 resume text, answers, emails or job descriptions.
@@ -2031,7 +2273,12 @@ extension tokens can read answers and work or education history plus manage
 approved Answer Memory. They cannot access jobs, applications, resumes, owner
 profile or other private API families.
 
-Password sign-in uses two steps in production. ACE verifies the password,
+Password sign-in supports an optional second email step. The Oracle template
+requires it, but the actual production `/api/auth/status` check on 2026-10-25
+reported `email_verification: false` and `reset_by_email: false`; production
+therefore accepts the password under Continue with email without an emailed
+code, and email recovery is unavailable. Never infer actual configuration from
+the deployment template. When verification is enabled, ACE verifies the password,
 sends an eight-character one-time code to the owner's email, and creates the
 browser session only after that code is confirmed. Sign-in and password reset
 codes expire after 10 minutes, are stored only as SHA-256 hashes, are single
@@ -2260,9 +2507,12 @@ During deployment on 2026-10-22, recreating the API container removed the
 temporary `/tmp/legacy_replica.py` helper during one active sync. That run failed
 safely, the cursor stayed at the prior boundary, and the next cron run replayed
 the interval and advanced successfully through `2026-10-22T00:23:01Z`. This is
-expected recovery behavior. After future API replacement, always verify that a
-subsequent log entry says `ACE legacy replica synchronized through ...` and that
-the cursor advanced. Never edit the cursor forward by hand.
+expected recovery behavior. In that historical replication mode, API replacement
+required verifying that a subsequent log entry said
+`ACE legacy replica synchronized through ...` and that the cursor advanced.
+This is not an instruction to run replication now: the owner subsequently chose
+independent discovery. Keep the replica disabled and never edit its cursor
+forward by hand.
 
 `replica-parity.psql` compares settled pull sessions, complete job identities,
 qualifying opportunities, enabled sources and user-managed application data.
@@ -2279,21 +2529,73 @@ not contain secrets or unrelated owner edits, and prepare the exact commit SHA.
 After approval:
 
 1. Push `wine-rose-platform` without force.
-2. On the VM, confirm `/opt/ace` has no conflicting tracked changes.
-3. Fetch and fast-forward to the exact approved SHA.
-4. Run `deploy/oracle/prepare-release.sh`. It builds `migrate`, `api` and `web`
-   images and does not change running containers.
-5. Set `ACE_BUILD_SHA` to the full approved SHA and bring up only the required
-   `postgres`, `migrate`, `api`, `web` and `caddy` services using
-   `docker compose --env-file .env -f deploy/oracle/compose.yaml up -d --no-build`.
-   Do not recreate the
-   scheduler as part of an ordinary web/API release; leave both discovery
-   schedulers running against their respective databases.
-6. Verify the migration exited zero, schema is at head, API/web/PostgreSQL are
-   healthy, the cloud scheduler is running and healthy, `https://ace.opik.net/healthz`
-   reports OK, and `X-Ace-Frontend-Commit` matches the approved SHA.
-7. Run the privacy-safe data inventory, confirm fresh writes by both schedulers,
-   and verify the cross-database replica cron remains disabled.
+2. On the VM, confirm `/opt/ace` has no conflicting tracked changes. Untracked
+   `private-backups/` is expected. Record current commit, API/web image IDs,
+   scheduler/PostgreSQL/Caddy container IDs, schema and private aggregate
+   inventory. Do not print credentials or private rows.
+3. Take a fresh private consistent backup. Verify gzip integrity and PostgreSQL
+   archive listing before activation. Keep previous API/web image IDs available
+   for rollback. A list check is not a restore drill; do not claim one occurred.
+4. Fetch and fast-forward to the exact approved SHA, preserving newer shared
+   branch work. Set `ACE_BUILD_SHA` to that full SHA before image construction.
+5. Build affected images. `deploy/oracle/prepare-release.sh` builds `migrate`,
+   `api` and `web` without changing containers. For a schema-free API/web
+   release, a direct `docker compose --env-file .env -f
+   deploy/oracle/compose.yaml build api web` also prepares only what is needed.
+6. For a schema-free API/web release, activate only those services with
+   `docker compose --env-file .env -f deploy/oracle/compose.yaml up -d
+   --no-build --no-deps --wait --wait-timeout 180 api web`. Website-only changes
+   activate only `web`. `--no-deps` prevents triggering the existing migrate
+   prerequisite. Do not include scheduler, migrate, PostgreSQL or Caddy merely
+   because they appear in Compose dependencies. A migration needs separate
+   explicit approval and the rehearsal procedure above.
+7. Verify API/web are healthy, running images match the prepared IDs, public
+   `/healthz` and `X-Ace-Frontend-Commit` match the approved SHA, schema is
+   unchanged for a schema-free release, and scheduler/PostgreSQL/Caddy container
+   IDs are unchanged. If activation fails, restore the recorded previous
+   API/web image tags and prior build SHA, then recreate only API/web; never
+   restore production data as an automatic application rollback.
+8. Compare private aggregate inventories for protected state. Discovery can
+   continue adding jobs/Pulls during a release, so those totals need not match.
+   Run read-only data invariants and public auth/static-asset checks. Do not
+   use mutation tests or an actual owner's browser session as fictional data.
+9. Record exact evidence and unverified areas here. Do not claim that container
+   health proves signed-in visuals, Gmail sync, official evidence availability
+   or legacy scheduler freshness. Keep both schedulers running independently
+   and the cross-database replica disabled; do not operate them to validate a
+   website release. Monitoring checks may be read-only.
+
+The Analytics release followed the schema-free path. Its protected inventory
+comparison checked row counts for `job_marks`, `external_applications`,
+`application_answers`, `resumes`, `users`, `resume_documents`, `career_facts`
+and `resume_versions`, plus the applied-mark count. Those matched before/after.
+This establishes aggregate preservation, not a full row-content hash audit.
+The 919 application total is a dated snapshot, not a fixed expected total for
+future releases. The Oracle scheduler was healthy and kept its container ID;
+legacy health and fresh source-write parity were not rechecked in this release.
+
+Release-script lessons from this deployment:
+
+- When sending `bash -s` over SSH, a child `docker compose exec -T` can consume
+  the script's remaining stdin. Give non-input commands `< /dev/null`; reserve
+  stdin explicitly for a Python/SQL script or dump stream. A zero SSH exit code
+  alone does not prove all planned commands ran. Verify expected artifacts and
+  the public release SHA.
+- Under `set -o pipefail`, `gzip -dc dump.gz | pg_restore --list` can exit 141
+  because listing closes input before gzip finishes. First run `gzip -t` over
+  the entire file. Then use Bash process substitution for archive listing,
+  check the listing command succeeds and its output is nonempty, and only then
+  rename the private `.partial` backup to its completed name. Do not ignore
+  integrity errors or treat a partial file's existence as a verified backup.
+- The ordinary backup script has retention cleanup. This release used a new
+  private dump without pruning existing backups. No scheduler operation,
+  cleanup, production restore or migration accompanied the deployment.
+- Production data smoke checks used `SET default_transaction_read_only = on`
+  on every diagnostic connection, without application startup hooks. The
+  existing in-process `time_pages.py` pattern allowed a process-local auth
+  override to exercise the route without creating a session or changing live
+  auth configuration. Public private endpoints still returned 401. This is not
+  verification of the owner's real signed-in browser.
 
 Do not use an unversioned web image. Do not assume a Git push deployed anything.
 Do not run `docker compose down`, remove a volume, restore a dump, downgrade a
@@ -2481,6 +2783,40 @@ Do not merge ACE Next to legacy `main` without separate approval.
   above the Pulls figures, and the "Discovery engine online" line at the
   foot of the sidebar, with their styles. The top bar's live status still
   says when a source last answered.
+
+### 2026-10-25, approved Analytics production release and continuity
+
+- Implemented the exact four-tab Pixel-Lock module compositions in the existing
+  Wine and Rose/Inter shell, added the read-only `/api/analytics` projection,
+  exact Applications drilldowns, conservative evidence handling, reviewed local
+  icons and the Pulls historical calendar above its original cards.
+- Preserved the two newer performance commits by rebasing onto `4f41949`.
+  Runtime release `340b175251a8040f3eedad9553c3f6f965657698` was pushed and
+  deployed after the owner's explicit request. Documentation release record
+  `8e604e7` was pushed afterward and does not require another deployment.
+- A new 437 MB private backup passed gzip and archive checks. Matching API/web
+  images became healthy at 23:41Z. PostgreSQL, Caddy and scheduler kept their
+  container IDs; schema stayed `0050`; no migration, Gmail permission change,
+  extension publication, retention cleanup or destructive operation occurred.
+- Read-only production verification matched 919 unique applications to
+  existing totals, checked four date ranges, disjoint cohorts, deduplication
+  and drilldowns, and confirmed no-store. Eight protected table counts and
+  applied-mark counts matched. Public health/header SHA, 11 logo hashes,
+  private API 401s and four sign-in redirects passed. Public health was checked
+  again at 23:52Z. No signed-in production browser review is claimed.
+- Passed 89 initial focused backend tests, 45 fictional Playwright tests and
+  final drilldown/mobile checks; after integration, 112 backend tests,
+  TypeScript, lint, build and zero-hit dash scan passed. Browser runs remain
+  suspended on this laptop pending cooling repairs. Screenshots, comparisons,
+  logs and the 39-file implementation list remain Git-ignored locally.
+- Recorded actual remaining gaps: zero production Gmail connections and
+  petition reports, missing submitted-resume/channel attribution and complete
+  observation coverage, unverified mailbox sync and owner visual acceptance.
+  Unknowns remain visible; no source or effectiveness claims were invented.
+- Consolidated the complete Analytics contract and file map into this file,
+  corrected stale live SHA/branch/schema/auth descriptions, distinguished dated
+  history from current facts, and documented safe schema-free releases, SSH
+  stdin handling, backup-list SIGPIPE handling and read-only diagnostics.
 
 ### 2026-10-25, second speed round
 
