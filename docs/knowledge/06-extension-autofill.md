@@ -864,3 +864,21 @@ Backward compatible: against an ace without sign-in it behaves as 1.20.
 Host permission is now any localhost port (`http://localhost/*`; a
 pattern without a port matches every port), so a second API on 8001 for
 testing a branch can be paired too. Verified in Chromium on 8000 and 8001.
+
+## The panel and popup take the website's typography (2026-10-24)
+
+The website moved to the approved Refined typography (05). For one look across ace, the Apply Studio panel and the
+toolbar popup now use the same face and scale.
+
+- The panel asked for "Inter" (Apply Studio rules) or "Geist" (the older rules), but neither was packaged, so it showed
+  whatever system face the computer had. Inter 4.1 now ships in `extension/fonts/` with its OFL licence.
+- A shadow root cannot declare `@font-face`, so `loadPanelFont()` adds the face to the page's document with the FontFace
+  API, under the name `ace-inter`, only when a panel opens; pages without a panel never see it. The file is listed in
+  `web_accessible_resources`. If a page refuses it, the panel keeps the system face and works the same.
+- Sizes are px tokens on `.ace-panel` mirroring `globals.css`: rem inside a content script would follow the employer
+  page's root size. The popup is an extension page, so it uses a plain `@font-face` with a relative URL.
+- The uppercase eyebrow became sentence case by removing `text-transform`; the text was already sentence case.
+
+Checks: `test-rules.js`, `test-memory.js` and the `web/tests/e2e/extension-*.spec.ts` tests pass. Those tests stub
+`chrome.runtime.getURL`, so they cover the fallback path; serving the extension folder over HTTP showed the face loading
+in Day and Night with no page errors.

@@ -104,9 +104,11 @@ before any database copy, Oracle deployment, Google OAuth setup or scheduler
 cutover. It records the aggregate live inventory, staged migration, rollback,
 backup and owner input requirements.
 
-- **Typography refresh (2026-10-24, branch `typography-refresh`, not merged or deployed):** the approved Refined
-  typography only: self-hosted Inter (SIL OFL), one token scale in `web/src/app/globals.css`, sentence case labels,
-  tabular numbers, colour emoji fallbacks. Layout, colours and text unchanged. Evidence method: `docs/knowledge/05`.
+- **Typography refresh (2026-10-24, on `wine-rose-platform`):** the approved Refined typography only: self-hosted
+  Inter (SIL OFL), one token scale in `web/src/app/globals.css`, sentence case labels, tabular numbers, colour emoji
+  fallbacks. Layout, colours and text unchanged; evidence method in `docs/knowledge/05`. The extension panel and popup
+  use the same face and scale (`docs/knowledge/06`). Website commit `54e939a` awaits the production release; Chrome
+  shows the extension change after a reload.
 - **Live** on the user's machine via `compose.yaml`: postgres (host port 5433),
   migrate, scheduler, web (port 8000, FastAPI serving the old UI at `/`). Built
   from the tree at commit 4f516ef. The user's machine is the only deployment.

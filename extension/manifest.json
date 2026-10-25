@@ -36,5 +36,16 @@
   "action": {
     "default_popup": "popup.html",
     "default_title": "ace autofill"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "fonts/InterVariable.woff2"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
+    }
+  ]
 }

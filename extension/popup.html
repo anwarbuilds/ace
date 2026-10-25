@@ -1,6 +1,8 @@
 <meta charset="utf-8">
 <title>ace autofill</title>
 <style>
+/* Typography: the website's approved Refined scale, with the Inter face packaged here. */
+@font-face{font-family:"ace-inter";src:url("fonts/InterVariable.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
 :root{--bg:#100c11;--s1:#1b131c;--s2:#2d202d;--line:#503545;--line2:#674858;
   --text:#fff4fa;--sec:#d2b9c6;--muted:#a78c9c;--hover:rgba(248,109,165,.09);--ring:rgba(248,109,165,.13);
   --accent:#a63766;--accent-hi:#bf4578;--ok:#85dabc;--warn:#ffc189}
@@ -11,35 +13,35 @@
 }
 *{box-sizing:border-box}
 body{margin:0;width:300px;background:var(--bg);color:var(--text);
-  font:13px/1.5 "Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  -webkit-font-smoothing:antialiased;letter-spacing:-.003em}
+  font:14px/1.52 "ace-inter","Inter",ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";
+  -webkit-font-smoothing:antialiased;letter-spacing:-.008em}
 header{display:flex;align-items:center;gap:10px;padding:14px 16px 12px;border-bottom:1px solid var(--line)}
-.mark{font-size:20px;font-weight:700;letter-spacing:-.055em;line-height:1;padding-right:10px;border-right:1px solid var(--line)}
-.what{font-size:12.5px;font-weight:600;color:var(--sec)}
+.mark{font-size:20px;font-weight:760;letter-spacing:-.082em;line-height:1;padding-right:10px;border-right:1px solid var(--line)}
+.what{font-size:13px;font-weight:590;color:var(--sec)}
 main{padding:14px 16px 16px}
-p{margin:0 0 14px;font-size:12px;color:var(--sec);line-height:1.55}
+p{margin:0 0 14px;font-size:13px;color:var(--sec);line-height:1.6}
 .status{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;padding:11px 12px;border-radius:12px;
   background:var(--s1);border:1px solid var(--line)}
-.s{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--sec)}
+.s{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--sec)}
 .s:empty{display:none}
 .s::before{content:"";width:7px;height:7px;border-radius:99px;margin-top:5px;flex:none;background:var(--ok)}
 .s.warn{color:var(--warn)}
 .s.warn::before{background:var(--warn)}
-button{font-family:inherit;cursor:pointer;border-radius:10px;font-weight:650;font-size:13px;width:100%;height:38px;border:0}
+button{font-family:inherit;cursor:pointer;border-radius:10px;font-weight:590;font-size:13.5px;width:100%;height:38px;border:0}
 #fill{background:var(--accent);color:#fff;box-shadow:0 8px 20px -8px rgba(229,9,20,.6),inset 0 1px 0 rgba(255,255,255,.18)}
 #fill:hover{background:var(--accent-hi)}
 details{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
-summary{cursor:pointer;font-size:11.5px;color:var(--muted);list-style:none;display:flex;align-items:center;gap:7px}
+summary{cursor:pointer;font-size:12.5px;color:var(--muted);list-style:none;display:flex;align-items:center;gap:7px}
 summary::-webkit-details-marker{display:none}
 /* A chevron, not "+" and a minus sign: the minus read as a dash. */
 summary::after{content:"";width:5px;height:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;
   transform:translateY(-2px) rotate(45deg);transition:transform .15s}
 details[open] summary::after{transform:translateY(1px) rotate(-135deg)}
-label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin:10px 0 5px;letter-spacing:.02em}
+label{display:block;font-size:12.5px;font-weight:590;color:var(--muted);margin:10px 0 5px}
 input{width:100%;height:34px;padding:0 10px;border:1px solid var(--line);border-radius:9px;background:var(--s1);
-  color:var(--text);font:12.5px inherit;font-family:inherit}
+  color:var(--text);font-family:inherit;font-size:13px}
 input:focus{outline:none;border-color:var(--line2);box-shadow:0 0 0 3px var(--ring)}
-#save,#pair,#unpair{margin-top:8px;height:34px;background:transparent;color:var(--text);border:1px solid var(--line2);font-size:12.5px}
+#save,#pair,#unpair{margin-top:8px;height:34px;background:transparent;color:var(--text);border:1px solid var(--line2);font-size:13px}
 #save:hover,#pair:hover,#unpair:hover{background:var(--hover)}
 #code{font-family:"Geist Mono",ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase}
 #unpair.quiet{border-color:transparent;color:var(--muted);font-weight:500}
