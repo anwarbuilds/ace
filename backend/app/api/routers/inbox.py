@@ -416,12 +416,24 @@ def backfill(body: SyncRequest, request: Request, session: Session = Depends(get
         raise HTTPException(502, str(exc)) from exc
 
 
+def _message_rows(session: Session, connection_id: int, decision: str | None = None) -> list[GmailMessageRecord]:
+    """Apply Analytics review filters before the existing bounded mailbox page."""
+    query = select(GmailMessageRecord).where(GmailMessageRecord.connection_id == connection_id)
+    if decision in {"review", "exact_preview"}:
+        query = query.where(GmailMessageRecord.decision == decision)
+    elif decision == "ambiguous":
+        query = query.where(GmailMessageRecord.decision == "review", GmailMessageRecord.candidate_keys[1].as_string().is_not(None))
+    elif decision is not None:
+        raise HTTPException(422, "Choose a supported evidence review filter.")
+    return list(session.scalars(query.order_by(GmailMessageRecord.received_at.desc(), GmailMessageRecord.id.desc()).limit(100)))
+
+
 @router.get("/api/inbox/messages")
-def messages(request: Request, session: Session = Depends(get_session)) -> dict:
+def messages(request: Request, session: Session = Depends(get_session), decision: str | None = None) -> dict:
     conn = _connection(session, current_owner(request))
     if not conn:
         return {"items": [], "review_count": 0}
-    rows = session.scalars(select(GmailMessageRecord).where(GmailMessageRecord.connection_id == conn.id).order_by(GmailMessageRecord.received_at.desc()).limit(100)).all()
+    rows = _message_rows(session, conn.id, decision)
     return {"items": [{"id": r.id, "received_at": r.received_at.isoformat(), "sender": r.sender, "subject": r.subject, "snippet": r.snippet, "classification": r.classification, "requisition_id": r.requisition_id, "decision": r.decision, "candidate_keys": r.candidate_keys or [], "reason": r.decision_reason, "selected_application_key": r.selected_application_key} for r in rows], "review_count": sum(r.decision in {"review", "exact_preview"} for r in rows)}
 
 

@@ -96,8 +96,8 @@ test("application totals update instantly, reject duplicate clicks, persist and 
   await expect(page.locator(".kpi", { hasText: "Total applications" }).locator(".kpi-n")).toHaveText(String(before + 1));
   await page.goto("/app/applications");
   await expect(page.locator(".head-row .h1-count")).toHaveText(String(before + 1));
-  await page.goto("/app/analytics");
-  await expect(page.locator(".kpi", { hasText: "Applications" }).first().locator(".kpi-n")).toHaveText(String(before + 1));
+  await page.goto("/app/analytics?days=all");
+  await expect(page.locator(".an-metric", { hasText: "Applications sent" }).locator(".an-metric-value")).toHaveText(String(before + 1));
 
   await page.goto(`/app/jobs/${id}`);
   await applied.click();

@@ -2381,6 +2381,7 @@ def create_app() -> FastAPI:
         )
 
     from backend.app.api.routers import (
+        analytics,
         auth,
         companies,
         dashboard,
@@ -2393,6 +2394,7 @@ def create_app() -> FastAPI:
     )
 
     for module in (
+        analytics,
         auth,
         companies,
         dashboard,

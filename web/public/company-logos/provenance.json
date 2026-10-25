@@ -1,0 +1,90 @@
+[
+  {
+    "company": "Google",
+    "source": "https://www.google.com/favicon.ico",
+    "identity": "Official company website favicon",
+    "verified_on": "2026-10-25",
+    "sha256": "6da5620880159634213e197fafca1dde0272153be3e4590818533fab8d040770",
+    "asset": "google.ico"
+  },
+  {
+    "company": "Apple",
+    "source": "https://www.apple.com/favicon.ico",
+    "identity": "Official company website favicon",
+    "verified_on": "2026-10-25",
+    "sha256": "5493c61cf725cf3a1d63cd9d07de75b0d6faa5564e772f7d0a6074f341442938",
+    "asset": "apple.ico"
+  },
+  {
+    "company": "Microsoft",
+    "source": "https://www.microsoft.com/favicon.ico",
+    "identity": "Official company website favicon",
+    "verified_on": "2026-10-25",
+    "sha256": "90cdaf487716184e4034000935c605d1633926d348116d198f355a98b8c6cd21",
+    "asset": "microsoft.ico"
+  },
+  {
+    "company": "Stripe",
+    "source": "https://stripe.com/favicon.ico",
+    "identity": "Official company website favicon",
+    "verified_on": "2026-10-25",
+    "sha256": "50630726cbd85299c64dbb510f051e5d70013abcd620fa2b23be82e618140150",
+    "asset": "stripe.ico"
+  },
+  {
+    "company": "Amazon",
+    "asset": "amazon.ico",
+    "source": "https://www.amazon.jobs/favicon.ico",
+    "identity": "Official company website favicon",
+    "verified_on": "2026-10-25",
+    "sha256": "17d02e2db6dbedb95dd449d06868c147ac2c3b5371497bcb9407e75336a99e09"
+  },
+  {
+    "company": "NVIDIA",
+    "asset": "nvidia.ico",
+    "source": "https://www.nvidia.com/favicon.ico",
+    "identity": "Official company website favicon",
+    "verified_on": "2026-10-25",
+    "sha256": "bedcb14e0470ff8abe26405a630e9604ac4fa581b385a7cfb00420c22f541b6e"
+  },
+  {
+    "company": "Adobe",
+    "asset": "adobe.ico",
+    "source": "https://www.adobe.com/favicon.ico",
+    "identity": "Official company website favicon",
+    "verified_on": "2026-10-25",
+    "sha256": "5eed69e764f1d40b943a19b4b36aca72519b2626dd519891173d7728a74d821c"
+  },
+  {
+    "company": "IBM",
+    "asset": "ibm.ico",
+    "source": "https://www.ibm.com/favicon.ico",
+    "identity": "Official company website favicon",
+    "verified_on": "2026-10-25",
+    "sha256": "3a2e015580f7185539eb91f5ae7952ffee9d02c5e4914d3370ff1a755b0048af"
+  },
+  {
+    "company": "Salesforce",
+    "asset": "salesforce.ico",
+    "source": "https://www.salesforce.com/favicon.ico",
+    "identity": "Official company website favicon",
+    "verified_on": "2026-10-25",
+    "sha256": "92842fc6c2f66b46f69458c14621fc2eca5d6c02d7937f9124fe8a3a9a55bc91"
+  },
+  {
+    "company": "Meta",
+    "asset": "meta.ico",
+    "source": "https://www.meta.com/favicon.ico",
+    "identity": "Official company website favicon",
+    "verified_on": "2026-10-25",
+    "sha256": "b96d739c3a8ac4ef0b34212c8a2b7f23dcb7b039e0dd14ef170d8e9232972bf7"
+  },
+  {
+    "company": "ServiceNow",
+    "asset": "servicenow.ico",
+    "source": "https://www.servicenow.com/favicon.ico",
+    "identity": "Official company website favicon",
+    "verified_on": "2026-10-25",
+    "sha256": "dc396aed077e7beff58d741b036a1c15fb6607f2531dea18dda47087645c868a"
+  }
+]

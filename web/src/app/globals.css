@@ -1831,3 +1831,15 @@ html[data-theme="light"] .wine-home .wine-art-a{opacity:.5;filter:drop-shadow(0 
   html:not([data-theme="dark"]) .wine-theme-toggle .theme-night{display:flex}
 }
 @media(prefers-reduced-motion:reduce){.wine-button,.auth-provider{transition:none}}
+
+/* Verified, local employer icons, shared only by Analytics and Pulls. */
+.company-logo{width:28px;height:28px;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;background:var(--surface-2);color:var(--text-secondary);vertical-align:middle;overflow:hidden}
+.company-logo img{width:24px;height:24px;object-fit:contain;background:#fff;border-radius:4px}
+.company-logo>span{font-size:var(--text-tick);font-weight:var(--weight-semibold);line-height:var(--leading-compact)}
+.job-line>.company-logo{width:36px;height:36px}
+.pull-calendar h3{margin-top:0}.pull-calendar .calendar-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 10px;font-size:var(--text-nav)}
+.pull-calendar .calendar-head button{padding:4px 9px;border:1px solid var(--border);border-radius:7px}.pull-calendar .calendar-head button:disabled{opacity:.4;cursor:default}
+.pull-calendar .calendar-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;text-align:center;font-size:var(--text-small)}
+.pull-calendar .calendar-days>span{color:var(--text-secondary);padding:5px 0}.pull-calendar .calendar-days a{padding:7px 0;border-radius:9px;border:1px solid transparent}.pull-calendar .calendar-days a:hover{background:var(--hover)}.pull-calendar .calendar-days a[aria-current="date"]{background:var(--accent);color:var(--on-accent)}
+.pull-calendar .calendar-days .calendar-future{opacity:.45}.pull-calendar label{display:flex;gap:12px;align-items:center;font-size:var(--text-small);margin:14px 0}.pull-calendar input{border:1px solid var(--border);padding:7px 9px;border-radius:8px;background:var(--surface-1);min-width:0;max-width:100%;font-size:var(--text-small)}
+.pull-calendar .calendar-today{display:block;border:1px solid var(--border);border-radius:8px;text-align:center;padding:6px;font-size:var(--text-label)}

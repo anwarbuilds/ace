@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Avatar, EmptyBox } from "@/components/bits";
+import { EmptyBox } from "@/components/bits";
+import { CompanyLogo } from "@/components/CompanyLogo";
 import { useMarks } from "@/components/jobs/useMarks";
 import { useApp, withPatch } from "@/components/shell/AppProvider";
 import { NavIcon } from "@/components/shell/NavIcon";
@@ -56,7 +57,7 @@ function JobLine({ job, tz, evidence, onCompanySelect }: { job: Job; tz: string;
   const dismissed = job.review_state === "dismissed";
   return (
     <div className={`job-line${dismissed ? " dim" : ""}`}>
-      <Avatar name={job.company} />
+      <CompanyLogo name={job.company} />
       <div className="job-copy">
         <button className="job-company" onClick={() => onCompanySelect(job.company)}>
           {clean(job.company)}

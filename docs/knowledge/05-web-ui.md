@@ -843,3 +843,17 @@ band counted by subtraction, list data fetched in parallel, a shared `RouteLoadi
 chip (the approved V2 search has none). **Lesson.** Measure with `EXPLAIN ANALYZE` on real-scale data before guessing;
 a `JIT:` block in a plan for a small result is the tell. A thin progress bar would read as a dash, so feedback is
 dimming and skeleton blocks. Details and numbers: `ACE_NEXT_KNOWLEDGE.md`, Speed and responsiveness.
+
+
+## Four-tab approved Analytics redesign (2026-10-25, local only)
+
+The Pixel-Lock package supersedes the older Analytics layout for this route.
+Overview, Outcomes, Role and resume, and Companies use the new read-only
+`/api/analytics` projection over existing application identities and evidence.
+No schema, Career Dashboard or extension changes. Missing resume/channel
+attribution, observation coverage and official sponsorship data remain explicit
+unknowns. Pulls gains only reviewed local company icons and the historical
+calendar above its original side cards. See
+`docs/architecture/2026-10-25-analytics-redesign.md` for the implementation,
+fictional screenshot captures, acceptance comparison and actual test results.
+No production release occurred in this session.

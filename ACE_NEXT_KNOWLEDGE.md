@@ -227,6 +227,10 @@ sign-in address.
   typecheck, lint, build and signed-in `curl` fetches of the changed pages
   (log in through `/api/auth/login` with a cookie jar). A reboot also
   empties `/tmp`, so recreate scratch folders before starting servers.
+- The watchdog must share Chrome's host PID namespace: a sandboxed
+  `pkill` can fail to see host browser processes. During Analytics validation
+  the machine restarted again; the successful rerun used one CPU core,
+  disabled GPU, a throttled Chrome wrapper and a host-visible 92 C cutoff.
 - Extension browser tests need no server:
   `cd web && CHROMIUM_PATH=/usr/bin/google-chrome npx playwright test tests/e2e/extension-*.spec.ts`
   (22 tests, about 25 seconds). Pair with `node extension/test-rules.js`,
@@ -372,6 +376,38 @@ After the first release (JIT off) it measured, in ms: `/api/stats` 216,
   use `prefetch={false}`: 23 requests and no job lookups per load.
 
 ## Current working state on 2026-10-25
+
+### Approved Analytics redesign, local work on 2026-10-25
+
+The four-tab Analytics design in `design/ace-analytics-pixel-lock/` is implemented
+locally from `9cbafd7`. It is not deployed. `/api/analytics` is a new authenticated,
+no-store, read-only projection over the existing Inbox application identities,
+marks, external applications, outcome ledger and reviewed petition reports.
+It adds submission-date/role filters, local Monday-to-Sunday weeks, undo-aware
+outcome deduplication and official employer-year evidence. Chart drilldowns use
+`/app/applications/analytics`, a read-only filtered Applications child view backed
+by the same projection, with links to existing job application controls. Career Dashboard's
+existing read model, the extension and discovery are unchanged. No schema or
+migration change is needed. A later approved release needs matching API and web
+images because the redesigned page reads the new endpoint.
+
+The current schema does not record submitted resume versions, application
+channels or complete observation coverage. Analytics explicitly reports those
+gaps and does not assign the primary resume, infer channels, rank incomplete
+combinations or fabricate response rates. Historical petitions never prove
+current role or new graduate sponsorship. Company logos use a reviewed local
+favicon cache with provenance and an image-error monogram fallback. Pulls adds
+only logos and the historical date calendar above its original side cards.
+
+Implementation, privacy boundaries, screenshot comparisons, exact changed files
+and local test results: `docs/architecture/2026-10-25-analytics-redesign.md`.
+Local validation passed 89 focused backend tests, 45 Playwright tests, a final
+filtered-record/mobile recheck, TypeScript, lint, production build and a zero-hit
+dash scan. All four tabs have 1672x941 Day and Night comparison captures.
+The fictional capture database is `/tmp/ace-analytics-fictional.db`; artifacts
+remain ignored in `artifacts/analytics-validation/`. No production, scheduler,
+Gmail consent, extension publication, or destructive data operation was run.
+
 
 The working branch is `wine-rose-platform`, reconciled on GitHub on
 2026-10-25: it holds the website typography release (`54e939a`, `61debd6`,

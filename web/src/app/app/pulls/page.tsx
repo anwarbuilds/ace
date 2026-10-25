@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ApplicationMetric } from "@/components/applications/ApplicationCount";
 import { PullsAlerts } from "@/components/pulls/PullsLog";
 import { PullsTimeline } from "@/components/pulls/PullsTimeline";
+import { PullsCalendar } from "@/components/pulls/PullsCalendar";
 import { NavIcon } from "@/components/shell/NavIcon";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGetOr } from "@/lib/api";
@@ -169,6 +170,7 @@ export default async function PullsPageRoute({ searchParams }: PageProps<"/app/p
         </div>
 
         <aside className="pull-rail">
+          <PullsCalendar key={data.date} date={data.date} today={data.today} filter={filter} />
           <div className={`panel status-panel s-${status.state}`}>
             <div className="tiny-label">
               <NavIcon name="pulls" size="sm" /> Discovery status
