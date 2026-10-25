@@ -2374,6 +2374,14 @@ Do not merge ACE Next to legacy `main` without separate approval.
 
 ### 2026-10-25, speed, search history and search box
 
+- Released with owner approval: `https://ace.opik.net/healthz` and the
+  `X-Ace-Frontend-Commit` header reported
+  `46d8738e29334ea228d6767858f3fd294a9b9dee` from 2026-10-25T21:22Z, API
+  ok, signed-out pages answering in about 0.23 s. The owner ran the
+  one-line release (backup service, prepare-release, `up` of postgres,
+  migrate, api, web and caddy; scheduler untouched). Not yet confirmed
+  from here: the printed `alembic_version` (whether 0050 is now applied)
+  and signed-in page timings, which need the owner's session.
 - JIT off for app database connections and one fewer stats query; list
   pages fetch in parallel; every workspace route has a loading screen;
   same-route clicks dim the page. Details in the working notes above.
