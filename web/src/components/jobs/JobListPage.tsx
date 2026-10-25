@@ -67,15 +67,22 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
   const [prefs, prevVisit] = await Promise.all([getPrefs(), getPrevVisit()]);
   const tz = prefs.tz;
 
-  const pulls = await apiGetOr<PullsResponse>(
+  const pullsRequest = apiGetOr<PullsResponse>(
     "/api/sessions",
     { last_poll_at: null, sessions: [] },
     { limit: "30" },
   );
-  const latest = pulls.sessions[0] ?? null;
+  // Only Latest discoveries with no pull chosen needs the newest pull
+  // before it can ask for its jobs; every other list asks at once rather
+  // than waiting a round trip for an answer it does not use.
+  const needsLatest = page === "queue" && state.view === "latest" && state.session == null;
+  const jobsRequest = (needsLatest ? pullsRequest : Promise.resolve(null)).then((p) =>
+    apiGet<JobPage>("/api/jobs", jobsParams(state, { prevVisit, latestPullId: p?.sessions[0]?.id ?? null })),
+  );
 
-  const [jobs, stats, newCount, external, summary] = await Promise.all([
-    apiGet<JobPage>("/api/jobs", jobsParams(state, { prevVisit, latestPullId: latest?.id ?? null })),
+  const [pulls, jobs, stats, newCount, external, summary] = await Promise.all([
+    pullsRequest,
+    jobsRequest,
     apiGetOr<Stats>("/api/stats", { last_poll_at: null }, filterParams(state)),
     page === "queue" && prevVisit
       ? apiGetOr<JobPage | null>("/api/jobs", null, { since: prevVisit.toISOString(), limit: "1" })
@@ -87,6 +94,7 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
       ? apiGetOr<{ applied: AppliedSummary } | null>("/api/dashboard", null)
       : Promise.resolve(null),
   ]);
+  const latest = pulls.sessions[0] ?? null;
   const applied = summary?.applied ?? null;
 
   const newSince = newCount?.total ?? 0;

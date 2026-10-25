@@ -1753,15 +1753,8 @@ def build_stats(
         *,
         low: int | None,
         high: int | None,
-        unscored: bool = False,
     ) -> int:
-        """Count gate-passing jobs whose match falls in one band.
-
-        Unscored is counted explicitly rather than inferred. Nearly half
-        the queue has no score because the posting was never readable,
-        and treating that as a zero would rank a job ACE could not read
-        alongside one it read and rejected.
-        """
+        """Count gate-passing jobs whose match falls in one band."""
 
         statement = _apply_filters(
             _join_scores(
@@ -1774,40 +1767,31 @@ def build_stats(
             now=reference_time,
         )
 
-        if unscored:
-            statement = statement.where(
-                JobResumeScoreRecord
-                .score
-                .is_(
-                    None
-                )
+        statement = statement.where(
+            JobResumeScoreRecord
+            .score
+            .is_not(
+                None
             )
-        else:
-            statement = statement.where(
-                JobResumeScoreRecord
-                .score
-                .is_not(
-                    None
+        )
+
+        if low is not None:
+            statement = (
+                statement.where(
+                    JobResumeScoreRecord
+                    .score
+                    >= low
                 )
             )
 
-            if low is not None:
-                statement = (
-                    statement.where(
-                        JobResumeScoreRecord
-                        .score
-                        >= low
-                    )
+        if high is not None:
+            statement = (
+                statement.where(
+                    JobResumeScoreRecord
+                    .score
+                    < high
                 )
-
-            if high is not None:
-                statement = (
-                    statement.where(
-                        JobResumeScoreRecord
-                        .score
-                        < high
-                    )
-                )
+            )
 
         return int(
             session.scalar(
@@ -1830,6 +1814,37 @@ def build_stats(
         verified_only=True
     )
 
+    match_high = _tier_count(
+        low=MATCH_HIGH_MIN,
+        high=None,
+    )
+
+    match_medium = _tier_count(
+        low=MATCH_MEDIUM_MIN,
+        high=MATCH_HIGH_MIN,
+    )
+
+    match_minimal = _tier_count(
+        low=None,
+        high=MATCH_MEDIUM_MIN,
+    )
+
+    # Unscored is its own band rather than a zero. Nearly half the queue
+    # has no score because the posting was never readable, and treating
+    # that as a zero would rank a job ACE could not read alongside one it
+    # read and rejected. It is the rest of the queue: a scored job falls
+    # in exactly one of the three bands above. Counting it by subtraction
+    # avoids a query whose outer join the planner misjudged, taking
+    # 225 ms on the real corpus where the bands took 15 ms together.
+    # Never below zero if the scheduler scores a job between the counts.
+    match_unscored = max(
+        0,
+        qualifying
+        - match_high
+        - match_medium
+        - match_minimal,
+    )
+
     return {
         # Every figure here describes the apply-ready queue. Corpus
         # size is deliberately absent: this page exists to show what to
@@ -1846,23 +1861,10 @@ def build_stats(
         ),
         # Match tiers. These drive the queue's view selector, so they
         # must be computed under the same filters as the list itself.
-        "match_high": _tier_count(
-            low=MATCH_HIGH_MIN,
-            high=None,
-        ),
-        "match_medium": _tier_count(
-            low=MATCH_MEDIUM_MIN,
-            high=MATCH_HIGH_MIN,
-        ),
-        "match_minimal": _tier_count(
-            low=None,
-            high=MATCH_MEDIUM_MIN,
-        ),
-        "match_unscored": _tier_count(
-            low=None,
-            high=None,
-            unscored=True,
-        ),
+        "match_high": match_high,
+        "match_medium": match_medium,
+        "match_minimal": match_minimal,
+        "match_unscored": match_unscored,
         "match_high_min": (
             MATCH_HIGH_MIN
         ),

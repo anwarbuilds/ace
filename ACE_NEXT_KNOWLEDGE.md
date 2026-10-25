@@ -211,6 +211,13 @@ password and then an emailed code; **Forgot password** sends a reset code.
 
 - Playwright's bundled browser is not installed. Always set
   `CHROMIUM_PATH=/usr/bin/google-chrome`.
+- This laptop overheats and powers off under full load (two hard
+  shutdowns on 2026-10-25 when the suite started four Chrome workers).
+  Run the suite with `--workers=1`, point `CHROMIUM_PATH` at a wrapper
+  that adds `--disable-gpu`, keep other heavy jobs off, and run a
+  watchdog that stops the tests at 95 C on `x86_pkg_temp`. Its pattern
+  must not appear in your own command line, or `pkill -f` ends your
+  shell too. Never run the browser suite and the backend suite at once.
 - Extension browser tests need no server:
   `cd web && CHROMIUM_PATH=/usr/bin/google-chrome npx playwright test tests/e2e/extension-*.spec.ts`
   (22 tests, about 25 seconds). Pair with `node extension/test-rules.js`,
@@ -272,6 +279,48 @@ password and then an emailed code; **Forgot password** sends a reset code.
   types, and returns on a URL change, a new form step or the toolbar `wake`
   message. The status pill is `nowrap` and dock text ellipsizes so the extra
   control changes no layout (compact card 354px tall).
+
+### Speed and responsiveness (2026-10-25)
+
+The owner reported slow page switches and a page 2 that seemed never to
+load. Measured read-only on the local legacy database (971,490 jobs, same
+scale as production):
+
+- PostgreSQL JIT was the main cost. The queue queries carry correlated
+  subqueries, so their estimated cost passes the JIT threshold while each
+  touches a few thousand rows. One count: 582 ms with JIT, 51 ms without.
+  An Opportunities page load cost about 2.8 s in `/api/stats` and 0.55 s in
+  `/api/jobs` on this laptop; the filter menu's `/api/facets` about 2.2 s.
+  With JIT off: about 0.12 s, 0.05 s and 0.08 s. The Oracle VM is a
+  smaller ARM host, so it paid more. `backend/app/db/session.py` now
+  connects with `options=-c jit=off` (verified with `SHOW jit` on a
+  throwaway PostgreSQL). The scheduler gets it only when it restarts.
+- `match_unscored` is now qualifying minus the three score bands (exact;
+  verified on real data: 1,276 - 750 - 268 - 14 = 244, equal to the old
+  query). The old outer-join count took 225 ms because the planner
+  misjudged its row estimate.
+- Method that worked: compile ACE Next's SQLAlchemy statements offline
+  with literal binds (a fake session that records statements), then run
+  `EXPLAIN (ANALYZE, BUFFERS)` inside `BEGIN READ ONLY` through
+  `docker exec ace-postgres-1 psql`. No credentials are read and no rows
+  are printed. Look for a `JIT:` block in the plan.
+- Next.js shows nothing on a click to a dynamic route without a
+  `loading.tsx`, so every workspace route folder now re-exports
+  `components/shell/RouteLoading.tsx`. Same-route changes (page 2, tabs,
+  sorts, filters) keep the route, so `components/shell/NavigationState.tsx`
+  sets `html[data-navigating]` on an internal link click and the main
+  area dims until the URL changes (15 s safety clear). Measured against a
+  1.5 s artificial API delay: skeleton after 21 ms, dimming after 5 ms.
+- Do not add a thin progress bar: the drawn-dash scan flags short bars,
+  and the owner reads them as dashes.
+- `JobListPage` no longer waits for `/api/sessions` before `/api/jobs`;
+  only Latest discoveries without a chosen pull needs it first.
+- Every text field outside sign-in and account identity sets
+  `autoComplete="off"`, so the browser never offers past searches or
+  answers; `search-and-navigation.spec.ts` checks every route. The
+  search box has no "/" chip (the approved V2 search has none), keeps the
+  `/` shortcut through `aria-keyshortcuts`, and its field draws no second
+  focus outline inside the box's ring.
 
 ## Current working state on 2026-10-25
 
@@ -2322,6 +2371,24 @@ deployed in `b8e30b0b4261257fea25fb8e46f03912c6811990` on 2026-10-23.
 Do not merge ACE Next to legacy `main` without separate approval.
 
 ## Change log
+
+### 2026-10-25, speed, search history and search box
+
+- JIT off for app database connections and one fewer stats query; list
+  pages fetch in parallel; every workspace route has a loading screen;
+  same-route clicks dim the page. Details in the working notes above.
+- No saved suggestions in any non-sign-in field; search box without the
+  "/" chip and with a single focus ring.
+- Checks: 1,229 backend tests, TypeScript, ESLint, dash scan, production
+  build, a slow-API feedback probe, and the full Playwright suite at one
+  worker on fictional data: 174 of 175 passed. The failure was the "/"
+  shortcut test pressing the key right after load while the CPU was
+  throttled at 93 to 98 C; it then passed 8 runs in a row. Production
+  timing is not yet measured after release.
+- The laptop shut down twice (12:58 and 14:03) while Playwright started
+  four Chrome workers next to the servers; each boot log simply stops.
+  `x86_pkg_temp` read 92 C three minutes after boot and 98 C with one
+  worker. See the local testing recipes.
 
 ### 2026-10-25, agent working notes
 

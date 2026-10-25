@@ -1291,3 +1291,82 @@ def test_a_facet_does_not_narrow_itself(
             "Amazon",
             "Stripe",
         }
+
+
+def test_stats_match_bands_cover_every_qualifying_job(
+    session_factory,
+) -> None:
+    """Unscored is the rest of the queue, counted by subtraction.
+
+    Every qualifying job has a score in exactly one band, or none. The
+    unscored figure is no longer its own query, so it must still agree
+    with the jobs that truly have no score, and must ignore rejected
+    postings and other resumes' scores.
+    """
+
+    from backend.app.db.models import (
+        JobResumeScoreRecord,
+        ResumeRecord,
+    )
+
+    with session_factory.begin() as session:
+        active = ResumeRecord(
+            label="active",
+            filename="active.pdf",
+            content_hash="a" * 8,
+            raw_text="Python.",
+            extracted_skills=["python"],
+            is_active=True,
+            uploaded_at=NOW,
+        )
+
+        older = ResumeRecord(
+            label="older",
+            filename="older.pdf",
+            content_hash="b" * 8,
+            raw_text="Python.",
+            extracted_skills=["python"],
+            is_active=False,
+            uploaded_at=NOW,
+        )
+
+        session.add_all([active, older])
+        session.flush()
+
+        def score(job: JobRecord, resume: ResumeRecord, value: int) -> None:
+            session.add(
+                JobResumeScoreRecord(
+                    job_id=job.id,
+                    resume_id=resume.id,
+                    score=value,
+                    matched_skills=["python"],
+                    missing_skills=[],
+                    related_skills=[],
+                    algorithm_version="test",
+                    scored_at=NOW,
+                )
+            )
+
+        score(add_job(session, external_id="1"), active, 90)
+        score(add_job(session, external_id="2"), active, 50)
+        score(add_job(session, external_id="3"), active, 10)
+
+        # Unscored for the active resume, though another resume scored it.
+        score(add_job(session, external_id="4"), older, 95)
+        add_job(session, external_id="5")
+
+        # A rejected posting never counts, scored or not.
+        score(add_job(session, external_id="6", status="REJECT"), active, 99)
+
+    with session_factory() as session:
+        stats = build_stats(
+            session,
+            filters=JobFilters(resume_id=active.id),
+            now=NOW,
+        )
+
+    assert stats["qualifying_active_jobs"] == 5
+    assert stats["match_high"] == 1
+    assert stats["match_medium"] == 1
+    assert stats["match_minimal"] == 1
+    assert stats["match_unscored"] == 2

@@ -188,10 +188,12 @@ export function ListControls({ state }: { state: ListState }) {
             type="search"
             placeholder="Search company, title, skill"
             aria-label="Search"
+            aria-keyshortcuts="/"
+            autoComplete="off"
+            spellCheck={false}
             value={q}
             onChange={(e) => onSearch(e.target.value)}
           />
-          {q ? null : <span className="kbd">/</span>}
         </label>
         {applied ? null : (
           <div className="ctl-grp">

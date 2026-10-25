@@ -55,7 +55,7 @@ function FactEditor({ fact, onDone }: { fact?: Fact; onDone: () => void }) {
     }
   }
   return (
-    <form className="st-editor card" action={save}>
+    <form className="st-editor card" action={save} autoComplete="off">
       <div className="st-grid2">
         <label>
           Kind

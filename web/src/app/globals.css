@@ -246,8 +246,8 @@ button.live:hover{background:var(--surface-2);border-color:var(--border)}
 .search input{flex:1;min-width:0;background:none;border:none;font-size:var(--text-nav);padding:0;color:var(--text)}
 .search input::placeholder{color:var(--text-muted)}
 .search input::-webkit-search-cancel-button{filter:grayscale(1);opacity:.5}
-.kbd{font-family:var(--mono);font-size:var(--text-small);color:var(--text-muted);border:1px solid var(--border);
-  border-bottom-width:2px;border-radius:5px;padding:0 5px;line-height:16px;background:var(--surface-2)}
+/* The box draws the focus ring; a second outline on the field inside read as a box within a box. */
+.search input:focus-visible{outline:none}
 .chip{
   display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;
   border:1px solid var(--border-subtle);border-radius:999px;background:transparent;
@@ -557,7 +557,7 @@ tr.bandline span{display:block;padding:9px var(--gutter);font-size:var(--text-sm
 .ans-edit input,.ans-edit textarea{width:100%;background:var(--surface-1);color:var(--text);
   border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:var(--text-button);transition:border-color var(--fast),box-shadow var(--fast)}
 .ans-edit textarea{min-height:40px;max-height:260px;resize:vertical;font-family:var(--sans);field-sizing:content;line-height:1.5}
-.ans-edit input:focus,.ans-edit textarea:focus,.ans-edit select:focus{border-color:var(--border-strong);box-shadow:0 0 0 4px var(--hover)}
+.ans-edit input:focus,.ans-edit textarea:focus,.ans-edit select:focus{outline:none;border-color:var(--border-strong);box-shadow:0 0 0 4px var(--hover)}
 .ans-edit select{width:100%;background:var(--surface-1);color:var(--text);
   border:1px solid var(--border);border-radius:10px;padding:9px 10px;font-size:var(--text-button);font-family:var(--sans)}
 /* The question is ACE's, not the user's: renaming it would break the
@@ -712,7 +712,7 @@ button.pl-alerts:hover{background:var(--raised)}
 .cov-add{display:flex;gap:8px;margin:14px 0 6px;max-width:760px}
 .cov-add input{flex:1;background:var(--surface-1);color:var(--text);border:1px solid var(--border);
   border-radius:10px;padding:0 14px;height:44px;font-size:var(--text-nav);font-family:var(--sans)}
-.cov-add input:focus{border-color:var(--border-strong);box-shadow:0 0 0 4px var(--hover)}
+.cov-add input:focus{outline:none;border-color:var(--border-strong);box-shadow:0 0 0 4px var(--hover)}
 .cov-out{font-size:var(--text-label);margin-top:8px;line-height:1.55}
 .cov-out.ok{color:var(--success)} .cov-out.warn{color:var(--warning)}
 .cov-names{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
@@ -736,7 +736,7 @@ button.pl-alerts:hover{background:var(--raised)}
 .hist input,.hist select,.hist textarea{width:100%;background:var(--surface-2);color:var(--text);
   border:1px solid var(--border-subtle);border-radius:9px;padding:9px 10px;font-size:var(--text-button);font-family:var(--sans)}
 .hist textarea{min-height:80px;resize:vertical}
-.hist input:focus,.hist select:focus,.hist textarea:focus{border-color:var(--border-strong)}
+.hist input:focus,.hist select:focus,.hist textarea:focus{outline:none;border-color:var(--border-strong);box-shadow:0 0 0 4px var(--hover)}
 .hist-dates{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:12px}
 .hist-wide{grid-column:1/-1;margin-top:12px}
 .hist-foot{display:flex;align-items:center;gap:12px;margin-top:10px}
@@ -1116,6 +1116,8 @@ a.db-tr:hover{background:var(--surface-2)}
 .sk-line{height:16px;width:46%}
 .sk-h{height:30px;width:220px}
 .sk-block{height:64px}
+/* A link to another page of ace was clicked and its page is on the way. */
+html[data-navigating] .main.content{opacity:.62;cursor:progress;transition:opacity var(--base) 120ms}
 @keyframes sk-pulse{50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){.sk-line,.sk-block{animation:none}}
 

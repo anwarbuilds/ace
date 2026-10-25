@@ -48,6 +48,7 @@ export function AddSource() {
         <input
           id="cov-input"
           type="text"
+          autoComplete="off"
           spellCheck={false}
           placeholder="https://company.com/careers  ·  or  ·  Cursor"
           value={text}

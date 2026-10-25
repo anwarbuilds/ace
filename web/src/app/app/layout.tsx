@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { AnswersDock } from "@/components/shell/AnswersDock";
 import { AppProvider } from "@/components/shell/AppProvider";
+import { NavigationState } from "@/components/shell/NavigationState";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { MobileBar, Topbar } from "@/components/shell/Topbar";
 import { apiGetOr, authStatus, signInPath } from "@/lib/api";
@@ -73,6 +74,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
       </div>
       <MobileBar />
       <AnswersDock answers={answers.items} />
+      <NavigationState />
     </AppProvider>
   );
 }

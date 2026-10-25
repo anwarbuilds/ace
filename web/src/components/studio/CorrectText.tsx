@@ -13,7 +13,7 @@ export function CorrectText({ text, parentId, label }: { text: string; parentId:
   const changed = value !== text;
   return (
     <div className="st-correct">
-      <textarea className="st-text" value={value} onChange={(e) => setValue(e.target.value)} rows={22} spellCheck />
+      <textarea className="st-text" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} rows={22} spellCheck />
       <div className="controls" style={{ paddingLeft: 0 }}>
         <button
           className="btn btn-primary btn-sm"

@@ -830,3 +830,16 @@ Found, not changed (layout): at 720 px (200 percent zoom) the Pulls job text col
 actions only wrap below 650 px; Applications scrolls sideways at 390 px; phone pages keep 44 px side padding because a
 later rule overrides the 16 px phone padding. `web/tests/e2e/typography.spec.ts` pins the face, the minimum size, sentence
 case, tabular figures and company first.
+
+## Speed, search history and the search box (2026-10-25)
+
+**Problem.** The owner found page switches slow and page 2 of Opportunities apparently stuck, Chrome offering past
+searches under every search box, and a box inside the search box. **Cause.** PostgreSQL compiled each queue query with
+JIT: 536 ms of a 582 ms count on the 971,490-job corpus, and an Opportunities page ran about seven such queries. Only
+Pulls had a `loading.tsx`, so every other click waited silently for the server. The global `:focus-visible` outline
+drew on the field inside the search box's own ring. **Fix.** JIT off on app connections (`db/session.py`), the unscored
+band counted by subtraction, list data fetched in parallel, a shared `RouteLoading` for every workspace route,
+`NavigationState` dimming the page for same-route clicks, `autoComplete="off"` on every non-sign-in field, and no "/"
+chip (the approved V2 search has none). **Lesson.** Measure with `EXPLAIN ANALYZE` on real-scale data before guessing;
+a `JIT:` block in a plan for a small result is the tell. A thin progress bar would read as a dash, so feedback is
+dimming and skeleton blocks. Details and numbers: `ACE_NEXT_KNOWLEDGE.md`, Speed and responsiveness.

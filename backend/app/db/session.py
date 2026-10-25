@@ -25,6 +25,13 @@ def _engine_options(
     session. FastAPI serves sync routes from a thread pool, so one
     connection is used from several threads, which SQLite refuses unless
     told otherwise.
+
+    PostgreSQL's JIT is switched off. The queue's queries carry several
+    correlated subqueries, so the planner's cost estimate passes the JIT
+    threshold although each one touches a few thousand rows: on the
+    971,490-job corpus, compiling took 536 ms of a 582 ms count, and one
+    Opportunities page ran seven such queries. With JIT off the same
+    count took 51 ms, and moving to page 2 stopped taking seconds.
     """
 
     if make_url(
@@ -41,6 +48,9 @@ def _engine_options(
         "pool_size": 12,
         "max_overflow": 8,
         "pool_recycle": 1800,
+        "connect_args": {
+            "options": "-c jit=off",
+        },
     }
 
 

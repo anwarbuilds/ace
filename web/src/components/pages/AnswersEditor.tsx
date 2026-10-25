@@ -83,6 +83,7 @@ function AnswerRow({ row, set, remove }: { row: Row; set: (r: Partial<Row>) => v
     control = (
       <textarea
         className="ans-value"
+        autoComplete="off"
         placeholder="Your answer"
         aria-label="Answer"
         value={row.value}
@@ -99,6 +100,7 @@ function AnswerRow({ row, set, remove }: { row: Row; set: (r: Partial<Row>) => v
         <input
           type="text"
           className="ans-label"
+          autoComplete="off"
           value={row.label}
           placeholder="Question"
           aria-label="Question"
@@ -171,15 +173,15 @@ function HistoryBlock({
       <div className="hist-grid">
         <div>
           <label>{work ? "Employer" : "School"}</label>
-          <input value={entry.employer} onChange={(e) => set({ employer: e.target.value })} />
+          <input autoComplete="off" value={entry.employer} onChange={(e) => set({ employer: e.target.value })} />
         </div>
         <div>
           <label>{work ? "Job title" : "Degree"}</label>
-          <input value={entry.job_title} onChange={(e) => set({ job_title: e.target.value })} />
+          <input autoComplete="off" value={entry.job_title} onChange={(e) => set({ job_title: e.target.value })} />
         </div>
         <div>
           <label>Location</label>
-          <input value={entry.location} onChange={(e) => set({ location: e.target.value })} />
+          <input autoComplete="off" value={entry.location} onChange={(e) => set({ location: e.target.value })} />
         </div>
         <div>
           <label>{work ? "Still working here" : "Still studying here"}</label>
@@ -195,6 +197,7 @@ function HistoryBlock({
       <div className="hist-wide">
         <label style={{ display: "block", fontSize: "var(--text-label)", fontWeight: "var(--weight-medium)", color: "var(--text-muted)", marginBottom: 4 }}>Description</label>
         <textarea
+          autoComplete="off"
           placeholder="What you did there. Pasted once, filled every time."
           value={entry.description}
           onChange={(e) => set({ description: e.target.value })}

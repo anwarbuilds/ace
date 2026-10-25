@@ -116,6 +116,7 @@ export function Checker({
               <div className="st-pick">
                 <input
                   className="st-input"
+                  autoComplete="off"
                   placeholder="Search by company or title"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
@@ -135,11 +136,12 @@ export function Checker({
           ) : (
             <div className="st-paste">
               <div className="st-grid2">
-                <input className="st-input" placeholder="Company" value={company} onChange={(e) => setCompany(e.target.value)} />
-                <input className="st-input" placeholder="Role title" value={title} onChange={(e) => setTitle(e.target.value)} />
+                <input className="st-input" autoComplete="off" placeholder="Company" value={company} onChange={(e) => setCompany(e.target.value)} />
+                <input className="st-input" autoComplete="off" placeholder="Role title" value={title} onChange={(e) => setTitle(e.target.value)} />
               </div>
               <textarea
                 className="st-text"
+                autoComplete="off"
                 rows={8}
                 placeholder="The full job description, including its requirements"
                 value={text}
