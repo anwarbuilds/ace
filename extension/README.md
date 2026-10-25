@@ -18,8 +18,8 @@ Focus Mode uses the existing V4 Answer Memory API. No new database migration or 
 - A choice made on the employer form appears in Review. A supported choice made in Review updates the employer control. **Approve & fill** confirms the answer. Safe, reusable answers can be saved to Answer Memory. Sensitive answers are for the current application only.
 - Company-motivation prompts, including "Why this company?" and equivalent wording, belong entirely on the employer form. ACE does not fill, review, capture, or remember those answers. Historical records remain stored but are excluded from reuse.
 - **Open memory & activity** opens the wider Workspace. Memory can be searched, edited, and deleted. Activity has **Undo** and field diagnostics. Answer values are not logged.
-- Drag ACE from its six-dot grip or another non-interactive area. Arrow keys move it when the grip is focused. Double-click the grip to reset its position. The position is saved in Chrome. **Minimize ACE** creates a small dock; **Expand ACE** restores the card.
-- New form questions are detected automatically. **Scan fields** is a manual fallback. The Day/Night control is in the card header. The existing answer bank, history, resume features, pairing, and site adapters remain in place.
+- Drag ACE from its six-dot grip or another non-interactive area. Arrow keys move it when the grip is focused. Double-click the grip to reset its position. The position is saved in Chrome. **Minimize ACE** creates a small dock; **Expand ACE** restores the card. **Close ACE** (the X in the card header or the dock) hides ACE on that page; it returns on a new page or form step, or when you press Fill in the toolbar popup.
+- New form questions are detected automatically. **Scan fields** is a manual fallback. ACE follows your computer's Day or Night setting. The Day/Night control in the card header picks the other theme; choosing your computer's theme again returns to following it. The existing answer bank, history, resume features, pairing, and site adapters remain in place.
 
 ## Local checks
 

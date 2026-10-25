@@ -112,7 +112,7 @@ The working branch is `wine-rose-platform`, reconciled on GitHub on
 `8d84141`), Focus Mode V5.1 rebased on top of it (`559ee84`, `5b8ab4b`, the
 pushed equivalents of local `4ce3570` and `cb7bb5e`), this continuity work and
 the V5.1 typography pass. It contains the existing extension's V4 Answer Memory
-implementation (`2e7c1dc`). The extension manifest is `1.27.0`. The V5.1
+implementation (`2e7c1dc`). The extension manifest is `1.28.0`. The V5.1
 extension has not been published; it runs as an unpacked installation. An unpacked installation must
 be reloaded at `chrome://extensions`; employer tabs must then be refreshed.
 The owner has seen a V5.1 interface before the final visual correction and
@@ -122,7 +122,9 @@ installation is recorded here.
 
 The approved V5.1 extension runs inside the existing MV3 extension. It has a
 compact draggable card, visible six-dot handle, remembered position, manual
-minimized dock, Day and Night Wine and Rose themes, **Fill**, persistent Review,
+minimized dock, a Close control on the card and dock, Day and Night Wine and
+Rose themes that follow the computer until the owner picks one, **Fill**,
+persistent Review,
 Review Complete or Review Paused, Answer Memory and Activity workspace, manual
 Scan fields, dynamic field detection, existing resume/pairing support and
 Alt+A. Review mirrors exact native select, radio, checkbox and multiple-select
@@ -832,7 +834,7 @@ reassuring success state when the backend has not confirmed one.
 
 The extension is Manifest V3. Important implementation areas are
 `extension/content.js`, `fields.js`, `background.js`, the popup/side panel,
-storage, pairing and rule tests. The current local manifest version is 1.27.0.
+storage, pairing and rule tests. The current local manifest version is 1.28.0.
 The approved interface is ACE Focus Mode V5.1; older extension interfaces are
 historical.
 
@@ -1407,7 +1409,7 @@ read-only production check proves them.
 
 The unpacked extension consists of:
 
-- `manifest.json`: MV3 declaration, version 1.27.0, storage/activeTab/scripting
+- `manifest.json`: MV3 declaration, version 1.28.0, storage/activeTab/scripting
   permissions, localhost host access and optional HTTPS host access.
 - `background.js`: stores endpoint/token, pairs with ACE, performs authenticated
   answer/history/memory calls, validates message senders and brokers runtime
@@ -1427,8 +1429,11 @@ The unpacked extension consists of:
   Chrome interaction tests live in `web/tests/e2e/extension-*.spec.ts`.
 
 Persistent Chrome keys currently include `base`, `token`, `aceStudioActivity`,
-`aceFocusPosition`, `aceStudioTheme` and `aceAutoKnown`. Changing a key requires
+`aceFocusPosition`, `aceStudioThemeMode` and `aceAutoKnown`. Changing a key requires
 backward-compatible read/migration behavior or an explicit owner-approved reset.
+`aceStudioThemeMode` is `system`, `day` or `night`; it replaced the older
+`aceStudioTheme` key, which is now ignored so every card starts by following
+the computer.
 
 The content scripts run at `document_idle` in all frames. They must use native
 setters and the events expected by the employer framework, then read the real
@@ -2134,6 +2139,22 @@ deployed in `b8e30b0b4261257fea25fb8e46f03912c6811990` on 2026-10-23.
 Do not merge ACE Next to legacy `main` without separate approval.
 
 ## Change log
+
+### 2026-10-25, V5.1 theme sync and Close
+
+- The card follows the computer's Day or Night setting, live, through
+  `prefers-color-scheme`. The header toggle picks the other theme and holds it;
+  toggling back to the computer's own theme returns to following it. Stored as
+  `aceStudioThemeMode`; the old `aceStudioTheme` value is ignored.
+- A Close button (outline X) sits after Minimize in the card header and after
+  Expand in the dock. It uses the existing dismiss path: the card stays closed
+  on that page, including while the owner types, and returns on a new page,
+  a new form step or the toolbar's Fill. Close never submits or advances.
+- The Form detected pill stays on one line and the dock text ellipsizes, so
+  the extra control changes no layout. Compact card height is 354px.
+- Checks: 258 rule cases, the memory safety cases and 22 Chrome extension
+  tests passed, including the new `extension-focus-theme-close.spec.ts`.
+  Manifest 1.28.0. Local fixtures only; reload the unpacked extension to use it.
 
 ### 2026-10-25, reconciliation and V5.1 typography
 

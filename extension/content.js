@@ -28,6 +28,9 @@
   var customOptions = new Map();
   var reviewDrafts = new Map();
   var studioTheme = "day";
+  // "system" follows the computer's Day or Night setting; "day" and "night"
+  // are the owner's explicit choice. studioTheme is the one shown.
+  var studioThemeMode = "system";
   var autoKnown = true;
   var skippedQuestions = new Set();
   var activity = [];
@@ -1900,6 +1903,11 @@
   .focus-panel .focus-stays{font-weight:var(--weight-medium)}
   .focus-panel .studio-button,.focus-panel .studio-button.wine,.focus-panel.night .studio-button.wine{font-weight:var(--weight-semibold)}
   .focus-panel .focus-progress,.focus-panel .focus-status span,.focus-panel .studio-pill,.focus-panel .studio-metric b,.focus-panel .studio-source-count{font-variant-numeric:tabular-nums}
+  /* Close: the same outline icon in the header and the minimized dock. */
+  .focus-panel .focus-close svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round}
+  .focus-panel .focus-dock-open.focus-close{display:grid;place-items:center;padding:0}
+  .focus-panel .studio-live{white-space:nowrap}
+  .focus-panel .focus-dock-status strong,.focus-panel .focus-dock-status small{overflow:hidden;text-overflow:ellipsis}
   `;
 
   /* Inter, the face the website uses. A shadow root cannot declare its own
@@ -2003,6 +2011,35 @@
     document.body.appendChild(host);
 
     return root.querySelector(".ace-panel");
+  }
+
+  function systemTheme() {
+    try {
+      return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "day";
+    } catch (error) {
+      return "day";
+    }
+  }
+
+  function applyThemeMode(mode) {
+    studioThemeMode = mode === "day" || mode === "night" ? mode : "system";
+    studioTheme = studioThemeMode === "system" ? systemTheme() : studioThemeMode;
+  }
+
+  // While ACE follows the computer, a Day or Night change there repaints the
+  // open card at once, without reloading the employer page.
+  try {
+    var colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
+    var followSystemTheme = function () {
+      if (studioThemeMode !== "system") return;
+      applyThemeMode("system");
+      var existing = document.querySelector(".ace-root");
+      if (existing && !dismissed) renderStudio(existing.shadowRoot.querySelector(".ace-panel"));
+    };
+    if (colorScheme.addEventListener) colorScheme.addEventListener("change", followSystemTheme);
+    else if (colorScheme.addListener) colorScheme.addListener(followSystemTheme);
+  } catch (error) {
+    // No media queries here: the card stays on its current theme.
   }
 
   function close() {
@@ -2408,11 +2445,13 @@
     host.className = 'ace-panel focus-panel focus-' + focusMode + (studioTheme === 'night' ? ' night' : '');
     var legacyStatus = lastResult ? 'Filled ' + lastResult.filled.length + ' fields' : 'Fill ' + (pending ? pending.willFill.length : 0) + ' fields';
     var themeLabel = studioTheme === "day" ? "Switch to Night theme" : "Switch to Day theme";
+    var themeTitle = themeLabel + (studioThemeMode === "system" ? ". Now following your computer" : ". Switch again to follow your computer");
+    var closeIcon = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>';
     var themeSvg = studioTheme === "day" ? '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"/></svg>' : '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>';
     if (focusMode === 'dock') {
-      render(host, '<div class="focus-dock-body">' + focusGrip() + '<span class="studio-logo">ace</span><span class="focus-dock-status"><strong>' + lastFill.length + ' filled · ' + open + ' to review</strong><small>Form detected · No auto-submit</small></span><button class="focus-dock-open" data-ace="expand" aria-label="Expand ACE">⌄</button></div>');
+      render(host, '<div class="focus-dock-body">' + focusGrip() + '<span class="studio-logo">ace</span><span class="focus-dock-status"><strong>' + lastFill.length + ' filled · ' + open + ' to review</strong><small>Form detected · No auto-submit</small></span><button class="focus-dock-open" data-ace="expand" aria-label="Expand ACE">⌄</button><button class="focus-dock-open focus-close" data-ace="close" aria-label="Close ACE" title="Close ACE on this page. Reopen it from the toolbar">' + closeIcon + '</button></div>');
     } else {
-      render(host, '<span class="ace-title" style="display:none">' + legacyStatus + '</span><header class="studio-head"><div class="focus-brand"><div class="focus-brand-top"><span class="studio-logo">ace</span><span class="studio-live">● Form detected</span></div><p class="studio-tagline">' + esc(plain(employer)) + ' · ' + esc(plain(role)) + '</p></div><div class="focus-head-controls">' + focusGrip() + '<button class="studio-icon focus-theme" data-ace="theme" aria-label="' + themeLabel + '" title="' + themeLabel + '">' + themeSvg + '</button><button class="studio-icon" data-ace="minimize" aria-label="Minimize ACE" title="Minimize ACE"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></div></header>' +
+      render(host, '<span class="ace-title" style="display:none">' + legacyStatus + '</span><header class="studio-head"><div class="focus-brand"><div class="focus-brand-top"><span class="studio-logo">ace</span><span class="studio-live">● Form detected</span></div><p class="studio-tagline">' + esc(plain(employer)) + ' · ' + esc(plain(role)) + '</p></div><div class="focus-head-controls">' + focusGrip() + '<button class="studio-icon focus-theme" data-ace="theme" aria-label="' + themeLabel + '" title="' + themeTitle + '">' + themeSvg + '</button><button class="studio-icon" data-ace="minimize" aria-label="Minimize ACE" title="Minimize ACE"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><button class="studio-icon focus-close" data-ace="close" aria-label="Close ACE" title="Close ACE on this page. Reopen it from the toolbar">' + closeIcon + '</button></div></header>' +
         (focusMode === 'workspace' ? '<nav class="studio-tabs" aria-label="ACE sections">' + ["overview", "review", "memory", "activity"].map(function (tab) { return '<button data-ace="tab:' + tab + '" class="' + (studioTab === tab ? 'active' : '') + '">' + tab.charAt(0).toUpperCase() + tab.slice(1) + '</button>'; }).join('') + '</nav>' : '') +
         '<div class="studio-scroll">' + (studioError ? '<div class="studio-error">' + esc(studioError) + '</div>' : '') + body + '</div>' +
         '<footer class="studio-foot">' + (focusMode === 'workspace' ? '<div class="studio-foot-actions"><button class="studio-button wine" data-ace="fill">Fill</button><button class="studio-button" data-ace="scan">Scan fields</button></div>' : '') + '<small><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>ACE fills. You review. You submit.</small></footer>');
@@ -2806,8 +2845,8 @@
         if (prefsReady && memoryReady && historyReady && autoKnown) runFill();
       }
 
-      if (chrome.storage && chrome.storage.local) chrome.storage.local.get({ aceStudioTheme: "day", aceAutoKnown: true, aceStudioActivity: [], aceFocusPosition: null }, function (prefs) {
-        studioTheme = prefs.aceStudioTheme === "night" ? "night" : "day";
+      if (chrome.storage && chrome.storage.local) chrome.storage.local.get({ aceStudioThemeMode: "system", aceAutoKnown: true, aceStudioActivity: [], aceFocusPosition: null }, function (prefs) {
+        applyThemeMode(prefs.aceStudioThemeMode);
         autoKnown = !!prefs.aceAutoKnown;
         activity = Array.isArray(prefs.aceStudioActivity) ? prefs.aceStudioActivity.slice(0, 35) : [];
         focusPosition = prefs.aceFocusPosition && typeof prefs.aceFocusPosition.x === 'number' && typeof prefs.aceFocusPosition.y === 'number'
@@ -2962,8 +3001,10 @@
     }
 
     if (action === "theme") {
-      studioTheme = studioTheme === "day" ? "night" : "day";
-      if (chrome.storage && chrome.storage.local) chrome.storage.local.set({ aceStudioTheme: studioTheme });
+      var nextTheme = studioTheme === "day" ? "night" : "day";
+      // Choosing the theme the computer already uses goes back to following it.
+      applyThemeMode(nextTheme === systemTheme() ? "system" : nextTheme);
+      if (chrome.storage && chrome.storage.local) chrome.storage.local.set({ aceStudioThemeMode: studioThemeMode });
       renderStudio(panel());
       return;
     }
