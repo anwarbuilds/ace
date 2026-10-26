@@ -503,3 +503,10 @@ Lesson: a status line must describe the exact thing it names. "Last sync" writte
 did with each recent item and let the owner search, so a miss is visible instead of silent. Tests:
 `backend/tests/test_inbox_display.py`, the parser 3 cases in `test_inbox_reconciliation.py`, the view, search and
 recheck cases in `test_inbox_persistence.py`, and `web/tests/inbox-review-render.test.mjs`.
+
+Follow-up the same day, found by a read-only production check after release: Analytics showed only 1 dated rejection
+although 29 emails had changed an application. Its "one email substantiates one application" rule counted Inbox's own
+`email:<id>` audit entry, which every imported email has, as a second application, so every email outcome was dropped
+and showed only as an undated status. Only job and external keys count now (27 of 47 dated afterwards). Lesson: a
+fixture that omits the audit rows production always writes cannot catch this; build test data in the production shape.
+Test: `test_email_outcomes_count_despite_the_inbox_audit_entry_every_email_has` in `test_analytics_read.py`.

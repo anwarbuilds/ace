@@ -13,6 +13,45 @@ a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
+## 2026-10-26: Inbox clarity and Rejected companies deployed
+
+The owner asked for it live. Production website `176744f` (what `/healthz`
+reports) has been healthy since 12:51 Pacific, and API `c7d3451` since 12:54.
+Shipped: the Inbox status card, Gmail checked on open and while open, one Sync
+now, the email shown as it arrived in a sandboxed frame, grouped choices with
+Acknowledgement and Status update, parser 3, the Rejected companies panel and
+searchable, paged rejected applications. Details are under "Inbox sync clarity"
+below.
+
+Found during release verification and fixed in `c7d3451`: Analytics dropped
+every outcome recorded from an email, because Inbox's own `email:<id>` audit
+entry counted as a second application for that email. Only job and external
+keys count now. A read-only production check then showed 27 of 47 rejections
+dated (1 before the fix). The newest is the 10:30 rejection the owner asked
+about: it had been imported, read as a rejection and held for the owner because
+several applications at that employer exist, and the owner recorded it by hand.
+
+Evidence: private backup
+`private-backups/inbox-clarity-20261026T194634Z/database.dump.gz` (445 MB,
+gzip and `pg_restore --list` verified, 278 entries) with before and after
+container, image, schema and count records. Only API and web were replaced
+(then API alone for the fix). Scheduler, PostgreSQL and Caddy kept their
+container IDs; schema stayed `0050`; protected counts were identical before and
+after (1,219 marks, 883 applied, 47 external, 104 answers, 1 user, 304 Gmail
+messages, 461 events). The production image build passed TypeScript. Deployed
+backend file hashes match the tested sources. Anonymous requests to the new
+Inbox and records routes return 401 and Inbox redirects to sign-in. Read-only
+in-process checks (read-only transactions, counts only) confirmed parser 3,
+the default view resolving to Recruiting email with nothing waiting, and 87
+emails due for one re-read under parser 3. No Gmail sync, recheck, review or
+status change was run by the release.
+
+Not verified: signed-in browser rendering (Chrome stays off for cooling). The
+laptop shut down again at about 12:43 during the single-process backend suite
+while the desktop and other work were busy, so only focused tests ran after the
+rebase onto `37225a5`; the production build was the type-check gate. Owner next
+step: open Inbox, press Sync now once, then check Analytics, Companies.
+
 ## 2026-10-26: Logos and quick fill deployed
 
 The owner explicitly requested all changes live after testing. Production API
@@ -484,7 +523,10 @@ After the first release (JIT off) it measured, in ms: `/api/stats` 216,
 
 ## Current working state on 2026-10-25
 
-### Inbox sync clarity, the email as it arrived, Rejected companies (2026-10-26, local)
+### Inbox sync clarity, the email as it arrived, Rejected companies (2026-10-26)
+
+**Release status:** live since 12:51 Pacific; evidence in the deployment section
+at the top of this file.
 
 The owner found Inbox unclear at a glance: it showed nothing to review, gave no
 way to tell whether all email was in, and a fresh rejection (shared Ashby

@@ -100,13 +100,15 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
-**2026-10-26 Inbox clarity (local, branch `inbox-clarity-20261026`):** Inbox now checks Gmail
+**2026-10-26 Inbox clarity (live: website `176744f`, API `c7d3451`):** Inbox now checks Gmail
 when opened, while open and on one Sync now button, and a status card says whether everything
 is in. Email shows exactly as it arrived (rebuilt HTML in a sandboxed frame, no scripts, no
 remote pictures). Choices add Recruiter reply, Acknowledgement and Status update. Parser 3
 never files a thanks-then-rejection email as a receipt and re-reads ACE-filed receipts.
 Analytics shows "Rejected companies" with totals and roles; rejected applications have search
-and pages. Not deployed. See `ACE_NEXT_KNOWLEDGE.md`, Inbox sync clarity.
+and pages. Released with a verified backup; only API/web changed. `c7d3451` also makes
+Analytics count outcomes recorded from email (they were dropped). Owner: press Sync now once.
+See `ACE_NEXT_KNOWLEDGE.md`, Inbox clarity and Rejected companies deployed.
 
 **2026-10-26 production release:** API/web are healthy at `21f563a`; logo work,
 quick fill 1.29.0 and the existing Inbox fixes are included. All Analytics tabs
