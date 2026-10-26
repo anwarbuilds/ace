@@ -115,5 +115,5 @@ def company_logo_seed(session: Session, company: str) -> LogoSeed:
     identities = sorted((s.source_type, s.source_account, s.source_host or "",
                          (s.source_type, s.source_account) in matched) for s in sources)
     # Parser revisions must not keep serving a six-hour miss from older code.
-    identity = hashlib.sha256(json.dumps(["tenant-branding-v3", company, identities], ensure_ascii=True).encode()).hexdigest()
+    identity = hashlib.sha256(json.dumps(["tenant-branding-v4", company, identities], ensure_ascii=True).encode()).hexdigest()
     return LogoSeed(company, identity, tuple(pages[:4]))

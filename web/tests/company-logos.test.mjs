@@ -66,6 +66,17 @@ test("additional reviewed employers have authentic bundled marks in shared list 
     assert.ok(html(Avatar,{name,large:true}).includes(`/company-logos/${record.asset}`));
   }
 });
+test("reported Pulls employers share reviewed logos across rows, heroes and company details",async()=>{
+  const {default:CompanyPage}=load(path.join(root,"src/app/app/company/[name]/page.tsx"));
+  for(const name of ["Uber","Optiver","Chime","temporal","twitch"]){
+    const asset=`${name.toLowerCase()}.png`;
+    assert.equal(companyLogoFor(name)?.asset,asset);
+    for(const [Component,props] of [[CompanyIdentity,{name}],[Avatar,{name}],[Avatar,{name,large:true}]]){
+      assert.ok(html(Component,props).includes(`/company-logos/${asset}`));
+    }
+    assert.ok(renderToStaticMarkup(await CompanyPage({params:Promise.resolve({name})})).includes(`/company-logos/${asset}`));
+  }
+});
 test("all identities are unambiguous and all local bytes match official provenance",()=>{
   const identities=new Map();
   for(const row of manifest){

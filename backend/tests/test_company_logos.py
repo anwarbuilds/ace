@@ -266,6 +266,111 @@ def test_social_profiles_do_not_become_employer_favicon_sources():
     assert fetch.calls == [PAGE]
 
 
+@pytest.mark.parametrize("host", ["recruiting.cdn.greenhouse.io", "s2-recruiting.cdn.greenhouse.io"])
+def test_greenhouse_metadata_accepts_tenant_logo_on_sharded_cdn(host):
+    page = "https://job-boards.greenhouse.io/future-fictional/jobs/1"
+    icon = f"https://{host}/external_greenhouse_job_boards/logos/1/original/brand.png?1"
+    # Legal payroll name and wrapper classes need not match the display name.
+    html = f'<meta property="og:image" content="{icon}"><a class="logo"><img alt="Fictional Payroll Inc Logo" src="{icon}"></a>'
+    fetch = fake_fetch({page: html, icon: image_bytes()})
+    assert discover_logo(seed(owned=False, url=page), fetch).source == icon
+
+
+def test_ashby_twitter_metadata_uses_logo_even_when_social_preview_is_different():
+    page = "https://jobs.ashbyhq.com/future-fictional"
+    icon = "https://app.ashbyhq.com/api/images/org-theme-logo/abc-123/def-456/abc-789.png"
+    html = f'<meta property="og:image" content="https://app.ashbyhq.com/api/images/org-theme-social/a/b/c.png"><meta name="twitter:image" content="{icon}">'
+    fetch = fake_fetch({page: html, icon: image_bytes()})
+    assert discover_logo(seed(owned=False, url=page), fetch).source == icon
+    assert fetch.calls == [page, icon]
+
+
+def test_exact_structured_employer_on_external_posting_authorizes_its_site_icon():
+    html = '<script type="application/ld+json">' + json.dumps({"@type": "JobPosting", "hiringOrganization": {"name": COMPANY}}) + '</script>'
+    fetch = fake_fetch({PAGE: html + f'<link rel="icon" href="{ICON}">', ICON: image_bytes()})
+    assert discover_logo(seed(owned=False), fetch).source == ICON
+    # An arbitrary outbound link or a different company is not evidence.
+    fetch = fake_fetch({PAGE: html.replace(COMPANY, COMPANY + " Consulting") + f'<link rel="icon" href="{ICON}">'})
+    assert discover_logo(seed(owned=False), fetch) is None
+    assert fetch.calls == [PAGE]
+
+
+def greenhouse_config(logo):
+    context = {"state": {"loaderData": {"root": {"boardConfiguration": {"logo": logo}}}}}
+    return '<script>window.__remixContext = ' + json.dumps(context) + ';</script>'
+
+
+def test_greenhouse_declared_employer_website_recovers_missing_tenant_logo():
+    page = "https://job-boards.greenhouse.io/future-fictional"
+    website = "https://future.example/careers"
+    html = greenhouse_config({"url": None, "href": "http://future.example/careers"})
+    fetch = fake_fetch({page: html, website: f'<link rel="icon" href="{ICON}">', ICON: image_bytes()})
+    asset = discover_logo(seed(owned=False, url=page), fetch)
+    assert asset and asset.source == ICON and asset.evidence == website
+    assert fetch.calls == [page, website, ICON]
+
+
+@pytest.mark.parametrize("website", ["https://www.greenhouse.com/", "https://linkedin.com/fictional", "https://127.0.0.1/", "javascript:alert(1)"])
+def test_greenhouse_configuration_does_not_authorize_provider_social_or_unsafe_sites(website):
+    page = "https://job-boards.greenhouse.io/future-fictional"
+    fetch = fake_fetch({page: greenhouse_config({"url": None, "href": website})})
+    assert discover_logo(seed(owned=False, url=page), fetch) is None
+    assert fetch.calls == [page]
+
+
+def test_greenhouse_configuration_is_data_only_and_scoped_to_verified_provider():
+    fetch = fake_fetch({PAGE: greenhouse_config({"href": "https://future.example/careers"})})
+    assert discover_logo(seed(owned=False), fetch) is None
+    assert fetch.calls == [PAGE]
+    page = "https://job-boards.greenhouse.io/future-fictional"
+    fetch = fake_fetch({page: '<script>window.__remixContext = executeSomething();</script>'})
+    assert discover_logo(seed(owned=False, url=page), fetch) is None
+
+
+def test_oracle_tenant_site_favicon_matches_declared_site_number():
+    page = "https://fictional.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/External/job/1"
+    icon = "https://fictional.fa.ocs.oraclecloud.com/hcmRestApi/CandidateExperience/siteFavicon/favicon-144x144.png?siteNumber=CX_1&size=144x144"
+    html = f'<input data-sitenumber="CX_1"><link rel="icon" href="{icon}"><link rel="icon" href="/favicon.ico">'
+    fetch = fake_fetch({page: html, icon: image_bytes()})
+    assert discover_logo(seed(owned=False, url=page), fetch).source == icon
+    assert fetch.calls == [page, icon]
+
+
+@pytest.mark.parametrize("replacement", ["siteNumber=CX_2", "siteNumber=CX_1&siteNumber=CX_2", "siteNumber=CX_1&redirect=1"])
+def test_oracle_tenant_icon_rejects_other_sites_and_unexpected_parameters(replacement):
+    page = "https://fictional.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/External/job/1"
+    icon = "https://fictional.fa.ocs.oraclecloud.com/hcmRestApi/CandidateExperience/siteFavicon/favicon-144x144.png?" + replacement
+    fetch = fake_fetch({page: f'<input data-sitenumber="CX_1"><link rel="icon" href="{icon}">'})
+    assert discover_logo(seed(owned=False, url=page), fetch) is None
+    assert fetch.calls == [page]
+
+
+def test_missing_site_identity_and_foreign_oracle_hosts_do_not_authorize_icons():
+    page = "https://fictional.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/External/job/1"
+    for host, declaration in [("fictional.fa.ocs.oraclecloud.com", ""), ("other.fa.ocs.oraclecloud.com", '<input data-sitenumber="CX_1">')]:
+        icon = f"https://{host}/hcmRestApi/CandidateExperience/siteFavicon/favicon-144x144.png?siteNumber=CX_1"
+        fetch = fake_fetch({page: declaration + f'<link rel="icon" href="{icon}">'})
+        assert discover_logo(seed(owned=False, url=page), fetch) is None
+        assert fetch.calls == [page]
+
+
+def test_temporary_failure_of_one_declared_image_can_recover_on_another():
+    fetch = fake_fetch({PAGE: f'<link rel="icon" href="/missing.png"><link rel="icon" href="{ICON}">',
+                        "https://careers.future.example/missing.png": LogoUnavailable(), ICON: image_bytes()})
+    assert discover_logo(seed(), fetch).source == ICON
+    refused = fake_fetch({PAGE: f'<link rel="icon" href="/denied.png"><link rel="icon" href="{ICON}">',
+                          "https://careers.future.example/denied.png": Refused(403), ICON: image_bytes()})
+    assert discover_logo(seed(), refused) is None
+    assert ICON not in refused.calls
+
+
+def test_temporary_posting_failure_can_recover_on_verified_board():
+    board = "https://job-boards.greenhouse.io/future-fictional"
+    fetch = fake_fetch({PAGE: LogoUnavailable(), board: f'<img alt="Company Logo" src="{ICON}">', ICON: image_bytes()})
+    multi = LogoSeed(COMPANY, "b" * 64, (LogoPage(PAGE), LogoPage(board)))
+    assert discover_logo(multi, fetch).source == ICON
+
+
 @pytest.mark.parametrize("data", [b"<html>challenge</html>", b'<svg><script>alert(1)</script></svg>', b"not an image", image_bytes(size=(4,4))])
 def test_unsafe_non_image_and_tracking_assets_are_not_served(data):
     assert raster_png(data) is None

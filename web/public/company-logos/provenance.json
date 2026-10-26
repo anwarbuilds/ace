@@ -923,5 +923,55 @@
     "verified_on": "2026-10-26",
     "sha256": "210d53762708eb99425bf69278148ae3514efdb929ddcfb5ecbf23c87a17603e",
     "aliases": []
+  },
+  {
+    "company": "Uber",
+    "source": "https://iaziqy.fa.ocs.oraclecloud.com/hcmRestApi/CandidateExperience/siteFavicon/favicon-152x152.png?siteNumber=CX_1&size=152x152",
+    "website": "https://iaziqy.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/UberCareers/job/303523",
+    "identity": "Employer-declared branding, decoded and visually reviewed",
+    "verified_on": "2026-10-26",
+    "sha256": "effab7b1a8547b40839d2ab58ab1379962d1e9132acb4b2f8515f7d9514be9fa",
+    "asset": "uber.png",
+    "aliases": []
+  },
+  {
+    "company": "Optiver",
+    "source": "https://www.optiver.com/favicon/favicon.png",
+    "website": "https://www.optiver.com/join-us/jobs/human-resources-and-recruiting/sydney/apac-mobility-partner-12-month-contract/",
+    "identity": "Employer-declared branding, decoded and visually reviewed",
+    "verified_on": "2026-10-26",
+    "sha256": "3b9c9a67454623d52924c4eaf7e472ff366ede19574b574cb13511430557c400",
+    "asset": "optiver.png",
+    "aliases": []
+  },
+  {
+    "company": "Chime",
+    "source": "https://s2-recruiting.cdn.greenhouse.io/external_greenhouse_job_boards/logos/400/491/500/original/Chime-Wordmark-Chime-Green-RGB.png?1741118555",
+    "website": "https://job-boards.greenhouse.io/chime/jobs/8900582002",
+    "identity": "Employer-declared branding, decoded and visually reviewed",
+    "verified_on": "2026-10-26",
+    "sha256": "9141f9140313ff5fb0d24a9b8f51fdcfddf67286260d9de9f233ed2ac5e4f185",
+    "asset": "chime.png",
+    "aliases": []
+  },
+  {
+    "company": "temporal",
+    "source": "https://app.ashbyhq.com/api/images/org-theme-logo/5614133d-0052-4bc6-ac2b-a2b46f0d02db/7cff9ba3-2322-4ac2-8d08-5b18f27c008c/712ee276-e7de-45f8-98cb-287b272205bd.png",
+    "website": "https://jobs.ashbyhq.com/temporal/e3d7f035-7946-469f-84cf-e1c775bf25e8",
+    "identity": "Employer-declared branding, decoded and visually reviewed",
+    "verified_on": "2026-10-26",
+    "sha256": "a1f3248e00487025792bcddaf0308b7c7aa2041a2b51b2835a40531defa0fb27",
+    "asset": "temporal.png",
+    "aliases": []
+  },
+  {
+    "company": "twitch",
+    "source": "https://careers.twitch.com/assets/icons/favicon.ico",
+    "website": "https://careers.twitch.com",
+    "identity": "Employer-declared branding, decoded and visually reviewed",
+    "verified_on": "2026-10-26",
+    "sha256": "c0dbb96679db5b984f718f779ba9fe73689064f6b403a7be75ff1f16db65bed5",
+    "asset": "twitch.png",
+    "aliases": []
   }
 ]

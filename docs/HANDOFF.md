@@ -170,6 +170,12 @@ in [the handoff state archive](knowledge/11-handoff-state-archive.md). Use
 `ACE_NEXT_KNOWLEDGE.md` for current verified production state, deployment controls,
 backups and migration evidence before operating production.
 
+**2026-10-26 Pulls logo follow-up:** Owner-requested fix/deploy for Uber,
+Optiver, Chime, temporal and twitch. General provider recovery plus 5 reviewed
+marks, now 85 total; parser v4. Fresh runtime inspection found `6163f59` already
+live, superseding the earlier pending Inbox observation. Final logo release
+status and verification: `architecture/2026-10-26-pulls-company-logos.md`.
+
 ## 4. System map
 
 ```

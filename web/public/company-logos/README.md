@@ -81,3 +81,20 @@ Marvell and Funnel initially had refused corporate CDN assets. The final
 review obtained permitted authentic marks from Funnel's own developer header
 and the issuer-provided image in Marvell's January 2025 PR Newswire release.
 Refused image hosts were not bypassed. Provenance records these distinct sources.
+
+## Pulls employer coverage follow-up, 2026-10-26
+
+The bundle contains 85 reviewed marks, including Uber, Optiver, Chime,
+temporal and twitch. Their images were obtained through the same automatic
+resolver used for future employers and visually inspected. No company labels
+or application records were rewritten.
+
+General discovery now recognizes Greenhouse's sharded logo CDN and declared
+employer website in its data-only tenant configuration, Ashby's `twitter:image`
+logo metadata, Oracle's same-host favicon bound to its declared site number,
+and icons on an external employer posting with an exact hiringOrganization.
+The Oracle platform favicon and Ashby social-preview image remain excluded.
+Temporary page/image failures can recover through another verified candidate;
+an explicit refusal still stops retrieval. Parser v4 retires earlier misses.
+These are provider rules, not a list limiting future employers. Sites without
+accessible authentic evidence can still show initials; no substitute is invented.

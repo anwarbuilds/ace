@@ -943,3 +943,18 @@ assets. Greenhouse/Ashby dynamic routes also pass. Totals stayed 931, and
 only API/web changed. Full tests, private backup and deployment evidence are in
 `docs/architecture/2026-10-26-platform-company-logos.md`. No browser run due
 to cooling; no unrelated behavior or database record changes.
+
+
+## Pulls logos: fix provider gaps, not just individual names (2026-10-26)
+
+The owner still saw Uber, Optiver, Chime, temporal and twitch initials after
+prior logo releases. Each had real public branding; extraction missed Oracle
+site-bound favicons, Greenhouse sharded CDN/tenant website configuration,
+Ashby twitter-image metadata or an employer-hosted posting's own declared icon.
+The shared parser now handles those provider patterns for future registered
+employers too. A temporary fetch failure can recover on another verified
+candidate; refusals still stop the lookup. Five retrieved and visually inspected
+marks join the optional 85-image bundle with provenance. Company identities,
+application data and discovery are unchanged. Final tests/runtime evidence are
+in `../architecture/2026-10-26-pulls-company-logos.md`. A universal guarantee of
+an external authentic logo remains impossible when evidence is absent/refused.

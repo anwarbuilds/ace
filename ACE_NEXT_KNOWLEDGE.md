@@ -149,6 +149,30 @@ verification of the reloaded extension on real forms. Do not silently turn
 these pending items into completed work or start them merely because they are
 listed here.
 
+## 2026-10-26: Pulls employer logos and automatic provider recovery
+
+Status: tested source in preparation for the owner-requested deployment.
+See `docs/architecture/2026-10-26-pulls-company-logos.md` for final runtime
+status once verified. The owner reported missing Uber, Optiver, Chime, temporal
+and twitch logos and explicitly requested a live fix that preserves backend work.
+All five candidate automatic lookups succeeded from the VM without changing its
+running API or application data. Their authentic images were visually inspected
+and added with provenance, taking the optional bundle from 80 to 85 marks.
+General rules now cover Greenhouse sharded CDN logos/declared employer websites,
+Ashby twitter-image logo metadata, Oracle same-host/site-number favicons and
+icons on an external posting with an exact hiringOrganization. Parser v4 retires
+old misses. Temporary failures can recover through another verified candidate;
+refusals still stop retrieval. No external-logo availability guarantee is made
+when authentic evidence is absent or access is refused.
+
+At the start of this release, fresh public health and VM checks found API/web
+already running `6163f59`, including the formerly pending Inbox add-from-email
+change. Its activation occurred outside this session; preserve it. This replaces
+the opening checkpoint's older pending-runtime observation, without claiming
+this session verified Inbox browser behavior. Schema/discovery/auth/application
+behavior and the extension are outside this logo correction. Browser tests remain
+prohibited by cooling. Final live evidence is recorded after activation.
+
 ## 2026-10-26: Platform-wide logo coverage follow-up
 
 Status: deployed as `0fef238` at 13:49 Pacific on 2026-10-26; PR #4 merged.

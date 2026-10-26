@@ -6,12 +6,12 @@ import json
 import re
 import time
 import unicodedata
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qs, urljoin, urlsplit, urlunsplit
 
 from PIL import Image, UnidentifiedImageError
 
 from backend.app.branding.sources import LogoPage, LogoSeed, shared_host
-from backend.app.branding.transport import LogoUnavailable, checked_url
+from backend.app.branding.transport import LogoUnavailable, Refused, checked_url
 
 
 @dataclass(frozen=True)
@@ -36,7 +36,27 @@ class BrandingHTML(HTMLParser):
         page = urlsplit(page_url)
         self.lever = page.hostname == "jobs.lever.co" and bool(page.path.strip("/"))
         self.workday = bool(re.fullmatch(r"[a-z0-9-]+\.wd\d+\.myworkdayjobs\.com", page.hostname or ""))
+        self.greenhouse = page.hostname in {"boards.greenhouse.io", "job-boards.greenhouse.io"} and bool(page.path.strip("/"))
+        self.oracle = bool(re.fullmatch(r"[a-z0-9-]+\.fa\.ocs\.oraclecloud\.com", page.hostname or "")
+                           and re.match(r"^/hcmUI/CandidateExperience/[^/]+/sites/[^/]+(?:/|$)", page.path))
+        self.oracle_site = None
+        self.websites = []
         self.tenant_header = False
+
+    def greenhouse_logo(self, value):
+        image = urlsplit(urljoin(self.page_url, value))
+        return bool(self.greenhouse and image.scheme == "https" and not image.fragment
+                    and re.fullmatch(r"(?:s\d+-)?recruiting\.cdn\.greenhouse\.io", image.hostname or "")
+                    and re.fullmatch(r"/external_greenhouse_job_boards/logos/[^\s]+", image.path))
+
+    def oracle_icon(self, value):
+        page, image = urlsplit(self.page_url), urlsplit(urljoin(self.page_url, value))
+        query = parse_qs(image.query, keep_blank_values=True)
+        return bool(self.oracle and self.oracle_site and image.scheme == "https"
+                    and image.netloc == page.netloc and not image.fragment
+                    and re.fullmatch(r"/hcmRestApi/CandidateExperience/siteFavicon/favicon-\d+x\d+\.png", image.path)
+                    and query.get("siteNumber") == [self.oracle_site]
+                    and set(query) <= {"siteNumber", "size"})
 
     def tenant_meta_logo(self, value):
         # Workday's social image is its tenant's dedicated branding endpoint,
@@ -56,13 +76,16 @@ class BrandingHTML(HTMLParser):
         workable = (page.hostname == "apply.workable.com" and bool(site)
                     and image.hostname == "workablehr.s3.amazonaws.com"
                     and re.fullmatch(r"/uploads/account/open_graph_logo/\d+/social", image.path))
-        return bool(workday or image.scheme == "https" and not image.fragment and (ashby or workable))
+        return bool(workday or self.greenhouse_logo(value)
+                    or image.scheme == "https" and not image.fragment and (ashby or workable))
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
+        if self.oracle and re.fullmatch(r"[A-Za-z0-9_-]+", a.get("data-sitenumber") or ""):
+            self.oracle_site = a["data-sitenumber"]
         if tag == "a":
             self.tenant_header = self.lever and "main-header-logo" in (a.get("class") or "").split()
-        if tag == "meta" and a.get("property") == "og:image":
+        if tag == "meta" and (a.get("property") or a.get("name")) in {"og:image", "twitter:image"}:
             candidate = a.get("content") or ""
             if self.tenant_meta_logo(candidate):
                 self.logos.append(candidate)
@@ -75,17 +98,14 @@ class BrandingHTML(HTMLParser):
             # Generic employer-logo markers belong to this verified tenant.
             # A provider-specific logo or generic og:image is never accepted.
             generic = alt in ("company logo", "employer logo") or (not alt and marker.strip() in ("company-logo", "employer-logo"))
-            page = urlsplit(self.page_url)
-            greenhouse = (page.hostname == "job-boards.greenhouse.io"
-                          and bool(page.path.strip("/"))
-                          and "logo" in (a.get("class") or "").split()
-                          and bool(re.fullmatch(r"https://recruiting\.cdn\.greenhouse\.io/external_greenhouse_job_boards/logos/[^\s]+", a.get("src") or "")))
+            greenhouse = self.greenhouse_logo(a.get("src") or "")
             # Lever's dedicated employer header remains the tenant's mark if
             # it rebrands. Do not accept its footer/provider or generic og:image.
             if employer_alt or generic or self.tenant_header or greenhouse:
                 self.logos.append(a.get("src", ""))
-        if tag == "script" and (a.get("type") or "").lower() == "application/ld+json":
-            self.script, self.text = True, []
+        if tag == "script":
+            self.script = "organization" if (a.get("type") or "").lower() == "application/ld+json" else "tenant" if self.greenhouse else False
+            self.text = []
 
     def handle_data(self, data):
         if self.script:
@@ -95,10 +115,31 @@ class BrandingHTML(HTMLParser):
         if tag == "a":
             self.tenant_header = False
         if tag == "script" and self.script:
+            kind = self.script
             self.script = False
             try:
-                self._organization(json.loads("".join(self.text)), 0)
-            except (ValueError, RecursionError):
+                body = "".join(self.text).strip()
+                if kind == "organization":
+                    self._organization(json.loads(body), 0)
+                elif body.startswith("window.__remixContext = "):
+                    # Parse data only, never execute the board's JavaScript.
+                    context, _ = json.JSONDecoder().raw_decode(body.split("=", 1)[1].lstrip())
+                    logo = context["state"]["loaderData"]["root"]["boardConfiguration"]["logo"]
+                    if not isinstance(logo, dict):
+                        return
+                    if isinstance(logo.get("url"), str) and self.greenhouse_logo(logo["url"]):
+                        self.logos.append(logo["url"])
+                    website = logo.get("href")
+                    if isinstance(website, str):
+                        parts = urlsplit(website)
+                        # Legacy tenant settings can declare HTTP. Contact only
+                        # the same declared host/path over validated HTTPS.
+                        if parts.scheme == "http":
+                            website = urlunsplit(("https", *parts[1:]))
+                        checked_url(website)
+                        if not shared_host(urlsplit(website).hostname or ""):
+                            self.websites.append(website)
+            except (ValueError, RecursionError, KeyError, TypeError, LogoUnavailable):
                 pass
 
     def _organization(self, value, depth):
@@ -153,12 +194,19 @@ def discover_logo(seed: LogoSeed, fetch) -> LogoAsset | None:
             if page.url in visited or time.monotonic() >= deadline:
                 continue
             visited.add(page.url)
-            result = fetch(page.url, 800_000, deadline)
+            try:
+                result = fetch(page.url, 800_000, deadline)
+            except Refused:
+                raise
+            except (LogoUnavailable, OSError):
+                continue
             if result.status != 200 or "html" not in result.content_type.lower():
                 continue
             parser = BrandingHTML(seed.company, result.url)
             parser.feed(result.data.decode("utf-8", "replace"))
             candidates = list(parser.logos)
+            for website in parser.websites:
+                pages.insert(index + 1, LogoPage(website, True))
             for org in parser.organizations:
                 logo = org.get("logo")
                 if isinstance(logo, dict):
@@ -176,9 +224,14 @@ def discover_logo(seed: LogoSeed, fetch) -> LogoAsset | None:
                         pages.insert(index + 1, LogoPage(website, True))
                     except LogoUnavailable:
                         pass
-            if page.employer_owned and not shared_host(urlsplit(result.url).hostname or ""):
+            # A registered board can redirect to the employer's own posting.
+            # Its exact hiringOrganization is independent identity evidence;
+            # the ATS adapter's source type need not own that resulting host.
+            if (page.employer_owned or parser.organizations) and not shared_host(urlsplit(result.url).hostname or ""):
                 candidates += parser.icons
+            if page.employer_owned and not shared_host(urlsplit(result.url).hostname or ""):
                 candidates.append(urljoin(result.url, "/favicon.ico"))
+            candidates += [icon for icon in reversed(parser.icons) if parser.oracle_icon(icon)]
             for candidate in candidates[:6]:
                 if not candidate:
                     continue
@@ -190,7 +243,12 @@ def discover_logo(seed: LogoSeed, fetch) -> LogoAsset | None:
                     checked_url(url)
                 except LogoUnavailable:
                     continue
-                icon = fetch(url, 1_048_576, deadline)
+                try:
+                    icon = fetch(url, 1_048_576, deadline)
+                except Refused:
+                    raise
+                except (LogoUnavailable, OSError):
+                    continue
                 if icon.status != 200:
                     continue
                 png = raster_png(icon.data)
