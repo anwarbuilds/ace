@@ -451,6 +451,29 @@ router, Gmail client/script and focused regression tests carry the other
 changes. Career Dashboard, the extension, discovery, schema, Gmail grants and
 automatic-outcome preferences remain unchanged.
 
+Corrective API/web release `42d6eb21ca68b60582bb9df3d13a849837fddd3e` became
+healthy on 2026-10-25 at 21:16 Pacific (2026-10-26T04:16Z), continuing the
+owner-requested working Gmail/Analytics rollout. Public health/header SHA
+matched; deployed backend file hashes and four guided-review client bundle
+markers matched. Read-only live checks verified 200 imported messages and 58
+pending reviews, exact global counts, pending-only rows, a disjoint next page,
+separate ignored mail and Analytics totals/ranges for 919 applications. These
+are dated snapshots; the owner continued previewing email during this work.
+No review decisions or application outcome mutations were performed by the
+deployment/diagnostic. Anonymous Inbox evidence still returned 401.
+
+Fresh backup
+`private-backups/inbox-review-release-20261026T041218Z/database.dump.gz` passed
+gzip and archive checks; rollback API/web image IDs and private inventories are
+beside it. Eight protected table counts and applied-mark counts matched. Only
+API/web were replaced; scheduler/PostgreSQL/Caddy container IDs and the private
+configuration hash were unchanged. Schema remained `0050`, owner automation
+remained false and no timer, Gmail permission change, migration or retrospective
+audit rewrite ran. Production checks validated data and compiled controls,
+not signed-in browser interactions; the owner must refresh and complete the
+explicit review form. The current tiles use global counts, superseding the
+bounded-counter description in the older release history below.
+
 The owner subsequently created the separate Web OAuth client `ace gmail` in
 project `acee`, with the correct Inbox callback, saved the Gmail read-only and
 basic identity scopes, and added a test user. The owner configured private
@@ -507,9 +530,9 @@ confirm outcomes. Full historical import and signed-in UI recovery remain to
 be verified through that owner action; the rate limit itself is not claimed
 to have disappeared.
 
-The existing Inbox `Emails reviewed`/review tiles use the bounded displayed
-message list; 100 displayed emails is not a full-mailbox count or evidence of
-complete observation coverage. Completing email import does not unlock missing
+Before corrective release `42d6eb2`, Inbox `Emails reviewed`/review tiles used
+the bounded displayed message list. They now use global stored counts; these
+still do not establish complete observation coverage. Completing email import does not unlock missing
 submitted-resume/channel attribution, response-rate coverage or petition data.
 
 ### Approved Analytics redesign, released on 2026-10-25

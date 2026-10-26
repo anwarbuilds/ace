@@ -4,6 +4,33 @@
 >
 > Read this when: you touch alert emails, freshness or Resend, or you start the sign-in work (read the authentication entry first).
 
+## Actionable Inbox review and bounded errors (2026-10-25)
+
+The quota fix exposed a storage bug: its explanatory error exceeded the existing
+120-character `gmail_connections.last_error` field, causing PostgreSQL
+`StringDataRightTruncation` and a sync 500. Stored errors are now bounded in both
+handlers and the optional one-shot script; the quota message itself is shorter.
+The regression was verified against disposable PostgreSQL, not SQLite alone.
+
+The owner also could not review emails because the queue mixed ignored mail
+with pending decisions, and its counts described only 100 displayed records.
+The default queue now filters pending messages before pagination, shows global
+counts, separates ignored mail and provides application search plus an explicit
+blank outcome choice and confirmation. No default rejection. Changing the
+historical window resets its page token; days and pending-message counts are
+explained separately. New confirmed events retain the original email time and
+the present audit-recording time; old audit rows remain intact.
+
+Release `42d6eb2` became healthy at 21:16 Pacific. Verified backup, protected
+counts, unchanged scheduler/database/Caddy/configuration, `0050` schema, public
+SHA, private-route 401, source hashes, compiled form controls and read-only live
+pending/global counts passed. Latest snapshot: 200 messages, 58 pending, 919
+applications. Local checks passed 116 backend tests, four PostgreSQL checks,
+eight actual component-render checks, TypeScript, lint, build and dash scan.
+Four browser tests were added/collected, but not executed under the laptop's
+cooling restriction. No permission expansion, automatic outcome enablement or
+deployment-side mail review occurred.
+
 ## Gmail connected, quota failure during initial import (2026-10-25)
 
 The owner configured the separate Gmail OAuth client and read-only grant.
