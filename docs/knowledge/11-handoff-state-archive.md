@@ -163,4 +163,3 @@ unchanged; no migration or deployment. Shopify outside the bundle passed a
 real public discovery and authenticated local proxy check against fictional
 data. See `docs/architecture/2026-10-26-company-identity.md` for validation,
 limits and changed files. Browser screenshots remain pending due to cooling.
-
