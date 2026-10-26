@@ -937,6 +937,9 @@ and cancels work on unmount. Include/exclude company choices, active company
 chips, Analytics' selected company and Inbox application/audit references use
 the same shared mark. The 20 new PNGs have official provenance and visual review.
 Marvell/Funnel were resolved through an issuer-provided release image and
-Funnel's own developer header after corporate CDNs refused reads. Local test results and eventual deployment verification are in
+Funnel's own developer header after corporate CDNs refused reads. Released in `0fef238` at 13:49 Pacific. All 80 live hashes and 21 company
+detail references pass; default Analytics renders JP Morgan Chase and new
+assets. Greenhouse/Ashby dynamic routes also pass. Totals stayed 931, and
+only API/web changed. Full tests, private backup and deployment evidence are in
 `docs/architecture/2026-10-26-platform-company-logos.md`. No browser run due
 to cooling; no unrelated behavior or database record changes.

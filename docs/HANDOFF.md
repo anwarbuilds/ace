@@ -157,8 +157,8 @@ See `ACE_NEXT_KNOWLEDGE.md`, Inbox automatic rejections.
 
 **2026-10-26 platform logo coverage:** 80 reviewed icons, JP Morgan Chase alias,
 Ashby/Greenhouse/Workable discovery, bounded failure recovery and company marks
-in filters/Inbox are tested locally. All 21 missing screenshot names resolve.
-Deployment pending; see `architecture/2026-10-26-platform-company-logos.md`.
+in filters/Inbox are live in `0fef238`. All 80 hashes and 21 company pages pass.
+Totals stayed 931; see `architecture/2026-10-26-platform-company-logos.md`.
 
 Historical state notes from earlier extension and platform releases are retained
 in [the handoff state archive](knowledge/11-handoff-state-archive.md). Use

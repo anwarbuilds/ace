@@ -15,7 +15,7 @@ or database dump content because the GitHub repository is public.
 
 ## 2026-10-26: Platform-wide logo coverage follow-up
 
-Status: locally tested, deployment pending on `platform-company-logos-20261026`.
+Status: deployed as `0fef238` at 13:49 Pacific on 2026-10-26; PR #4 merged.
 The owner found initials across Analytics and requested company marks throughout
 the platform. The prior Hive/Vizient release did not cover all providers/names.
 This pass audits all 21 missing names in the supplied view. Twenty authentic
@@ -44,8 +44,21 @@ notifications, input text and other literal content are not rewritten.
 Validation: 142 fictional logo/auth/source tests, 10 company React contracts
 (including retry bounds/cancellation), 12 Inbox and 4 Analytics render tests
 pass. TypeScript, lint, production build and forbidden-dash checks pass.
-Deployment evidence will be recorded after completion. Chrome stays off for
-cooling; no browser screenshots claimed.
+Signed-in live HTTP validated all 80 image hashes, all 21 reviewed company
+detail logo references, the actual default Analytics company view (including
+JP Morgan Chase), and general Greenhouse/Ashby discovery on CLEAR/Iambic.
+All four Analytics tabs, Pulls, Inbox and job/Opportunities routes returned 200.
+Totals stayed 931 (884 posting applications and 47 external history) before/
+after verification; no Gmail sync or application write ran. Temporary owner
+sessions were immediately revoked. Backend hashes match tested sources.
+Only API/web containers changed; environment bytes, schema 0050 and scheduler/
+PostgreSQL/Caddy IDs are preserved. The private 467,291,925-byte custom backup
+and restore catalog are at `private-backups/platform-company-logos-20261026/`
+on the VM, with prior image tags and runtime snapshots. Chrome stays off for
+cooling; 9 browser cases collect only, no screenshots claimed. Refresh website
+tabs to load the expanded manifest. This is HTTP/asset verification, not a
+browser visual test. When using SSH `bash -s`, give non-input Docker exec calls
+`</dev/null`; otherwise they can consume the remaining heredoc commands.
 No extension, schema, scheduler, Gmail permission or application-data changes.
 Full evidence: `docs/architecture/2026-10-26-platform-company-logos.md`.
 

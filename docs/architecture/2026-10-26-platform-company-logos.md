@@ -1,6 +1,7 @@
 # Platform company-logo coverage, 2026-10-26
 
-Status: locally tested on `platform-company-logos-20261026`; deployment pending.
+Status: deployed as `0fef238c9a3c5575927786e823109ad351b78245` on 2026-10-26
+at 13:49 Pacific; PR #4 merged.
 This follows the deployed Hive/Vizient correction in `bd5c364`. The owner
 reported initials throughout Analytics and requested company marks everywhere
 company identity is presented. The earlier correction was insufficient in scope.
@@ -50,8 +51,82 @@ The UI never fabricates a replacement brand.
 | Lint and production build | Passed |
 | All bundled provenance hashes | Passed in company contracts |
 | Browser rendering / screenshots | Not run; laptop cooling restriction |
-| Production release and signed-in verification | Pending |
+| Production release and signed-in HTTP verification | Passed, detailed below |
 
 No extension, migration, scheduler operation, Gmail scope change or application
 write is part of this correction. It requires only API/web replacement under
 the owner's existing request to deploy tested changes.
+
+## Live verification and rollback
+
+At 2026-10-26T20:48:50Z through 20:48:58Z, the owner-authenticated public HTTPS
+path passed every image and all reviewed company detail checks. All 80 served
+assets decoded and matched exact provenance hashes. All 21 reviewed company
+pages contained their bundled logo reference. The actual default Analytics
+Companies tab returned 200 and referenced JP Morgan Chase plus five of the
+new asset filenames. Dynamic CLEAR and Iambic routes returned verified
+PNGs, exercising general Greenhouse and Ashby extraction despite local bundles.
+All four Analytics tabs, Pulls, Inbox, company/job and Opportunities routes
+returned 200. Existing Hive/Vizient and anonymous/unknown-name checks pass.
+
+Totals were unchanged: 884 posting applications and 47 external history, 931
+combined. Schema remains 0050. No Gmail sync, status review, source registration
+or application write was triggered. Temporary owner verification sessions were
+revoked immediately in `finally`. Image public URLs/hashes and boolean status
+checks were logged, with no owner HTML, mail, credentials or answer values.
+
+Runtime branding hashes match local tested files. API and website are healthy
+and public health reports `0fef238`. Only API/web containers changed. Scheduler,
+PostgreSQL and Caddy retained their IDs; `.env` bytes are identical. No migration
+container ran. Browser rendering/screenshots remain unverified due to cooling.
+
+Private rollback records are on the VM at
+`private-backups/platform-company-logos-20261026/`, including a 467,291,925-byte
+custom-format database backup with a successfully read restore catalog, runtime
+metadata, prior commit and environment snapshot. Prior images are tagged
+`oracle-api:before-platform-logos` and `oracle-web:before-platform-logos`.
+Rollback uses only prior API/web images, with no automatic database restore.
+Non-input Docker exec calls inside SSH `bash -s` must use `</dev/null` so they
+cannot consume following commands from the script's stdin.
+
+Refresh the website once to load the new logo manifest. No extension reload or
+publication is involved.
+
+## Exact changed files
+
+- `ACE_NEXT_KNOWLEDGE.md`
+- `backend/app/branding/discovery.py`
+- `backend/app/branding/sources.py`
+- `backend/tests/test_company_logos.py`
+- `docs/HANDOFF.md`
+- `docs/architecture/2026-10-26-platform-company-logos.md`
+- `docs/knowledge/05-web-ui.md`
+- `docs/knowledge/11-handoff-state-archive.md`
+- `web/public/company-logos/README.md`
+- `web/public/company-logos/c3-ai.png`
+- `web/public/company-logos/cigna-group.png`
+- `web/public/company-logos/citi.png`
+- `web/public/company-logos/clear.png`
+- `web/public/company-logos/costar-group.png`
+- `web/public/company-logos/dtcc.png`
+- `web/public/company-logos/forge-nano.png`
+- `web/public/company-logos/funnel-leasing.png`
+- `web/public/company-logos/gartner.png`
+- `web/public/company-logos/greenheck-group.png`
+- `web/public/company-logos/iambic-therapeutics.png`
+- `web/public/company-logos/marvell.png`
+- `web/public/company-logos/mastercard.png`
+- `web/public/company-logos/medtronic.png`
+- `web/public/company-logos/morningstar.png`
+- `web/public/company-logos/provenance.json`
+- `web/public/company-logos/t-d-williamson.png`
+- `web/public/company-logos/thomson-reuters.png`
+- `web/public/company-logos/travelers.png`
+- `web/public/company-logos/u-s-bank.png`
+- `web/public/company-logos/wex.png`
+- `web/src/app/app/analytics/analytics.css`
+- `web/src/components/CompanyLogo.tsx`
+- `web/src/components/analytics/AnalyticsFilters.tsx`
+- `web/src/components/inbox/InboxIntelligence.tsx`
+- `web/src/components/jobs/ListControls.tsx`
+- `web/tests/company-logos.test.mjs`
