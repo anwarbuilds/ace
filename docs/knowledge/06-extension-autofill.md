@@ -941,3 +941,29 @@ or real authenticated Workday verification are claimed. The owner must reload
 version 1.28.1 in `chrome://extensions` and refresh employer tabs. No production
 service change or extension publication was performed. See the main knowledge
 file for the complete validation and reload boundary.
+
+
+## Direct employer-answer adoption and approved reuse (2026-10-26)
+
+The owner also wants to enter unknown answers on the employer form, approve
+what ACE detects, and reuse eligible answers later. Local 1.28.2 observes
+eligible `input` and `change` events with a debounce and refreshes custom
+label/state changes even after Fill. Review shows **Answer detected on form**
+and **Approve answer**, with no duplicate editor or employer write. An optional
+**Edit answer in ACE** creates a draft correction. Nothing is saved before
+approval. Protected answers and multi-answer sets stay application-only;
+motivation and credentials are excluded before answer capture.
+
+The existing Memory API handles explicit saves and **Auto-fill known** handles
+future reuse. Equivalent common prompt wording can match with subject, numeric
+scope, timeframe, negation and answer shape preserved. Corrections reuse a
+matching legacy concept rather than creating ambiguous duplicates. No stored
+records, backend contracts or permissions were changed.
+
+Twenty-four DOM contracts pass with fictional data, including a manual answer
+approved on one fixture and automatically filled on a later equivalent fixture.
+The 258 matcher cases, expanded Memory checks, syntax, TypeScript and lint pass;
+27 Playwright cases collect but Chrome is still prohibited on this laptop due
+to cooling failures. No fresh visual, authenticated employer or live paired
+Memory verification is claimed. Reload local ACE 1.28.2 and refresh employer
+tabs. No production deployment or extension publication was performed.

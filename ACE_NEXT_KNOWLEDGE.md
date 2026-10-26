@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-25
+Last updated: 2026-10-26
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -609,7 +609,7 @@ commits (`54e939a`, `61debd6`, `8d84141`), the reconciled Focus Mode V5.1
 commits (`559ee84`, `5b8ab4b`, equivalents of local `4ce3570` and `cb7bb5e`),
 the V5.1 typography pass and theme sync/Close (`386bed9`). It contains the
 existing V4 Answer Memory implementation (`2e7c1dc`). The
-extension manifest is now `1.28.1` (local exact-question/approval repair described below). The V5.1 extension has not been published; it
+extension manifest is now `1.28.2` (local exact-question and direct-answer learning repairs described below). The V5.1 extension has not been published; it
 runs as an unpacked installation loaded from
 `/home/ubuntu/Documents/ace-next/extension`. An unpacked installation must be
 reloaded at `chrome://extensions`; employer tabs must then be refreshed.
@@ -683,6 +683,53 @@ Use Review, choose an answer once, then **Approve & fill**; custom button
 listboxes may first need **Load employer options**. Rollback baseline is
 `877b046`; restore only extension files into a separate copy if needed, without
 resetting unrelated work. The owner's screenshots/answers were not saved.
+
+### Direct employer answers, approval and future reuse (2026-10-26)
+
+The owner clarified that they also want to answer an unknown question directly
+on the employer form, have ACE adopt the answer and ask only for approval,
+then auto-fill a later equivalent question. Local extension **1.28.2** adds:
+
+- Debounced `input` and `change` detection for eligible employer controls,
+  including typed answers before blur. Existing company-motivation exclusion
+  runs before any value read. Password/search controls stay outside learning.
+  Ordinary known profile edits do not create unsolicited learning prompts.
+  Approval checks the displayed answer, option set and question again, so an
+  unseen employer edit cannot be saved by a stale approval.
+- An **Answer detected on form** preview with **Approve answer**, rather than
+  a duplicate answer editor. Approval reads back the existing field and saves
+  eligible reusable answers without another employer write or option click.
+  **Edit answer in ACE** creates a draft if the owner wants a correction.
+- Custom label/state mutations refresh Review even after an earlier Fill,
+  covering dropdowns that do not dispatch `change`. Employer edits clear stale
+  drafts, including old textarea drafts, and re-open the affected approval.
+- Conservative equivalence for common prompt wording, retaining subject,
+  numbers, timeframe, negation, answer shape and protected-question policies.
+  Numerical/measurement prompts use specific keys. Existing legacy concepts
+  are retained when correcting an equivalent stored answer, avoiding duplicate
+  records that would make later reuse ambiguous. No memory records are deleted.
+- Existing paired Answer Memory API and **Auto-fill known** preference power
+  future reuse. It requires a successful save and real compatible controls;
+  disabled auto-fill preferences are respected. Multi-answer sets, sensitive
+  and company-specific answers remain application-only. Employer motivation
+  remains entirely excluded. No submission or Applied-state mutation occurs.
+
+Validation: **24** fictional DOM contracts pass, including employer text to
+approval to a later equivalent auto-fill, native option codes changing between
+forms, custom dropdown adoption after Fill, no duplicate writes, no learning
+without approval, legacy Memory correction and protected/motivation/credential
+exclusions. **258** matcher cases, expanded Memory safety checks, syntax,
+TypeScript, ESLint, static dash and whitespace checks pass. **27** Playwright
+cases collect (two new adoption/reuse cases); they were not executed and no new
+screenshots were captured because the laptop cooling restriction still applies.
+Browser event/default-action behavior, authenticated Workday and the owner's
+live paired Memory save/reuse remain unverified by these local DOM tests.
+Website runtime files and dependencies are unchanged in this follow-up; the
+previous production build passed for the 1.28.1 repair. No production release,
+backend migration, scheduler operation, Gmail change or extension publication
+was performed. Baseline is `e6249ad`; reload local ACE **1.28.2** and refresh
+employer tabs. Keep **Remember this approved answer** checked for routine
+answers, and **Auto-fill known** on for subsequent applications.
 
 The latest local visual comparison used fictional Chrome fixtures: the
 approved Night compact reference and corrected extension compact capture were

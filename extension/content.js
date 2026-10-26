@@ -1884,6 +1884,7 @@
   .focus-panel .focus-utility{display:flex;justify-content:space-between;gap:7px;margin-top:13px}.focus-panel .focus-utility button{display:inline-flex;align-items:center;gap:4px;font-size:11px;line-height:1.3;font-weight:620;color:var(--secondary);padding:4px 0}.focus-panel .focus-utility button:hover{color:var(--wine)}.focus-panel .focus-utility svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round}
   .focus-panel .focus-title-row h2{font-size:16px;font-weight:690;letter-spacing:-.025em}.focus-panel .focus-subtitle{font-size:11px;line-height:1.55;margin:4px 0 12px}.focus-panel .focus-progress{font-size:10.5px;margin-bottom:12px}.focus-panel .focus-chip{font-size:11px;padding:8px 10px;border-radius:8px}.focus-panel .focus-question{padding:13px;border-radius:11px}.focus-panel .focus-question .studio-question{font-size:13px;font-weight:680;line-height:1.45;margin:0 0 8px}.focus-panel .focus-question p{font-size:11px;line-height:1.55}.focus-panel .focus-question .studio-pill{background:none;padding:0;margin-bottom:8px;border-radius:0}
   .focus-panel .focus-options{border:0;padding:0;margin:0;min-width:0}.focus-panel .focus-options legend{font-size:11px;font-weight:620}.focus-panel .focus-options .studio-checkline{padding:8px;border:1px solid var(--line);border-radius:8px}.focus-panel .focus-options span{overflow-wrap:anywhere}.focus-panel .focus-options input{flex:none;margin-top:3px}
+  .focus-panel .focus-detected p{white-space:pre-wrap;overflow-wrap:anywhere}
   .focus-panel .studio-search,.focus-panel .studio-input{font-size:12px;line-height:1.55;border-radius:8px;padding:10px}.focus-panel .studio-input{min-height:82px}.focus-panel .studio-scroll>label{font-size:11px;font-weight:620}.focus-panel .focus-hint{font-size:10.5px;line-height:1.55}.focus-panel .studio-checkline{font-size:11px;line-height:1.5}.focus-panel .focus-stays{font-size:10.5px;font-weight:570;padding:8px 10px}.focus-panel .studio-actions{display:flex;flex-wrap:nowrap;gap:8px}.focus-panel .studio-actions button{flex:1;min-width:0;white-space:nowrap;font-weight:600}
   .focus-panel .studio-pill{font-size:10px;font-weight:680;padding:5px 8px;border-radius:7px}
   .focus-panel .focus-dock-body{min-height:49px}.focus-panel .focus-dock-status strong{font-size:12px}.focus-panel .focus-dock-status small{font-size:11px}
@@ -1971,7 +1972,7 @@
         baseline: prior && prior.field === chosen.field ? prior.baseline : reviewValue(chosen),
         options: reviewOptionsSignature(chosen), values: values });
       studioError = '';
-
+      showReviewDraft(root);
     });
     root.addEventListener('input', function (event) {
       if (event.target && event.target.id === 'studio-answer' && event.target.tagName === 'TEXTAREA' && reviewQuestion) {
@@ -1982,6 +1983,7 @@
         reviewSelections.set(chosen.key, { field: chosen.field,
           baseline: prior && prior.field === chosen.field ? prior.baseline : reviewValue(chosen),
           options: reviewOptionsSignature(chosen), values: [event.target.value] });
+        showReviewDraft(root);
       }
     });
     installFocusDrag(root);
@@ -2259,6 +2261,9 @@
     var draft = reviewSelections.get(selected.key);
     if (draft && draft.field !== selected.field) { reviewSelections.delete(selected.key); draft = null; }
     var current = draft ? draft.values[0] : reviewValue(selected);
+    var detected = !draft && selected.answered && !!current;
+    selected.detectedSnapshot = detected ? { value: current, options: reviewOptionsSignature(selected) } : null;
+    var reusable = selected.protected === 'reusable' && !selected.field.multiple && selected.field.type !== 'checkbox';
     var isChoice = selected.field.tagName === 'SELECT' || aceIsChoiceControl(selected.field);
     var control = '';
     if (selected.field.tagName === 'SELECT') {
@@ -2281,7 +2286,7 @@
           return '<option value="' + esc(option) + '"' + (option === current ? ' selected' : '') + '>' + esc(plain(option)) + '</option>';
         }).join('') + '</select>';
     } else if (selected.field.tagName === 'BUTTON' || aceIsAutocomplete(selected.field)) {
-      control = aceIsListboxButton(selected.field)
+      control = detected ? '' : aceIsListboxButton(selected.field)
         ? '<button class="studio-button" data-ace="read-options:' + index + '">Load employer options</button><p class="focus-hint">ACE reads the dropdown’s actual choices without selecting an answer.</p>'
         : '<p>Choose this option on the employer form. ACE will show it here when the form reports a selected value.</p>';
     } else {
@@ -2291,11 +2296,12 @@
       'Protected question. Confirm for this application only.';
     html += '<article class="studio-card focus-question"><span class="studio-pill ' + (selected.protected === 'reusable' ? 'good' : '') + '">' +
       (selected.protected === 'reusable' ? 'New question' : 'Review required') + (aceIsChoiceControl(selected.field) ? selected.field.type === 'checkbox' ? ' · Checkboxes' : ' · Radio options' : isChoice || aceIsListboxButton(selected.field) ? ' · Dropdown' : '') + '</span><div class="studio-question">' + esc(plain(selected.display)) + '</div><p>' + why + '</p></article>' +
-      control + '<p class="focus-hint">Answer here, then Approve &amp; fill. ACE checks that the employer form accepted it.</p>' +
-      (selected.protected === 'reusable' && !selected.field.multiple && selected.field.type !== 'checkbox' ? '<label class="studio-checkline"><input id="studio-reuse" type="checkbox" checked> Remember this approved answer for equivalent questions</label>' :
+      (detected ? '<div class="studio-card focus-detected" role="status"><strong>Answer detected on form</strong><p>' + esc(plain(reviewAnswerLabel(selected))) + '</p><p>Approve this answer without entering it again.</p><button class="studio-button small" data-ace="edit-answer:' + index + '">Edit answer in ACE</button></div>' : control) +
+      '<p class="focus-hint">' + (detected ? 'Your employer answer stays as entered. Approval confirms it.' : 'Answer here, then Approve &amp; fill. ACE checks that the employer form accepted it.') + '</p>' +
+      (reusable ? '<label class="studio-checkline"><input id="studio-reuse" type="checkbox" checked> Remember this approved answer for equivalent questions</label>' :
         '<p class="focus-hint">Used for this application only. It is not saved to Memory.</p>') +
       '<p class="focus-stays">✓ &nbsp;Review stays open until you minimize ACE.</p>' +
-      '<div class="studio-actions"><button class="studio-button wine" data-ace="approve:' + index + '">Approve &amp; fill</button><button class="studio-button" data-ace="show-form">Show on form</button><button class="studio-button" data-ace="skip:' + index + '">Skip</button></div><div class="focus-utility"><button data-ace="tab:overview">Overview</button><button data-ace="workspace">Memory &amp; activity</button></div>';
+      '<div class="studio-actions"><button class="studio-button wine" data-ace="approve:' + index + '">' + (detected ? 'Approve answer' : 'Approve &amp; fill') + '</button><button class="studio-button" data-ace="show-form">Show on form</button><button class="studio-button" data-ace="skip:' + index + '">Skip</button></div><div class="focus-utility"><button data-ace="tab:overview">Overview</button><button data-ace="workspace">Memory &amp; activity</button></div>';
     return html;
   }
 
@@ -2313,6 +2319,20 @@
     if (aceIsListboxButton(field)) return aceIsEmpty(field) ? '' : String(field.textContent || '').trim();
     if (aceIsAutocomplete(field)) return aceIsEmpty(field) ? '' : String(field.value || '').trim();
     return String(field.value || '').trim();
+  }
+
+  function reviewAnswerLabel(item) {
+    if (item.field.tagName === 'SELECT' && !item.field.multiple) {
+      return String(item.field.options[item.field.selectedIndex].textContent || '').trim();
+    }
+    return reviewValue(item);
+  }
+
+  function showReviewDraft(root) {
+    var detected = root.querySelector('.focus-detected');
+    if (detected) detected.remove();
+    var approve = root.querySelector('[data-ace^="approve:"]');
+    if (approve) approve.textContent = 'Approve & fill';
   }
 
   function reviewOptionsSignature(item) {
@@ -2740,7 +2760,13 @@
     lastSignature = currentSignature;
 
     if (filling) return;
-    if (lastResult && !signatureChanged) return;
+    if (lastResult && !signatureChanged) {
+      // Custom widgets often update their label or pressed state without a
+      // change event. Keep an open Review current after a Fill operation.
+      var existing = document.querySelector('.ace-root');
+      if (!dismissed && existing && existing.shadowRoot) renderStudio(existing.shadowRoot.querySelector('.ace-panel'));
+      return;
+    }
     if (dismissed) return;
 
     showPreview(panel());
@@ -3045,6 +3071,22 @@
       return;
     }
 
+    if (action.indexOf('edit-answer:') === 0) {
+      var editing = studioFields[Number(action.slice(12))];
+      if (!editing || !editing.field.isConnected || aceMemory.isEmployerMotivation(editing.question)) return;
+      var values = aceIsChoiceControl(editing.field)
+        ? groupMembers(editing.field).map(function (member, at) { return aceIsChosen(member) ? at : -1; }).filter(function (at) { return at >= 0; })
+        : editing.field.tagName === 'SELECT'
+        ? Array.from(editing.field.selectedOptions).map(function (option) { return option.value; })
+        : [reviewValue(editing)];
+      reviewSelections.set(editing.key, { field: editing.field, baseline: reviewValue(editing),
+        options: reviewOptionsSignature(editing), values: values });
+      renderStudio(panel());
+      var editor = panel().querySelector('#studio-answer');
+      if (editor) editor.focus({ preventScroll: true });
+      return;
+    }
+
     if (action.indexOf("read-options:") === 0) {
       var item = studioFields[Number(action.slice(13))];
       if (filling || !item || !item.field.isConnected || !aceIsListboxButton(item.field) ||
@@ -3078,6 +3120,11 @@
       if (!chosen || aceMemory.isEmployerMotivation(chosen.question)) return;
       if (filling) return;
       var selection = reviewSelections.get(chosen.key);
+      if (aceQuestionFor(chosen.field) !== chosen.question || (!selection && chosen.detectedSnapshot &&
+          (chosen.detectedSnapshot.value !== reviewValue(chosen) || chosen.detectedSnapshot.options !== reviewOptionsSignature(chosen)))) {
+        studioError = "The employer answer changed. Review its current answer before approving.";
+        renderStudio(panel()); return;
+      }
       if (selection && (selection.field !== chosen.field || selection.baseline !== reviewValue(chosen) || selection.options !== reviewOptionsSignature(chosen))) {
         reviewSelections.delete(chosen.key);
         studioError = "The employer answer changed. Review its current answer before approving.";
@@ -3172,7 +3219,8 @@
       function persistApproval() {
         if (!save) { finishApproval(); return; }
         filling = true;
-        var concept = aceMemory.concept(chosen.question);
+        var previousMemory = aceMemory.resolve(chosen.question, chosen.kind, memory);
+        var concept = previousMemory ? previousMemory.concept : aceMemory.concept(chosen.question);
         var memoryValue = chosen.field.tagName === 'SELECT'
           ? String(chosen.field.options[chosen.field.selectedIndex] && chosen.field.options[chosen.field.selectedIndex].textContent || value).trim()
           : aceIsChoiceControl(chosen.field) && chosen.field.type === 'checkbox' && groupMembers(chosen.field).length === 1
@@ -3338,18 +3386,37 @@
 
   // Employer-owned motivation fields are screened by label before any
   // control value can be observed. Other review controls mirror user edits.
-  document.addEventListener('change', function (event) {
+  var pendingEmployerReview = null;
+  function employerAnswerEdited(event) {
     var field = event.target;
     if (!loaded || filling || !field || field.closest && field.closest('.ace-root')) return;
     if (!field.matches || !field.matches('input,textarea,select,button')) return;
-    if (aceMemory.isEmployerMotivation(aceQuestionFor(field))) return;
-    var editedKey = aceMemory.norm(aceQuestionFor(field)) + '|' + kindOf(field);
+    var question = aceQuestionFor(field);
+    if (!question || aceShouldSkip(field) || aceMemory.isEmployerMotivation(question)) return;
+    var editedKey = aceMemory.norm(question) + '|' + kindOf(field);
     reviewSelections.delete(editedKey);
+    reviewDrafts.delete(editedKey);
     approvedQuestions.delete(editedKey);
-    if (focusMode === 'review') setTimeout(function () {
+    skippedQuestions.delete(editedKey);
+    clearTimeout(pendingEmployerReview);
+    pendingEmployerReview = setTimeout(function () {
+      if (!field.isConnected || filling || dismissed || aceMemory.isEmployerMotivation(aceQuestionFor(field)) || fillable().indexOf(field) < 0) return;
+      var name = answerNameFor(aceQuestionFor(field), kindOf(field));
+      if (name && name.indexOf('Memory:') !== 0 && answers[name] && !reviewSeen.has(editedKey)) return;
+      reviewSeen.add(editedKey);
+      if (focusMode === 'review' && !reviewSelections.has(reviewQuestion)) reviewQuestion = editedKey;
       var host = document.querySelector('.ace-root');
       if (host && host.shadowRoot) renderStudio(host.shadowRoot.querySelector('.ace-panel'));
-    }, 60);
+    }, 180);
+  }
+  document.addEventListener('input', employerAnswerEdited, true);
+  document.addEventListener('change', employerAnswerEdited, true);
+  document.addEventListener('click', function (event) {
+    var field = event.target && event.target.closest && event.target.closest('button');
+    if (!loaded || filling || !field || field.closest('.ace-root') || !aceIsChoiceControl(field)) return;
+    // Some accessible choice buttons only change aria-pressed/aria-checked.
+    // Read after the employer's own click handler has committed the choice.
+    setTimeout(function () { employerAnswerEdited({ target: field }); }, 0);
   }, true);
 
   // A Workday-style listbox may not expose options until the applicant

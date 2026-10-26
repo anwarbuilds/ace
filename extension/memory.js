@@ -29,10 +29,20 @@
   }
   function concept(question) {
     var q = norm(question);
+    if (/\d|\b(how many|how much|number of|years of|months of|rate|rating|level)\b/.test(q)) return "q:" + canonicalQuestion(q);
     if (/\b(distributed|microservice)\b/.test(q) && /\b(tradeoff|trade off|tradeoffs|trade offs)\b/.test(q) && /\b(design|architecture|system)\b/.test(q)) return "distributed_design_tradeoff";
     if (/\bpython\b/.test(q) && /\bapi|apis\b/.test(q) && /\bexperience|built|building|develop|worked\b/.test(q)) return "python_api_experience";
     if (/\b(time zones|distributed team|remote team)\b/.test(q) && /\b(collaborat|work|communicat)\b/.test(q)) return "remote_collaboration";
-    return "q:" + q;
+    return "q:" + canonicalQuestion(q);
+  }
+  // Normalize only common prompt phrasing. Preserve the subject, scope,
+  // numbers and qualifiers; keyword overlap alone never authorizes reuse.
+  function canonicalQuestion(question) {
+    return norm(question)
+      .replace(/^(?:please |kindly )/, "")
+      .replace(/^(?:can you |could you |would you )(?=describe |explain |share |tell us )/, "")
+      .replace(/^(?:tell us about |share |explain |describe )your experience (?:with |in |using )?/, "experience ")
+      .replace(/^what (?:is|has been) your experience (?:with |in |using )?/, "experience ");
   }
   function equivalent(a, b, kindA, kindB) {
     if (kindA !== kindB || policy(a) !== "reusable" || policy(b) !== "reusable") return false;
@@ -40,8 +50,10 @@
     // the subject words unchanged. Keep these cases in Review.
     var qualifiers = /\b(not|never|without|currently|previously|former|future|minimum|maximum|at least|more than|less than)\b/g;
     if ((norm(a).match(qualifiers) || []).join("|") !== (norm(b).match(qualifiers) || []).join("|")) return false;
+    var measurement = /\b(how many|how much|number of|years of|months of|rate|rating|level)\b/;
+    if (measurement.test(norm(a)) !== measurement.test(norm(b))) return false;
     var ca = concept(a), cb = concept(b);
-    return ca === cb && ca !== "q:" || ca === cb && norm(a) === norm(b);
+    return ca === cb && ca !== "q:";
   }
   function resolve(question, kind, entries) {
     if (policy(question) !== "reusable") return null;

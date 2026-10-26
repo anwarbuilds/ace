@@ -93,6 +93,8 @@ test("Focus Mode V5.1 mirrors choices, protects motivation, stays open and never
   await expect(page.locator("#tradeoff")).toHaveValue("I measured latency and chose a simpler consistency model.");
   await expect(panel).toHaveClass(/focus-review/);
   await page.locator("#source").selectOption("friend");
+  await expect(panel.locator(".focus-detected")).toContainText("Friend referral");
+  await panel.getByRole("button", { name: "Edit answer in ACE" }).click();
   await expect(panel.getByRole("combobox", { name: "Exact employer options" })).toHaveValue("friend");
   await panel.getByRole("combobox", { name: "Exact employer options" }).selectOption("careers");
   await expect(page.locator("#source")).toHaveValue("friend");

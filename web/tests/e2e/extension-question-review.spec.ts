@@ -5,20 +5,21 @@ const extensionRoot = path.resolve(process.cwd(), '../extension');
 const question = 'If you worked for Silverpine Labs, was it as an associate, an intern, or a contractor/temporary?';
 const choices = ['Associate', 'Contractor', 'Intern', 'I have never worked for/at Silverpine Labs in any capacity.'];
 const base = '<label for="name">Full name</label><input id="name" value="Example Applicant"><label for="email">Email</label><input id="email" value="applicant@example.test"><label for="phone">Phone</label><input id="phone" value="5550100100"><label for="role">Current role</label><input id="role" value="Engineer"><label for="resume">Resume</label><input type="file" id="resume">';
-async function load(page: Page, body: string) {
+async function load(page: Page, body: string, memory: Array<Record<string, unknown>> = [], autoKnown = false) {
   await page.goto('data:text/html,<html><body></body></html>');
   await page.setContent(`<form>${base}${body}<button type="submit">Submit application</button></form>`);
-  await page.evaluate(() => {
-    const w = window as typeof window & { chrome: unknown; __saved: Array<Record<string, unknown>>; __submits: number };
-    w.__saved = []; w.__submits = 0;
+  await page.evaluate(({ memory, autoKnown }) => {
+    const w = window as typeof window & { chrome: unknown; __saved: Array<Record<string, unknown>>; __memory: Array<Record<string, unknown>>; __submits: number };
+    w.__saved = []; w.__memory = memory; w.__submits = 0;
     document.querySelector('form')!.addEventListener('submit', event => { event.preventDefault(); w.__submits++; });
-    w.chrome = { runtime: { lastError: null, onMessage: { addListener() {} }, getURL: (value: string) => value, getManifest: () => ({ version: 'test' }),
+    w.chrome = { storage: { local: { get: (defaults: Record<string, unknown>, reply: (data: unknown) => void) => reply({ ...defaults, aceAutoKnown: autoKnown }), set() {}, remove() {} } }, runtime: { lastError: null, onMessage: { addListener() {} }, getURL: (value: string) => value, getManifest: () => ({ version: 'test' }),
       sendMessage(message: { type: string; item: Record<string, unknown> }, reply: (data: unknown) => void) {
         if (message.type === 'answers') reply({ ok: true, items: [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Email', value: 'applicant@example.test' }, { label: 'Phone', value: '5550100100' }, { label: 'Current role', value: 'Engineer' }] });
-        else if (message.type === 'memorySave') { w.__saved.push(message.item); reply({ ok: true, item: { ...message.item, id: w.__saved.length, revision: 1 } }); }
+        else if (message.type === 'memory') reply({ ok: true, items: w.__memory });
+        else if (message.type === 'memorySave') { const entry = { ...message.item, id: w.__memory.length + 1, revision: 1, reuse_policy: 'reusable' }; w.__saved.push(message.item); w.__memory.push(entry); reply({ ok: true, item: entry }); }
         else reply({ ok: true, items: [], work: [], education: [] });
       } } };
-  });
+  }, { memory, autoKnown });
   for (const file of ['fields.js', 'memory.js', 'content.js']) await page.addScriptTag({ path: path.join(extensionRoot, file) });
   const panel = page.locator('.ace-root .ace-panel');
   await panel.getByRole('button', { name: /^Review/ }).click();
@@ -84,4 +85,51 @@ test('native option codes remain drafts until approval and reverted writes are n
   await expect(page.locator('#channel')).toHaveValue('');
   expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(0);
   expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
+});
+
+test('a typed form answer needs approval only and auto-fills an equivalent question on the next application', async ({ page }) => {
+  const panel = await load(page, '<label for="testing">Describe your experience writing integration tests</label><textarea id="testing"></textarea>');
+  await panel.getByRole('button', { name: /Describe your experience/ }).click();
+  const answer = 'I test API boundaries with isolated fixtures and deterministic assertions.';
+  await page.locator('#testing').fill(answer);
+  await expect(panel.getByText('Answer detected on form', { exact: true })).toBeVisible();
+  await expect(panel.locator('.focus-detected')).toContainText(answer);
+  await expect(panel.getByRole('textbox', { name: 'Your answer' })).toHaveCount(0);
+  expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(0);
+  await page.locator('#testing').evaluate(field => {
+    field.addEventListener('input', () => field.setAttribute('data-extra-input', 'true'));
+    field.addEventListener('change', () => field.setAttribute('data-extra-change', 'true'));
+  });
+  await panel.getByRole('button', { name: 'Approve answer', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
+  expect(await page.locator('#testing').getAttribute('data-extra-input')).toBeNull();
+  expect(await page.locator('#testing').getAttribute('data-extra-change')).toBeNull();
+  const memory = await page.evaluate(() => (window as typeof window & { __memory: Array<Record<string, unknown>> }).__memory);
+  await load(page, '<label for="testing">Please tell us about your experience writing integration tests.</label><textarea id="testing"></textarea>', memory, true);
+  await expect(page.locator('#testing')).toHaveValue(answer);
+  expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(0);
+  expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
+});
+
+test('a manual custom dropdown answer is detected after Fill without a change event', async ({ page }) => {
+  const panel = await load(page, '<label for="channel">Which application channel did you use?</label><button id="channel" type="button" aria-haspopup="listbox">Select One</button>');
+  await panel.getByRole('button', { name: 'Overview', exact: true }).click();
+  await panel.getByRole('button', { name: 'Fill', exact: true }).click();
+  await panel.getByRole('button', { name: /^Review/ }).click();
+  await panel.getByRole('button', { name: /Which application channel/ }).click();
+  await page.evaluate(() => {
+    const trigger = document.getElementById('channel')!;
+    trigger.addEventListener('click', () => {
+      const option = document.createElement('button'); option.type = 'button'; option.setAttribute('role', 'option'); option.textContent = 'Friend referral';
+      option.addEventListener('click', () => { trigger.textContent = 'Friend referral'; option.remove(); });
+      document.body.append(option);
+    });
+  });
+  await page.locator('#channel').click();
+  await page.getByRole('option', { name: 'Friend referral' }).click();
+  await expect(panel.getByText('Answer detected on form', { exact: true })).toBeVisible();
+  await expect(panel.locator('.focus-detected')).toContainText('Friend referral');
+  await expect(panel.getByRole('button', { name: 'Load employer options' })).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Approve answer', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
 });

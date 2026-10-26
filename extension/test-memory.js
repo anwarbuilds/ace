@@ -19,6 +19,17 @@ assert.equal(memory.resolve("Why do you want to join Northstar Labs?", "text", s
 assert.equal(memory.resolve("Do you have authorization to work in the US?", "text", saved), null);
 assert.equal(memory.equivalent("Did you work in Python?", "Did you not work in Python?", "text", "text"), false);
 assert.equal(memory.resolve(equivalent, "text", saved.concat(saved)), null);
+const testing = "Describe your experience writing integration tests";
+const testingSaved = [{ concept: memory.concept(testing), question: testing, answer: "Fictional approved testing answer", answer_type: "text", reuse_policy: "reusable" }];
+assert.equal(memory.resolve("Please tell us about your experience writing integration tests.", "text", testingSaved)?.answer, testingSaved[0].answer);
+assert.equal(memory.resolve("Could you describe your experience writing integration tests?", "text", testingSaved)?.answer, testingSaved[0].answer);
+assert.equal(memory.resolve("Describe your experience writing unit tests", "text", testingSaved), null);
+assert.equal(memory.resolve("Describe your experience writing integration tests without external services", "text", testingSaved), null);
+assert.equal(memory.resolve("Describe your experience writing integration tests in the last 3 years", "text", testingSaved), null);
+assert.equal(memory.resolve("Describe your experience writing integration tests", "choice", testingSaved), null);
+assert.equal(memory.equivalent("Describe your experience building Python APIs", "How many years of experience do you have building Python APIs?", "text", "text"), false);
+assert.equal(memory.equivalent("Describe your experience building Python 2 APIs", "Describe your experience building Python 3 APIs", "text", "text"), false);
+assert.notEqual(memory.concept("How many years have you worked building Python APIs?"), memory.concept("How many projects have you built using Python APIs?"));
 for (const question of [
   "Why this company?",
   "Why do you want to work at Cobalt Systems?",

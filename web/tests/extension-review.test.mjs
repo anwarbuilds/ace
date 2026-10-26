@@ -20,12 +20,13 @@ async function until(check, message) {
   assert.fail(message);
 }
 
-function fixture(body) {
+function fixture(body, config = {}) {
   const { window } = parseHTML(`<html><head><title>Engineer | Fictional employer</title></head><body><form>${base}${body}<button type="submit">Submit application</button></form></body></html>`);
   delete window.__aceLoaded;
   const { document, HTMLElement, HTMLInputElement, HTMLSelectElement, HTMLOptionElement } = window;
   const timers = new Set();
   const saved = [];
+  const memoryStore = config.memoryStore || [];
   let submissions = 0;
   let active = document.body;
   Object.defineProperty(document, 'activeElement', { get: () => active });
@@ -50,6 +51,7 @@ function fixture(body) {
     this.dispatchEvent(new window.Event('change', { bubbles: true }));
   };
   Object.defineProperty(HTMLOptionElement.prototype, 'selected', { get() { return this.hasAttribute('selected'); }, set(value) { this.toggleAttribute('selected', Boolean(value)); }, configurable: true });
+  Object.defineProperty(HTMLOptionElement.prototype, 'value', { get() { return this.getAttribute('value') ?? this.textContent; }, set(value) { this.setAttribute('value', value); }, configurable: true });
   Object.defineProperty(HTMLSelectElement.prototype, 'multiple', { get() { return this.hasAttribute('multiple'); }, configurable: true });
   Object.defineProperty(HTMLSelectElement.prototype, 'selectedOptions', { get() { const selected = Array.from(this.options).filter(option => option.selected); return selected.length || this.multiple ? selected : Array.from(this.options).slice(0, 1); }, configurable: true });
   Object.defineProperty(HTMLSelectElement.prototype, 'selectedIndex', { get() { return Array.from(this.options).indexOf(this.selectedOptions[0]); }, configurable: true });
@@ -63,11 +65,20 @@ function fixture(body) {
     innerWidth: 1440, innerHeight: 900, console,
     setTimeout(fn, ms) { const id = setTimeout(() => { timers.delete(id); fn(); }, ms); timers.add(id); return id; },
     clearTimeout(id) { clearTimeout(id); timers.delete(id); },
-    MutationObserver: class { observe() {} disconnect() {} },
-    chrome: { runtime: { lastError: null, onMessage: { addListener() {} }, getURL: value => value, getManifest: () => ({ version: 'test' }),
+    MutationObserver: config.observeDOM ? window.MutationObserver : class { observe() {} disconnect() {} },
+    chrome: { ...(config.autoKnown ? { storage: { local: {
+      get(defaults, reply) { reply({ ...defaults, aceAutoKnown: true }); }, set() {}, remove() {},
+    } } } : {}), runtime: { lastError: null, onMessage: { addListener() {} }, getURL: value => value, getManifest: () => ({ version: 'test' }),
       sendMessage(message, reply) {
         if (message.type === 'answers') reply({ ok: true, items: [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Email', value: 'applicant@example.test' }, { label: 'Phone', value: '5550100100' }, { label: 'Current role', value: 'Engineer' }] });
-        else if (message.type === 'memorySave') { saved.push(message.item); reply({ ok: true, item: { ...message.item, id: saved.length, revision: 1 } }); }
+        else if (message.type === 'memory') reply({ ok: true, items: memoryStore });
+        else if (message.type === 'memorySave') {
+          saved.push(message.item);
+          const existing = memoryStore.find(entry => entry.concept === message.item.concept);
+          const entry = { ...message.item, id: existing?.id || memoryStore.length + 1, revision: (existing?.revision || 0) + 1, reuse_policy: 'reusable' };
+          if (existing) Object.assign(existing, entry); else memoryStore.push(entry);
+          reply({ ok: true, item: entry });
+        }
         else reply({ ok: true, items: [], work: [], education: [] });
       } } },
   });
@@ -238,4 +249,162 @@ test('an unlabelled radio option never becomes a profile question', t => {
   const f = fixture('<div><input type="radio" name="unknown" id="social"><label for="social">LinkedIn</label></div>'); t.after(f.dispose);
   f.document.querySelector('form').innerHTML = '<div><input type="radio" id="unlabelled-choice"><label for="unlabelled-choice">LinkedIn</label></div>';
   assert.equal(f.context.aceQuestionFor(f.document.querySelector('#unlabelled-choice')), '');
+});
+
+test('typed employer answer needs only approval, then fills an equivalent question on a later application', async t => {
+  const memoryStore = [];
+  const first = fixture('<label for="testing">Describe your experience writing integration tests</label><textarea id="testing"></textarea>', { memoryStore }); t.after(first.dispose);
+  first.review('Describe your experience');
+  const field = first.document.getElementById('testing');
+  let writes = 0;
+  const descriptor = Object.getOwnPropertyDescriptor(first.window.HTMLTextAreaElement.prototype, 'value');
+  Object.defineProperty(field, 'value', { get() { return descriptor.get.call(this); }, set(value) { writes++; descriptor.set.call(this, value); } });
+  field.value = 'I test API boundaries with isolated fixtures and deterministic assertions.';
+  field.dispatchEvent(new first.window.Event('input', { bubbles: true }));
+  await until(() => first.panel().textContent.includes('Answer detected on form'), 'typed form answers must appear without blur or retyping');
+  assert.ok(first.panel().querySelector('.focus-detected').textContent.includes(field.value));
+  assert.equal(first.panel().querySelector('#studio-answer'), null, 'detected answers need approval, not another editor');
+  assert.equal(first.panel().querySelector('[data-ace^="approve:"]').textContent, 'Approve answer');
+  assert.equal(first.saved.length, 0, 'observing a typed answer never saves it');
+  first.click(first.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => first.saved.length === 1, 'explicit approval saves the detected answer');
+  assert.equal(writes, 1, 'approval must not fill the employer field a second time');
+  const answer = field.value;
+  first.dispose();
+  const later = fixture('<label for="testing">Please tell us about your experience writing integration tests.</label><textarea id="testing"></textarea>', { memoryStore, autoKnown: true }); t.after(later.dispose);
+  await until(() => later.document.getElementById('testing').value === answer, 'approved equivalent answers must auto-fill on a later application');
+  assert.equal(later.saved.length, 0);
+  assert.equal(later.submissions(), 0);
+});
+
+test('manual native selection is approved without another change and reuses visible text across different option codes', async t => {
+  const memoryStore = [];
+  const first = fixture('<label for="channel">Which application channel did you use?</label><select id="channel"><option value="">Select one</option><option value="ref-1">Friend referral</option><option value="site-2">Careers website</option></select>', { memoryStore }); t.after(first.dispose);
+  first.review('Which application channel');
+  let changes = 0;
+  const field = first.document.getElementById('channel'); field.addEventListener('change', () => changes++);
+  field.value = 'ref-1'; field.dispatchEvent(new first.window.Event('change', { bubbles: true }));
+  await until(() => first.panel().textContent.includes('Answer detected on form'), 'native selections must be detected');
+  assert.ok(first.panel().querySelector('.focus-detected').textContent.includes('Friend referral'));
+  assert.ok(!first.panel().querySelector('.focus-detected').textContent.includes('ref-1'));
+  first.click(first.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => first.saved.length === 1, 'approval saves the option text');
+  assert.equal(changes, 1); assert.equal(first.saved[0].answer, 'Friend referral'); first.dispose();
+  const later = fixture('<label for="channel">Which application channel did you use?</label><select id="channel"><option value="">Select one</option><option value="new-site">Careers website</option><option value="new-ref">Friend referral</option></select>', { memoryStore, autoKnown: true }); t.after(later.dispose);
+  await until(() => later.document.getElementById('channel').value === 'new-ref', 'reuse matches a real option rather than copying an old code');
+});
+
+test('custom dropdown selection without change events is detected after Fill and approved without another option click', async t => {
+  const f = fixture('<label for="channel">Which application channel did you use?</label><button id="channel" type="button" aria-haspopup="listbox">Select One</button>', { observeDOM: true }); t.after(f.dispose);
+  f.click('fill'); await sleep(150); f.review('Which application channel');
+  const trigger = f.document.getElementById('channel'); let optionClicks = 0;
+  trigger.addEventListener('click', () => {
+    const box = f.document.createElement('div'); box.setAttribute('role', 'listbox');
+    const option = f.document.createElement('div'); option.setAttribute('role', 'option'); option.textContent = 'Friend referral';
+    option.addEventListener('click', () => { optionClicks++; trigger.textContent = option.textContent; box.remove(); });
+    box.append(option); f.document.body.append(box);
+  });
+  trigger.click(); f.document.querySelector('[role=option]').click();
+  await until(() => f.panel().textContent.includes('Answer detected on form'), 'custom label mutations must update Review even after Fill');
+  assert.equal(f.panel().querySelector('[data-ace^="read-options:"]'), null, 'an existing answer does not require loading options again');
+  f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => f.saved.length === 1, 'approve the custom selection');
+  assert.equal(optionClicks, 1);
+  assert.equal(f.saved[0].answer, 'Friend referral');
+});
+
+test('direct protected answers need per-application approval and never enter future memory', async t => {
+  const memoryStore = [];
+  const first = fixture('<label for="authorization">Are you authorized to work in the U.S.?</label><select id="authorization"><option value="">Select one</option><option>Yes</option><option>No</option></select>', { memoryStore }); t.after(first.dispose);
+  first.review('Are you authorized');
+  const field = first.document.getElementById('authorization'); field.value = 'Yes'; field.dispatchEvent(new first.window.Event('change', { bubbles: true }));
+  await until(() => first.panel().textContent.includes('Answer detected on form'), 'protected manual answers can be confirmed for this form');
+  first.click(first.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  assert.equal(memoryStore.length, 0); assert.equal(first.saved.length, 0); first.dispose();
+  const later = fixture('<label for="authorization">Are you authorized to work in the U.S.?</label><select id="authorization"><option value="">Select one</option><option>Yes</option><option>No</option></select>', { memoryStore, autoKnown: true }); t.after(later.dispose);
+  await sleep(200); assert.equal(later.document.getElementById('authorization').value, '');
+});
+
+test('typing a motivation answer does not read or capture it', async t => {
+  const f = fixture('<label for="motivation">Why do you want to work at Silverpine Labs?</label><textarea id="motivation"></textarea>'); t.after(f.dispose);
+  const field = f.document.getElementById('motivation');
+  Object.defineProperty(field, 'value', { get() { assert.fail('motivation values must never be read'); } });
+  field.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+  field.dispatchEvent(new f.window.Event('change', { bubbles: true }));
+  await sleep(220); f.click('tab:review');
+  assert.ok(!f.panel().textContent.includes('Why do you want to work')); assert.equal(f.saved.length, 0);
+});
+
+test('a manually corrected legacy memory answer updates the existing record rather than creating ambiguous duplicates', async t => {
+  const memoryStore = [{ id: 7, revision: 1, concept: 'q:describe your experience writing integration tests', question: 'Describe your experience writing integration tests', answer: 'Fictional old answer', answer_type: 'text', reuse_policy: 'reusable' }];
+  const f = fixture('<label for="testing">Please tell us about your experience writing integration tests.</label><textarea id="testing"></textarea>', { memoryStore }); t.after(f.dispose);
+  const field = f.document.getElementById('testing'); field.value = 'Fictional corrected testing experience';
+  field.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+  await sleep(220); f.review('Please tell us about');
+  f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => f.saved.length === 1, 'approve the updated form answer');
+  assert.equal(memoryStore.length, 1); assert.equal(memoryStore[0].id, 7);
+  assert.equal(memoryStore[0].answer, 'Fictional corrected testing experience');
+});
+
+test('an answer typed without approval is not learned on a later application', async t => {
+  const memoryStore = [];
+  const first = fixture('<label for="testing">Describe your experience writing integration tests</label><textarea id="testing"></textarea>', { memoryStore }); t.after(first.dispose);
+  const field = first.document.getElementById('testing'); field.value = 'An unapproved fictional answer'; field.dispatchEvent(new first.window.Event('input', { bubbles: true }));
+  await sleep(220); assert.equal(first.saved.length, 0); first.dispose();
+  const later = fixture('<label for="testing">Please tell us about your experience writing integration tests.</label><textarea id="testing"></textarea>', { memoryStore, autoKnown: true }); t.after(later.dispose);
+  await sleep(200); assert.equal(later.document.getElementById('testing').value, ''); assert.equal(memoryStore.length, 0);
+});
+
+test('credential and search inputs never enter employer-answer learning', async t => {
+  const f = fixture('<label for="password">Create an employer account password</label><input type="password" id="password"><label for="search">Search jobs</label><input type="search" id="search">'); t.after(f.dispose);
+  const password = f.document.getElementById('password');
+  Object.defineProperty(password, 'value', { get() { assert.fail('passwords must never be captured'); } });
+  password.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+  f.document.getElementById('search').dispatchEvent(new f.window.Event('input', { bubbles: true }));
+  await sleep(220); f.click('tab:review');
+  assert.ok(!f.panel().textContent.includes('Create an employer account password'));
+  assert.ok(!f.panel().textContent.includes('Search jobs')); assert.equal(f.saved.length, 0);
+});
+
+test('a detected answer can be edited in ACE without changing the form until approval', async t => {
+  const f = fixture('<label for="channel">Which application channel did you use?</label><select id="channel"><option value="">Select one</option><option value="site">Careers website</option><option value="ref">Friend referral</option></select>'); t.after(f.dispose);
+  f.review('Which application channel');
+  const field = f.document.getElementById('channel'); field.value = 'site'; field.dispatchEvent(new f.window.Event('change', { bubbles: true }));
+  await until(() => f.panel().textContent.includes('Answer detected on form'), 'detect the existing employer answer');
+  f.click(f.panel().querySelector('[data-ace^="edit-answer:"]').getAttribute('data-ace'));
+  const editor = f.panel().querySelector('#studio-answer'); assert.equal(editor.value, 'site');
+  editor.value = 'ref'; editor.dispatchEvent(new f.window.Event('change', { bubbles: true }));
+  assert.equal(field.value, 'site');
+  f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => f.saved.length === 1, 'approve and remember the corrected selection');
+  assert.equal(field.value, 'ref'); assert.equal(f.saved[0].answer, 'Friend referral');
+});
+
+test('custom choice buttons that change only aria state are adopted for approval', async t => {
+  const f = fixture('<div role="radiogroup" aria-label="Which interview format do you prefer?"><button type="button" aria-pressed="false" id="remote-format">Remote video</button><button type="button" aria-pressed="false" id="onsite-format">On site</button></div>'); t.after(f.dispose);
+  for (const button of f.document.querySelectorAll('[aria-pressed]')) button.addEventListener('click', () => {
+    f.document.querySelectorAll('[aria-pressed]').forEach(option => option.setAttribute('aria-pressed', String(option === button)));
+  });
+  f.review('Which interview format'); f.document.getElementById('onsite-format').click();
+  await until(() => f.panel().textContent.includes('Answer detected on form'), 'aria-only custom choices must be detected');
+  assert.ok(f.panel().querySelector('.focus-detected').textContent.includes('On site'));
+  f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => f.saved.length === 1, 'approval remembers the exact custom choice');
+  assert.equal(f.saved[0].answer, 'On site'); assert.equal(f.submissions(), 0);
+});
+
+test('approval never saves a detected answer that changed after ACE displayed it', async t => {
+  const f = fixture('<label for="testing">Describe your experience writing integration tests</label><textarea id="testing"></textarea>'); t.after(f.dispose);
+  f.review('Describe your experience');
+  const field = f.document.getElementById('testing'); field.value = 'First fictional answer'; field.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+  await until(() => f.panel().textContent.includes('Answer detected on form'), 'display the answer awaiting approval');
+  field.value = 'A changed fictional answer'; // A framework update without an input event.
+  f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  assert.equal(f.saved.length, 0);
+  assert.ok(f.panel().textContent.includes('employer answer changed'));
+  assert.ok(f.panel().querySelector('.focus-detected').textContent.includes('A changed fictional answer'));
+  f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => f.saved.length === 1, 'approve the newly displayed answer');
+  assert.equal(f.saved[0].answer, 'A changed fictional answer');
 });

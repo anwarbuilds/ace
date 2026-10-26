@@ -1081,7 +1081,7 @@ function aceOwnGroup(field) {
    chrome and matched "phone" through its ancestors, and filling a
    captcha or a consent box is never wanted. */
 function aceShouldSkip(field) {
-  if (field.type === "search") return true;
+  if (field.type === "search" || field.type === "password") return true;
 
   var name = aceNormalise(
     (field.getAttribute("name") || "") + " " + (field.id || "")
