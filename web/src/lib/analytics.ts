@@ -15,9 +15,15 @@ export interface AnalyticsData {
   roles: (AnalyticsGroup & { family: string })[];
   attribution: { resume: string; channel: string; combinations: unknown[] };
   companies: AnalyticsCompany[]; selected_company: string;
-  rejected_companies: { name: string; rejections: number; applications: number; latest_at: string | null }[];
+  rejected_companies: RejectedCompany[];
+  rejection_summary: { applications: number; companies: number; dated: number; latest_at: string | null };
   verified_companies: (AnalyticsGroup & { name: string; reports: number })[];
   reports: PetitionReport[]; annual: { period: string; approvals: number; denials: number; rate: number | null }[];
+}
+/** An employer with a recorded rejection: newest dated rejection first. */
+export interface RejectedCompany {
+  name: string; rejections: number; applications: number; latest_at: string | null;
+  dated: number; roles: string[]; in_progress: number;
 }
 export interface InboxConnection { connected: boolean; state: string; available: boolean; last_synced_at: string | null }
 
@@ -30,9 +36,11 @@ export function applicationRecordsHref(data: Pick<AnalyticsData,"days"|"start"|"
   return `/app/applications/analytics?${query}`;
 }
 export interface ApplicationAnalyticsRecord {
-  key:string; company:string; title:string; family:string; submitted_at:string|null;
+  key:string; company:string; title:string; requisition_id:string|null; family:string; submitted_at:string|null;
   status:string; event_types:string[]; href:string|null;
+  /** Each counted outcome, with its date and the email behind it when one exists. */
+  evidence:{kind:string; at:string|null; message_id:number|null}[];
 }
 export interface ApplicationAnalyticsRecords extends AnalyticsData {
-  records:ApplicationAnalyticsRecord[]; record_total:number; record_offset:number; record_limit:number;
+  records:ApplicationAnalyticsRecord[]; record_total:number; record_offset:number; record_limit:number; record_query:string;
 }

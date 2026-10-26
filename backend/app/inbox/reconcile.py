@@ -11,6 +11,10 @@ company, or as the owner's only application at that company. Interviews,
 assessments and offers keep the stricter rule: an exact job ID from the
 employer's own domain. Receipts are filed without changing anything, and
 everything uncertain goes to review with the likeliest application first.
+
+Parser version 3 (2026-10-26) never files an email as a receipt when it also
+sounds like a decision, or when only part of it could be read: a rejection
+that opens with "thank you for applying" must reach the owner.
 """
 
 from __future__ import annotations
@@ -21,30 +25,39 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from urllib.parse import urlparse
 
-PARSER_VERSION = "2"
+PARSER_VERSION = "3"
 
 _OTHERS = r"(?:other|another|a\s+different|different|more\s+qualified|alternative)\s+(?:candidates?|applicants?|individuals?|profiles?)"
+_ONWARD = r"(?:moving\s+(?:forward|ahead)|proceeding|progressing|advancing|continuing)"
 _REJECTION = re.compile(
     r"\b(?:"
-    r"we\s+regret\s+to\s+(?:inform|let\s+you\s+know|advise|tell)"
-    r"|(?:mov(?:e|ed|ing)|go(?:ne|ing)?)\s+forward(?:\s+\w+){0,3}?\s+" + _OTHERS +
+    r"we\s+regret\s+to\s+(?:inform|let\s+you\s+know|advise|tell)|we\s+regret\s+that\s+(?:we|your)"
+    r"|(?:mov(?:e|ed|ing)|go(?:ne|ing)?)\s+(?:forward|ahead)(?:\s+\w+){0,3}?\s+" + _OTHERS +
     r"|(?:proceed(?:ed|ing)?|pursu(?:e|ed|ing)|progress(?:ed|ing)?)(?:\s+\w+){0,3}?\s+" + _OTHERS +
     r"|(?:move\s+forward|proceed)\s+with\s+(?:a\s+)?candidates?\s+whose"
     r"|(?:decided|chosen|elected)\s+(?:not\s+to|to\s+not)\s+(?:move\s+forward|proceed|progress|continue|pursue|advance)"
-    r"|(?:will|would|are|is)\s+not\s+be\s+(?:moving\s+forward|proceeding|progressing|advancing|continuing)"
-    r"|won[’']t\s+be\s+(?:moving\s+forward|proceeding|progressing|advancing|continuing)"
+    r"|(?:will|would|are|is)\s+not\s+be\s+" + _ONWARD +
+    r"|won[’']t\s+be\s+(?:" + _ONWARD + r"|able\s+to\s+(?:move\s+forward|proceed|progress|offer\s+you))"
     r"|not\s+(?:be\s+)?able\s+to\s+(?:move\s+forward|proceed|progress|offer\s+you)"
     r"|not\s+(?:be\s+)?moving\s+forward\s+with\s+your\s+(?:application|candidacy)"
-    r"|your\s+(?:application|candidacy)\s+(?:was|has\s+been|is)\s+(?:unsuccessful|declined|rejected|not\s+successful)"
+    r"|your\s+(?:application|candidacy)\s+(?:was|has\s+been|is)\s+(?:unsuccessful|declined|rejected|not\s+successful|not\s+selected)"
     r"|(?:have|has)\s+not\s+been\s+selected|you\s+were\s+not\s+selected"
     r"|(?:position|role|opening|requisition|job|posting)(?:\s+(?:that\s+)?you\s+applied\s+(?:for|to))?"
     r"\s+(?:has\s+been|was|is\s+now)\s+(?:filled|closed|cancell?ed)"
+    r"|(?:position|role|opening|job)\s+is\s+no\s+longer\s+(?:available|open)"
     r"|(?:have|we['’]ve)\s+filled\s+(?:the|this)\s+(?:position|role|opening)"
     r"|unable\s+to\s+(?:offer\s+you|move\s+forward|proceed|progress)"
     r"|not\s+(?:be\s+)?extend(?:ing)?\s+(?:you\s+)?an\s+offer"
     r"|(?:decided|chosen)\s+to\s+go\s+(?:in\s+)?(?:a\s+)?different\s+direction"
     r"|no\s+longer\s+(?:considering|being\s+considered|under\s+consideration)"
     r")\b",
+    re.I,
+)
+# Wording that sounds like a decision. An email that also thanks you for
+# applying is shown to you rather than filed as a receipt.
+_DECLINE = re.compile(
+    r"\b(?:(?:won[’']t|will\s+not|not)\s+(?:be\s+)?" + _ONWARD +
+    r"|regret|(?:other|another|more\s+qualified)\s+(?:candidates?|applicants?))\b",
     re.I,
 )
 # The owner withdrawing is not an employer rejection.
@@ -108,6 +121,10 @@ _LEGAL_SUFFIX = re.compile(r"\s+(?:inc|incorporated|llc|ltd|limited|corp|corpora
 # An email received slightly before the owner marked Applied in ACE is
 # still about that application: some employers reject within minutes.
 _MARKING_GRACE = timedelta(hours=24)
+# Receipts ACE filed itself; a later parser may read them again. Receipts the
+# owner filed carry their own reason and are never re-decided.
+RECEIPT_REASON = "Application receipt; no status change"
+PARTIAL_REASON = "Only part of this email could be read"
 
 
 @dataclass(frozen=True)
@@ -129,6 +146,8 @@ class EmailEvidence:
     body: str
     received_at: datetime
     sender_authenticated: bool = False
+    # False when only Gmail's short snippet could be read, not the body.
+    complete: bool = True
 
 
 @dataclass(frozen=True)
@@ -178,7 +197,7 @@ def classify(evidence: EmailEvidence) -> tuple[str, str | None]:
     if _RECRUITER.search(text):
         return "recruiter_reply", requisition
     if _CONFIRMATION.search(text):
-        return "application_confirmation", requisition
+        return ("possible_rejection" if _DECLINE.search(text) else "application_confirmation"), requisition
     return "unknown", requisition
 
 
@@ -323,7 +342,12 @@ def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity]) 
         return Decision(classification, req, (), None, "ignored", "No explicit recruiting outcome", False)
     found = _match(evidence, applications, req)
     if classification == "application_confirmation":
-        return Decision(classification, found.requisition, found.ranked, found.target, "receipt", "Application receipt; no status change", False)
+        if not evidence.complete:
+            return Decision(classification, found.requisition, found.ranked, None, "review", PARTIAL_REASON, False)
+        return Decision(classification, found.requisition, found.ranked, found.target, "receipt", RECEIPT_REASON, False)
+    if classification == "possible_rejection":
+        return Decision(classification, found.requisition, found.ranked, None, "review",
+                        "It may be a rejection, but the wording is not clear enough to record on its own", False)
     if found.target is None:
         return Decision(classification, found.requisition, found.ranked, None, "review", found.basis, False)
     app = next(a for a in applications if a.key == found.target)

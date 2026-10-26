@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import html
 import re
 import secrets
@@ -10,11 +9,12 @@ import time
 from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr, parsedate_to_datetime
 from html.parser import HTMLParser
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
@@ -26,8 +26,10 @@ from backend.app.db.models import (
     ApplicationEventRecord, ExternalApplicationRecord, GmailConnectionRecord,
     GmailMessageRecord, JobMarkRecord, JobRecord, UserRecord,
 )
-from backend.app.inbox import gmail
-from backend.app.inbox.reconcile import ApplicationIdentity, Decision, EmailEvidence, PARSER_VERSION, conflict, reconcile
+from backend.app.inbox import display, gmail
+from backend.app.inbox.reconcile import (
+    ApplicationIdentity, Decision, EmailEvidence, PARSER_VERSION, RECEIPT_REASON, conflict, reconcile,
+)
 
 router = APIRouter()
 STATE_COOKIE = "ace_gmail_state"
@@ -35,7 +37,10 @@ NONCE_COOKIE = "ace_gmail_nonce"
 VERIFIER_COOKIE = "ace_gmail_verifier"
 PENDING = ("review", "exact_preview", "deferred")
 # Emails ACE has not applied to an application can still be decided by hand.
-DECIDABLE = PENDING + ("ignored", "receipt", "unrelated")
+DECIDABLE = PENDING + ("ignored", "receipt", "unrelated", "update")
+# Subject words that put an email ACE found no outcome in among the
+# recruiting email, so an outcome ACE could not read is still in view.
+_ABOUT_APPLICATIONS = ("application", "applying", "applied", "candidacy", "interview", "assessment")
 _OUTCOME_STATUS = {"rejection": "rejected", "interview": "interviewing", "offer": "offer"}
 _TOKENS: dict[tuple[int, bytes], tuple[float, str]] = {}
 
@@ -58,7 +63,9 @@ def _public(conn: GmailConnectionRecord | None) -> dict:
         "connected": bool(conn and conn.encrypted_refresh_token),
         "state": conn.state if conn else "disconnected",
         "email": conn.email if conn and conn.encrypted_refresh_token else None,
+        # The last check for new email. Importing older email does not move it.
         "last_synced_at": conn.last_synced_at.isoformat() if conn and conn.last_synced_at else None,
+        "following_changes": bool(conn and conn.history_id),
         "last_error": conn.last_error if conn else None,
         "auto_outcomes_enabled": bool(conn and conn.auto_outcomes_enabled),
         "automation_available": get_settings().gmail_auto_outcomes_allowed,
@@ -190,6 +197,8 @@ class _Text(HTMLParser):
         self.skip = 0
 
     def handle_starttag(self, tag: str, attrs) -> None:
+        if tag == "body":
+            self.skip = 0  # A head left unclosed ends where the body starts.
         if tag in self._SKIP:
             self.skip += 1
         elif tag in self._BREAK:
@@ -214,36 +223,24 @@ def _html_text(markup: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
-def _decode(part: dict) -> str:
-    encoded = part.get("body", {}).get("data", "")
-    content_type = next((str(h.get("value", "")) for h in part.get("headers", []) if str(h.get("name", "")).casefold() == "content-type"), "")
-    charset = re.search(r'(?i)charset="?([\w.-]+)', content_type)
-    try:
-        raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
-    except (ValueError, TypeError):
-        return ""
-    try:
-        return raw.decode(charset.group(1) if charset else "utf-8", "replace")
-    except LookupError:
-        return raw.decode("utf-8", "replace")
-
-
 def _parts(payload: dict, mime: str) -> list[str]:
-    if payload.get("mimeType") == mime:
-        return [_decode(payload)]
-    return [text for part in payload.get("parts", []) if isinstance(part, dict) for text in _parts(part, mime)]
+    return [display.decode(part) for part in display.parts(payload, mime)]
 
 
 def _body(payload: dict, limit: int = 10000) -> str:
     """Plain text when the email has it, else the text of its HTML.
 
-    HTML is never rendered, executed or stored; many employer systems send
-    only HTML, and reading its text is how their wording and job IDs count.
+    HTML is never executed or stored here; many employer systems send only
+    HTML, and reading its text is how their wording and job IDs count.
     """
     plain = "\n".join(text for text in _parts(payload, "text/plain") if text.strip())
     if plain:
         return plain[:limit]
     return "\n".join(_html_text(text) for text in _parts(payload, "text/html"))[:limit]
+
+
+def _headers(payload: dict) -> dict[str, str]:
+    return {str(h.get("name", "")).lower(): str(h.get("value", "")) for h in payload.get("headers", [])}
 
 
 def _message_evidence(data: dict) -> EmailEvidence:
@@ -261,7 +258,11 @@ def _message_evidence(data: dict) -> EmailEvidence:
         stamp = parsedate_to_datetime(headers.get("date", ""))
     except (TypeError, ValueError):
         stamp = datetime.fromtimestamp(int(data["internalDate"]) / 1000, timezone.utc)
-    return EmailEvidence(headers.get("from", "")[:320], headers.get("subject", "")[:500], _body(data.get("payload", {})) or html.unescape(str(data.get("snippet", "")))[:500], stamp, authenticated)
+    body = _body(data.get("payload", {}))
+    # Gmail's snippet is a couple of hundred characters; a rejection further
+    # down an email that opens with thanks would be missed, so say so.
+    return EmailEvidence(headers.get("from", "")[:320], headers.get("subject", "")[:500],
+                         body or html.unescape(str(data.get("snippet", "")))[:500], stamp, authenticated, bool(body))
 
 
 def _access(conn: GmailConnectionRecord) -> str:
@@ -376,9 +377,10 @@ def decide_message(message_id: int, body: EmailDisposition, request: Request, se
     if row.decision not in DECIDABLE:
         raise HTTPException(409, "This email already changed an application. Undo that change first.")
     reasons = {"unrelated": "You marked it not about your applications", "deferred": "You chose to decide later",
-               "receipt": "You marked it an application receipt"}
+               "receipt": "You marked it an application receipt",
+               "update": "You marked it a status update with no decision yet"}
     if body.action not in reasons:
-        raise HTTPException(422, "Choose unrelated, receipt or deferred.")
+        raise HTTPException(422, "Choose unrelated, receipt, update or deferred.")
     before = row.decision
     row.decision = body.action
     row.decision_reason = reasons[body.action]
@@ -514,13 +516,14 @@ def backfill(body: SyncRequest, request: Request, session: Session = Depends(get
                 continue  # Deleted after listing; no evidence or outcome exists.
             outcome = _ingest(session, conn, data, identities, preview=True)
             counts[outcome] = counts.get(outcome, 0) + 1
-        conn.last_synced_at = datetime.now(timezone.utc)
+        # Older pages say nothing about new email, so the time of the last
+        # check for new email (last_synced_at) stays where sync left it.
         conn.last_error = None
         if not batch.get("nextPageToken") and conn.preview_baseline_history_id and not conn.history_id:
             conn.history_id = conn.preview_baseline_history_id
             conn.preview_complete = True
         session.commit()
-        return {"preview_only": True, "counts": counts, "next_page_token": batch.get("nextPageToken"), "as_of": conn.last_synced_at.isoformat()}
+        return {"preview_only": True, "counts": counts, "next_page_token": batch.get("nextPageToken"), "as_of": datetime.now(timezone.utc).isoformat()}
     except gmail.GmailError as exc:
         session.rollback()
         conn = _connection(session, current_owner(request))
@@ -530,66 +533,131 @@ def backfill(body: SyncRequest, request: Request, session: Session = Depends(get
         raise HTTPException(429 if isinstance(exc, gmail.GmailRateLimited) else 502, str(exc)) from exc
 
 
-def _message_query(connection_id: int, decision: str | None = None):
+def _message_query(connection_id: int, decision: str | None = None, q: str | None = None):
     query = select(GmailMessageRecord).where(GmailMessageRecord.connection_id == connection_id)
     if decision == "pending":
         query = query.where(GmailMessageRecord.decision.in_(PENDING))
-    elif decision in {"review", "exact_preview", "deferred", "ignored", "manual", "automatic", "unrelated", "receipt"}:
+    elif decision == "recruiting":
+        # Everything about applications, newest first, whatever ACE did with it.
+        named = or_(*(GmailMessageRecord.subject.ilike(f"%{word}%") for word in _ABOUT_APPLICATIONS))
+        query = query.where(or_(GmailMessageRecord.decision.not_in(("ignored", "unrelated")),
+                                and_(GmailMessageRecord.decision == "ignored", named)))
+    elif decision in {"review", "exact_preview", "deferred", "ignored", "manual", "automatic", "unrelated", "receipt", "update"}:
         query = query.where(GmailMessageRecord.decision == decision)
     elif decision == "ambiguous":
         query = query.where(GmailMessageRecord.decision == "review", GmailMessageRecord.candidate_keys[1].as_string().is_not(None))
     elif decision is not None:
         raise HTTPException(422, "Choose a supported evidence review filter.")
+    for word in (q or "").split()[:6]:
+        pattern = "%" + re.sub(r"([\\%_])", r"\\\1", word) + "%"
+        query = query.where(or_(GmailMessageRecord.sender.ilike(pattern, escape="\\"),
+                                GmailMessageRecord.subject.ilike(pattern, escape="\\"),
+                                GmailMessageRecord.snippet.ilike(pattern, escape="\\")))
     return query
 
 
-def _message_rows(session: Session, connection_id: int, decision: str | None = None, offset: int = 0, limit: int = 100) -> list[GmailMessageRecord]:
+def _message_rows(session: Session, connection_id: int, decision: str | None = None, offset: int = 0, limit: int = 100,
+                  q: str | None = None) -> list[GmailMessageRecord]:
     """Filter before pagination, so ignored mail cannot hide pending evidence."""
-    return list(session.scalars(_message_query(connection_id, decision).order_by(
+    return list(session.scalars(_message_query(connection_id, decision, q).order_by(
         GmailMessageRecord.received_at.desc(), GmailMessageRecord.id.desc()).offset(offset).limit(limit)))
+
+
+def _stale_query(connection_id: int):
+    """Email read under older rules that the current rules may decide differently:
+    everything waiting, and receipts ACE filed itself (never the owner's)."""
+    return select(GmailMessageRecord).where(
+        GmailMessageRecord.connection_id == connection_id, GmailMessageRecord.parser_version != PARSER_VERSION,
+        or_(GmailMessageRecord.decision.in_(PENDING),
+            and_(GmailMessageRecord.decision == "receipt", GmailMessageRecord.decision_reason == RECEIPT_REASON)))
+
+
+def _item(r: GmailMessageRecord) -> dict:
+    return {"id": r.id, "received_at": r.received_at.isoformat(), "sender": r.sender, "subject": r.subject,
+            "snippet": html.unescape(r.snippet), "classification": r.classification, "requisition_id": r.requisition_id,
+            "decision": r.decision, "candidate_keys": r.candidate_keys or [], "reason": r.decision_reason,
+            "selected_application_key": r.selected_application_key}
 
 
 @router.get("/api/inbox/messages")
 def messages(request: Request, session: Session = Depends(get_session), decision: str | None = None,
-             offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=100)) -> dict:
+             offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=100),
+             q: Annotated[str | None, Query(max_length=100)] = None) -> dict:
+    """One page of imported email. ``decision=auto`` shows what waits for the
+    owner when anything does, else the recent recruiting email."""
     conn = _connection(session, current_owner(request))
+    counts = {"stored": 0, "needs_review": 0, "automatic": 0, "manual": 0, "reviewed": 0, "receipts": 0, "updates": 0, "stale": 0}
     if not conn:
         return {"items": [], "review_count": 0, "total": 0, "offset": offset, "has_more": False,
-                "counts": {"stored": 0, "needs_review": 0, "automatic": 0, "reviewed": 0, "receipts": 0, "stale": 0}}
+                "view": ("pending" if decision == "auto" else decision) or "all", "latest_received_at": None, "counts": counts}
     by_decision = dict(session.execute(select(GmailMessageRecord.decision, func.count()).where(
         GmailMessageRecord.connection_id == conn.id).group_by(GmailMessageRecord.decision)).all())
     review_count = sum(by_decision.get(key, 0) for key in PENDING)
-    # Waiting emails read under older rules; recheck applies the current ones.
-    stale = session.scalar(select(func.count()).select_from(GmailMessageRecord).where(
-        GmailMessageRecord.connection_id == conn.id, GmailMessageRecord.decision.in_(PENDING),
-        GmailMessageRecord.parser_version != PARSER_VERSION)) or 0
-    total = session.scalar(select(func.count()).select_from(_message_query(conn.id, decision).subquery())) or 0
-    rows = _message_rows(session, conn.id, decision, offset, limit)
-    return {"items": [{"id": r.id, "received_at": r.received_at.isoformat(), "sender": r.sender, "subject": r.subject, "snippet": html.unescape(r.snippet), "classification": r.classification, "requisition_id": r.requisition_id, "decision": r.decision, "candidate_keys": r.candidate_keys or [], "reason": r.decision_reason, "selected_application_key": r.selected_application_key} for r in rows],
-            "review_count": review_count, "total": total, "offset": offset, "has_more": offset + len(rows) < total,
-            "counts": {"stored": sum(by_decision.values()), "needs_review": review_count,
-                       "automatic": by_decision.get("automatic", 0),
-                       "reviewed": sum(by_decision.get(key, 0) for key in ("manual", "automatic", "unrelated")),
-                       "receipts": by_decision.get("receipt", 0), "stale": stale}}
+    if decision == "auto":
+        decision = "pending" if review_count else "recruiting"
+    stale = session.scalar(select(func.count()).select_from(_stale_query(conn.id).subquery())) or 0
+    latest = session.scalar(select(func.max(GmailMessageRecord.received_at)).where(GmailMessageRecord.connection_id == conn.id))
+    total = session.scalar(select(func.count()).select_from(_message_query(conn.id, decision, q).subquery())) or 0
+    rows = _message_rows(session, conn.id, decision, offset, limit, q)
+    counts.update({"stored": sum(by_decision.values()), "needs_review": review_count,
+                   "automatic": by_decision.get("automatic", 0), "manual": by_decision.get("manual", 0),
+                   "reviewed": sum(by_decision.get(key, 0) for key in ("manual", "automatic", "unrelated", "update")),
+                   "receipts": by_decision.get("receipt", 0), "updates": by_decision.get("update", 0), "stale": stale})
+    return {"items": [_item(r) for r in rows], "review_count": review_count, "total": total, "offset": offset,
+            "has_more": offset + len(rows) < total, "view": decision or "all",
+            "latest_received_at": latest.isoformat() if latest else None, "counts": counts}
+
+
+def _owned(session: Session, request: Request, message_id: int) -> tuple[GmailConnectionRecord, GmailMessageRecord]:
+    conn = _connection(session, current_owner(request))
+    row = session.get(GmailMessageRecord, message_id)
+    if not conn or not row or row.connection_id != conn.id:
+        raise HTTPException(404, "Email not found.")
+    return conn, row
+
+
+@router.get("/api/inbox/messages/{message_id}")
+def message(message_id: int, request: Request, session: Session = Depends(get_session)) -> dict:
+    """One imported email, so a link from Analytics can open it."""
+    return _item(_owned(session, request, message_id)[1])
 
 
 @router.get("/api/inbox/messages/{message_id}/full")
 def full_message(message_id: int, request: Request, session: Session = Depends(get_session)) -> dict:
-    """The whole email as readable text, read from Gmail now and never stored."""
-    conn = _connection(session, current_owner(request))
-    row = session.get(GmailMessageRecord, message_id)
-    if not conn or not conn.encrypted_refresh_token or not row or row.connection_id != conn.id:
+    """The whole email, read from Gmail now and never stored.
+
+    ``document`` is the email's own HTML rebuilt for a sandboxed frame (see
+    ``display``); ``text`` is the readable text for search and fallbacks.
+    """
+    conn, row = _owned(session, request, message_id)
+    if not conn.encrypted_refresh_token:
         raise HTTPException(404, "Email not found.")
     try:
-        data = gmail.get_json("/messages/" + row.gmail_id, _access(conn), {"format": "full"})
+        token = _access(conn)
+        data = gmail.get_json("/messages/" + row.gmail_id, token, {"format": "full"})
+
+        def attachment(key: str) -> str:
+            try:
+                return str(gmail.get_json(f"/messages/{row.gmail_id}/attachments/{key}", token).get("data", ""))
+            except gmail.GmailError:
+                return ""  # A picture that cannot be read never hides the email.
+
+        payload = data.get("payload", {})
+        snippet = html.unescape(str(data.get("snippet", "")))
+        text = _body(payload, 60000) or snippet
+        shown = display.show(payload, attachment, fallback=snippet)
     except gmail.GmailCursorExpired as exc:
         raise HTTPException(404, "This email is no longer in Gmail.") from exc
     except gmail.GmailError as exc:
         if not isinstance(exc, gmail.GmailTemporaryError):
             _TOKENS.clear()
         raise HTTPException(429 if isinstance(exc, gmail.GmailRateLimited) else 502, str(exc)) from exc
-    text = _body(data.get("payload", {}), 60000) or html.unescape(str(data.get("snippet", "")))
-    return {"id": row.id, "sender": row.sender, "subject": row.subject, "received_at": row.received_at.isoformat(), "text": text}
+    headers = _headers(payload)
+    message_key = headers.get("message-id", "").strip()
+    return {"id": row.id, "sender": headers.get("from") or row.sender, "to": headers.get("to", ""), "cc": headers.get("cc", ""),
+            "subject": headers.get("subject") or row.subject, "received_at": row.received_at.isoformat(), "text": text,
+            "document": shown.document, "format": shown.kind, "blocked_images": shown.blocked_images,
+            "message_id_header": message_key[:300] or None, "thread_id": row.thread_id}
 
 
 class RecheckRequest(BaseModel):
@@ -598,17 +666,17 @@ class RecheckRequest(BaseModel):
 
 @router.post("/api/inbox/recheck")
 def recheck(body: RecheckRequest, request: Request, session: Session = Depends(get_session)) -> dict:
-    """Decide waiting emails again under the current rules.
+    """Decide email read under older rules again, under the current ones.
 
-    Each email is read from Gmail again (the full text is not stored) and
-    decided as a historical import would be: a clear rejection is recorded,
-    anything else stays waiting. Run it again until nothing remains.
+    That is every waiting email and every receipt ACE filed itself. Each is
+    read from Gmail again (the full text is not stored) and decided as a
+    historical import would be: a clear rejection is recorded, a receipt
+    stays a receipt, anything unclear waits. Run it again until none remain.
     """
     conn = _connection(session, current_owner(request))
     if not conn or not conn.encrypted_refresh_token or conn.state == "disconnected":
         raise HTTPException(409, "Connect Gmail before rechecking email.")
-    stale = select(GmailMessageRecord).where(GmailMessageRecord.connection_id == conn.id, GmailMessageRecord.decision.in_(PENDING),
-                                             GmailMessageRecord.parser_version != PARSER_VERSION)
+    stale = _stale_query(conn.id)
     rows = list(session.scalars(stale.order_by(GmailMessageRecord.received_at.desc(), GmailMessageRecord.id.desc()).limit(body.limit)))
     counts: dict[str, int] = {}
     identities = _identities(session) if rows else []
@@ -619,7 +687,7 @@ def recheck(body: RecheckRequest, request: Request, session: Session = Depends(g
         except gmail.GmailCursorExpired:
             # Deleted from Gmail: decide from what was kept, which cannot
             # prove the sender, so nothing changes automatically.
-            evidence = EmailEvidence(row.sender, row.subject, html.unescape(row.snippet), row.received_at)
+            evidence = EmailEvidence(row.sender, row.subject, html.unescape(row.snippet), row.received_at, complete=False)
         except gmail.GmailError as exc:
             if not isinstance(exc, gmail.GmailTemporaryError):
                 _TOKENS.clear()

@@ -217,10 +217,34 @@ test("date, status and evidence drilldowns show the exact Applications selection
   await page.goto("/app/analytics?days=90");
   await page.getByRole("link",{name:/Online assessments/}).click();
   await expect(page).toHaveURL(/evidence=online_assessment/);
-  await expect(page.locator(".an-record-row").first()).toContainText("online assessment");
+  await expect(page.locator(".an-record-row").first()).toContainText(/online assessment/i);
   await page.screenshot({path:path.join(root,"application-drilldown.png"),fullPage:true});
   await page.setViewportSize({width:390,height:941});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
   expect(errors).toEqual([]);
   await page.screenshot({path:path.join(root,"application-drilldown-mobile.png"),fullPage:true});
+});
+
+test("Rejected companies opens rejected applications that can be searched and paged",async({page})=>{
+  const errors=watchErrors(page);
+  await page.goto("/app/analytics?tab=companies&days=all");
+  const panel=page.locator(".an-rejections");
+  await expect(panel.getByRole("heading",{name:"Rejected companies"})).toBeVisible();
+  await expect(page.getByText("Companies that rejected you")).toHaveCount(0);
+  await panel.getByRole("link",{name:/View rejected applications/}).click();
+  await expect(page).toHaveURL(/evidence=rejection/);
+  await expect(page.getByRole("heading",{name:"Rejected applications",level:1})).toBeVisible();
+  const company=(await page.locator(".an-record-company strong").first().innerText()).trim();
+  await page.getByRole("link",{name:"25",exact:true}).click();
+  await expect(page).toHaveURL(/limit=25/);
+  await page.getByRole("searchbox",{name:/Search rejected applications/}).fill(company);
+  await page.getByRole("button",{name:"Search",exact:true}).click();
+  await expect(page).toHaveURL(/q=/);
+  await expect(page).toHaveURL(/limit=25/);
+  expect(await page.locator(".an-record-company strong").allInnerTexts()).toEqual(expect.arrayContaining([company]));
+  expect((await page.locator(".an-record-company strong").allInnerTexts()).every(name=>name.trim()===company)).toBe(true);
+  await expect(page.getByText(/match(es)? for/)).toBeVisible();
+  await page.getByRole("link",{name:"Clear search"}).click();
+  await expect(page).not.toHaveURL(/q=/);
+  expect(errors).toEqual([]);
 });

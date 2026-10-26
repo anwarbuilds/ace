@@ -480,3 +480,26 @@ The API now returns `match_state`: `scored`, `pending` (not scored yet), `no_des
 
 Lesson: a derived table with one writer goes stale silently. Ask which events should refresh it (new row, changed input,
 changed rules, changed algorithm), and test each one. Tests: `backend/tests/test_score_sweep.py`.
+
+## The Inbox looked synced when it was not (2026-10-26)
+
+The owner opened Inbox Intelligence to "Waiting for you: 0" and "Last sync" a few minutes old, while Gmail held a fresh
+rejection from a shared Ashby sender that the dashboard never showed. Three things made the page look settled when it
+was not. Nothing read Gmail in the background: email arrived only when a button was pressed. "Last sync" also moved
+when an older import page ran, so it could show a recent time while new email had never been fetched. And a rejection
+that opens with "thank you for applying" was filed as a receipt whenever its decisive sentence went unread (body
+extraction failed, so only Gmail's short snippet was classified), and receipts never reach Waiting for you.
+
+Fix (parser version 3, branch `inbox-clarity-20261026`): the page checks Gmail when opened and while open, one Sync now
+button also re-reads email kept under older rules, and a status card states when Gmail was last checked and whether
+anything waits. `last_synced_at` means only the last check for new email. A receipt that also sounds like a decision,
+or that was read only from its snippet, waits for the owner; receipts ACE filed itself are read again by recheck, the
+owner's never. A Recruiting email view lists everything about applications with what ACE did, and search reaches every
+imported email. The review shows the email itself, rebuilt from an allowlist into a sandboxed frame with no scripts
+and no pictures fetched from the sender (`backend/app/inbox/display.py`, `components/inbox/EmailFrame.tsx`).
+
+Lesson: a status line must describe the exact thing it names. "Last sync" written by two different operations, and a
+"nothing to review" that excludes the bucket a misread email lands in, both read as "all done". Show what the system
+did with each recent item and let the owner search, so a miss is visible instead of silent. Tests:
+`backend/tests/test_inbox_display.py`, the parser 3 cases in `test_inbox_reconciliation.py`, the view, search and
+recheck cases in `test_inbox_persistence.py`, and `web/tests/inbox-review-render.test.mjs`.

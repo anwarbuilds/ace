@@ -66,8 +66,8 @@ for (const theme of ["dark", "light"] as const) {
       const errors = watchErrors(page);
       await page.goto("/app/applications/inbox");
       await expect(page.getByRole("heading", { name: "Inbox Intelligence", level: 1 })).toBeVisible();
-      await expect(page.getByText("Setup required")).toBeVisible();
-      await expect(page.getByText("Automatic rejections: ON")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Gmail is not set up on this server" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Sync now" })).toHaveCount(0);
       expect(await page.evaluate(TEXT_SCAN)).toEqual([]);
       expect(await page.evaluate(DRAWN_SCAN)).toEqual([]);
       expect(errors).toEqual([]);

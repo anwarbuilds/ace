@@ -144,7 +144,8 @@ def test_existing_evidence_skips_google_detail_reads(monkeypatch, database, prev
     assert result["counts"] == {"duplicate": 1}
     assert session.scalar(select(func.count()).select_from(GmailMessageRecord)) == 1
     assert session.scalar(select(func.count()).select_from(ApplicationEventRecord)) == 0
-    assert conn.last_synced_at is not None
+    # Only a check for new email moves the sync time; an older page does not.
+    assert (conn.last_synced_at is None) == preview
     assert not any(path.startswith("/messages/") for path in calls)
 
 
@@ -160,7 +161,7 @@ def test_backfill_tolerates_a_message_deleted_after_listing(monkeypatch, databas
     result = inbox.backfill(inbox.SyncRequest(), owner_request(), session)
     assert result["preview_only"] is True
     assert conn.history_id == "fixture-cursor"
-    assert conn.last_synced_at is not None
+    assert conn.last_synced_at is None  # Importing older email is not a check for new email.
     assert session.scalar(select(func.count()).select_from(ApplicationEventRecord)) == 0
 
 
@@ -213,7 +214,7 @@ def test_review_counts_and_pagination_include_older_pending_messages(database):
     assert [len(page["items"]) for page in pages] == [50,50,27]
     assert all(page["total"] == page["review_count"] == 127 for page in pages)
     assert [page["has_more"] for page in pages] == [True,True,False]
-    assert pages[0]["counts"] == {"stored":284,"needs_review":127,"automatic":3,"reviewed":7,"receipts":0,"stale":127}
+    assert pages[0]["counts"] == {"stored":284,"needs_review":127,"automatic":3,"manual":4,"reviewed":7,"receipts":0,"updates":0,"stale":127}
     ids=[row["id"] for page in pages for row in page["items"]]
     assert len(ids)==len(set(ids))==127
     assert all(row["decision"] != "ignored" for page in pages for row in page["items"])
