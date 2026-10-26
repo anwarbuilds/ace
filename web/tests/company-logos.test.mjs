@@ -59,6 +59,13 @@ test("reviewed company spellings share the same mark on lists, filters and detai
     assert.ok(html(Avatar,{name,large:true}).includes(`/company-logos/${asset}`));
   }
 });
+test("additional reviewed employers have authentic bundled marks in shared list and detail identities",()=>{
+  for(const name of ["JP Morgan Chase","Mastercard","U.S. Bank","Wex","C3.ai","CLEAR","Cigna Group","Citi","CoStar Group","DTCC","Forge Nano","Funnel Leasing","Gartner","Greenheck Group","Iambic Therapeutics","Marvell","Medtronic","Morningstar","T.D. Williamson","Thomson Reuters","Travelers"]){
+    const record=companyLogoFor(name);assert.ok(record,`Missing reviewed identity: ${name}`);
+    assert.ok(html(CompanyIdentity,{name}).includes(`/company-logos/${record.asset}`));
+    assert.ok(html(Avatar,{name,large:true}).includes(`/company-logos/${record.asset}`));
+  }
+});
 test("all identities are unambiguous and all local bytes match official provenance",()=>{
   const identities=new Map();
   for(const row of manifest){

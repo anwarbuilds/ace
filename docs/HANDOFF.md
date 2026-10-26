@@ -155,9 +155,9 @@ Analytics. `GMAIL_AUTO_REJECTIONS` (default true) is the server switch. No migra
 See `ACE_NEXT_KNOWLEDGE.md`, Inbox automatic rejections.
 
 
-**2026-10-26 platform logo coverage:** 78 reviewed icons, JP Morgan Chase alias,
+**2026-10-26 platform logo coverage:** 80 reviewed icons, JP Morgan Chase alias,
 Ashby/Greenhouse/Workable discovery, bounded failure recovery and company marks
-in filters/Inbox are tested locally. Marvell/Funnel image hosts refuse reads.
+in filters/Inbox are tested locally. All 21 missing screenshot names resolve.
 Deployment pending; see `architecture/2026-10-26-platform-company-logos.md`.
 
 Historical state notes from earlier extension and platform releases are retained

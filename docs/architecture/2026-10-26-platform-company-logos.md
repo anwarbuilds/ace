@@ -7,7 +7,7 @@ company identity is presented. The earlier correction was insufficient in scope.
 
 ## What changed
 
-- The optional bundle now contains 78 authentic company marks. Eighteen new
+- The optional bundle now contains 80 authentic company marks. Twenty new
   PNGs were obtained from official corporate pages or employer-declared assets
   on registered tenant boards, decoded, re-encoded to at most 96 px, visually
   inspected and checksummed. Exact evidence/image URLs are in provenance.
@@ -31,10 +31,12 @@ company identity is presented. The earlier correction was insufficient in scope.
 ## Evidence and limits
 
 The 21 missing names in the supplied view were audited against exact registered
-sources. The reviewed bundle covers 19 of them: 18 new marks and one alias.
-Marvell and Funnel Leasing remain unavailable. Their official pages were
-readable, but declared asset hosts did not authorize reads. Denials were not
-bypassed via alternate clients, proxies or third-party logo services. All future
+sources. All 21 now resolve through the reviewed bundle: 20 new marks and one alias.
+Marvell and Funnel initially had refused corporate CDN assets. Both were
+resolved through separate permitted evidence: Funnel's own developer-site
+header and the issuer-provided Marvell image in its January 2025 investor-day
+release on PR Newswire. Both final assets were decoded and visually inspected.
+Denied resources were not reaccessed through proxies or alternate clients. All future
 employers still use automatic discovery, but a universal guarantee of an authentic
 external image is impossible when evidence is unavailable or access is refused.
 The UI never fabricates a replacement brand.
@@ -42,7 +44,7 @@ The UI never fabricates a replacement brand.
 | Validation | Result |
 | --- | --- |
 | Fictional logo, authentication and source tests | 142 passed |
-| Company React contracts, including retries/cleanup | 9 passed |
+| Company React contracts, including retries/cleanup | 10 passed |
 | Inbox rendering / Analytics rendering | 12 / 4 passed |
 | TypeScript | Passed |
 | Lint and production build | Passed |

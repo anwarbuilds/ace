@@ -2,7 +2,7 @@
 
 These are authentic marks downloaded from the exact official employer URLs
 in `provenance.json`. The first 60 preserve the downloaded icon bytes; the
-18 additions below were decoded and re-encoded as PNG at up to 96 px. The initial 11 were reviewed on 2026-10-25; 48 more
+20 additions below were decoded and re-encoded as PNG at up to 96 px. The initial 11 were reviewed on 2026-10-25; 48 more
 were downloaded and visually inspected on 2026-10-26, for 59 employers total.
 One more official Hive icon was reviewed on 2026-10-26, for 60 employers total.
 Checksums record the cached versions. They identify employers, never ACE.
@@ -64,10 +64,10 @@ produce visible initials; universal external logo availability cannot be promise
 
 ## Platform coverage follow-up, 2026-10-26
 
-The bundle now has 78 reviewed marks. Added C3.ai, Cigna Group, Citi, CLEAR,
+The bundle now has 80 reviewed marks. Added C3.ai, Cigna Group, Citi, CLEAR,
 CoStar Group, DTCC, Forge Nano, Gartner, Greenheck Group, Iambic Therapeutics,
 Mastercard, Medtronic, Morningstar, T.D. Williamson, Thomson Reuters, Travelers,
-U.S. Bank and Wex. All were decoded, visually reviewed and checksummed. The
+U.S. Bank, Wex, Marvell and Funnel Leasing. All were decoded, visually reviewed and checksummed. The
 JP Morgan Chase spelling now resolves to the existing JPMorgan Chase mark;
 C3 AI and ForgeNano have explicit reviewed aliases. No application data or
 history-based company counts are stored in this manifest.
@@ -77,7 +77,7 @@ Workable account branding and Greenhouse's tenant-logo element. Generic
 preview images and platform favicons remain excluded. Bounded frontend retries
 allow transient busy/offline failures to recover, with no polling loop.
 
-Marvell and Funnel Leasing have no cached asset from this review: corporate
-pages were readable but their declared image hosts did not authorize reads.
-Their refused image URLs were not retried through proxies or third-party logo
-services. Readable initials remain until permitted authentic evidence is available.
+Marvell and Funnel initially had refused corporate CDN assets. The final
+review obtained permitted authentic marks from Funnel's own developer header
+and the issuer-provided image in Marvell's January 2025 PR Newswire release.
+Refused image hosts were not bypassed. Provenance records these distinct sources.

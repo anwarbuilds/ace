@@ -18,13 +18,15 @@ or database dump content because the GitHub repository is public.
 Status: locally tested, deployment pending on `platform-company-logos-20261026`.
 The owner found initials across Analytics and requested company marks throughout
 the platform. The prior Hive/Vizient release did not cover all providers/names.
-This pass audits all 21 missing names in the supplied view. Eighteen authentic
+This pass audits all 21 missing names in the supplied view. Twenty authentic
 assets were obtained, decoded, visually inspected and checksummed, expanding
-the optional bundle to 78; JP Morgan Chase now aliases the existing JPMorgan
+the optional bundle to 80; JP Morgan Chase now aliases the existing JPMorgan
 Chase asset. C3 AI/ForgeNano spelling variants are explicitly reviewed. No legal
-suffix guessing or company/history rewriting. The two still-unavailable brands
-are Marvell and Funnel Leasing: their corporate pages are readable but their
-declared image hosts refuse automated reads. No bypass or substitute logo.
+suffix guessing or company/history rewriting. Marvell and Funnel initially had refused corporate image hosts. Permitted
+independent evidence resolved both: Funnel's own developer-site header and
+Marvell's issuer-provided logo in its January 2025 PR Newswire release. No
+refused host was bypassed or substitute brand used. All 21 previously missing
+names in the supplied view now resolve (20 new assets and one alias).
 
 General discovery supports Ashby org-theme logo metadata, Workable account
 branding metadata and Greenhouse's dedicated tenant-logo element, with strict
@@ -39,7 +41,7 @@ surfaces already use the shared resolver. Native select options retain native
 keyboard behavior; the selected company has an adjacent mark. Email bodies,
 notifications, input text and other literal content are not rewritten.
 
-Validation: 142 fictional logo/auth/source tests, 9 company React contracts
+Validation: 142 fictional logo/auth/source tests, 10 company React contracts
 (including retry bounds/cancellation), 12 Inbox and 4 Analytics render tests
 pass. TypeScript, lint, production build and forbidden-dash checks pass.
 Deployment evidence will be recorded after completion. Chrome stays off for

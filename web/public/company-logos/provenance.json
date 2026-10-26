@@ -903,5 +903,25 @@
     "verified_on": "2026-10-26",
     "sha256": "67048016487a415ef42774257ff4a99c0ad2bf82e191ad53ce2020fbfe4f4574",
     "aliases": []
+  },
+  {
+    "company": "Marvell",
+    "asset": "marvell.png",
+    "source": "https://mmx.prnewswire.com/media/356222/marvell_logo.jpg",
+    "website": "https://www.prnewswire.com/news-releases/marvell-technology-inc-to-host-investor-day-302352474.html",
+    "identity": "Issuer-provided logo in Marvell-issued January 2025 investor-day release; publisher identifies Marvell as the news source; decoded and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "1591acf44fbe0845397f0426856fcef5dc1ca754447949972a5fa12f57018dc6",
+    "aliases": []
+  },
+  {
+    "company": "Funnel Leasing",
+    "asset": "funnel-leasing.png",
+    "source": "https://developers.funnelleasing.com/logo/funnel-leasing.webp",
+    "website": "https://developers.funnelleasing.com/",
+    "identity": "Official employer developer website header branding; decoded and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "210d53762708eb99425bf69278148ae3514efdb929ddcfb5ecbf23c87a17603e",
+    "aliases": []
   }
 ]
