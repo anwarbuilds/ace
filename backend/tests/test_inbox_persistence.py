@@ -224,3 +224,96 @@ def test_full_email_is_read_live_and_never_stored(database, gmail_reads, monkeyp
     with pytest.raises(HTTPException) as error:
         inbox.full_message(row.id, owner_request(), session)
     assert error.value.status_code == 404
+
+
+def stored(session: Session, conn, gmail_id: str, decision: str, subject: str, *, sender: str = "talent@careers.silverpine.example",
+           reason: str = "Fictional fixture", version: str = PARSER_VERSION, minutes: int = 0, snippet: str = "Fictional") -> GmailMessageRecord:
+    row = GmailMessageRecord(connection_id=conn.id, gmail_id=gmail_id, received_at=NOW - timedelta(minutes=minutes), sender=sender,
+                             subject=subject, snippet=snippet, classification="unknown", decision=decision, candidate_keys=[],
+                             decision_reason=reason, parser_version=version)
+    session.add(row)
+    session.flush()
+    return row
+
+
+def test_default_view_shows_recruiting_email_and_search_finds_it(database):
+    session, conn = database
+    stored(session, conn, "auto", "automatic", "Your application to Silverpine Labs", minutes=1)
+    stored(session, conn, "receipt", "receipt", "Thanks for applying", minutes=2)
+    stored(session, conn, "noise", "ignored", "Weekly newsletter", minutes=3)
+    maybe = stored(session, conn, "maybe", "ignored", "Update on your application", sender="Wayfern Fiction <no-reply@ashbyhq.example>", minutes=4)
+    stored(session, conn, "elsewhere", "unrelated", "Your application for a fictional credit card", minutes=5)
+    session.commit()
+    page = inbox.messages(owner_request(), session, "auto", 0, 50)
+    # Nothing waits, so the newest recruiting email shows, whatever ACE did with it.
+    assert page["view"] == "recruiting"
+    assert page["latest_received_at"][:16] == (NOW - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M")
+    assert [item["subject"] for item in page["items"]] == ["Your application to Silverpine Labs", "Thanks for applying", "Update on your application"]
+    found = inbox.messages(owner_request(), session, None, 0, 50, "  WAYFERN  ")
+    assert [item["id"] for item in found["items"]] == [maybe.id] and found["total"] == 1
+    assert inbox.messages(owner_request(), session, None, 0, 50, "100%_")["total"] == 0  # Wildcards are literal.
+    assert inbox.message(maybe.id, owner_request(), session)["subject"] == "Update on your application"
+    stored(session, conn, "waiting", "review", "Interview invitation")
+    session.commit()
+    assert inbox.messages(owner_request(), session, "auto", 0, 50)["view"] == "pending"
+    with pytest.raises(HTTPException) as error:
+        inbox.message(maybe.id + 100, owner_request(), session)
+    assert error.value.status_code == 404
+
+
+def test_owner_can_file_a_status_update_that_changes_nothing(database):
+    session, conn = database
+    row = stored(session, conn, "update", "ignored", "Your application is under review")
+    session.commit()
+    assert inbox.decide_message(row.id, inbox.EmailDisposition(action="update"), owner_request(), session)["decision"] == "update"
+    counts = inbox.messages(owner_request(), session, "update", 0, 50)
+    assert counts["counts"]["updates"] == 1 and [item["id"] for item in counts["items"]] == [row.id]
+    assert job_events(session) == [] and statuses(session) == ["applied"] * 3
+
+
+def test_recheck_rereads_receipts_ace_filed_but_never_the_owners(database, gmail_reads, monkeypatch):
+    session, conn = database
+    from backend.app.inbox.reconcile import RECEIPT_REASON
+    bodies = {"ace-receipt": "Req ID: SE-101. Thank you for applying. Unfortunately, we won't be moving forward.",
+              "owner-receipt": "Thank you for applying."}
+    stored(session, conn, "ace-receipt", "receipt", "Application update", reason=RECEIPT_REASON, version="2", minutes=60)
+    stored(session, conn, "owner-receipt", "receipt", "Application update", reason="You marked it an application receipt", version="2", minutes=61)
+    session.commit()
+    monkeypatch.setattr(inbox.gmail, "get_json", lambda path, *a: message(path.rsplit("/", 1)[1], bodies[path.rsplit("/", 1)[1]], NOW - timedelta(hours=1)))
+    assert inbox.messages(owner_request(), session, None, 0, 50)["counts"]["stale"] == 1
+    assert inbox.recheck(inbox.RecheckRequest(), owner_request(), session) == {"checked": 1, "counts": {"automatic": 1}, "remaining": 0}
+    assert row_for(session, "owner-receipt").decision == "receipt"
+    assert statuses(session) == ["applied", "rejected", "applied"]
+
+
+def test_full_email_is_its_own_html_made_safe(database, gmail_reads, monkeypatch):
+    session, conn = database
+    _ingest(session, conn, message("styled", "Req ID: SE-100. Thank you for applying."), _identities(session), preview=True)
+    row = row_for(session, "styled")
+    markup = ('<html><body onload="steal()"><p>Hello <b>Fixture</b> \u2014 thanks.</p><img src="cid:logo@fixture" alt="Logo">'
+              '<img src="https://tracker.example/logo.png"><a href="https://careers.example/jobs">Careers</a><script>steal()</script></body></html>')
+    full = {"id": "styled", "threadId": "thread-1", "snippet": "Hello Fixture", "payload": {"mimeType": "multipart/related", "headers": [
+        {"name": "From", "value": "Silverpine Talent <talent@careers.silverpine.example>"}, {"name": "To", "value": "fictional@example.test"},
+        {"name": "Subject", "value": "Your application"}, {"name": "Message-ID", "value": "<fixture-1@careers.silverpine.example>"}], "parts": [
+        {"mimeType": "text/plain", "body": {"data": base64.urlsafe_b64encode(b"Hello Fixture, thanks.").decode()}},
+        {"mimeType": "text/html", "body": {"data": base64.urlsafe_b64encode(markup.encode()).decode()}},
+        {"mimeType": "image/png", "headers": [{"name": "Content-ID", "value": "<logo@fixture>"}], "body": {"attachmentId": "logo-1"}}]}}
+    reads = []
+
+    def get(path, *args):
+        reads.append(path)
+        if path.endswith("/attachments/logo-1"):
+            return {"data": base64.urlsafe_b64encode(b"fictional png").decode()}
+        return full
+
+    monkeypatch.setattr(inbox.gmail, "get_json", get)
+    shown = inbox.full_message(row.id, owner_request(), session)
+    assert reads == ["/messages/styled", "/messages/styled/attachments/logo-1"]
+    assert shown["format"] == "html" and shown["blocked_images"] == 1 and shown["text"] == "Hello Fixture, thanks."
+    assert shown["sender"] == "Silverpine Talent <talent@careers.silverpine.example>" and shown["to"] == "fictional@example.test"
+    assert shown["message_id_header"] == "<fixture-1@careers.silverpine.example>" and shown["thread_id"] == "thread-1"
+    document = shown["document"]
+    assert "Hello <b>Fixture</b>, thanks." in document and "data:image/png;base64," in document
+    assert "steal" not in document and "tracker.example" not in document and "\u2014" not in document
+    assert 'href="https://careers.example/jobs" target="_blank" rel="noopener noreferrer"' in document
+    assert len(row.snippet) <= 500 and "steal" not in row.snippet  # Nothing new is stored.

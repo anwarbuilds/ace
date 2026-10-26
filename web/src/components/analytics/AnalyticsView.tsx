@@ -52,11 +52,29 @@ function RoleResume({d}:{d:AnalyticsData}) {
     <div className="an-grid an-role-bottom"><Panel title="Submitted resume versions" subtitle="Compare the resume actually used on each application."><div className="an-table-wrap"><table className="an-table"><thead><tr><th>Resume version</th><th>Applications used</th><th>Positive responses</th><th>Interviews</th><th>Response rate</th></tr></thead><tbody><tr><th><i className="an-dot"/>Not recorded</th><td data-label="Applications used">{n(d.submitted)}</td><td data-label="Positive responses">{n(d.positive)}</td><td data-label="Interviews">{n(d.interviews)}</td><td data-label="Response rate"><Rate/></td></tr></tbody></table></div><p className="an-foot">Submitted resume attribution is absent. The current primary resume is never assigned to historical applications.</p><Jump href={applicationRecordsHref(d)}>View application records</Jump></Panel><Panel title="Best-performing combinations" subtitle="Role family + submitted resume version + captured source."><div className="an-table-wrap"><table className="an-table"><thead><tr><th>Combination</th><th>Applications<br/>(30+ days)</th><th>Positive responses</th><th>Response rate</th></tr></thead></table></div><div className="an-empty-combinations"><NavIcon name="chart"/><strong>Not enough comparable applications</strong><p>At least 5 age-qualified applications per combination, recorded resume and channel attribution, and complete comparable evidence are required.</p></div><p className="an-foot">Observed outcomes do not establish that a resume caused a response.</p></Panel></div></>;
 }
 function RejectedCompanies({d}:{d:AnalyticsData}) {
-  const rows=d.rejected_companies;
-  const total=rows.reduce((sum,r)=>sum+r.rejections,0);
+  const rows=d.rejected_companies.map(r=>({...r,roles:r.roles??[],in_progress:r.in_progress??0}));
+  const s=d.rejection_summary??{applications:rows.reduce((sum,r)=>sum+r.rejections,0),companies:rows.length,dated:0,latest_at:null};
   const day=(iso:string)=>new Date(iso).toLocaleDateString("en-US",{timeZone:d.timezone,month:"short",day:"numeric",year:"numeric"});
-  return <Panel className="an-rejections" title="Companies that rejected you" subtitle={rows.length?`${n(rows.length)} ${rows.length===1?"company":"companies"}, ${n(total)} ${total===1?"rejection":"rejections"}, for applications in this selection.`:"Employers with a recorded rejection, for applications in this selection."} action={rows.length?<Jump href={applicationRecordsHref(d,{evidence:"rejection"})}>View rejected applications</Jump>:undefined}>
-    {rows.length?<ul className="an-rejected-list">{rows.map(r=><li key={r.name}><Link href={applicationRecordsHref(d,{company:r.name,evidence:"rejection"})} title={`${r.rejections} of your ${r.applications} ${r.applications===1?"application":"applications"} there rejected`}><CompanyLogo name={r.name}/><span><strong>{clean(r.name)}</strong><small>{r.latest_at?`Latest ${day(r.latest_at)}`:"Date not recorded"}</small></span><b>{n(r.rejections)} of {n(r.applications)}</b></Link></li>)}</ul>:<Unavailable>No rejection is recorded for applications in this selection. Inbox Intelligence records clear rejection emails automatically.</Unavailable>}
+  return <Panel className="an-rejections" title="Rejected companies" subtitle={rows.length?`${n(s.applications)} rejected ${s.applications===1?"application":"applications"} at ${n(s.companies)} ${s.companies===1?"company":"companies"} in this selection, newest rejection first.`:"Employers with a recorded rejection, for applications in this selection."} action={rows.length?<Jump href={applicationRecordsHref(d,{evidence:"rejection"})}>View rejected applications</Jump>:undefined}>
+    {rows.length?<>
+      <div className="an-rejection-stats">
+        <div><strong>{n(s.applications)}</strong><span>Rejected applications</span></div>
+        <div><strong>{n(s.companies)}</strong><span>{s.companies===1?"Company":"Companies"}</span></div>
+        <div><strong>{n(s.dated)}</strong><span>Dated by an email</span></div>
+        <div><strong>{s.latest_at?day(s.latest_at):"None dated"}</strong><span>Latest rejection</span></div>
+      </div>
+      <div className="an-table-wrap an-rejected-wrap"><table className="an-table an-rejected-table">
+        <thead><tr><th>Company</th><th>Rejected roles</th><th>Rejected</th><th>Still in progress there</th><th>Last rejection</th></tr></thead>
+        <tbody>{rows.map(r=><tr key={r.name}>
+          <th><Link href={applicationRecordsHref(d,{company:r.name,evidence:"rejection"})} title={`Open the ${r.rejections===1?"rejected application":"rejected applications"} at ${clean(r.name)}`}><CompanyLogo name={r.name}/>{clean(r.name)}</Link></th>
+          <td data-label="Rejected roles" className="an-rejected-roles">{r.roles.slice(0,2).map(clean).join("; ")}{r.roles.length>2?<span className="an-muted"> and {r.roles.length-2} more</span>:null}</td>
+          <td data-label="Rejected"><span className="an-rejected-count">{n(r.rejections)} of {n(r.applications)}</span></td>
+          <td data-label="Still in progress there">{r.in_progress?n(r.in_progress):<span className="an-muted">None</span>}</td>
+          <td data-label="Last rejection">{r.latest_at?day(r.latest_at):<span className="an-muted">No date</span>}</td>
+        </tr>)}</tbody>
+      </table></div>
+      <p className="an-foot">&ldquo;No date&rdquo; means the status was set without an email. Open a company to see each rejected application and, when ACE has it, the rejection email itself.</p>
+    </>:<Unavailable>No rejection is recorded for applications in this selection. Inbox Intelligence records clear rejection emails automatically.</Unavailable>}
   </Panel>;
 }
 function Companies({d}:{d:AnalyticsData}) {

@@ -59,6 +59,45 @@ refresh employer tabs to activate 1.29.1. This correction changes extension
 source only; no backend, database, Gmail, scheduler or website runtime change
 is needed. Full details: `docs/architecture/2026-10-26-extension-explicit-fill.md`.
 
+## 2026-10-26: Inbox clarity and Rejected companies deployed
+
+The owner asked for it live. Production website `176744f` (what `/healthz`
+reports) has been healthy since 12:51 Pacific, and API `c7d3451` since 12:54.
+Shipped: the Inbox status card, Gmail checked on open and while open, one Sync
+now, the email shown as it arrived in a sandboxed frame, grouped choices with
+Acknowledgement and Status update, parser 3, the Rejected companies panel and
+searchable, paged rejected applications. Details are under "Inbox sync clarity"
+below.
+
+Found during release verification and fixed in `c7d3451`: Analytics dropped
+every outcome recorded from an email, because Inbox's own `email:<id>` audit
+entry counted as a second application for that email. Only job and external
+keys count now. A read-only production check then showed 27 of 47 rejections
+dated (1 before the fix). The newest is the 10:30 rejection the owner asked
+about: it had been imported, read as a rejection and held for the owner because
+several applications at that employer exist, and the owner recorded it by hand.
+
+Evidence: private backup
+`private-backups/inbox-clarity-20261026T194634Z/database.dump.gz` (445 MB,
+gzip and `pg_restore --list` verified, 278 entries) with before and after
+container, image, schema and count records. Only API and web were replaced
+(then API alone for the fix). Scheduler, PostgreSQL and Caddy kept their
+container IDs; schema stayed `0050`; protected counts were identical before and
+after (1,219 marks, 883 applied, 47 external, 104 answers, 1 user, 304 Gmail
+messages, 461 events). The production image build passed TypeScript. Deployed
+backend file hashes match the tested sources. Anonymous requests to the new
+Inbox and records routes return 401 and Inbox redirects to sign-in. Read-only
+in-process checks (read-only transactions, counts only) confirmed parser 3,
+the default view resolving to Recruiting email with nothing waiting, and 87
+emails due for one re-read under parser 3. No Gmail sync, recheck, review or
+status change was run by the release.
+
+Not verified: signed-in browser rendering (Chrome stays off for cooling). The
+laptop shut down again at about 12:43 during the single-process backend suite
+while the desktop and other work were busy, so only focused tests ran after the
+rebase onto `37225a5`; the production build was the type-check gate. Owner next
+step: open Inbox, press Sync now once, then check Analytics, Companies.
+
 ## 2026-10-26: Logos and quick fill deployed
 
 The owner explicitly requested all changes live after testing. Production API
@@ -266,8 +305,10 @@ changes; the owner requirements above still control.
 
 Earlier sessions had SSH refused by their permission classifier. On 2026-10-25
 the owner's explicit Analytics deployment request was completed through the
-configured SSH connection with approved escalated commands. Recheck actual
-access rather than assuming those earlier refusals persist. When the owner
+configured SSH connection with approved escalated commands. On 2026-10-26 a
+read-only diagnostic query without a deployment request was refused again
+(production reads). Recheck actual access rather than assuming either way, and
+prefer a fix the owner can verify in the UI. When the owner
 must run a production command, give exactly one line they paste in
 their laptop terminal, in the form `ssh -i ~/.ssh/ace_oracle
 ubuntu@161.153.89.170 'cd /opt/ace && ...'`. A multi-line paste that starts
@@ -375,6 +416,13 @@ sign-in address.
   `pkill` can fail to see host browser processes. During Analytics validation
   the machine restarted again; the successful rerun used one CPU core,
   disabled GPU, a throttled Chrome wrapper and a host-visible 92 C cutoff.
+- Agent file tools turn a typed backslash-u escape (such as the one for an em
+  dash) into the literal character, so a regex or test written that way can
+  ship real em and en dashes. Run `python3 scripts/no_user_facing_dashes.py`
+  after every edit and write escapes through a script when the source needs
+  them (2026-10-26).
+- `npx next typegen` generates `PageProps` and `LayoutProps` for a fresh
+  worktree without a full build, so `npx tsc --noEmit` can run first.
 - Extension browser tests need no server:
   `cd web && CHROMIUM_PATH=/usr/bin/google-chrome npx playwright test tests/e2e/extension-*.spec.ts`
   (22 tests, about 25 seconds). Pair with `node extension/test-rules.js`,
@@ -520,6 +568,104 @@ After the first release (JIT off) it measured, in ms: `/api/stats` 216,
   use `prefetch={false}`: 23 requests and no job lookups per load.
 
 ## Current working state on 2026-10-25
+
+### Inbox sync clarity, the email as it arrived, Rejected companies (2026-10-26)
+
+**Release status:** live since 12:51 Pacific; evidence in the deployment section
+at the top of this file.
+
+The owner found Inbox unclear at a glance: it showed nothing to review, gave no
+way to tell whether all email was in, and a fresh rejection (shared Ashby
+sender, opening with "thank you for applying") was missing from the dashboard.
+They asked for one click and a clear "everything is synced" state, the exact
+email as received instead of extracted text, more choices (an acknowledgement
+option), a "Rejected companies" panel with a clearer picture, and search plus
+pagination on the rejected applications list.
+
+Causes found in code. Production reads were refused by this session's
+permission classifier, so that email's stored row was not inspected; the
+fixes cover every path it could have taken:
+
+- Nothing reads Gmail in the background. Email arrived only when "Run
+  catch-up" or "Import past email" was pressed; no timer is approved.
+- "Last sync" also moved when an older import page ran, so the page could show
+  a recent time while new email had never been fetched.
+- A rejection that opens with thanks was filed as a receipt whenever its
+  decisive sentence was not read: when body extraction failed (for example an
+  HTML email whose head is never closed) only Gmail's ~200 character snippet
+  was classified, and receipts were never read again. Receipts never appear in
+  Waiting for you.
+- The email view showed text extracted from HTML, not the email.
+
+What changed (branch `inbox-clarity-20261026`, from production `3e4e25b`):
+
+- Inbox checks Gmail itself when opened, while it stays open and visible (at
+  most every 3 minutes; a Google rate limit rests it 10 minutes) and on Sync
+  now. Sync now also reads email kept under older rules again (the separate
+  recheck banner is folded in). A status card says All caught up, N emails need
+  you, paused or needs attention, when Gmail was last checked and what the last
+  check found. `last_synced_at` now means only the last check for new email;
+  importing older email no longer moves it. Import older email is a collapsed
+  section; `following_changes` reports whether the history cursor is set.
+- Views: the default `decision=auto` shows Waiting for you when anything waits,
+  else Recruiting email (everything about applications, newest first, with what
+  ACE did, including ignored email whose subject mentions an application or
+  interview). `q` searches sender, subject and snippet server-side, wildcards
+  literal. `GET /api/inbox/messages/{id}` opens one email for deep links from
+  Analytics records and the audit trail (`?message=<id>`).
+- The email as it arrived: `backend/app/inbox/display.py` rebuilds the email's
+  own HTML from an allowlist (no scripts, handlers, forms, frames, meta, base
+  or stylesheet links; CSS `url()` and `@import` removed), inlines pictures
+  attached to the email by Content-ID within size limits, never fetches
+  pictures from the sender's servers (it reports how many; 1 by 1 pixels are
+  not counted), opens links in a new tab, adds a strict CSP meta and turns
+  dashes into punctuation. `/full` returns `document`, `format`,
+  `blocked_images`, `to`, `message_id_header` and `thread_id`. The web shows it
+  in `components/inbox/EmailFrame.tsx`: an iframe `srcdoc` sandboxed with
+  `allow-same-origin allow-popups allow-popups-to-escape-sandbox` and no
+  `allow-scripts` (same-origin only lets the page measure its height), plus
+  Show as plain text and Open in Gmail (an `rfc822msgid` search in the
+  connected account). Nothing new is stored.
+- Choices are grouped. Changes the application: Rejection, Assessment,
+  Recruiter reply, Interview, Offer. Nothing to change: Acknowledgement
+  (`receipt`), Status update (new decision `update`, no migration), Not about
+  my applications, Decide later. ACE's reading is marked; filed email can be
+  changed by choosing again.
+- Parser version 3 in `reconcile.py`: more rejection wording (move ahead with
+  other candidates, won't be able to offer you, we regret that, application not
+  selected, position no longer available); a "thank you for applying" email
+  that also sounds like a decision becomes `possible_rejection` and waits; a
+  receipt read only from the snippet waits; `<body>` ends an unclosed head.
+  Recheck now also reads receipts ACE filed itself (reason `Application
+  receipt; no status change`) again, never receipts the owner filed. The bump
+  makes waiting email and ACE-filed receipts stale once.
+- Analytics: "Companies that rejected you" is now "Rejected companies" with
+  totals (rejected applications, companies, dated by an email, latest
+  rejection) and a table of rejected roles, rejected of applied, still in
+  progress there and last rejection, newest dated rejection first
+  (`rejection_summary`; rows add `dated`, `roles`, `in_progress`). The records
+  page has search (`q`: every word must appear in company, role, job ID or
+  record key), 25/50/100 per page and numbered pages. With
+  `evidence=rejection` it is titled Rejected applications, sorted newest
+  rejection first, and each outcome shows its date and View email when an email
+  recorded it (records add `evidence` and `requisition_id`).
+
+Validation: 1,375 backend tests (new: display rebuild and its dash rules,
+parser 3 wording including a fictional Ashby-shaped rejection that opens with
+thanks, unclosed head, snippet-only receipts, views, search, single email,
+status updates, receipt recheck, full email document, rejected companies and
+records search), 13 Node render tests (`web/tests/inbox-review-render.test.mjs`
+and the new `web/tests/analytics-rejections-render.test.mjs`, run with
+`node --test`), TypeScript, ESLint, production build (CPU peaked at 92 C),
+forbidden-dash scan 0 and whitespace. Playwright specs were updated and added
+(automatic sync, frame sandbox, filings, search, deep link, rejected records
+search and pages) but not run: the cooling restriction stands. No deployment,
+migration or production read occurred.
+
+After release: open Inbox; it checks Gmail by itself. Press Sync now once to
+read the older waiting email and ACE-filed acknowledgements again under parser
+3; a clear rejection among them is recorded with Undo. Search a company name to
+see exactly what ACE did with its email.
 
 ### Inbox automatic rejections, one-click review, Career Dashboard removed (2026-10-26)
 
@@ -1847,8 +1993,11 @@ Required routes and contracts:
 - `/app/dashboard`: redirects to `/app/analytics`. Career Dashboard was removed
   at the owner's request on 2026-10-26 because Analytics covers it.
 - `/app/applications/inbox`: owner-controlled Gmail Inbox Intelligence:
-  automatic clear rejections, one-click review with the full email, receipts
-  and outcome reconciliation. Google sign-in does not mean Gmail is connected.
+  a sync status card that checks Gmail when opened, automatic clear
+  rejections, one-click review beside the email exactly as it arrived,
+  acknowledgements, status updates, search and outcome reconciliation.
+  `?message=<id>` opens one email. Google sign-in does not mean Gmail is
+  connected.
 - `/app/resume-studio`: documents, knowledge, versions, ATS checker and history.
 - `/app/extension`: pairing, token revocation, setup and answer-memory access.
 - `/app/archive`: historical reviewed and dismissed state.
@@ -2210,9 +2359,10 @@ The backend is organized by responsibility:
   refused sources.
 - `backend/app/auth/` owns password security, sessions, CSRF, Google owner
   identity, avatar processing and request guards.
-- `backend/app/inbox/` owns Gmail read-only access and conservative evidence
-  reconciliation. `backend/app/intelligence/` also supplies combined dashboard
-  aggregates and action vocabulary.
+- `backend/app/inbox/` owns Gmail read-only access (`gmail.py`), conservative
+  evidence reconciliation (`reconcile.py`) and the safe rebuilt email shown in
+  Inbox (`display.py`). `backend/app/intelligence/` also supplies combined
+  dashboard aggregates and action vocabulary.
 - `backend/app/studio/` owns resume documents, facts, sections, versions,
   legacy bridging and deterministic ATS assessments.
 - `backend/app/answers/`, `alerts/` and `mail/` own answer catalogue behavior,
@@ -2310,14 +2460,15 @@ prefix for every Studio suffix listed in its row.
 | Pairing | `GET /api/extension/tokens`, `DELETE /api/extension/tokens/{token_id}` | List and revoke extension tokens. |
 | Company | `GET /api/companies`, `GET /api/company-intelligence`, `GET /api/company-intelligence/batch` | Company lists and evidence-backed company intelligence. |
 | Dashboard | `GET /api/dashboard` | Preserved discovery/resume-fit/application aggregate used by the former Analytics page. |
-| Analytics | `GET /api/analytics` | Read-only submission-date/role-filtered application metrics, evidence, official petition series and exact paginated drilldowns with `records=1`. |
+| Analytics | `GET /api/analytics` | Read-only submission-date/role-filtered application metrics, evidence, rejected companies, official petition series and exact paginated drilldowns with `records=1` (searchable with `q`). |
 | Inbox | `GET /api/inbox/connection`, `PATCH /api/inbox/connection`, `DELETE /api/inbox/connection` | Gmail connection state, settings and disconnect. |
 | Inbox | `GET /api/inbox/google/start`, `GET /api/inbox/google/callback` | Separate Gmail read-only OAuth. |
 | Inbox | `POST /api/inbox/sync`, `POST /api/inbox/backfill` | Owner-triggered incremental sync and historical import (clear rejections recorded; other outcomes wait). |
-| Inbox | `GET /api/inbox/messages`, `GET /api/inbox/applications`, `GET /api/inbox/events` | Evidence, reconciled applications and event ledger. |
-| Inbox | `GET /api/inbox/messages/{message_id}/full` | The whole email as text, read live from Gmail and never stored. |
-| Inbox | `POST /api/inbox/recheck` | Re-decide waiting email read under an older parser version, 25 to 50 at a time. |
-| Inbox | `PATCH /api/inbox/messages/{message_id}/decision`, `PATCH /api/inbox/automation` | Receipt, unrelated or later; tightly gated positive-outcome automation. |
+| Inbox | `GET /api/inbox/messages`, `GET /api/inbox/applications`, `GET /api/inbox/events` | Evidence (views incl. `auto` and `recruiting`, search `q`, `latest_received_at`), reconciled applications and event ledger. |
+| Inbox | `GET /api/inbox/messages/{message_id}` | One imported email, for deep links. |
+| Inbox | `GET /api/inbox/messages/{message_id}/full` | The email read live from Gmail and never stored: its rebuilt HTML `document` for a sandboxed frame, plus text and headers. |
+| Inbox | `POST /api/inbox/recheck` | Re-decide waiting email and ACE-filed receipts read under an older parser version, 25 to 50 at a time. |
+| Inbox | `PATCH /api/inbox/messages/{message_id}/decision`, `PATCH /api/inbox/automation` | Receipt, status update, unrelated or later; tightly gated positive-outcome automation. |
 | Inbox | `POST /api/inbox/review`, `POST /api/inbox/events/{event_id}/undo` | One-click owner outcome (with the email kind) or undo one event; undo returns the email to the queue. |
 | Inbox | `DELETE /api/inbox/snippets` | Purge retained message snippets. |
 | Studio | `GET /api/studio` | Resume Studio overview. |
@@ -2480,8 +2631,10 @@ the owner removed on 2026-10-26 together with `/api/intelligence` and its action
 queue. The Analytics change did not modify the extension, authentication,
 discovery, scheduler or migrations. Since 2026-10-26 the projection also
 returns `rejected_companies` (every employer with a recorded rejection in the
-selection: rejections, applications there, latest dated rejection or null),
-shown as "Companies that rejected you" on the Companies tab.
+selection: rejections, applications there, latest dated rejection or null,
+dated count, rejected roles and applications still in progress there, newest
+dated rejection first) and `rejection_summary`, shown as "Rejected companies"
+on the Companies tab.
 
 | Tab | Implemented modules and accuracy rules |
 | --- | --- |
@@ -2682,12 +2835,22 @@ Interviews, assessments and offers keep the earlier rule: both the global
 `GMAIL_AUTO_OUTCOMES_ALLOWED=true` and the connection's owner setting, a live
 (not historical) import, an exact job ID and an employer-domain sender. Receipts
 ("thank you for applying") are filed as decision `receipt` with no status
-change. Plain text is read when present, otherwise text extracted from HTML
-(never rendered or stored); only the 500-character snippet is retained. Review
-is one click: the full email is fetched live by `/messages/{id}/full`, the
-likeliest application is preselected, and Rejected, Interview, Assessment,
-Offer, receipt, unrelated and later are single actions. `POST /api/inbox/review`
+change. Plain text is read when present, otherwise text extracted from HTML;
+only the 500-character snippet is retained. Review is one click: the email is
+fetched live by `/messages/{id}/full` and shown as it arrived (rebuilt by
+`inbox/display.py` for a sandboxed frame with no scripts and no remote
+pictures), the likeliest application is preselected, and Rejection,
+Assessment, Recruiter reply, Interview, Offer, Acknowledgement, Status update,
+not about applications and later are single actions. `POST /api/inbox/review`
 takes an optional `kind` so an owner-chosen assessment counts as one.
+
+Parser version 3 (2026-10-26) never files an email as a receipt when it also
+sounds like a decision (`possible_rejection`, waits) or when only the snippet
+could be read (waits). Recheck reads waiting email and receipts ACE filed
+itself again; receipts the owner filed are never re-decided. The Inbox page
+checks Gmail when opened, while open (at most every 3 minutes) and on Sync now;
+there is still no server timer. `last_synced_at` is the last check for new
+email only.
 
 Metrics are deliberately conservative:
 

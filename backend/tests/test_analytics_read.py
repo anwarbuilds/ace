@@ -223,12 +223,63 @@ def test_application_drilldowns_match_chart_filters_and_remain_unique(db):
     with pytest.raises(HTTPException):read(db,records=True,status="silently_rejected")
 
 
-def test_companies_that_rejected_you_lists_every_employer_once(db):
+def test_rejected_companies_lists_every_employer_once_newest_rejection_first(db):
     first=app(db,1,company="Silverpine Labs");app(db,2,company="Silverpine Labs",status="rejected")
     outcome(db,first,"rejection",stamp=NOW-timedelta(days=5))
-    app(db,3,company="Northwind Robotics",status="rejected")
+    app(db,3,company="Northwind Robotics",status="rejected");app(db,6,company="Northwind Robotics",status="rejected")
+    app(db,7,company="Northwind Robotics",status="screening")
     app(db,4,company="Bluefin Analytics")
-    rows=read(db)["rejected_companies"]
-    assert rows==[{"name":"Silverpine Labs","rejections":2,"applications":2,"latest_at":(NOW-timedelta(days=5)).isoformat()},
-                  {"name":"Northwind Robotics","rejections":1,"applications":1,"latest_at":None}]
-    assert read(db,start=NOW.date()-timedelta(days=10),end=NOW.date()-timedelta(days=1))["rejected_companies"]==[]
+    app(db,5,company="Aster Fiction",status="rejected")
+    d=read(db)
+    assert d["rejected_companies"]==[
+        {"name":"Silverpine Labs","rejections":2,"applications":2,"dated":1,"roles":["Fictional software role"],"in_progress":0,
+         "latest_at":(NOW-timedelta(days=5)).isoformat()},
+        # Undated ones follow, most rejections first, then by name.
+        {"name":"Northwind Robotics","rejections":2,"applications":3,"dated":0,"roles":["Fictional software role"],"in_progress":1,"latest_at":None},
+        {"name":"Aster Fiction","rejections":1,"applications":1,"dated":0,"roles":["Fictional software role"],"in_progress":0,"latest_at":None}]
+    assert d["rejection_summary"]=={"applications":5,"companies":3,"dated":1,"latest_at":(NOW-timedelta(days=5)).isoformat()}
+    empty=read(db,start=NOW.date()-timedelta(days=10),end=NOW.date()-timedelta(days=1))
+    assert empty["rejected_companies"]==[] and empty["rejection_summary"]["applications"]==0
+
+
+def test_rejected_records_search_dates_and_link_the_email(db):
+    from backend.app.db.models import GmailConnectionRecord
+    early=app(db,1,company="Silverpine Labs");late=app(db,2,company="Northwind Robotics")
+    db.get(JobRecord,int(late.split(":")[1])).title="Platform Engineer"
+    app(db,3,company="Bluefin Analytics",status="rejected")
+    conn=GmailConnectionRecord(owner_id=1,email="fictional@example.test",encrypted_refresh_token=b"",scope="gmail.readonly",state="disconnected")
+    db.add(conn);db.flush()
+    mail=GmailMessageRecord(connection_id=conn.id,gmail_id="fictional-rejection",received_at=NOW-timedelta(days=2),sender="fixture@example.test",subject="Fictional update",snippet="",classification="rejection",decision="automatic",selected_application_key=late,decision_reason="Fictional fixture",parser_version="fixture")
+    db.add(mail);db.flush()
+    outcome(db,early,"rejection",stamp=NOW-timedelta(days=9))
+    row=outcome(db,late,"rejection",stamp=NOW-timedelta(days=2),gmail_message_id=mail.id);row.actor="verified_automation"
+    d=read(db,records=True,evidence="rejection")
+    # Newest rejection first; a status without an email date comes last.
+    assert [r["key"] for r in d["records"]][:2]==[late,early] and d["record_total"]==3
+    assert d["records"][0]["evidence"]==[{"kind":"rejection","at":(NOW-timedelta(days=2)).isoformat(),"message_id":mail.id}]
+    assert d["records"][2]["evidence"]==[{"kind":"rejection","at":None,"message_id":None}]
+    found=read(db,records=True,evidence="rejection",q="  northwind   PLATFORM ")
+    assert [r["key"] for r in found["records"]]==[late] and found["record_query"]=="northwind platform"
+    assert read(db,records=True,evidence="rejection",q="northwind data")["record_total"]==0
+    assert read(db,records=True,q=late)["record_total"]==1  # The record key is searchable too.
+
+
+def test_email_outcomes_count_despite_the_inbox_audit_entry_every_email_has(db):
+    # Production shape: Inbox logs "email_classified" under "email:<id>" for every
+    # imported email, so that entry must not look like a second application.
+    from backend.app.db.models import GmailConnectionRecord
+    key=app(db,1,status="rejected");other=app(db,2,status="rejected")
+    conn=GmailConnectionRecord(owner_id=1,email="fictional@example.test",encrypted_refresh_token=b"",scope="gmail.readonly",state="disconnected")
+    db.add(conn);db.flush()
+    for target,received,decision,actor,kind in ((key,NOW-timedelta(days=3),"automatic","verified_automation","rejection"),
+                                                (other,NOW-timedelta(days=2),"manual","owner","manual_correction")):
+        mail=GmailMessageRecord(connection_id=conn.id,gmail_id=f"fictional-{target}",received_at=received,sender="fixture@example.test",subject="Fictional update",snippet="",classification="rejection",decision=decision,selected_application_key=target,decision_reason="Fictional fixture",parser_version="fixture")
+        db.add(mail);db.flush()
+        audit=outcome(db,f"email:{mail.id}","email_classified",stamp=received,gmail_message_id=mail.id);audit.actor="classifier"
+        row=outcome(db,target,kind,stamp=received,gmail_message_id=mail.id,new_status="rejected");row.actor=actor
+    d=read(db)
+    assert d["rejection_summary"]["dated"]==2
+    assert {r["latest_at"] for r in d["rejected_companies"]}=={(NOW-timedelta(days=2)).isoformat()}
+    records=read(db,records=True,evidence="rejection")["records"]
+    assert [r["key"] for r in records]==[other,key]
+    assert all(r["evidence"][0]["message_id"] for r in records)

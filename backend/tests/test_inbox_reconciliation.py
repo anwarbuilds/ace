@@ -214,3 +214,63 @@ def test_html_only_email_is_read_as_text():
     assert "alert" not in evidence.body and "color" not in evidence.body
     assert "we’ve decided to move forward with other candidates" in evidence.body
     assert reconcile(evidence, [northwind()]).target == "job:7"
+
+
+# Parser version 3 (2026-10-26): a rejection that opens with thanks must
+# reach the owner, never sit among receipts.
+
+import dataclasses
+
+
+def test_rejection_that_opens_with_thanks_from_a_shared_platform_is_recorded():
+    body = ("Hi Fixture,\n\nThank you for applying for the Full-Stack Software Engineer role at Wayfern, we know applying "
+            "takes real effort.\n\nWe’ve reviewed your application in detail, and on this occasion we won’t be "
+            "moving forward.\n\nBest,\nWayfern Talent Team")
+    evidence = ats_mail("Update on your application at Wayfern - Full-Stack Software Engineer", body,
+                        display="Wayfern London Engineering", address="no-reply@ashbyhq.com")
+    wayfern = [ApplicationIdentity(f"job:{n}", "wayfern", title, None, NOW - timedelta(days=4), "applied")
+               for n, title in ((1, "Full-Stack Software Engineer"), (2, "Machine Learning Engineer"), (3, "Software Engineer, Simulation"))]
+    result = reconcile(evidence, wayfern)
+    assert (result.classification, result.disposition, result.target) == ("rejection", "verified", "job:1")
+    assert result.reason == "Clear rejection matched by its exact title"
+    # The same role applied to twice waits, with both candidates offered first.
+    twice = reconcile(evidence, wayfern + [ApplicationIdentity("job:4", "wayfern", "Full-Stack Software Engineer", None, NOW - timedelta(days=2), "applied")])
+    assert twice.disposition == "review" and set(twice.candidates[:2]) == {"job:1", "job:4"}
+
+
+@pytest.mark.parametrize("sentence", [
+    "Unfortunately, we have decided to move ahead with other candidates.",
+    "We won't be able to offer you a position at this time.",
+    "We regret that we cannot offer you this role.",
+    "Your application was not selected for the next stage.",
+    "The position is no longer available.",
+])
+def test_more_rejection_wording_is_recognized(sentence):
+    assert classify(ats_mail("Your application", "Thank you for applying. " + sentence))[0] == "rejection"
+
+
+def test_thanks_with_decision_like_wording_waits_instead_of_being_filed():
+    result = reconcile(ats_mail("Northwind Robotics", "Thank you for applying. We regret the delay; other candidates are still being reviewed."),
+                       [northwind()])
+    assert (result.classification, result.disposition, result.target) == ("possible_rejection", "review", None)
+    assert result.candidates == ("job:7",)
+
+
+def test_a_receipt_read_only_from_the_snippet_waits():
+    partial = EmailEvidence("Northwind Robotics <no-reply@us.greenhouse-mail.io>", "Northwind Robotics",
+                            "Thank you for applying to Northwind Robotics. We have reviewed", NOW, True, complete=False)
+    result = reconcile(partial, [northwind()])
+    assert (result.disposition, result.reason) == ("review", "Only part of this email could be read")
+    assert reconcile(dataclasses.replace(partial, complete=True), [northwind()]).disposition == "receipt"
+
+
+def test_html_with_an_unclosed_head_is_still_read():
+    markup = ("<html><head><meta charset='utf-8'><style>p{color:red}</style><body><p>Thank you for applying to Northwind Robotics."
+              "</p><p>Unfortunately, we won't be moving forward.</p></body></html>")
+    data = {"internalDate": str(int(NOW.timestamp() * 1000)), "snippet": "Thank you for applying",
+            "payload": {"mimeType": "text/html", "headers": [{"name": "From", "value": "Northwind Robotics <no-reply@us.greenhouse-mail.io>"},
+                                                             {"name": "Subject", "value": "Your application"}],
+                        "body": {"data": base64.urlsafe_b64encode(markup.encode()).decode()}}}
+    evidence = _message_evidence(data)
+    assert evidence.complete and "won't be moving forward" in evidence.body
+    assert classify(evidence)[0] == "rejection"
