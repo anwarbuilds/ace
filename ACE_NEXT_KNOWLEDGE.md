@@ -85,6 +85,22 @@ is needed. Full details: `docs/architecture/2026-10-26-extension-explicit-fill.m
 
 ## 2026-10-26: Inbox clarity and Rejected companies deployed
 
+Owner follow-ups the same afternoon (website `64ab0f0`, then parser 4):
+Rejected companies is back to the original card grid (newest rejection first,
+15 newest companies, no summary boxes, table or scrolling; search and pages
+stay behind View rejected applications) and the sponsorship evidence
+methodology section is removed from the Companies tab. Parser 4 reads the
+employer from Workday senders (`<tenant>@myworkday.com`, for example
+`generalmotors` for General Motors), so such emails can match and clear
+rejections can record. When ACE still cannot tell, the review panel suggests
+applications named by the sender or subject (Workday tenant, display name,
+company name or initials such as GM in the subject) without typing, and its
+search also matches initials and squashed names. "We have chosen to pursue
+other candidates" and "decided to pursue other candidates who align more
+closely" were already recognized; tests now pin them. The parser bump makes
+waiting email and ACE-filed acknowledgements due for one more re-read, which
+Sync now performs.
+
 The owner asked for it live. Production website `176744f` (what `/healthz`
 reports) has been healthy since 12:51 Pacific, and API `c7d3451` since 12:54.
 Shipped: the Inbox status card, Gmail checked on open and while open, one Sync

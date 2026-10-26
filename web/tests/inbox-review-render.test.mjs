@@ -33,7 +33,7 @@ function loadSource(filename) {
   return loadedModule.exports;
 }
 
-const { InboxReviewPanel, senderParts, since } = loadSource(path.join(sourceRoot, "components/inbox/InboxReviewPanel.tsx"));
+const { InboxReviewPanel, senderParts, since, likelyApplications } = loadSource(path.join(sourceRoot, "components/inbox/InboxReviewPanel.tsx"));
 const message = { id: 1, received_at: "2026-01-01T12:00:00Z", sender: "Fictional Talent <fixture@example.test>", subject: "Fictional interview", snippet: "Fictional interview invitation", classification: "interview", requisition_id: "FIX-1", decision: "review", candidate_keys: ["job:1"], reason: "Matched by its job ID; positive outcomes need your confirmation", selected_application_key: null };
 const applications = [{ key: "job:1", company: "Fictional Labs", title: "Fictional engineer", requisition_id: "FIX-1", applied_at: "2025-12-01T12:00:00Z", status: "applied" }];
 function render(selected = message, apps = applications, events = []) {
@@ -120,11 +120,29 @@ test("empty selection explains how to begin", () => {
 
 test("sender names, addresses and relative times read plainly", () => {
   assert.deepEqual(senderParts('"Fictional Talent" <talent@example.test>'), { name: "Fictional Talent", address: "talent@example.test" });
-  assert.deepEqual(senderParts("talent@example.test"), { name: "talent@example.test", address: "" });
+  assert.deepEqual(senderParts("talent@example.test"), { name: "talent@example.test", address: "talent@example.test" });
   const now = Date.parse("2026-01-01T12:00:00Z");
   assert.equal(since("2026-01-01T11:59:40Z", now), "just now");
   assert.equal(since("2026-01-01T11:57:00Z", now), "3 minutes ago");
   assert.equal(since("2026-01-01T10:00:00Z", now), "2 hours ago");
   assert.equal(since("2025-12-30T12:00:00Z", now), "2 days ago");
   assert.equal(since("2026-01-01T11:57:00Z", 0), "");
+});
+
+test("when ACE could not tell, the sender and subject suggest applications without typing", () => {
+  const apps = [
+    { key: "job:7", company: "General Motors", title: "Software Engineer", requisition_id: null, applied_at: "2026-10-01T12:00:00Z", status: "applied" },
+    { key: "job:8", company: "Greenheck Group", title: "Application Developer II", requisition_id: null, applied_at: "2026-10-01T12:00:00Z", status: "applied" },
+    { key: "job:9", company: "Fictional Labs", title: "Software Engineer", requisition_id: null, applied_at: "2026-10-01T12:00:00Z", status: "applied" },
+  ];
+  const workday = { ...message, sender: "generalmotors@myworkday.com", subject: "Your interest in Software Engineer at GM", candidate_keys: [] };
+  assert.deepEqual(likelyApplications(workday, apps).map(a => a.key), ["job:7"]);
+  assert.deepEqual(likelyApplications({ ...workday, sender: "greenheckgroup@myworkday.com", subject: "Application Received for Application Developer II" }, apps).map(a => a.key), ["job:8"]);
+  assert.deepEqual(likelyApplications({ ...workday, sender: "Talent <no-reply@us.greenhouse-mail.io>", subject: "Your application" }, apps), []);
+  const html = render(workday, apps);
+  assert.match(html, /Possible matches from the sender and subject/);
+  assert.match(html, /General Motors/);
+  assert.doesNotMatch(html, /Greenheck Group/);
+  assert.match(choice(html, "Rejection"), /disabled/);
+  assert.doesNotMatch(html, /&lt;generalmotors@myworkday.com&gt;/);
 });
