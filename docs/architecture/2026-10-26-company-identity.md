@@ -14,7 +14,7 @@ without adding another company to source code or a branding allowlist.
 
 ## Tenant follow-up, 2026-10-26
 
-Status: tested candidate on `company-logo-tenants-20261026`, deployment pending.
+Status: released as `bd5c364e22f51fb76dfbd3d638cf7681bf41867d`, PR #3 merged.
 The owner reported Hive and Vizient initials on live Pulls. Registered public
 source pages returned 200 but neither matched the original extraction rules.
 
@@ -43,9 +43,44 @@ The candidate parser fetched Vizient's authentic 96 x 44 PNG using the actual
 registered production source and existing bounded public fetcher, with no
 service replacement. Both public images were visually inspected as standalone
 assets. TypeScript, lint and the production build pass. Nine Playwright cases
-collect; execution/screenshots remain suspended for cooling. Deployment checks
-are pending.
+collect; execution/screenshots remain suspended for cooling.
 No scheduler, migration, Gmail sync or application status operation is needed.
+
+Live release verification completed at 2026-10-26T20:25Z (13:25 Pacific).
+The concurrent `40254e7` Inbox parser 4/suggestions and `64ab0f0` Analytics grid
+changes were merged and preserved. Their checks passed 79 backend, 12 Inbox
+render and 4 Analytics render tests, plus lint and a fresh merged-source build.
+The VM image build passed and the public health endpoint reports `bd5c364`.
+
+Signed-in production HTTP checks:
+
+| Check | Result |
+| --- | --- |
+| Hive local official icon | 200, 48 x 48, exact provenance SHA-256 |
+| Vizient automatic route | 200, verified 96 x 44 PNG; repeat bytes identical |
+| Company, job and Opportunities pages for both | 200, correct logo references |
+| Pulls | 200; both companies present in actual window job responses |
+| Four Analytics tabs and Inbox | 200 |
+| Anonymous logo / unknown employer | 401 / 204 |
+| Application totals | Unchanged: 883 posting applications + 47 external = 930 |
+| Running branding source hashes | Match tested local sources |
+| Scheduler, PostgreSQL, Caddy | Original container IDs preserved |
+| Runtime environment / schema | Unchanged bytes / 0050 |
+
+Pulls loads window rows in client effects, so its initial server HTML does not
+contain the row images. This verification checked the actual row API responses
+and shared logo sources, not a browser rendering. Temporary five-minute owner
+sessions were revoked in `finally`; no credential or private HTML was logged.
+No real application, Gmail message, outcome, answer or source record was changed.
+
+Private rollback: `private-backups/company-logo-tenants-20261026/` on the VM,
+including a 466,848,369-byte compressed database backup, verified by gzip and
+`pg_restore --list`, environment snapshot, previous commit and container metadata.
+Images tagged `oracle-api:before-logo-tenants-activation` and
+`oracle-web:before-logo-tenants-activation` preserve prior runtime images.
+Rollback is an API/web image operation, never an automatic database restore.
+No migration or scheduler container was started. Refresh website tabs to load
+the new manifest; no extension reload is needed for this logo correction.
 
 Changed files: branding `discovery.py`/`sources.py`, backend logo tests, frontend
 logo contracts, `hive.ico`, provenance and logo README, this architecture note,

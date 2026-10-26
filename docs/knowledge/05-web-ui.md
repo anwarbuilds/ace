@@ -920,5 +920,9 @@ Hive's official favicon was downloaded, decoded, visually reviewed and added
 with provenance, bringing the optional bundle to 60. No unrelated Hive employer
 is an alias and application company names are not rewritten. Candidate parser
 retrieval from the VM returned Vizient's authentic 96 x 44 PNG. Fictional tests:
-135 backend and 7 React contracts pass. Deployment/HTTP verification is pending;
-browser rendering remains untested due to cooling.
+135 backend and 7 React contracts pass. Released as `bd5c364`, with current
+Inbox/Analytics changes preserved. Signed-in live HTTP verified both images,
+company/job/Opportunities logo references and Pulls window data; totals stayed
+930. API/web health and source hashes pass. Environment, schema and scheduler
+are unchanged. Browser rendering remains untested due to cooling. Full release
+evidence and private rollback location are in the architecture note.

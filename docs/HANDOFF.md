@@ -121,8 +121,8 @@ See `ACE_NEXT_KNOWLEDGE.md`, Inbox clarity and Rejected companies deployed.
 
 **2026-10-26 tenant logos:** Workday site-bound logo metadata and Lever employer
 headers now resolve without equating payroll/rebrand names. Hive uses its reviewed
-official icon; 60 bundled icons. 135 backend and 7 React tests pass. Deployment
-pending. See `architecture/2026-10-26-company-identity.md`, tenant follow-up.
+official icon; 60 bundled icons. Live `bd5c364` verified both images and detail
+references; totals stayed 930. See `architecture/2026-10-26-company-identity.md`.
 
 **2026-10-26 earlier production release:** API/web were healthy at `21f563a`; logo work,
 quick fill 1.29.0 and the existing Inbox fixes are included. All Analytics tabs

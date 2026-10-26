@@ -15,7 +15,8 @@ or database dump content because the GitHub repository is public.
 
 ## 2026-10-26: Missing Hive and Vizient logos, tenant metadata correction
 
-Status: tested candidate, production deployment pending. The owner found initials
+Status: deployed in `bd5c364`, healthy at 13:25 Pacific on 2026-10-26; PR #3 merged.
+The owner found initials
 for Hive and Vizient on Pulls. Their enabled registered sources/pages return 200,
 but the prior exact-name parser skipped Workday's site-bound `og:image` because
 its payroll hiringOrganization differs from the display name, and Lever's
@@ -32,9 +33,23 @@ Hive's Lever image CDN disallows reads; its official website favicon is usable
 and was decoded, visually inspected and added with checksum/source provenance.
 The optional bundle now contains 60 icons. Actual candidate retrieval on the
 VM returned Vizient's authentic 96 x 44 PNG. 135 fictional logo/auth/source
-tests and 7 React contracts pass. No browser launch or screenshots due to the
-cooling restriction. No schema, scheduler, auth, Gmail or application-data
-change is part of this fix. Full evidence and release status:
+tests and 7 React contracts pass. Merged-source checks also passed 79 Inbox/
+Analytics backend tests, 12 Inbox and 4 Analytics render tests, TypeScript,
+lint and the production build. The concurrent `40254e7` Inbox parser 4 and
+`64ab0f0` Analytics grid are preserved. Signed-in live HTTP verified Hive's
+exact 48 x 48 icon/hash, Vizient's verified 96 x 44 PNG and repeat cache bytes,
+both employers' company/job/Opportunities logo references and Pulls window data,
+all four Analytics tabs, Inbox, anonymous denial and unknown-employer fallback.
+Application totals stayed 930 (883 posting applications and 47 history).
+Temporary verification sessions were revoked immediately. API source hashes
+match tested files. API/web are healthy; scheduler/PostgreSQL/Caddy IDs,
+environment bytes and schema 0050 are unchanged. No migration or Gmail sync.
+A private 445 MiB backup passed gzip integrity and restore-catalog checks at
+`private-backups/company-logo-tenants-20261026/` on the VM, with prior image
+tags and runtime metadata for rollback. No browser launch or screenshots due
+to cooling; 9 logo Playwright cases collected only. This is signed-in HTTP and
+asset verification, not browser rendering. Refresh website tabs to use the
+updated manifest. Full evidence and release status:
 `docs/architecture/2026-10-26-company-identity.md`, tenant follow-up.
 
 ## 2026-10-26: Explicit filling and Workday corrections, extension 1.29.1
