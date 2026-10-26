@@ -36,3 +36,35 @@ test("a failed official image has a readable fallback and the next company still
   await page.goto("/app/company/General%20Motors");
   await expect(page.getByRole("img", { name: "General Motors logo", exact: true })).toBeVisible();
 });
+
+test("a future employer outside the bundled list loads its logo through the authenticated ACE route", async ({ page }) => {
+  const company = "Future Fictional Labs";
+  const endpoint = `/api/company-logo?name=${encodeURIComponent(company)}`;
+  await page.route(`**${endpoint}`, async route => {
+    // Existing public bytes stand in for a fictional employer's icon. This
+    // tests rendering only; backend contracts test actual source resolution.
+    const icon = await page.request.get("/company-logos/google.ico");
+    await route.fulfill({ status: 200, contentType: "image/x-icon", body: await icon.body() });
+  });
+  await page.goto(`/app/company/${encodeURIComponent(company)}`);
+  const logo = page.getByRole("img", { name: `${company} logo`, exact: true });
+  await expect(logo).toBeVisible();
+  await expect(logo).toHaveAttribute("src", endpoint);
+  await expect(page.getByLabel(`${company} monogram`, { exact: true })).toHaveCount(0);
+  await expect(logo).not.toHaveAttribute("data-pending", "true");
+});
+
+test("future employer remains readable while lookup is pending and after unavailable evidence", async ({ page }) => {
+  const company = "Future Fictional Labs";
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/api/company-logo?name=Future%20Fictional%20Labs", async route => {
+    await pending;
+    await route.fulfill({ status: 204 });
+  });
+  await page.goto(`/app/company/${encodeURIComponent(company)}`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByLabel(`${company} monogram`, { exact: true })).toHaveText("FF");
+  release();
+  await expect(page.locator(".page-hero img")).toHaveCount(0);
+  await expect(page.getByLabel(`${company} monogram`, { exact: true })).toHaveText("FF");
+});

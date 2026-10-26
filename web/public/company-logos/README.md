@@ -13,26 +13,39 @@ it never strips arbitrary legal suffixes or matches part of a name. A parent
 company's icon is not automatically assigned to subsidiaries. FedEx Freight
 uses the icon declared by its own official careers website.
 
-The shared `CompanyLogo.tsx`, including the table/detail `Avatar`,
-uses these local files. It
-never derives a domain from application history, fetches an arbitrary URL,
-contacts a third-party logo service, or delays jobs while fetching a logo.
-Unknown identities and failed image loads show a neutral monogram beside the
-unchanged company name. Empty names show C with the accessible name Company.
-Changing companies resets failed-image state. Compact, table and detail sizes
-share the same identity mapping in both themes.
+The bundled cache is an optional fast path. Companies outside this list now
+use the authenticated `/api/company-logo?name=...` route automatically. No
+manual manifest edit is needed for a newly pulled employer. The backend
+resolves its existing registered source and official posting, reads permitted
+public branding, validates image bytes, and caches a small PNG with its source,
+evidence page and fetch time. The browser contacts ACE only; it sends no history
+to a third-party logo service and the backend forwards no cookies or mail data.
 
-To add an employer, confirm its official website, inspect its declared icon,
-download the exact image bytes, and visually inspect them. Record the source,
-date, SHA-256, local filename and individually reviewed aliases in the manifest.
-Run `npm run test:company-logos` from `web/` to catch alias collisions, missing
-files, checksum mismatches, identity confusion and image-failure regressions.
-Never add a guessed domain or generated substitute. Keep owner history out of
-the manifest and tests.
+The service accepts an employer-owned site's declared icon, an employer logo
+on a verified tenant board, or a logo/website identified by an exactly matched
+structured hiringOrganization. It never guesses a company domain, substitutes
+an ATS platform favicon, or borrows a parent company's branding automatically.
+HTTPS/public-address checks, DNS pinning, redirect/robots checks, time/size
+limits and four asset workers keep this separate from job polling. Only decoded
+raster images are returned, re-encoded as PNG at up to 96 px; SVG/HTML and empty
+or tracking placeholders are not served. No migration or scheduler edit.
+
+Initials remain visible while a dynamic logo is loading or unavailable. Empty
+names show C with the accessible name Company. Successful/error state resets
+when the employer changes. The private cache holds at most 512 entries, with
+seven-day successes and six-hour misses; the first stored job invalidates an
+earlier board-only lookup. Its disposable disk cache is outside the repository
+and rebuilds after a container replacement. Other ACE data is untouched.
+
+To expand the optional bundled cache, confirm an official website, inspect its
+declared icon, download exact bytes and review the image. Record source, date,
+SHA-256, local filename and reviewed aliases in the manifest. Run
+`npm run test:company-logos` from `web/`. This manual fast path is optional;
+automatic future-company discovery does not depend on this list.
 
 The 2026-10-26 review did not cache Oracle, Intel, Cisco, Dell, Tesla,
 Mastercard, Ford, DoorDash or Akamai because their sites refused access; Uber
 also refused, HPE timed out, and Walmart supplied no usable raster icon in this
-review. These and unreviewed employers retain a visible fallback. This is not
-a claim that every company in ACE's dynamic source catalog has an authentic
-cached mark.
+review. These employers now also use automatic discovery when a trusted source
+is available. Access refusals or unavailable trustworthy raster assets still
+produce visible initials; universal external logo availability cannot be promised.

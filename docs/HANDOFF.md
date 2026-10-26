@@ -100,16 +100,17 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
-**2026-10-26 employer logo update:** Local website work centralizes employer
-identity across lists, job/company details, Analytics, Inbox, Coverage and
-Resume Studio. There are 59 authentic local icons and 71 explicit aliases;
-FedEx Freight, GM and Southern Company are covered. Encoded company route
-names are decoded before evidence queries and logo matching. Unknown, refused
-or broken icons retain accessible initials and failed-image state resets when
-the employer changes. No backend, Career Dashboard, extension, scheduler or
-production data changes. See `docs/architecture/2026-10-26-company-identity.md`
-for validation and unavailable sources. Deployment still requires approval;
-no browser execution or fresh screenshots due to the cooling restriction.
+**2026-10-26 automatic employer logos:** Review branch
+`company-logo-consistency-20261026`, draft PR #1, now handles future employers
+automatically through `/api/company-logo`. The 59 bundled icons/71 aliases are
+an optional fast path. Exact registered sources provide employer branding;
+no guessed domains, ATS favicon substitutions or external history disclosure.
+A bounded, private asset cache and image decoder serve small PNGs while initial
+fallbacks stay visible. Auth, application state, polling and scheduler are
+unchanged; no migration or deployment. Shopify outside the bundle passed a
+real public discovery and authenticated local proxy check against fictional
+data. See `docs/architecture/2026-10-26-company-identity.md` for validation,
+limits and changed files. Browser screenshots remain pending due to cooling.
 
 **2026-10-26 question-following update:** Local 1.28.6 follows clicked/focused
 employer questions, fills equivalent known routine answers on focus and records

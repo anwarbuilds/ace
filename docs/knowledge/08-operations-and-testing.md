@@ -265,3 +265,15 @@ curl http://127.0.0.1:8000/healthz
 
 Backend maintenance now uses `docker compose exec api ...`. `PUBLIC_BASE_URL` and `WEB_BASE_URL` should both name
 the browser-facing Next.js origin so alerts, reset links and the FastAPI root redirect land on the canonical app.
+
+
+## TestClient wakeup sockets in the sandbox (2026-10-26)
+
+A new image endpoint test stalled on its first anonymous TestClient GET, before
+any asset work. Faulthandler showed the portal event loop and calling thread
+waiting, with no application worker active. The same in-memory/mocked-network
+test passed immediately outside the restricted sandbox; the auth/source/logo
+regressions passed there too. Use an approved execution outside this sandbox
+for Starlette TestClient's local wakeup sockets when this specific stall recurs.
+This does not authorize connecting to real data or running Chrome; the laptop
+cooling restriction still applies.

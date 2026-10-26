@@ -885,3 +885,21 @@ See `docs/architecture/2026-10-26-company-identity.md` for the final checks,
 unavailable sources and changed-file inventory. This is local work with no
 production deployment, scheduler operation or migration. Chrome and screenshot
 runs remain suspended by the laptop cooling restriction.
+
+
+## Automatic future-company logos (2026-10-26, local)
+
+Status: supersedes the fixed-list limitation in the previous employer-logo entry.
+
+The owner clarified that branding must follow new Pulls companies automatically.
+The bundle of 59 approved files is now a fast path. Unknown company names use
+an owner-only same-origin image endpoint backed by exact registered source/job
+identities and verified employer page evidence. Initials remain visible while
+loading and if the site refuses access or supplies no trustworthy raster asset.
+No domain guesses, provider favicon substitutions or third-party logo service.
+The independent asset cache is bounded, keeps provenance, coalesces concurrent
+rows and expires misses. It neither polls jobs nor changes any application.
+Shopify outside the bundle passed actual public discovery and the built local
+website's authenticated proxy path with fictional application data. Full
+checks, file inventory and remaining browser limitations are in
+`docs/architecture/2026-10-26-company-identity.md`. No production deployment.

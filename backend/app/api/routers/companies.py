@@ -7,16 +7,56 @@ brand. Counts only; the roles themselves come from /api/jobs?company=.
 
 from __future__ import annotations
 
+import asyncio
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
 from backend.app.db.models import CompanyPetitionReportRecord, JobEvaluationRecord, JobMarkRecord, JobRecord
 from backend.app.intelligence.companies import classify_company
+from backend.app.branding.cache import LogoBusy, LogoCache
+from backend.app.branding.sources import LogoSeed, company_logo_seed
 
 
 router = APIRouter()
+logo_cache = LogoCache()
+
+
+def _logo_seed(name: str = Query(..., min_length=1, max_length=255),
+               session: Session = Depends(get_session)) -> LogoSeed:
+    try:
+        return company_logo_seed(session, name)
+    finally:
+        # These are plain source metadata strings. Do not hold a database
+        # connection while awaiting a public image request in the asset pool.
+        session.close()
+
+
+@router.get("/api/company-logo")
+async def company_logo(seed: LogoSeed = Depends(_logo_seed)) -> Response:
+    """Owner-only, same-origin logo lookup for any registered employer.
+
+    Authentication and extension scope remain enforced by the normal API guard.
+    This fetches public branding only, never jobs or application outcomes.
+    """
+    headers = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "X-ACE-Logo-Status": "unavailable"}
+    if not seed.pages:
+        return Response(status_code=204, headers=headers)
+    try:
+        asset = await asyncio.shield(asyncio.wrap_future(logo_cache.request(seed)))
+    except LogoBusy:
+        return Response(status_code=503, headers={**headers, "Retry-After": "15"})
+    if asset is None:
+        return Response(status_code=204, headers=headers)
+    return Response(asset.png, media_type="image/png", headers={
+        **headers,
+        "X-ACE-Logo-Status": "verified",
+        "X-ACE-Logo-Checked": datetime.fromtimestamp(asset.fetched_at, timezone.utc).isoformat(),
+    })
 
 
 @router.get("/api/company-intelligence/batch")

@@ -1,78 +1,116 @@
-# Shared company identity, 2026-10-26
+# Shared company identity and automatic future logos, 2026-10-26
 
 Status: implemented and tested locally on `company-logo-consistency-20261026`,
-based on `wine-rose-platform` at `cdefb3f`. Not deployed.
+based on `wine-rose-platform` at `cdefb3f`, draft PR #1. Not deployed.
 
-The owner requested actual marks for missing employers such as FedEx Freight
-and General Motors, plus the same logo after opening an Apple opportunity.
-Pulls/Analytics previously knew 11 exact names, while job tables and job detail
-heroes always used monograms. A shared resolver and image component now serve
-59 reviewed employer icons and 71 explicit aliases across the main employer
-views. The approved Wine and Rose layout, typography and company-first rows
-are preserved.
+The owner requested the same authentic logo inside details and on lists, then
+clarified that every newly pulled employer must use automatic discovery. The
+59 reviewed bundled icons/71 aliases are now an optional fast path. An employer
+outside the bundle uses ACE's owner-only `/api/company-logo?name=...` route,
+without adding another company to source code or a branding allowlist.
 
-## Result and boundaries
+## Behavior
 
-- FedEx, FedEx Freight, General Motors and Southern Company have separate
-  reviewed assets from their official sites. The Freight icon is declared by
-  its own official careers page. All 48 new files preserve downloaded bytes.
-- Canonical names and individually listed aliases share one manifest. Matching
-  normalizes Unicode/case/whitespace/periods/commas only. Partial-name matches,
-  inferred domains and automatic parent/subsidiary substitutions are excluded.
-- Pulls rows and its company dialog, job table cells, job detail heroes,
-  company evidence headers, stored and external applications, Analytics company
-  history, Inbox application records, Coverage, Resume Studio and check history
-  use the shared components. Native selects retain text options.
-- Company routes decode escaped names once before both evidence queries and
-  logo lookup. This fixes multiword identities and keeps malformed bookmarks
-  usable. Other page headers retain their existing markup unless given a logo.
-- Unknown, empty or failed images have visible accessible initials. Image error
-  state is scoped to the current identity, including cached failed images.
-  All browser image sources remain local. No extra backend calls or scheduler
-  operations are introduced for logos. Table/hero sizes retain 36/64 px and
-  26/48 px at the existing 720 px mobile breakpoint.
-- Career Dashboard, extension, backend, business rules, application identities,
-  authentication, Gmail permissions, production data and scheduler are unchanged.
+The shared CompanyLogo inherits the existing company's name on every supported
+surface: Pulls rows/dialog, job tables and details, company evidence pages,
+external applications, Analytics employer history, Inbox application records,
+Coverage and Resume Studio/check history. Unknown names now start a lazy
+same-origin image request; readable initials stay visible during loading and
+on failure. Success/error state resets on identity changes. The approved layout,
+company-first ordering, typography and 36/64 px table/hero sizes remain, with
+26/48 px sizes below the existing 720 px breakpoint.
 
-The official-site review could not retrieve Oracle, Intel, Cisco, Dell, Tesla,
-Mastercard, Ford, DoorDash, Akamai or Uber icons because access was refused.
-HPE timed out and Walmart supplied no usable raster icon. These and unreviewed
-employers retain the visible fallback. A genuine mark for every employer in the
-dynamic catalog is not claimed. Additional coverage requires another reviewed
-source record, rather than a guessed domain or fabricated mark.
+The backend reads exact employer/source identities from the existing catalog
+and indexed job records. Enabled registered source metadata, verified board
+accounts and stored jobs establish which public employer pages can be read.
+Feed-only/unregistered links, external application URLs and arbitrary browser
+URLs never become fetch seeds. It accepts an employer-owned site's declared
+icon, a company-specific logo on a verified tenant board, or branding/website
+from an exactly matched structured hiringOrganization. Shared ATS/platform
+favicons and social-profile branding are excluded. No company domain is guessed
+and no parent company's mark is automatically assigned to another employer.
+
+The independent asset service performs certificate-checked HTTPS, validates
+all DNS answers and pins the public address with the original TLS SNI/Host.
+It checks redirects and robots for pages and image CDNs, stops on an explicit
+refusal, shares a host cooldown after rate limits, limits bytes/deadlines and forwards no cookies, referrers, mail or
+owner application contents. Raster images are decoded and re-encoded as PNG
+at up to 96 px. HTML, SVG, tracking-size, transparent and solid placeholders
+are not returned as brand assets.
+
+Four asset workers, a 32-request ceiling and coalesced company lookups keep
+this independent of job polling. Cancelling one image request does not cancel
+other rows' shared lookup. The 512-entry cache retains source, evidence page,
+fetch time and PNG hash. Successes expire after seven days, misses after six
+hours; first-job evidence invalidates an earlier board-only lookup. Private
+0700/0600 disposable cache files live under the system temp directory in
+`ace-company-logo-cache-v1`, outside Git and the database. A replacement
+container may rebuild that cache automatically. The API's normal owner guard,
+extension scope and no-store policy remain; database connections close before
+public image work. Unavailable evidence returns 204 so the client retains
+initials without a fake brand or noisy missing-resource response.
+
+## Scope and limits
+
+The API has a new public-branding-fetch exception to its previous prohibition
+on inline ATS networking. It still never polls or evaluates jobs inline.
+Application identities, totals/statuses, job discovery business rules, auth,
+Gmail permissions, Career Dashboard, extension, schema and scheduler are
+unchanged. No migration or scheduler operation occurred. A release requires
+matching API and website images and separate owner approval.
+
+Automatic discovery applies to future employers without manual logo entries.
+An external site can still refuse access, disallow reading, require browser
+rendering or provide no trustworthy supported image. Such a company retains
+visible initials and retries after the cache cooldown. Authentic logos from
+every external company cannot be guaranteed; substitutes are never fabricated.
+The optional bundle remains useful for reviewed assets on blocked sites.
 
 ## Validation
 
 | Check | Result |
 | --- | --- |
-| TypeScript | Passed, `npm run typecheck` |
-| ESLint | Passed, `npm run lint`, no warnings |
-| Production webpack build | Passed, `npm run build`, one CPU core |
-| Company component/DOM contracts | 7 passed: reviewed aliases, false-match protection, manifest integrity, shared list/detail avatars, empty/unknown fallback, encoded routes and evidence queries, failed-image recovery |
+| TypeScript, ESLint, webpack production build | Passed |
+| Backend logo/source/transport/cache contracts | 53 passed |
+| Existing auth and board-name regressions | 73 passed; 126 backend tests passed together |
+| Company React/DOM contracts | 7 passed, including future-name loading/success/failure and identity changes |
 | Existing Inbox review rendering | 8 passed |
-| Assets | All 59 decode as images, minimum 16 px; every file matches its recorded SHA-256 |
-| Built local website | Authenticated HTTP checks on 17 pages against a disposable fictional SQLite database; all four requested brands appear as actual image elements in job and company heroes; Apple list row has its logo |
-| Served image bytes | All 59 public image responses return 200 and match manifest hashes |
-| Application totals | Unchanged at 33 fictional applications before/after page reads |
-| Dash and diff guards | Zero forbidden UI dashes; `git diff --check` passes |
-| Playwright | 7 new cases collected only, for Day/Night at 1672, 700 and 390 px, plus broken-image recovery |
+| Existing bundled assets | All 59 decode and match recorded SHA-256; earlier built-site serving checks verified all 59 |
+| Real public future-employer discovery | Shopify, outside the bundled list, automatically supplied its authentic icon from its official careers site |
+| Built local website/API proxy | Shopify company HTML uses the dynamic route; authenticated request returns a PNG up to 96 px, repeat bytes match; anonymous request denied and unknown source returns 204 |
+| Fictional application totals | Stayed 33 before and after the automatic route checks |
+| Dash/diff guards | Zero forbidden UI dashes; `git diff --check` passes |
+| Playwright | 9 cases collected only: Day/Night at 1672, 700 and 390 px; broken image, unbundled company success and pending/unavailable evidence |
 
-The local API ran against `/tmp/ace-company-logos-fictional-20261026.db` with
-fictional records only; it did not use or mutate the owner's database. Public
-brand names were assigned to four fictional jobs for these checks. Source
-bytes were inspected in a local brand contact sheet, not a website screenshot.
+The real public check used
+[Shopify's official careers page](https://www.shopify.com/careers), whose
+HTML declared the downloaded icon. It was inspected locally, not added to the
+bundled manifest. The website integration used an explicitly fictional Shopify
+job in `/tmp/ace-company-logos-fictional-20261026.db`, never owner applications.
+All automated backend records/network responses are fictional/in-memory.
+The earlier shared-logo pass also checked 17 authenticated local pages and all
+59 served bundle hashes. Current backend tests verify a name first unavailable
+and then newly registered, exact identity protection, first-job invalidation,
+refusals, mixed/private DNS, pinning, redirect robots checks, raster decoding,
+cache reuse/expiry/restart, coalescing, cancellation and unchanged totals.
 
 Chrome was not launched because the documented laptop cooling restriction
-remains. No fresh rendered-page screenshots, pixel comparison, keyboard/browser
-accessibility run or production verification are claimed. Pulls job rows and
-the Inbox register load interactively; HTTP checks confirm their pages load,
-while their full interactive behavior remains a browser verification item.
-The seven Playwright cases must run on a machine with working cooling before
-claiming visual acceptance. Website deployment requires separate owner approval.
+remains. No fresh website screenshots, pixel comparison, browser accessibility
+run or production verification are claimed. The 9 browser cases remain pending
+on a machine with working cooling. The temporary local services were stopped;
+no production deployment was performed.
 
 ## Files changed
 
 Implementation:
+
+- `backend/app/branding/__init__.py`
+- `backend/app/branding/sources.py`
+- `backend/app/branding/transport.py`
+- `backend/app/branding/discovery.py`
+- `backend/app/branding/cache.py`
+- `backend/app/api/routers/companies.py`
+- `backend/app/api/main.py`
 
 - `web/src/lib/companyLogos.ts`
 - `web/src/components/CompanyLogo.tsx`
@@ -93,6 +131,9 @@ Implementation:
 - `web/src/app/globals.css`
 
 Tests, provenance and continuity:
+
+- `backend/tests/test_company_logos.py`
+- `docs/knowledge/08-operations-and-testing.md`
 
 - `.github/workflows/ci.yml`
 - `web/package.json`

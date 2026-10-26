@@ -49,7 +49,7 @@ test("requested employers and reviewed legal variants resolve consistently",()=>
 });
 test("similar names, unknown subsidiaries and prototype properties never borrow marks",()=>{
   for(const name of ["Applewood Fictional Labs","Not Apple","Apple Fictional Subsidiary","General Motorsports","FedEx Freight Services Fictional","Workday tenant: Apple","toString","__proto__",""]){
-    assert.equal(companyLogoFor(name),undefined,name);assert.doesNotMatch(html(CompanyLogo,{name}),/<img/);
+    assert.equal(companyLogoFor(name),undefined,name);assert.doesNotMatch(html(CompanyLogo,{name}),/src="\/company-logos\//);
   }
 });
 test("all identities are unambiguous and all local bytes match official provenance",()=>{
@@ -74,7 +74,7 @@ test("list and detail avatars use the same authentic mark and size variants",()=
 test("empty and unknown names have visible accessible fallbacks and never request remote images",()=>{
   for(const [name,initials] of [["Fictional Labs","FL"],["","C"],["   ","C"]]){
     const markup=html(CompanyLogo,{name});assert.match(markup,new RegExp(`>${initials}</span>`));
-    assert.match(markup,/logo unavailable/);assert.doesNotMatch(markup,/<img|https?:/);
+    assert.match(markup,name.trim() ? /checking official logo/ : /logo unavailable/);assert.doesNotMatch(markup,/src="https?:/);
   }
   for(const row of manifest)assert.match(html(CompanyLogo,{name:row.company}),/src="\/company-logos\//);
 });
@@ -88,7 +88,7 @@ test("company evidence pages include the logo even when official outcome evidenc
     assert.equal(evidenceQueries.at(-1).params.name,decodeURIComponent(name));
   }
   const malformed=renderToStaticMarkup(await CompanyPage({params:Promise.resolve({name:"Fictional%Labs"})}));
-  assert.match(malformed,/Fictional%Labs/);assert.match(malformed,/logo unavailable/);
+  assert.match(malformed,/Fictional%Labs/);assert.match(malformed,/checking official logo/);
 });
 test("broken and cached failed images fall back and recover when the employer changes",async()=>{
   const {window}=parseHTML("<html><body><div id='root'></div></body></html>");
@@ -102,6 +102,13 @@ test("broken and cached failed images fall back and recover when the employer ch
     assert.equal(host.querySelector("img"),null);assert.equal(host.textContent,"A");
     await render("General Motors");assert.match(host.innerHTML,/general-motors.png/);
     await render("Fictional Labs");assert.equal(host.textContent,"FL");
+    assert.equal(host.querySelector("img").getAttribute("src"),"/api/company-logo?name=Fictional%20Labs");
+    assert.equal(host.querySelector("img").getAttribute("data-pending"),"true");
+    await act(async()=>host.querySelector("img").dispatchEvent(new window.Event("load")));
+    assert.equal(host.textContent,"");assert.equal(host.querySelector("img").getAttribute("data-pending"),null);
+    await render("Future Fictional Brand");assert.equal(host.textContent,"FF");
+    await act(async()=>host.querySelector("img").dispatchEvent(new window.Event("error")));
+    assert.equal(host.querySelector("img"),null);assert.equal(host.textContent,"FF");
     await render("Apple");assert.match(host.innerHTML,/apple.ico/);
     await act(async()=>mounted.render(null));
     const createElement=window.document.createElement.bind(window.document);

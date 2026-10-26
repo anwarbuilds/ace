@@ -3,10 +3,14 @@
 This service is deliberately read-only over the database the scheduler
 writes.
 
-It does not fetch from any ATS, does not evaluate eligibility inline,
+It does not poll jobs from any ATS, does not evaluate eligibility inline,
 and does not send email. Those responsibilities stay with the scheduler
 and the notification worker, so the web application cannot become a
 second, divergent source of truth.
+
+The independent owner-only company-logo route may fetch public branding from
+registered employer pages through its bounded, cached asset service. It never
+changes source polling, eligibility, job identity or application records.
 """
 
 import csv

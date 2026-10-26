@@ -1842,8 +1842,9 @@ html[data-theme="light"] .wine-home .wine-art-a{opacity:.5;filter:drop-shadow(0 
 @media(prefers-reduced-motion:reduce){.wine-button,.auth-provider{transition:none}}
 
 /* Verified, local employer icons shared by lists and company detail views. */
-.company-logo{--logo-size:28px;width:var(--logo-size);height:var(--logo-size);flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;background:var(--surface-2);color:var(--text-secondary);vertical-align:middle;overflow:hidden}
+.company-logo{--logo-size:28px;position:relative;width:var(--logo-size);height:var(--logo-size);flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;background:var(--surface-2);color:var(--text-secondary);vertical-align:middle;overflow:hidden}
 .company-logo img{width:calc(var(--logo-size) - 4px);height:calc(var(--logo-size) - 4px);object-fit:contain;background:#fff;border-radius:4px}
+.company-logo img[data-pending]{position:absolute;opacity:0}
 .company-logo>span{font-size:var(--text-tick);font-weight:var(--weight-semibold);line-height:var(--leading-compact)}
 .company-logo--compact{--logo-size:20px;border-radius:4px}
 .company-logo--table{--logo-size:36px}

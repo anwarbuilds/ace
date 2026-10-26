@@ -633,7 +633,71 @@ Workday listing and search routes outside `/apply/` stay quiet, including after
 single-page navigation back from an application. The toolbar Wake override
 remains available.
 
+### Automatic logos for future employers (2026-10-26, local)
+
+The owner clarified that every future pulled company needs automatic logo
+handling, rather than further additions to a fixed reviewed list. The existing
+59-file bundle remains a fast path; it no longer limits employer coverage.
+`CompanyLogo` now requests `/api/company-logo?name=...` for an unbundled name,
+with visible initials during loading/failure, lazy image loading on compact
+rows, and reset state on navigation. Every existing shared logo surface inherits
+this behavior without another company-specific code change.
+
+The owner-only endpoint reads exact company/source identities from the existing
+catalog and indexed job records. Enabled, registered employer sources with
+verified board metadata or stored job evidence can supply seeds. External
+application links, public feeds, unknown names and mismatched sources cannot
+supply arbitrary fetch URLs. Shared ATS favicons and social-profile branding
+are not employer logos. Company-declared tenant images or an exact structured
+hiringOrganization match can provide a logo or official employer website.
+Employer-owned registered hosts can provide their declared site icon.
+
+`backend/app/branding/` contains this independent asset service. It performs
+normal certificate-checked HTTPS, validates every DNS answer, pins the public
+address while retaining TLS SNI/Host, checks redirects and robots for pages
+and image CDNs, stops on explicit refusal, bounds requests and image sizes,
+and returns only decoded/re-encoded PNG at up to 96 px. No cookies, referrers,
+owner mail or application contents are sent to external sites. SVG/HTML,
+tracking-size, transparent and solid placeholders are rejected.
+
+Four asset workers, a 32-request ceiling, per-company concurrent-request
+coalescing and a 512-entry private cache prevent repeated row lookups from
+repeating network work. Successes last seven days; misses six hours. Cache
+metadata records source, evidence page, fetch time and PNG hash. Disposable
+files live under the system temp directory at `ace-company-logo-cache-v1`
+(mode 0700 directory/0600 files), outside Git and the database; they may rebuild
+on container replacement. A first stored job changes an earlier board-only
+cache identity. Request DB connections close before external image work. The
+read-model/API auth and no-store policy remain; extension tokens cannot access
+this route. Polling, scheduler, eligibility, application identities/statuses,
+Career Dashboard, extension code, Gmail permissions and schema are unchanged.
+The API now has a narrowly scoped public-branding-fetch exception to its
+previous no-ATS-network rule; it still never polls or evaluates jobs inline.
+
+Validation: 53 logo/backend tests plus 73 existing auth and board-name regressions
+(126 passed together),
+7 React/DOM company contracts, 8 Inbox rendering tests, TypeScript, lint, build
+and dash guards pass. Nine Playwright cases collect only; Chrome remains
+prohibited by the laptop cooling issue. A real public Shopify careers lookup
+(outside the bundled list) returned its authentic icon; the built local website
+then served a cached 96 px-or-smaller PNG through the owner-authenticated API
+using an explicitly fictional Shopify job in a disposable SQLite database.
+Anonymous access was denied, unknown companies returned 204, repeat image
+bytes matched and fictional application totals stayed 33. This is local
+verification, not a production deployment or production visual test.
+
+The follow-up remains on review branch `company-logo-consistency-20261026`,
+targeting `wine-rose-platform` in draft PR #1. Details and current limitations
+are in `docs/architecture/2026-10-26-company-identity.md`. No deployment,
+migration or scheduler operation occurred. Sites may refuse access, provide
+only browser-rendered branding or only unsupported images. ACE automatically
+attempts retrieval for new employers; it cannot promise a trustworthy actual
+logo from every external website and never fabricates one.
+
 ### Consistent employer logos across the website (2026-10-26, local)
+
+**Status:** The fixed-list limitation below is superseded by the automatic
+future-employer service described above. The 59-file bundle remains valid.
 
 Review branch: `company-logo-consistency-20261026`, based on
 `wine-rose-platform` at `cdefb3f`. Merge target is `wine-rose-platform`.
