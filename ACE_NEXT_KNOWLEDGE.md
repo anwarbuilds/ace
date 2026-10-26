@@ -83,60 +83,84 @@ refresh employer tabs to activate 1.29.1. This correction changes extension
 source only; no backend, database, Gmail, scheduler or website runtime change
 is needed. Full details: `docs/architecture/2026-10-26-extension-explicit-fill.md`.
 
-## 2026-10-26: Inbox clarity and Rejected companies deployed
+## 2026-10-26: Inbox clarity, Rejected companies and Workday matching deployed
 
-Owner follow-ups the same afternoon (website `64ab0f0`, then parser 4):
-Rejected companies is back to the original card grid (newest rejection first,
-15 newest companies, no summary boxes, table or scrolling; search and pages
-stay behind View rejected applications) and the sponsorship evidence
-methodology section is removed from the Companies tab. Parser 4 reads the
-employer from Workday senders (`<tenant>@myworkday.com`, for example
-`generalmotors` for General Motors), so such emails can match and clear
-rejections can record. When ACE still cannot tell, the review panel suggests
-applications named by the sender or subject (Workday tenant, display name,
-company name or initials such as GM in the subject) without typing, and its
-search also matches initials and squashed names. "We have chosen to pursue
-other candidates" and "decided to pursue other candidates who align more
-closely" were already recognized; tests now pin them. The parser bump makes
-waiting email and ACE-filed acknowledgements due for one more re-read, which
-Sync now performs.
+Current state: website and API built from `40254e7` went live at 13:21 Pacific
+with Inbox parser version 4 (verified inside the running API). Production then
+moved to `bd5c364` (the logo session's release), which contains all of this.
+Code: `backend/app/inbox/display.py`, `reconcile.py`, `routers/inbox.py`,
+`routers/analytics.py`, `web/src/components/inbox/` (`InboxIntelligence.tsx`,
+`InboxReviewPanel.tsx`, `EmailFrame.tsx`), `components/analytics/AnalyticsView.tsx`
+and `app/app/applications/analytics/page.tsx`. Details under "Inbox sync
+clarity" below.
 
-The owner asked for it live. Production website `176744f` (what `/healthz`
-reports) has been healthy since 12:51 Pacific, and API `c7d3451` since 12:54.
-Shipped: the Inbox status card, Gmail checked on open and while open, one Sync
-now, the email shown as it arrived in a sandboxed frame, grouped choices with
-Acknowledgement and Status update, parser 3, the Rejected companies panel and
-searchable, paged rejected applications. Details are under "Inbox sync clarity"
-below.
+Owner decisions this session, in order (later ones win):
+
+1. Inbox must show at a glance that all email is in, with one click. Inbox now
+   checks Gmail when opened and every 3 minutes while open and visible (10
+   minute rest after a Google rate limit); one Sync now also re-reads email kept
+   under older parser rules. A status card says All caught up / N emails need
+   you / paused / needs attention, when Gmail was last checked and what that
+   check found. `last_synced_at` means only the last check for new email.
+2. Show the exact email, not extracted text: the email's own HTML rebuilt from
+   an allowlist in a sandboxed frame (no scripts, no pictures from the sender's
+   servers), with Show as plain text and Open in Gmail.
+3. More choices: Rejection, Assessment, Recruiter reply, Interview, Offer
+   (change the application) and Acknowledgement, Status update, Not about my
+   applications, Decide later (change nothing). ACE's reading is marked.
+4. "Companies that rejected you" is renamed "Rejected companies". A table with
+   summary boxes was tried and rejected by the owner ("keep the old one"): the
+   panel is the original card grid, newest dated rejection first, the 15 newest
+   companies, with no summary boxes, table, scrolling or paging.
+5. Search and pages belong only inside View rejected applications
+   (`/app/applications/analytics?evidence=rejection`): search over company,
+   role, job ID and record key, 25/50/100 per page, numbered pages, newest
+   rejection first, each with its date and View email.
+6. The sponsorship evidence methodology section and its link are removed from
+   the Analytics Companies tab.
+7. Owner-reported rejection sentences ("we have chosen to pursue other
+   candidates at this time", "decided to pursue other candidates who align more
+   closely with the role requirements") are recognized and pinned by tests.
+8. "How can I select now?": parser 4 reads the employer from Workday senders
+   (`<tenant>@myworkday.com`, `generalmotors` is General Motors). When ACE still
+   cannot tell, the review panel suggests applications named by the sender or
+   subject (tenant, display name, company name, initials such as GM) without
+   typing; search also matches initials and squashed names. Outcome buttons stay
+   disabled until an application is chosen.
 
 Found during release verification and fixed in `c7d3451`: Analytics dropped
 every outcome recorded from an email, because Inbox's own `email:<id>` audit
 entry counted as a second application for that email. Only job and external
 keys count now. A read-only production check then showed 27 of 47 rejections
-dated (1 before the fix). The newest is the 10:30 rejection the owner asked
-about: it had been imported, read as a rejection and held for the owner because
-several applications at that employer exist, and the owner recorded it by hand.
+dated (1 before the fix). The 10:30 rejection the owner asked about had been
+imported, read as a rejection and held for the owner because several
+applications at that employer exist; the owner then recorded it by hand.
 
-Evidence: private backup
-`private-backups/inbox-clarity-20261026T194634Z/database.dump.gz` (445 MB,
-gzip and `pg_restore --list` verified, 278 entries) with before and after
-container, image, schema and count records. Only API and web were replaced
-(then API alone for the fix). Scheduler, PostgreSQL and Caddy kept their
-container IDs; schema stayed `0050`; protected counts were identical before and
-after (1,219 marks, 883 applied, 47 external, 104 answers, 1 user, 304 Gmail
-messages, 461 events). The production image build passed TypeScript. Deployed
-backend file hashes match the tested sources. Anonymous requests to the new
-Inbox and records routes return 401 and Inbox redirects to sign-in. Read-only
-in-process checks (read-only transactions, counts only) confirmed parser 3,
-the default view resolving to Recruiting email with nothing waiting, and 87
-emails due for one re-read under parser 3. No Gmail sync, recheck, review or
-status change was run by the release.
+Releases, each at the owner's request ("we want it to be live"): `176744f`
+website and API 12:51 Pacific; `c7d3451` API 12:54 (Analytics fix); `64ab0f0`
+website 13:15 (card grid, methodology removed); `40254e7` API and website 13:21
+(parser 4, suggestions). Each was built on the VM (Next.js TypeScript passed)
+and activated with `up -d --no-build --no-deps --wait` for only the changed
+services. Scheduler, PostgreSQL and Caddy kept their container IDs throughout;
+schema stayed `0050`. Private backup before the first activation:
+`private-backups/inbox-clarity-20261026T194634Z/database.dump.gz` (445 MB, gzip
+and `pg_restore --list` verified, 278 entries); the same folder holds before and
+after containers, images, schema, counts and every build log. Protected counts
+were identical before and after (1,219 marks, 883 applied, 47 external, 104
+answers, 1 user, 304 Gmail messages, 461 events). Deployed backend file hashes
+matched the tested sources. Anonymous Inbox and records requests return 401;
+Inbox redirects to sign-in. Read-only in-process checks (read-only
+transactions, counts and decisions only) confirmed the parser version, the
+default view resolving to Recruiting email with nothing waiting, and 87 emails
+due for a re-read at parser 3 (more after the parser 4 bump). No Gmail sync,
+recheck, review or status change was run by any release.
 
-Not verified: signed-in browser rendering (Chrome stays off for cooling). The
-laptop shut down again at about 12:43 during the single-process backend suite
-while the desktop and other work were busy, so only focused tests ran after the
-rebase onto `37225a5`; the production build was the type-check gate. Owner next
-step: open Inbox, press Sync now once, then check Analytics, Companies.
+Pending owner action: open Inbox and press Sync now once; it re-reads waiting
+email and ACE-filed acknowledgements under parser 4 and records clear
+rejections with Undo. Not verified: signed-in browser rendering (Chrome stays
+off for cooling). The laptop shut down at about 12:43 during the single-process
+backend suite while the desktop and another session were busy; afterwards only
+focused tests ran locally and the VM image build was the type-check gate.
 
 ## 2026-10-26: Logos and quick fill deployed
 
@@ -463,6 +487,14 @@ sign-in address.
   them (2026-10-26).
 - `npx next typegen` generates `PageProps` and `LayoutProps` for a fresh
   worktree without a full build, so `npx tsc --noEmit` can run first.
+- Releasing from this laptop (2026-10-26): long SSH waits can be cut off
+  locally, so start VM builds with `nohup ... > <release dir>/build.log` and
+  poll the log in short calls; the build keeps running on the VM. Keep every
+  release's evidence in one `private-backups/<name>-<UTC stamp>/` folder. Ad hoc
+  read-only production queries outside a requested release may be refused by
+  the agent permission classifier; do not retry, give the owner the UI path or
+  a one-line command instead. Other sessions push to `wine-rose-platform`
+  often: fetch and rebase immediately before every push.
 - Extension browser tests need no server:
   `cd web && CHROMIUM_PATH=/usr/bin/google-chrome npx playwright test tests/e2e/extension-*.spec.ts`
   (22 tests, about 25 seconds). Pair with `node extension/test-rules.js`,
@@ -2884,6 +2916,8 @@ Assessment, Recruiter reply, Interview, Offer, Acknowledgement, Status update,
 not about applications and later are single actions. `POST /api/inbox/review`
 takes an optional `kind` so an owner-chosen assessment counts as one.
 
+Parser version 4 (2026-10-26) also reads the employer from Workday senders
+(`<tenant>@myworkday.com`); other shared platforms never name one.
 Parser version 3 (2026-10-26) never files an email as a receipt when it also
 sounds like a decision (`possible_rejection`, waits) or when only the snippet
 could be read (waits). Recheck reads waiting email and receipts ACE filed

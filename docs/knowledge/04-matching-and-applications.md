@@ -510,3 +510,11 @@ although 29 emails had changed an application. Its "one email substantiates one 
 and showed only as an undated status. Only job and external keys count now (27 of 47 dated afterwards). Lesson: a
 fixture that omits the audit rows production always writes cannot catch this; build test data in the production shape.
 Test: `test_email_outcomes_count_despite_the_inbox_audit_entry_every_email_has` in `test_analytics_read.py`.
+
+Later the same day: the owner asked how to choose the application for two Workday emails that waited with none
+picked. Workday sends from `<tenant>@myworkday.com` (for example `generalmotors`), and ACE ignored every platform
+address, so the employer was never named. Parser 4 reads the Workday tenant (other shared platforms still never name an
+employer), and the review panel suggests applications the sender or subject names, including initials such as GM,
+before the owner types. The owner also rejected a richer Rejected companies table in favour of the original card grid:
+summary panels stay compact, and search and paging live on the drill-down page. Tests:
+`test_a_workday_tenant_names_the_employer` and the suggestion case in `web/tests/inbox-review-render.test.mjs`.

@@ -109,14 +109,16 @@ DOM tests and the rule/Memory checks pass; browser testing remains suspended.
 Reload the unpacked extension and refresh employer tabs. Details:
 `architecture/2026-10-26-extension-explicit-fill.md`.
 
-**2026-10-26 Inbox clarity (live: website `176744f`, API `c7d3451`):** Inbox now checks Gmail
+**2026-10-26 Inbox clarity (live since `40254e7`, now within `bd5c364`):** Inbox now checks Gmail
 when opened, while open and on one Sync now button, and a status card says whether everything
 is in. Email shows exactly as it arrived (rebuilt HTML in a sandboxed frame, no scripts, no
 remote pictures). Choices add Recruiter reply, Acknowledgement and Status update. Parser 3
 never files a thanks-then-rejection email as a receipt and re-reads ACE-filed receipts.
 Analytics shows "Rejected companies" with totals and roles; rejected applications have search
 and pages. Released with a verified backup; only API/web changed. `c7d3451` also makes
-Analytics count outcomes recorded from email (they were dropped). Owner: press Sync now once.
+Analytics count outcomes recorded from email (they were dropped). Follow-ups: Rejected
+companies back to the card grid (15 newest), methodology removed, parser 4 matches Workday
+tenants and review suggests applications. Owner: press Sync now once.
 See `ACE_NEXT_KNOWLEDGE.md`, Inbox clarity and Rejected companies deployed.
 
 **2026-10-26 tenant logos:** Workday site-bound logo metadata and Lever employer
