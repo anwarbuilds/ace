@@ -609,7 +609,7 @@ commits (`54e939a`, `61debd6`, `8d84141`), the reconciled Focus Mode V5.1
 commits (`559ee84`, `5b8ab4b`, equivalents of local `4ce3570` and `cb7bb5e`),
 the V5.1 typography pass and theme sync/Close (`386bed9`). It contains the
 existing V4 Answer Memory implementation (`2e7c1dc`). The
-extension manifest is now `1.28.2` (local exact-question and direct-answer learning repairs described below). The V5.1 extension has not been published; it
+extension manifest is now `1.28.3` (local exact-question, direct-answer learning and control-mirroring repairs described below). The V5.1 extension has not been published; it
 runs as an unpacked installation loaded from
 `/home/ubuntu/Documents/ace-next/extension`. An unpacked installation must be
 reloaded at `chrome://extensions`; employer tabs must then be refreshed.
@@ -730,6 +730,49 @@ backend migration, scheduler operation, Gmail change or extension publication
 was performed. Baseline is `e6249ad`; reload local ACE **1.28.2** and refresh
 employer tabs. Keep **Remember this approved answer** checked for routine
 answers, and **Auto-fill known** on for subsequent applications.
+
+### Exact control mirroring and approval layout (2026-10-26)
+
+The owner confirmed direct answer adoption works, then clarified that Review
+must replicate the employer's control type. They also supplied an Oracle
+screenshot with **Approve answer** clipped in the three-equal-column action
+row. Local extension **1.28.3** fixes both:
+
+- Ordinary inputs were all rendered as textareas. Review now uses single-line
+  inputs for single-line fields, textareas for multiline fields, native
+  numeric/date/time types with the employer's placeholder and min/max/step/
+  length constraints, and native datalists with their real suggestions.
+  Native selects, multiple selects, radio and checkbox groups remain intact.
+- Custom dropdown recognition includes `aria-autocomplete=list/both`, explicit
+  input popup semantics and a `role=combobox` wrapper owning one input. A wrapper
+  cannot adopt a neighbouring input. Readonly choice inputs are eligible for
+  option selection without being treated as writable text.
+- **Load employer options** also opens supported input comboboxes and uses
+  only their associated visible options. The same actual options appear in an
+  ACE dropdown. A raw text editor is never substituted for such a dropdown.
+  Unreadable/inaccessible controls remain explicit manual states. No options
+  are fabricated. The opener avoids clear/remove and submit buttons.
+- Choosing a dropdown answer requires an actual option click and readback of
+  the committed selection. A query that remains in an uncommitted search box
+  cannot count as success. Selection labels beside cleared React-style search
+  inputs are recognized. Placeholder values remain unanswered. Disabled or
+  submit-button options cannot be clicked. Failed choices cannot create Memory.
+- The primary approval action spans the full first row, with Show on form and
+  Skip sharing the second row. Wrapping is allowed instead of clipping or
+  shrinking the label. Native controls follow the card's Day/Night color scheme.
+  Other Workspace actions retain their existing layout.
+
+Validation: **31** fictional DOM contracts pass (including all previous
+adoption/reuse cases), **258** matcher cases and Memory safety checks pass;
+syntax, TypeScript, ESLint, dash and whitespace checks pass. **30** Playwright
+cases collect, including new real-browser control-shape, readonly-combobox and
+Day/Night narrow-layout assertions. They were **not executed** because the
+laptop cooling restriction still prohibits Chrome. Thus no fresh screenshots,
+actual text-fit measurement or authenticated Oracle control verification is
+claimed. The owner image was used only in chat, not saved to the repository.
+No website runtime, backend, database, scheduler, pairing or permission change,
+production deployment or extension publication occurred. Baseline is `0ad9bbb`.
+Reload ACE **1.28.3** in `chrome://extensions`, then refresh employer tabs.
 
 The latest local visual comparison used fictional Chrome fixtures: the
 approved Night compact reference and corrected extension compact capture were

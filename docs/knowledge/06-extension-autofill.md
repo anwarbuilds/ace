@@ -967,3 +967,28 @@ The 258 matcher cases, expanded Memory checks, syntax, TypeScript and lint pass;
 to cooling failures. No fresh visual, authenticated employer or live paired
 Memory verification is claimed. Reload local ACE 1.28.2 and refresh employer
 tabs. No production deployment or extension publication was performed.
+
+
+## Mirror the control type and keep approval text visible (2026-10-26)
+
+The owner confirmed direct answer adoption, then requested exact control
+mirroring and reported a clipped approval button. Local 1.28.3 replaces the
+universal textarea fallback with matching single-line, multiline, numeric/date
+and native suggestion controls. Native selects and choice groups remain.
+Explicit ARIA autocomplete and single-input combobox wrappers are recognized;
+supported readonly dropdown inputs load actual options without typing.
+
+ACE can read input-combobox options through **Load employer options** as well
+as button listboxes. Selection requires clicking a real safe option and reading
+back the committed value, including visible selection labels beside cleared
+React-style inputs. Query text alone is not proof of selection. Readonly fields
+are never searched by typing, and submit/clear/remove controls are not used as
+openers. Unknown custom controls stay manual rather than becoming textareas.
+
+The approval action has a full-width first row. Show on form and Skip share
+the second row; labels can wrap, and native controls use the card's color scheme.
+The 31 fictional DOM contracts, 258 matcher cases, Memory checks, TypeScript,
+lint, syntax and dash checks pass. Thirty Playwright cases collect but were not
+run because the laptop cooling restriction remains. No fresh visual text-fit
+or authenticated Oracle verification is claimed. Reload local ACE 1.28.3 and
+refresh employer tabs. No deployment, publication or backend/data change occurred.

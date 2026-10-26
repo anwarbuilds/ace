@@ -637,11 +637,23 @@ function aceIsAutocomplete(field) {
   return (
     (
       field.tagName === "INPUT" &&
-      field.getAttribute("role") === "combobox"
+      (field.getAttribute("role") === "combobox" ||
+        /^(list|both)$/.test(field.getAttribute("aria-autocomplete") || "") ||
+        /^(listbox|grid)$/.test(field.getAttribute("aria-haspopup") || "") ||
+        !!aceComboboxScope(field))
     ) ||
     aceIsListboxButton(field) ||
     aceIsWorkdayPrompt(field)
   );
+}
+
+/* Some ATSs put role=combobox on a wrapper instead of the actual input.
+   Only a wrapper owning one visible input can name that input's control. */
+function aceComboboxScope(field) {
+  var scope = field.closest('[role="combobox"]');
+  if (!scope || scope === field) return scope;
+  var inputs = scope.querySelectorAll('input:not([type=hidden])');
+  return inputs.length === 1 && inputs[0] === field ? scope : null;
 }
 
 /* Workday's search-and-pick box: School, Field of Study, Country Phone
@@ -1034,6 +1046,20 @@ function aceQuestionLabelFor(field) {
     sources.push(joined);
   }
 
+  var combo = aceComboboxScope(field);
+  if (combo && combo !== field) {
+    if (combo.id) {
+      var comboLabel = document.querySelector('label[for="' + CSS.escape(combo.id) + '"]');
+      if (comboLabel) sources.push(aceTextWithoutControls(comboLabel));
+    }
+    sources.push(combo.getAttribute('aria-label'));
+    var comboIds = combo.getAttribute('aria-labelledby');
+    if (comboIds) sources.push(comboIds.split(/\s+/).map(function (id) {
+      var node = document.getElementById(id);
+      return node ? node.textContent : '';
+    }).join(' '));
+  }
+
   // Only consulted when nothing above named the field. Greenhouse gives
   // its custom selects no label at all, so their question lives in the
   // surrounding markup and this is the only place it can be read.
@@ -1081,7 +1107,7 @@ function aceOwnGroup(field) {
    chrome and matched "phone" through its ancestors, and filling a
    captcha or a consent box is never wanted. */
 function aceShouldSkip(field) {
-  if (field.type === "search" || field.type === "password") return true;
+  if (field.type === "password" || (field.type === "search" && !aceIsAutocomplete(field))) return true;
 
   var name = aceNormalise(
     (field.getAttribute("name") || "") + " " + (field.id || "")

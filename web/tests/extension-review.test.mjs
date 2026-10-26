@@ -408,3 +408,109 @@ test('approval never saves a detected answer that changed after ACE displayed it
   await until(() => f.saved.length === 1, 'approve the newly displayed answer');
   assert.equal(f.saved[0].answer, 'A changed fictional answer');
 });
+
+test('Review mirrors single-line, multiline, numeric and date fields with their real control types', t => {
+  for (const type of ['text', 'email', 'tel', 'url', 'number', 'date', 'month', 'time']) {
+    const f = fixture(`<label for="detail">Additional screening detail</label><input id="detail" type="${type}" placeholder="Employer hint" min="1" max="40" step="1">`); t.after(f.dispose);
+    f.review('Additional screening detail');
+    const editor = f.panel().querySelector('#studio-answer');
+    assert.equal(editor.tagName, 'INPUT', type); assert.equal(editor.type, type);
+    assert.equal(editor.getAttribute('placeholder'), 'Employer hint');
+    assert.equal(editor.getAttribute('min'), '1'); assert.equal(editor.getAttribute('max'), '40');
+    f.dispose();
+  }
+  const f = fixture('<label for="detail">Additional screening detail</label><textarea id="detail"></textarea>'); t.after(f.dispose);
+  f.review('Additional screening detail'); assert.equal(f.panel().querySelector('#studio-answer').tagName, 'TEXTAREA');
+});
+
+test('a mirrored single-line editor keeps its draft through theme changes and fills only on approval', async t => {
+  const f = fixture('<label for="detail">Additional screening detail</label><input id="detail" type="text">'); t.after(f.dispose);
+  f.review('Additional screening detail');
+  const editor = f.panel().querySelector('#studio-answer'); editor.value = 'Fictional screening response'; editor.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+  f.click('theme'); assert.equal(f.panel().querySelector('#studio-answer').value, 'Fictional screening response');
+  assert.equal(f.document.getElementById('detail').value, '');
+  f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => f.saved.length === 1, 'single-line approval must fill the original input');
+  assert.equal(f.document.getElementById('detail').value, 'Fictional screening response');
+});
+
+test('a native datalist stays a text input with its actual suggestions', t => {
+  const f = fixture('<label for="detail">Additional screening detail</label><input id="detail" list="suggestions"><datalist id="suggestions"><option value="Option A">First suggestion</option><option value="Option B">Second suggestion</option></datalist>'); t.after(f.dispose);
+  f.review('Additional screening detail');
+  assert.equal(f.panel().querySelector('#studio-answer').tagName, 'INPUT');
+  assert.equal(f.panel().querySelector('#studio-answer').getAttribute('list'), 'studio-answer-options');
+  assert.deepEqual(Array.from(f.panel().querySelectorAll('#studio-answer-options option'), option => option.value), ['Option A', 'Option B']);
+});
+
+test('wrapper comboboxes mirror actual dropdown choices and select an option without typing', async t => {
+  const f = fixture('<label id="detail-label">Additional screening detail</label><div id="detail-control" role="combobox" aria-labelledby="detail-label" aria-controls="detail-options"><input id="detail" type="search" readonly value="Select One"></div>'); t.after(f.dispose);
+  const scope = f.document.getElementById('detail-control'); const field = f.document.getElementById('detail'); field.readOnly = true;
+  let typed = 0; let picked = 0;
+  field.addEventListener('input', () => typed++);
+  scope.addEventListener('mousedown', () => {
+    if (f.document.getElementById('detail-options')) return;
+    const menu = f.document.createElement('div'); menu.id = 'detail-options'; menu.setAttribute('role', 'listbox');
+    for (const label of ['Research', 'Engineering']) {
+      const option = f.document.createElement('div'); option.setAttribute('role', 'option'); option.textContent = label;
+      option.addEventListener('click', () => { picked++; field.value = label; menu.remove(); }); menu.append(option);
+    }
+    f.document.body.append(menu);
+  });
+  scope.addEventListener('keydown', event => { if (event.key === 'Escape') f.document.getElementById('detail-options')?.remove(); });
+  assert.equal(f.context.aceIsAutocomplete(field), true);
+  f.review('Additional screening detail');
+  assert.equal(f.panel().querySelector('textarea'), null, 'dropdowns never become free-text editors');
+  f.click(f.panel().querySelector('[data-ace^="read-options:"]').getAttribute('data-ace'));
+  await until(() => f.panel().querySelector('#studio-answer option[value="Engineering"]'), 'load the actual wrapper-owned list');
+  const editor = f.panel().querySelector('#studio-answer'); assert.equal(editor.tagName, 'SELECT'); editor.value = 'Engineering'; editor.dispatchEvent(new f.window.Event('change', { bubbles: true }));
+  assert.equal(field.value, 'Select One');
+  f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => f.saved.length === 1, 'approval must select the real option');
+  assert.equal(field.value, 'Engineering'); assert.equal(typed, 0); assert.equal(picked, 1);
+});
+
+test('aria-autocomplete inputs are choice controls even when role=combobox is absent', t => {
+  const f = fixture('<label for="detail">Additional screening detail</label><input id="detail" aria-autocomplete="list">'); t.after(f.dispose);
+  assert.equal(f.context.aceIsAutocomplete(f.document.getElementById('detail')), true);
+  f.review('Additional screening detail');
+  assert.equal(f.panel().querySelector('#studio-answer'), null);
+  assert.ok(f.panel().querySelector('[data-ace^="read-options:"]'));
+});
+
+test('a combobox option click that does not commit an answer is not approved or remembered', async t => {
+  const f = fixture('<label for="detail">Additional screening detail</label><div><input id="detail" role="combobox" aria-controls="detail-options"></div>'); t.after(f.dispose);
+  const field = f.document.getElementById('detail');
+  field.parentElement.addEventListener('mousedown', () => {
+    if (f.document.getElementById('detail-options')) return;
+    const menu = f.document.createElement('div'); menu.id = 'detail-options'; menu.setAttribute('role', 'listbox');
+    const option = f.document.createElement('div'); option.setAttribute('role', 'option'); option.textContent = 'Engineering'; menu.append(option); f.document.body.append(menu);
+  });
+  field.addEventListener('keydown', event => { if (event.key === 'Escape') f.document.getElementById('detail-options')?.remove(); });
+  f.review('Additional screening detail'); f.click(f.panel().querySelector('[data-ace^="read-options:"]').getAttribute('data-ace'));
+  await until(() => f.panel().querySelector('#studio-answer'), 'load actual choices');
+  const editor = f.panel().querySelector('#studio-answer'); editor.value = 'Engineering'; editor.dispatchEvent(new f.window.Event('change', { bubbles: true }));
+  f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => f.panel().textContent.includes('did not accept this answer'), 'a no-op option cannot be claimed as filled');
+  assert.equal(field.value, ''); assert.equal(f.saved.length, 0);
+});
+
+test('custom selection displayed beside a cleared search input is verified and remembered', async t => {
+  const f = fixture('<label for="detail">Additional screening detail</label><div><input id="detail" role="combobox" aria-controls="detail-options"></div>'); t.after(f.dispose);
+  const field = f.document.getElementById('detail');
+  field.parentElement.addEventListener('mousedown', () => {
+    if (f.document.getElementById('detail-options')) return;
+    const menu = f.document.createElement('div'); menu.id = 'detail-options'; menu.setAttribute('role', 'listbox');
+    const option = f.document.createElement('div'); option.setAttribute('role', 'option'); option.textContent = 'Engineering';
+    option.addEventListener('click', () => {
+      const value = f.document.createElement('span'); value.className = 'react-select__single-value'; value.textContent = 'Engineering'; field.parentElement.append(value); field.value = ''; menu.remove();
+    });
+    menu.append(option); f.document.body.append(menu);
+  });
+  field.addEventListener('keydown', event => { if (event.key === 'Escape') f.document.getElementById('detail-options')?.remove(); });
+  f.review('Additional screening detail'); f.click(f.panel().querySelector('[data-ace^="read-options:"]').getAttribute('data-ace'));
+  await until(() => f.panel().querySelector('#studio-answer'), 'load actual choices');
+  const editor = f.panel().querySelector('#studio-answer'); editor.value = 'Engineering'; editor.dispatchEvent(new f.window.Event('change', { bubbles: true }));
+  f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => f.saved.length === 1, 'the committed visible selection is the answer even when the search input clears');
+  assert.equal(field.value, ''); assert.equal(f.saved[0].answer, 'Engineering');
+});

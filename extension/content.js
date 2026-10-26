@@ -204,6 +204,8 @@
       if (picker && picker.querySelector('[data-automation-id="selectedItem"]')) {
         return false;
       }
+      var comboValue = autocompleteValue(field);
+      return !comboValue || isPlaceholderText(comboValue);
     }
 
     if (field.tagName !== "SELECT") {
@@ -239,7 +241,7 @@
   // are all wordings a form ships selected, never ones a person
   // chooses.
   function isPlaceholderText(text) {
-    return /^(select|choose|please select|please choose|select one|no answer|n\/a|-+|)\s*\.*$/.test(
+    return /^(select|choose|please select|please choose|select one|select an option|select a value|choose an option|please select one|no answer|n\/a|-+|)\s*\.*$/.test(
       aceNormalise(text)
     );
   }
@@ -248,7 +250,7 @@
     var normal = Array.prototype.filter.call(
       document.querySelectorAll("input, select, textarea"),
       function (field) {
-        if (field.disabled || field.readOnly) return false;
+        if (field.disabled || (field.readOnly && !aceIsAutocomplete(field))) return false;
         if (field.type === "hidden" || field.type === "file") return false;
         if (field.type === "submit" || field.type === "button") return false;
         if (!field.offsetParent && field.type !== "radio") return false;
@@ -936,6 +938,8 @@
     var id =
       field.getAttribute("aria-controls") ||
       field.getAttribute("aria-owns");
+    var declared = aceComboboxScope(field);
+    if (!id && declared) id = declared.getAttribute('aria-controls') || declared.getAttribute('aria-owns');
 
     if (id) box = document.getElementById(id);
 
@@ -980,7 +984,15 @@
     // were left empty on a required page.
     if (!options.length) options = box.querySelectorAll("[role=gridcell]");
 
-    return Array.prototype.slice.call(options);
+    return Array.prototype.filter.call(options, function (option) {
+      return option.getClientRects().length && safeChoiceOption(option);
+    });
+  }
+
+  function safeChoiceOption(option) {
+    var button = option.closest('button');
+    return option.getAttribute('aria-disabled') !== 'true' && !option.disabled &&
+      (!button || (!button.disabled && button.type !== 'submit'));
   }
 
   /* Get the menu open.
@@ -994,6 +1006,7 @@
     var toggle =
       field.parentElement &&
       field.parentElement.querySelector("button");
+    if (toggle && (toggle.type === 'submit' || /clear|remove|delete/i.test(toggle.getAttribute('aria-label') || toggle.getAttribute('title') || ''))) toggle = null;
 
     if (toggle) {
       toggle.click();
@@ -1007,6 +1020,7 @@
     }
 
     var control =
+      aceComboboxScope(field) ||
       field.closest('[class*="control"]') ||
       field.parentElement ||
       field;
@@ -1254,7 +1268,7 @@
 
       var options = Array.prototype.slice.call(
         box.querySelectorAll("[role=option]")
-      ).filter(function (option) { return option.getAttribute('aria-disabled') !== 'true'; });
+      ).filter(safeChoiceOption);
 
       var texts = options.map(function (option) {
         return option.textContent;
@@ -1380,6 +1394,7 @@
 
     return waitForComboboxOptions(field, 900).then(function (options) {
       if (options.length) return options;
+      if (field.readOnly || !aceIsEmpty(field)) return [];
 
       typed = true;
 
@@ -1408,10 +1423,29 @@
         return { matched: false };
       }
 
-      options[index].click();
-
-      return { matched: true, text: texts[index] };
+      press(options[index]);
+      return waitFor(function () {
+        return aceNormalise(autocompleteValue(field)) === aceNormalise(texts[index]) &&
+          (options[index].getAttribute('aria-selected') === 'true' ||
+            !options[index].isConnected || !options[index].getClientRects().length);
+      }, 1200).then(function (accepted) {
+        if (!accepted) {
+          if (typed) typeIntoCombobox(field, '');
+          closeCombobox(field);
+        }
+        return { matched: !!accepted, text: texts[index] };
+      });
     });
+  }
+
+  function autocompleteValue(field) {
+    var scope = aceComboboxScope(field) || field.parentElement;
+    for (var depth = 0; scope && scope !== document.body && scope.tagName !== 'FORM' && depth < 5; depth++, scope = scope.parentElement) {
+      if (scope.querySelectorAll('input:not([type=hidden])').length > 1) break;
+      var selected = scope.querySelector('[class*="singleValue"], [class*="single-value"], [data-automation-id="selectedItem"]');
+      if (selected && selected.getClientRects().length) return String(selected.textContent || '').trim();
+    }
+    return String(field.value || '').trim();
   }
 
   /* Whether `field` sits immediately next to a field that answers
@@ -1908,6 +1942,10 @@
   /* Close: the same outline icon in the header and the minimized dock. */
   .focus-panel .focus-close svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round}
   .focus-panel .focus-dock-open.focus-close{display:grid;place-items:center;padding:0}
+  .focus-panel{color-scheme:light}.focus-panel.night{color-scheme:dark}
+  .focus-panel .focus-review-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .focus-panel .focus-review-actions>.wine{grid-column:1/-1}
+  .focus-panel .focus-review-actions>.studio-button{width:100%;min-height:39px;padding:9px 10px;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
   .focus-panel .studio-live{white-space:nowrap}
   .focus-panel .focus-dock-status strong,.focus-panel .focus-dock-status small{overflow:hidden;text-overflow:ellipsis}
   `;
@@ -1975,7 +2013,7 @@
       showReviewDraft(root);
     });
     root.addEventListener('input', function (event) {
-      if (event.target && event.target.id === 'studio-answer' && event.target.tagName === 'TEXTAREA' && reviewQuestion) {
+      if (event.target && event.target.id === 'studio-answer' && /^(INPUT|TEXTAREA)$/.test(event.target.tagName) && reviewQuestion) {
         reviewDrafts.set(reviewQuestion, event.target.value);
         var chosen = studioFields.find(function (item) { return item.key === reviewQuestion; });
         if (!chosen) return;
@@ -2280,28 +2318,28 @@
             ((draft ? draft.values.indexOf(at) >= 0 : aceIsChosen(choice)) ? ' checked' : '') + (choice.disabled ? ' disabled' : '') + '><span>' +
             esc(plain(aceOptionRaw(choice))) + '</span></label>';
         }).join('') + '</fieldset>';
-    } else if (aceIsListboxButton(selected.field) && customOptions.has(selected.key)) {
+    } else if (aceIsAutocomplete(selected.field) && customOptions.has(selected.key)) {
       control = '<label for="studio-answer">Exact employer options</label><select id="studio-answer" class="studio-search" aria-label="Exact employer options" data-mirror="' + index + '"><option value="">Choose an option</option>' +
         customOptions.get(selected.key).map(function (option) {
           return '<option value="' + esc(option) + '"' + (option === current ? ' selected' : '') + '>' + esc(plain(option)) + '</option>';
         }).join('') + '</select>';
     } else if (selected.field.tagName === 'BUTTON' || aceIsAutocomplete(selected.field)) {
-      control = detected ? '' : aceIsListboxButton(selected.field)
+      control = detected ? '' : aceIsAutocomplete(selected.field)
         ? '<button class="studio-button" data-ace="read-options:' + index + '">Load employer options</button><p class="focus-hint">ACE reads the dropdown’s actual choices without selecting an answer.</p>'
         : '<p>Choose this option on the employer form. ACE will show it here when the form reports a selected value.</p>';
     } else {
-      control = '<label for="studio-answer">Your answer</label><textarea id="studio-answer" class="studio-input" aria-label="Your answer">' + esc(draft ? draft.values[0] : current || reviewDrafts.get(selected.key) || '') + '</textarea>';
+      control = reviewTextControl(selected, draft ? draft.values[0] : current || reviewDrafts.get(selected.key) || '');
     }
     var why = selected.protected === 'reusable' ? 'New question. Review this answer before saving.' :
       'Protected question. Confirm for this application only.';
     html += '<article class="studio-card focus-question"><span class="studio-pill ' + (selected.protected === 'reusable' ? 'good' : '') + '">' +
-      (selected.protected === 'reusable' ? 'New question' : 'Review required') + (aceIsChoiceControl(selected.field) ? selected.field.type === 'checkbox' ? ' · Checkboxes' : ' · Radio options' : isChoice || aceIsListboxButton(selected.field) ? ' · Dropdown' : '') + '</span><div class="studio-question">' + esc(plain(selected.display)) + '</div><p>' + why + '</p></article>' +
+      (selected.protected === 'reusable' ? 'New question' : 'Review required') + (aceIsChoiceControl(selected.field) ? selected.field.type === 'checkbox' ? ' · Checkboxes' : ' · Radio options' : isChoice || aceIsAutocomplete(selected.field) ? ' · Dropdown' : '') + '</span><div class="studio-question">' + esc(plain(selected.display)) + '</div><p>' + why + '</p></article>' +
       (detected ? '<div class="studio-card focus-detected" role="status"><strong>Answer detected on form</strong><p>' + esc(plain(reviewAnswerLabel(selected))) + '</p><p>Approve this answer without entering it again.</p><button class="studio-button small" data-ace="edit-answer:' + index + '">Edit answer in ACE</button></div>' : control) +
       '<p class="focus-hint">' + (detected ? 'Your employer answer stays as entered. Approval confirms it.' : 'Answer here, then Approve &amp; fill. ACE checks that the employer form accepted it.') + '</p>' +
       (reusable ? '<label class="studio-checkline"><input id="studio-reuse" type="checkbox" checked> Remember this approved answer for equivalent questions</label>' :
         '<p class="focus-hint">Used for this application only. It is not saved to Memory.</p>') +
       '<p class="focus-stays">✓ &nbsp;Review stays open until you minimize ACE.</p>' +
-      '<div class="studio-actions"><button class="studio-button wine" data-ace="approve:' + index + '">' + (detected ? 'Approve answer' : 'Approve &amp; fill') + '</button><button class="studio-button" data-ace="show-form">Show on form</button><button class="studio-button" data-ace="skip:' + index + '">Skip</button></div><div class="focus-utility"><button data-ace="tab:overview">Overview</button><button data-ace="workspace">Memory &amp; activity</button></div>';
+      '<div class="studio-actions focus-review-actions"><button class="studio-button wine" data-ace="approve:' + index + '">' + (detected ? 'Approve answer' : 'Approve &amp; fill') + '</button><button class="studio-button" data-ace="show-form">Show on form</button><button class="studio-button" data-ace="skip:' + index + '">Skip</button></div><div class="focus-utility"><button data-ace="tab:overview">Overview</button><button data-ace="workspace">Memory &amp; activity</button></div>';
     return html;
   }
 
@@ -2317,7 +2355,7 @@
       }).join('\n');
     }
     if (aceIsListboxButton(field)) return aceIsEmpty(field) ? '' : String(field.textContent || '').trim();
-    if (aceIsAutocomplete(field)) return aceIsEmpty(field) ? '' : String(field.value || '').trim();
+    if (aceIsAutocomplete(field)) return aceIsEmpty(field) ? '' : autocompleteValue(field);
     return String(field.value || '').trim();
   }
 
@@ -2326,6 +2364,22 @@
       return String(item.field.options[item.field.selectedIndex].textContent || '').trim();
     }
     return reviewValue(item);
+  }
+
+  function reviewTextControl(item, value) {
+    if (item.field.tagName === 'TEXTAREA') return '<label for="studio-answer">Your answer</label><textarea id="studio-answer" class="studio-input" aria-label="Your answer">' + esc(value) + '</textarea>';
+    var type = /^(text|email|tel|url|number|date|month|week|time|datetime-local|color|range)$/.test(item.field.type) ? item.field.type : 'text';
+    var attributes = ['placeholder', 'min', 'max', 'step', 'minlength', 'maxlength'].map(function (name) {
+      var attribute = item.field.getAttribute(name);
+      return attribute === null ? '' : ' ' + name + '="' + esc(attribute) + '"';
+    }).join('');
+    var listId = item.field.getAttribute('list');
+    var list = listId && document.getElementById(listId);
+    var hasList = list && list.tagName === 'DATALIST';
+    return '<label for="studio-answer">Your answer</label><input id="studio-answer" class="studio-search" aria-label="Your answer" type="' + type + '" value="' + esc(value) + '"' + attributes + (hasList ? ' list="studio-answer-options"' : '') + '>' +
+      (hasList ? '<datalist id="studio-answer-options">' + Array.from(list.querySelectorAll('option')).map(function (option) {
+        return '<option value="' + esc(option.value) + '">' + esc(plain(option.textContent)) + '</option>';
+      }).join('') + '</datalist>' : '');
   }
 
   function showReviewDraft(root) {
@@ -2345,7 +2399,7 @@
 
   function studioMemory() {
     var search = "";
-    var input = panel().querySelector(".studio-search");
+    var input = panel().querySelector('.studio-search[type="search"]');
     if (input) search = input.value.toLowerCase();
     var entries = memory.filter(function (m) { return (m.question + " " + m.answer).toLowerCase().indexOf(search) >= 0; });
     return '<div class="studio-between"><h2>Answer Memory</h2><span class="studio-pill good">' + memory.length + ' approved</span></div><p>Reviewed answers available to equivalent, safe questions.</p><div class="studio-memory-status"><span class="studio-pill ' + (memoryAvailable ? 'good' : '') + '">' + (memoryAvailable ? 'Connected' : 'Unavailable') + '</span><button class="studio-button small" data-ace="retry-memory">Retry connection</button></div><input class="studio-search" type="search" placeholder="Search approved answers" value="' + esc(search) + '">' +
@@ -3089,21 +3143,25 @@
 
     if (action.indexOf("read-options:") === 0) {
       var item = studioFields[Number(action.slice(13))];
-      if (filling || !item || !item.field.isConnected || !aceIsListboxButton(item.field) ||
+      if (filling || !item || !item.field.isConnected || !aceIsAutocomplete(item.field) ||
           aceMemory.isEmployerMotivation(item.question)) return;
-      var before = shownListboxes();
-      var alreadyOpen = listboxOpenedBy(item.field, before);
+      var isButton = aceIsListboxButton(item.field);
+      var before = isButton ? shownListboxes() : comboboxOptions(item.field);
+      var alreadyOpen = isButton ? listboxOpenedBy(item.field, before) : before.length > 0;
       var focusBefore = document.activeElement;
       filling = true;
-      if (!alreadyOpen) press(item.field);
-      waitFor(function () { return listboxOpenedBy(item.field, before); }, 1500).then(function (box) {
-        if (box) {
-          var options = Array.from(box.querySelectorAll('[role=option]')).filter(function (option) {
-            return option.getAttribute('aria-disabled') !== 'true';
-          }).map(function (option) { return String(option.textContent || '').trim(); }).filter(Boolean);
-          if (options.length) customOptions.set(item.key, options);
+      if (!alreadyOpen) {
+        if (isButton) press(item.field); else openCombobox(item.field);
+      }
+      var optionPromise = isButton
+        ? waitFor(function () { return listboxOpenedBy(item.field, before); }, 1500).then(function (box) { return box ? Array.from(box.querySelectorAll('[role=option]')) : []; })
+        : waitForComboboxOptions(item.field, 1500);
+      optionPromise.then(function (nodes) {
+        var options = nodes.filter(safeChoiceOption).map(function (option) { return String(option.textContent || '').trim(); }).filter(Boolean);
+        if (options.length && item.field.isConnected) customOptions.set(item.key, options);
+        if (!alreadyOpen) {
+          if (isButton) closeListbox(item.field); else closeCombobox(item.field);
         }
-        if (!alreadyOpen) closeListbox(item.field);
         filling = false;
         studioError = customOptions.has(item.key) ? '' : 'ACE could not read this dropdown safely. Use Show on form to choose an answer there.';
         renderStudio(panel());
@@ -3142,7 +3200,7 @@
       if (!value || !chosen.field.isConnected) { studioError = "Choose an answer here or on the employer form before approval."; renderStudio(panel()); return; }
       var save = chosen.protected === "reusable" && !chosen.field.multiple && chosen.field.type !== "checkbox" && !!panel().querySelector("#studio-reuse:checked");
       function applyApproved() {
-        if (!chosen.field.isConnected || chosen.field.disabled || chosen.field.readOnly) {
+        if (!chosen.field.isConnected || chosen.field.disabled || (chosen.field.readOnly && !aceIsAutocomplete(chosen.field))) {
           studioError = "This field changed. Review the employer form before filling.";
           renderStudio(panel()); return;
         }
@@ -3181,8 +3239,9 @@
           ? fillOneCombobox(chosen.field, value, [])
           : Promise.resolve({ matched: fillOne(chosen.field, value, []) });
         outcome.then(function (result) {
+          if (!result || !result.matched) return false;
           return new Promise(function (resolve) { setTimeout(resolve, 60); }).then(function () {
-            return waitFor(function () { return result && result.matched && chosen.field.isConnected && reviewValue(chosen) === value; }, 1200);
+            return waitFor(function () { return chosen.field.isConnected && reviewValue(chosen) === value; }, 1200);
           });
         }).then(function (accepted) {
           filling = false;

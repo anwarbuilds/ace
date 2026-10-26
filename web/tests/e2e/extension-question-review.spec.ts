@@ -133,3 +133,67 @@ test('a manual custom dropdown answer is detected after Fill without a change ev
   await panel.getByRole('button', { name: 'Approve answer', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
 });
+
+test('Review mirrors a text input and textarea instead of making every answer multiline', async ({ page }) => {
+  const panel = await load(page, '<label for="short">Additional short screening detail</label><input id="short" placeholder="Employer hint"><label for="long">Additional detailed screening response</label><textarea id="long"></textarea>');
+  await panel.getByRole('button', { name: /Additional short screening/ }).click();
+  await expect(panel.locator('input#studio-answer')).toBeVisible();
+  await expect(panel.locator('textarea#studio-answer')).toHaveCount(0);
+  await expect(panel.locator('#studio-answer')).toHaveAttribute('placeholder', 'Employer hint');
+  await panel.locator('#studio-answer').fill('Fictional short answer');
+  await panel.getByRole('button', { name: 'Approve & fill' }).click();
+  await expect(page.locator('#short')).toHaveValue('Fictional short answer');
+  await panel.getByRole('button', { name: /Additional detailed screening/ }).click();
+  await expect(panel.locator('textarea#studio-answer')).toBeVisible();
+});
+
+test('approval labels fit the full-width action row in Day, Night and narrow viewports', async ({ page }) => {
+  const panel = await load(page, '<label for="detail">Additional screening detail</label><input id="detail">');
+  await panel.getByRole('button', { name: /Additional screening detail/ }).click();
+  await page.locator('#detail').fill('Fictional answer');
+  const approve = panel.getByRole('button', { name: 'Approve answer', exact: true });
+  await expect(approve).toBeVisible();
+  for (const width of [390, 195]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      await expect(panel).toHaveClass(colorScheme === 'dark' ? /night/ : /focus-review/);
+      const geometry = await panel.locator('.focus-review-actions').evaluate(actions => {
+        const [primary, show, skip] = Array.from(actions.querySelectorAll('button'));
+        const a = primary.getBoundingClientRect(), b = show.getBoundingClientRect(), c = skip.getBoundingClientRect();
+        return { primaryWidth: a.width, availableWidth: actions.clientWidth, labelFits: primary.scrollWidth <= primary.clientWidth,
+          secondaryBelow: b.top >= a.bottom, secondaryAligned: Math.abs(b.top - c.top) < 1 };
+      });
+      expect(geometry.primaryWidth).toBeGreaterThanOrEqual(geometry.availableWidth - 1);
+      expect(geometry.labelFits).toBe(true); expect(geometry.secondaryBelow).toBe(true); expect(geometry.secondaryAligned).toBe(true);
+    }
+  }
+});
+
+test('a readonly wrapper combobox mirrors a dropdown and selects the actual employer option without typing', async ({ page }) => {
+  const panel = await load(page, '<label id="detail-label">Additional screening detail</label><div id="detail-control" role="combobox" aria-labelledby="detail-label" aria-controls="detail-options"><input id="detail" readonly></div>');
+  await page.evaluate(() => {
+    const input = document.getElementById('detail') as HTMLInputElement;
+    input.setAttribute('data-input-events', '0');
+    input.addEventListener('input', () => input.setAttribute('data-input-events', String(Number(input.getAttribute('data-input-events')) + 1)));
+    document.getElementById('detail-control')!.addEventListener('mousedown', () => {
+      if (document.getElementById('detail-options')) return;
+      const menu = document.createElement('div'); menu.id = 'detail-options'; menu.setAttribute('role', 'listbox');
+      for (const text of ['Research', 'Engineering']) {
+        const option = document.createElement('div'); option.setAttribute('role', 'option'); option.textContent = text;
+        option.addEventListener('click', () => { input.value = text; menu.remove(); }); menu.append(option);
+      }
+      document.body.append(menu);
+    });
+    input.addEventListener('keydown', event => { if (event.key === 'Escape') document.getElementById('detail-options')?.remove(); });
+  });
+  await panel.getByRole('button', { name: /Additional screening detail/ }).click();
+  await expect(panel.getByRole('textbox', { name: 'Your answer' })).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Load employer options' }).click();
+  const dropdown = panel.getByRole('combobox', { name: 'Exact employer options' });
+  await dropdown.selectOption('Engineering');
+  await expect(page.locator('#detail')).toHaveValue('');
+  await panel.getByRole('button', { name: 'Approve & fill' }).click();
+  await expect(page.locator('#detail')).toHaveValue('Engineering');
+  await expect(page.locator('#detail')).toHaveAttribute('data-input-events', '0');
+});
