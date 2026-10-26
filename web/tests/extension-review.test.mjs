@@ -22,16 +22,20 @@ async function until(check, message) {
 }
 
 function fixture(body, config = {}) {
-  const { window } = parseHTML(`<html><head><title>Engineer | Fictional employer</title></head><body><form>${base}${body}<button type="submit">Submit application</button></form></body></html>`);
+  const { window } = parseHTML(`<html><head><title>Engineer | Fictional employer</title></head><body><form>${config.topOnly ? "" : base}${body}<button type="submit">Submit application</button></form></body></html>`);
   delete window.__aceLoaded;
+  window.top = config.embedded ? {} : window;
   const { document, HTMLElement, HTMLInputElement, HTMLSelectElement, HTMLOptionElement } = window;
   const timers = new Set();
+  const listeners = [];
   const saved = [];
   const memoryStore = config.memoryStore || [];
   let submissions = 0;
   let active = document.body;
   Object.defineProperty(document, 'activeElement', { get: () => active });
   Object.defineProperty(HTMLElement.prototype, 'offsetParent', { get() { return this.hidden ? null : document.body; }, configurable: true });
+  Object.defineProperty(HTMLElement.prototype, 'offsetLeft', { get() { return parseFloat(this.style.left) || 0; }, configurable: true });
+  Object.defineProperty(HTMLElement.prototype, 'offsetTop', { get() { return parseFloat(this.style.top) || 0; }, configurable: true });
   Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { get() { return 318; }, configurable: true });
   Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { get() { return 500; }, configurable: true });
   HTMLElement.prototype.getClientRects = function () { return this.closest('[hidden]') ? [] : [{}]; };
@@ -63,14 +67,16 @@ function fixture(body, config = {}) {
     HTMLSelectElement, HTMLTextAreaElement: window.HTMLTextAreaElement, Event: window.Event, MouseEvent: DOMEvent, KeyboardEvent: DOMEvent,
     location: { href: 'https://fixture.example/apply', hostname: 'fixture.example', pathname: '/apply' },
     CSS: { escape: value => String(value).replace(/[^a-zA-Z0-9_-]/g, character => `\\${character}`) },
-    innerWidth: 1440, innerHeight: 900, console, crypto: webcrypto, TextEncoder,
+    innerWidth: config.width || 1440, innerHeight: config.height || 900, console, crypto: webcrypto, TextEncoder,
     setTimeout(fn, ms) { const id = setTimeout(() => { timers.delete(id); fn(); }, ms); timers.add(id); return id; },
     clearTimeout(id) { clearTimeout(id); timers.delete(id); },
     MutationObserver: config.observeDOM ? window.MutationObserver : class { observe() {} disconnect() {} },
     chrome: { ...(config.autoKnown || config.autoLearn !== undefined ? { storage: { local: {
       get(defaults, reply) { reply({ ...defaults, aceAutoKnown: !!config.autoKnown, aceAutoLearnRoutine: !!config.autoLearn }); }, set() {}, remove() {},
-    } } } : {}), runtime: { lastError: null, onMessage: { addListener() {} }, getURL: value => value, getManifest: () => ({ version: 'test' }),
+    } } } : {}), runtime: { id: 'fixture-extension', lastError: null, onMessage: { addListener(listener) { listeners.push(listener); } }, getURL: value => value, getManifest: () => ({ version: 'test' }),
       sendMessage(message, reply) {
+        if (config.onSend?.(message, reply)) return;
+        if (message.type === 'aceFocusRoute') { reply({ ok: false }); return; }
         if (message.type === 'answers') reply({ ok: true, items: [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Email', value: 'applicant@example.test' }, { label: 'Phone', value: '5550100100' }, { label: 'Current role', value: 'Engineer' }] });
         else if (message.type === 'memory') reply({ ok: true, items: memoryStore });
         else if (message.type === 'memorySave') {
@@ -93,7 +99,12 @@ function fixture(body, config = {}) {
     const button = Array.from(panel().querySelectorAll('[data-ace^="question:"]')).find(button => button.textContent.includes(question));
     assert.ok(button, `Missing review prompt ${question}`); button.click();
   }
-  return { window, document, context, panel, click, review, saved, submissions: () => submissions,
+  return { window, document, context, internals: window.__aceInternals, panel, click, review, saved,
+    deliver(message, sender = { id: 'fixture-extension' }) {
+      let response;
+      for (const listener of listeners) listener(message, sender, value => { response = value; });
+      return response;
+    }, submissions: () => submissions,
     dispose() { timers.forEach(clearTimeout); } };
 }
 
@@ -648,4 +659,115 @@ test('native radio and aria-only choice buttons save the actual chosen answer au
     await until(() => f.saved.length === 1, 'actual radio choice should save'); assert.equal(f.saved[0].answer, 'On site'); assert.equal(f.submissions(), 0);
     f.dispose();
   }
+});
+
+
+function framedFixture(body) {
+  const endpoints = new Map(), routes = [];
+  let route;
+  const runtime = { id: 'fixture-extension', lastError: null, onMessage: { addListener(listener) { route = listener; } } };
+  const background = vm.createContext({ chrome: { runtime, tabs: { sendMessage(tab, message, target, reply) {
+    routes.push({ tab, message, target });
+    reply(endpoints.get(target.frameId)?.deliver(message));
+  } } } });
+  vm.runInContext(fs.readFileSync(path.join(extension, 'background.js'), 'utf8'), background);
+  function config(frame, extra) {
+    return { autoLearn: false, ...extra, onSend(message, reply) {
+      if (message.type !== 'aceFocusRoute') return false;
+      route(message, { id: runtime.id, tab: { id: 17 }, frameId: frame, documentId: `fictional-document-${frame}` }, reply); return true;
+    } };
+  }
+  const top = fixture('', config(0, { topOnly: true })); endpoints.set(0, top);
+  const source = fixture(body, config(7, { embedded: true, width: 600, height: 700 })); endpoints.set(7, source);
+  const remote = () => top.internals.remotePanel();
+  return { top, source, remote, routes, route, endpoints,
+    click(action) { const button = remote()?.querySelector(`[data-ace="${action}"]`); assert.ok(button, `Missing outer action ${action}`); button.click(); },
+    dispose() { top.dispose(); source.dispose(); } };
+}
+
+test('embedded application card renders outside the form frame and drags across the outer viewport', async t => {
+  const f = framedFixture(routine); t.after(f.dispose);
+  await until(() => f.remote(), 'outer viewport should host the card');
+  await until(() => f.source.document.querySelector('.ace-root').style.visibility === 'hidden', 'local card should hide after the outer receiver acknowledges');
+  assert.equal(f.top.document.querySelector('.ace-remote-root').shadowRoot, null, 'outer page cannot inspect the mirrored Answer Memory DOM');
+  const card = f.remote(); const grip = card.querySelector('[data-focus-grip]'); let captured = false;
+  card.setPointerCapture = () => { captured = true; };
+  function pointer(type, x, y) { const event = new f.top.window.Event(type, { bubbles: true, cancelable: true }); Object.assign(event, { button: 0, pointerId: 1, clientX: x, clientY: y, pointerType: 'mouse' }); grip.dispatchEvent(event); }
+  pointer('pointerdown', 1200, 50); assert.equal(captured, true, 'capture begins before the pointer can leave the grip');
+  pointer('pointermove', 100, 210); pointer('pointerup', 100, 210);
+  assert.ok(parseFloat(card.style.left) < 100, 'card can move left of the embedded form column');
+  assert.equal(parseFloat(card.style.top), 178);
+  f.click('tab:review'); await until(() => f.remote()?.classList.contains('focus-review'), 'review stays connected after dragging');
+  assert.ok(parseFloat(f.remote().style.left) < 100, 'source rerender keeps the outer drag position');
+  assert.equal(f.top.panel(), undefined, 'outer page does not start a separate application controller');
+  assert.equal(f.source.submissions(), 0);
+});
+
+test('outer Review edits, approval, Memory and undo operate only on the originating frame', async t => {
+  const f = framedFixture(routine); t.after(f.dispose);
+  await until(() => f.remote(), 'outer card should appear'); f.click('tab:review');
+  await until(() => f.remote()?.querySelector('.focus-chips'), 'Review should appear');
+  const chip = Array.from(f.remote().querySelectorAll('[data-ace^="question:"]')).find(button => button.textContent.includes('integration tests')); chip.click();
+  await until(() => f.remote()?.querySelector('.studio-question')?.textContent.includes('integration tests'), 'right source question should appear');
+  const editor = f.remote().querySelector('#studio-answer'); editor.value = 'Fictional answer entered in the outer card'; editor.dispatchEvent(new f.top.window.Event('input', { bubbles: true }));
+  assert.equal(f.source.document.getElementById('detail').value, '', 'typing in ACE remains a draft');
+  f.click(f.remote().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => f.source.saved.length === 1, 'source controller verifies filling and saves Memory');
+  assert.equal(f.source.document.getElementById('detail').value, 'Fictional answer entered in the outer card');
+  await until(() => !f.remote()?.querySelector('.studio-question')?.textContent.includes('integration tests'), 'outer card receives completion');
+  f.click('workspace'); await until(() => f.remote()?.textContent.includes('Saved for reuse'), 'Memory remains functional');
+  f.click('tab:activity'); await until(() => f.remote()?.textContent.includes('Undo last fill'), 'Activity remains functional'); f.click('undo');
+  await until(() => f.source.document.getElementById('detail').value === '', 'Undo reaches the originating field');
+  assert.equal(f.source.submissions() + f.top.submissions(), 0);
+  assert.ok(f.routes.filter(route => route.message.op === 'event').every(route => route.target.frameId === 7 && route.target.documentId === 'fictional-document-7'));
+});
+
+test('outer native choices preserve opaque values and protected decisions remain application-only', async t => {
+  const f = framedFixture('<label for="sponsor">Do you require sponsorship?</label><select id="sponsor"><option value="">Select One</option><option value="sponsor-19">Yes</option></select>'); t.after(f.dispose);
+  await until(() => f.remote(), 'outer card appears'); f.click('tab:review');
+  await until(() => f.remote()?.querySelector('.focus-chips'), 'Review appears');
+  Array.from(f.remote().querySelectorAll('[data-ace^="question:"]')).find(button => button.textContent.includes('sponsorship')).click();
+  await until(() => f.remote()?.querySelector('.studio-question')?.textContent.includes('sponsorship'), 'protected prompt appears');
+  const select = f.remote().querySelector('#studio-answer'); select.value = 'sponsor-19'; select.dispatchEvent(new f.top.window.Event('change', { bubbles: true }));
+  assert.equal(f.source.document.getElementById('sponsor').value, '');
+  f.click(f.remote().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => f.source.document.getElementById('sponsor').value === 'sponsor-19', 'exact original option is selected');
+  assert.equal(f.source.saved.length, 0); assert.equal(f.source.submissions(), 0);
+});
+
+test('outer Close, popup Wake, dock and keyboard movement remain connected', async t => {
+  const f = framedFixture(routine); t.after(f.dispose);
+  await until(() => f.remote(), 'outer card appears'); f.click('minimize');
+  await until(() => f.remote()?.classList.contains('focus-dock'), 'dock is outer-page-owned');
+  const grip = f.remote().querySelector('[data-focus-grip]'); const before = parseFloat(f.remote().style.left);
+  const event = new f.top.window.Event('keydown', { bubbles: true, cancelable: true }); Object.assign(event, { key: 'ArrowLeft' }); grip.dispatchEvent(event);
+  assert.equal(parseFloat(f.remote().style.left), before - 10);
+  f.click('close'); await until(() => !f.remote(), 'Close hides the outer card');
+  assert.equal(f.source.document.querySelector('.ace-root'), null);
+  assert.equal(f.top.deliver({ type: 'wake' }).ok, true);
+  await until(() => f.remote()?.classList.contains('focus-compact'), 'popup Wake reopens the same embedded application');
+  assert.equal(f.top.panel(), undefined); assert.equal(f.source.submissions(), 0);
+});
+
+test('frame relay rejects foreign senders, wrong directions and stale review actions', async t => {
+  const f = framedFixture(routine); t.after(f.dispose);
+  await until(() => f.remote(), 'outer card appears');
+  for (const sender of [{ id: 'other-extension', tab: { id: 17 }, frameId: 0 }, { id: 'fixture-extension', frameId: 0 }, { id: 'fixture-extension', tab: { id: 17 }, frameId: 7 }]) {
+    let reply; const count = f.routes.length;
+    f.route({ type: 'aceFocusRoute', op: 'event', sourceFrame: 7 }, sender, value => { reply = value; });
+    assert.equal(reply.ok, false); assert.equal(f.routes.length, count);
+  }
+  const snapshot = f.routes.find(route => route.message.op === 'render').message;
+  f.click('tab:review'); await until(() => f.remote()?.classList.contains('focus-review'), 'new revision appears');
+  assert.equal(f.source.deliver({ ...snapshot, op: 'event', event: 'click', action: 'fill', control: 0 }).ok, false);
+  assert.equal(f.source.document.getElementById('detail').value, '');
+  assert.equal(f.source.deliver({ ...snapshot, session: 'wrong-session', op: 'event', event: 'wake' }).ok, false);
+});
+
+test('motivation values never enter frame relay snapshots and missing outer receivers retain a usable local card', async t => {
+  const f = framedFixture('<label for="why">Why this company?</label><textarea id="why">Private fictional motivation excluded from ACE</textarea>'); t.after(f.dispose);
+  await until(() => f.remote(), 'outer card appears');
+  assert.ok(f.routes.filter(route => route.message.op === 'render').every(route => !JSON.stringify(route.message).includes('Private fictional motivation')));
+  const fallback = fixture(routine, { embedded: true }); t.after(fallback.dispose);
+  await sleep(100); assert.ok(fallback.panel()); assert.notEqual(fallback.document.querySelector('.ace-root').style.visibility, 'hidden');
 });

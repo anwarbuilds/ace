@@ -103,8 +103,36 @@ function pair(code, respond) {
   });
 }
 
+/* Keep an embedded employer's form work in its own content script, while
+   displaying ACE in the outer viewport. Routes stay in this tab and in the
+   extension's isolated worlds; no page postMessage or credential is involved. */
+function routeFocusPanel(message, sender, respond) {
+  if (!sender || sender.id !== chrome.runtime.id || !sender.tab ||
+      !Number.isSafeInteger(sender.tab.id) || !Number.isSafeInteger(sender.frameId)) {
+    respond({ ok: false }); return;
+  }
+  var target, forwarded;
+  if ((message.op === 'render' || message.op === 'hide') && sender.frameId > 0) {
+    target = { frameId: 0 };
+    forwarded = Object.assign({}, message, { sourceFrame: sender.frameId, sourceDocument: sender.documentId });
+  } else if (message.op === 'event' && sender.frameId === 0 && Number.isSafeInteger(message.sourceFrame) && message.sourceFrame > 0) {
+    target = { frameId: message.sourceFrame };
+    if (typeof message.sourceDocument === 'string') target.documentId = message.sourceDocument;
+    forwarded = message;
+  } else { respond({ ok: false }); return; }
+  chrome.tabs.sendMessage(sender.tab.id, Object.assign({}, forwarded, { type: 'aceFocusDelivery' }), target, function (reply) {
+    var failed = chrome.runtime.lastError;
+    respond(!failed && reply ? reply : { ok: false });
+  });
+}
+
 chrome.runtime.onMessage.addListener(
   function (message, sender, respond) {
+    if (message && message.type === 'aceFocusRoute') {
+      routeFocusPanel(message, sender, respond);
+      return true;
+    }
+
     if (message && message.type === "memory") {
       getJson("/api/extension/memory").then(function (data) {
         respond({ ok: true, items: data.items || [] });

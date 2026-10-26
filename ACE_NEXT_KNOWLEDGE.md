@@ -611,7 +611,7 @@ commits (`54e939a`, `61debd6`, `8d84141`), the reconciled Focus Mode V5.1
 commits (`559ee84`, `5b8ab4b`, equivalents of local `4ce3570` and `cb7bb5e`),
 the V5.1 typography pass and theme sync/Close (`386bed9`). It contains the
 existing V4 Answer Memory implementation (`2e7c1dc`). The
-extension manifest is now `1.28.4` (local automatic routine-answer saving, exact-question, direct-answer learning and control-mirroring repairs described below). The V5.1 extension has not been published; it
+extension manifest is now `1.28.5` (local full-viewport embedded-form dragging, automatic routine-answer saving and control-mirroring repairs described below). The V5.1 extension has not been published; it
 runs as an unpacked installation loaded from
 `/home/ubuntu/Documents/ace-next/extension`. An unpacked installation must be
 reloaded at `chrome://extensions`; employer tabs must then be refreshed.
@@ -632,6 +632,51 @@ employer form for manual completion. ACE never submits or marks Applied.
 Workday listing and search routes outside `/apply/` stay quiet, including after
 single-page navigation back from an application. The toolbar Wake override
 remains available.
+
+### Free movement beyond embedded application frames (2026-10-26)
+
+The owner reported that ACE could move only within the form column. The
+existing drag bounds used the content script's `innerWidth`/`innerHeight`;
+inside an embedded form these are the iframe's dimensions. Local **1.28.5**
+keeps the employer controller in that frame and presents its floating card in
+the outer page's viewport through the existing extension service worker.
+
+- `background.js` forwards render/hide messages from a child frame to frame 0,
+  and UI events from frame 0 back to the originating frame/document. It derives
+  the tab and source frame from Chrome's sender, rejects foreign/missing senders
+  and reversed directions, and uses no page `postMessage`, extra permission,
+  network service or credential. Sessions and render revisions reject stale
+  question actions; a matching Close can always dismiss the current card.
+- The outer card uses a closed shadow root and the existing CSS/font, remains
+  draggable across the complete viewport, and routes only ACE editor state and
+  existing actions to the source controller. It does not copy employer DOM,
+  motivation answers or credentials. Native values/choices, approved drafts,
+  protected per-form decisions, readback, Memory and undo stay source-owned.
+- The original card is hidden only after outer acknowledgement. An unavailable
+  outer receiver leaves the local card usable, with its existing iframe bounds.
+  One active embedded application owns the outer card; unrelated child frames
+  cannot replace it. Frame navigation/hide is session-scoped. Popup Wake/status,
+  Alt+A, minimize/expand, Close, theme, keyboard movement and position reset stay
+  connected. No arbitrary cross-origin DOM access is attempted.
+- Pointer capture begins on pointerdown rather than after crossing the drag
+  threshold. In-progress coordinates survive source rerenders. Touch dragging
+  works from the header/grip/dock; the Review body remains scrollable. Arrow keys
+  move the focused grip, Shift uses a larger step, and double-click resets it.
+  Both hosts mount on the document root to avoid a transformed body trapping
+  fixed positioning. Resize clamps to the current outer viewport.
+
+Validation: **49** fictional DOM contracts pass, including two isolated content
+controllers through the actual background router, full-viewport movement,
+round-trip draft/approval/native choice/Memory/undo, dock/Close/Wake, stale and
+foreign-message rejection, motivation exclusion and local fallback. The 258
+matcher cases, Memory safety checks, TypeScript, ESLint, syntax, dash scan and
+Git whitespace checks pass. **33** Playwright cases collect, including a new
+cross-origin iframe movement and interaction fixture. Chrome was not launched:
+the cooling restriction remains. This is local simulated transport validation,
+not a live installed-MV3, real employer or visual verification. No fresh browser
+screenshots are claimed. Reload **1.28.5** in `chrome://extensions` and refresh
+the application tab. No production deployment, publication, backend/data,
+Gmail, scheduler or permission change occurred.
 
 ### Automatic saving of finished routine answers (2026-10-26)
 
@@ -1532,7 +1577,7 @@ reassuring success state when the backend has not confirmed one.
 
 The extension is Manifest V3. Important implementation areas are
 `extension/content.js`, `fields.js`, `background.js`, the popup/side panel,
-storage, pairing and rule tests. The current local manifest version is 1.28.4.
+storage, pairing and rule tests. The current local manifest version is 1.28.5.
 The approved interface is ACE Focus Mode V5.1; older extension interfaces are
 historical.
 

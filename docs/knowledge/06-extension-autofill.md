@@ -1021,3 +1021,30 @@ TypeScript, lint and forbidden-dash checks pass. 32 Playwright cases collect
 but were not run because of the cooling restriction. No fresh browser/visual,
 authenticated employer or paired live Memory verification is claimed. Reload
 local 1.28.4 and refresh employer tabs; no deployment or publication occurred.
+
+
+## Full-viewport movement for embedded application forms (2026-10-26)
+
+Local 1.28.5 corrects iframe-relative drag bounds. The embedded content script
+keeps all employer form logic, while the service worker routes its rendered
+ACE card to the top content script. UI edits/actions return to the exact source
+frame/document. The card can move beyond the form column without changing the
+employer iframe or reading parent-page DOM across origins.
+
+The outer card uses the existing CSS/font in a closed shadow root. Source
+visibility changes only after acknowledgement; missing outer receivers retain
+the usable local card. Messages are extension-only and tab-scoped, validate
+sender/direction, and carry session/revision checks. One active embedded form
+owns the outer card. Motivation/credentials and arbitrary employer DOM never
+enter the relay. No host permissions or external services were added.
+
+Pointer capture begins on pointerdown, and current drag coordinates survive
+rerenders. Header/grip/dock touch dragging, keyboard movement, stored position,
+reset, resize, Review, Memory, undo, Close and popup Wake remain connected.
+Hosts mount on the document root to avoid body transforms trapping fixed UI.
+
+49 fictional DOM contracts, 258 matcher cases, Memory safety checks, TypeScript,
+lint, syntax, dash and whitespace checks pass. 33 Playwright cases collect, with
+one new cross-origin iframe fixture, but were not run due to laptop cooling.
+No live installed-MV3/employer or fresh visual verification is claimed. Reload
+local 1.28.5 and refresh employer tabs; no deployment or publication occurred.

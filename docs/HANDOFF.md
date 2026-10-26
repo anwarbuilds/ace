@@ -100,6 +100,15 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
+**2026-10-26 drag update:** Local 1.28.5 lifts an embedded form's floating card
+into the outer viewport through a tab/frame/document-scoped extension relay.
+Form logic stays in the source frame; stale actions are rejected and an
+unavailable outer receiver leaves the local card usable. Pointer capture starts
+immediately; touch, keyboard, saved position and existing controls remain.
+49 DOM contracts, 258 matcher cases, Memory checks, TypeScript, lint, syntax
+and dash checks pass. 33 Playwright cases collect only due to cooling. Reload
+the extension and refresh employer tabs. No deployment or publication occurred.
+
 **2026-10-26 extension update:** Local 1.28.4 adds owner-authorized automatic
 saving of finished routine employer-form answers without per-question approval.
 Memory exposes separate Auto-save routine answers and Auto-fill known switches.

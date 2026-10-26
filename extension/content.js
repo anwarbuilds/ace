@@ -23,6 +23,12 @@
   var studioTab = "overview";
   var focusMode = "compact";
   var focusPosition = null;
+  var embeddedPanel = !!window.top && window.top !== window;
+  var focusSession = String(Date.now()) + ':' + Math.random().toString(36).slice(2);
+  var focusRevision = 0;
+  var focusPublishTimer = null;
+  var remoteFocus = null;
+  var lastRemoteFocus = null;
   var reviewSeen = new Set();
   var approvedQuestions = new Set();
   var customOptions = new Map();
@@ -1836,6 +1842,7 @@
 
   function render(host, html) {
     host.innerHTML = html;
+    publishFocusPanel(host);
   }
 
   /* Whether this page is a form at all.
@@ -1989,6 +1996,7 @@
   .focus-panel .studio-head{padding:12px 13px 10px;background:var(--surface)}
   .focus-panel .studio-top{gap:7px}.focus-panel .studio-logo{font-size:23px;line-height:1}.focus-panel .studio-live{margin-left:0;font-size:10px;padding:3px 7px;font-weight:700}
   .focus-panel .studio-icon{border:0;background:transparent;width:26px;height:26px;padding:4px;border-radius:7px}.focus-panel .studio-icon svg{width:15px;height:15px}
+  .focus-panel .studio-head,.focus-panel .focus-dock-body{touch-action:none;cursor:grab}
   .focus-panel .focus-grip{margin-left:auto;cursor:grab;touch-action:none;user-select:none}.focus-panel .focus-grip svg{stroke:none;fill:currentColor;width:14px;height:19px}
   .focus-panel .studio-company{display:none}.focus-panel .studio-tagline{margin:4px 0 0;color:var(--secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10.5px}
   .focus-panel .studio-tabs{grid-template-columns:repeat(4,1fr);padding:0 7px}.focus-panel .studio-tabs button{padding:9px 0;font-size:10px}
@@ -2080,6 +2088,149 @@
     }
   }
 
+  function focusRoute(message, done) {
+    try {
+      chrome.runtime.sendMessage(Object.assign({ type: 'aceFocusRoute', session: focusSession }, message), function (reply) {
+        var failed = chrome.runtime.lastError;
+        if (done) done(!failed && reply && reply.ok, reply);
+      });
+    } catch (error) { if (done) done(false); }
+  }
+
+  function publishFocusPanel(card) {
+    if (!embeddedPanel || !card || !card.classList.contains('focus-panel')) return;
+    var revision = ++focusRevision;
+    clearTimeout(focusPublishTimer);
+    focusPublishTimer = setTimeout(function () {
+      if (!card.isConnected || dismissed) return;
+      // Live editor properties are not serialized by innerHTML. Send their
+      // state separately, without any employer DOM or excluded answers.
+      focusRoute({ op: 'render', revision: revision, html: card.innerHTML,
+        className: card.className, controls: focusControlState(card) }, function (shown) {
+        var host = card.getRootNode().host;
+        if (!host || revision !== focusRevision) return;
+        if (shown) host.style.setProperty('visibility', 'hidden', 'important');
+        else host.style.removeProperty('visibility'); // Missing outer receiver: keep the local card usable.
+      });
+    }, 0);
+  }
+
+  function focusControls(card) { return Array.from(card.querySelectorAll('button,input,textarea,select')); }
+  function focusControlState(card) {
+    return focusControls(card).map(function (control) {
+      return { value: control.value, checked: !!control.checked,
+        selected: control.tagName === 'SELECT' ? Array.from(control.options).map(function (option) { return !!option.selected; }) : null };
+    });
+  }
+  function applyFocusControlState(card, states) {
+    if (!Array.isArray(states)) return;
+    focusControls(card).forEach(function (control, at) {
+      var state = states[at];
+      if (!state) return;
+      // Only ACE editors, never employer controls, are addressed by this path.
+      if (control.tagName === 'INPUT' || control.tagName === 'TEXTAREA') {
+        if (typeof state.value === 'string') control.value = state.value;
+        if (control.type === 'checkbox' || control.type === 'radio') control.checked = !!state.checked;
+      } else if (control.tagName === 'SELECT' && Array.isArray(state.selected)) {
+        Array.from(control.options).forEach(function (option, index) { option.selected = !!state.selected[index]; });
+      }
+    });
+  }
+
+  function hideFocusPanel() {
+    if (embeddedPanel) focusRoute({ op: 'hide' });
+  }
+
+  function receiveFocusPanel(message, respond) {
+    if (message.op === 'event') {
+      if (!embeddedPanel || message.session !== focusSession) { respond({ ok: false }); return; }
+      if (message.event === 'wake') {
+        dismissed = false; focusMode = studioTab === 'review' ? 'review' : 'compact';
+        lastResult = null; refresh(); respond({ ok: true }); return;
+      }
+      if (message.event === 'status') {
+        respond({ ok: true, fields: fillable().filter(function (field) { return !!answerNameFor(aceQuestionFor(field), kindOf(field)); }).length }); return;
+      }
+      if (message.event === 'click' && message.action === 'close') { close(); respond({ ok: true }); return; }
+      if (message.revision !== focusRevision || dismissed) { respond({ ok: false }); return; }
+      var host = document.querySelector('.ace-root');
+      var card = host && host.shadowRoot.querySelector('.ace-panel');
+      var control = card && focusControls(card)[message.control];
+      if (!control || !/^(click|input|change)$/.test(message.event) || message.event === 'click' && control.getAttribute('data-ace') !== message.action) { respond({ ok: false }); return; }
+      applyFocusControlState(card, message.controls);
+      if (message.event === 'click') control.click();
+      else control.dispatchEvent(new Event(message.event, { bubbles: true }));
+      respond({ ok: true }); return;
+    }
+    if (embeddedPanel || !Number.isSafeInteger(message.sourceFrame) || message.sourceFrame <= 0) { respond({ ok: false }); return; }
+    if (message.op === 'hide') {
+      if (remoteFocus && remoteFocus.session === message.session) {
+        lastRemoteFocus = remoteFocus;
+        remoteFocus.host.remove(); remoteFocus = null;
+      }
+      respond({ ok: true }); return;
+    }
+    if (message.op !== 'render' || typeof message.html !== 'string' ||
+        !/^ace-panel focus-panel focus-(compact|review|workspace|dock)( night)?$/.test(message.className || '') ||
+        (loaded && !dismissed) || remoteFocus && remoteFocus.sourceFrame !== message.sourceFrame) { respond({ ok: false }); return; }
+    if (!remoteFocus) {
+      var overlay = document.createElement('div'); overlay.className = 'ace-remote-root';
+      overlay.style.cssText = 'all:initial;position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647';
+      var root = overlay.attachShadow({ mode: 'closed' });
+      root.innerHTML = '<style>' + PANEL_CSS + '</style><div class="ace-panel focus-panel"></div>';
+      loadPanelFont();
+      remoteFocus = { host: overlay, root: root, sourceFrame: message.sourceFrame };
+      installFocusDrag(root);
+      ['click', 'input', 'change'].forEach(function (type) {
+        root.addEventListener(type, function (event) {
+          var state = remoteFocus;
+          if (!state || state.host !== overlay || !event.target.matches('button,input,textarea,select') && !event.target.closest('button[data-ace]')) return;
+          var target = event.target.closest('button,input,textarea,select');
+          if (type === 'click' && !target.hasAttribute('data-ace')) return;
+          if (type === 'click') { event.preventDefault(); event.stopPropagation(); }
+          var card = root.querySelector('.ace-panel');
+          focusRoute({ op: 'event', session: state.session, sourceFrame: state.sourceFrame,
+            sourceDocument: state.sourceDocument, revision: state.revision,
+            control: focusControls(card).indexOf(target), action: target.getAttribute('data-ace'), event: type, controls: focusControlState(card) }, function (ok) {
+            if (!ok && remoteFocus === state && type === 'click') {
+              // Never send an old review action to another frame or question.
+              target.title = 'The form changed. Wait for ACE to refresh, or refresh the application tab.';
+            }
+          });
+        }, true);
+      });
+      document.documentElement.appendChild(overlay);
+      if (chrome.storage && chrome.storage.local) chrome.storage.local.get({ aceFocusPosition: null }, function (prefs) {
+        if (!remoteFocus || remoteFocus.host !== overlay) return;
+        focusPosition = prefs.aceFocusPosition && typeof prefs.aceFocusPosition.x === 'number' && typeof prefs.aceFocusPosition.y === 'number' ? prefs.aceFocusPosition : null;
+        positionFocus(root.querySelector('.ace-panel'));
+      });
+    }
+    if (remoteFocus.session === message.session && message.revision < remoteFocus.revision) { respond({ ok: false }); return; }
+    Object.assign(remoteFocus, { session: message.session, revision: message.revision, sourceDocument: message.sourceDocument });
+    var root = remoteFocus.root, card = root.querySelector('.ace-panel');
+    var active = root.activeElement;
+    var priorQuestion = card.querySelector('.studio-question');
+    var priorQuestionText = priorQuestion ? priorQuestion.textContent : '';
+    var activeIndex = active ? focusControls(card).indexOf(active) : -1;
+    var selection = active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
+    var scroller = card.querySelector('.studio-scroll'), scroll = scroller ? scroller.scrollTop : 0;
+    card.className = message.className;
+    card.innerHTML = message.html;
+    applyFocusControlState(card, message.controls);
+    scroller = card.querySelector('.studio-scroll'); if (scroller) scroller.scrollTop = scroll;
+    positionFocus(card);
+    var replacement = focusControls(card)[activeIndex];
+    var nextQuestion = card.querySelector('.studio-question');
+    if (priorQuestionText === (nextQuestion ? nextQuestion.textContent : '') && replacement && active && replacement.id === active.id && replacement.getAttribute('data-ace') === active.getAttribute('data-ace') && replacement.tagName === active.tagName) {
+      replacement.focus({ preventScroll: true });
+      if (selection && replacement.setSelectionRange) replacement.setSelectionRange(selection[0], selection[1]);
+    }
+    respond({ ok: true });
+  }
+
+  window.addEventListener('pagehide', hideFocusPanel);
+
   function panel() {
     var existing = document.querySelector(".ace-root");
 
@@ -2136,7 +2287,7 @@
     });
     installFocusDrag(root);
 
-    document.body.appendChild(host);
+    document.documentElement.appendChild(host);
 
     return root.querySelector(".ace-panel");
   }
@@ -2172,6 +2323,7 @@
 
   function close() {
     dismissed = true;
+    hideFocusPanel();
     var existing = document.querySelector(".ace-root");
     if (existing) existing.remove();
   }
@@ -2549,12 +2701,12 @@
     host.style.top = Math.max(0, Math.min(y, innerHeight - host.offsetHeight)) + 'px';
   }
 
-  function saveFocusPosition(host) {
+  function saveFocusPosition(host, persist) {
     focusPosition = {
       x: Math.max(0, Math.min(1, parseFloat(host.style.left) / Math.max(1, innerWidth - host.offsetWidth))),
       y: Math.max(0, Math.min(1, parseFloat(host.style.top) / Math.max(1, innerHeight - host.offsetHeight)))
     };
-    if (chrome.storage && chrome.storage.local) chrome.storage.local.set({ aceFocusPosition: focusPosition });
+    if (persist !== false && chrome.storage && chrome.storage.local) chrome.storage.local.set({ aceFocusPosition: focusPosition });
   }
 
   function installFocusDrag(root) {
@@ -2563,9 +2715,11 @@
       var host = root.querySelector('.ace-panel.focus-panel');
       if (!host || !host.contains(event.target) || event.button !== 0) return;
       var grip = event.target.closest('[data-focus-grip]');
-      if (!grip && (event.target.closest('button,input,textarea,select,a,label,[contenteditable]') || event.pointerType === 'touch')) return;
+      if (!grip && (event.target.closest('button,input,textarea,select,a,label,[contenteditable]') || event.pointerType === 'touch' && !event.target.closest('.studio-head,.focus-dock-body'))) return;
       gesture = { id: event.pointerId, x: event.clientX, y: event.clientY,
         left: host.offsetLeft, top: host.offsetTop, moved: false };
+      if (host.setPointerCapture) host.setPointerCapture(event.pointerId);
+      if (grip || event.pointerType === 'touch') event.preventDefault();
     });
     root.addEventListener('pointermove', function (event) {
       if (!gesture || gesture.id !== event.pointerId) return;
@@ -2573,11 +2727,11 @@
       if (!host) return;
       var dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
       if (!gesture.moved && Math.hypot(dx, dy) < 5) return;
-      if (!gesture.moved) host.setPointerCapture(event.pointerId);
       gesture.moved = true;
       host.classList.add('dragging');
       host.style.left = Math.max(0, Math.min(innerWidth - host.offsetWidth, gesture.left + dx)) + 'px';
       host.style.top = Math.max(0, Math.min(innerHeight - host.offsetHeight, gesture.top + dy)) + 'px';
+      saveFocusPosition(host, false);
       event.preventDefault();
     });
     function finish(event) {
@@ -2587,8 +2741,11 @@
         saveFocusPosition(host);
         host.classList.remove('dragging');
       }
+      var id = gesture.id;
       gesture = null;
+      if (host && host.hasPointerCapture && host.hasPointerCapture(id)) host.releasePointerCapture(id);
     }
+    root.addEventListener('lostpointercapture', finish);
     root.addEventListener('pointerup', finish);
     root.addEventListener('pointercancel', finish);
     root.addEventListener('dblclick', function (event) {
@@ -2867,6 +3024,7 @@
     if (isWorkdayListing() && !manualListingOpen) {
       var listingPanel = document.querySelector('.ace-root');
       if (listingPanel) listingPanel.remove();
+      hideFocusPanel();
       return;
     }
 
@@ -3491,6 +3649,12 @@
   // a plain shortcut would type into them.
   document.addEventListener("keydown", function (event) {
     if (event.altKey && (event.key === "a" || event.key === "A")) {
+      if (remoteFocus) {
+        event.preventDefault();
+        focusRoute({ op: 'event', session: remoteFocus.session, sourceFrame: remoteFocus.sourceFrame,
+          sourceDocument: remoteFocus.sourceDocument, event: 'wake' });
+        return;
+      }
       if (loaded && !lastResult) {
         event.preventDefault();
         runFill();
@@ -3510,6 +3674,18 @@
      host list used to be able to describe. */
   chrome.runtime.onMessage.addListener(
     function (message, sender, respond) {
+      if (message && message.type === 'aceFocusDelivery' && sender.id === chrome.runtime.id) {
+        receiveFocusPanel(message, respond);
+        return;
+      }
+      if (message && /^(wake|status)$/.test(message.type) && (remoteFocus || lastRemoteFocus)) {
+        var remote = remoteFocus || lastRemoteFocus;
+        focusRoute({ op: 'event', session: remote.session, sourceFrame: remote.sourceFrame,
+          sourceDocument: remote.sourceDocument, event: message.type }, function (ok, reply) {
+          respond(ok ? reply : { ok: false, fields: 0 });
+        });
+        return true;
+      }
       if (message && message.type === "wake") {
         // The user clicked Fill in the popup, which is a better signal
         // than any heuristic: run whether or not the page looked like
@@ -3714,6 +3890,7 @@
     recordFill: function (record) { lastFill.push(record); },
     panel: panel,
     shell: shell,
-    onAceClick: onAceClick
+    onAceClick: onAceClick,
+    remotePanel: function () { return remoteFocus && remoteFocus.root.querySelector(".ace-panel"); }
   };
 })();
