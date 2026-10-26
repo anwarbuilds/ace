@@ -13,6 +13,47 @@ a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
+## 2026-10-26: Simplified extension quick fill, local 1.29.0
+
+The owner asked to replace the time-consuming review/memory flow while keeping
+minimize, dragging, themes and employer compatibility. This request supersedes
+the V5.1 compact action arrangement and explicit remember checkbox only. The
+shell, no-submit boundary, motivation exclusion and protected choices remain.
+
+- One full-width **Fill all known answers** action fills matching empty controls
+  through the existing native/custom adapters and job-specific history pass.
+  Remaining questions use a shorter editor, collapsed question selector and
+  **Fill answer** action. Undo is on the compact card. Settings/activity and
+  Memory search/edit/delete remain optional advanced tools.
+- A verified routine answer supplied in ACE immediately fills equivalent empty
+  prompts, without another remember checkbox. Private saving runs separately;
+  failed persistence cannot reopen a verified completed employer question.
+  Explicit retry is in Settings/activity. A receipt-bound, document-local answer
+  cache permits immediate reuse on this form; it is invalidated when the source
+  answer/options/control/URL change. Persistent future reuse still requires a
+  successful private save. Existing preferences and revision checks remain.
+- Already populated routine fields do not create unnecessary approval work or
+  get silently learned. Real committed owner edits retain automatic learning;
+  protected choices stay per application. Employer-motivation answers remain
+  unread, unfilled and unlearned. No personal answers were added to source.
+- Each repeated field/group now has its own completion identity. An incompatible
+  option on a repeated question remains visible even when another instance was
+  filled. Work-history From/To/current-job values cannot become global reusable
+  answers. Custom history dropdowns no longer require a global bank label before
+  using the matching saved job. A slow Memory response no longer blocks profile
+  and history autofill.
+- Validation: 65 fictional DOM contracts, 258 matcher cases and Memory safety
+  checks pass. TypeScript, lint, production web build, JS syntax and forbidden
+  dash checks pass. Playwright fixtures were updated for the new labels and two
+  quick-fill regressions were added; collection only, no Chrome launch due to
+  the documented cooling restriction. No real employer or production browser
+  verification, deployment, extension publication, migration or scheduler action.
+- Local branch: `extension-quick-fill-20261026`, based on company-logo branch
+  `2a2982e`. Keep this extension change separate from the company-logo review.
+  To use it, reload the unpacked extension at `chrome://extensions`, then refresh
+  employer tabs. The owner will supply additional common questions while using
+  applications; their private answers must never be committed to this repository.
+
 ## Instructions for a new Codex chat
 
 Treat this file as the continuity source for ACE. Read it completely before
@@ -611,7 +652,7 @@ commits (`54e939a`, `61debd6`, `8d84141`), the reconciled Focus Mode V5.1
 commits (`559ee84`, `5b8ab4b`, equivalents of local `4ce3570` and `cb7bb5e`),
 the V5.1 typography pass and theme sync/Close (`386bed9`). It contains the
 existing V4 Answer Memory implementation (`2e7c1dc`). The
-extension manifest is now `1.28.6` (local active-question following, completed-answer receipts, full-viewport embedded-form dragging and automatic routine-answer saving described below). The V5.1 extension has not been published; it
+extension manifest is now `1.29.0` (local simplified quick fill, active-question following, completed-answer receipts, full-viewport embedded-form dragging and automatic routine-answer saving described below). The V5.1 extension has not been published; it
 runs as an unpacked installation loaded from
 `/home/ubuntu/Documents/ace-next/extension`. An unpacked installation must be
 reloaded at `chrome://extensions`; employer tabs must then be refreshed.
@@ -1742,7 +1783,7 @@ reassuring success state when the backend has not confirmed one.
 
 The extension is Manifest V3. Important implementation areas are
 `extension/content.js`, `fields.js`, `background.js`, the popup/side panel,
-storage, pairing and rule tests. The current local manifest version is 1.28.6.
+storage, pairing and rule tests. The current local manifest version is 1.29.0.
 The approved interface is ACE Focus Mode V5.1; older extension interfaces are
 historical.
 

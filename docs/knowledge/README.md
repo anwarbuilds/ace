@@ -66,3 +66,6 @@ These are the habits the whole history teaches. Each is an entry you can read fo
 
 The owner's profile, application history, private cleanup items and any secret live outside the repo (private notes, local
 memory, the prompt a session is started with). Do not copy them in.
+
+Historical section 3 notes moved out of the growing handoff on 2026-10-26 are
+retained in [11-handoff-state-archive.md](11-handoff-state-archive.md).

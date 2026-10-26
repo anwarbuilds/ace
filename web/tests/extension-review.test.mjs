@@ -77,7 +77,7 @@ function fixture(body, config = {}) {
       sendMessage(message, reply) {
         if (config.onSend?.(message, reply)) return;
         if (message.type === 'aceFocusRoute') { reply({ ok: false }); return; }
-        if (message.type === 'answers') reply({ ok: true, items: [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Email', value: 'applicant@example.test' }, { label: 'Phone', value: '5550100100' }, { label: 'Current role', value: 'Engineer' }] });
+        if (message.type === 'answers') reply({ ok: true, items: config.answerItems || [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Email', value: 'applicant@example.test' }, { label: 'Phone', value: '5550100100' }, { label: 'Current role', value: 'Engineer' }] });
         else if (message.type === 'memory') reply({ ok: true, items: memoryStore });
         else if (message.type === 'memorySave') {
           saved.push(message.item);
@@ -87,6 +87,7 @@ function fixture(body, config = {}) {
           if (existing) Object.assign(existing, entry); else memoryStore.push(entry);
           reply({ ok: true, item: entry });
         }
+        else if (message.type === 'history') reply({ ok: true, work: config.work || [], education: config.education || [] });
         else reply({ ok: true, items: [], work: [], education: [] });
       } } },
   });
@@ -107,6 +108,98 @@ function fixture(body, config = {}) {
     }, submissions: () => submissions,
     dispose() { timers.forEach(clearTimeout); } };
 }
+
+test('quick fill has one main action and fills every matching native dropdown without changing existing answers', t => {
+  const memoryStore = [{ id: 1, concept: 'q:preferred development environment', question: 'Preferred development environment', answer: 'Linux', answer_type: 'choice', reuse_policy: 'reusable' }];
+  const f = fixture(['first', 'second', 'manual', 'unavailable'].map(id => `<label for="${id}">Preferred development environment</label><select id="${id}"><option value="">Select one</option>${id === 'unavailable' ? '<option value="other">Other</option>' : '<option value="linux">Linux</option><option value="mac">macOS</option>'}</select>`).join(''), { memoryStore }); t.after(f.dispose);
+  assert.equal(f.panel().querySelector('[data-ace="fill"]').textContent, 'Fill all known answers');
+  assert.equal(f.panel().querySelectorAll('.focus-compact-actions button').length, 1);
+  assert.equal(f.panel().querySelector('#studio-reuse'), null);
+  f.document.getElementById('manual').value = 'mac'; f.click('fill');
+  assert.equal(f.document.getElementById('first').value, 'linux');
+  assert.equal(f.document.getElementById('second').value, 'linux');
+  assert.equal(f.document.getElementById('manual').value, 'mac');
+  assert.equal(f.document.getElementById('unavailable').value, '');
+  assert.ok(f.panel().querySelector('[data-ace="tab:review"]').textContent.includes('(1)'), 'a repeated question with incompatible options stays visible');
+  assert.equal(f.submissions(), 0); f.click('undo');
+  assert.equal(f.document.getElementById('first').value, '');
+  assert.equal(f.document.getElementById('second').value, '');
+  assert.equal(f.document.getElementById('manual').value, 'mac');
+});
+
+test('one answer fills equivalent prompts immediately and a failed background save does not reopen them', async t => {
+  const config = { failSave: true };
+  const f = fixture('<label for="first">Describe your experience writing integration tests</label><textarea id="first"></textarea><label for="second">Please tell us about your experience writing integration tests.</label><textarea id="second"></textarea><label for="other">Describe your experience writing unit tests</label><textarea id="other"></textarea>', config); t.after(f.dispose);
+  f.review('Describe your experience writing integration');
+  assert.equal(f.panel().querySelector('#studio-reuse'), null, 'no separate remember checkbox');
+  const editor = f.panel().querySelector('#studio-answer'); editor.value = 'Fictional integration testing experience'; editor.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+  f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => f.document.getElementById('second').value === editor.value, 'one click fills equivalent prompts');
+  assert.equal(f.document.getElementById('other').value, '');
+  assert.ok(f.panel().textContent.includes('Saving for future applications failed'));
+  assert.equal(f.panel().querySelector('.studio-question')?.textContent, 'Describe your experience writing unit tests');
+  config.failSave = false; f.click('workspace');
+  const retry = f.panel().querySelector('[data-ace^="retry-save:"]'); assert.ok(retry, 'retry lives in optional settings'); f.click(retry.getAttribute('data-ace'));
+  await until(() => f.saved.length === 2 && !f.panel().querySelector('[data-ace^="retry-save:"]'), 'private save can retry without answering again');
+  assert.equal(f.submissions(), 0);
+});
+
+test('saved profile fills before a delayed reusable-answer request completes', async t => {
+  const f = fixture('<label for="fresh">Full name</label><input id="fresh">', { autoKnown: true,
+    onSend(message) { return message.type === 'memory'; } }); t.after(f.dispose);
+  await until(() => f.document.getElementById('fresh').value === 'Example Applicant', 'slow Memory must not block known profile facts');
+  assert.equal(f.submissions(), 0);
+});
+
+test('job-specific dates and current-job choices come from history, never a global From answer', async t => {
+  const job = (id, employer) => `<section><h2>Work experience ${id}</h2><label for="employer-${id}">Company</label><input id="employer-${id}" value="${employer}"><label for="from-${id}">From</label><input id="from-${id}" type="month"><label for="current-${id}">I currently work here</label><input id="current-${id}" type="checkbox"></section>`;
+  const f = fixture(job(1, 'Fictional Current Lab') + job(2, 'Fictional Previous Lab') + job(3, 'Unknown Fictional Lab'), {
+    autoLearn: true, work: [{ employer: 'Fictional Previous Lab', start_month: 5, start_year: 2020, is_current: false }, { employer: 'Fictional Current Lab', start_month: 3, start_year: 2024, is_current: true }],
+    memoryStore: [{ id: 1, concept: 'q:from', question: 'From', answer: '1999-01', answer_type: 'text', reuse_policy: 'reusable' }],
+  }); t.after(f.dispose); f.click('fill');
+  assert.equal(f.document.getElementById('from-1').value, '2024-03');
+  assert.equal(f.document.getElementById('from-2').value, '2020-05');
+  assert.equal(f.document.getElementById('from-3').value, '');
+  assert.equal(f.document.getElementById('current-1').checked, true);
+  assert.equal(f.document.getElementById('current-2').checked, false);
+  const date = f.document.getElementById('from-1'); date.value = '2024-04'; ownerEvent(f, date, 'input'); ownerEvent(f, date, 'focusout'); await sleep(450);
+  assert.equal(f.saved.length, 0, 'history dates must not become shared global answers');
+});
+
+test('one click chooses a real custom history dropdown even without a global answer for From', async t => {
+  const f = fixture('<section><h2>Work experience</h2><label for="company">Company</label><input id="company" value="Fictional Lab"><label for="from">From</label><button type="button" id="from" aria-haspopup="listbox" aria-controls="dates">Select One</button></section>', { work: [{ employer: 'Fictional Lab', start_month: 3, start_year: 2024, is_current: true }] }); t.after(f.dispose);
+  const field = f.document.getElementById('from'); let typed = 0;
+  field.addEventListener('input', () => typed++);
+  field.addEventListener('click', () => {
+    if (f.document.getElementById('dates')) return;
+    const menu = f.document.createElement('div'); menu.id = 'dates'; menu.setAttribute('role', 'listbox');
+    for (const label of ['02/2024', '03/2024']) {
+      const option = f.document.createElement('div'); option.setAttribute('role', 'option'); option.textContent = label;
+      option.addEventListener('click', () => { field.textContent = label; menu.remove(); }); menu.append(option);
+    }
+    f.document.body.append(menu);
+  });
+  f.click('fill'); await until(() => field.textContent === '03/2024', 'the saved date must select its actual option');
+  assert.equal(typed, 0); assert.equal(f.saved.length, 0); assert.equal(f.submissions(), 0);
+});
+
+test('qualification dropdowns use saved facts while unknown age choices remain unanswered', t => {
+  const f = fixture('<label for="degree">Highest qualification</label><select id="degree"><option value="">Select one</option><option value="bs">Bachelor of Science</option><option value="ms">Master of Science</option></select><label for="age">Are you at least 18 years old?</label><select id="age"><option value="">Select one</option><option>Yes</option><option>No</option></select>', { answerItems: [{ label: 'Degree', value: 'Master of Science' }] }); t.after(f.dispose);
+  f.click('fill'); assert.equal(f.document.getElementById('degree').value, 'ms'); assert.equal(f.document.getElementById('age').value, ''); assert.equal(f.submissions(), 0);
+});
+
+test('editing a saved answer replaces the immediate reuse copy while preserving existing employer text', async t => {
+  const f = fixture('<label for="detail">Describe your experience writing integration tests</label><textarea id="detail"></textarea>'); t.after(f.dispose);
+  f.review('Describe your experience'); const editor = f.panel().querySelector('#studio-answer'); editor.value = 'First fictional answer'; editor.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+  f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => f.saved.length === 1, 'first answer saves privately');
+  f.click('workspace'); f.click('tab:memory'); f.click('edit:1');
+  f.panel().querySelector('#studio-memory-edit').value = 'Corrected fictional answer'; f.click('save-edit:1');
+  f.document.querySelector('form').insertAdjacentHTML('beforeend', '<label for="later">Please tell us about your experience writing integration tests.</label><textarea id="later"></textarea>');
+  f.click('fill'); assert.equal(f.document.getElementById('later').value, 'Corrected fictional answer');
+  assert.equal(f.document.getElementById('detail').value, 'First fictional answer');
+  assert.equal(f.submissions(), 0);
+});
 
 test('parent prompt and all uniquely named checkbox choices remain one exact question', async t => {
   const f = fixture(grouped); t.after(f.dispose);
@@ -277,7 +370,7 @@ test('typed employer answer needs only approval, then fills an equivalent questi
   await until(() => first.panel().textContent.includes('Answer detected on form'), 'typed form answers must appear without blur or retyping');
   assert.ok(first.panel().querySelector('.focus-detected').textContent.includes(field.value));
   assert.equal(first.panel().querySelector('#studio-answer'), null, 'detected answers need approval, not another editor');
-  assert.equal(first.panel().querySelector('[data-ace^="approve:"]').textContent, 'Approve answer');
+  assert.equal(first.panel().querySelector('[data-ace^="approve:"]').textContent, 'Use answer');
   assert.equal(first.saved.length, 0, 'observing a typed answer never saves it');
   first.click(first.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
   await until(() => first.saved.length === 1, 'explicit approval saves the detected answer');
@@ -607,10 +700,10 @@ test('protected, motivation and multi-answer controls never auto-save', async t 
 test('failed auto-save stays visible and can be retried without approving', async t => {
   const config = { autoLearn: true, failSave: true }; const f = fixture(routine, config); t.after(f.dispose);
   f.review('Describe your experience'); const field = f.document.getElementById('detail'); field.value = 'Fictional final answer'; ownerEvent(f, field, 'input'); ownerEvent(f, field, 'focusout');
-  await until(() => f.panel().textContent.includes('Memory has not saved this answer yet.'), 'failure remains honest');
-  assert.ok(f.panel().textContent.includes('Retry Memory save')); config.failSave = false;
-  f.click(f.panel().querySelector('[data-ace^="learn-now:"]').getAttribute('data-ace'));
-  await until(() => f.saved.length === 2 && !f.panel().textContent.includes('Memory has not saved this answer yet.'), 'retry saves without approval'); assert.equal(f.saved.length, 2);
+  await until(() => f.panel().textContent.includes('Saving for next time failed.'), 'failure remains honest');
+  assert.ok(f.panel().textContent.includes('Retry saving')); config.failSave = false;
+  f.click(f.panel().querySelector('[data-ace^="retry-save:"]').getAttribute('data-ace'));
+  await until(() => f.saved.length === 2 && !f.panel().textContent.includes('Saving for next time failed.'), 'retry saves without approval'); assert.equal(f.saved.length, 2);
 });
 
 test('long question keys fit the existing API and remain reusable', async t => {
@@ -710,7 +803,9 @@ test('outer Review edits, approval, Memory and undo operate only on the originat
   const f = framedFixture(routine); t.after(f.dispose);
   await until(() => f.remote(), 'outer card should appear'); f.click('tab:review');
   await until(() => f.remote()?.querySelector('.focus-chips'), 'Review should appear');
+  const priorEditor = f.remote().querySelector('#studio-answer');
   const chip = Array.from(f.remote().querySelectorAll('[data-ace^="question:"]')).find(button => button.textContent.includes('integration tests')); chip.click();
+  await until(() => f.remote()?.querySelector('#studio-answer') !== priorEditor, 'source refresh arrives after question selection');
   await until(() => f.remote()?.querySelector('.studio-question')?.textContent.includes('integration tests'), 'right source question should appear');
   const editor = f.remote().querySelector('#studio-answer'); editor.value = 'Fictional answer entered in the outer card'; editor.dispatchEvent(new f.top.window.Event('input', { bubbles: true }));
   assert.equal(f.source.document.getElementById('detail').value, '', 'typing in ACE remains a draft');
@@ -718,7 +813,7 @@ test('outer Review edits, approval, Memory and undo operate only on the originat
   await until(() => f.source.saved.length === 1, 'source controller verifies filling and saves Memory');
   assert.equal(f.source.document.getElementById('detail').value, 'Fictional answer entered in the outer card');
   await until(() => !f.remote()?.querySelector('.studio-question')?.textContent.includes('integration tests'), 'outer card receives completion');
-  f.click('workspace'); await until(() => f.remote()?.textContent.includes('Saved for reuse'), 'Memory remains functional');
+  f.click('workspace'); await until(() => f.remote()?.querySelector('[data-ace="tab:memory"]'), 'Settings navigation arrives'); f.click('tab:memory'); await until(() => f.remote()?.textContent.includes('Saved for reuse'), 'Memory remains functional');
   f.click('tab:activity'); await until(() => f.remote()?.textContent.includes('Undo last fill'), 'Activity remains functional'); f.click('undo');
   await until(() => f.source.document.getElementById('detail').value === '', 'Undo reaches the originating field');
   assert.equal(f.source.submissions() + f.top.submissions(), 0);
@@ -729,7 +824,9 @@ test('outer native choices preserve opaque values and protected decisions remain
   const f = framedFixture('<label for="sponsor">Do you require sponsorship?</label><select id="sponsor"><option value="">Select One</option><option value="sponsor-19">Yes</option></select>'); t.after(f.dispose);
   await until(() => f.remote(), 'outer card appears'); f.click('tab:review');
   await until(() => f.remote()?.querySelector('.focus-chips'), 'Review appears');
+  const priorEditor = f.remote().querySelector('#studio-answer');
   Array.from(f.remote().querySelectorAll('[data-ace^="question:"]')).find(button => button.textContent.includes('sponsorship')).click();
+  await until(() => f.remote()?.querySelector('#studio-answer') !== priorEditor, 'source refresh arrives after question selection');
   await until(() => f.remote()?.querySelector('.studio-question')?.textContent.includes('sponsorship'), 'protected prompt appears');
   const select = f.remote().querySelector('#studio-answer'); select.value = 'sponsor-19'; select.dispatchEvent(new f.top.window.Event('change', { bubbles: true }));
   assert.equal(f.source.document.getElementById('sponsor').value, '');
@@ -806,7 +903,7 @@ test('protected prefills stay visible for confirmation rather than being silentl
   const field = f.document.getElementById('sponsor'); ownerEvent(f, field, 'focusin');
   await until(() => f.panel().querySelector('.focus-detected'), 'existing answer is shown without re-entry');
   assert.ok(f.panel().querySelector('.focus-detected').textContent.includes('Yes'));
-  assert.equal(f.panel().querySelector('[data-ace^="approve:"]').textContent, 'Approve answer'); assert.equal(f.saved.length, 0);
+  assert.equal(f.panel().querySelector('[data-ace^="approve:"]').textContent, 'Use answer'); assert.equal(f.saved.length, 0);
 });
 
 test('inputless ARIA comboboxes expose their actual selected label and committed protected choice', async t => {

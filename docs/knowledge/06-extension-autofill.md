@@ -1077,3 +1077,44 @@ lint, syntax, dash and whitespace checks pass. 35 Playwright cases collect but
 were not run due to laptop cooling. Screenshot DOM and live installed-MV3 or
 paired production Memory behavior remain unverified. Reload local 1.28.6 and
 refresh employer tabs; no production deployment/publication/permissions change.
+
+## 2026-10-26: Simplified extension quick fill, local 1.29.0
+
+The owner asked to replace the time-consuming review/memory flow while keeping
+minimize, dragging, themes and employer compatibility. This request supersedes
+the V5.1 compact action arrangement and explicit remember checkbox only. The
+shell, no-submit boundary, motivation exclusion and protected choices remain.
+
+- One full-width **Fill all known answers** action fills matching empty controls
+  through the existing native/custom adapters and job-specific history pass.
+  Remaining questions use a shorter editor, collapsed question selector and
+  **Fill answer** action. Undo is on the compact card. Settings/activity and
+  Memory search/edit/delete remain optional advanced tools.
+- A verified routine answer supplied in ACE immediately fills equivalent empty
+  prompts, without another remember checkbox. Private saving runs separately;
+  failed persistence cannot reopen a verified completed employer question.
+  Explicit retry is in Settings/activity. A receipt-bound, document-local answer
+  cache permits immediate reuse on this form; it is invalidated when the source
+  answer/options/control/URL change. Persistent future reuse still requires a
+  successful private save. Existing preferences and revision checks remain.
+- Already populated routine fields do not create unnecessary approval work or
+  get silently learned. Real committed owner edits retain automatic learning;
+  protected choices stay per application. Employer-motivation answers remain
+  unread, unfilled and unlearned. No personal answers were added to source.
+- Each repeated field/group now has its own completion identity. An incompatible
+  option on a repeated question remains visible even when another instance was
+  filled. Work-history From/To/current-job values cannot become global reusable
+  answers. Custom history dropdowns no longer require a global bank label before
+  using the matching saved job. A slow Memory response no longer blocks profile
+  and history autofill.
+- Validation: 65 fictional DOM contracts, 258 matcher cases and Memory safety
+  checks pass. TypeScript, lint, production web build, JS syntax and forbidden
+  dash checks pass. Playwright fixtures were updated for the new labels and two
+  quick-fill regressions were added; collection only, no Chrome launch due to
+  the documented cooling restriction. No real employer or production browser
+  verification, deployment, extension publication, migration or scheduler action.
+- Local branch: `extension-quick-fill-20261026`, based on company-logo branch
+  `2a2982e`. Keep this extension change separate from the company-logo review.
+  To use it, reload the unpacked extension at `chrome://extensions`, then refresh
+  employer tabs. The owner will supply additional common questions while using
+  applications; their private answers must never be committed to this repository.

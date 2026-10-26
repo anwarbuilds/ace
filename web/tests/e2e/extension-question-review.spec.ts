@@ -22,9 +22,37 @@ async function load(page: Page, body: string, memory: Array<Record<string, unkno
   }, { memory, autoKnown, autoLearn });
   for (const file of ['fields.js', 'memory.js', 'content.js']) await page.addScriptTag({ path: path.join(extensionRoot, file) });
   const panel = page.locator('.ace-root .ace-panel');
-  await panel.getByRole('button', { name: /^Review/ }).click();
+  await panel.getByRole('button', { name: /^(Answer remaining questions|Check answers|Review$)/ }).click();
   return panel;
 }
+
+test('quick fill selects all known native choices once and preserves manual answers and missing options', async ({ page }) => {
+  const memory = [{ id: 1, revision: 1, concept: 'q:preferred development environment', question: 'Preferred development environment', answer: 'Linux', answer_type: 'choice', reuse_policy: 'reusable' }];
+  const body = ['first', 'second', 'manual', 'unavailable'].map(id => `<label for="${id}">Preferred development environment</label><select id="${id}"><option value="">Select one</option>${id === 'unavailable' ? '<option value="other">Other</option>' : '<option value="linux">Linux</option><option value="mac">macOS</option>'}</select>`).join('');
+  const panel = await load(page, body, memory);
+  await page.locator('#manual').selectOption('mac');
+  await panel.getByRole('button', { name: 'Fill all known answers', exact: true }).click();
+  await expect(page.locator('#first')).toHaveValue('linux'); await expect(page.locator('#second')).toHaveValue('linux');
+  await expect(page.locator('#manual')).toHaveValue('mac'); await expect(page.locator('#unavailable')).toHaveValue('');
+  await expect(panel.locator('#studio-reuse')).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Back to fill', exact: true }).click();
+  await expect(panel.locator('.focus-compact-actions button')).toHaveCount(1);
+  await panel.getByRole('button', { name: 'Undo fill', exact: true }).click();
+  await expect(page.locator('#first')).toHaveValue(''); await expect(page.locator('#second')).toHaveValue('');
+  await expect(page.locator('#manual')).toHaveValue('mac');
+  expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
+});
+
+test('one routine answer fills equivalent questions without another save or approval step', async ({ page }) => {
+  const panel = await load(page, '<label for="first">Describe your experience writing integration tests</label><textarea id="first"></textarea><label for="second">Please tell us about your experience writing integration tests.</label><textarea id="second"></textarea><label for="different">Describe your experience writing unit tests</label><textarea id="different"></textarea>');
+  await panel.getByRole('textbox', { name: 'Your answer' }).fill('Fictional testing experience');
+  await panel.getByRole('button', { name: 'Fill answer', exact: true }).click();
+  await expect(page.locator('#first')).toHaveValue('Fictional testing experience');
+  await expect(page.locator('#second')).toHaveValue('Fictional testing experience');
+  await expect(page.locator('#different')).toHaveValue('');
+  await expect(panel.locator('#studio-reuse')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
+});
 
 test('Workday checkbox choices show the full question and fill once after approval', async ({ page }) => {
   const panel = await load(page, `<div data-automation-id="formField-employment"><label id="prompt">${question}</label><div role="group" aria-labelledby="prompt">${choices.map((label, at) => `<div><input type="checkbox" id="choice-${at}" name="unique-${at}"><label for="choice-${at}">${label}</label></div>`).join('')}</div></div>`);
@@ -35,7 +63,7 @@ test('Workday checkbox choices show the full question and fill once after approv
   await expect(page.locator('#choice-3')).not.toBeChecked();
   await panel.getByRole('button', { name: 'Switch to Night theme' }).click();
   await expect(panel.getByRole('checkbox', { name: choices[3], exact: true })).toBeChecked();
-  await panel.getByRole('button', { name: 'Approve & fill' }).click();
+  await panel.getByRole('button', { name: 'Fill answer' }).click();
   await expect(page.locator('#choice-3')).toBeChecked();
   for (let at = 0; at < 3; at++) await expect(page.locator(`#choice-${at}`)).not.toBeChecked();
   await expect(panel.locator('.studio-question').filter({ hasText: question })).toHaveCount(0);
@@ -66,7 +94,7 @@ test('ACE loads lazy dropdown choices without requiring an employer-page answer'
   await expect(page.locator('#choices')).toHaveCount(0);
   await panel.getByRole('combobox', { name: 'Exact employer options' }).selectOption('Friend referral');
   await expect(page.locator('#channel')).toHaveText('Select One');
-  await panel.getByRole('button', { name: 'Approve & fill' }).click();
+  await panel.getByRole('button', { name: 'Fill answer' }).click();
   await expect(page.locator('#channel')).toHaveText('Friend referral');
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
   expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
@@ -80,7 +108,7 @@ test('native option codes remain drafts until approval and reverted writes are n
   await page.locator('#channel').evaluate(field => {
     field.addEventListener('change', () => setTimeout(() => { (field as HTMLSelectElement).value = ''; }, 10));
   });
-  await panel.getByRole('button', { name: 'Approve & fill' }).click();
+  await panel.getByRole('button', { name: 'Fill answer' }).click();
   await expect(panel.getByText('The employer field did not accept this answer. Review it on the form.')).toBeVisible();
   await expect(page.locator('#channel')).toHaveValue('');
   expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(0);
@@ -99,7 +127,7 @@ test('a pre-existing form answer is confirmed once without another employer writ
     field.addEventListener('input', () => field.setAttribute('data-extra-input', 'true'));
     field.addEventListener('change', () => field.setAttribute('data-extra-change', 'true'));
   });
-  await panel.getByRole('button', { name: 'Approve answer', exact: true }).click();
+  await panel.getByRole('button', { name: 'Use answer', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
   expect(await page.locator('#testing').getAttribute('data-extra-input')).toBeNull();
   expect(await page.locator('#testing').getAttribute('data-extra-change')).toBeNull();
@@ -112,9 +140,9 @@ test('a pre-existing form answer is confirmed once without another employer writ
 
 test('a manual custom dropdown answer is detected after Fill without a change event', async ({ page }) => {
   const panel = await load(page, '<label for="channel">Which application channel did you use?</label><button id="channel" type="button" aria-haspopup="listbox">Select One</button>');
-  await panel.getByRole('button', { name: 'Overview', exact: true }).click();
-  await panel.getByRole('button', { name: 'Fill', exact: true }).click();
-  await panel.getByRole('button', { name: /^Review/ }).click();
+  await panel.getByRole('button', { name: /^(Back to fill|Overview)$/, exact: true }).click();
+  await panel.getByRole('button', { name: 'Fill all known answers', exact: true }).click();
+  await panel.getByRole('button', { name: /^(Answer remaining questions|Check answers|Review$)/ }).click();
   await panel.getByRole('button', { name: /Which application channel/ }).click();
   await page.evaluate(() => {
     const trigger = document.getElementById('channel')!;
@@ -129,7 +157,7 @@ test('a manual custom dropdown answer is detected after Fill without a change ev
   await expect(panel.getByText('Answer detected on form', { exact: true })).toBeVisible();
   await expect(panel.locator('.focus-detected')).toContainText('Friend referral');
   await expect(panel.getByRole('button', { name: 'Load employer options' })).toHaveCount(0);
-  await panel.getByRole('button', { name: 'Approve answer', exact: true }).click();
+  await panel.getByRole('button', { name: 'Use answer', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
 });
 
@@ -140,7 +168,7 @@ test('Review mirrors a text input and textarea instead of making every answer mu
   await expect(panel.locator('textarea#studio-answer')).toHaveCount(0);
   await expect(panel.locator('#studio-answer')).toHaveAttribute('placeholder', 'Employer hint');
   await panel.locator('#studio-answer').fill('Fictional short answer');
-  await panel.getByRole('button', { name: 'Approve & fill' }).click();
+  await panel.getByRole('button', { name: 'Fill answer' }).click();
   await expect(page.locator('#short')).toHaveValue('Fictional short answer');
   await panel.getByRole('button', { name: /Additional detailed screening/ }).click();
   await expect(panel.locator('textarea#studio-answer')).toBeVisible();
@@ -150,7 +178,7 @@ test('approval labels fit the full-width action row in Day, Night and narrow vie
   const panel = await load(page, '<label for="detail">Additional screening detail</label><input id="detail">');
   await panel.getByRole('button', { name: /Additional screening detail/ }).click();
   await page.locator('#detail').fill('Fictional answer');
-  const approve = panel.getByRole('button', { name: 'Approve answer', exact: true });
+  const approve = panel.getByRole('button', { name: 'Use answer', exact: true });
   await expect(approve).toBeVisible();
   for (const width of [390, 195]) {
     await page.setViewportSize({ width, height: 900 });
@@ -192,7 +220,7 @@ test('a readonly wrapper combobox mirrors a dropdown and selects the actual empl
   const dropdown = panel.getByRole('combobox', { name: 'Exact employer options' });
   await dropdown.selectOption('Engineering');
   await expect(page.locator('#detail')).toHaveValue('');
-  await panel.getByRole('button', { name: 'Approve & fill' }).click();
+  await panel.getByRole('button', { name: 'Fill answer' }).click();
   await expect(page.locator('#detail')).toHaveValue('Engineering');
   await expect(page.locator('#detail')).toHaveAttribute('data-input-events', '0');
 });
@@ -222,7 +250,8 @@ test('native choices save without approval while synthetic page events cannot te
   await page.locator('#testing').evaluate(field => { (field as HTMLTextAreaElement).value = 'Page generated value'; field.dispatchEvent(new Event('input', { bubbles: true })); field.dispatchEvent(new Event('change', { bubbles: true })); });
   await page.waitForTimeout(500);
   expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
-  await panel.getByRole('button', { name: 'Memory & activity', exact: true }).click();
+  await panel.getByRole('button', { name: 'Settings & activity', exact: true }).click();
+  await panel.getByRole("button", { name: "Memory", exact: true }).click();
   await expect(panel.getByRole('switch', { name: 'Auto-save routine answers: On' })).toBeChecked();
   await panel.getByRole('switch', { name: 'Auto-save routine answers: On' }).click();
   await expect(panel.getByRole('switch', { name: 'Auto-save routine answers: Off' })).not.toBeChecked();
@@ -256,7 +285,7 @@ test('a direct protected custom dropdown choice completes without another approv
   });
   await page.locator('#sponsor').click(); await page.getByRole('option', { name: 'Yes', exact: true }).click();
   await expect(panel.getByText('Answered on form', { exact: true })).toBeVisible();
-  await expect(panel.getByText('Your choice is recorded for this application only. No extra approval or Memory save.')).toBeVisible();
+  await expect(panel.getByText('Your choice is recorded for this application only.')).toBeVisible();
   await expect(panel.getByRole('button', { name: /Approve/ })).toHaveCount(0);
   expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(0);
   expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
