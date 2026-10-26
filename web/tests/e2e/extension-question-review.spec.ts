@@ -5,10 +5,10 @@ const extensionRoot = path.resolve(process.cwd(), '../extension');
 const question = 'If you worked for Silverpine Labs, was it as an associate, an intern, or a contractor/temporary?';
 const choices = ['Associate', 'Contractor', 'Intern', 'I have never worked for/at Silverpine Labs in any capacity.'];
 const base = '<label for="name">Full name</label><input id="name" value="Example Applicant"><label for="email">Email</label><input id="email" value="applicant@example.test"><label for="phone">Phone</label><input id="phone" value="5550100100"><label for="role">Current role</label><input id="role" value="Engineer"><label for="resume">Resume</label><input type="file" id="resume">';
-async function load(page: Page, body: string, memory: Array<Record<string, unknown>> = [], autoKnown = false, autoLearn = false) {
+async function load(page: Page, body: string, memory: Array<Record<string, unknown>> = [], autoKnown = false, autoLearn = false, work: Array<Record<string, unknown>> = []) {
   await page.goto('data:text/html,<html><body></body></html>');
   await page.setContent(`<form>${base}${body}<button type="submit">Submit application</button></form>`);
-  await page.evaluate(({ memory, autoKnown, autoLearn }) => {
+  await page.evaluate(({ memory, autoKnown, autoLearn, work }) => {
     const w = window as typeof window & { chrome: unknown; __saved: Array<Record<string, unknown>>; __memory: Array<Record<string, unknown>>; __submits: number };
     w.__saved = []; w.__memory = memory; w.__submits = 0;
     document.querySelector('form')!.addEventListener('submit', event => { event.preventDefault(); w.__submits++; });
@@ -17,9 +17,9 @@ async function load(page: Page, body: string, memory: Array<Record<string, unkno
         if (message.type === 'answers') reply({ ok: true, items: [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Email', value: 'applicant@example.test' }, { label: 'Phone', value: '5550100100' }, { label: 'Current role', value: 'Engineer' }] });
         else if (message.type === 'memory') reply({ ok: true, items: w.__memory });
         else if (message.type === 'memorySave') { const entry = { ...message.item, id: w.__memory.length + 1, revision: 1, reuse_policy: 'reusable' }; w.__saved.push(message.item); w.__memory.push(entry); reply({ ok: true, item: entry }); }
-        else reply({ ok: true, items: [], work: [], education: [] });
+        else reply({ ok: true, items: [], work, education: [] });
       } } };
-  }, { memory, autoKnown, autoLearn });
+  }, { memory, autoKnown, autoLearn, work });
   for (const file of ['fields.js', 'memory.js', 'content.js']) await page.addScriptTag({ path: path.join(extensionRoot, file) });
   const panel = page.locator('.ace-root .ace-panel');
   await panel.getByRole('button', { name: /^(Answer remaining questions|Check answers|Review$)/ }).click();
@@ -235,7 +235,9 @@ test('routine employer answers save on leaving the field and auto-fill an equiva
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
   await expect(panel.locator('.studio-question').filter({ hasText: 'integration tests' })).toHaveCount(0);
   const memory = await page.evaluate(() => (window as typeof window & { __memory: Array<Record<string, unknown>> }).__memory);
-  await load(page, '<label for="detail">Can you describe your experience writing integration tests?</label><textarea id="detail"></textarea>', memory, true, true);
+  const next = await load(page, '<label for="detail">Can you describe your experience writing integration tests?</label><textarea id="detail"></textarea>', memory, true, true);
+  await expect(page.locator('#detail')).toHaveValue('');
+  await next.getByRole('button', { name: 'Fill all known answers', exact: true }).click();
   await expect(page.locator('#detail')).toHaveValue('Fictional integration test experience');
   expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
 });
@@ -258,18 +260,23 @@ test('native choices save without approval while synthetic page events cannot te
 });
 
 
-test('Review follows clicked questions beyond the chip strip and fills a newly added known routine answer', async ({ page }) => {
+test('employer focus preserves the selected question and filling requires a click', async ({ page }) => {
   const memory = [{ id: 1, revision: 1, concept: 'q:experience writing integration tests', question: 'Describe your experience writing integration tests', answer: 'Fictional saved testing experience', answer_type: 'text', reuse_policy: 'reusable' }];
   const panel = await load(page, Array.from({ length: 9 }, (_, at) => `<label for="detail-${at}">Fictional screening question ${at + 1}</label><textarea id="detail-${at}"></textarea>`).join(''), memory, true, true);
-  await page.locator('#detail-0').click(); await expect(panel.locator('.studio-question')).toHaveText('Fictional screening question 1');
   await panel.getByRole('textbox', { name: 'Your answer' }).fill('Fictional unsent draft');
-  await page.locator('#detail-8').click(); await expect(panel.locator('.studio-question')).toHaveText('Fictional screening question 9');
-  await page.locator('#detail-0').click(); await expect(panel.getByRole('textbox', { name: 'Your answer' })).toHaveValue('Fictional unsent draft');
-  await expect(page.locator('#detail-0')).toHaveValue('');
+  await page.locator('#detail-8').click(); await expect(panel.locator('.studio-question')).toHaveText('Fictional screening question 1');
+  await expect(panel.getByRole('textbox', { name: 'Your answer' })).toHaveValue('Fictional unsent draft');
+  await panel.locator('.focus-question-picker summary').click();
+  await panel.getByRole('button', { name: '9. Fictional screening question 9', exact: true }).click();
+  await expect(panel.locator('.studio-question')).toHaveText('Fictional screening question 9');
+  await panel.locator('.focus-question-picker summary').click();
+  await panel.getByRole('button', { name: '1. Fictional screening question 1', exact: true }).click();
+  await expect(panel.getByRole('textbox', { name: 'Your answer' })).toHaveValue('Fictional unsent draft');
   await page.evaluate(() => { const block = document.createElement('div'); block.innerHTML = '<label for="known">Could you describe your experience writing integration tests?</label><textarea id="known"></textarea>'; document.querySelector('form')!.append(block); });
-  await page.locator('#known').click(); await expect(page.locator('#known')).toHaveValue('Fictional saved testing experience');
-  await expect(panel.getByText('Answered on form', { exact: true })).toBeVisible();
-  await expect(panel.getByRole('button', { name: /Approve/ })).toHaveCount(0);
+  await page.locator('#known').click(); await expect(page.locator('#known')).toHaveValue('');
+  await panel.getByRole('button', { name: 'Fill all known answers', exact: true }).click();
+  await expect(page.locator('#known')).toHaveValue('Fictional saved testing experience');
+  await expect(page.locator('#detail-0')).toHaveValue('');
 });
 
 test('a direct protected custom dropdown choice completes without another approval and never enters Memory', async ({ page }) => {
@@ -289,4 +296,25 @@ test('a direct protected custom dropdown choice completes without another approv
   await expect(panel.getByRole('button', { name: /Approve/ })).toHaveCount(0);
   expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(0);
   expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
+});
+
+
+test('Workday month and year sections fill from the matching saved job after one click', async ({ page }) => {
+  const date = (id: string, label: string) => `<div><label>${label}*</label><div data-automation-id="dateInputWrapper"><input id="${id}-month" aria-label="${label}" data-automation-id="dateSectionMonth-input" maxlength="2" placeholder="MM"><input id="${id}-year" aria-label="${label}" data-automation-id="dateSectionYear-input" maxlength="4" placeholder="YYYY"></div></div>`;
+  const panel = await load(page, `<section><label for="company">Company</label><input id="company" value="Fictional Workday Lab"><label for="current">I currently work here</label><input id="current" type="checkbox">${date('from', 'From')}${date('to', 'To')}</section>`, [], true, false, [{ employer: 'Fictional Workday Lab', is_current: false, start_month: 6, start_year: 2020, end_month: 8, end_year: 2023 }]);
+  await expect(page.locator('#from-month')).toHaveValue('');
+  await panel.getByRole('button', { name: 'Fill all known answers', exact: true }).click();
+  await expect(page.locator('#from-month')).toHaveValue('06'); await expect(page.locator('#from-year')).toHaveValue('2020');
+  await expect(page.locator('#to-month')).toHaveValue('08'); await expect(page.locator('#to-year')).toHaveValue('2023');
+  await expect(page.locator('#current')).not.toBeChecked();
+});
+
+test('legacy automatic preference cannot fill or open Review when the applicant edits the page', async ({ page }) => {
+  const memory = [{ id: 1, revision: 1, concept: 'q:experience writing integration tests', question: 'Describe your experience writing integration tests', answer: 'Fictional saved answer', answer_type: 'text', reuse_policy: 'reusable' }];
+  const panel = await load(page, '<label for="known">Describe your experience writing integration tests</label><textarea id="known"></textarea><label for="manual">Additional screening detail</label><input id="manual">', memory, true, true);
+  await panel.getByRole('button', { name: 'Back to fill', exact: true }).click();
+  await page.locator('#known').focus(); await page.locator('#manual').fill('Applicant draft');
+  await page.waitForTimeout(250); await expect(panel).toHaveClass(/focus-compact/); await expect(page.locator('#known')).toHaveValue('');
+  await panel.getByRole('button', { name: 'Fill all known answers', exact: true }).click();
+  await expect(page.locator('#known')).toHaveValue('Fictional saved answer'); await expect(page.locator('#manual')).toHaveValue('Applicant draft');
 });

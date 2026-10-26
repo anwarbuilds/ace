@@ -254,7 +254,7 @@ function fillActivePage() {
 
             pageLine.className = "s";
             pageLine.textContent =
-              "ACE is on the page. Review it there, then Fill.";
+              "Filling known answers. Review the employer form.";
 
             window.close();
           }

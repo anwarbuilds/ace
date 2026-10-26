@@ -37,11 +37,7 @@
   var completedOnForm = new Map();
   var fieldKeys = new WeakMap(), nextFieldKey = 0;
   var pointedField = null;
-  var pendingPoint = null;
-  var focusFillTimer = null;
   var completionTimers = new WeakMap();
-  var ownerTabAt = 0;
-  var focusFillBlocked = new WeakSet();
   var customOptions = new Map();
   var reviewDrafts = new Map();
   var reviewSelections = new Map();
@@ -49,7 +45,6 @@
   // "system" follows the computer's Day or Night setting; "day" and "night"
   // are the owner's explicit choice. studioTheme is the one shown.
   var studioThemeMode = "system";
-  var autoKnown = true;
   var autoLearn = false;
   var ownerEdits = new WeakMap();
   var learnTimers = new WeakMap();
@@ -98,10 +93,31 @@
     });
   }
   function answerNameFor(question, kind, field) {
-    if (field && !reusableItem({ field: field, question: question })) {
-      return aceMemory.policy(question) === "reusable" ? aceAnswerNameFor(question, kind, Object.keys(answers)) : null;
+    var policy = aceMemory.policy(question);
+    if (policy !== 'reusable') {
+      // These are explicitly saved profile facts, filled only by the owner's
+      // Fill action. Protected answers are never inferred from routine Memory.
+      var fact = aceAnswerNameFor(question, kind, Object.keys(answers));
+      var allowed = ['Work authorisation', 'Authorized to work for any US employer',
+        'Need sponsorship now', 'Need sponsorship in future',
+        'Currently require employer visa sponsorship', 'At least 18 years old'];
+      if (policy !== 'sensitive' || allowed.indexOf(fact) < 0 || !answers[fact] ||
+          /\b(not|without|ever|previously|past|former|certify|attest|agree|consent|signature|canada|canadian|australia|australian|united kingdom|uk|germany|india)\b/.test(question)) return null;
+      if ((fact === 'Work authorisation' || fact === 'Authorized to work for any US employer') &&
+          !/\b(united states|us|u s)\b/.test(question)) return null;
+      if (fact === 'Need sponsorship in future' && /\b(?:now|currently) or (?:in )?(?:the )?future\b/.test(question)) {
+        var present = aceIntent(answers['Need sponsorship now']);
+        var future = aceIntent(answers['Need sponsorship in future']);
+        if (future === 'yes') return fact;
+        if (present === 'yes') return 'Need sponsorship now';
+        if (present !== 'no' || future !== 'no') return null;
+      }
+      if (fact === 'At least 18 years old' && !/\b(at least 18|18 (?:years (?:of age )?)?or older)\b/.test(question)) return null;
+      return fact;
     }
-    if (aceMemory.policy(question) !== "reusable") return null;
+    if (field && !reusableItem({ field: field, question: question })) {
+      return aceAnswerNameFor(question, kind, Object.keys(answers));
+    }
     var local = aceMemory.resolve(question, kind, formAnswers.filter(function (entry) {
       return entry.href === location.href && sameFormAnswer(entry.receipt);
     }));
@@ -792,7 +808,23 @@
       return key(entry.employer) === key(shown);
     });
     if (matches.length === 1) return matches[0];
-    if (!matches.length) return null;
+    if (!matches.length) {
+      // Resume imports may reorder an employer's words or append a city.
+      // A name fragment alone is insufficient: require a long matching role
+      // description as independent evidence and exactly one saved entry.
+      var description = block.fields.find(function (slot) { return slot.role === 'description'; });
+      var shownDescription = description && key(description.field.value);
+      var shownWords = key(shown).split(' ').filter(function (word) { return !/^(and|the|of|at)$/.test(word); });
+      if (!shownDescription || shownDescription.length < 120) return null;
+      matches = entries.filter(function (entry) {
+        var words = key(entry.employer).split(' ').filter(function (word) { return !/^(and|the|of|at)$/.test(word); });
+        var descriptionKey = key(entry.description);
+        return words.length >= 3 && words.join(' ').length >= 16 &&
+          words.every(function (word) { return shownWords.indexOf(word) >= 0; }) &&
+          descriptionKey.length >= 120 && shownDescription.slice(0, 120) === descriptionKey.slice(0, 120);
+      });
+      return matches.length === 1 ? matches[0] : null;
+    }
 
     // Two roles at one employer need their titles to distinguish them.
     // If the title is absent or still ambiguous, leave the dates blank.
@@ -870,6 +902,12 @@
         var group = aceIsChoiceControl(slot.field)
           ? groupMembers(slot.field)
           : [slot.field];
+
+        if (slot.role === 'isCurrent' && slot.field.type === 'checkbox' && group.length === 1 &&
+            aceIntent(value) === 'no' && !aceIsChosen(slot.field)) {
+          if (apply) recordFormAnswer(formItem(slot.field));
+          return;
+        }
 
         if (!group.every(aceIsEmpty)) return;
 
@@ -1849,8 +1887,6 @@
 
   function undo() {
     lastFill.slice().reverse().forEach(function (record) {
-      focusFillBlocked.add(record.field);
-      if (record.reviewChoices) record.reviewChoices.forEach(function (entry) { focusFillBlocked.add(entry.field); });
       if (record.reviewChoices) {
         record.reviewChoices.forEach(function (entry) {
           if (!entry.field.isConnected) return;
@@ -2128,7 +2164,7 @@
   .focus-panel .focus-close svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round}
   .focus-panel .focus-dock-open.focus-close{display:grid;place-items:center;padding:0}
   .focus-panel{color-scheme:light}.focus-panel.night{color-scheme:dark}
-  .focus-panel .focus-remaining{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:10px 0}.focus-panel .focus-question-picker{margin:12px 0;color:var(--secondary);font-size:11px}.focus-panel .focus-question-picker summary{cursor:pointer;padding:5px 0}.focus-panel .focus-question-picker .focus-chips{margin-top:8px}.focus-panel .focus-review-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .focus-panel .focus-remaining{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:10px 0}.focus-panel .focus-question-picker{margin:12px 0;color:var(--secondary);font-size:11px}.focus-panel .focus-question-picker summary{cursor:pointer;padding:5px 0}.focus-panel .focus-question-picker .focus-chips{display:grid;max-height:180px;overflow:auto;margin-top:8px}.focus-panel .focus-question-picker .focus-chip{white-space:normal;text-align:left}.focus-panel .focus-review-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   .focus-panel .focus-review-actions>.wine{grid-column:1/-1}
   .focus-panel .focus-review-actions>.studio-button{width:100%;min-height:39px;padding:9px 10px;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
   .focus-panel .studio-live{white-space:nowrap}
@@ -2213,7 +2249,7 @@
       if (!embeddedPanel || message.session !== focusSession) { respond({ ok: false }); return; }
       if (message.event === 'wake') {
         dismissed = false; focusMode = studioTab === 'review' ? 'review' : 'compact';
-        lastResult = null; refresh(); respond({ ok: true }); return;
+        lastResult = null; refresh(); runFill(); respond({ ok: true }); return;
       }
       if (message.event === 'status') {
         respond({ ok: true, fields: fillable().filter(function (field) { return !!answerNameFor(aceQuestionFor(field), kindOf(field), field); }).length }); return;
@@ -2572,7 +2608,8 @@
       if (seen.has(key)) return;
       seen.add(key);
       var group = aceIsChoiceControl(field) ? groupMembers(field) : [field];
-      var answered = !group.every(aceIsEmpty);
+      var receipt = completedOnForm.get(key);
+      var answered = !group.every(aceIsEmpty) || !!(receipt && sameFormAnswer(receipt));
       var name = answerNameFor(question, kind, field);
       if ((!name || !answers[name]) && (!answered || aceMemory.policy(question) !== 'reusable') &&
           !approvedQuestions.has(key) && !skippedQuestions.has(key)) reviewSeen.add(key);
@@ -2605,18 +2642,20 @@
       '<section class="studio-card"><h2>✓ &nbsp;Filled from trusted sources <span class="studio-source-count">' + filled + ' fields</span></h2><p>Visible answers remain editable on the employer form. ACE never touches the final submit button.</p><div class="studio-source"><span class="studio-source-icon">✓</span><span><strong>Profile</strong><small>Verified identity and saved answers</small></span><b>' + profile + ' fields</b></div><div class="studio-source"><span class="studio-source-icon">□</span><span><strong>Answer Memory</strong><small>Previously approved reusable answers</small></span><b>' + remembered + ' fields</b></div><div class="studio-source"><span class="studio-source-icon">△</span><span><strong>User review required</strong><small>No fill without enough evidence</small></span><b>' + needs + ' fields</b></div></section>' +
       '<section class="studio-card"><div class="studio-between"><h2>Answer Memory</h2><button class="studio-button small" data-ace="tab:memory">Browse memory</button></div><p>Approved reusable answers can match equivalent questions on another application.</p></section>' +
       '<section class="studio-card"><div class="studio-between"><h2>Needs your input</h2><span class="studio-pill">' + needs + ' open</span></div><p>New and protected questions stay in Review. Complete company motivation on the employer form.</p><button class="studio-button small" data-ace="tab:review">Open review</button></section>' +
-      '<section class="studio-card"><h2>Current form</h2><p>' + esc(plain(document.title || location.hostname)) + '</p><p>Detected on ' + esc(location.hostname) + '. No resume attachment is claimed by ACE.</p><button class="studio-button small" data-ace="auto">Auto-fill known: ' + (autoKnown ? 'On' : 'Off') + '</button></section>';
+      '<section class="studio-card"><h2>Current form</h2><p>' + esc(plain(document.title || location.hostname)) + '</p><p>Detected on ' + esc(location.hostname) + '. No resume attachment is claimed by ACE.</p><span>Fill starts only when you click Fill or press Alt+A.</span></section>';
   }
 
   function studioReview(fields) {
     var open = fields.filter(needsStudioReview);
-    var total = reviewSeen.size;
-    var done = Array.from(reviewSeen).filter(function (key) { return approvedQuestions.has(key); }).length;
+    var tracked = fields.filter(function (item) { return reviewSeen.has(item.key); });
+    var total = tracked.length;
+    var done = tracked.filter(function (item) { return approvedQuestions.has(item.key); }).length;
     var skipped = fields.filter(function (field) { return skippedQuestions.has(field.key) && !approvedQuestions.has(field.key); }).length;
     var pointed = pointedField && fields.find(function (item) {
       return item.field === pointedField || aceIsChoiceControl(item.field) && groupMembers(item.field).indexOf(pointedField) >= 0;
     });
-    var selected = pointed || open.find(function (f) { return f.key === reviewQuestion; }) || open[0];
+    var selected = pointed || open.find(function (f) { return f.key === reviewQuestion; }) || open[0] ||
+      fields.find(function (f) { return f.key === reviewQuestion && completedOnForm.has(f.key); });
     if (selected) reviewQuestion = selected.key;
     var html = '<div class="focus-title-row"><h2>' + (open.length ? 'Review questions' : skipped ? 'Review paused' : 'Review complete') + '</h2>' +
       (open.length || skipped ? '<span class="studio-pill">' + (open.length + skipped) + ' open</span>' : '') + '</div>' +
@@ -2631,9 +2670,8 @@
       '<p class="focus-stays">✓ &nbsp;Review stays open until you minimize ACE.</p><div class="studio-actions"><button class="studio-button" data-ace="show-form">Check employer form</button><button class="studio-button" data-ace="minimize">Minimize when ready</button></div><div class="focus-utility"><button data-ace="tab:overview">Back to fill</button><button data-ace="workspace">Settings &amp; activity</button></div>';
     var chipFields = open.slice();
     if (chipFields.indexOf(selected) < 0) chipFields.unshift(selected);
-    var chipStart = Math.max(0, Math.min(chipFields.length - 6, chipFields.indexOf(selected) - 2));
-    html += '<details class="focus-question-picker"><summary>Choose another question (' + chipFields.length + ')</summary><div class="focus-chips">' + chipFields.slice(chipStart, chipStart + 6).map(function (f, at) {
-      return '<button class="focus-chip ' + (f.key === selected.key ? 'active' : '') + '" data-ace="question:' + fields.indexOf(f) + '">' + (at + chipStart + 1) + '. ' + esc(tidy(plain(f.display))) + '</button>';
+    html += '<details class="focus-question-picker"><summary>Choose another question (' + chipFields.length + ')</summary><div class="focus-chips">' + chipFields.map(function (f, at) {
+      return '<button class="focus-chip ' + (f.key === selected.key ? 'active' : '') + '" data-ace="question:' + fields.indexOf(f) + '">' + (at + 1) + '. ' + esc(plain(f.display)) + '</button>';
     }).join('') + '</div></details>';
     var index = fields.indexOf(selected);
     var received = completedOnForm.get(selected.key);
@@ -2699,6 +2737,7 @@
       ? Array.from(field.selectedOptions).map(function (option) { return String(option.textContent || '').trim(); }).join(', ')
       : aceIsEmpty(field) ? '' : field.value;
     if (aceIsChoiceControl(field)) {
+      if (field.type === 'checkbox' && groupMembers(field).length === 1) return aceIsChosen(field) ? 'Yes' : 'No';
       return groupMembers(field).filter(aceIsChosen).map(function (choice) {
         return String(aceOptionRaw(choice)).replace(/\s+/g, ' ').trim();
       }).join('\n');
@@ -2752,7 +2791,7 @@
     if (input) search = input.value.toLowerCase();
     var entries = memory.filter(function (m) { return (m.question + " " + m.answer).toLowerCase().indexOf(search) >= 0; });
     return '<div class="studio-between"><h2>Answer Memory</h2><span class="studio-pill good">' + memory.length + ' saved</span></div><p class="studio-receipt">ACE ' + esc(version()) + '</p><p>Saved answers available to equivalent, safe questions.</p>' +
-      '<div class="studio-card"><button class="studio-button" data-ace="auto-learn" role="switch" aria-checked="' + autoLearn + '">Auto-save routine answers: ' + (autoLearn ? 'On' : 'Off') + '</button><p>Text saves when you leave the field. Selections save after choosing. Protected questions still need review.</p><button class="studio-button" data-ace="auto" role="switch" aria-checked="' + autoKnown + '">Auto-fill known: ' + (autoKnown ? 'On' : 'Off') + '</button></div><div class="studio-memory-status"><span class="studio-pill ' + (memoryAvailable ? 'good' : '') + '">' + (memoryAvailable ? 'Connected' : 'Unavailable') + '</span><button class="studio-button small" data-ace="retry-memory">Retry connection</button></div><input class="studio-search" type="search" placeholder="Search saved answers" value="' + esc(search) + '">' +
+      '<div class="studio-card"><button class="studio-button" data-ace="auto-learn" role="switch" aria-checked="' + autoLearn + '">Auto-save routine answers: ' + (autoLearn ? 'On' : 'Off') + '</button><p>Text saves when you leave the field. Selections save after choosing. Protected questions still need review.</p><p>Filling starts only from Fill all known answers or Alt+A. Opening, focusing or editing the employer form never starts a fill.</p></div><div class="studio-memory-status"><span class="studio-pill ' + (memoryAvailable ? 'good' : '') + '">' + (memoryAvailable ? 'Connected' : 'Unavailable') + '</span><button class="studio-button small" data-ace="retry-memory">Retry connection</button></div><input class="studio-search" type="search" placeholder="Search saved answers" value="' + esc(search) + '">' +
       (entries.length ? entries.map(function (m) {
         return '<article class="studio-card"><span class="studio-pill good">Saved for reuse</span><div class="studio-question">' + esc(plain(m.question)) + '</div><p class="studio-memory-answer">' + esc(plain(m.answer)) + '</p><p class="studio-receipt">Saved on ' + esc(m.source_host || 'an application') + '. Revision ' + m.revision + '</p>' +
           (m.last_used_at ? '<p class="studio-receipt">Last used ' + esc(new Date(m.last_used_at).toLocaleDateString()) + '</p>' : '') +
@@ -3139,7 +3178,6 @@
       reviewSeen.clear();
       approvedQuestions.clear();
       completedOnForm.clear();
-      focusFillBlocked = new WeakSet();
       pointedField = null;
       customOptions.clear();
       reviewDrafts.clear();
@@ -3147,6 +3185,8 @@
       learningState.clear();
       ownerEdits = new WeakMap();
       ownerDropdown = null;
+      if (focusMode !== 'dock') focusMode = 'compact';
+      studioTab = 'overview';
     }
     if (location.href !== lastHref || movedOn()) {
       lastResult = null;
@@ -3203,7 +3243,7 @@
     showPreview(panel());
   }
 
-  function start() {
+  function start(fillAfterReady) {
     chrome.runtime.sendMessage({ type: "answers" }, function (reply) {
       if (chrome.runtime.lastError) return;
 
@@ -3290,28 +3330,27 @@
 
       loaded = true;
       lastHref = location.href;
-      var prefsReady = !(chrome.storage && chrome.storage.local);
-      if (prefsReady) { autoKnown = false; autoLearn = false; } // Browser fixtures without Chrome storage use explicit Fill.
-      var historyReady = false;
-      function fillWhenReady() {
-        if (prefsReady && historyReady && autoKnown) runFill();
+      var pendingResponses = 3;
+      function sourceReady() {
+        pendingResponses -= 1;
+        if (pendingResponses === 0 && fillAfterReady === true) {
+          fillAfterReady = false;
+          runFill();
+        }
       }
-
-      if (chrome.storage && chrome.storage.local) chrome.storage.local.get({ aceStudioThemeMode: "system", aceAutoKnown: true, aceAutoLearnRoutine: true, aceStudioActivity: [], aceFocusPosition: null }, function (prefs) {
+      if (!(chrome.storage && chrome.storage.local)) autoLearn = false;
+      if (chrome.storage && chrome.storage.local) chrome.storage.local.get({ aceStudioThemeMode: "system", aceAutoLearnRoutine: true, aceStudioActivity: [], aceFocusPosition: null }, function (prefs) {
         applyThemeMode(prefs.aceStudioThemeMode);
-        autoKnown = !!prefs.aceAutoKnown;
         autoLearn = !!prefs.aceAutoLearnRoutine;
         activity = Array.isArray(prefs.aceStudioActivity) ? prefs.aceStudioActivity.slice(0, 35) : [];
         focusPosition = prefs.aceFocusPosition && typeof prefs.aceFocusPosition.x === 'number' && typeof prefs.aceFocusPosition.y === 'number'
           ? prefs.aceFocusPosition : null;
-        prefsReady = true;
         refresh();
-        fillWhenReady();
+        sourceReady();
       });
+      else sourceReady();
 
-      loadMemory(function () {
-        fillWhenReady();
-      });
+      loadMemory(sourceReady);
 
       // Fetched after the answers rather than in parallel: a page with
       // no repeating section is the common case, and the panel should
@@ -3324,9 +3363,8 @@
             histories.work = reply.work || [];
             histories.education = reply.education || [];
           }
-          historyReady = true;
           refresh();
-          fillWhenReady();
+          sourceReady();
         }
       );
 
@@ -3353,6 +3391,13 @@
     if (filling) return;
 
     filling = true;
+    var focusBefore = document.activeElement;
+    function restoreOwnerFocus() {
+      if (focusBefore && focusBefore.isConnected && /^(INPUT|SELECT|TEXTAREA)$/.test(focusBefore.tagName) &&
+          !focusBefore.closest('.ace-root') && document.activeElement === document.body) {
+        try { focusBefore.focus({ preventScroll: true }); } catch (error) { /* Employer retains focus control. */ }
+      }
+    }
 
     var host = panel();
 
@@ -3363,6 +3408,7 @@
       filling = false;
       lastResult = flat;
       showResult(host, flat);
+      restoreOwnerFocus();
       return;
     }
 
@@ -3389,6 +3435,7 @@
       filling = false;
       lastResult = result || plan();
       showResult(host, lastResult);
+      restoreOwnerFocus();
     }
 
     // Three passes, in this order for one reason: the phone widget's
@@ -3411,7 +3458,6 @@
   function onAceClick(event) {
     var button = event.target.closest("[data-ace]");
     if (!button) return;
-    clearTimeout(pendingPoint);
 
     event.preventDefault();
     event.stopPropagation();
@@ -3464,14 +3510,6 @@
       // Choosing the theme the computer already uses goes back to following it.
       applyThemeMode(nextTheme === systemTheme() ? "system" : nextTheme);
       if (chrome.storage && chrome.storage.local) chrome.storage.local.set({ aceStudioThemeMode: studioThemeMode });
-      renderStudio(panel());
-      return;
-    }
-
-    if (action === "auto") {
-      autoKnown = !autoKnown;
-      if (chrome.storage && chrome.storage.local) chrome.storage.local.set({ aceAutoKnown: autoKnown });
-      activityNote("Auto-fill known answers " + (autoKnown ? "enabled" : "disabled"));
       renderStudio(panel());
       return;
     }
@@ -3600,7 +3638,9 @@
       }
       var members = aceIsChoiceControl(chosen.field) ? groupMembers(chosen.field) : [];
       var values = selection ? selection.values : null;
-      var value = members.length && values
+      var value = chosen.field.type === 'checkbox' && members.length === 1 && values
+        ? values.indexOf(0) >= 0 ? 'Yes' : 'No'
+        : members.length && values
         ? values.map(function (at) { return String(aceOptionRaw(members[at])).replace(/\s+/g, ' ').trim(); }).join('\n')
         : chosen.field.tagName === 'SELECT' && chosen.field.multiple && values
         ? values.map(function (val) { return String(Array.from(chosen.field.options).find(function (opt) { return opt.value === val; }).textContent).trim(); }).join(', ')
@@ -3761,7 +3801,6 @@
     }
 
     if (action === "fill") {
-      focusFillBlocked = new WeakSet();
       runFill();
       return;
     }
@@ -3789,7 +3828,7 @@
           sourceDocument: remoteFocus.sourceDocument, event: 'wake' });
         return;
       }
-      if (loaded && !lastResult) {
+      if (loaded) {
         event.preventDefault();
         runFill();
       }
@@ -3830,8 +3869,9 @@
         if (loaded) {
           lastResult = null;
           refresh();
+          runFill();
         } else {
-          start();
+          start(true);
         }
 
         respond({ ok: true });
@@ -3900,85 +3940,11 @@
           field.getAttribute('aria-invalid') === 'true' || field.validity && !field.validity.valid) return;
       if (recordFormAnswer(current)) {
         if (autoLearn) rememberOnForm(current);
+        if (focusMode !== 'review') reviewQuestion = current.key;
         renderLearningState();
       }
     }, 70));
   }
-  function employerControlAt(target) {
-    if (!target || !target.closest || target.closest('.ace-root,.ace-remote-root,[role=option],[role=gridcell]')) return null;
-    var control = target.closest('input,select,textarea,button,[role=combobox]');
-    var label = !control && target.closest('label');
-    if (label) control = label.control || document.getElementById(label.getAttribute('for')) || label.querySelector('input,select,textarea,button,[role=combobox]');
-    if (control && !/^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(control.tagName) && !aceIsListboxButton(control)) {
-      var inputs = control.querySelectorAll('input:not([type=hidden])');
-      control = inputs.length === 1 ? inputs[0] : null;
-    }
-    return control;
-  }
-  function followEmployerQuestion(event, canFill) {
-    if (!loaded || dismissed || event.isTrusted !== true) return;
-    if (filling && event.type !== 'pointerdown' && !(event.type === 'focusin' && Date.now() - ownerTabAt < 250)) return;
-    clearTimeout(pendingPoint);
-    var field = employerControlAt(event.target), item = formItem(field);
-    if (!item) return;
-    if (event.type === 'focusin') ownerTabAt = 0;
-    pendingPoint = setTimeout(function () {
-      if (!field.isConnected || dismissed || aceQuestionFor(field) !== item.question) return;
-      pointedField = field; reviewQuestion = item.key;
-      if (focusMode !== 'dock') { focusMode = 'review'; studioTab = 'review'; renderLearningState(); }
-      if (canFill && !filling) fillPointedKnown(field);
-    }, canFill ? 25 : 110);
-  }
-  function fillPointedKnown(field) {
-    clearTimeout(focusFillTimer);
-    focusFillTimer = setTimeout(function () {
-      var item = formItem(field);
-      if (!item || !autoKnown || filling || dismissed || pointedField !== field || focusFillBlocked.has(field) ||
-          aceMemory.policy(item.question) !== 'reusable' || field.multiple || field.type === 'checkbox' ||
-          ownedByHistory(field) || reviewSelections.has(item.key)) return;
-      var members = aceIsChoiceControl(field) ? groupMembers(field) : [field];
-      if (!members.every(aceIsEmpty)) return;
-      var name = answerNameFor(item.question, item.kind, item.field), value = name && answers[name];
-      if (!value) return;
-      var previous = field.value || '', choices = members.map(aceIsChosen);
-      var wasFocused = document.activeElement === field;
-      var exactOption = field.tagName === 'SELECT' ? chooseOption(field, value, aliases[name] || []) : null;
-      if (field.tagName === 'SELECT' && (!exactOption || exactOption.disabled || exactOption.closest('optgroup[disabled]'))) return;
-      ownerEdits.delete(field);
-      clearTimeout(learnTimers.get(field)); clearTimeout(completionTimers.get(field));
-      filling = true; lastPicked = null;
-      var outcome = aceIsAutocomplete(field) ? fillOneCombobox(field, value, aliases[name] || [])
-        : Promise.resolve({ matched: fillOne(aceIsChoiceControl(field) ? members[0] : field, value, aliases[name] || []) });
-      Promise.resolve(outcome).then(function (result) {
-        var wrote = reviewValue(item);
-        if (!result || !result.matched || !wrote || exactOption && field.value !== exactOption.value) return false;
-        if (!aceIsAutocomplete(field) && !aceIsChoiceControl(field) && field.tagName !== 'SELECT' && !/^(date|month)$/.test(field.type || '') && String(field.value).replace(/\r\n?/g, '\n') !== String(value).replace(/\r\n?/g, '\n')) return false;
-        return new Promise(function (resolve) { setTimeout(resolve, 70); }).then(function () {
-          return field.isConnected && aceQuestionFor(field) === item.question && reviewValue(item) === wrote &&
-            field.getAttribute('aria-invalid') !== 'true' && (!field.validity || field.validity.valid);
-        });
-      }).then(function (accepted) {
-        if (accepted && wasFocused && pointedField === field && document.activeElement === document.body && !aceIsAutocomplete(field)) {
-          try { field.focus({ preventScroll: true }); } catch (error) { /* Keep the actual employer focus if restoration is unavailable. */ }
-        }
-        filling = false;
-        if (accepted && recordFormAnswer(item)) {
-          lastFill.push({ field: lastPicked || field, previous: previous, wrote: field.value,
-            reviewChoices: aceIsChoiceControl(field) ? members.map(function (member, at) { return { field: member, checked: choices[at] }; }) : null });
-          activityNote('Known answer filled for the active question', 1);
-        }
-        renderLearningState();
-        if (pointedField && pointedField !== field) fillPointedKnown(pointedField);
-      }, function () { filling = false; renderLearningState(); });
-    }, 35);
-  }
-  document.addEventListener('keydown', function (event) { if (event.isTrusted === true && event.key === 'Tab') ownerTabAt = Date.now(); }, true);
-  document.addEventListener('focusin', function (event) { followEmployerQuestion(event, true); }, true);
-  document.addEventListener('pointerdown', function (event) { followEmployerQuestion(event, true); }, true);
-  document.addEventListener('pointerover', function (event) {
-    if (focusMode === 'review') followEmployerQuestion(event, false);
-  }, true);
-
   // Employer-owned motivation fields are screened by label before any
   // control value can be observed. Other review controls mirror user edits.
   var pendingEmployerReview = null;
@@ -4011,7 +3977,6 @@
       var name = answerNameFor(aceQuestionFor(field), kindOf(field), field);
       if (name && !/^(Memory|Form):/.test(name) && answers[name] && !reviewSeen.has(editedKey)) return;
       reviewSeen.add(editedKey);
-      if (focusMode === 'review' && !reviewSelections.has(reviewQuestion)) reviewQuestion = editedKey;
       var host = document.querySelector('.ace-root');
       if (host && host.shadowRoot) renderStudio(host.shadowRoot.querySelector('.ace-panel'));
     }, 180);

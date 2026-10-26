@@ -13,6 +13,52 @@ a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
+## 2026-10-26: Explicit filling and Workday corrections, extension 1.29.1
+
+The owner clarified that filling must start only after clicking Fill or using
+Alt+A. Opening a page, focusing/hovering a question, typing and late private-data
+responses must neither write answers nor open/change Review. This supersedes
+the prior focus-following and Auto-fill known behaviors, including an older
+stored `aceAutoKnown=true`. That preference is ignored; the automatic filling
+switch is removed. Automatic saving of eligible committed routine answers is
+still separate and optional. Toolbar Fill now actually starts filling, including
+through the existing scoped iframe relay. Minimize, drag, Close and themes stay.
+
+Workday selected-button text such as “Yes Required” is no longer a question.
+Associated question text wins and selected-state-only labels are rejected.
+Existing generic Memory records are retained but cannot match those controls.
+Exact saved profile authorization/sponsorship/adult-status facts can be filled
+by the explicit action; unrelated, unknown, foreign-scope or attestation choices
+are not inferred. Now-or-future sponsorship uses the explicit present/future
+facts rather than copying a negative from one half. Protected facts never enter
+routine Memory. A standalone unchecked checkbox records an explicit No instead
+of displaying its affirmative label. Missing answers remain manual.
+
+Workday month/year sections receive the appropriate numeric component and
+required markers on From/To labels do not obscure which date they name. Job
+locations also come from that job, not the global contact location. Reordered
+or city-appended employer wording needs both meaningful employer tokens and
+an independently matching long role-description prefix, with exactly one saved
+entry; ambiguous identities stay blank. No real names, descriptions or date
+values entered source. A read-only completeness check confirmed the existing
+private work history has its dates; no stored history was changed.
+
+Review selection now changes only through explicit ACE controls; all questions
+are available in the collapsed chooser. Current-step progress excludes departed
+fields. Owner drafts and existing employer values remain intact. Completed
+employer choices do not need a second approval. ACE still never submits,
+advances employer steps or marks an application Applied, and motivation answers
+remain excluded from reading, filling and learning.
+
+Validation: 75 fictional DOM contracts, 258 rule cases, Memory safety, JavaScript
+syntax, TypeScript, lint and forbidden-dash checks pass. Updated Playwright
+fixtures collect only; no Chrome launch due to the documented cooling restriction.
+These are local control contracts, not verification inside the owner's real
+Workday session. Reload the unpacked extension at `chrome://extensions`, then
+refresh employer tabs to activate 1.29.1. This correction changes extension
+source only; no backend, database, Gmail, scheduler or website runtime change
+is needed. Full details: `docs/architecture/2026-10-26-extension-explicit-fill.md`.
+
 ## 2026-10-26: Logos and quick fill deployed
 
 The owner explicitly requested all changes live after testing. Production API
@@ -734,7 +780,7 @@ commits (`54e939a`, `61debd6`, `8d84141`), the reconciled Focus Mode V5.1
 commits (`559ee84`, `5b8ab4b`, equivalents of local `4ce3570` and `cb7bb5e`),
 the V5.1 typography pass and theme sync/Close (`386bed9`). It contains the
 existing V4 Answer Memory implementation (`2e7c1dc`). The
-extension manifest is now `1.29.0` (local simplified quick fill, active-question following, completed-answer receipts, full-viewport embedded-form dragging and automatic routine-answer saving described below). The V5.1 extension has not been published; it
+extension manifest is now `1.29.1` (explicit filling, Workday month/year and question-label corrections, completed-answer receipts, full-viewport dragging and optional routine-answer saving described above). The V5.1 extension has not been published; it
 runs as an unpacked installation loaded from
 `/home/ubuntu/Documents/ace-next/extension`. An unpacked installation must be
 reloaded at `chrome://extensions`; employer tabs must then be refreshed.
@@ -871,6 +917,10 @@ screenshots remain suspended by the laptop cooling restriction. This change
 is local work, not a production deployment or production visual verification.
 
 ### Follow the actual question and avoid duplicate work (2026-10-26)
+
+**Status:** passive question following and filling were superseded by the
+owner-requested explicit-only 1.29.1 behavior above. Historical implementation
+and verification follow.
 
 The owner reported that Review remained on an old question and asked again
 after a visible employer answer was already selected. Local **1.28.6** adds
@@ -1869,7 +1919,7 @@ reassuring success state when the backend has not confirmed one.
 
 The extension is Manifest V3. Important implementation areas are
 `extension/content.js`, `fields.js`, `background.js`, the popup/side panel,
-storage, pairing and rule tests. The current local manifest version is 1.29.0.
+storage, pairing and rule tests. The current local manifest version is 1.29.1.
 The approved interface is ACE Focus Mode V5.1; older extension interfaces are
 historical.
 

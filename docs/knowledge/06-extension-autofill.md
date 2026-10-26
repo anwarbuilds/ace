@@ -1146,3 +1146,49 @@ hashes match local **1.29.0**. Reload the unpacked extension in Chrome and refre
 employer tabs; production deployment does not reload injected scripts. No Web
 Store publication occurred. Logo PR #1 is merged. Full evidence and rollback:
 `docs/architecture/2026-10-26-quick-fill-release.md`.
+
+## 2026-10-26: Explicit filling and Workday corrections, extension 1.29.1
+
+The owner clarified that filling must start only after clicking Fill or using
+Alt+A. Opening a page, focusing/hovering a question, typing and late private-data
+responses must neither write answers nor open/change Review. This supersedes
+the prior focus-following and Auto-fill known behaviors, including an older
+stored `aceAutoKnown=true`. That preference is ignored; the automatic filling
+switch is removed. Automatic saving of eligible committed routine answers is
+still separate and optional. Toolbar Fill now actually starts filling, including
+through the existing scoped iframe relay. Minimize, drag, Close and themes stay.
+
+Workday selected-button text such as “Yes Required” is no longer a question.
+Associated question text wins and selected-state-only labels are rejected.
+Existing generic Memory records are retained but cannot match those controls.
+Exact saved profile authorization/sponsorship/adult-status facts can be filled
+by the explicit action; unrelated, unknown, foreign-scope or attestation choices
+are not inferred. Now-or-future sponsorship uses the explicit present/future
+facts rather than copying a negative from one half. Protected facts never enter
+routine Memory. A standalone unchecked checkbox records an explicit No instead
+of displaying its affirmative label. Missing answers remain manual.
+
+Workday month/year sections receive the appropriate numeric component and
+required markers on From/To labels do not obscure which date they name. Job
+locations also come from that job, not the global contact location. Reordered
+or city-appended employer wording needs both meaningful employer tokens and
+an independently matching long role-description prefix, with exactly one saved
+entry; ambiguous identities stay blank. No real names, descriptions or date
+values entered source. A read-only completeness check confirmed the existing
+private work history has its dates; no stored history was changed.
+
+Review selection now changes only through explicit ACE controls; all questions
+are available in the collapsed chooser. Current-step progress excludes departed
+fields. Owner drafts and existing employer values remain intact. Completed
+employer choices do not need a second approval. ACE still never submits,
+advances employer steps or marks an application Applied, and motivation answers
+remain excluded from reading, filling and learning.
+
+Validation: 75 fictional DOM contracts, 258 rule cases, Memory safety, JavaScript
+syntax, TypeScript, lint and forbidden-dash checks pass. Updated Playwright
+fixtures collect only; no Chrome launch due to the documented cooling restriction.
+These are local control contracts, not verification inside the owner's real
+Workday session. Reload the unpacked extension at `chrome://extensions`, then
+refresh employer tabs to activate 1.29.1. This correction changes extension
+source only; no backend, database, Gmail, scheduler or website runtime change
+is needed. Full details: `docs/architecture/2026-10-26-extension-explicit-fill.md`.

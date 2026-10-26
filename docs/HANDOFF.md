@@ -100,6 +100,15 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
+**2026-10-26 explicit-fill correction:** Local extension **1.29.1** fills only
+after Fill or Alt+A. Focus, hover, typing and late data responses stay passive.
+Workday question labels use the actual prompt rather than “Yes Required”;
+split month/year inputs and per-job locations use matched history. Unchecked
+single checkboxes display No. Minimize, movement and themes remain. 75 fictional
+DOM tests and the rule/Memory checks pass; browser testing remains suspended.
+Reload the unpacked extension and refresh employer tabs. Details:
+`architecture/2026-10-26-extension-explicit-fill.md`.
+
 **2026-10-26 production release:** API/web are healthy at `21f563a`; logo work,
 quick fill 1.29.0 and the existing Inbox fixes are included. All Analytics tabs
 and logo assets passed signed-in HTTP checks; application records stayed 929.

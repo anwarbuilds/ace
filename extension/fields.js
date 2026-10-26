@@ -949,14 +949,14 @@ function aceChoiceMembers(field) {
    Lever gender select reads "gender select male female decline to
    self-identify" and the question is lost in its own answers. */
 function aceTextWithoutControls(block) {
-  if (!block.querySelector("select, option, input, textarea, button")) {
+  if (!block.querySelector("select, option, input, textarea, button, [role=combobox]")) {
     return block.textContent;
   }
 
   var clone = block.cloneNode(true);
 
   Array.prototype.forEach.call(
-    clone.querySelectorAll("select, option, input, textarea, button"),
+    clone.querySelectorAll("select, option, input, textarea, button, [role=combobox]"),
     function (node) {
       node.remove();
     }
@@ -1036,16 +1036,16 @@ function aceQuestionLabelFor(field) {
   var wrapping = field.closest("label");
   if (wrapping) sources.push(aceTextWithoutControls(wrapping));
 
-  sources.push(field.getAttribute("aria-label"));
-
   var describedBy = field.getAttribute("aria-labelledby");
   if (describedBy) {
     var joined = describedBy.split(/\s+/).map(function (id) {
       var node = document.getElementById(id);
-      return node ? node.textContent : "";
+      return node && node !== field ? aceTextWithoutControls(node) : "";
     }).join(" ");
     sources.push(joined);
   }
+
+  sources.push(field.getAttribute("aria-label"));
 
   var combo = aceComboboxScope(field);
   if (combo && combo !== field) {
@@ -1073,6 +1073,11 @@ function aceQuestionLabelFor(field) {
 
   for (var i = 0; i < sources.length; i++) {
     var text = String(sources[i] || "").replace(/\s+/g, " ").trim();
+    // Workday labels its selected-value button "Yes Required". That is
+    // control state, not the question, and must never become a reusable key.
+    var prompt = aceNormalise(text).replace(/\b(required|optional)\b/g, '').trim();
+    if (!prompt || /^(yes|no|true|false|select one|select|choose|choose an option|select an option)$/.test(prompt)) continue;
+    if (aceIsListboxButton(field) && aceNormalise(field.textContent || '') === prompt) continue;
     if (text && text.length <= ACE_MAX_QUESTION) return text;
   }
 
@@ -1091,9 +1096,9 @@ function aceOwnGroup(field) {
   var best = null;
 
   for (var depth = 0; node && depth < 6; depth++) {
-    var controls = node.querySelectorAll(
-      "input:not([type=hidden]), select, textarea"
-    );
+    var controls = Array.from(node.querySelectorAll(
+      'input:not([type=hidden]),select,textarea,button[aria-haspopup="listbox"],[role="combobox"]'
+    )).filter(function (control) { return control === field || !control.contains(field); });
 
     if (controls.length > 1) break;
 
@@ -1556,7 +1561,7 @@ var ACE_HISTORY_ROLES = [
           "what did you do", "achievements"] },
   { role: "location",
     any: ["employer location", "company location", "job location",
-          "work location"] }
+          "work location", "location"] }
 ];
 
 /* Whether a history block is a job or a school, from its anchor's
@@ -1582,6 +1587,9 @@ var ACE_MONTHS = [
    "Month" or "Year" is then resolved by which half of the block it sits
    in rather than by its own words. */
 function aceHistoryRole(field, question) {
+  var datePart = (field && field.getAttribute('data-automation-id') || '').toLowerCase();
+  if (/datesectionmonth(?:-|$)/.test(datePart)) return 'month';
+  if (/datesectionyear(?:-|$)/.test(datePart)) return 'year';
   // Longest matched phrase wins, for the same reason the answer rules
   // score rather than take the first hit: "Current Employer" contains
   // "employer", so a first-match rule read the Yes/No beside the dates
@@ -1647,7 +1655,7 @@ function aceDateSide(field, block) {
     // short piece of text can be the one that names this dropdown.
     if (node.querySelector("input, select, textarea, button")) continue;
 
-    var text = aceNormalise(node.textContent || "");
+    var text = aceNormalise(node.textContent || "").replace(/\s*\*\s*$/, '').replace(/\s*\(?required\)?\s*$/, '').trim();
     if (!text || text.length > 40) continue;
 
     if (acePhraseIn(text, "end date") || text === "to") return "end";
@@ -1764,14 +1772,22 @@ function aceHistoryValue(entry, role, field) {
   if (role === "description") return entry.description || null;
   if (role === "isCurrent") return entry.is_current ? "Yes" : "No";
 
-  if (role === "startMonth") return aceMonthName(entry.start_month) || null;
-  if (role === "endMonth") return aceMonthName(entry.end_month) || null;
+  if (role === "startMonth" || role === "endMonth") {
+    if (role === 'endMonth' && entry.is_current) return null;
+    var month = role === 'startMonth' ? entry.start_month : entry.end_month;
+    if (!month) return null;
+    var part = field && (field.getAttribute('data-automation-id') || '').toLowerCase();
+    var numeric = field && field.tagName === 'INPUT' && !aceIsAutocomplete(field) &&
+      (field.type === 'number' || /^mm$/i.test(field.getAttribute('placeholder') || ''));
+    return /datesectionmonth(?:-|$)/.test(part) || numeric ? String(month).padStart(2, '0') : aceMonthName(month) || null;
+  }
 
   if (role === "startYear") {
     return entry.start_year ? String(entry.start_year) : null;
   }
 
   if (role === "endYear") {
+    if (entry.is_current) return null;
     return entry.end_year ? String(entry.end_year) : null;
   }
 
