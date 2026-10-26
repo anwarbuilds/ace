@@ -1413,6 +1413,7 @@ html[data-navigating] .main.content{opacity:.62;cursor:progress;transition:opaci
 .inbox-app span{font-size:var(--text-label);color:var(--text);overflow-wrap:anywhere}
 .inbox-app small{font-size:var(--text-small);color:var(--text-secondary);font-variant-numeric:tabular-nums}
 .inbox-picker{display:grid;gap:8px}
+.inbox-add{display:grid;gap:8px}.inbox-add label{display:grid;gap:5px;font-size:var(--text-label);color:var(--text-secondary)}.inbox-add input{width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--surface-1);color:var(--text)}.inbox-add>.btn,.inbox-add-open{justify-self:start}
 .inbox-picker input{width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--surface-1);color:var(--text)}
 .inbox-options{display:grid;gap:6px;max-height:300px;overflow-y:auto;overscroll-behavior:contain}
 .inbox-options button{display:block;width:100%;padding:0;border:0;background:none;font:inherit;cursor:pointer;border-radius:10px}

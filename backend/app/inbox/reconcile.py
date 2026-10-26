@@ -19,6 +19,8 @@ that opens with "thank you for applying" must reach the owner.
 Parser version 4 (2026-10-26) reads the employer from a Workday sender:
 Workday mails from <tenant>@myworkday.com, and the tenant names the employer
 ("generalmotors" is General Motors), so those emails can match by company.
+Parser version 5 also accepts a tenant or domain made of the company's
+initials ("cir" for Cambridge Investment Research).
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from urllib.parse import urlparse
 
-PARSER_VERSION = "4"
+PARSER_VERSION = "5"
 
 _OTHERS = r"(?:other|another|a\s+different|different|more\s+qualified|alternative)\s+(?:candidates?|applicants?|individuals?|profiles?)"
 _ONWARD = r"(?:moving\s+(?:forward|ahead)|proceeding|progressing|advancing|continuing)"
@@ -261,7 +263,10 @@ def _named(words: str, haystack: str) -> bool:
 
 def _in_domain(name: str, labels: list[str]) -> bool:
     first = name.split()[0] if name else ""
-    return bool(name) and (name.replace(" ", "") in labels or (len(first) >= 5 and first in labels))
+    # A tenant or domain can also be the initials: cir is Cambridge Investment Research.
+    initials = "".join(word[0] for word in name.split())
+    return bool(name) and (name.replace(" ", "") in labels or (len(first) >= 5 and first in labels)
+                           or (len(initials) >= 3 and initials in labels))
 
 
 def _title_overlap(title: str, words: set[str]) -> float:

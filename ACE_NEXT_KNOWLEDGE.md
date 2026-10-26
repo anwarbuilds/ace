@@ -191,6 +191,18 @@ Owner decisions this session, in order (later ones win):
    subject (tenant, display name, company name, initials such as GM) without
    typing; search also matches initials and squashed names. Outcome buttons stay
    disabled until an application is chosen.
+9. "For these two applications I'm not able to do anything. It's blocking me."
+   (Workday emails from `cir@` and `relx@`.) Nothing in review may dead-end:
+   **Not in ACE yet? Add it from this email** opens a form prefilled from the
+   email (company from "a role with Cambridge", the display name or the Workday
+   tenant; role from "application for the ..." or the subject; applied date
+   optional) and the outcome buttons then create an external application and
+   record the outcome (`POST /api/inbox/applications`, reusing a record with
+   the same company and role, event and Undo as usual). Parser 5 also treats a
+   tenant or domain made of the company's initials as naming it (`cir` is
+   Cambridge Investment Research); suggestions also use company names in the
+   email text and tenant initials. Wide fixed-width emails are scaled to fit
+   the viewer instead of scrolling sideways.
 
 Found during release verification and fixed in `c7d3451`: Analytics dropped
 every outcome recorded from an email, because Inbox's own `email:<id>` audit

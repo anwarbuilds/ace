@@ -6,7 +6,7 @@ import html
 import re
 import secrets
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time as day_time, timedelta, timezone
 from email.utils import parseaddr, parsedate_to_datetime
 from html.parser import HTMLParser
 from typing import Annotated
@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
 from backend.app.api.marks import APPLICATION_STATUSES
+from backend.app.applications.service import external_match_key
 from backend.app.auth.crypto import same
 from backend.app.auth.guard import current_owner, is_local_peer
 from backend.app.config import get_settings
@@ -42,6 +43,8 @@ DECIDABLE = PENDING + ("ignored", "receipt", "unrelated", "update")
 # recruiting email, so an outcome ACE could not read is still in view.
 _ABOUT_APPLICATIONS = ("application", "applying", "applied", "candidacy", "interview", "assessment")
 _OUTCOME_STATUS = {"rejection": "rejected", "interview": "interviewing", "offer": "offer"}
+# What the owner can say an email was.
+_KINDS = {"rejection", "interview", "online_assessment", "offer", "recruiter_reply"}
 _TOKENS: dict[tuple[int, bytes], tuple[float, str]] = {}
 
 
@@ -743,7 +746,7 @@ def review(body: ManualDecision, request: Request, session: Session = Depends(ge
         raise HTTPException(409, "Choose a pending email and confirm the exact application.")
     if body.status not in APPLICATION_STATUSES:
         raise HTTPException(422, "Unknown application status.")
-    if body.kind is not None and body.kind not in {"rejection", "interview", "online_assessment", "offer", "recruiter_reply"}:
+    if body.kind is not None and body.kind not in _KINDS:
         raise HTTPException(422, "Unknown email outcome.")
     target = _target(session, body.application_key)
     if not target or (target.application_status or "applied") != body.expected_status:
@@ -758,6 +761,58 @@ def review(body: ManualDecision, request: Request, session: Session = Depends(ge
         message.classification = body.kind
     session.commit()
     return {"event_id": event.id, "application_key": body.application_key, "status": body.status}
+
+
+class AddedApplication(BaseModel):
+    message_id: int
+    company: str = Field(min_length=1, max_length=255)
+    title: str = Field(min_length=1, max_length=500)
+    status: str
+    kind: str | None = None
+    applied_on: date | None = None
+
+
+@router.post("/api/inbox/applications")
+def add_application(body: AddedApplication, request: Request, session: Session = Depends(get_session)) -> dict:
+    """An application ACE never knew about, added from the email about it.
+
+    Applications made outside ACE leave nothing to choose, so an email about
+    one could never be recorded. This keeps it as external history (the same
+    record an import makes, reused when company and role already match) and
+    records what the email says, with the usual event and Undo.
+    """
+    conn = _connection(session, current_owner(request))
+    message = session.get(GmailMessageRecord, body.message_id)
+    if not conn or not message or message.connection_id != conn.id or message.decision not in DECIDABLE:
+        raise HTTPException(409, "Choose a pending email first.")
+    if body.status not in APPLICATION_STATUSES:
+        raise HTTPException(422, "Unknown application status.")
+    if body.kind is not None and body.kind not in _KINDS:
+        raise HTTPException(422, "Unknown email outcome.")
+    company, title = " ".join(body.company.split()), " ".join(body.title.split())
+    if not company or not title:
+        raise HTTPException(422, "Give the company and the role.")
+    key = external_match_key(company=company, title=title)
+    application = session.scalar(select(ExternalApplicationRecord).where(ExternalApplicationRecord.match_key == key).with_for_update())
+    created = application is None
+    if application is None:
+        applied = datetime.combine(body.applied_on, day_time(12, 0), tzinfo=timezone.utc) if body.applied_on else None
+        application = ExternalApplicationRecord(company=company, title=title, match_key=key, applied_at=applied, application_status="applied")
+        session.add(application)
+        session.flush()
+    application_key = f"external:{application.id}"
+    before = application.application_status or "applied"
+    application.application_status = body.status
+    application.status_changed_at = datetime.now(timezone.utc)
+    event = _append_event(session, application_key, "manual_correction", before, body.status, actor="owner",
+                          reason="Owner added the application from an email and recorded what it said",
+                          message_id=message.id, occurred_at=message.received_at)
+    message.decision = "manual"
+    message.selected_application_key = application_key
+    if body.kind:
+        message.classification = body.kind
+    session.commit()
+    return {"event_id": event.id, "application_key": application_key, "status": body.status, "created": created}
 
 
 @router.post("/api/inbox/events/{event_id}/undo")

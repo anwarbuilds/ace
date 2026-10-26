@@ -33,7 +33,7 @@ function loadSource(filename) {
   return loadedModule.exports;
 }
 
-const { InboxReviewPanel, senderParts, since, likelyApplications } = loadSource(path.join(sourceRoot, "components/inbox/InboxReviewPanel.tsx"));
+const { InboxReviewPanel, senderParts, since, likelyApplications, applicationFromEmail } = loadSource(path.join(sourceRoot, "components/inbox/InboxReviewPanel.tsx"));
 const message = { id: 1, received_at: "2026-01-01T12:00:00Z", sender: "Fictional Talent <fixture@example.test>", subject: "Fictional interview", snippet: "Fictional interview invitation", classification: "interview", requisition_id: "FIX-1", decision: "review", candidate_keys: ["job:1"], reason: "Matched by its job ID; positive outcomes need your confirmation", selected_application_key: null };
 const applications = [{ key: "job:1", company: "Fictional Labs", title: "Fictional engineer", requisition_id: "FIX-1", applied_at: "2025-12-01T12:00:00Z", status: "applied" }];
 function render(selected = message, apps = applications, events = []) {
@@ -77,7 +77,7 @@ test("without a likely application the outcome buttons wait for a choice", () =>
   assert.match(html, /Which application\?/);
   assert.match(html, /Search company, role or job ID/);
   assert.match(choice(html, "Rejection"), /disabled/);
-  assert.match(html, /Choose the application first/);
+  assert.match(html, /Choose the application above, or add it from this email/);
   assert.doesNotMatch(choice(html, "Not about my applications"), /disabled/);
 });
 
@@ -135,7 +135,7 @@ test("when ACE could not tell, the sender and subject suggest applications witho
     { key: "job:8", company: "Greenheck Group", title: "Application Developer II", requisition_id: null, applied_at: "2026-10-01T12:00:00Z", status: "applied" },
     { key: "job:9", company: "Fictional Labs", title: "Software Engineer", requisition_id: null, applied_at: "2026-10-01T12:00:00Z", status: "applied" },
   ];
-  const workday = { ...message, sender: "generalmotors@myworkday.com", subject: "Your interest in Software Engineer at GM", candidate_keys: [] };
+  const workday = { ...message, sender: "generalmotors@myworkday.com", subject: "Your interest in Software Engineer at GM", snippet: "Thank you for your interest.", candidate_keys: [] };
   assert.deepEqual(likelyApplications(workday, apps).map(a => a.key), ["job:7"]);
   assert.deepEqual(likelyApplications({ ...workday, sender: "greenheckgroup@myworkday.com", subject: "Application Received for Application Developer II" }, apps).map(a => a.key), ["job:8"]);
   assert.deepEqual(likelyApplications({ ...workday, sender: "Talent <no-reply@us.greenhouse-mail.io>", subject: "Your application" }, apps), []);
@@ -145,4 +145,29 @@ test("when ACE could not tell, the sender and subject suggest applications witho
   assert.doesNotMatch(html, /Greenheck Group/);
   assert.match(choice(html, "Rejection"), /disabled/);
   assert.doesNotMatch(html, /&lt;generalmotors@myworkday.com&gt;/);
+});
+
+test("an application missing from ACE can be added from the email, prefilled from what it says", () => {
+  const cir = { ...message, sender: "cir@myworkday.com", subject: "Thank you for your interest!", classification: "rejection", candidate_keys: [] };
+  const text = "Thank you for your interest in a role with Cambridge. We have found ourselves in the fortunate position of having a wide range of qualified candidates. After reviewing your application for the Full Stack Software Engineer , we've made the decision to move forward with other candidates at this time.";
+  assert.deepEqual(applicationFromEmail(cir, text), { company: "Cambridge", title: "Full Stack Software Engineer" });
+  const relx = { ...cir, sender: "relx@myworkday.com", subject: "Thank you for your interest, Software Engineer II" };
+  assert.deepEqual(applicationFromEmail(relx, "We appreciate the time you took."), { company: "RELX", title: "Software Engineer II" });
+  assert.deepEqual(applicationFromEmail({ ...cir, sender: "generalmotors@myworkday.com", subject: "Your interest in Software Engineer at GM" }, "Hello."), { company: "Generalmotors", title: "Software Engineer" });
+  const html = render(cir, []);
+  assert.match(html, /Not in ACE yet\? Add it from this email/);
+  assert.match(html, /or add it from this email, to record an outcome/);
+  assert.match(choice(html, "Rejection"), /disabled/);
+});
+
+test("the email text and initials tenants suggest the stored application", () => {
+  const apps = [
+    { key: "job:31", company: "Cambridge Investment Research", title: "Full Stack Software Engineer", requisition_id: null, applied_at: "2026-10-01T12:00:00Z", status: "applied" },
+    { key: "job:32", company: "Global Fiction", title: "Software Engineer", requisition_id: null, applied_at: "2026-10-01T12:00:00Z", status: "applied" },
+  ];
+  const cir = { ...message, sender: "cir@myworkday.com", subject: "Thank you for your interest!", snippet: "Thank you for your interest.", candidate_keys: [] };
+  assert.deepEqual(likelyApplications(cir, apps).map(a => a.key), ["job:31"]);
+  const other = { ...cir, sender: "Talent <no-reply@us.greenhouse-mail.io>" };
+  assert.deepEqual(likelyApplications(other, apps, "Thank you for your interest in a role with Cambridge.").map(a => a.key), ["job:31"]);
+  assert.deepEqual(likelyApplications(other, apps, "A global team of fictional people."), []);
 });

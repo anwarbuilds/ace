@@ -289,3 +289,12 @@ def test_a_workday_tenant_names_the_employer():
     # Other platforms still never name an employer by their address.
     other = reconcile(EmailEvidence("generalmotors@us.greenhouse-mail.io", evidence.subject, evidence.body, NOW, True), gm)
     assert other.target is None
+
+
+def test_a_workday_tenant_made_of_initials_names_the_employer():
+    apps = [ApplicationIdentity("job:31", "Cambridge Investment Research", "Full Stack Software Engineer", None, NOW - timedelta(days=12), "applied"),
+            ApplicationIdentity("job:32", "Fictional Labs", "Full Stack Software Engineer", None, NOW - timedelta(days=12), "applied")]
+    body = ("Thank you for your interest in a role with Cambridge. After reviewing your application for the Full Stack Software "
+            "Engineer, we've made the decision to move forward with other candidates at this time.")
+    result = reconcile(EmailEvidence("cir@myworkday.com", "Thank you for your interest!", body, NOW, True), apps)
+    assert (result.classification, result.disposition, result.target) == ("rejection", "verified", "job:31")

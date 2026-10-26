@@ -58,22 +58,46 @@ const initials=(value:string)=>value.split(/[^A-Za-z0-9]+/).filter(Boolean).map(
 // Shared recruiting platforms and personal mail never name the employer.
 const SHARED=/greenhouse|lever|workday|smartrecruiters|ashby|icims|jobvite|taleo|successfactors|workable|bamboohr|eightfold|avature|phenom|oraclecloud|brassring|rippling|teamtailor|recruitee|paylocity|ultipro|ukg|adp|applytojob|breezy|csod|hirevue|hackerrank|codesignal|linkedin|gmail|googlemail|outlook|hotmail|yahoo|icloud|proton/;
 
-/** Applications the sender or subject seems to name, offered when ACE could not tell. */
-export function likelyApplications(message:InboxMessage, applications:InboxApplication[]): InboxApplication[] {
+// First words too common to identify an employer on their own.
+const GENERIC=new Set(["global","health","united","american","national","general","international","digital","capital","solutions","systems","technologies","technology","group","software","services","financial","first","north","south","western","eastern","energy","pacific","atlantic"]);
+const tenantOf=(address:string)=>{const [local="",domain=""]=address.toLocaleLowerCase().split("@");return domain.endsWith("myworkday.com")?local.replace(/\d+$/,""):"";};
+
+/** Applications the sender, subject or email text seems to name, offered when ACE could not tell. */
+export function likelyApplications(message:InboxMessage, applications:InboxApplication[], text=""): InboxApplication[] {
   const {name,address}=senderParts(message.sender);
-  const [local="",domain=""]=address.toLocaleLowerCase().split("@");
+  const domain=address.toLocaleLowerCase().split("@")[1]??"";
   const hints=[name.includes("@")?"":squash(name)];
-  // Workday sends as the employer's tenant: generalmotors@myworkday.com.
-  if(domain.endsWith("myworkday.com"))hints.push(squash(local.replace(/\d+$/,"")));
+  // Workday sends as the employer's tenant: generalmotors@myworkday.com, or initials such as cir.
+  const tenant=squash(tenantOf(address));
+  if(tenant)hints.push(tenant);
   else if(!SHARED.test(domain))hints.push(...domain.split(".").slice(0,-1).map(squash));
   const named=squash(message.subject);
   const acronyms=new Set(message.subject.match(/\b[A-Z][A-Z0-9&]{1,4}\b/g)?.map(word=>squash(word))??[]);
+  const words=new Set(`${message.subject} ${text||message.snippet}`.toLocaleLowerCase().split(/[^a-z0-9&]+/).filter(Boolean));
   return applications.filter(app=>{
     const company=squash(app.company);
     if(company.length<2)return false;
+    const first=app.company.toLocaleLowerCase().split(/[^a-z0-9&]+/).filter(Boolean)[0]??"";
     return hints.some(hint=>hint.length>=3&&(hint===company||hint.startsWith(company)||(company.length>=5&&company.startsWith(hint))))
-      ||(company.length>=4&&named.includes(company))||acronyms.has(initials(app.company));
+      ||(company.length>=4&&named.includes(company))||acronyms.has(initials(app.company))
+      ||(tenant.length>=3&&tenant===initials(app.company))
+      ||(first.length>=5&&!GENERIC.has(first)&&words.has(first));
   }).slice(0,8);
+}
+
+/** A company and role for an application ACE does not have, read from the email for the owner to check. */
+export function applicationFromEmail(message:InboxMessage, text=""): {company:string; title:string} {
+  const body=(text||message.snippet).replace(/\s+/g," ");
+  const {name,address}=senderParts(message.sender);
+  let company=body.match(/\b(?:role|position|opportunity|opening|career|job|interest|employment)\s+(?:with|at)\s+([A-Z][\w&'-]*(?: (?:[A-Z][\w&'-]*|of|and|&))*)/)?.[1]??"";
+  if(!company&&!name.includes("@")&&!SHARED.test(squash(name)))company=name;
+  const tenant=tenantOf(address);
+  if(!company&&tenant)company=tenant.length<=4?tenant.toUpperCase():tenant.charAt(0).toUpperCase()+tenant.slice(1);
+  const role=body.match(/\bapplication for (?:the |our |a )?([A-Z][^,.;:!?]{2,80}?)(?:\s+(?:position|role|opening|job))?\s*(?:[,.;:!?]|\s+(?:at|with|in|and)\b)/)
+    ??body.match(/\binterest in (?:the |our |a )?([A-Z][^,.;:!?]{2,80}?)(?:\s+(?:position|role|opening))?\s+(?:at|with)\b/)
+    ??message.subject.match(/,\s*([^,]{3,80})$/)
+    ??message.subject.match(/\b(?:for|in)\s+(?:the\s+)?([A-Z][^,]{2,80}?)(?:\s+(?:position|role))?(?:\s+at\s+.+)?$/);
+  return {company:clean(company).slice(0,255), title:clean(role?.[1]??"").slice(0,500)};
 }
 
 /** "3 minutes ago"; empty until the page knows the time. */
@@ -110,6 +134,8 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
   const [targetKey,setTargetKey]=useState(()=>message?.selected_application_key??message?.candidate_keys[0]??"");
   const [choosing,setChoosing]=useState(false);
   const [search,setSearch]=useState("");
+  // An application ACE never had: added from this email, then recorded.
+  const [draft,setDraft]=useState<{company:string;title:string;applied:string}|null>(null);
   const byKey=useMemo(()=>new Map(applications.map(a=>[a.key,a])),[applications]);
   useEffect(()=>{
     if(id==null||loaded.has(id))return;
@@ -125,12 +151,17 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
   const target=byKey.get(targetKey);
   const candidates=message.candidate_keys.map(key=>byKey.get(key)).filter((a):a is InboxApplication=>Boolean(a));
   const query=search.trim().toLocaleLowerCase();
-  const guesses=!query&&!candidates.length?likelyApplications(message,applications):[];
+  const guesses=!query&&!candidates.length?likelyApplications(message,applications,full?.text):[];
   // Search also finds "gm" and "generalmotors" for General Motors.
   const options=query?applications.filter(a=>`${a.company} ${a.title} ${a.requisition_id??""} ${squash(a.company)} ${initials(a.company)}`.toLocaleLowerCase().includes(query)).slice(0,30):candidates.length?candidates:guesses;
   const linked=message.selected_application_key?byKey.get(message.selected_application_key):undefined;
   const change=events.find(e=>e.gmail_message_id===message.id&&e.kind!=="undo"&&e.application_key===message.selected_application_key&&["owner","verified_automation"].includes(e.actor)&&!events.some(other=>other.undo_of_id===e.id));
-  const decide=(outcome:typeof OUTCOMES[number])=>{if(target)void action(()=>sendJson("POST","/api/inbox/review",{message_id:message.id,application_key:target.key,status:outcome.status,expected_status:target.status,confirmed:true,kind:outcome.kind}),`${outcome.done}: ${clean(target.company)}`);};
+  const ready=draft?Boolean(draft.company.trim()&&draft.title.trim()):Boolean(target);
+  const decide=(outcome:typeof OUTCOMES[number])=>{
+    if(draft){if(ready)void action(()=>sendJson("POST","/api/inbox/applications",{message_id:message.id,company:draft.company,title:draft.title,status:outcome.status,kind:outcome.kind,applied_on:draft.applied||null}),`${outcome.done}: ${clean(draft.company)} added to your applications`);}
+    else if(target)void action(()=>sendJson("POST","/api/inbox/review",{message_id:message.id,application_key:target.key,status:outcome.status,expected_status:target.status,confirmed:true,kind:outcome.kind}),`${outcome.done}: ${clean(target.company)}`);
+  };
+  const edit=(field:"company"|"title"|"applied",value:string)=>setDraft(old=>old&&{...old,[field]:value});
   const file=(filing:typeof FILINGS[number])=>{void action(()=>sendJson("PATCH",`/api/inbox/messages/${message.id}/decision`,{action:filing.action}),filing.done);};
   const guessed=Boolean(target)&&!message.selected_application_key&&candidates[0]?.key===targetKey;
   const suggest=SUGGEST[message.classification];
@@ -165,19 +196,26 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
     </div> : <div className="inbox-decide">
       {!pending&&FILED[message.decision]&&<p className="inbox-filed"><strong>{FILED[message.decision]}</strong> Nothing changed. If that is wrong, choose what it is below.</p>}
       <div className="inbox-target">
-        <div className="inbox-target-head"><h3>{target?guessed?"ACE thinks this is about":"Application":"Which application?"}</h3>{target&&!choosing&&<button className="btn btn-sm" onClick={()=>setChoosing(true)}>Change</button>}</div>
-        {target&&!choosing?<AppCard app={target}/>:<div className="inbox-picker">
+        <div className="inbox-target-head"><h3>{draft?"Add it to your applications":target?guessed?"ACE thinks this is about":"Application":"Which application?"}</h3>{target&&!choosing&&!draft&&<button className="btn btn-sm" onClick={()=>setChoosing(true)}>Change</button>}</div>
+        {draft?<div className="inbox-add">
+          <p className="inbox-muted">Not in ACE yet. It is added to your applications, then what you choose below is recorded on it. Check what ACE read from the email.</p>
+          <label>Company<input autoComplete="off" value={draft.company} onChange={event=>edit("company",event.target.value)}/></label>
+          <label>Role<input autoComplete="off" value={draft.title} onChange={event=>edit("title",event.target.value)}/></label>
+          <label>Applied on, if you know it<input type="date" value={draft.applied} onChange={event=>edit("applied",event.target.value)}/></label>
+          <button className="btn btn-sm" onClick={()=>setDraft(null)}>Back to my applications</button>
+        </div>:target&&!choosing?<AppCard app={target}/>:<div className="inbox-picker">
           <input autoComplete="off" aria-label="Search your applications" placeholder="Search company, role or job ID" value={search} onChange={event=>setSearch(event.target.value)}/>
           {guesses.length>0&&<p className="inbox-muted">Possible matches from the sender and subject. Click the right one, or search above.</p>}
           {options.length?<div className="inbox-options">{options.map(a=><button key={a.key} className={a.key===targetKey?"on":""} onClick={()=>{setTargetKey(a.key);setChoosing(false);setSearch("");}}><AppCard app={a}/></button>)}</div>:<p className="inbox-muted">{query?"No application matches that search.":"ACE could not tell which application this is. Search for it above."}</p>}
+          <button className="btn btn-sm inbox-add-open" onClick={()=>{setDraft({...applicationFromEmail(message,full?.text),applied:""});setSearch("");}}>Not in ACE yet? Add it from this email</button>
         </div>}
       </div>
       <div className="inbox-outcomes" role="group" aria-label="What is this email?">
         <h3>What is this email?</h3>
         {pending&&message.reason&&<p className="inbox-muted">Why it waits: {clean(message.reason)}.</p>}
         <p className="inbox-group">Changes the application</p>
-        <div className="inbox-choices">{OUTCOMES.map(outcome=><button key={outcome.kind} className={`inbox-choice${suggest===outcome.kind?" suggested":""}`} disabled={busy||!target} onClick={()=>decide(outcome)}><strong>{outcome.label}</strong><span>{outcome.hint}</span>{suggest===outcome.kind&&<em>ACE&rsquo;s reading</em>}</button>)}</div>
-        {!target&&<p className="inbox-muted">Choose the application first to record an outcome.</p>}
+        <div className="inbox-choices">{OUTCOMES.map(outcome=><button key={outcome.kind} className={`inbox-choice${suggest===outcome.kind?" suggested":""}`} disabled={busy||!ready} onClick={()=>decide(outcome)}><strong>{outcome.label}</strong><span>{outcome.hint}</span>{suggest===outcome.kind&&<em>ACE&rsquo;s reading</em>}</button>)}</div>
+        {!ready&&<p className="inbox-muted">{draft?"Give the company and the role to record an outcome.":"Choose the application above, or add it from this email, to record an outcome."}</p>}
         <p className="inbox-group">Nothing to change</p>
         <div className="inbox-choices quiet">{FILINGS.filter(filing=>filing.action!=="deferred"||(pending&&message.decision!=="deferred")).map(filing=><button key={filing.action} className={`inbox-choice${suggest===filing.action?" suggested":""}`} disabled={busy||message.decision===filing.action} onClick={()=>file(filing)}><strong>{filing.label}</strong><span>{filing.hint}</span>{suggest===filing.action&&<em>ACE&rsquo;s reading</em>}</button>)}</div>
       </div>

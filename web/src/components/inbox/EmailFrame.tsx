@@ -23,6 +23,12 @@ export function EmailFrame({ document, title }: { document: string; title: strin
     if (root) setHeight(Math.min(MAX_HEIGHT, Math.max(120, root.scrollHeight + 2)));
   };
   const loaded = () => {
+    const doc = frame.current?.contentDocument;
+    if (doc?.body) {
+      // A fixed-width email wider than the frame is scaled to fit instead of scrolling sideways.
+      const wide = doc.documentElement.scrollWidth, room = doc.documentElement.clientWidth;
+      if (room > 0 && wide > room + 4) doc.body.style.setProperty("zoom", String(Math.max(0.55, room / wide)));
+    }
     measure();
     watcher.current?.disconnect();
     const body = frame.current?.contentDocument?.body;

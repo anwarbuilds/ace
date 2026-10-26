@@ -9,6 +9,7 @@ async function inboxFixture(page: import("@playwright/test").Page, options: {las
   const previews: Record<string,unknown>[]=[];
   const syncs: number[]=[];
   const searches: string[]=[];
+  const added: Record<string,unknown>[]=[];
   const applications=[{key:"job:1",company:"Fictional Labs",title:"Fictional engineer",requisition_id:"FIX-1",applied_at:"2026-01-01T12:00:00Z",status:"applied"},
                       {key:"job:2",company:"Imaginary Systems",title:"Fictional developer",requisition_id:"IMG-2",applied_at:"2026-01-03T12:00:00Z",status:"applied"}];
   const rows=Array.from({length:107},(_,i)=>({id:i+1,received_at:"2026-01-10T12:00:00Z",sender:"Fictional Talent <fixture@example.test>",subject:`Fictional interview ${i+1}`,snippet:"Please schedule an interview for requisition FIX-1.",classification:"interview",requisition_id:"FIX-1",decision:"review",candidate_keys:["job:1"],reason:"Matched by its job ID; positive outcomes need your confirmation",selected_application_key:null}));
@@ -19,6 +20,7 @@ async function inboxFixture(page: import("@playwright/test").Page, options: {las
     let body:unknown;
     const pending=rows.filter(row=>!reviewed.includes(row.id));
     if(path==="/api/inbox/connection") body={available:true,connected:true,state:"ready",email:"fixture@example.test",last_synced_at:syncs.length?new Date().toISOString():lastSync,following_changes:true,last_error:null,auto_outcomes_enabled:false,automation_available:false,auto_rejections:true};
+    else if(path==="/api/inbox/applications"&&request.method()==="POST"){const data=request.postDataJSON();added.push(data);reviewed.push(data.message_id);body={event_id:2,application_key:"external:9",status:data.status,created:true};}
     else if(path==="/api/inbox/applications")body={items:applications};
     else if(path==="/api/inbox/events")body={items:[]};
     else if(/^\/api\/inbox\/messages\/\d+\/full$/.test(path))body={sender:"Fictional Talent <fixture@example.test>",to:"fixture@example.test",subject:"Fictional interview",received_at:"2026-01-10T12:00:00Z",text:"Hello,\n\nPlease schedule an interview for requisition FIX-1.\n\nThe fictional recruiting team",document:"<!doctype html><html><head><meta charset=\"utf-8\"></head><body><p>Hello,</p><p>Please schedule an interview for requisition FIX-1.</p><p>The fictional recruiting team</p></body></html>",format:"html",blocked_images:0,message_id_header:"<fixture-1@example.test>",thread_id:"thread-1"};
@@ -44,7 +46,7 @@ async function inboxFixture(page: import("@playwright/test").Page, options: {las
     }else throw new Error(`Unexpected fictional Inbox request: ${path}`);
     await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
   });
-  return {submitted,filed,previews,syncs,searches};
+  return {submitted,filed,previews,syncs,searches,added};
 }
 
 test("default review queue exposes all pending messages beyond the latest 100",async({page})=>{
@@ -156,4 +158,17 @@ test("selecting another email starts again from its own suggestion",async({page}
   await page.locator(".inbox-mail").nth(1).click();
   await expect(page.getByLabel("Search your applications")).toHaveCount(0);
   await expect(page.locator(".inbox-target")).toContainText("Fictional Labs");
+});
+
+test("an application missing from ACE is added from the email with its outcome",async({page})=>{
+  const fixture=await inboxFixture(page);
+  await page.goto("/app/applications/inbox");
+  await page.getByRole("button",{name:"Change"}).click();
+  await page.getByRole("button",{name:"Not in ACE yet? Add it from this email"}).click();
+  await page.getByLabel("Company",{exact:true}).fill("Wayfern Fiction");
+  await page.getByLabel("Role",{exact:true}).fill("Fictional engineer");
+  await page.getByRole("button",{name:/^Rejection/}).click();
+  await expect.poll(()=>fixture.added.length).toBe(1);
+  expect(fixture.added[0]).toMatchObject({message_id:1,company:"Wayfern Fiction",title:"Fictional engineer",status:"rejected",kind:"rejection",applied_on:null});
+  expect(fixture.submitted).toEqual([]);
 });

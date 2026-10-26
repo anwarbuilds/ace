@@ -317,3 +317,32 @@ def test_full_email_is_its_own_html_made_safe(database, gmail_reads, monkeypatch
     assert "steal" not in document and "tracker.example" not in document and "\u2014" not in document
     assert 'href="https://careers.example/jobs" target="_blank" rel="noopener noreferrer"' in document
     assert len(row.snippet) <= 500 and "steal" not in row.snippet  # Nothing new is stored.
+
+
+def test_an_application_ace_never_knew_about_can_be_added_from_its_email(database):
+    from backend.app.db.models import ExternalApplicationRecord
+    from backend.app.api.marks import mark_counts
+    session, conn = database
+    row = stored(session, conn, "unknown-employer", "review", "Thank you for your interest!", sender="cir@myworkday.com")
+    session.commit()
+    before = mark_counts(session)["applications_total"]
+    result = inbox.add_application(inbox.AddedApplication(message_id=row.id, company="  Cambridge   Investment Research ", title="Full Stack Software Engineer",
+                                                          status="rejected", kind="rejection", applied_on="2026-10-01"), owner_request(), session)
+    created = session.get(ExternalApplicationRecord, int(result["application_key"].split(":")[1]))
+    assert result["created"] is True and (created.company, created.application_status) == ("Cambridge Investment Research", "rejected")
+    assert created.applied_at.replace(tzinfo=timezone.utc) == datetime(2026, 10, 1, 12, tzinfo=timezone.utc)
+    assert (row.decision, row.selected_application_key, row.classification) == ("manual", result["application_key"], "rejection")
+    assert mark_counts(session)["applications_total"] == before + 1
+    assert statuses(session) == ["applied"] * 3  # Stored jobs are untouched.
+    # The same company and role later reuse the record instead of adding another.
+    again = stored(session, conn, "second-email", "review", "Update", sender="cir@myworkday.com")
+    session.commit()
+    second = inbox.add_application(inbox.AddedApplication(message_id=again.id, company="Cambridge Investment Research", title="full stack software engineer",
+                                                          status="rejected", kind="rejection"), owner_request(), session)
+    assert second["created"] is False and second["application_key"] == result["application_key"]
+    # Undo restores the status; the email goes back to the queue.
+    inbox.undo(result["event_id"], owner_request(), session)
+    assert row.decision == "review" and row.selected_application_key is None
+    with pytest.raises(HTTPException) as error:
+        inbox.add_application(inbox.AddedApplication(message_id=row.id, company=" ", title="Role", status="rejected"), owner_request(), session)
+    assert error.value.status_code == 422
