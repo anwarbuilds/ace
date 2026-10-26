@@ -6,12 +6,148 @@ This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
 the product, architecture, safety boundaries, verified state, extension,
 operations, migration history, deployment controls and remaining work by
-reading this file alone. `docs/HANDOFF.md` and `docs/knowledge/` remain useful
-historical evidence, but they are optional archives rather than required
-context. Dated observations below are evidence from that date, not a claim that
-a service is healthy now.
+reading this file alone. `docs/HANDOFF.md` and `docs/knowledge/` retain supporting
+incident histories; also read the handoff and relevant topic as required by
+repository instructions. Dated observations below are evidence from that date,
+not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
+
+## Continuation checkpoint for new chats, 2026-10-26
+
+This checkpoint consolidates the owner's latest decisions and the work across
+sessions. Read this complete file and repository instructions before changes.
+Use the dated release evidence below to distinguish tested source, built images
+and running production. Later explicit owner decisions supersede older designs
+or behavior notes only in the area they actually change. Preserve the history.
+This checkpoint is a documentation update, not a new deployment or live check.
+
+### Source and runtime state
+
+| Item | Last recorded state |
+| --- | --- |
+| Repository / canonical branch | `/home/ubuntu/Documents/ace-next`, `wine-rose-platform`, remote `anwarbuilds/ace`; fetch and inspect before editing because parallel chats advance it |
+| Last directly verified live API/web | `0fef238c9a3c5575927786e823109ad351b78245`, 2026-10-26 at 13:49 Pacific, public `https://ace.opik.net/healthz` |
+| Newer Inbox source | `6163f59`, documented by `35a055c`: add-from-email, parser 5 and wide-email fit; images reportedly built, activation blocked by permission review and still pending in that record |
+| Important runtime distinction | The pending Inbox entry's references to `40254e7`/`bd5c364` are older releases; the logo session directly verified `0fef238`. Recheck health and running image/source hashes before any future activation rather than assuming either checkout or image tags are live |
+| Installed source of unpacked extension | Manifest **1.29.1**; browser activation still requires extension Reload and refreshed employer tabs; no Web Store publication |
+| Database | Last verified schema `0050`; no migration was run for the logo releases |
+| Last logo verification totals | 931 applications, 884 posting applications plus 47 external history; a timestamped observation, never a UI constant |
+
+Saving this knowledge does not authorize activation of the pending Inbox build.
+Do not run an old activation line blindly: check which images were built, what
+commit they contain, whether newer changes exist and the owner's authorization
+for that operation. A documentation commit requires no application rebuild.
+
+### Current product contracts
+
+- **Website and Analytics:** preserve Wine and Rose Day/Night, Inter, the
+  existing shell and the four Pixel-Lock tabs. The four approved screenshots
+  under `design/ace-analytics-pixel-lock/references/screenshots/` remain the
+  visual reference at 1672 x 941; read its full spec/checklist/test plan for
+  visual work. The locally ignored package may be absent in a fresh clone.
+  Later owner-approved changes include the Rejected companies card grid,
+  newest 15 with a link to searchable records, and removal of the methodology
+  section/link. Do not restore superseded table/summary-box alternatives.
+- **Analytics data:** count unique actual application identities. An unanswered
+  application remains pending/unknown; a 30-day observation window is not a
+  rejection rule. Email evidence audit keys must not count as another
+  application. Only recorded submitted resume versions, channels and comparable
+  outcomes can support effectiveness claims. USCIS petition decisions are
+  separate from DOL LCAs, hiring totals or new-graduate sponsorship eligibility.
+  Keep missing evidence visibly unavailable instead of inventing a number.
+- **Company identity:** use `CompanyLogo`/`CompanyIdentity` on every structured
+  company surface. The 80 reviewed assets are an optional fast path, with
+  exact aliases and source/hash provenance; newly pulled employers use the
+  owner-only same-origin route. Respect refusal/robots, verified tenant
+  identity, public-address pinning and raster validation. Never guess a domain,
+  borrow an unrelated/parent mark, fabricate a logo or rewrite history to match
+  a brand. Native dropdowns keep native keyboard behavior, with a selected mark
+  beside them. Literal email bodies, notifications and inputs stay literal.
+- **Inbox and Gmail:** Google sign-in and read-only Gmail are separate OAuth
+  connections. `GOOGLE_*` uses `/api/auth/google/callback`; `GMAIL_*` uses
+  `/api/inbox/google/callback`, with a private token-encryption key. Credentials
+  remain only in private environment configuration, never this public file.
+  Never claim Gmail is connected from a client ID alone. Show real ready/error/
+  paused/disconnected states. Live Inbox parser 4 and the existing audit/Undo
+  rules are in the last verified release. Parser 5/add-from-email are pending
+  activation, not verified live. Preserve conservative identity matching,
+  ambiguity review, protected newer statuses and owner-controlled automation.
+  Clear rejections can be recorded automatically under the approved exact
+  matching rules; interviews/assessments/offers retain their stricter evidence
+  and opt-in requirements. Importing 90 days does not mean 90 review items:
+  the window controls which email is fetched; the queue counts unresolved
+  evidence. Failed imports are not a successful sync.
+- **Extension:** fill only after explicit Fill, toolbar Fill or Alt+A. Opening,
+  hovering, focusing, typing and delayed profile responses stay passive. Mirror
+  actual text/select/radio/checkbox controls and exact question labels; never
+  use selected text such as Yes Required as the question. Reuse equivalent
+  owner-provided routine answers without duplicate approval; keep correction,
+  delete and Undo controls. Work-history dates, location and current-job flags
+  belong to their matched entry, not global answers. Preserve drag across the
+  viewport/frames, minimize, Close and themes. Company motivation answers stay
+  entirely on the employer form. Never default every question to Yes, submit
+  an employer form, advance it or mark Applied after filling.
+
+### Implementation and evidence map
+
+| Area | Primary files / evidence |
+| --- | --- |
+| Analytics | `web/src/components/analytics/`, `web/src/lib/analytics.ts`, `web/src/app/app/analytics/`, `backend/app/api/routers/analytics.py`; drilldown `web/src/app/app/applications/analytics/page.tsx` |
+| Shared logos | `web/src/components/CompanyLogo.tsx`, `CompanyIdentity.tsx`, `web/src/lib/companyLogos.ts`, `web/public/company-logos/provenance.json`; `backend/app/branding/{sources,discovery,transport,cache}.py` and `backend/app/api/routers/companies.py` |
+| Logo cache and recovery | Four workers, 32 pending, 512 entries; seven-day success/six-hour miss; parser v3 keys; dynamic image retries at 2 and 15 seconds, at most twice, with cleanup. Unavailable evidence can still retain initials; no universal external-image guarantee |
+| Inbox | `backend/app/inbox/{gmail,reconcile,display}.py`, `backend/app/api/routers/inbox.py`, `web/src/components/inbox/`; source parser version and deployed parser version must be checked separately |
+| Extension | `extension/{content,fields,popup,background}.js`, manifest, `web/tests/extension-review.test.mjs`; approved V5.1 package plus later explicit-fill decisions |
+| Exact logo release inventory, sources and rollback | `docs/architecture/2026-10-26-platform-company-logos.md`, `2026-10-26-company-identity.md`, `2026-10-26-quick-fill-release.md` |
+| Extension behavior and proofs | `docs/architecture/2026-10-26-extension-explicit-fill.md`, `docs/knowledge/06-extension-autofill.md` |
+| Latest private rollback on VM | `private-backups/platform-company-logos-20261026/`; prior API/web image tags and custom-format backup/restore catalog. Never copy private artifacts into Git or automatically restore a database for a UI rollback |
+
+### Validation, operating lessons and next work
+
+Recorded logo-release checks passed 142 fictional backend logo/auth/source
+tests, 10 company React contracts, 12 Inbox and 4 Analytics render tests,
+TypeScript, lint, production builds and the dash guard. Live signed-in HTTP
+checked all 80 image hashes, all 21 reviewed company detail references, the
+default Analytics view and Greenhouse/Ashby discovery. Application totals,
+schema, environment bytes and scheduler/PostgreSQL/Caddy IDs were preserved.
+Extension 1.29.1 passed 75 fictional DOM contracts, 258 matcher cases and Memory
+safety checks. These are dated results, not tests rerun by this documentation
+update and not proof of a live employer form or browser visual rendering.
+
+- Do not launch Chrome/browser tests on this laptop while the cooling
+  restriction stands. Nine logo and 39 extension Playwright cases were collected
+  only in those releases. Fresh browser screenshots, pixel comparison and real
+  employer-form verification remain pending on suitable hardware.
+- Run heavy local commands sequentially and pin them to `taskset -c 0`. For
+  Node DOM tests use `--max-old-space-size=256`; assert boolean presence/identity
+  instead of serializing circular DOM nodes on failure. Use relevant focused
+  tests, not a new full-suite run for a documentation-only change.
+- Starlette TestClient can stall on its first request under the restricted
+  sandbox. An approved run outside that restriction passed with isolated
+  fictional records and mocked networking. Do not mistake this for an API bug
+  or substitute real owner data for a fixture.
+- In SSH `bash -s`, redirect non-input `docker compose exec` calls from
+  `</dev/null`; otherwise they can consume the following heredoc commands.
+  Pass actual intended stdin explicitly for Python scripts or restore-catalog
+  checks. A `pg_restore --list` consumer can close a gzip pipe early; distinguish
+  expected SIGPIPE from a failed backup rather than suppressing all errors.
+- Prepare/build/test before an authorized API/web activation. Do not restart
+  schedulers, migrate, publish the extension, change Gmail permissions or
+  perform destructive operations as incidental release steps. Both legacy and
+  Oracle discovery remain independent, with separate databases and replication
+  disabled. Numeric job IDs must never be merged across those databases.
+- Keep source, runtime and evidence states current after each session. Fetch
+  before edits/push, reconcile concurrent changes without force-push, preserve
+  owner edits, record exact files/tests/limits and use the owner's Git identity
+  without co-author trailers. No user-facing em dashes. Keep replies short.
+
+Next work must follow the owner's next request. Known outstanding checks are
+the pending Inbox activation decision/runtime verification, browser visual
+validation on suitable hardware, ongoing independent discovery comparison,
+actual availability of official sponsorship/resume/channel evidence, and owner
+verification of the reloaded extension on real forms. Do not silently turn
+these pending items into completed work or start them merely because they are
+listed here.
 
 ## 2026-10-26: Platform-wide logo coverage follow-up
 
@@ -32,8 +168,8 @@ General discovery supports Ashby org-theme logo metadata, Workable account
 branding metadata and Greenhouse's dedicated tenant-logo element, with strict
 provider/asset-path checks. Cache keys advance to parser v3. These are general
 provider rules, not a new allowlist of future employers. Dynamic failed images
-retry at most twice with cleanup; they no longer retain a transient failure
-forever on the mounted row. Genuine unavailable evidence still shows initials.
+retry at most twice with cleanup, allowing recovery from transient failures.
+After those retries, genuinely unavailable evidence still shows initials.
 Company include/exclude menus, active filter chips, the selected Analytics
 company and Inbox linked-application/audit references now share CompanyIdentity.
 Existing list/detail, Analytics, Pulls, history, Coverage and Resume Studio
@@ -206,8 +342,12 @@ Owner decisions this session, in order (later ones win):
    **Status: pushed as `6163f59`, NOT yet live.** The VM checkout is at that
    commit and the API and web images are built (TypeScript passed), but the
    production swap was refused by the agent permission check and needs the
-   owner's go-ahead. Production still runs `40254e7`/`bd5c364` until then.
-   Activation (only API and web, as in earlier releases): on the VM,
+   owner's go-ahead. That session's `40254e7`/`bd5c364` runtime references are
+   older than the logo session's directly verified `0fef238` release. No fresh
+   runtime verification is implied by this documentation update. Recheck live
+   health, image/source hashes and authorization before activation.
+   Historical proposed activation for that prepared build, only after matching
+   the checkout/image commit and obtaining the required authorization: on the VM,
    `cd /opt/ace && export ACE_BUILD_SHA=$(git rev-parse HEAD) && docker compose
    --env-file .env -f deploy/oracle/compose.yaml up -d --no-build --no-deps
    --wait --wait-timeout 180 api web`, then check `/healthz` shows `6163f59`.

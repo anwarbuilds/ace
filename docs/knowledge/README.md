@@ -4,6 +4,14 @@ Everything learned building ace, from the first week to now, split by topic so a
 Start with `../../ACE_NEXT_KNOWLEDGE.md` (current verified state) and `../HANDOFF.md` (rules and plan; both load through the root `CLAUDE.md`), then open
 a topic file when you work in that area. Reading all of it is about 53k tokens; do not.
 
+The root knowledge file now opens with a consolidated continuation checkpoint:
+latest owner decisions, separately recorded source/build/runtime states, shared
+logo and Analytics contracts, extension behavior, test recipes and unresolved
+checks. Use it to navigate after the required continuity read. The last directly
+verified release is `0fef238`; the newer Inbox `6163f59` build was recorded as
+awaiting activation. Documentation updates are not deployments or fresh live
+verification. Keep this distinction when continuing in a new chat.
+
 | File | Covers | Read when | Size |
 | --- | --- | --- | --- |
 | `00-overview-limits-roadmap.md` | The whole system on one page: what ace is, the seven invariants, architecture table, known limits, old roadmap, backlog, newest session log | you start cold, or want the rules that must never break | ~3k |

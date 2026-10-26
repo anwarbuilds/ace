@@ -100,6 +100,11 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
+**Current cross-session checkpoint:** See the opening continuation checkpoint in
+`ACE_NEXT_KNOWLEDGE.md` for live `0fef238`, extension 1.29.1, the newer built-but-
+unactivated Inbox change `6163f59`, code/test maps and outstanding verification.
+This knowledge-only update performs no deployment or production operation.
+
 **2026-10-26 explicit-fill correction:** Local extension **1.29.1** fills only
 after Fill or Alt+A. Focus, hover, typing and late data responses stay passive.
 Workday question labels use the actual prompt rather than “Yes Required”;
