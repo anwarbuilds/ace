@@ -784,33 +784,48 @@ function aceNormalise(text) {
    form the "How did you hear about this opportunity" group has an
    option reading "LinkedIn", which matched the LinkedIn profile rule,
    so a stored profile URL would have ticked a referral-source box. */
+function aceChoiceScope(field) {
+  var declared = field.closest('fieldset, [role=radiogroup], [role=group], ' +
+    '[data-automation-id^="formField-"], [data-automation-id="formField"]');
+  if (declared) return declared;
+  var node = field.parentElement;
+  for (var depth = 0; node && node.tagName !== 'FORM' && depth < 8; depth++, node = node.parentElement) {
+    var controls = node.querySelectorAll('input:not([type=hidden]),select,textarea,button');
+    if (controls.length > 1 && Array.prototype.every.call(controls, aceIsChoiceControl) && aceHeadingIn(node, field, true)) return node;
+  }
+  return null;
+}
+
 function aceGroupQuestion(field) {
+  return aceNormalise(aceGroupQuestionLabel(field));
+}
+
+function aceGroupQuestionLabel(field) {
   // The declared group first. Ashby marks one up with a fieldset whose
   // first label is the question, and climbing from the control instead
   // finds the option's own text on the way past.
-  var declared = field.closest("fieldset, [role=radiogroup], [role=group]");
+  var declared = aceChoiceScope(field);
 
   if (declared) {
-    var named = aceHeadingIn(declared, field);
-    if (named) return named;
-
     // Then the group's own accessible name. Oracle's Candidate
     // Experience puts the question on its radiogroup as aria-label and
     // prints it in markup that reads as no heading, and climbing from
     // there reaches the section title -- "Application Questions" --
     // before the question.
-    var own = aceNormalise(declared.getAttribute("aria-label"));
+    var own = declared.getAttribute("aria-label") || "";
 
     var labelledBy = declared.getAttribute("aria-labelledby");
 
     if (!own && labelledBy) {
-      own = aceNormalise(labelledBy.split(/\s+/).map(function (id) {
+      own = labelledBy.split(/\s+/).map(function (id) {
         var node = document.getElementById(id);
         return node ? node.textContent : "";
-      }).join(" "));
+      }).join(" ");
     }
 
     if (own && own.length <= ACE_MAX_QUESTION) return own;
+    var named = aceHeadingIn(declared, field, true);
+    if (named) return named;
   }
 
   // Lever declares no group, so the question is whatever heading sits
@@ -818,7 +833,7 @@ function aceGroupQuestion(field) {
   var node = field.parentElement;
 
   for (var depth = 0; node && depth < 8; depth++) {
-    var found = aceHeadingIn(node, field);
+    var found = aceHeadingIn(node, field, true);
     if (found) return found;
     node = node.parentElement;
   }
@@ -845,7 +860,7 @@ var ACE_MAX_QUESTION = 520;
    Real headings are included as candidates too. A form writes "Current
    Employer" and "Start Date" as an h4 or a bold div, not as a label,
    because they name a group rather than one input. */
-function aceHeadingIn(block, field) {
+function aceHeadingIn(block, field, original) {
   var candidates = Array.prototype.filter.call(
     block.querySelectorAll(
       "legend, label, h1, h2, h3, h4, h5, h6, " +
@@ -855,8 +870,13 @@ function aceHeadingIn(block, field) {
       // A heading that wraps a control is an option, not the question.
       // Lever puts each choice in its own label, so without this the
       // group's question reads as "he/him" or "female".
-      if (node.querySelector("input, select, textarea")) return false;
+      if (node.querySelector("input, select, textarea, button")) return false;
       if (node.contains(field)) return false;
+      // Workday uses separate label[for] elements after each checkbox.
+      // Those labels are answers, even though they do not wrap the input.
+      var target = node.tagName === "LABEL" && node.getAttribute("for");
+      var control = target && document.getElementById(target);
+      if (control && aceIsChoiceControl(control)) return false;
 
       return !!aceNormalise(aceTextWithoutControls(node));
     }
@@ -882,9 +902,32 @@ function aceHeadingIn(block, field) {
 
   if (best === null) best = candidates[0];
 
-  return aceNormalise(
-    aceTextWithoutControls(best)
-  ).slice(0, ACE_MAX_QUESTION);
+  var text = aceTextWithoutControls(best).replace(/\s+/g, " ").trim();
+  return original ? text : aceNormalise(text).slice(0, ACE_MAX_QUESTION);
+}
+
+/* Checkbox option names are often unique on Workday. Their shared question
+   boundary, rather than the name of one answer, owns the complete choice set. */
+function aceChoiceMembers(field) {
+  var scope = aceChoiceScope(field);
+  var name = field.getAttribute("name");
+  if (!scope && name) {
+    var node = field.parentElement;
+    for (var depth = 0; node && depth < 8; depth++, node = node.parentElement) {
+      if (node.querySelectorAll('[name="' + CSS.escape(name) + '"]').length > 1) {
+        scope = node;
+        break;
+      }
+    }
+  }
+  if (!scope) return [field];
+  var question = aceGroupQuestion(field);
+  var selector = 'input[type="' + field.type + '"]';
+  if (field.type === "radio" && name) selector += '[name="' + CSS.escape(name) + '"]';
+  var members = Array.prototype.filter.call(scope.querySelectorAll(selector), function (member) {
+    return aceGroupQuestion(member) === question;
+  });
+  return members.length ? members : [field];
 }
 
 /* A block's wording with its own controls taken out.
@@ -950,8 +993,19 @@ function aceOptionText(field) {
 }
 
 function aceQuestionFor(field) {
+  return aceNormalise(aceQuestionLabelFor(field));
+}
+
+/* Display the same prompt used for matching, preserving the employer's words.
+   An option's individual label must never replace its group question. */
+function aceQuestionLabelFor(field) {
   if (aceIsChoiceControl(field)) {
-    return aceGroupQuestion(field);
+    var scope = aceChoiceScope(field);
+    if (field.type === 'checkbox' && aceChoiceMembers(field).length === 1 &&
+        (!scope || (!scope.getAttribute('aria-label') && !scope.getAttribute('aria-labelledby') && !aceHeadingIn(scope, field, true)))) {
+      return String(aceOptionRaw(field)).replace(/\s+/g, ' ').trim();
+    }
+    return aceGroupQuestionLabel(field);
   }
 
   var sources = [];
@@ -991,7 +1045,7 @@ function aceQuestionFor(field) {
   sources.push(field.id);
 
   for (var i = 0; i < sources.length; i++) {
-    var text = aceNormalise(sources[i]);
+    var text = String(sources[i] || "").replace(/\s+/g, " ").trim();
     if (text && text.length <= ACE_MAX_QUESTION) return text;
   }
 

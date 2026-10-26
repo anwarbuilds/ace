@@ -51,6 +51,8 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      - name: Extension review DOM contracts (fictional forms, no browser)
+        run: npm run test:extension-dom
       - run: npx next typegen
       - run: npx tsc --noEmit
       - run: npx eslint src tests

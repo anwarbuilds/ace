@@ -14,8 +14,8 @@ Focus Mode uses the existing V4 Answer Memory API. No new database migration or 
 ## Use Focus Mode
 
 - The compact assistant shows **Fill** and **Review**. **Fill** only writes approved answers into empty, supported fields. **Alt+A** also starts Fill.
-- **Review** stays open while you answer, approve, or skip. It shows the employer's exact options for native selects and supported choice controls. For a Workday-style listbox, open it once on the employer form so ACE can read the offered choices. An unsupported control stays on the employer form for manual completion.
-- A choice made on the employer form appears in Review. A supported choice made in Review updates the employer control. **Approve & fill** confirms the answer. Safe, reusable answers can be saved to Answer Memory. Sensitive answers are for the current application only.
+- **Review** stays open while you answer, approve, or skip. It shows the employer's exact options for native selects and supported choice controls. Checkbox and radio groups show the full parent question and all original, untruncated options. For a Workday-style listbox, use **Load employer options** inside ACE to read its actual choices without answering on the employer page. An unsupported control stays on the employer form for manual completion.
+- A choice made on the employer form appears in Review. A supported choice made in Review stays a draft until **Approve & fill** applies it and checks the actual employer state. You answer once. An employer edit supersedes an unapproved draft; a changed control or option set requires another review. Memory is saved only after a verified fill. Multi-answer checkbox sets are used for the current application rather than flattened into a reusable answer. Safe, reusable answers can be saved to Answer Memory. Sensitive answers are for the current application only.
 - Company-motivation prompts, including "Why this company?" and equivalent wording, belong entirely on the employer form. ACE does not fill, review, capture, or remember those answers. Historical records remain stored but are excluded from reuse.
 - **Open memory & activity** opens the wider Workspace. Memory can be searched, edited, and deleted. Activity has **Undo** and field diagnostics. Answer values are not logged.
 - Drag ACE from its six-dot grip or another non-interactive area. Arrow keys move it when the grip is focused. Double-click the grip to reset its position. The position is saved in Chrome. **Minimize ACE** creates a small dock; **Expand ACE** restores the card. **Close ACE** (the X in the card header or the dock) hides ACE on that page; it returns on a new page or form step, or when you press Fill in the toolbar popup.
@@ -28,11 +28,12 @@ From the repository root:
 ```sh
 node extension/test-rules.js
 node extension/test-memory.js
+cd web && npm run test:extension-dom && cd ..
 node --check extension/content.js
 ```
 
-The Chrome interaction tests are `web/tests/e2e/extension-focus-v5.spec.ts` and `web/tests/e2e/extension-v4.spec.ts`.
+The 13 DOM contract tests execute the actual content scripts with simulated layout, native activation and Chrome messaging. They do not verify real browser behavior. Run Chrome tests only after the documented laptop cooling problem is fixed. The Chrome interaction tests include `web/tests/e2e/extension-question-review.spec.ts`, `web/tests/e2e/extension-focus-v5.spec.ts` and `web/tests/e2e/extension-v4.spec.ts`.
 
 ## Release and rollback
 
-This change is extension-only. It requires no schema migration. Keep a copy of the previous unpacked extension folder or use the previous Git commit, reload it from `chrome://extensions`, then reload employer tabs to roll back. Existing answers and application records remain on the ACE server. Do not remove the V4 Answer Memory table as part of a V5.1 rollback.
+Version **1.28.1** fixes parent-question extraction, complete choice groups and approval before filling. This change is extension-only. It requires no schema migration. Keep a copy of the previous unpacked extension folder or use the previous Git commit, reload it from `chrome://extensions`, then reload employer tabs to roll back. Existing answers and application records remain on the ACE server. Do not remove the V4 Answer Memory table as part of a V5.1 rollback.

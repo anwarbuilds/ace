@@ -8,7 +8,8 @@
     "start": "next start -H 127.0.0.1",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "check:dashes": "python3 ../scripts/no_user_facing_dashes.py"
+    "check:dashes": "python3 ../scripts/no_user_facing_dashes.py",
+    "test:extension-dom": "node tests/extension-review.test.mjs"
   },
   "dependencies": {
     "next": "16.4.2",
@@ -23,6 +24,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "linkedom": "0.18.12",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

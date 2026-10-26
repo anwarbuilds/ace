@@ -910,3 +910,34 @@ The local Focus Mode V5.1 branch is at `cb7bb5e`, with the previous V4 Answer Me
 The owner asked for the card to match the computer's Day or Night setting and for a way to close it. The card now keeps a theme mode, `system`, `day` or `night`, in `aceStudioThemeMode`. In `system` it reads `prefers-color-scheme` and re-renders when the computer changes. The header toggle switches to the other theme; landing on the computer's own theme stores `system` again, so there is no separate third button. The older `aceStudioTheme` value is ignored rather than migrated, because a saved Day from before this change would otherwise pin the card against the computer.
 
 Close reuses the existing `close()` dismiss path rather than adding a new state: the card stays hidden on that page, typing does not bring it back, and a URL change, a new form step or the toolbar's `wake` message reopens it. The X sits after Minimize in the header and after Expand in the dock. Adding a fourth header control wrapped the Form detected pill and crowded the dock text, so the pill is `nowrap` and the dock lines ellipsize. `web/tests/e2e/extension-focus-theme-close.spec.ts` covers live system sync, an explicit choice holding, return to system, the ignored old key, Close from both places, typing while closed, wake and zero submits.
+
+
+## Exact parent questions and approval before filling (2026-10-25)
+
+The owner found a Workday checkbox option displayed as the question. Review
+preferred the option's individual `label[for]`, grouping assumed every checkbox
+shared a name, and the UI flattened every choice group into a single dropdown.
+The local 1.28.1 repair uses one raw parent-question source for display and
+normalized matching, excludes separate option labels from group headings, and
+collects uniquely named Workday checkbox siblings by the question boundary.
+Checkbox/radio controls show full choices. Native dropdown values are preserved.
+
+The owner explicitly requested question, answer, approval, then fill. Review
+choices now stay drafts until **Approve & fill**, with employer readback before
+completion and Memory persistence. Existing employer edits still appear in
+Review; changed values/options or detached controls invalidate stale drafts.
+The **Load employer options** action reads a supported lazy button listbox
+inside ACE, without requiring an employer-page answer first. Unsupported
+controls remain manual. Protected and multi-answer checkbox decisions stay
+application-only. Undo restores prior choice/multiple-select state. Motivation
+exclusion and no-submit/no-Applied behavior remain.
+
+Thirteen fictional DOM contracts execute the real scripts with simulated
+layout, native activation and Chrome messaging; 258 rule cases and Memory
+safety checks pass. TypeScript, lint, build, syntax and dash checks pass.
+Twenty-five Playwright cases collect, including three new regressions, but were
+not executed: the laptop cooling restriction remains. No new browser screenshots
+or real authenticated Workday verification are claimed. The owner must reload
+version 1.28.1 in `chrome://extensions` and refresh employer tabs. No production
+service change or extension publication was performed. See the main knowledge
+file for the complete validation and reload boundary.

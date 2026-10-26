@@ -609,7 +609,7 @@ commits (`54e939a`, `61debd6`, `8d84141`), the reconciled Focus Mode V5.1
 commits (`559ee84`, `5b8ab4b`, equivalents of local `4ce3570` and `cb7bb5e`),
 the V5.1 typography pass and theme sync/Close (`386bed9`). It contains the
 existing V4 Answer Memory implementation (`2e7c1dc`). The
-extension manifest is `1.28.0`. The V5.1 extension has not been published; it
+extension manifest is now `1.28.1` (local exact-question/approval repair described below). The V5.1 extension has not been published; it
 runs as an unpacked installation loaded from
 `/home/ubuntu/Documents/ace-next/extension`. An unpacked installation must be
 reloaded at `chrome://extensions`; employer tabs must then be refreshed.
@@ -625,12 +625,64 @@ persistent Review,
 Review Complete or Review Paused, Answer Memory and Activity workspace, manual
 Scan fields, dynamic field detection, existing resume/pairing support and
 Alt+A. Review mirrors exact native select, radio, checkbox and multiple-select
-options, and mirrors supported custom Workday listboxes once their options are
-exposed by the employer page. Unsupported custom controls stay on the
+options. Supported Workday listboxes expose their real choices through **Load employer options** inside ACE, or when opened on the employer page. Review answers remain drafts until **Approve & fill** verifies the actual employer control. Unsupported custom controls stay on the
 employer form for manual completion. ACE never submits or marks Applied.
 Workday listing and search routes outside `/apply/` stay quiet, including after
 single-page navigation back from an application. The toolbar Wake override
 remains available.
+
+### Exact-question Review and one-entry approval repair (2026-10-25)
+
+The owner reported that a Workday checkbox group showed an individual answer as
+its question and offered only that choice, forcing duplicate entry. The display
+path used `label[for=option-id]` even after the matcher found the group prompt;
+choice grouping also restricted checkboxes to one `name`, although Workday can
+use a distinct name for every option. All choice controls were rendered as one
+single-answer dropdown, and lazy custom options required an employer-side click.
+
+Local extension **1.28.1** now:
+
+- Shares raw question extraction with normalized matching. Group accessible
+  names and real headings identify the parent question; separate option labels
+  cannot replace it. Standalone checkbox statements retain their own wording.
+  Unlabelled radio options remain ineligible for profile matching.
+- Groups checkbox choices by their question boundary, including Workday form
+  fields with unique option names. Full checkbox/radio options are shown as
+  their actual control type, with no 54-character answer truncation. Native
+  selects preserve exact option codes and multiple selections.
+- Keeps Review answers as drafts until **Approve & fill**. Employer edits still
+  appear in Review. Drafts survive themes/rerenders; changed answers, option
+  sets or detached controls invalidate a stale approval. This owner-requested
+  approval sequence supersedes V5.1's previous immediate Review-to-form write.
+- Lets the owner click **Load employer options** inside ACE to open/read a
+  supported button listbox without choosing an answer. Ambiguous or inaccessible
+  custom controls remain honest manual states; options are never invented.
+- Verifies the employer state before completing approval or saving Memory.
+  A reverted/rejected write stays open and cannot create reusable Memory.
+  Protected questions and multi-answer checkbox sets stay application-only.
+  Undo restores prior review choices/multiple selections. Never submits or
+  marks Applied. Motivation exclusion, pairing, themes and card geometry remain.
+
+Validation: 13 DOM contracts in `web/tests/extension-review.test.mjs` execute
+actual content scripts against fictional forms, with explicitly simulated
+layout/native activation/Chrome messaging; 258 matcher cases and Memory safety
+checks pass. TypeScript, ESLint, production build, syntax, forbidden-dash and
+whitespace checks pass. Playwright collects 25 extension cases, including three
+new regressions, but **Chrome was not launched** because the laptop cooling
+restriction remains. Existing Playwright expectations now require approval
+before the employer value changes. No fresh visual screenshots, real Workday
+verification, unpacked MV3 validation or browser accessibility verification is
+claimed. `linkedom` is a pinned web development dependency for the DOM checks;
+`npm run test:extension-dom` also runs in the web CI job.
+
+No production deployment, scheduler operation, schema/data/auth/Gmail change or
+extension publication was performed. Chrome loads this local folder:
+`/home/ubuntu/Documents/ace-next/extension`. The owner must Reload ACE at
+`chrome://extensions`, check version **1.28.1**, and refresh employer tabs.
+Use Review, choose an answer once, then **Approve & fill**; custom button
+listboxes may first need **Load employer options**. Rollback baseline is
+`877b046`; restore only extension files into a separate copy if needed, without
+resetting unrelated work. The owner's screenshots/answers were not saved.
 
 The latest local visual comparison used fictional Chrome fixtures: the
 approved Night compact reference and corrected extension compact capture were

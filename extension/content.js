@@ -27,6 +27,7 @@
   var approvedQuestions = new Set();
   var customOptions = new Map();
   var reviewDrafts = new Map();
+  var reviewSelections = new Map();
   var studioTheme = "day";
   // "system" follows the computer's Day or Night setting; "day" and "night"
   // are the owner's explicit choice. studioTheme is the one shown.
@@ -279,7 +280,7 @@
     var listboxButtons = Array.prototype.filter.call(
       document.querySelectorAll('button[aria-haspopup="listbox"]'),
       function (field) {
-        if (field.disabled || !field.offsetParent) return false;
+        if (field.disabled || field.type === 'submit' || !field.offsetParent) return false;
         return !aceShouldSkip(field) && !aceMemory.isEmployerMotivation(aceQuestionFor(field));
       }
     );
@@ -375,28 +376,7 @@
       return siblings.length ? siblings : [field];
     }
 
-    var name = field.getAttribute("name");
-    var scope = field.closest("fieldset, [role=radiogroup], [role=group]");
-
-    if (!scope && name) {
-      var node = field.parentElement;
-      for (var depth = 0; node && depth < 8; depth++) {
-        if (node.querySelectorAll('[name="' + CSS.escape(name) + '"]').length > 1) {
-          scope = node;
-          break;
-        }
-        node = node.parentElement;
-      }
-    }
-
-    if (!scope) return [field];
-
-    var selector = 'input[type="' + field.type + '"]' +
-      (name ? '[name="' + CSS.escape(name) + '"]' : "");
-
-    var members = Array.prototype.slice.call(scope.querySelectorAll(selector));
-
-    return members.length ? members : [field];
+    return aceChoiceMembers(field);
   }
 
   /* `alts` is the other wordings ACE ships for this same answer. It is
@@ -1208,7 +1188,7 @@
 
     var declared = id ? document.getElementById(id) : null;
 
-    if (declared && declared.querySelector("[role=option]")) return declared;
+    if (declared && declared.getClientRects().length && declared.querySelector("[role=option]")) return declared;
 
     var fresh = shownListboxes().filter(function (box) {
       return before.indexOf(box) < 0 && !!box.querySelector("[role=option]");
@@ -1262,7 +1242,7 @@
   function fillOneListbox(field, value, alts) {
     var before = shownListboxes();
 
-    press(field);
+    if (!listboxOpenedBy(field, before)) press(field);
 
     return waitFor(function () {
       return listboxOpenedBy(field, before);
@@ -1274,7 +1254,7 @@
 
       var options = Array.prototype.slice.call(
         box.querySelectorAll("[role=option]")
-      );
+      ).filter(function (option) { return option.getAttribute('aria-disabled') !== 'true'; });
 
       var texts = options.map(function (option) {
         return option.textContent;
@@ -1290,7 +1270,7 @@
       press(options[index]);
 
       return waitFor(function () {
-        return !aceIsEmpty(field);
+        return aceNormalise(field.textContent) === aceNormalise(texts[index]);
       }, 1200).then(function (took) {
         if (!took) {
           closeListbox(field);
@@ -1617,6 +1597,7 @@
      start a loop.  */
   function restoreClobbered() {
     lastFill.forEach(function (record) {
+      if (record.reviewChoices || record.reviewOptions) return;
       if (record.ticked) return;
       if (!record.wrote) return;
       if (!record.field.isConnected) return;
@@ -1652,8 +1633,27 @@
   }
 
   function undo() {
-    lastFill.forEach(function (record) {
-      if (record.ticked && record.field.tagName === "BUTTON") {
+    lastFill.slice().reverse().forEach(function (record) {
+      if (record.reviewChoices) {
+        record.reviewChoices.forEach(function (entry) {
+          if (!entry.field.isConnected) return;
+          if (entry.field.tagName === 'BUTTON' || entry.field.type === 'checkbox') {
+            if (aceIsChosen(entry.field) !== entry.checked) entry.field.click();
+          } else if (entry.checked && !aceIsChosen(entry.field)) {
+            entry.field.click();
+          } else {
+            entry.field.checked = entry.checked;
+            entry.field.dispatchEvent(new Event('input', { bubbles: true }));
+            entry.field.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        });
+      } else if (record.reviewOptions) {
+        Array.from(record.field.options).forEach(function (option) {
+          option.selected = record.reviewOptions.indexOf(option.value) >= 0;
+        });
+        record.field.dispatchEvent(new Event('input', { bubbles: true }));
+        record.field.dispatchEvent(new Event('change', { bubbles: true }));
+      } else if (record.ticked && record.field.tagName === "BUTTON") {
         // Ashby's Yes/No widget has no property to unset; clicking the
         // same button again is what toggles it back off, confirmed
         // against the live control rather than assumed.
@@ -1883,6 +1883,7 @@
   .focus-panel .focus-compact-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.focus-panel .focus-compact-actions button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:39px}
   .focus-panel .focus-utility{display:flex;justify-content:space-between;gap:7px;margin-top:13px}.focus-panel .focus-utility button{display:inline-flex;align-items:center;gap:4px;font-size:11px;line-height:1.3;font-weight:620;color:var(--secondary);padding:4px 0}.focus-panel .focus-utility button:hover{color:var(--wine)}.focus-panel .focus-utility svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round}
   .focus-panel .focus-title-row h2{font-size:16px;font-weight:690;letter-spacing:-.025em}.focus-panel .focus-subtitle{font-size:11px;line-height:1.55;margin:4px 0 12px}.focus-panel .focus-progress{font-size:10.5px;margin-bottom:12px}.focus-panel .focus-chip{font-size:11px;padding:8px 10px;border-radius:8px}.focus-panel .focus-question{padding:13px;border-radius:11px}.focus-panel .focus-question .studio-question{font-size:13px;font-weight:680;line-height:1.45;margin:0 0 8px}.focus-panel .focus-question p{font-size:11px;line-height:1.55}.focus-panel .focus-question .studio-pill{background:none;padding:0;margin-bottom:8px;border-radius:0}
+  .focus-panel .focus-options{border:0;padding:0;margin:0;min-width:0}.focus-panel .focus-options legend{font-size:11px;font-weight:620}.focus-panel .focus-options .studio-checkline{padding:8px;border:1px solid var(--line);border-radius:8px}.focus-panel .focus-options span{overflow-wrap:anywhere}.focus-panel .focus-options input{flex:none;margin-top:3px}
   .focus-panel .studio-search,.focus-panel .studio-input{font-size:12px;line-height:1.55;border-radius:8px;padding:10px}.focus-panel .studio-input{min-height:82px}.focus-panel .studio-scroll>label{font-size:11px;font-weight:620}.focus-panel .focus-hint{font-size:10.5px;line-height:1.55}.focus-panel .studio-checkline{font-size:11px;line-height:1.5}.focus-panel .focus-stays{font-size:10.5px;font-weight:570;padding:8px 10px}.focus-panel .studio-actions{display:flex;flex-wrap:nowrap;gap:8px}.focus-panel .studio-actions button{flex:1;min-width:0;white-space:nowrap;font-weight:600}
   .focus-panel .studio-pill{font-size:10px;font-weight:680;padding:5px 8px;border-radius:7px}
   .focus-panel .focus-dock-body{min-height:49px}.focus-panel .focus-dock-status strong{font-size:12px}.focus-panel .focus-dock-status small{font-size:11px}
@@ -1962,48 +1963,25 @@
       if (!mirror) return;
       var chosen = studioFields[Number(mirror.getAttribute('data-mirror'))];
       if (!chosen || aceMemory.isEmployerMotivation(chosen.question) || !chosen.field.isConnected) return;
-      if (chosen.field.tagName === 'SELECT' && chosen.field.multiple) {
-        var wanted = Array.from(mirror.selectedOptions).map(function (option) { return option.value; });
-        Array.from(chosen.field.options).forEach(function (option) { option.selected = wanted.indexOf(option.value) >= 0; });
-        chosen.field.dispatchEvent(new Event('input', { bubbles: true }));
-        chosen.field.dispatchEvent(new Event('change', { bubbles: true }));
-        var selectedValues = Array.from(chosen.field.selectedOptions).map(function (option) { return option.value; });
-        if (selectedValues.join('|') !== wanted.join('|')) studioError = 'The employer field did not accept these options. Choose them on the form.';
-      } else if (chosen.field.tagName === 'SELECT' && mirror.value) {
-        setNatively(chosen.field, mirror.value);
-        if (chosen.field.value !== mirror.value) studioError = 'The employer field did not accept this option. Choose it on the form.';
-      } else if (aceIsListboxButton(chosen.field) && mirror.value) {
-        filling = true;
-        var opened = listboxOpenedBy(chosen.field, []);
-        var resultPromise;
-        if (opened) {
-          var exact = Array.from(opened.querySelectorAll('[role=option]')).filter(function (option) {
-            return String(option.textContent || '').trim() === mirror.value;
-          });
-          if (exact.length === 1) press(exact[0]);
-          resultPromise = Promise.resolve({ matched: exact.length === 1 && !aceIsEmpty(chosen.field) });
-        } else resultPromise = fillOneListbox(chosen.field, mirror.value, []);
-        resultPromise.then(function (result) {
-          filling = false;
-          if (!result || !result.matched) studioError = 'The employer field did not accept this option. Choose it on the form.';
-          renderStudio(panel());
-        }, function () {
-          filling = false;
-          studioError = 'The employer field did not accept this option. Choose it on the form.';
-          renderStudio(panel());
-        });
-        return;
-      } else if (aceIsChoiceControl(chosen.field) && mirror.value) {
-        var members = groupMembers(chosen.field);
-        var option = members.find(function (member) { return aceOptionLabel(member) === mirror.value; });
-        if (option && !aceIsChosen(option)) option.click();
-        if (!option || !aceIsChosen(option)) studioError = 'The employer field did not accept this option. Choose it on the form.';
-      }
-      renderStudio(panel());
+      var prior = reviewSelections.get(chosen.key);
+      var values = mirror.hasAttribute('data-choice')
+        ? Array.from(root.querySelectorAll('#studio-answer input:checked')).map(function (input) { return Number(input.getAttribute('data-choice')); })
+        : mirror.multiple ? Array.from(mirror.selectedOptions).map(function (option) { return option.value; }) : [mirror.value];
+      reviewSelections.set(chosen.key, { field: chosen.field,
+        baseline: prior && prior.field === chosen.field ? prior.baseline : reviewValue(chosen),
+        options: reviewOptionsSignature(chosen), values: values });
+      studioError = '';
+
     });
     root.addEventListener('input', function (event) {
       if (event.target && event.target.id === 'studio-answer' && event.target.tagName === 'TEXTAREA' && reviewQuestion) {
         reviewDrafts.set(reviewQuestion, event.target.value);
+        var chosen = studioFields.find(function (item) { return item.key === reviewQuestion; });
+        if (!chosen) return;
+        var prior = reviewSelections.get(chosen.key);
+        reviewSelections.set(chosen.key, { field: chosen.field,
+          baseline: prior && prior.field === chosen.field ? prior.baseline : reviewValue(chosen),
+          options: reviewOptionsSignature(chosen), values: [event.target.value] });
       }
     });
     installFocusDrag(root);
@@ -2225,8 +2203,7 @@
       var answered = !group.every(aceIsEmpty);
       var name = answerNameFor(question, kind);
       if ((!name || !answers[name]) && !approvedQuestions.has(key) && !skippedQuestions.has(key)) reviewSeen.add(key);
-      var explicitLabel = field.id ? document.querySelector('label[for="' + CSS.escape(field.id) + '"]') : null;
-      var display = explicitLabel ? aceTextWithoutControls(explicitLabel) : field.getAttribute("aria-label") || question;
+      var display = aceQuestionLabelFor(field) || question;
       studioFields.push({ field: field, question: question, kind: kind, key: key,
         display: display, answered: answered, name: name, protected: aceMemory.policy(question),
         source: name && name.indexOf("Memory:") === 0 ? "Answer Memory" : "Profile and answers" });
@@ -2279,34 +2256,43 @@
       return '<button class="focus-chip ' + (f.key === selected.key ? 'active' : '') + '" data-ace="question:' + fields.indexOf(f) + '">' + (at + 1) + '. ' + esc(tidy(plain(f.display))) + '</button>';
     }).join('') + '</div>';
     var index = fields.indexOf(selected);
-    var current = reviewValue(selected);
+    var draft = reviewSelections.get(selected.key);
+    if (draft && draft.field !== selected.field) { reviewSelections.delete(selected.key); draft = null; }
+    var current = draft ? draft.values[0] : reviewValue(selected);
     var isChoice = selected.field.tagName === 'SELECT' || aceIsChoiceControl(selected.field);
     var control = '';
     if (selected.field.tagName === 'SELECT') {
       control = '<label for="studio-answer">Exact employer options</label><select id="studio-answer" class="studio-search" aria-label="Exact employer options" data-mirror="' + index + '"' + (selected.field.multiple ? ' multiple size="4"' : '') + '>' + (selected.field.multiple ? '' : '<option value=""' + (current ? '' : ' selected') + '>Choose an option</option>') +
         Array.from(selected.field.options).filter(function (option, at) { return !(at === 0 && isPlaceholderText(option.textContent)); }).map(function (option) {
-          return '<option value="' + esc(option.value) + '"' + ((selected.field.multiple ? option.selected : option.value === current) ? ' selected' : '') + '>' + esc(plain(option.textContent)) + '</option>';
+          return '<option value="' + esc(option.value) + '"' + ((draft ? draft.values.indexOf(option.value) >= 0 : selected.field.multiple ? option.selected : option.value === current) ? ' selected' : '') + (option.disabled || option.closest('optgroup[disabled]') ? ' disabled' : '') + '>' + esc(plain(option.textContent)) + '</option>';
         }).join('') + '</select>';
     } else if (aceIsChoiceControl(selected.field)) {
       var choices = groupMembers(selected.field);
-      control = '<label for="studio-answer">Exact employer options</label><select id="studio-answer" class="studio-search" aria-label="Exact employer options" data-mirror="' + index + '"><option value="">Select an option</option>' +
-        choices.map(function (choice) { var option = aceOptionLabel(choice); return '<option value="' + esc(option) + '"' + (option === current ? ' selected' : '') + '>' + esc(plain(option)) + '</option>'; }).join('') + '</select>';
+      control = '<fieldset id="studio-answer" class="focus-options"><legend>Exact employer options</legend>' +
+        choices.map(function (choice, at) {
+          return '<label class="studio-checkline"><input type="' + (selected.field.type === 'checkbox' ? 'checkbox' : 'radio') +
+            '" name="studio-choice" data-mirror="' + index + '" data-choice="' + at + '"' +
+            ((draft ? draft.values.indexOf(at) >= 0 : aceIsChosen(choice)) ? ' checked' : '') + (choice.disabled ? ' disabled' : '') + '><span>' +
+            esc(plain(aceOptionRaw(choice))) + '</span></label>';
+        }).join('') + '</fieldset>';
     } else if (aceIsListboxButton(selected.field) && customOptions.has(selected.key)) {
       control = '<label for="studio-answer">Exact employer options</label><select id="studio-answer" class="studio-search" aria-label="Exact employer options" data-mirror="' + index + '"><option value="">Choose an option</option>' +
         customOptions.get(selected.key).map(function (option) {
           return '<option value="' + esc(option) + '"' + (option === current ? ' selected' : '') + '>' + esc(plain(option)) + '</option>';
         }).join('') + '</select>';
     } else if (selected.field.tagName === 'BUTTON' || aceIsAutocomplete(selected.field)) {
-      control = '<p>Choose this option on the employer form. ACE will show it here when the form reports a selected value.</p>';
+      control = aceIsListboxButton(selected.field)
+        ? '<button class="studio-button" data-ace="read-options:' + index + '">Load employer options</button><p class="focus-hint">ACE reads the dropdown’s actual choices without selecting an answer.</p>'
+        : '<p>Choose this option on the employer form. ACE will show it here when the form reports a selected value.</p>';
     } else {
-      control = '<label for="studio-answer">Your answer</label><textarea id="studio-answer" class="studio-input" aria-label="Your answer">' + esc(current || reviewDrafts.get(selected.key) || '') + '</textarea>';
+      control = '<label for="studio-answer">Your answer</label><textarea id="studio-answer" class="studio-input" aria-label="Your answer">' + esc(draft ? draft.values[0] : current || reviewDrafts.get(selected.key) || '') + '</textarea>';
     }
     var why = selected.protected === 'reusable' ? 'New question. Review this answer before saving.' :
       'Protected question. Confirm for this application only.';
     html += '<article class="studio-card focus-question"><span class="studio-pill ' + (selected.protected === 'reusable' ? 'good' : '') + '">' +
-      (selected.protected === 'reusable' ? 'New question' : 'Review required') + (isChoice ? ' · Dropdown' : '') + '</span><div class="studio-question">' + esc(plain(selected.display)) + '</div><p>' + why + '</p></article>' +
-      control + '<p class="focus-hint">Select here or on the employer page. ACE checks the employer control before approval.</p>' +
-      (selected.protected === 'reusable' && !selected.field.multiple ? '<label class="studio-checkline"><input id="studio-reuse" type="checkbox" checked> Remember this approved answer for equivalent questions</label>' :
+      (selected.protected === 'reusable' ? 'New question' : 'Review required') + (aceIsChoiceControl(selected.field) ? selected.field.type === 'checkbox' ? ' · Checkboxes' : ' · Radio options' : isChoice || aceIsListboxButton(selected.field) ? ' · Dropdown' : '') + '</span><div class="studio-question">' + esc(plain(selected.display)) + '</div><p>' + why + '</p></article>' +
+      control + '<p class="focus-hint">Answer here, then Approve &amp; fill. ACE checks that the employer form accepted it.</p>' +
+      (selected.protected === 'reusable' && !selected.field.multiple && selected.field.type !== 'checkbox' ? '<label class="studio-checkline"><input id="studio-reuse" type="checkbox" checked> Remember this approved answer for equivalent questions</label>' :
         '<p class="focus-hint">Used for this application only. It is not saved to Memory.</p>') +
       '<p class="focus-stays">✓ &nbsp;Review stays open until you minimize ACE.</p>' +
       '<div class="studio-actions"><button class="studio-button wine" data-ace="approve:' + index + '">Approve &amp; fill</button><button class="studio-button" data-ace="show-form">Show on form</button><button class="studio-button" data-ace="skip:' + index + '">Skip</button></div><div class="focus-utility"><button data-ace="tab:overview">Overview</button><button data-ace="workspace">Memory &amp; activity</button></div>';
@@ -2320,12 +2306,21 @@
       ? Array.from(field.selectedOptions).map(function (option) { return String(option.textContent || '').trim(); }).join(', ')
       : aceIsEmpty(field) ? '' : field.value;
     if (aceIsChoiceControl(field)) {
-      var chosen = groupMembers(field).find(aceIsChosen);
-      return chosen ? aceOptionLabel(chosen) : '';
+      return groupMembers(field).filter(aceIsChosen).map(function (choice) {
+        return String(aceOptionRaw(choice)).replace(/\s+/g, ' ').trim();
+      }).join('\n');
     }
     if (aceIsListboxButton(field)) return aceIsEmpty(field) ? '' : String(field.textContent || '').trim();
     if (aceIsAutocomplete(field)) return aceIsEmpty(field) ? '' : String(field.value || '').trim();
     return String(field.value || '').trim();
+  }
+
+  function reviewOptionsSignature(item) {
+    return JSON.stringify(aceIsChoiceControl(item.field)
+      ? groupMembers(item.field).map(function (member) { return [aceOptionRaw(member), !!member.disabled]; })
+      : item.field.tagName === 'SELECT'
+      ? Array.from(item.field.options).map(function (option) { return [option.value, option.textContent, !!option.disabled]; })
+      : customOptions.get(item.key) || []);
   }
 
   function studioMemory() {
@@ -2700,6 +2695,7 @@
       approvedQuestions.clear();
       customOptions.clear();
       reviewDrafts.clear();
+      reviewSelections.clear();
     }
     if (location.href !== lastHref || movedOn()) {
       lastResult = null;
@@ -3049,85 +3045,160 @@
       return;
     }
 
+    if (action.indexOf("read-options:") === 0) {
+      var item = studioFields[Number(action.slice(13))];
+      if (filling || !item || !item.field.isConnected || !aceIsListboxButton(item.field) ||
+          aceMemory.isEmployerMotivation(item.question)) return;
+      var before = shownListboxes();
+      var alreadyOpen = listboxOpenedBy(item.field, before);
+      var focusBefore = document.activeElement;
+      filling = true;
+      if (!alreadyOpen) press(item.field);
+      waitFor(function () { return listboxOpenedBy(item.field, before); }, 1500).then(function (box) {
+        if (box) {
+          var options = Array.from(box.querySelectorAll('[role=option]')).filter(function (option) {
+            return option.getAttribute('aria-disabled') !== 'true';
+          }).map(function (option) { return String(option.textContent || '').trim(); }).filter(Boolean);
+          if (options.length) customOptions.set(item.key, options);
+        }
+        if (!alreadyOpen) closeListbox(item.field);
+        filling = false;
+        studioError = customOptions.has(item.key) ? '' : 'ACE could not read this dropdown safely. Use Show on form to choose an answer there.';
+        renderStudio(panel());
+        var next = panel().querySelector('#studio-answer');
+        if (next) next.focus({ preventScroll: true });
+        else if (focusBefore && focusBefore.isConnected) focusBefore.focus({ preventScroll: true });
+      });
+      return;
+    }
+
     if (action.indexOf("approve:") === 0) {
       var chosen = studioFields[Number(action.slice(8))];
       var valueBox = panel().querySelector("#studio-answer");
       if (!chosen || aceMemory.isEmployerMotivation(chosen.question)) return;
-      var value = valueBox && valueBox.multiple
-        ? Array.from(valueBox.selectedOptions).map(function (option) { return String(option.textContent || '').trim(); }).join(', ')
-        : valueBox ? valueBox.value.trim() : reviewValue(chosen);
+      if (filling) return;
+      var selection = reviewSelections.get(chosen.key);
+      if (selection && (selection.field !== chosen.field || selection.baseline !== reviewValue(chosen) || selection.options !== reviewOptionsSignature(chosen))) {
+        reviewSelections.delete(chosen.key);
+        studioError = "The employer answer changed. Review its current answer before approving.";
+        renderStudio(panel()); return;
+      }
+      var members = aceIsChoiceControl(chosen.field) ? groupMembers(chosen.field) : [];
+      var values = selection ? selection.values : null;
+      var value = members.length && values
+        ? values.map(function (at) { return String(aceOptionRaw(members[at])).replace(/\s+/g, ' ').trim(); }).join('\n')
+        : chosen.field.tagName === 'SELECT' && chosen.field.multiple && values
+        ? values.map(function (val) { return String(Array.from(chosen.field.options).find(function (opt) { return opt.value === val; }).textContent).trim(); }).join(', ')
+        : values ? String(values[0] || '')
+        : chosen.field.multiple ? reviewValue(chosen)
+        : valueBox && valueBox.tagName !== 'FIELDSET' ? valueBox.value.trim() : reviewValue(chosen);
       if (!value || !chosen.field.isConnected) { studioError = "Choose an answer here or on the employer form before approval."; renderStudio(panel()); return; }
-      var save = chosen.protected === "reusable" && !chosen.field.multiple && !!panel().querySelector("#studio-reuse:checked");
+      var save = chosen.protected === "reusable" && !chosen.field.multiple && chosen.field.type !== "checkbox" && !!panel().querySelector("#studio-reuse:checked");
       function applyApproved() {
-        if (!chosen.field.isConnected) {
+        if (!chosen.field.isConnected || chosen.field.disabled || chosen.field.readOnly) {
           studioError = "This field changed. Review the employer form before filling.";
-          renderStudio(panel());
-          return;
+          renderStudio(panel()); return;
         }
         var existing = reviewValue(chosen);
-        if (existing && existing !== value) {
+        if (existing === value) { persistApproval(); return; }
+        if (existing && !selection) {
           studioError = "The employer field has a different answer. Review it on the form.";
           renderStudio(panel()); return;
         }
-        if (existing === value) { finishApproval(); return; }
-        if (chosen.field.multiple) {
-          studioError = "The employer field did not accept all selected options. Choose them on the form.";
-          renderStudio(panel()); return;
-        }
         filling = true;
-        var outcome = aceIsListboxButton(chosen.field)
+        var previous = chosen.field.value || '';
+        var beforeChoices = members.map(aceIsChosen);
+        var beforeOptions = chosen.field.tagName === 'SELECT' && chosen.field.multiple
+          ? Array.from(chosen.field.selectedOptions).map(function (option) { return option.value; }) : null;
+        var outcome;
+        if (members.length && values) {
+          members.forEach(function (member, at) {
+            var wanted = values.indexOf(at) >= 0;
+            if (!member.disabled && aceIsChosen(member) !== wanted && (member.type === 'checkbox' || wanted)) member.click();
+          });
+          outcome = Promise.resolve({ matched: members.every(function (member, at) { return aceIsChosen(member) === (values.indexOf(at) >= 0); }) });
+        } else if (chosen.field.tagName === 'SELECT' && chosen.field.multiple && values) {
+          Array.from(chosen.field.options).forEach(function (option) { option.selected = values.indexOf(option.value) >= 0; });
+          chosen.field.dispatchEvent(new Event('input', { bubbles: true }));
+          chosen.field.dispatchEvent(new Event('change', { bubbles: true }));
+          outcome = Promise.resolve({ matched: true });
+        } else if (chosen.field.tagName === 'SELECT') {
+          var exact = Array.from(chosen.field.options).filter(function (option) {
+            return option.value === value && !option.disabled && !option.closest('optgroup[disabled]');
+          });
+          if (exact.length === 1) setNatively(chosen.field, value);
+          outcome = Promise.resolve({ matched: exact.length === 1 });
+        } else outcome = aceIsListboxButton(chosen.field)
           ? fillOneListbox(chosen.field, value, [])
           : aceIsAutocomplete(chosen.field)
           ? fillOneCombobox(chosen.field, value, [])
           : Promise.resolve({ matched: fillOne(chosen.field, value, []) });
         outcome.then(function (result) {
+          return new Promise(function (resolve) { setTimeout(resolve, 60); }).then(function () {
+            return waitFor(function () { return result && result.matched && chosen.field.isConnected && reviewValue(chosen) === value; }, 1200);
+          });
+        }).then(function (accepted) {
           filling = false;
-          if (!result || !result.matched || aceIsEmpty(chosen.field)) {
-            studioError = "The employer field did not accept this answer. Fill it manually.";
-            renderStudio(panel());
-            return;
+          if (!accepted) {
+            studioError = "The employer field did not accept this answer. Review it on the form.";
+            renderStudio(panel()); return;
           }
-          lastFill.push({ field: lastPicked || chosen.field, previous: "", wrote: value, ticked: aceIsChoiceControl(chosen.field) });
-          finishApproval();
+          lastFill.push({ field: chosen.field, previous: previous, wrote: chosen.field.value,
+            reviewChoices: members.length ? members.map(function (member, at) { return { field: member, checked: beforeChoices[at] }; }) : null,
+            reviewOptions: beforeOptions });
+          if (selection) selection.baseline = value;
+          persistApproval();
         }, function () {
           filling = false;
-          studioError = "The employer field did not accept this answer. Fill it manually.";
+          studioError = "The employer field did not accept this answer. Review it on the form.";
           renderStudio(panel());
         });
       }
       function finishApproval() {
+        filling = false;
+        if (!chosen.field.isConnected || reviewValue(chosen) !== value) {
+          reviewSelections.delete(chosen.key);
+          studioError = "The employer answer changed. Review its current answer before approving.";
+          renderStudio(panel()); return;
+        }
         approvedQuestions.add(chosen.key);
         reviewDrafts.delete(chosen.key);
+        reviewSelections.delete(chosen.key);
         reviewQuestion = "";
         studioError = "";
         activityNote(save ? "Answer approved and saved" : "Answer approved for this form");
         renderStudio(panel());
       }
-      if (!save) { applyApproved(); return; }
-      var concept = aceMemory.concept(chosen.question);
-      var memoryValue = chosen.field.tagName === 'SELECT'
-        ? String(chosen.field.options[chosen.field.selectedIndex] && chosen.field.options[chosen.field.selectedIndex].textContent || value).trim()
-        : aceIsChoiceControl(chosen.field) && chosen.field.type === 'checkbox' && groupMembers(chosen.field).length === 1
-        ? 'Yes'
-        : value;
-      chrome.runtime.sendMessage({ type: "memorySave", item: {
-        concept: concept, question: chosen.display, answer: memoryValue,
-        answer_type: chosen.kind, source_host: location.hostname
-      } }, function (reply) {
-        if (chrome.runtime.lastError || !reply || !reply.ok) {
-          studioError = memoryFailure(reply && reply.error || chrome.runtime.lastError && chrome.runtime.lastError.message) + " The field remains for review because its answer was not saved.";
-          renderStudio(panel());
-          return;
-        }
-        var old = memory.find(function (m) { return m.concept === concept; });
-        if (old) { old.answer = memoryValue; old.question = chosen.display; old.revision = reply.item.revision; }
-        else memory.push({ id: reply.item.id, concept: concept, question: chosen.display,
-          answer: memoryValue, answer_type: chosen.kind, reuse_policy: "reusable", revision: reply.item.revision,
-          source_host: location.hostname });
-        answers["Memory:" + concept] = memoryValue;
-        aliases["Memory:" + concept] = [];
-        applyApproved();
-      });
+      function persistApproval() {
+        if (!save) { finishApproval(); return; }
+        filling = true;
+        var concept = aceMemory.concept(chosen.question);
+        var memoryValue = chosen.field.tagName === 'SELECT'
+          ? String(chosen.field.options[chosen.field.selectedIndex] && chosen.field.options[chosen.field.selectedIndex].textContent || value).trim()
+          : aceIsChoiceControl(chosen.field) && chosen.field.type === 'checkbox' && groupMembers(chosen.field).length === 1
+          ? 'Yes'
+          : value;
+        chrome.runtime.sendMessage({ type: "memorySave", item: {
+          concept: concept, question: chosen.display, answer: memoryValue,
+          answer_type: chosen.kind, source_host: location.hostname
+        } }, function (reply) {
+          if (chrome.runtime.lastError || !reply || !reply.ok) {
+            filling = false;
+            studioError = memoryFailure(reply && reply.error || chrome.runtime.lastError && chrome.runtime.lastError.message) + " The form is filled. Approval remains open because Memory did not save the answer.";
+            renderStudio(panel());
+            return;
+          }
+          var old = memory.find(function (m) { return m.concept === concept; });
+          if (old) { old.answer = memoryValue; old.question = chosen.display; old.revision = reply.item.revision; }
+          else memory.push({ id: reply.item.id, concept: concept, question: chosen.display,
+            answer: memoryValue, answer_type: chosen.kind, reuse_policy: "reusable", revision: reply.item.revision,
+            source_host: location.hostname });
+          answers["Memory:" + concept] = memoryValue;
+          aliases["Memory:" + concept] = [];
+          finishApproval();
+        });
+      }
+      applyApproved();
       return;
     }
 
@@ -3272,6 +3343,9 @@
     if (!loaded || filling || !field || field.closest && field.closest('.ace-root')) return;
     if (!field.matches || !field.matches('input,textarea,select,button')) return;
     if (aceMemory.isEmployerMotivation(aceQuestionFor(field))) return;
+    var editedKey = aceMemory.norm(aceQuestionFor(field)) + '|' + kindOf(field);
+    reviewSelections.delete(editedKey);
+    approvedQuestions.delete(editedKey);
     if (focusMode === 'review') setTimeout(function () {
       var host = document.querySelector('.ace-root');
       if (host && host.shadowRoot) renderStudio(host.shadowRoot.querySelector('.ace-panel'));
@@ -3282,7 +3356,7 @@
   // opens it. Mirror only the actual menu associated with that control.
   document.addEventListener('click', function (event) {
     var field = event.target && event.target.closest && event.target.closest('button[aria-haspopup="listbox"]');
-    if (!field || !loaded) return;
+    if (!field || !loaded || filling) return;
     var question = aceQuestionFor(field);
     if (aceMemory.isEmployerMotivation(question)) return;
     var before = shownListboxes();
