@@ -34,42 +34,62 @@ function loadSource(filename) {
 }
 
 const { InboxReviewPanel } = loadSource(path.join(sourceRoot, "components/inbox/InboxReviewPanel.tsx"));
-const message = { id: 1, received_at: "2026-01-01T12:00:00Z", sender: "fixture@example.test", subject: "Fictional interview", snippet: "Fictional interview invitation", classification: "interview", requisition_id: "FIX-1", decision: "review", candidate_keys: ["job:1"], reason: "Exact application needs confirmation", selected_application_key: null };
+const message = { id: 1, received_at: "2026-01-01T12:00:00Z", sender: "fixture@example.test", subject: "Fictional interview", snippet: "Fictional interview invitation", classification: "interview", requisition_id: "FIX-1", decision: "review", candidate_keys: ["job:1"], reason: "Matched by its job ID; positive outcomes need your confirmation", selected_application_key: null };
 const applications = [{ key: "job:1", company: "Fictional Labs", title: "Fictional engineer", requisition_id: "FIX-1", applied_at: "2025-12-01T12:00:00Z", status: "applied" }];
-function render(selected = message, apps = applications) {
-  return renderToStaticMarkup(React.createElement(InboxReviewPanel, { message: selected, applications: apps, busy: false, action: async () => { throw Error("Rendering must not mutate"); }, showPending: () => {} }));
+function render(selected = message, apps = applications, events = []) {
+  return renderToStaticMarkup(React.createElement(InboxReviewPanel, { message: selected, applications: apps, events, busy: false, action: async () => { throw Error("Rendering must not mutate"); } }));
 }
+const button = (html, label) => html.match(new RegExp(`<button[^>]*>${label}</button>`))?.[0] ?? "";
 
 for (const decision of ["review", "exact_preview", "deferred"]) {
-  test(`${decision}: renders explicit application and outcome choices without a rejection default`, () => {
+  test(`${decision}: ACE's likeliest application is chosen and each outcome is one click`, () => {
     const html = render({ ...message, decision });
-    assert.match(html, /1\. Choose the exact application/);
-    assert.match(html, /2\. Choose what the email confirms/);
-    assert.match(html, /Search your applications/);
+    assert.match(html, /ACE thinks this is about/);
     assert.match(html, /Fictional Labs/);
-    assert.match(html, /<option value="" selected="">Choose an outcome after reading the email/);
-    assert.doesNotMatch(html, /<option value="rejected" selected/);
-    assert.match(html, /<button[^>]*disabled=""[^>]*>Confirm application outcome/);
-    assert.match(html, /Not about an application/);
-    assert.match(html, /Defer for later/);
+    assert.match(html, /Loading the full email/);
+    assert.match(html, /Fictional interview invitation/);
+    for (const label of ["Rejected", "Interview", "Assessment", "Offer", "Just a receipt", "Not about my applications"]) {
+      assert.ok(button(html, label), `${label} button`);
+      assert.doesNotMatch(button(html, label), /disabled/);
+    }
+    assert.match(button(html, "Interview"), /class="btn primary"/);
+    assert.doesNotMatch(button(html, "Rejected"), /primary/);
+    assert.equal(Boolean(button(html, "Decide later")), decision !== "deferred");
+    assert.doesNotMatch(html, /type="checkbox"/);
   });
 }
 
-for (const decision of ["ignored", "manual", "automatic"]) {
-  test(`${decision}: explains why no pending review form is shown`, () => {
-    const html = render({ ...message, decision });
-    assert.match(html, /It has no pending outcome to confirm/);
-    assert.match(html, /Show messages awaiting review/);
-    assert.doesNotMatch(html, /Confirm application outcome/);
-  });
-}
+test("without a likely application the outcome buttons wait for a choice", () => {
+  const html = render({ ...message, candidate_keys: [] });
+  assert.match(html, /Which application\?/);
+  assert.match(html, /Search company, role or job ID/);
+  assert.match(button(html, "Rejected"), /disabled/);
+  assert.match(html, /Choose the application first/);
+  assert.doesNotMatch(button(html, "Not about my applications"), /disabled/);
+});
 
-test("no application can be confirmed without a stored application choice", () => {
-  const html = render(message, []);
-  assert.match(html, /No applications match that search/);
-  assert.match(html, /<button[^>]*disabled=""[^>]*>Confirm application outcome/);
+test("an email ACE ignored can still be decided by hand", () => {
+  const html = render({ ...message, decision: "ignored", classification: "unknown" });
+  assert.match(html, /No recruiting outcome found/);
+  assert.ok(button(html, "Rejected"));
+});
+
+test("a recorded email offers Undo instead of outcome buttons", () => {
+  const recorded = { ...message, decision: "automatic", classification: "rejection", selected_application_key: "job:1", reason: "Clear rejection matched by its job ID" };
+  const events = [{ id: 7, application_key: "job:1", kind: "rejection", before: "applied", after: "rejected", actor: "verified_automation", reason: "fixture", recorded_at: "2026-01-02T00:00:00Z", undo_of_id: null, gmail_message_id: 1 }];
+  const html = render(recorded, applications, events);
+  assert.match(html, /ACE recorded this email/);
+  assert.match(html, /Undo this change/);
+  assert.ok(!button(html, "Rejected"));
+  const undone = render(recorded, applications, [...events, { ...events[0], id: 8, kind: "undo", undo_of_id: 7 }]);
+  assert.match(undone, /Undo it from Audit trail/);
+});
+
+test("drawn rules and dashes in the email excerpt are not shown", () => {
+  const html = render({ ...message, snippet: "Hello\n-----\nTeam — Fictional Labs" });
+  assert.doesNotMatch(html, /-----|—/);
 });
 
 test("empty selection explains how to begin", () => {
-  assert.match(render(null), /Select a message on the left/);
+  assert.match(render(null), /Choose an email on the left/);
 });

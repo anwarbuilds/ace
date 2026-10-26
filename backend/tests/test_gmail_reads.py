@@ -213,7 +213,7 @@ def test_review_counts_and_pagination_include_older_pending_messages(database):
     assert [len(page["items"]) for page in pages] == [50,50,27]
     assert all(page["total"] == page["review_count"] == 127 for page in pages)
     assert [page["has_more"] for page in pages] == [True,True,False]
-    assert pages[0]["counts"] == {"stored":284,"needs_review":127,"automatic":3,"reviewed":7}
+    assert pages[0]["counts"] == {"stored":284,"needs_review":127,"automatic":3,"reviewed":7,"receipts":0,"stale":127}
     ids=[row["id"] for page in pages for row in page["items"]]
     assert len(ids)==len(set(ids))==127
     assert all(row["decision"] != "ignored" for page in pages for row in page["items"])

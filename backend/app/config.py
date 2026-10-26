@@ -138,6 +138,10 @@ class Settings(BaseSettings):
     # A Fernet key supplied privately by the owner, never committed.
     gmail_token_key: str = ""
     gmail_auto_outcomes_allowed: bool = False
+    # A clear rejection matched to exactly one application is recorded
+    # without a manual step (owner decision, 2026-10-26). False sends
+    # every rejection back to review.
+    gmail_auto_rejections: bool = True
 
     # The interactive API docs list every route. Off unless asked for.
     api_docs: bool = False

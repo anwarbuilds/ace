@@ -486,7 +486,7 @@ _PATTERN_REQUIRES: dict[str, str] = {
 # What each alias needs to find in the lowercased text before its
 # pattern can match. Most aliases are absent from a given posting, and a
 # substring test settles that far faster than a case-insensitive
-# regular expression: one Career Dashboard load ran 216 patterns over
+# regular expression: one dashboard load ran 216 patterns over
 # 100 real descriptions in 1.4 s. None, for an alias with regex syntax
 # that has no entry above, means its pattern always runs.
 _REQUIRED_TEXT: dict[

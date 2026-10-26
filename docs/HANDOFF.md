@@ -112,6 +112,16 @@ build pass. Browser testing remains suspended for cooling. Reload the unpacked
 extension and refresh employer tabs; nothing was deployed or published.
 Work branch: `extension-quick-fill-20261026`, based on logo commit `2a2982e`.
 
+**2026-10-26 Inbox and Analytics update:** Clear rejection emails matched to exactly one
+application (job ID including "Ref:", exact title, or the only application at the named
+company) are recorded automatically from sync, historical import and a new recheck, with
+Undo; receipts are filed; everything else is one click with the full email (read live) and
+ACE's best-guess application preselected. Analytics lists the companies that rejected the
+owner. Career Dashboard and `/api/intelligence` are removed; `/app/dashboard` redirects to
+Analytics. `GMAIL_AUTO_REJECTIONS` (default true) is the server switch. No migration.
+See `ACE_NEXT_KNOWLEDGE.md`, Inbox automatic rejections.
+
+
 **2026-10-26 automatic employer logos:** Review branch
 `company-logo-consistency-20261026`, draft PR #1, now handles future employers
 automatically through `/api/company-logo`. The 59 bundled icons/71 aliases are

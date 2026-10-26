@@ -1,9 +1,9 @@
 """Read-only Analytics projection. No mailbox access, status writes or guessed attribution.
 
-The older intelligence endpoint serves Career Dashboard and mixes lifetime
-applications with discovery. This projection adds bounded submission-date
-filters, local calendar weeks, undo-aware outcomes and official petition series
-without changing that endpoint or any durable business logic.
+Analytics replaced the Career Dashboard (removed 2026-10-26). This projection
+has bounded submission-date filters, local calendar weeks, undo-aware outcomes,
+the employers that rejected the owner and official petition series, without
+changing any durable business logic.
 """
 from __future__ import annotations
 
@@ -139,6 +139,15 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
         stamps = [(stamp, kind) for a in apps for kind, stamp in events.get(a.key, {}).items() if stamp]
         latest = max(stamps, default=None)
         company_rows.append({"name": name, **group(apps), "latest": latest[1] if latest else "Not recorded", "latest_at": latest[0].isoformat() if latest else None})
+    # Every employer with a recorded rejection in this selection. A status
+    # recorded without an email has no date; it is never given one.
+    rejected_companies = []
+    for name, apps in employers.items():
+        refused = [a.key for a in apps if a.key in rejected]
+        if refused:
+            stamps = [events[key]["rejection"] for key in refused if events[key].get("rejection")]
+            rejected_companies.append((name, len(refused), len(apps), max(stamps, default=None)))
+    rejected_companies.sort(key=lambda row: (-row[1], -(row[3].timestamp() if row[3] else 0), row[0]))
     monday = today - timedelta(days=today.weekday())
     daily = Counter(dated[a.key].isoformat() for a in selected if a.key in dated)
     weekly = Counter(dated[a.key].isoformat() for a in eligible_family if a.key in dated and monday <= dated[a.key] <= today)
@@ -207,6 +216,8 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
             "roles": [{"family": key, **group(apps)} for key, apps in sorted(groups.items(), key=lambda item: -len(item[1]))],
             "attribution": {"resume": "Not recorded", "channel": "Not recorded", "combinations": []},
             "companies": company_rows, "selected_company": selected_company,
+            "rejected_companies": [{"name": name, "rejections": count, "applications": total, "latest_at": latest.isoformat() if latest else None}
+                                   for name, count, total, latest in rejected_companies],
             "verified_companies": [{"name": name, **group(employers[name]), "reports": sum(r.ace_company == name for r in reports)} for name in employers if any(r.ace_company == name for r in reports)],
             "reports": sorted(report_items, key=lambda r: r["period"], reverse=True),
             "annual": [{"period": period, **counts, "rate": counts["approvals"] / sum(counts.values()) if sum(counts.values()) else None} for period, counts in sorted(annual.items())]}
