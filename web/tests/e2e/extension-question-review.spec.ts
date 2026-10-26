@@ -87,11 +87,10 @@ test('native option codes remain drafts until approval and reverted writes are n
   expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
 });
 
-test('a typed form answer needs approval only and auto-fills an equivalent question on the next application', async ({ page }) => {
-  const panel = await load(page, '<label for="testing">Describe your experience writing integration tests</label><textarea id="testing"></textarea>');
-  await panel.getByRole('button', { name: /Describe your experience/ }).click();
+test('a pre-existing form answer is confirmed once without another employer write and reused later', async ({ page }) => {
   const answer = 'I test API boundaries with isolated fixtures and deterministic assertions.';
-  await page.locator('#testing').fill(answer);
+  const panel = await load(page, `<label for="testing">Describe your experience writing integration tests</label><textarea id="testing">${answer}</textarea>`);
+  await panel.getByRole('button', { name: /Describe your experience/ }).click();
   await expect(panel.getByText('Answer detected on form', { exact: true })).toBeVisible();
   await expect(panel.locator('.focus-detected')).toContainText(answer);
   await expect(panel.getByRole('textbox', { name: 'Your answer' })).toHaveCount(0);
@@ -227,4 +226,38 @@ test('native choices save without approval while synthetic page events cannot te
   await expect(panel.getByRole('switch', { name: 'Auto-save routine answers: On' })).toBeChecked();
   await panel.getByRole('switch', { name: 'Auto-save routine answers: On' }).click();
   await expect(panel.getByRole('switch', { name: 'Auto-save routine answers: Off' })).not.toBeChecked();
+});
+
+
+test('Review follows clicked questions beyond the chip strip and fills a newly added known routine answer', async ({ page }) => {
+  const memory = [{ id: 1, revision: 1, concept: 'q:experience writing integration tests', question: 'Describe your experience writing integration tests', answer: 'Fictional saved testing experience', answer_type: 'text', reuse_policy: 'reusable' }];
+  const panel = await load(page, Array.from({ length: 9 }, (_, at) => `<label for="detail-${at}">Fictional screening question ${at + 1}</label><textarea id="detail-${at}"></textarea>`).join(''), memory, true, true);
+  await page.locator('#detail-0').click(); await expect(panel.locator('.studio-question')).toHaveText('Fictional screening question 1');
+  await panel.getByRole('textbox', { name: 'Your answer' }).fill('Fictional unsent draft');
+  await page.locator('#detail-8').click(); await expect(panel.locator('.studio-question')).toHaveText('Fictional screening question 9');
+  await page.locator('#detail-0').click(); await expect(panel.getByRole('textbox', { name: 'Your answer' })).toHaveValue('Fictional unsent draft');
+  await expect(page.locator('#detail-0')).toHaveValue('');
+  await page.evaluate(() => { const block = document.createElement('div'); block.innerHTML = '<label for="known">Could you describe your experience writing integration tests?</label><textarea id="known"></textarea>'; document.querySelector('form')!.append(block); });
+  await page.locator('#known').click(); await expect(page.locator('#known')).toHaveValue('Fictional saved testing experience');
+  await expect(panel.getByText('Answered on form', { exact: true })).toBeVisible();
+  await expect(panel.getByRole('button', { name: /Approve/ })).toHaveCount(0);
+});
+
+test('a direct protected custom dropdown choice completes without another approval and never enters Memory', async ({ page }) => {
+  const panel = await load(page, '<label id="sponsor-label">Will you require visa sponsorship?</label><div id="sponsor" role="combobox" aria-labelledby="sponsor-label" aria-controls="sponsor-options" tabindex="0">Select One</div>', [], false, true);
+  await page.evaluate(() => {
+    const field = document.getElementById('sponsor')!;
+    field.addEventListener('click', () => {
+      if (document.getElementById('sponsor-options')) return;
+      const menu = document.createElement('div'); menu.id = 'sponsor-options'; menu.setAttribute('role', 'listbox');
+      const option = document.createElement('div'); option.setAttribute('role', 'option'); option.textContent = 'Yes';
+      option.addEventListener('click', event => { event.stopPropagation(); field.textContent = 'Yes'; menu.remove(); }); menu.append(option); document.body.append(menu);
+    });
+  });
+  await page.locator('#sponsor').click(); await page.getByRole('option', { name: 'Yes', exact: true }).click();
+  await expect(panel.getByText('Answered on form', { exact: true })).toBeVisible();
+  await expect(panel.getByText('Your choice is recorded for this application only. No extra approval or Memory save.')).toBeVisible();
+  await expect(panel.getByRole('button', { name: /Approve/ })).toHaveCount(0);
+  expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(0);
+  expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
 });

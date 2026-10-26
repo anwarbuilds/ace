@@ -580,13 +580,16 @@ test('new typing cancels an unfinished scheduled save', async t => {
   ownerEvent(f, field, 'focusout'); await until(() => f.saved.length === 1, 'final value is saved'); assert.equal(f.saved[0].answer, 'Still editing');
 });
 
-test('Memory switch cancels pending auto-save and preserves manual approval', async t => {
+test('Memory switch cancels pending saving without asking for the completed form answer again', async t => {
   const f = fixture(routine, { autoLearn: true }); t.after(f.dispose);
   const field = f.document.getElementById('detail'); field.value = 'Fictional final answer'; ownerEvent(f, field, 'input'); ownerEvent(f, field, 'focusout');
   f.click('workspace'); f.click('tab:memory');
   assert.equal(f.panel().querySelector('[data-ace=auto-learn]').getAttribute('aria-checked'), 'true'); f.click('auto-learn');
   await sleep(450); assert.equal(f.saved.length, 0);
-  f.review('Describe your experience'); assert.equal(f.panel().querySelector('[data-ace^="approve:"]').textContent, 'Approve answer');
+  ownerEvent(f, field, 'focusin');
+  await until(() => f.panel().textContent.includes('Answered on form'), 'completed answer remains complete with learning disabled');
+  assert.equal(f.panel().querySelector('[data-ace^="approve:"]'), null);
+  f.click(f.panel().querySelector('[data-ace^="edit-answer:"]').getAttribute('data-ace'));
   f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
   await until(() => f.saved.length === 1, 'explicit approval still saves with auto-learning disabled');
 });
@@ -604,10 +607,10 @@ test('protected, motivation and multi-answer controls never auto-save', async t 
 test('failed auto-save stays visible and can be retried without approving', async t => {
   const config = { autoLearn: true, failSave: true }; const f = fixture(routine, config); t.after(f.dispose);
   f.review('Describe your experience'); const field = f.document.getElementById('detail'); field.value = 'Fictional final answer'; ownerEvent(f, field, 'input'); ownerEvent(f, field, 'focusout');
-  await until(() => f.panel().textContent.includes('Not saved yet.'), 'failure remains honest');
-  assert.ok(f.panel().textContent.includes('Save now')); config.failSave = false;
+  await until(() => f.panel().textContent.includes('Memory has not saved this answer yet.'), 'failure remains honest');
+  assert.ok(f.panel().textContent.includes('Retry Memory save')); config.failSave = false;
   f.click(f.panel().querySelector('[data-ace^="learn-now:"]').getAttribute('data-ace'));
-  await until(() => f.saved.length === 2 && !f.panel().querySelector('.studio-question')?.textContent.includes('integration tests'), 'retry saves without approval'); assert.equal(f.saved.length, 2);
+  await until(() => f.saved.length === 2 && !f.panel().textContent.includes('Memory has not saved this answer yet.'), 'retry saves without approval'); assert.equal(f.saved.length, 2);
 });
 
 test('long question keys fit the existing API and remain reusable', async t => {
@@ -770,4 +773,108 @@ test('motivation values never enter frame relay snapshots and missing outer rece
   assert.ok(f.routes.filter(route => route.message.op === 'render').every(route => !JSON.stringify(route.message).includes('Private fictional motivation')));
   const fallback = fixture(routine, { embedded: true }); t.after(fallback.dispose);
   await sleep(100); assert.ok(fallback.panel()); assert.notEqual(fallback.document.querySelector('.ace-root').style.visibility, 'hidden');
+});
+
+test('Review follows the actual focused question beyond the first six and preserves other drafts', async t => {
+  const f = fixture(Array.from({ length: 9 }, (_, at) => `<label for="detail-${at}">Fictional screening question ${at + 1}</label><textarea id="detail-${at}"></textarea>`).join(''), { autoLearn: false }); t.after(f.dispose);
+  ownerEvent(f, f.document.getElementById('detail-0'), 'focusin');
+  await until(() => f.panel().querySelector('.studio-question')?.textContent === 'Fictional screening question 1', 'follow the first employer field');
+  const editor = f.panel().querySelector('#studio-answer'); editor.value = 'Fictional draft retained in ACE'; editor.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+  ownerEvent(f, f.document.getElementById('detail-8'), 'pointerdown');
+  await until(() => f.panel().querySelector('.studio-question')?.textContent === 'Fictional screening question 9', 'follow a field beyond the first six');
+  assert.ok(Array.from(f.panel().querySelectorAll('.focus-chip.active')).some(chip => chip.textContent.includes('question 9')));
+  ownerEvent(f, f.document.getElementById('detail-0'), 'focusin');
+  await until(() => f.panel().querySelector('.studio-question')?.textContent === 'Fictional screening question 1', 'return to the exact original question');
+  assert.equal(f.panel().querySelector('#studio-answer').value, 'Fictional draft retained in ACE'); assert.equal(f.document.getElementById('detail-0').value, '');
+});
+
+test('a committed protected employer selection finishes locally without a second approval or Memory save', async t => {
+  const f = fixture('<label for="sponsor">Will you require visa sponsorship?</label><select id="sponsor"><option value="">Select One</option><option value="yes-9">Yes</option><option value="no-3">No</option></select>', { autoLearn: true }); t.after(f.dispose);
+  const field = f.document.getElementById('sponsor'); ownerEvent(f, field, 'focusin'); field.value = 'yes-9'; ownerEvent(f, field, 'change');
+  await until(() => f.panel().textContent.includes('Answered on form'), 'actual applicant selection is the per-form decision');
+  assert.ok(f.panel().textContent.includes('this application only')); assert.equal(f.panel().querySelector('[data-ace^="approve:"]'), null); assert.equal(f.panel().querySelector('#studio-answer'), null);
+  await sleep(400); assert.equal(f.saved.length, 0);
+  field.dispatchEvent(new f.window.Event('change', { bubbles: true })); await sleep(220);
+  assert.ok(f.panel().textContent.includes('Answered on form'), 'unchanged synthetic events cannot reopen a completed question');
+  field.value = ''; f.click('theme');
+  assert.ok(!f.panel().textContent.includes('Answered on form'), 'clearing the real answer invalidates completion'); assert.ok(f.panel().querySelector('#studio-answer'));
+  assert.equal(f.submissions(), 0);
+});
+
+test('protected prefills stay visible for confirmation rather than being silently approved by focus', async t => {
+  const f = fixture('<label for="sponsor">Will you require visa sponsorship?</label><select id="sponsor"><option value="">Select One</option><option value="yes-9" selected>Yes</option></select>', { autoLearn: true }); t.after(f.dispose);
+  const field = f.document.getElementById('sponsor'); ownerEvent(f, field, 'focusin');
+  await until(() => f.panel().querySelector('.focus-detected'), 'existing answer is shown without re-entry');
+  assert.ok(f.panel().querySelector('.focus-detected').textContent.includes('Yes'));
+  assert.equal(f.panel().querySelector('[data-ace^="approve:"]').textContent, 'Approve answer'); assert.equal(f.saved.length, 0);
+});
+
+test('inputless ARIA comboboxes expose their actual selected label and committed protected choice', async t => {
+  const f = fixture('<label id="sponsor-label">Will you require visa sponsorship?</label><div id="sponsor" role="combobox" aria-labelledby="sponsor-label" aria-controls="sponsor-options" tabindex="0">Select One</div>', { autoLearn: true }); t.after(f.dispose);
+  const field = f.document.getElementById('sponsor');
+  field.addEventListener('click', event => { if (event.target !== field) return; setTimeout(() => {
+    if (f.document.getElementById('sponsor-options')) return;
+    const menu = f.document.createElement('div'); menu.id = 'sponsor-options'; menu.setAttribute('role', 'listbox');
+    const option = f.document.createElement('div'); option.setAttribute('role', 'option'); option.textContent = 'Yes';
+    option.addEventListener('click', () => setTimeout(() => { field.textContent = 'Yes'; menu.remove(); }, 0)); menu.append(option); field.append(menu);
+  }, 0); });
+  ownerEvent(f, field, 'focusin');
+  await until(() => f.panel().querySelector('[data-ace^="read-options:"]'), 'declared inputless dropdown stays a choice control');
+  ownerEvent(f, field, 'click'); await until(() => f.document.querySelector('#sponsor-options [role=option]'), 'real menu opens');
+  ownerEvent(f, f.document.querySelector('#sponsor-options [role=option]'), 'click');
+  await until(() => f.panel().textContent.includes('Answered on form'), 'committed custom choice is acknowledged without re-entering');
+  assert.ok(f.panel().textContent.includes('Yes')); assert.equal(f.saved.length, 0); assert.equal(f.submissions(), 0);
+});
+
+test('focus immediately fills a newly added equivalent known routine question and supports undo', async t => {
+  const memoryStore = [{ id: 1, concept: 'q:experience writing integration tests', question: 'Describe your experience writing integration tests', answer: 'Fictional remembered test experience', answer_type: 'text', reuse_policy: 'reusable', revision: 1 }];
+  const f = fixture('', { autoKnown: true, autoLearn: true, memoryStore }); t.after(f.dispose); await sleep(150);
+  const label = f.document.createElement('label'); label.setAttribute('for', 'new-question'); label.textContent = 'Could you describe your experience writing integration tests?';
+  const field = f.document.createElement('textarea'); field.id = 'new-question'; f.document.querySelector('form').append(label, field);
+  field.focus(); ownerEvent(f, field, 'focusin');
+  await until(() => field.value === memoryStore[0].answer && f.panel().textContent.includes('Answered on form'), 'one focused field fills from verified equivalent Memory');
+  assert.equal(f.saved.length, 0, 'ACE does not relearn its own write');
+  assert.equal(f.document.activeElement, field, 'targeted fill retains the owner’s typing focus');
+  f.click('workspace'); f.click('tab:activity'); f.click('undo'); assert.equal(field.value, '');
+  ownerEvent(f, field, 'focusin'); await sleep(200); assert.equal(field.value, '', 'focusing does not reverse an explicit Undo'); assert.equal(f.submissions(), 0);
+});
+
+test('hover follows the question without writing, synthetic focus does not act, and sensitive fields are never inferred', async t => {
+  const memoryStore = [{ id: 1, concept: 'q:experience writing integration tests', question: 'Describe your experience writing integration tests', answer: 'Fictional remembered answer', answer_type: 'text', reuse_policy: 'reusable', revision: 1 }];
+  const f = fixture('', { autoKnown: true, autoLearn: true, memoryStore }); t.after(f.dispose); await sleep(150);
+  const container = f.document.createElement('div'); container.innerHTML = '<label for="detail">Describe your experience writing integration tests</label><textarea id="detail"></textarea><label for="sponsor">Will you require visa sponsorship?</label><input id="sponsor"><label for="why">Why this company?</label><textarea id="why"></textarea>'; f.document.querySelector('form').append(container);
+  const field = f.document.getElementById('detail'); field.dispatchEvent(new f.window.Event('focusin', { bubbles: true })); await sleep(150); assert.equal(field.value, '');
+  f.click('tab:review'); ownerEvent(f, field, 'pointerover'); await sleep(180); assert.equal(field.value, ''); assert.ok(f.panel().querySelector('.studio-question').textContent.includes('integration tests'));
+  ownerEvent(f, f.document.getElementById('sponsor'), 'focusin'); await sleep(180); assert.equal(f.document.getElementById('sponsor').value, '');
+  const why = f.document.getElementById('why'); let reads = 0; Object.defineProperty(why, 'value', { get() { reads++; return 'Excluded'; } });
+  ownerEvent(f, why, 'focusin'); ownerEvent(f, why, 'pointerover'); await sleep(180); assert.equal(reads, 0); assert.ok(!f.panel().textContent.includes('Why this company'));
+});
+
+test('pointed known native choices reject employer reversion instead of claiming completion', async t => {
+  const memoryStore = [{ id: 1, concept: 'q:which interview format do you prefer', question: 'Which interview format do you prefer?', answer: 'Remote', answer_type: 'choice', reuse_policy: 'reusable', revision: 1 }];
+  const f = fixture('', { autoKnown: true, autoLearn: false, memoryStore }); t.after(f.dispose); await sleep(150);
+  const container = f.document.createElement('div'); container.innerHTML = '<label for="format">Which interview format do you prefer?</label><select id="format"><option value="">Select One</option><option value="remote-19">Remote</option></select>'; f.document.querySelector('form').append(container);
+  const field = f.document.getElementById('format'); field.addEventListener('change', () => setTimeout(() => { field.value = ''; }, 10));
+  ownerEvent(f, field, 'focusin'); await sleep(250); assert.equal(field.value, ''); assert.ok(!f.panel().textContent.includes('Answered on form')); assert.equal(f.saved.length, 0);
+});
+
+test('question following works through the outer-frame card and keeps direct protected answers complete', async t => {
+  const f = framedFixture('<label for="sponsor">Will you require visa sponsorship?</label><select id="sponsor"><option value="">Select One</option><option value="yes-7">Yes</option></select>' + routine); t.after(f.dispose);
+  await until(() => f.remote(), 'outer card appears'); const sponsor = f.source.document.getElementById('sponsor'); ownerEvent(f.source, sponsor, 'focusin'); sponsor.value = 'yes-7'; ownerEvent(f.source, sponsor, 'change');
+  await until(() => f.remote()?.textContent.includes('Answered on form'), 'outer card acknowledges the actual committed source choice');
+  assert.equal(f.remote().querySelector('[data-ace^="approve:"]'), null);
+  ownerEvent(f.source, f.source.document.getElementById('detail'), 'focusin');
+  await until(() => f.remote()?.querySelector('.studio-question')?.textContent.includes('integration tests'), 'outer card follows the next source field without choosing a chip');
+  assert.equal(f.source.saved.length, 0); assert.equal(f.source.submissions(), 0);
+});
+
+
+test('pointed choice autofill never clicks a submit button even if it declares choice semantics', async t => {
+  const memoryStore = [{ id: 1, concept: 'q:are you available for a remote interview', question: 'Are you available for a remote interview?', answer: 'Yes', answer_type: 'yesno', reuse_policy: 'reusable', revision: 1 }];
+  const f = fixture('', { autoKnown: true, autoLearn: false, memoryStore }); t.after(f.dispose); await sleep(150);
+  const group = f.document.createElement('div'); group.setAttribute('role', 'radiogroup'); group.setAttribute('aria-label', 'Are you available for a remote interview?');
+  group.innerHTML = '<button id="no" type="button" aria-pressed="false">No</button><button id="bad-choice" type="submit" aria-pressed="false">Yes</button>'; f.document.querySelector('form').append(group);
+  let attempts = 0; f.document.getElementById('bad-choice').addEventListener('click', () => { attempts++; });
+  ownerEvent(f, f.document.getElementById('no'), 'focusin'); await sleep(250);
+  assert.equal(attempts, 0); assert.equal(f.saved.length, 0); assert.equal(f.submissions(), 0);
 });

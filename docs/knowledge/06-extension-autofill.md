@@ -1048,3 +1048,32 @@ lint, syntax, dash and whitespace checks pass. 33 Playwright cases collect, with
 one new cross-origin iframe fixture, but were not run due to laptop cooling.
 No live installed-MV3/employer or fresh visual verification is claimed. Reload
 local 1.28.5 and refresh employer tabs; no deployment or publication occurred.
+
+
+## Active-question following and completed-answer receipts (2026-10-26)
+
+Status: Local 1.28.6 supersedes extra approval after an observed, committed owner
+answer on the employer form. Protected choices remain per-application and are
+never saved to Memory. Untouched prefills still show the actual answer for one
+confirmation; ACE drafts retain the explicit verified fill action.
+
+Review follows clicked/focused employer controls and previews hover while
+Review is open. Its chip window includes selected questions beyond the first
+six. Drafts remain keyed to their questions. Auto-fill known can fill an empty
+routine focused field from existing equivalent Memory/profile data through the
+current adapters, with stable readback, focus restoration and Undo protection.
+It does not fill sensitive questions or overwrite existing answers. Closed and
+minimized cards retain owner control.
+
+Actual owner commits create identity/question/type/value/options-bound local
+receipts. Answered on form removes duplicate approval/re-entry. Clears or
+changed answers invalidate completion; no-op synthetic events do not. Memory
+saving is separate: Off or save failure leaves the form answered, with an
+optional Retry Memory save. Inputless declared ARIA comboboxes expose actual
+menus and selected labels. The loaded version is visible in Memory.
+
+58 fictional DOM contracts, 258 matcher cases, Memory safety checks, TypeScript,
+lint, syntax, dash and whitespace checks pass. 35 Playwright cases collect but
+were not run due to laptop cooling. Screenshot DOM and live installed-MV3 or
+paired production Memory behavior remain unverified. Reload local 1.28.6 and
+refresh employer tabs; no production deployment/publication/permissions change.

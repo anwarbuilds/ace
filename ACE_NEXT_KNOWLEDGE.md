@@ -611,7 +611,7 @@ commits (`54e939a`, `61debd6`, `8d84141`), the reconciled Focus Mode V5.1
 commits (`559ee84`, `5b8ab4b`, equivalents of local `4ce3570` and `cb7bb5e`),
 the V5.1 typography pass and theme sync/Close (`386bed9`). It contains the
 existing V4 Answer Memory implementation (`2e7c1dc`). The
-extension manifest is now `1.28.5` (local full-viewport embedded-form dragging, automatic routine-answer saving and control-mirroring repairs described below). The V5.1 extension has not been published; it
+extension manifest is now `1.28.6` (local active-question following, completed-answer receipts, full-viewport embedded-form dragging and automatic routine-answer saving described below). The V5.1 extension has not been published; it
 runs as an unpacked installation loaded from
 `/home/ubuntu/Documents/ace-next/extension`. An unpacked installation must be
 reloaded at `chrome://extensions`; employer tabs must then be refreshed.
@@ -632,6 +632,60 @@ employer form for manual completion. ACE never submits or marks Applied.
 Workday listing and search routes outside `/apply/` stay quiet, including after
 single-page navigation back from an application. The toolbar Wake override
 remains available.
+
+### Follow the actual question and avoid duplicate work (2026-10-26)
+
+The owner reported that Review remained on an old question and asked again
+after a visible employer answer was already selected. Local **1.28.6** adds
+active-question following and separate, value-checked form-completion receipts.
+This supersedes the earlier requirement for another approval click after a
+trusted owner answer has actually committed on the employer form, including
+protected per-application choices. It does not authorize sensitive Memory reuse.
+
+- Clicking/focusing an eligible employer control selects its exact Review
+  question. Hovering while Review is open previews only; it never writes.
+  The chip window follows the selected question beyond the original six-item
+  slice. Per-question ACE drafts survive moving between employer questions.
+  Minimized and closed cards retain their owner-controlled state.
+- With Auto-fill known on, focusing a blank routine field can fill only its
+  existing equivalent saved answer through the current native/choice/custom
+  adapters. Disabled options, incompatible options, nonempty answers, protected
+  questions, multi-answer controls, history-owned fields and ACE drafts are
+  excluded. Actual readback must remain stable before completion. Native text
+  focus is restored after validation so typing and Tab navigation still work.
+  Undo blocks a focus-triggered refill until an explicit Fill or a new step.
+- Trusted text edits commit on leaving the field; actual selected choices
+  commit after settling. **Answered on form** shows the current exact answer
+  without another entry or approval action. Protected decisions are local to
+  this application, never saved to Memory or inferred from another question.
+  Untouched protected prefills still show their current value for one explicit
+  confirmation. Motivation, credentials, synthetic-only edits and raw custom
+  search queries remain excluded from automatic completion.
+- Completion receipts bind control identity, question, type, value and options.
+  Clearing/changing those invalidates completion. Repeated no-op page events
+  do not reopen a completed question. Memory saving is independent: turning
+  auto-save off or a failed save does not make a completed form question empty.
+  Failures offer Retry Memory save. ACE-editor drafts still use explicit
+  Approve & fill with readback; manual approval advances normally.
+- Inputless elements declaring role=combobox, including button variants, are
+  treated as actual dropdowns rather than ignored or flattened into text.
+  The associated menu and committed label must verify a custom choice.
+  Protected menus can acknowledge a direct owner selection without reuse.
+  Memory displays the loaded extension version for reload verification.
+
+Validation: **58** fictional DOM contracts pass, including focus/hover/draft
+switching past six questions, direct protected completion with no Memory save,
+prefill confirmation, inputless custom choices, targeted reuse and Undo,
+reverted writes, motivation exclusions and outer-frame following. The 258
+matcher cases, Memory safety checks, TypeScript, ESLint, syntax, whitespace
+and forbidden-dash checks pass. **35** Playwright cases collect, with two new
+active-question/direct-choice scenarios, but Chrome was not launched because
+of the cooling restriction. No new visual, installed-MV3, authenticated real
+employer or paired live Memory verification is claimed. The owner's screenshot
+alone does not establish its exact DOM; the new adapter supports declared ARIA
+comboboxes conservatively. Reload **1.28.6** at `chrome://extensions`, refresh
+employer tabs, and check the version in Memory. No production deployment,
+extension publication, backend/data, Gmail, scheduler or permissions changed.
 
 ### Free movement beyond embedded application frames (2026-10-26)
 
@@ -1577,7 +1631,7 @@ reassuring success state when the backend has not confirmed one.
 
 The extension is Manifest V3. Important implementation areas are
 `extension/content.js`, `fields.js`, `background.js`, the popup/side panel,
-storage, pairing and rule tests. The current local manifest version is 1.28.5.
+storage, pairing and rule tests. The current local manifest version is 1.28.6.
 The approved interface is ACE Focus Mode V5.1; older extension interfaces are
 historical.
 

@@ -677,8 +677,9 @@ function aceIsWorkdayPrompt(field) {
    questions, the phone type and the whole language block. */
 function aceIsListboxButton(field) {
   return (
-    field.tagName === "BUTTON" &&
-    field.getAttribute("aria-haspopup") === "listbox"
+    ((field.tagName === "BUTTON" && field.getAttribute("aria-haspopup") === "listbox") ||
+      (field.getAttribute("role") === "combobox" && !/^(INPUT|SELECT|TEXTAREA)$/.test(field.tagName) &&
+        !field.querySelector('input:not([type=hidden]),select,textarea')))
   );
 }
 

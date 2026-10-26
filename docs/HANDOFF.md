@@ -100,6 +100,16 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
+**2026-10-26 question-following update:** Local 1.28.6 follows clicked/focused
+employer questions, fills equivalent known routine answers on focus and records
+committed owner answers as Answered on form without duplicate approval. Protected
+choices remain per-application; prefills still need one confirmation and ACE
+editor drafts still need the explicit fill action. Inputless ARIA dropdowns,
+completion invalidation, Memory failure handling and Undo are covered. 58 DOM
+contracts, 258 matcher cases, Memory checks, TypeScript, lint, syntax and dash
+checks pass. 35 Playwright cases collect only due to cooling. Reload 1.28.6 and
+refresh employer tabs; no deployment or publication occurred.
+
 **2026-10-26 drag update:** Local 1.28.5 lifts an embedded form's floating card
 into the outer viewport through a tab/frame/document-scoped extension relay.
 Form logic stays in the source frame; stale actions are rejected and an
