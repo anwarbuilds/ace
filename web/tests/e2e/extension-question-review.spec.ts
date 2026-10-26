@@ -5,21 +5,21 @@ const extensionRoot = path.resolve(process.cwd(), '../extension');
 const question = 'If you worked for Silverpine Labs, was it as an associate, an intern, or a contractor/temporary?';
 const choices = ['Associate', 'Contractor', 'Intern', 'I have never worked for/at Silverpine Labs in any capacity.'];
 const base = '<label for="name">Full name</label><input id="name" value="Example Applicant"><label for="email">Email</label><input id="email" value="applicant@example.test"><label for="phone">Phone</label><input id="phone" value="5550100100"><label for="role">Current role</label><input id="role" value="Engineer"><label for="resume">Resume</label><input type="file" id="resume">';
-async function load(page: Page, body: string, memory: Array<Record<string, unknown>> = [], autoKnown = false) {
+async function load(page: Page, body: string, memory: Array<Record<string, unknown>> = [], autoKnown = false, autoLearn = false) {
   await page.goto('data:text/html,<html><body></body></html>');
   await page.setContent(`<form>${base}${body}<button type="submit">Submit application</button></form>`);
-  await page.evaluate(({ memory, autoKnown }) => {
+  await page.evaluate(({ memory, autoKnown, autoLearn }) => {
     const w = window as typeof window & { chrome: unknown; __saved: Array<Record<string, unknown>>; __memory: Array<Record<string, unknown>>; __submits: number };
     w.__saved = []; w.__memory = memory; w.__submits = 0;
     document.querySelector('form')!.addEventListener('submit', event => { event.preventDefault(); w.__submits++; });
-    w.chrome = { storage: { local: { get: (defaults: Record<string, unknown>, reply: (data: unknown) => void) => reply({ ...defaults, aceAutoKnown: autoKnown }), set() {}, remove() {} } }, runtime: { lastError: null, onMessage: { addListener() {} }, getURL: (value: string) => value, getManifest: () => ({ version: 'test' }),
+    w.chrome = { storage: { local: { get: (defaults: Record<string, unknown>, reply: (data: unknown) => void) => reply({ ...defaults, aceAutoKnown: autoKnown, aceAutoLearnRoutine: autoLearn }), set() {}, remove() {} } }, runtime: { lastError: null, onMessage: { addListener() {} }, getURL: (value: string) => value, getManifest: () => ({ version: 'test' }),
       sendMessage(message: { type: string; item: Record<string, unknown> }, reply: (data: unknown) => void) {
         if (message.type === 'answers') reply({ ok: true, items: [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Email', value: 'applicant@example.test' }, { label: 'Phone', value: '5550100100' }, { label: 'Current role', value: 'Engineer' }] });
         else if (message.type === 'memory') reply({ ok: true, items: w.__memory });
         else if (message.type === 'memorySave') { const entry = { ...message.item, id: w.__memory.length + 1, revision: 1, reuse_policy: 'reusable' }; w.__saved.push(message.item); w.__memory.push(entry); reply({ ok: true, item: entry }); }
         else reply({ ok: true, items: [], work: [], education: [] });
       } } };
-  }, { memory, autoKnown });
+  }, { memory, autoKnown, autoLearn });
   for (const file of ['fields.js', 'memory.js', 'content.js']) await page.addScriptTag({ path: path.join(extensionRoot, file) });
   const panel = page.locator('.ace-root .ace-panel');
   await panel.getByRole('button', { name: /^Review/ }).click();
@@ -196,4 +196,35 @@ test('a readonly wrapper combobox mirrors a dropdown and selects the actual empl
   await panel.getByRole('button', { name: 'Approve & fill' }).click();
   await expect(page.locator('#detail')).toHaveValue('Engineering');
   await expect(page.locator('#detail')).toHaveAttribute('data-input-events', '0');
+});
+
+
+test('routine employer answers save on leaving the field and auto-fill an equivalent future question', async ({ page }) => {
+  const panel = await load(page, '<label for="detail">Describe your experience writing integration tests</label><textarea id="detail"></textarea>', [], false, true);
+  await page.locator('#detail').fill('Fictional integration test experience');
+  await page.waitForTimeout(450);
+  expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(0);
+  await page.locator('#phone').focus();
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
+  await expect(panel.locator('.studio-question').filter({ hasText: 'integration tests' })).toHaveCount(0);
+  const memory = await page.evaluate(() => (window as typeof window & { __memory: Array<Record<string, unknown>> }).__memory);
+  await load(page, '<label for="detail">Can you describe your experience writing integration tests?</label><textarea id="detail"></textarea>', memory, true, true);
+  await expect(page.locator('#detail')).toHaveValue('Fictional integration test experience');
+  expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
+});
+
+test('native choices save without approval while synthetic page events cannot teach Memory', async ({ page }) => {
+  const panel = await load(page, '<label for="detail">Which interview format do you prefer?</label><select id="detail"><option value="">Select One</option><option value="remote-17">Remote</option></select><label for="testing">Describe your testing experience</label><textarea id="testing"></textarea>', [], false, true);
+  // selectOption dispatches synthetic events. A real keyboard selection is
+  // required here to cover the browser isTrusted gate.
+  await page.locator('#detail').focus(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
+  expect(await page.evaluate(() => (window as typeof window & { __saved: Array<{answer: string}> }).__saved[0].answer)).toBe('Remote');
+  await page.locator('#testing').evaluate(field => { (field as HTMLTextAreaElement).value = 'Page generated value'; field.dispatchEvent(new Event('input', { bubbles: true })); field.dispatchEvent(new Event('change', { bubbles: true })); });
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
+  await panel.getByRole('button', { name: 'Memory & activity', exact: true }).click();
+  await expect(panel.getByRole('switch', { name: 'Auto-save routine answers: On' })).toBeChecked();
+  await panel.getByRole('switch', { name: 'Auto-save routine answers: On' }).click();
+  await expect(panel.getByRole('switch', { name: 'Auto-save routine answers: Off' })).not.toBeChecked();
 });

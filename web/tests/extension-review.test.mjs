@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { webcrypto } from 'node:crypto';
 import { test } from 'node:test';
 import { parseHTML } from 'linkedom';
 
@@ -62,18 +63,19 @@ function fixture(body, config = {}) {
     HTMLSelectElement, HTMLTextAreaElement: window.HTMLTextAreaElement, Event: window.Event, MouseEvent: DOMEvent, KeyboardEvent: DOMEvent,
     location: { href: 'https://fixture.example/apply', hostname: 'fixture.example', pathname: '/apply' },
     CSS: { escape: value => String(value).replace(/[^a-zA-Z0-9_-]/g, character => `\\${character}`) },
-    innerWidth: 1440, innerHeight: 900, console,
+    innerWidth: 1440, innerHeight: 900, console, crypto: webcrypto, TextEncoder,
     setTimeout(fn, ms) { const id = setTimeout(() => { timers.delete(id); fn(); }, ms); timers.add(id); return id; },
     clearTimeout(id) { clearTimeout(id); timers.delete(id); },
     MutationObserver: config.observeDOM ? window.MutationObserver : class { observe() {} disconnect() {} },
-    chrome: { ...(config.autoKnown ? { storage: { local: {
-      get(defaults, reply) { reply({ ...defaults, aceAutoKnown: true }); }, set() {}, remove() {},
+    chrome: { ...(config.autoKnown || config.autoLearn !== undefined ? { storage: { local: {
+      get(defaults, reply) { reply({ ...defaults, aceAutoKnown: !!config.autoKnown, aceAutoLearnRoutine: !!config.autoLearn }); }, set() {}, remove() {},
     } } } : {}), runtime: { lastError: null, onMessage: { addListener() {} }, getURL: value => value, getManifest: () => ({ version: 'test' }),
       sendMessage(message, reply) {
         if (message.type === 'answers') reply({ ok: true, items: [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Email', value: 'applicant@example.test' }, { label: 'Phone', value: '5550100100' }, { label: 'Current role', value: 'Engineer' }] });
         else if (message.type === 'memory') reply({ ok: true, items: memoryStore });
         else if (message.type === 'memorySave') {
           saved.push(message.item);
+          if (config.failSave) { reply({ ok: false, error: "unavailable" }); return; }
           const existing = memoryStore.find(entry => entry.concept === message.item.concept);
           const entry = { ...message.item, id: existing?.id || memoryStore.length + 1, revision: (existing?.revision || 0) + 1, reuse_policy: 'reusable' };
           if (existing) Object.assign(existing, entry); else memoryStore.push(entry);
@@ -513,4 +515,137 @@ test('custom selection displayed beside a cleared search input is verified and r
   f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
   await until(() => f.saved.length === 1, 'the committed visible selection is the answer even when the search input clears');
   assert.equal(field.value, ''); assert.equal(f.saved[0].answer, 'Engineering');
+});
+
+// linkedom has no hardware events. These explicit trusted-event simulations
+// exercise the real gate; the corresponding Playwright cases use browser input.
+function ownerEvent(f, field, type) {
+  const event = new f.window.Event(type, { bubbles: true });
+  Object.defineProperty(event, 'isTrusted', { value: true });
+  field.dispatchEvent(event);
+}
+const routine = '<label for="detail">Describe your experience writing integration tests</label><textarea id="detail"></textarea>';
+
+test('finished routine employer answers save without approval and auto-fill equivalent future prompts', async t => {
+  const memoryStore = [];
+  const first = fixture(routine, { autoLearn: true, memoryStore }); t.after(first.dispose);
+  const field = first.document.getElementById('detail'); field.value = 'Fictional integration test experience';
+  ownerEvent(first, field, 'input');
+  await sleep(450); assert.equal(first.saved.length, 0, 'typing is not a finished answer');
+  ownerEvent(first, field, 'focusout');
+  await until(() => memoryStore.length === 1, 'leaving the field should remember the answer');
+  assert.equal(first.saved[0].answer, field.value);
+  first.click('tab:review'); assert.ok(!first.panel().querySelector('.studio-question')?.textContent.includes('integration tests'), first.panel().textContent.slice(-2500));
+  const next = fixture('<label for="next">Can you describe your experience writing integration tests?</label><textarea id="next"></textarea>', { autoKnown: true, autoLearn: true, memoryStore }); t.after(next.dispose);
+  await until(() => next.document.getElementById('next').value === field.value, 'equivalent future prompt auto-fills');
+  assert.equal(next.saved.length, 0, 'ACE filling is never learned as owner input');
+  assert.equal(first.submissions() + next.submissions(), 0);
+});
+
+test('synthetic events and untouched prefills never auto-learn', async t => {
+  const f = fixture(routine, { autoLearn: true }); t.after(f.dispose);
+  const field = f.document.getElementById('detail'); field.value = 'Synthetic page value';
+  field.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+  field.dispatchEvent(new f.window.Event('change', { bubbles: true }));
+  ownerEvent(f, field, 'focusout');
+  await sleep(500); assert.equal(f.saved.length, 0);
+});
+
+test('native selections save visible employer labels once and update corrections in place', async t => {
+  const memoryStore = [];
+  const f = fixture('<label for="detail">Which interview format do you prefer?</label><select id="detail"><option value="">Select One</option><option value="remote-7">Remote</option><option value="office-9">On site</option></select>', { autoLearn: true, memoryStore }); t.after(f.dispose);
+  const field = f.document.getElementById('detail'); field.value = 'remote-7'; ownerEvent(f, field, 'change'); ownerEvent(f, field, 'focusout');
+  await until(() => f.saved.length === 1, 'native choice saves without approval'); assert.equal(f.saved[0].answer, 'Remote');
+  ownerEvent(f, field, 'change'); await sleep(450); assert.equal(f.saved.length, 1, 'same answer does not create another revision');
+  field.value = 'office-9'; ownerEvent(f, field, 'change');
+  await until(() => f.saved.length === 2, 'correction saves'); assert.equal(memoryStore.length, 1);
+  assert.equal(f.saved[1].expected_revision, 1); assert.equal(memoryStore[0].answer, 'On site');
+});
+
+test('new typing cancels an unfinished scheduled save', async t => {
+  const f = fixture(routine, { autoLearn: true }); t.after(f.dispose);
+  const field = f.document.getElementById('detail'); field.value = 'First draft'; ownerEvent(f, field, 'input'); ownerEvent(f, field, 'focusout');
+  field.value = 'Still editing'; ownerEvent(f, field, 'input'); await sleep(450); assert.equal(f.saved.length, 0);
+  ownerEvent(f, field, 'focusout'); await until(() => f.saved.length === 1, 'final value is saved'); assert.equal(f.saved[0].answer, 'Still editing');
+});
+
+test('Memory switch cancels pending auto-save and preserves manual approval', async t => {
+  const f = fixture(routine, { autoLearn: true }); t.after(f.dispose);
+  const field = f.document.getElementById('detail'); field.value = 'Fictional final answer'; ownerEvent(f, field, 'input'); ownerEvent(f, field, 'focusout');
+  f.click('workspace'); f.click('tab:memory');
+  assert.equal(f.panel().querySelector('[data-ace=auto-learn]').getAttribute('aria-checked'), 'true'); f.click('auto-learn');
+  await sleep(450); assert.equal(f.saved.length, 0);
+  f.review('Describe your experience'); assert.equal(f.panel().querySelector('[data-ace^="approve:"]').textContent, 'Approve answer');
+  f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
+  await until(() => f.saved.length === 1, 'explicit approval still saves with auto-learning disabled');
+});
+
+test('protected, motivation and multi-answer controls never auto-save', async t => {
+  const f = fixture('<label for="sponsor">Do you require sponsorship?</label><input id="sponsor"><label for="company">Have you previously worked for Silverpine?</label><input id="company"><label for="why">Why this company?</label><textarea id="why"></textarea><fieldset><legend>Which interview formats do you prefer?</legend><input type="checkbox" id="remote"><label for="remote">Remote</label></fieldset>', { autoLearn: true }); t.after(f.dispose);
+  for (const id of ['sponsor', 'company', 'remote']) {
+    const field = f.document.getElementById(id); field.value = 'Fictional answer'; field.checked = true; ownerEvent(f, field, 'input'); ownerEvent(f, field, 'change'); ownerEvent(f, field, 'focusout');
+  }
+  const why = f.document.getElementById('why'); let reads = 0; Object.defineProperty(why, 'value', { get() { reads++; return 'Excluded'; } });
+  ownerEvent(f, why, 'input'); ownerEvent(f, why, 'change'); ownerEvent(f, why, 'focusout');
+  await sleep(500); assert.equal(f.saved.length, 0); assert.equal(reads, 0);
+});
+
+test('failed auto-save stays visible and can be retried without approving', async t => {
+  const config = { autoLearn: true, failSave: true }; const f = fixture(routine, config); t.after(f.dispose);
+  f.review('Describe your experience'); const field = f.document.getElementById('detail'); field.value = 'Fictional final answer'; ownerEvent(f, field, 'input'); ownerEvent(f, field, 'focusout');
+  await until(() => f.panel().textContent.includes('Not saved yet.'), 'failure remains honest');
+  assert.ok(f.panel().textContent.includes('Save now')); config.failSave = false;
+  f.click(f.panel().querySelector('[data-ace^="learn-now:"]').getAttribute('data-ace'));
+  await until(() => f.saved.length === 2 && !f.panel().querySelector('.studio-question')?.textContent.includes('integration tests'), 'retry saves without approval'); assert.equal(f.saved.length, 2);
+});
+
+test('long question keys fit the existing API and remain reusable', async t => {
+  const question = 'Describe your experience ' + 'building fictional integration fixtures '.repeat(7);
+  const memoryStore = []; const f = fixture(`<label for="detail">${question}</label><textarea id="detail"></textarea>`, { autoLearn: true, memoryStore }); t.after(f.dispose);
+  const field = f.document.getElementById('detail'); field.value = 'Fictional technical answer'; ownerEvent(f, field, 'input'); ownerEvent(f, field, 'focusout');
+  await until(() => f.saved.length === 1, 'long question can save'); assert.match(f.saved[0].concept, /^q:sha256:[a-f0-9]{64}$/);
+  const next = fixture(`<label for="detail">${question}</label><textarea id="detail"></textarea>`, { autoKnown: true, autoLearn: true, memoryStore }); t.after(next.dispose);
+  await until(() => next.document.getElementById('detail').value === field.value, 'hashed key still matches full question');
+});
+
+test('custom dropdown learns only a committed choice from its associated menu', async t => {
+  const f = fixture('<label for="detail">Which interview format do you prefer?</label><div><input id="detail" role="combobox" aria-controls="formats"></div><div role="listbox" id="unrelated"><div role="option">Unrelated</div></div>', { autoLearn: true }); t.after(f.dispose);
+  const field = f.document.getElementById('detail');
+  field.addEventListener('click', () => {
+    if (f.document.getElementById('formats')) return;
+    const box = f.document.createElement('div'); box.id = 'formats'; box.setAttribute('role', 'listbox');
+    const option = f.document.createElement('div'); option.setAttribute('role', 'option'); option.textContent = 'Remote'; option.addEventListener('click', () => { setTimeout(() => { field.value = 'Remote'; box.remove(); }, 0); }); box.append(option); f.document.body.append(box);
+  });
+  ownerEvent(f, field, 'click'); field.value = 'Rem'; ownerEvent(f, field, 'input'); ownerEvent(f, field, 'focusout');
+  ownerEvent(f, f.document.querySelector('#unrelated [role=option]'), 'click'); await sleep(450); assert.equal(f.saved.length, 0);
+  ownerEvent(f, f.document.querySelector('#formats [role=option]'), 'click');
+  await until(() => f.saved.length === 1, 'real associated choice should save'); assert.equal(f.saved[0].answer, 'Remote'); assert.equal(f.submissions(), 0);
+});
+
+test('custom option clicks that leave a query uncommitted do not learn', async t => {
+  const f = fixture('<label for="detail">Which interview format do you prefer?</label><div><input id="detail" role="combobox" aria-controls="formats"></div><div role="listbox" id="formats"><div role="option">Remote</div></div>', { autoLearn: true }); t.after(f.dispose);
+  const field = f.document.getElementById('detail'); ownerEvent(f, field, 'click'); field.value = 'Remote'; ownerEvent(f, field, 'input');
+  ownerEvent(f, f.document.querySelector('#formats [role=option]'), 'click'); await sleep(500); assert.equal(f.saved.length, 0);
+});
+
+
+test('auto-learning preserves a non-equivalent answer with the same broad legacy concept', async t => {
+  const memoryStore = [{ id: 1, concept: 'python_api_experience', question: 'Describe your current Python API experience', answer: 'Fictional current answer', answer_type: 'text', reuse_policy: 'reusable', revision: 1 }];
+  const f = fixture('<label for="detail">Describe your previous Python API experience</label><textarea id="detail"></textarea>', { autoLearn: true, memoryStore }); t.after(f.dispose);
+  const field = f.document.getElementById('detail'); field.value = 'Fictional previous answer'; ownerEvent(f, field, 'input'); ownerEvent(f, field, 'focusout');
+  await until(() => f.saved.length === 1, 'qualified answer should save independently');
+  assert.equal(memoryStore.length, 2); assert.equal(memoryStore[0].answer, 'Fictional current answer'); assert.notEqual(f.saved[0].concept, memoryStore[0].concept);
+});
+
+
+test('native radio and aria-only choice buttons save the actual chosen answer automatically', async t => {
+  for (const buttons of [false, true]) {
+    const choices = buttons ? '<button type="button" role="radio" aria-checked="false" id="remote">Remote</button><button type="button" role="radio" aria-checked="false" id="office">On site</button>' : '<input id="remote" type="radio" name="format"><label for="remote">Remote</label><input id="office" type="radio" name="format"><label for="office">On site</label>';
+    const f = fixture(`<fieldset><legend>Which interview format do you prefer?</legend>${choices}</fieldset>`, { autoLearn: true }); t.after(f.dispose);
+    const field = f.document.getElementById('office');
+    if (buttons) { field.addEventListener('click', () => field.setAttribute('aria-checked', 'true')); ownerEvent(f, field, 'click'); }
+    else { field.checked = true; ownerEvent(f, field, 'change'); }
+    await until(() => f.saved.length === 1, 'actual radio choice should save'); assert.equal(f.saved[0].answer, 'On site'); assert.equal(f.submissions(), 0);
+    f.dispose();
+  }
 });

@@ -121,8 +121,10 @@ Before every task:
   on the employer form. ACE must not suggest, fill, capture, review, count,
   remember or reuse the answer. Keep historical data intact but exclude it from
   automatic reuse.
-- Only genuinely equivalent, approved general answers may be reused. Unknown
-  questions enter Review. Authorization, sponsorship, citizenship, legal
+- Only genuinely equivalent general answers saved with the owner's permission
+  may be reused. The owner authorized automatic saving of finished routine
+  employer-form answers on 2026-10-26; the visible Memory switch controls it.
+  Unknown questions enter Review until answered or safely learned. Authorization, sponsorship, citizenship, legal
   declarations and company-specific questions need appropriate per-application
   review. Do not infer a sensitive answer from a broad answer.
 
@@ -609,7 +611,7 @@ commits (`54e939a`, `61debd6`, `8d84141`), the reconciled Focus Mode V5.1
 commits (`559ee84`, `5b8ab4b`, equivalents of local `4ce3570` and `cb7bb5e`),
 the V5.1 typography pass and theme sync/Close (`386bed9`). It contains the
 existing V4 Answer Memory implementation (`2e7c1dc`). The
-extension manifest is now `1.28.3` (local exact-question, direct-answer learning and control-mirroring repairs described below). The V5.1 extension has not been published; it
+extension manifest is now `1.28.4` (local automatic routine-answer saving, exact-question, direct-answer learning and control-mirroring repairs described below). The V5.1 extension has not been published; it
 runs as an unpacked installation loaded from
 `/home/ubuntu/Documents/ace-next/extension`. An unpacked installation must be
 reloaded at `chrome://extensions`; employer tabs must then be refreshed.
@@ -630,6 +632,50 @@ employer form for manual completion. ACE never submits or marks Applied.
 Workday listing and search routes outside `/apply/` stay quiet, including after
 single-page navigation back from an application. The toolbar Wake override
 remains available.
+
+### Automatic saving of finished routine answers (2026-10-26)
+
+The owner explicitly requested no repeat approval for routine answers entered
+on the employer form. Local extension **1.28.4** supersedes the earlier
+per-question approval requirement for this eligible direct-entry path.
+
+- **Auto-save routine answers** defaults on and is stored in Chrome local
+  `aceAutoLearnRoutine`. Memory exposes this and **Auto-fill known** as separate
+  accessible switches. Existing auto-fill preferences remain respected.
+- Actual trusted owner text input becomes eligible, then saves when the owner
+  leaves the field or commits a native change. A 350 ms settling period checks
+  that the value, options, question, page and control still match. Typing again
+  cancels the pending save. Untouched prefills and synthetic page events alone
+  never authorize learning. Closing ACE suspends this observation path.
+- Native single selects save the visible label rather than opaque option IDs.
+  Native radios and accessible choice buttons save the real chosen answer.
+  Supported custom dropdowns require a trusted click in their associated menu,
+  committed readback and a closed menu or selected option. A query string or
+  a click in a neighboring menu is insufficient. Unsupported/keyboard-only
+  custom selections without verifiable commitment remain manual.
+- Protected authorization, sponsorship, legal, company-specific and other
+  sensitive answers, checkboxes and multiple selections remain application-only.
+  Company motivation and credentials remain excluded. Answers drafted in ACE
+  still need the explicit fill action and verified employer readback.
+- Automatic and manual reusable saves share a serialized writer, avoid identical
+  revisions, preserve matching legacy concepts and send expected revisions on
+  corrections. Long keys use SHA-256 within the existing 180-character API bound;
+  full questions still determine equivalence. Broad legacy concept collisions
+  preserve non-equivalent answers separately. Current/previous/past qualifiers
+  stay distinct. Conflicting equivalent records fail safely for Memory review.
+- Successful saves remove the routine question from Review without minimizing.
+  Failure stays visible with **Save now** retry; it never claims persistence.
+  No answer values enter Activity or diagnostics. ACE still never submits or
+  marks Applied.
+
+Validation: 43 fictional DOM contracts, 258 matcher cases, Memory safety checks,
+TypeScript, ESLint, syntax and forbidden-dash checks pass. Thirty-two Playwright
+cases collect, including two new auto-learning scenarios, but were not run:
+the laptop's cooling restriction remains. No new browser screenshots, live
+employer interaction or authenticated paired production Memory verification is
+claimed. No website/backend runtime, schema, production service, Gmail scope,
+scheduler or extension publication change was made. Reload ACE **1.28.4** at
+`chrome://extensions` and refresh employer tabs to activate the local version.
 
 ### Exact-question Review and one-entry approval repair (2026-10-25)
 
@@ -1486,7 +1532,7 @@ reassuring success state when the backend has not confirmed one.
 
 The extension is Manifest V3. Important implementation areas are
 `extension/content.js`, `fields.js`, `background.js`, the popup/side panel,
-storage, pairing and rule tests. The current local manifest version is 1.28.0.
+storage, pairing and rule tests. The current local manifest version is 1.28.4.
 The approved interface is ACE Focus Mode V5.1; older extension interfaces are
 historical.
 
@@ -1544,8 +1590,10 @@ It must distinguish company motivation from technical questions such as `Why
 did you choose eventual consistency?`. One shared predicate must guard scan,
 fill, queue, observability, status counts, activity and memory retrieval.
 
-Unknown ordinary questions enter Review. Only genuinely equivalent approved
-general answers may be reused when type, options, scope and context align.
+Unknown ordinary questions enter Review. Finished routine employer answers may
+be saved automatically under the owner-authorized Auto-save routine answers
+setting. Only genuinely equivalent saved general answers may be reused when
+type, options, scope and context align.
 Authorization, sponsorship, citizenship, legal declarations, compensation and
 self-identification require conservative, per-application handling. Never
 infer a narrow sensitive answer from a broad saved answer.

@@ -100,6 +100,16 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
+**2026-10-26 extension update:** Local 1.28.4 adds owner-authorized automatic
+saving of finished routine employer-form answers without per-question approval.
+Memory exposes separate Auto-save routine answers and Auto-fill known switches.
+Trusted edits, settled readback, protected/motivation exclusions, revision checks
+and no-submit remain. 43 DOM contracts, 258 matcher cases, Memory checks,
+TypeScript, lint, syntax and dash scan pass. 32 Playwright cases collect only;
+browser runs remain suspended for laptop cooling. Reload the unpacked extension
+and refresh employer tabs. No production deployment/publication was performed.
+See `ACE_NEXT_KNOWLEDGE.md` for the complete current state and limitations.
+
 **2026-10-25 continuity check:** `ACE_NEXT_KNOWLEDGE.md` now distinguishes the local V5.1 extension at `cb7bb5e` from the last independently verified API/database release at `11a7fd4` and the separately recorded website typography release at `61debd6`. The V4 migration 0050 and live Memory API status were not verified in this session. The local branch has two V5.1 commits absent from `origin/wine-rose-platform`; the tracked remote has three typography commits absent locally. Reconcile both lines before pushing or releasing. A root `AGENTS.md` and the root `CLAUDE.md` direct future agents to the continuity file.
 
 **2026-10-24 extension update:** ACE Focus Mode V5.1 is implemented locally in the existing MV3 extension on `wine-rose-platform`. The panel is a compact floating card with Review, Workspace, a minimized dock, free dragging, persisted position, Day/Night themes, native and supported listbox option mirroring, and persistent Review completion. Employer-motivation questions are excluded from scan, fill, Review, Memory reuse and progress; older records are retained on the server. This update requires no database migration and has not been deployed or published. See `extension/README.md` and `web/tests/e2e/extension-focus-v5.spec.ts` for usage and browser verification.

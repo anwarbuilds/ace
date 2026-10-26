@@ -992,3 +992,32 @@ lint, syntax and dash checks pass. Thirty Playwright cases collect but were not
 run because the laptop cooling restriction remains. No fresh visual text-fit
 or authenticated Oracle verification is claimed. Reload local ACE 1.28.3 and
 refresh employer tabs. No deployment, publication or backend/data change occurred.
+
+
+## Automatic routine-answer saving without per-question approval (2026-10-26)
+
+Status: 1.28.4 supersedes the 1.28.2 approval-only direct-entry path for
+eligible routine answers, following the owner's explicit request. Protected
+and multi-answer questions remain application-only. Motivation stays excluded.
+
+Auto-save routine answers defaults on, persists as `aceAutoLearnRoutine`, and
+has a visible Memory switch beside the separate Auto-fill known switch. Trusted
+owner text edits save after leaving the field; real native selections save
+after committing. Typing again cancels pending work. Prefills, synthetic page
+events and custom dropdown queries alone cannot teach Memory. Supported custom
+menus need an actual associated option click and verified commitment; uncertain
+or keyboard-only custom selections remain manual. Closing ACE suspends learning.
+
+Automatic/manual saves share per-concept serialization, deduplicate unchanged
+answers, use expected revisions for corrections, retain matching legacy keys
+and hash long or colliding scoped keys within existing API limits. Matching
+still uses the full question and answer type, and now distinguishes current,
+previous and past scope. Successful routine saves close that question without
+minimizing; failures remain visible with Save now retry. ACE editor drafts keep
+the explicit fill action. No submit, Applied, backend, schema or Gmail changes.
+
+43 fictional DOM contracts, 258 matcher cases, Memory safety checks, syntax,
+TypeScript, lint and forbidden-dash checks pass. 32 Playwright cases collect
+but were not run because of the cooling restriction. No fresh browser/visual,
+authenticated employer or paired live Memory verification is claimed. Reload
+local 1.28.4 and refresh employer tabs; no deployment or publication occurred.

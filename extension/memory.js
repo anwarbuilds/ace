@@ -48,7 +48,7 @@
     if (kindA !== kindB || policy(a) !== "reusable" || policy(b) !== "reusable") return false;
     // A negation or a time qualifier can reverse the answer while leaving
     // the subject words unchanged. Keep these cases in Review.
-    var qualifiers = /\b(not|never|without|currently|previously|former|future|minimum|maximum|at least|more than|less than)\b/g;
+    var qualifiers = /\b(not|never|without|current|currently|previous|previously|past|former|future|minimum|maximum|at least|more than|less than)\b/g;
     if ((norm(a).match(qualifiers) || []).join("|") !== (norm(b).match(qualifiers) || []).join("|")) return false;
     var measurement = /\b(how many|how much|number of|years of|months of|rate|rating|level)\b/;
     if (measurement.test(norm(a)) !== measurement.test(norm(b))) return false;

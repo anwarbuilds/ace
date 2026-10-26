@@ -23,7 +23,7 @@ async function mount(page: Page, storage: Record<string, unknown> = {}) {
       __wake?: (m: unknown, s: unknown, r: (v: unknown) => void) => void;
       __submits: number;
     };
-    w.__storage = { aceAutoKnown: false, ...initial };
+    w.__storage = { aceAutoKnown: false, aceAutoLearnRoutine: false, ...initial };
     w.__submits = 0;
     document.querySelector("form")!.addEventListener("submit", (event) => { w.__submits++; event.preventDefault(); });
     w.chrome = {

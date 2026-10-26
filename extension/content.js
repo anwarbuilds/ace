@@ -33,6 +33,12 @@
   // are the owner's explicit choice. studioTheme is the one shown.
   var studioThemeMode = "system";
   var autoKnown = true;
+  var autoLearn = false;
+  var ownerEdits = new WeakMap();
+  var learnTimers = new WeakMap();
+  var learningState = new Map();
+  var memoryWrites = new Map();
+  var ownerDropdown = null;
   var skippedQuestions = new Set();
   var activity = [];
   var studioError = "";
@@ -79,6 +85,110 @@
     var saved = aceMemory.resolve(question, kind === "yesno" ? "yesno" : kind === "choice" ? "choice" : "text", memory);
     if (saved) return "Memory:" + saved.concept;
     return aceAnswerNameFor(question, kind, Object.keys(answers));
+  }
+
+  async function memoryKey(item) {
+    var existing = aceMemory.resolve(item.question, item.kind, memory);
+    var equivalents = memory.filter(function (entry) {
+      return entry.reuse_policy === 'reusable' && aceMemory.equivalent(item.question, entry.question, item.kind, entry.answer_type);
+    });
+    if (equivalents.length > 1) throw new Error('Answer Memory has conflicting entries. Review them in Memory before saving.');
+    var key = existing ? existing.concept : aceMemory.concept(item.question);
+    var occupied = memory.some(function (entry) { return entry.concept === key; });
+    if (existing || !occupied) { if (key.length <= 180) return key; }
+    else key = item.kind + ':' + aceMemory.norm(item.question);
+    // The existing API bounds concept keys, while retaining full questions.
+    // Hash only the key; equivalence still compares the complete question.
+    if (!globalThis.crypto || !globalThis.crypto.subtle) throw new Error('Answer Memory cannot save this question in this browser.');
+    var digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+    return 'q:sha256:' + Array.from(new Uint8Array(digest)).map(function (byte) { return byte.toString(16).padStart(2, '0'); }).join('');
+  }
+
+  function saveReusableAnswer(item, value, stillCurrent) {
+    return memoryKey(item).then(function (key) {
+      var previous = memoryWrites.get(key) || Promise.resolve();
+      var write = previous.catch(function () {}).then(function () {
+        if (stillCurrent && !stillCurrent()) return null;
+        var existing = memory.find(function (entry) { return entry.concept === key; });
+        if (existing && existing.answer === value && existing.answer_type === item.kind && existing.reuse_policy === 'reusable') return existing;
+        return new Promise(function (resolve, reject) {
+          var payload = { concept: key, question: item.display, answer: value,
+            answer_type: item.kind, source_host: location.hostname };
+          if (existing) payload.expected_revision = existing.revision;
+          chrome.runtime.sendMessage({ type: 'memorySave', item: payload }, function (reply) {
+            if (chrome.runtime.lastError || !reply || !reply.ok) {
+              reject(new Error(memoryFailure(reply && reply.error || chrome.runtime.lastError && chrome.runtime.lastError.message)));
+              return;
+            }
+            var record = { id: reply.item.id, concept: key, question: item.display,
+              answer: value, answer_type: item.kind, reuse_policy: 'reusable',
+              revision: reply.item.revision, source_host: location.hostname };
+            if (existing) Object.assign(existing, record); else memory.push(record);
+            memoryAvailable = true;
+            answers['Memory:' + key] = value;
+            aliases['Memory:' + key] = [];
+            resolve(record);
+          });
+        });
+      });
+      memoryWrites.set(key, write);
+      function clearWrite() { if (memoryWrites.get(key) === write) memoryWrites.delete(key); }
+      write.then(clearWrite, clearWrite);
+      return write;
+    });
+  }
+
+  function autoLearnItem(field) {
+    if (!autoLearn || !memoryAvailable || !loaded || dismissed || !field || !field.isConnected || aceShouldSkip(field)) return null;
+    var question = aceQuestionFor(field);
+    // Inspect policy before reading an answer, including motivation fields.
+    if (!question || aceMemory.policy(question) !== 'reusable' || field.multiple || field.type === 'checkbox') return null;
+    var edit = ownerEdits.get(field);
+    if (!edit || edit.question !== question || edit.href !== location.href) return null;
+    if (aceIsAutocomplete(field) && !edit.choiceCommitted) return null;
+    if (fillable().indexOf(field) < 0 || field.getAttribute('aria-invalid') === 'true' || field.validity && !field.validity.valid) return null;
+    var kind = kindOf(field), key = aceMemory.norm(question) + '|' + kind;
+    var name = answerNameFor(question, kind);
+    if (name && name.indexOf('Memory:') !== 0 && answers[name] && !reviewSeen.has(key)) return null;
+    return { field: field, question: question, display: aceQuestionLabelFor(field), kind: kind, key: key };
+  }
+
+  function renderLearningState() {
+    var host = document.querySelector('.ace-root');
+    if (!dismissed && host && host.shadowRoot) renderStudio(host.shadowRoot.querySelector('.ace-panel'));
+  }
+
+  function scheduleRoutineLearning(field) {
+    clearTimeout(learnTimers.get(field));
+    var item = autoLearnItem(field);
+    if (!item) return;
+    learnTimers.set(field, setTimeout(function () {
+      item = autoLearnItem(field);
+      if (!item || filling) return;
+      var value = reviewValue(item), answer = reviewAnswerLabel(item);
+      if (!value || !answer) return;
+      var options = reviewOptionsSignature(item);
+      function current() {
+        return !!autoLearnItem(field) && reviewValue(item) === value && reviewOptionsSignature(item) === options;
+      }
+      learningState.set(item.key, 'saving');
+      renderLearningState();
+      saveReusableAnswer(item, answer, current).then(function (record) {
+        if (!record || !current()) { learningState.delete(item.key); renderLearningState(); return; }
+        approvedQuestions.add(item.key);
+        reviewSeen.add(item.key);
+        reviewSelections.delete(item.key);
+        reviewDrafts.delete(item.key);
+        learningState.delete(item.key);
+        if (studioError.indexOf('This answer was not saved to Memory.') === 0) studioError = '';
+        activityNote('Routine answer saved automatically');
+        renderLearningState();
+      }, function (error) {
+        learningState.set(item.key, 'error');
+        studioError = 'This answer was not saved to Memory. ' + error.message + ' Check Memory or use Save now to retry.';
+        renderLearningState();
+      });
+    }, 350));
   }
   // Work and study history, most recent first. Kept apart from answers
   // because they are a list, not a value: the second block on a form
@@ -2302,6 +2412,7 @@
     var detected = !draft && selected.answered && !!current;
     selected.detectedSnapshot = detected ? { value: current, options: reviewOptionsSignature(selected) } : null;
     var reusable = selected.protected === 'reusable' && !selected.field.multiple && selected.field.type !== 'checkbox';
+    var automatic = detected && reusable && !!autoLearnItem(selected.field);
     var isChoice = selected.field.tagName === 'SELECT' || aceIsChoiceControl(selected.field);
     var control = '';
     if (selected.field.tagName === 'SELECT') {
@@ -2330,16 +2441,16 @@
     } else {
       control = reviewTextControl(selected, draft ? draft.values[0] : current || reviewDrafts.get(selected.key) || '');
     }
-    var why = selected.protected === 'reusable' ? 'New question. Review this answer before saving.' :
-      'Protected question. Confirm for this application only.';
+    var why = reusable ? autoLearn ? 'Routine answers entered on the employer form save automatically when finished.' : 'New question. Review this answer before saving.' :
+      'Confirm this answer for this application only.';
     html += '<article class="studio-card focus-question"><span class="studio-pill ' + (selected.protected === 'reusable' ? 'good' : '') + '">' +
       (selected.protected === 'reusable' ? 'New question' : 'Review required') + (aceIsChoiceControl(selected.field) ? selected.field.type === 'checkbox' ? ' · Checkboxes' : ' · Radio options' : isChoice || aceIsAutocomplete(selected.field) ? ' · Dropdown' : '') + '</span><div class="studio-question">' + esc(plain(selected.display)) + '</div><p>' + why + '</p></article>' +
-      (detected ? '<div class="studio-card focus-detected" role="status"><strong>Answer detected on form</strong><p>' + esc(plain(reviewAnswerLabel(selected))) + '</p><p>Approve this answer without entering it again.</p><button class="studio-button small" data-ace="edit-answer:' + index + '">Edit answer in ACE</button></div>' : control) +
-      '<p class="focus-hint">' + (detected ? 'Your employer answer stays as entered. Approval confirms it.' : 'Answer here, then Approve &amp; fill. ACE checks that the employer form accepted it.') + '</p>' +
-      (reusable ? '<label class="studio-checkline"><input id="studio-reuse" type="checkbox" checked> Remember this approved answer for equivalent questions</label>' :
-        '<p class="focus-hint">Used for this application only. It is not saved to Memory.</p>') +
+      (detected ? '<div class="studio-card focus-detected" role="status"><strong>Answer detected on form</strong><p>' + esc(plain(reviewAnswerLabel(selected))) + '</p><p>' + (automatic ? learningState.get(selected.key) === 'saving' ? 'Saving to Memory…' : learningState.get(selected.key) === 'error' ? 'Not saved yet. Use Save now to retry.' : 'Finish this field to save automatically. No approval needed.' : 'Approve this answer without entering it again.') + '</p><button class="studio-button small" data-ace="edit-answer:' + index + '">Edit answer in ACE</button></div>' : control) +
+      '<p class="focus-hint">' + (detected ? automatic ? 'ACE remembers this routine answer for equivalent questions.' : 'Your employer answer stays as entered. Approval confirms it.' : 'Answer here, then Approve &amp; fill. ACE checks that the employer form accepted it.') + '</p>' +
+      (reusable && !automatic ? '<label class="studio-checkline"><input id="studio-reuse" type="checkbox" checked> Remember this approved answer for equivalent questions</label>' :
+        automatic ? '' : '<p class="focus-hint">Used for this application only. It is not saved to Memory.</p>') +
       '<p class="focus-stays">✓ &nbsp;Review stays open until you minimize ACE.</p>' +
-      '<div class="studio-actions focus-review-actions"><button class="studio-button wine" data-ace="approve:' + index + '">' + (detected ? 'Approve answer' : 'Approve &amp; fill') + '</button><button class="studio-button" data-ace="show-form">Show on form</button><button class="studio-button" data-ace="skip:' + index + '">Skip</button></div><div class="focus-utility"><button data-ace="tab:overview">Overview</button><button data-ace="workspace">Memory &amp; activity</button></div>';
+      '<div class="studio-actions focus-review-actions"><button class="studio-button wine" data-ace="' + (automatic ? 'learn-now:' : 'approve:') + index + '">' + (automatic ? 'Save now' : detected ? 'Approve answer' : 'Approve &amp; fill') + '</button><button class="studio-button" data-ace="show-form">Show on form</button><button class="studio-button" data-ace="skip:' + index + '">Skip</button></div><div class="focus-utility"><button data-ace="tab:overview">Overview</button><button data-ace="workspace">Memory &amp; activity</button></div>';
     return html;
   }
 
@@ -2402,12 +2513,13 @@
     var input = panel().querySelector('.studio-search[type="search"]');
     if (input) search = input.value.toLowerCase();
     var entries = memory.filter(function (m) { return (m.question + " " + m.answer).toLowerCase().indexOf(search) >= 0; });
-    return '<div class="studio-between"><h2>Answer Memory</h2><span class="studio-pill good">' + memory.length + ' approved</span></div><p>Reviewed answers available to equivalent, safe questions.</p><div class="studio-memory-status"><span class="studio-pill ' + (memoryAvailable ? 'good' : '') + '">' + (memoryAvailable ? 'Connected' : 'Unavailable') + '</span><button class="studio-button small" data-ace="retry-memory">Retry connection</button></div><input class="studio-search" type="search" placeholder="Search approved answers" value="' + esc(search) + '">' +
+    return '<div class="studio-between"><h2>Answer Memory</h2><span class="studio-pill good">' + memory.length + ' saved</span></div><p>Saved answers available to equivalent, safe questions.</p>' +
+      '<div class="studio-card"><button class="studio-button" data-ace="auto-learn" role="switch" aria-checked="' + autoLearn + '">Auto-save routine answers: ' + (autoLearn ? 'On' : 'Off') + '</button><p>Text saves when you leave the field. Selections save after choosing. Protected questions still need review.</p><button class="studio-button" data-ace="auto" role="switch" aria-checked="' + autoKnown + '">Auto-fill known: ' + (autoKnown ? 'On' : 'Off') + '</button></div><div class="studio-memory-status"><span class="studio-pill ' + (memoryAvailable ? 'good' : '') + '">' + (memoryAvailable ? 'Connected' : 'Unavailable') + '</span><button class="studio-button small" data-ace="retry-memory">Retry connection</button></div><input class="studio-search" type="search" placeholder="Search saved answers" value="' + esc(search) + '">' +
       (entries.length ? entries.map(function (m) {
-        return '<article class="studio-card"><span class="studio-pill good">Reusable and approved</span><div class="studio-question">' + esc(plain(m.question)) + '</div><p class="studio-memory-answer">' + esc(plain(m.answer)) + '</p><p class="studio-receipt">Approved on ' + esc(m.source_host || 'an application') + '. Revision ' + m.revision + '</p>' +
+        return '<article class="studio-card"><span class="studio-pill good">Saved for reuse</span><div class="studio-question">' + esc(plain(m.question)) + '</div><p class="studio-memory-answer">' + esc(plain(m.answer)) + '</p><p class="studio-receipt">Saved on ' + esc(m.source_host || 'an application') + '. Revision ' + m.revision + '</p>' +
           (m.last_used_at ? '<p class="studio-receipt">Last used ' + esc(new Date(m.last_used_at).toLocaleDateString()) + '</p>' : '') +
           (editConcept === m.concept ? '<textarea id="studio-memory-edit" class="studio-input" aria-label="Edit answer">' + esc(m.answer) + '</textarea><div class="studio-actions"><button class="studio-button wine" data-ace="save-edit:' + m.id + '">Save</button><button class="studio-button" data-ace="cancel-edit">Cancel</button></div>' : '<div class="studio-actions"><button class="studio-button" data-ace="edit:' + m.id + '">Edit</button><button class="studio-button" data-ace="delete:' + m.id + '">Delete</button></div>') + '</article>';
-      }).join("") : '<div class="studio-empty">' + (memoryAvailable ? 'No approved answers match this search.' : 'Memory will appear here when ACE is connected and updated.') + '</div>');
+      }).join("") : '<div class="studio-empty">' + (memoryAvailable ? 'No saved answers match this search.' : 'Memory will appear here when ACE is connected and updated.') + '</div>');
   }
 
   function studioActivity() {
@@ -2770,6 +2882,9 @@
       customOptions.clear();
       reviewDrafts.clear();
       reviewSelections.clear();
+      learningState.clear();
+      ownerEdits = new WeakMap();
+      ownerDropdown = null;
     }
     if (location.href !== lastHref || movedOn()) {
       lastResult = null;
@@ -2914,16 +3029,17 @@
       loaded = true;
       lastHref = location.href;
       var prefsReady = !(chrome.storage && chrome.storage.local);
-      if (prefsReady) autoKnown = false; // Browser fixtures without Chrome storage use explicit Fill.
+      if (prefsReady) { autoKnown = false; autoLearn = false; } // Browser fixtures without Chrome storage use explicit Fill.
       var memoryReady = false;
       var historyReady = false;
       function fillWhenReady() {
         if (prefsReady && memoryReady && historyReady && autoKnown) runFill();
       }
 
-      if (chrome.storage && chrome.storage.local) chrome.storage.local.get({ aceStudioThemeMode: "system", aceAutoKnown: true, aceStudioActivity: [], aceFocusPosition: null }, function (prefs) {
+      if (chrome.storage && chrome.storage.local) chrome.storage.local.get({ aceStudioThemeMode: "system", aceAutoKnown: true, aceAutoLearnRoutine: true, aceStudioActivity: [], aceFocusPosition: null }, function (prefs) {
         applyThemeMode(prefs.aceStudioThemeMode);
         autoKnown = !!prefs.aceAutoKnown;
+        autoLearn = !!prefs.aceAutoLearnRoutine;
         activity = Array.isArray(prefs.aceStudioActivity) ? prefs.aceStudioActivity.slice(0, 35) : [];
         focusPosition = prefs.aceFocusPosition && typeof prefs.aceFocusPosition.x === 'number' && typeof prefs.aceFocusPosition.y === 'number'
           ? prefs.aceFocusPosition : null;
@@ -3090,6 +3206,20 @@
       if (chrome.storage && chrome.storage.local) chrome.storage.local.set({ aceAutoKnown: autoKnown });
       activityNote("Auto-fill known answers " + (autoKnown ? "enabled" : "disabled"));
       renderStudio(panel());
+      return;
+    }
+
+    if (action === "auto-learn") {
+      autoLearn = !autoLearn;
+      if (chrome.storage && chrome.storage.local) chrome.storage.local.set({ aceAutoLearnRoutine: autoLearn });
+      activityNote("Auto-save routine answers " + (autoLearn ? "enabled" : "disabled"));
+      renderStudio(panel());
+      return;
+    }
+
+    if (action.indexOf("learn-now:") === 0) {
+      var learningItem = studioFields[Number(action.slice(10))];
+      if (learningItem) scheduleRoutineLearning(learningItem.field);
       return;
     }
 
@@ -3278,31 +3408,15 @@
       function persistApproval() {
         if (!save) { finishApproval(); return; }
         filling = true;
-        var previousMemory = aceMemory.resolve(chosen.question, chosen.kind, memory);
-        var concept = previousMemory ? previousMemory.concept : aceMemory.concept(chosen.question);
-        var memoryValue = chosen.field.tagName === 'SELECT'
-          ? String(chosen.field.options[chosen.field.selectedIndex] && chosen.field.options[chosen.field.selectedIndex].textContent || value).trim()
-          : aceIsChoiceControl(chosen.field) && chosen.field.type === 'checkbox' && groupMembers(chosen.field).length === 1
-          ? 'Yes'
-          : value;
-        chrome.runtime.sendMessage({ type: "memorySave", item: {
-          concept: concept, question: chosen.display, answer: memoryValue,
-          answer_type: chosen.kind, source_host: location.hostname
-        } }, function (reply) {
-          if (chrome.runtime.lastError || !reply || !reply.ok) {
-            filling = false;
-            studioError = memoryFailure(reply && reply.error || chrome.runtime.lastError && chrome.runtime.lastError.message) + " The form is filled. Approval remains open because Memory did not save the answer.";
-            renderStudio(panel());
-            return;
-          }
-          var old = memory.find(function (m) { return m.concept === concept; });
-          if (old) { old.answer = memoryValue; old.question = chosen.display; old.revision = reply.item.revision; }
-          else memory.push({ id: reply.item.id, concept: concept, question: chosen.display,
-            answer: memoryValue, answer_type: chosen.kind, reuse_policy: "reusable", revision: reply.item.revision,
-            source_host: location.hostname });
-          answers["Memory:" + concept] = memoryValue;
-          aliases["Memory:" + concept] = [];
+        var memoryValue = reviewAnswerLabel(chosen);
+        saveReusableAnswer(chosen, memoryValue, function () {
+          return chosen.field.isConnected && reviewValue(chosen) === value;
+        }).then(function () {
           finishApproval();
+        }, function (error) {
+          filling = false;
+          studioError = error.message + " The form is filled. Review remains open because Memory did not save the answer.";
+          renderStudio(panel());
         });
       }
       applyApproved();
@@ -3446,13 +3560,21 @@
   // Employer-owned motivation fields are screened by label before any
   // control value can be observed. Other review controls mirror user edits.
   var pendingEmployerReview = null;
-  function employerAnswerEdited(event) {
+  function employerAnswerEdited(event, ownerIntent) {
     var field = event.target;
     if (!loaded || filling || !field || field.closest && field.closest('.ace-root')) return;
     if (!field.matches || !field.matches('input,textarea,select,button')) return;
     var question = aceQuestionFor(field);
     if (!question || aceShouldSkip(field) || aceMemory.isEmployerMotivation(question)) return;
     var editedKey = aceMemory.norm(question) + '|' + kindOf(field);
+    var trusted = event.isTrusted === true || ownerIntent;
+    clearTimeout(learnTimers.get(field));
+    if (trusted) {
+      ownerEdits.set(field, { question: question, href: location.href,
+        choiceCommitted: !!(ownerIntent && ownerIntent.choiceCommitted) });
+      learningState.delete(editedKey);
+      if (event.type === 'change' || ownerIntent && ownerIntent.commit) scheduleRoutineLearning(field);
+    }
     reviewSelections.delete(editedKey);
     reviewDrafts.delete(editedKey);
     approvedQuestions.delete(editedKey);
@@ -3468,14 +3590,51 @@
       if (host && host.shadowRoot) renderStudio(host.shadowRoot.querySelector('.ace-panel'));
     }, 180);
   }
-  document.addEventListener('input', employerAnswerEdited, true);
-  document.addEventListener('change', employerAnswerEdited, true);
+  document.addEventListener('input', function (event) { employerAnswerEdited(event); }, true);
+  document.addEventListener('change', function (event) { employerAnswerEdited(event); }, true);
+  document.addEventListener('focusout', function (event) {
+    if (event.isTrusted === true) scheduleRoutineLearning(event.target);
+  }, true);
   document.addEventListener('click', function (event) {
     var field = event.target && event.target.closest && event.target.closest('button');
     if (!loaded || filling || !field || field.closest('.ace-root') || !aceIsChoiceControl(field)) return;
     // Some accessible choice buttons only change aria-pressed/aria-checked.
     // Read after the employer's own click handler has committed the choice.
-    setTimeout(function () { employerAnswerEdited({ target: field }); }, 0);
+    var ownerIntent = event.isTrusted === true ? { commit: true, choiceCommitted: true } : null;
+    setTimeout(function () { employerAnswerEdited({ target: field }, ownerIntent); }, 0);
+  }, true);
+
+  document.addEventListener('click', function (event) {
+    if (!loaded || filling || event.isTrusted !== true || !event.target || event.target.closest('.ace-root')) return;
+    var option = event.target.closest('[role=option],[role=gridcell]');
+    if (option && ownerDropdown) {
+      var opened = ownerDropdown, field = opened.field;
+      if (!field.isConnected || opened.href !== location.href || opened.question !== aceQuestionFor(field) || Date.now() - opened.at > 30000 || !safeChoiceOption(option)) return;
+      var box = aceIsListboxButton(field) ? listboxOpenedBy(field, opened.before) : null;
+      var associated = box ? box.contains(option) : comboboxOptions(field).indexOf(option) >= 0;
+      if (!associated) return;
+      ownerDropdown = null;
+      var label = String(option.textContent || '').replace(/\s+/g, ' ').trim();
+      setTimeout(function () {
+        if (!field.isConnected || opened.href !== location.href || aceQuestionFor(field) !== opened.question || aceMemory.policy(opened.question) !== 'reusable') return;
+        // A clicked search result must actually commit. An unchanged query
+        // with a still-open menu is not an answer.
+        var value = aceIsListboxButton(field) ? String(field.textContent || '').trim() : autocompleteValue(field);
+        var menuOpen = aceIsListboxButton(field) ? !!listboxOpenedBy(field, opened.before) : comboboxOptions(field).length > 0;
+        if (value.replace(/\s+/g, ' ').trim() !== label || menuOpen && option.getAttribute('aria-selected') !== 'true') return;
+        employerAnswerEdited({ target: field }, { commit: true, choiceCommitted: true });
+      }, 0);
+      return;
+    }
+    var trigger = event.target.closest('input,button,[role=combobox]');
+    if (trigger && trigger.tagName !== 'INPUT' && trigger.tagName !== 'BUTTON') {
+      var inputs = trigger.querySelectorAll('input');
+      trigger = inputs.length === 1 ? inputs[0] : null;
+    }
+    if (!trigger || !aceIsAutocomplete(trigger) || aceShouldSkip(trigger)) return;
+    var question = aceQuestionFor(trigger);
+    if (aceMemory.policy(question) !== 'reusable') return;
+    ownerDropdown = { field: trigger, question: question, href: location.href, before: shownListboxes(), at: Date.now() };
   }, true);
 
   // A Workday-style listbox may not expose options until the applicant

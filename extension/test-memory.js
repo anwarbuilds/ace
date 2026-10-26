@@ -45,4 +45,5 @@ for (const question of [
   "Why was eventual consistency appropriate?",
   "Explain a technical design tradeoff you faced",
 ]) assert.equal(memory.isEmployerMotivation(question), false, question);
+assert.equal(memory.equivalent("Describe your current Python API experience", "Describe your previous Python API experience", "text", "text"), false);
 console.log("memory safety cases pass");

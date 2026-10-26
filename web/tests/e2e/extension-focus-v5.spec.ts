@@ -23,7 +23,7 @@ test("Focus Mode V5.1 mirrors choices, protects motivation, stays open and never
     document.title = "Software Engineer | Cobalt Systems";
     const w = window as typeof window & { chrome: unknown; __memory: unknown[]; __storage: Record<string, unknown>; __submits: number; __applied: number };
     w.__memory = [{ id: 99, concept: "q:why do you want to work at cobalt systems", question: "Why do you want to work at Cobalt Systems?", answer: "Historical private motivation", answer_type: "text", reuse_policy: "reusable", revision: 1 }];
-    w.__storage = { aceAutoKnown: false };
+    w.__storage = { aceAutoKnown: false, aceAutoLearnRoutine: false };
     w.__submits = 0;
     w.__applied = 0;
     document.querySelector("form")!.addEventListener("submit", event => { w.__submits++; event.preventDefault(); });
