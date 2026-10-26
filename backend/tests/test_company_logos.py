@@ -207,6 +207,41 @@ def test_workday_social_metadata_cannot_supply_another_tenant_or_arbitrary_image
     assert fetch.calls == [page]
 
 
+@pytest.mark.parametrize("page,icon", [
+    ("https://jobs.ashbyhq.com/future-fictional/1", "https://app.ashbyhq.com/api/images/org-theme-logo/abc-123/def-456/abc-789.png"),
+    ("https://apply.workable.com/future-fictional/j/1", "https://workablehr.s3.amazonaws.com/uploads/account/open_graph_logo/1234/social?12345"),
+])
+def test_verified_boards_expose_tenant_specific_logo_metadata(page, icon):
+    fetch = fake_fetch({page:f'<meta property="og:image" content="{icon}">',icon:image_bytes()})
+    asset = discover_logo(seed(owned=False,url=page),fetch)
+    assert asset and asset.source == icon and asset.evidence == page
+    assert fetch.calls == [page,icon]
+
+
+@pytest.mark.parametrize("page,icon", [
+    ("https://jobs.ashbyhq.com/future-fictional", "https://app.ashbyhq.com/job-preview.png"),
+    ("https://jobs.ashbyhq.com/future-fictional", "https://app.ashbyhq.com.evil.example/api/images/org-theme-logo/a/b/c.png"),
+    ("https://apply.workable.com/future-fictional", "https://workablehr.s3.amazonaws.com/static/provider-logo.png"),
+    ("https://careers.other.example/1", "https://workablehr.s3.amazonaws.com/uploads/account/open_graph_logo/1234/social"),
+])
+def test_provider_previews_and_other_sites_cannot_claim_tenant_metadata(page, icon):
+    fetch = fake_fetch({page:f'<meta property="og:image" content="{icon}">',icon:image_bytes()})
+    assert discover_logo(seed(owned=False,url=page),fetch) is None
+    assert fetch.calls == [page]
+
+
+def test_greenhouse_branding_class_accepts_legal_name_variants_without_matching_other_images():
+    page = "https://job-boards.greenhouse.io/future-fictional/jobs/123"
+    icon = "https://recruiting.cdn.greenhouse.io/external_greenhouse_job_boards/logos/1/original/brand.png?12"
+    markup = f'<img class="logo" alt="Future Fictional Labs - Corporate Logo" src="{icon}">'
+    fetch = fake_fetch({page:markup,icon:image_bytes()})
+    assert discover_logo(seed(owned=False,url=page),fetch).source == icon
+    for wrong in ["https://recruiting.cdn.greenhouse.io/provider-logo.png","https://recruiting.cdn.greenhouse.io.evil.example/external_greenhouse_job_boards/logos/1/logo.png"]:
+        fetch = fake_fetch({page:markup.replace(icon,wrong),wrong:image_bytes()})
+        assert discover_logo(seed(owned=False,url=page),fetch) is None
+        assert fetch.calls == [page]
+
+
 def test_structured_hiring_organization_must_match_the_exact_employer():
     def html(name):
         return '<script type="application/ld+json">' + json.dumps({"@type":"JobPosting", "hiringOrganization":{"name":name, "logo":{"url":ICON}}}) + '</script>'

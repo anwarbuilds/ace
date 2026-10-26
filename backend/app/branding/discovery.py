@@ -43,10 +43,20 @@ class BrandingHTML(HTMLParser):
         # not a generic preview image. Require the same host and site path.
         page, image = urlsplit(self.page_url), urlsplit(urljoin(self.page_url, value))
         site = page.path.strip("/").split("/", 1)[0]
-        return (self.workday and bool(site) and image.scheme == "https"
+        workday = (self.workday and bool(site) and image.scheme == "https"
                 and image.netloc == page.netloc
                 and image.path == f"/{site}/assets/logo"
                 and not image.query and not image.fragment)
+        # These paths explicitly identify tenant branding, rather than a job
+        # thumbnail or the hosting platform's own favicon. The page itself
+        # already comes from this employer's registered board identity.
+        ashby = (page.hostname == "jobs.ashbyhq.com" and bool(site)
+                 and image.hostname == "app.ashbyhq.com"
+                 and re.fullmatch(r"/api/images/org-theme-logo/[a-f0-9-]+/[a-f0-9-]+/[a-f0-9-]+\.(png|jpe?g|webp)", image.path))
+        workable = (page.hostname == "apply.workable.com" and bool(site)
+                    and image.hostname == "workablehr.s3.amazonaws.com"
+                    and re.fullmatch(r"/uploads/account/open_graph_logo/\d+/social", image.path))
+        return bool(workday or image.scheme == "https" and not image.fragment and (ashby or workable))
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
@@ -65,9 +75,14 @@ class BrandingHTML(HTMLParser):
             # Generic employer-logo markers belong to this verified tenant.
             # A provider-specific logo or generic og:image is never accepted.
             generic = alt in ("company logo", "employer logo") or (not alt and marker.strip() in ("company-logo", "employer-logo"))
+            page = urlsplit(self.page_url)
+            greenhouse = (page.hostname == "job-boards.greenhouse.io"
+                          and bool(page.path.strip("/"))
+                          and "logo" in (a.get("class") or "").split()
+                          and bool(re.fullmatch(r"https://recruiting\.cdn\.greenhouse\.io/external_greenhouse_job_boards/logos/[^\s]+", a.get("src") or "")))
             # Lever's dedicated employer header remains the tenant's mark if
             # it rebrands. Do not accept its footer/provider or generic og:image.
-            if employer_alt or generic or self.tenant_header:
+            if employer_alt or generic or self.tenant_header or greenhouse:
                 self.logos.append(a.get("src", ""))
         if tag == "script" and (a.get("type") or "").lower() == "application/ld+json":
             self.script, self.text = True, []

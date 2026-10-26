@@ -149,3 +149,18 @@ backup and owner input requirements.
 - User side, not yours: add `RESEND_API_KEY`; reload the extension at
   `chrome://extensions` (1.20.0, it never reloads itself); a private cleanup
   item the prompt mentions.
+
+## Earlier automatic-logo handoff, archived 2026-10-26
+
+**2026-10-26 automatic employer logos:** Review branch
+`company-logo-consistency-20261026`, draft PR #1, now handles future employers
+automatically through `/api/company-logo`. The 59 bundled icons/71 aliases are
+an optional fast path. Exact registered sources provide employer branding;
+no guessed domains, ATS favicon substitutions or external history disclosure.
+A bounded, private asset cache and image decoder serve small PNGs while initial
+fallbacks stay visible. Auth, application state, polling and scheduler are
+unchanged; no migration or deployment. Shopify outside the bundle passed a
+real public discovery and authenticated local proxy check against fictional
+data. See `docs/architecture/2026-10-26-company-identity.md` for validation,
+limits and changed files. Browser screenshots remain pending due to cooling.
+

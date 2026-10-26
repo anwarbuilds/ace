@@ -363,7 +363,9 @@
     "sha256": "62a36457dd2a780bb74e5ad63bb6f745b9d74f497920ec35569e5edd98d93df8",
     "aliases": [
       "JPMorganChase",
-      "JPMorgan Chase & Co."
+      "JPMorgan Chase & Co.",
+      "JP Morgan Chase",
+      "JP Morgan Chase & Co."
     ]
   },
   {
@@ -715,6 +717,191 @@
     "identity": "Official Hive website favicon; official homepage confirms Hive is now Deploy and careers link confirms the existing Lever hive tenant. No unrelated Hive businesses are aliases.",
     "verified_on": "2026-10-26",
     "sha256": "db27cb8187e8ae959a91f5f36d3676696c77032c61c31e30ad3e49757c2ba662",
+    "aliases": []
+  },
+  {
+    "company": "C3.ai",
+    "asset": "c3-ai.png",
+    "source": "https://c3.ai/favicon.ico",
+    "website": "https://c3.ai/careers",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "024afb4c5f318d6ce42d2fa5cfe5f70d30628bd130b87df92e1b9cf18340e85a",
+    "aliases": [
+      "C3 AI",
+      "C3 AI, Inc."
+    ]
+  },
+  {
+    "company": "Cigna Group",
+    "asset": "cigna-group.png",
+    "source": "https://cigna.wd5.myworkdayjobs.com/cignacareers/assets/logo",
+    "website": "https://cigna.wd5.myworkdayjobs.com/cignacareers/job/United-States-Work-at-Home/Healthcare-Fraud-Investigator--Remote-_26012771",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "eb4db2a1249d1cb58172b61c6a453629f2af9a3dea3876b292d25b4de139aff1",
+    "aliases": []
+  },
+  {
+    "company": "Citi",
+    "asset": "citi.png",
+    "source": "https://www.citi.com/cbol-hp-static-assets/assets/favicon.ico",
+    "website": "https://www.citi.com/",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "e6700b6f8ac821640f18fc8b5dda35ee6a1b9c667079ba42c8678eedb3755012",
+    "aliases": []
+  },
+  {
+    "company": "CLEAR",
+    "asset": "clear.png",
+    "source": "https://recruiting.cdn.greenhouse.io/external_greenhouse_job_boards/logos/000/000/760/original/CLEAR_Logo_Halo_Midnight_RGB_DIGITAL_(1).png?1742563293",
+    "website": "https://job-boards.greenhouse.io/clear/jobs/8325081",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "d30abc18cd07c2847e20fd399b90c0dbcde582d5a6ecddbb6de2f832d20c9ff7",
+    "aliases": []
+  },
+  {
+    "company": "CoStar Group",
+    "asset": "costar-group.png",
+    "source": "https://costar.wd1.myworkdayjobs.com/CoStarCareers/assets/logo",
+    "website": "https://costar.wd1.myworkdayjobs.com/CoStarCareers/job/US-CA-Los-Angeles/Field-Sales-Account-Executive---Matterport---Los-Angeles--CA_R39750",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "7f75149533d54142841e2c78e63ea863c273b1c33293457dfcd2af71caa98e53",
+    "aliases": []
+  },
+  {
+    "company": "DTCC",
+    "asset": "dtcc.png",
+    "source": "https://www.dtcc.com/favicon-512x512.png",
+    "website": "https://www.dtcc.com/",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "b4c728b4c3cf4f566bffbad4cf719a52d1ecf47104a22475a0dc21851b8a1a7f",
+    "aliases": []
+  },
+  {
+    "company": "Forge Nano",
+    "asset": "forge-nano.png",
+    "source": "https://www.forgenano.com/wp-content/uploads/2025/09/preview.jpg",
+    "website": "https://www.forgenano.com/careers/",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "5dbfb37b5948b703811d9b3414e4faa618f502f0cf21f7b30e5d7c2a99102681",
+    "aliases": [
+      "ForgeNano"
+    ]
+  },
+  {
+    "company": "Gartner",
+    "asset": "gartner.png",
+    "source": "https://gartner.wd5.myworkdayjobs.com/EXT/assets/logo",
+    "website": "https://gartner.wd5.myworkdayjobs.com/EXT/job/Gurgaon/Marketing-Specialist_115191",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "6909ae108f47b7ed13533159b814fec3b80cc489b1a80416ee9ad43794e0c099",
+    "aliases": []
+  },
+  {
+    "company": "Greenheck Group",
+    "asset": "greenheck-group.png",
+    "source": "https://greenheckgroup.wd5.myworkdayjobs.com/external/assets/logo",
+    "website": "https://greenheckgroup.wd5.myworkdayjobs.com/external/job/Tulsa-Facility-5---DOAS/Plant-Manager_JR104928",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "d356a435d71ad2a1b9d361e5d41f5a7b57bd9da28feffaa8b8490e4bfb862d64",
+    "aliases": []
+  },
+  {
+    "company": "Iambic Therapeutics",
+    "asset": "iambic-therapeutics.png",
+    "source": "https://app.ashbyhq.com/api/images/org-theme-logo/091b17bc-e30a-4466-a27f-00f6d98ca0bc/b33243b6-1d56-4382-837d-0ec2b66511b3/5e7b4194-71c2-475d-9890-516e41b2ab22.png",
+    "website": "https://jobs.ashbyhq.com/iambic-therapeutics/c03e278f-ec98-4fa0-8900-1796ac60d4b4",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "7b04b5c8ef338e73f61133ab7d89659539b37c36177eb53632e1b586a06653a8",
+    "aliases": []
+  },
+  {
+    "company": "Mastercard",
+    "asset": "mastercard.png",
+    "source": "https://mastercard.wd1.myworkdayjobs.com/CorporateCareers/assets/logo",
+    "website": "https://mastercard.wd1.myworkdayjobs.com/CorporateCareers/job/Mexico-City-Mexico/Social-Content-Creator--Video-Specialist-_R-294620",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "06793b835b1c84ee8630658162fcdf7552815759b0887248e4eae0aa671a0f9a",
+    "aliases": []
+  },
+  {
+    "company": "Medtronic",
+    "asset": "medtronic.png",
+    "source": "https://medtronic.wd1.myworkdayjobs.com/MedtronicCareers/assets/logo",
+    "website": "https://medtronic.wd1.myworkdayjobs.com/MedtronicCareers/job/Minneapolis-Minnesota-United-States-of-America/Sr-Sales-Administration-Manager---Neurovascular-Commercial-Excellence_R78839-2",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "6bb07a46d6ae0063d9d61015c5eb4b99063380be3460e8d9f6491c6befa2ffc4",
+    "aliases": []
+  },
+  {
+    "company": "Morningstar",
+    "asset": "morningstar.png",
+    "source": "https://morningstar.wd5.myworkdayjobs.com/Morningstar/assets/logo",
+    "website": "https://morningstar.wd5.myworkdayjobs.com/Morningstar/job/Chicago/Director-of-Product-Operations--Indexes_REQ-059056",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "d223c3d1d56342d24e9a659f59be743449a5854cebbfdc4e2367fa4ce7057293",
+    "aliases": []
+  },
+  {
+    "company": "T.D. Williamson",
+    "asset": "t-d-williamson.png",
+    "source": "https://tdwilliamson.wd1.myworkdayjobs.com/TDWCareers/assets/logo",
+    "website": "https://tdwilliamson.wd1.myworkdayjobs.com/TDWCareers/job/USA-OK-Tulsa/Senior-Quality-Control-Inspector_REQ-03912-1",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "1ccb3ed16077142d593010ac7fdfb2f6b2a0a7b22a268f191394ca68d912856e",
+    "aliases": []
+  },
+  {
+    "company": "Thomson Reuters",
+    "asset": "thomson-reuters.png",
+    "source": "https://thomsonreuters.wd5.myworkdayjobs.com/External_Career_Site/assets/logo",
+    "website": "https://thomsonreuters.wd5.myworkdayjobs.com/External_Career_Site/job/United-States-of-America-Ann-Arbor-Michigan/Client-Executive_JREQ204623",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "cb101d245e992628748a9254ad39ed5fe1997b4141f89e7355a2e4678ea19850",
+    "aliases": []
+  },
+  {
+    "company": "Travelers",
+    "asset": "travelers.png",
+    "source": "https://www.travelers.com/favicon.ico",
+    "website": "https://www.travelers.com/",
+    "identity": "Official employer website branding, HTTPS and robots checked, re-encoded PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "507eb615635c75224c8a3223c2afec898ae893a5474386167cf374998633d8fb",
+    "aliases": []
+  },
+  {
+    "company": "U.S. Bank",
+    "asset": "u-s-bank.png",
+    "source": "https://usbank.wd1.myworkdayjobs.com/US_Bank_Careers/assets/logo",
+    "website": "https://usbank.wd1.myworkdayjobs.com/US_Bank_Careers/job/Saint-Joseph-MO/Relationship-Banker-1---Belt---Pickett--Spanish-Fluency-Preferred-_2026-0033218",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "8a94e751bc4786b75a0a09c8eab1e3baa87ea0136a82affcda6dee8d7c70bfae",
+    "aliases": []
+  },
+  {
+    "company": "Wex",
+    "asset": "wex.png",
+    "source": "https://wexinc.wd5.myworkdayjobs.com/WEXInc/assets/logo",
+    "website": "https://wexinc.wd5.myworkdayjobs.com/WEXInc/job/US---Remote/Software-Development-Manager_R21296",
+    "identity": "Official employer website icon or employer-declared branding on its registered tenant board; downloaded with HTTPS and robots checks and re-encoded as PNG",
+    "verified_on": "2026-10-26",
+    "sha256": "67048016487a415ef42774257ff4a99c0ad2bf82e191ad53ce2020fbfe4f4574",
     "aliases": []
   }
 ]

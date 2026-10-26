@@ -8,6 +8,7 @@ const clientReady = () => true;
 const serverReady = () => false;
 function useReady() { return useSyncExternalStore(subscribe, clientReady, serverReady); }
 import { familyLabel } from "@/lib/format";
+import { CompanyLogo } from "@/components/CompanyLogo";
 
 export function AnalyticsFilters({ families, today }: { families: string[]; today: string }) {
   const ready = useReady();
@@ -42,7 +43,7 @@ export function AnalyticsCompanySelect({ companies, value }: { companies: string
   const ready = useReady();
   const router = useRouter();
   const params = useSearchParams();
-  return <label className="an-company-select"><span className="sr">Company evidence</span><select disabled={!ready} value={value} onChange={e => {const next = new URLSearchParams(params); next.set("company", e.target.value); router.push(`/app/analytics?${next}`, { scroll: false });}}>{companies.map(name => <option key={name}>{name}</option>)}</select></label>;
+  return <label className="an-company-select">{value && <CompanyLogo name={value} size="compact" />}<span className="sr">Company evidence</span><select disabled={!ready} value={value} onChange={e => {const next = new URLSearchParams(params); next.set("company", e.target.value); router.push(`/app/analytics?${next}`, { scroll: false });}}>{companies.map(name => <option key={name}>{name}</option>)}</select></label>;
 }
 
 

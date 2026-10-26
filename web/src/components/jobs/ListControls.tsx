@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Icon } from "@/components/Icon";
+import { CompanyIdentity } from "@/components/CompanyIdentity";
 import { Popover, usePopover } from "@/components/shell/Popover";
 import { getJson } from "@/lib/client";
 import { TIER_LABEL } from "@/lib/format";
@@ -71,7 +72,7 @@ function FilterMenu({ state, onPick }: { state: ListState; onPick: (change: Part
             className={`pop-opt${state[key].includes(o.value) ? " on" : ""}`}
             onClick={() => onPick({ [key]: state[key].includes(o.value) ? state[key] : [...state[key], o.value] })}
           >
-            {fold ? o.value.replace(/_/g, " ").toLowerCase() : o.value}
+            {key === "companies" ? <CompanyIdentity name={o.value} /> : fold ? o.value.replace(/_/g, " ").toLowerCase() : o.value}
             <span className="n">{o.count}</span>
           </button>
         ))}
@@ -125,7 +126,7 @@ function FilterMenu({ state, onPick }: { state: ListState; onPick: (change: Part
                       }
                     >
                       <Icon name="minus" size={13} />
-                      {o.value}
+                      <CompanyIdentity name={o.value} />
                       <span className="n">{o.count}</span>
                     </button>
                   );
@@ -165,7 +166,7 @@ export function ListControls({ state }: { state: ListState }) {
 
   const applied = state.page === "applied";
   const valueChips = [
-    ...state.companies.map((v) => ({ label: v, drop: { companies: state.companies.filter((x) => x !== v) } })),
+    ...state.companies.map((v) => ({ label: v, company: v, drop: { companies: state.companies.filter((x) => x !== v) } })),
     ...state.sources.map((v) => ({ label: v.replace(/_/g, " ").toLowerCase(), drop: { sources: state.sources.filter((x) => x !== v) } })),
     ...state.families.map((v) => ({
       label: v.replace(/_/g, " ").toLowerCase(),
@@ -276,7 +277,7 @@ export function ListControls({ state }: { state: ListState }) {
           <span className="ctl-label">Filtering by</span>
           {valueChips.map((c) => (
             <button key={c.label} className="chip on" onClick={() => go(c.drop)}>
-              {c.label}
+              {"company" in c ? <CompanyIdentity name={c.company} /> : c.label}
               <span className="chip-x">&times;</span>
             </button>
           ))}
@@ -288,7 +289,7 @@ export function ListControls({ state }: { state: ListState }) {
               onClick={() => go({ excluded: state.excluded.filter((x) => x !== name) })}
             >
               <Icon name="minus" size={13} />
-              {name}
+              <CompanyIdentity name={name} />
             </button>
           ))}
           {!valueChips.length && !state.excluded.length ? (

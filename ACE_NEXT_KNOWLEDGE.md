@@ -13,6 +13,40 @@ a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
+## 2026-10-26: Platform-wide logo coverage follow-up
+
+Status: locally tested, deployment pending on `platform-company-logos-20261026`.
+The owner found initials across Analytics and requested company marks throughout
+the platform. The prior Hive/Vizient release did not cover all providers/names.
+This pass audits all 21 missing names in the supplied view. Eighteen authentic
+assets were obtained, decoded, visually inspected and checksummed, expanding
+the optional bundle to 78; JP Morgan Chase now aliases the existing JPMorgan
+Chase asset. C3 AI/ForgeNano spelling variants are explicitly reviewed. No legal
+suffix guessing or company/history rewriting. The two still-unavailable brands
+are Marvell and Funnel Leasing: their corporate pages are readable but their
+declared image hosts refuse automated reads. No bypass or substitute logo.
+
+General discovery supports Ashby org-theme logo metadata, Workable account
+branding metadata and Greenhouse's dedicated tenant-logo element, with strict
+provider/asset-path checks. Cache keys advance to parser v3. These are general
+provider rules, not a new allowlist of future employers. Dynamic failed images
+retry at most twice with cleanup; they no longer retain a transient failure
+forever on the mounted row. Genuine unavailable evidence still shows initials.
+Company include/exclude menus, active filter chips, the selected Analytics
+company and Inbox linked-application/audit references now share CompanyIdentity.
+Existing list/detail, Analytics, Pulls, history, Coverage and Resume Studio
+surfaces already use the shared resolver. Native select options retain native
+keyboard behavior; the selected company has an adjacent mark. Email bodies,
+notifications, input text and other literal content are not rewritten.
+
+Validation: 142 fictional logo/auth/source tests, 9 company React contracts
+(including retry bounds/cancellation), 12 Inbox and 4 Analytics render tests
+pass. TypeScript, lint, production build and forbidden-dash checks pass.
+Deployment evidence will be recorded after completion. Chrome stays off for
+cooling; no browser screenshots claimed.
+No extension, schema, scheduler, Gmail permission or application-data changes.
+Full evidence: `docs/architecture/2026-10-26-platform-company-logos.md`.
+
 ## 2026-10-26: Missing Hive and Vizient logos, tenant metadata correction
 
 Status: deployed in `bd5c364`, healthy at 13:25 Pacific on 2026-10-26; PR #3 merged.

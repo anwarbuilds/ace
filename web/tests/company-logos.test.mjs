@@ -52,6 +52,13 @@ test("similar names, unknown subsidiaries and prototype properties never borrow 
     assert.equal(companyLogoFor(name),undefined,name);assert.doesNotMatch(html(CompanyLogo,{name}),/src="\/company-logos\//);
   }
 });
+test("reviewed company spellings share the same mark on lists, filters and details",()=>{
+  for(const [name,asset] of [["JP Morgan Chase","jpmorgan-chase.png"],["JPMorgan Chase & Co.","jpmorgan-chase.png"],["C3 AI","c3-ai.png"],["C3.ai","c3-ai.png"],["ForgeNano","forge-nano.png"]]){
+    assert.equal(companyLogoFor(name)?.asset,asset);
+    assert.ok(html(CompanyIdentity,{name}).includes(`/company-logos/${asset}`));
+    assert.ok(html(Avatar,{name,large:true}).includes(`/company-logos/${asset}`));
+  }
+});
 test("all identities are unambiguous and all local bytes match official provenance",()=>{
   const identities=new Map();
   for(const row of manifest){
@@ -99,7 +106,7 @@ test("broken and cached failed images fall back and recover when the employer ch
   try {
     await render("Apple");assert.match(host.innerHTML,/apple.ico/);
     await act(async()=>host.querySelector("img").dispatchEvent(new window.Event("error")));
-    assert.equal(host.querySelector("img"),null);assert.equal(host.textContent,"A");
+    assert.equal(Boolean(host.querySelector("img")),false);assert.equal(host.textContent,"A");
     await render("General Motors");assert.match(host.innerHTML,/general-motors.png/);
     await render("Fictional Labs");assert.equal(host.textContent,"FL");
     assert.equal(host.querySelector("img").getAttribute("src"),"/api/company-logo?name=Fictional%20Labs");
@@ -108,7 +115,7 @@ test("broken and cached failed images fall back and recover when the employer ch
     assert.equal(host.textContent,"");assert.equal(host.querySelector("img").getAttribute("data-pending"),null);
     await render("Future Fictional Brand");assert.equal(host.textContent,"FF");
     await act(async()=>host.querySelector("img").dispatchEvent(new window.Event("error")));
-    assert.equal(host.querySelector("img"),null);assert.equal(host.textContent,"FF");
+    assert.equal(Boolean(host.querySelector("img")),false);assert.equal(host.textContent,"FF");
     await render("Apple");assert.match(host.innerHTML,/apple.ico/);
     await act(async()=>mounted.render(null));
     const createElement=window.document.createElement.bind(window.document);
@@ -117,10 +124,37 @@ test("broken and cached failed images fall back and recover when the employer ch
       if(tag==="img")Object.defineProperties(element,{complete:{value:true},naturalWidth:{value:0}});
       return element;
     };
-    await render("Apple");assert.equal(host.querySelector("img"),null);assert.equal(host.textContent,"A");
+    await render("Apple");assert.equal(Boolean(host.querySelector("img")),false);assert.equal(host.textContent,"A");
     window.document.createElement=createElement;
     await render("FedEx Freight");assert.match(host.innerHTML,/fedex-freight.png/);
   } finally {
     await act(async()=>mounted.unmount());globalThis.window=previous.window;globalThis.document=previous.document;globalThis.IS_REACT_ACT_ENVIRONMENT=previous.act;
+  }
+});
+
+test("a transient dynamic failure retries twice, can recover, and cancels pending work on unmount",async()=>{
+  const {window}=parseHTML("<html><body><div id='retry-root'></div></body></html>");
+  const previous={window:globalThis.window,document:globalThis.document,act:globalThis.IS_REACT_ACT_ENVIRONMENT,set:window.setTimeout,clear:window.clearTimeout};
+  const timers=new Map();let serial=0;
+  window.setTimeout=(fn,delay)=>{const id=++serial;timers.set(id,{fn,delay});return id;};
+  window.clearTimeout=id=>timers.delete(id);
+  globalThis.window=window;globalThis.document=window.document;globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+  const host=window.document.getElementById("retry-root"),mounted=createRoot(host);
+  const fail=async()=>act(async()=>host.querySelector("img").dispatchEvent(new window.Event("error")));
+  const retry=async delay=>{const [id,task]=[...timers][0];assert.equal(task.delay,delay);timers.delete(id);await act(async()=>task.fn());};
+  try {
+    await act(async()=>mounted.render(React.createElement(CompanyLogo,{name:"Future Fictional Retry"})));
+    await fail();assert.equal(Boolean(host.querySelector("img")),false);assert.equal(timers.size,1);
+    await retry(2000);assert.match(host.querySelector("img").getAttribute("src"),/retry=1$/);
+    await act(async()=>host.querySelector("img").dispatchEvent(new window.Event("load")));
+    assert.equal(host.textContent,"");assert.equal(timers.size,0);
+    await fail();await retry(15000);assert.match(host.querySelector("img").getAttribute("src"),/retry=2$/);
+    await fail();assert.equal(timers.size,0);assert.equal(host.textContent,"FF");
+    await act(async()=>mounted.render(React.createElement(CompanyLogo,{name:"Another Fictional Retry"})));
+    await fail();assert.equal(timers.size,1);
+    await act(async()=>mounted.unmount());assert.equal(timers.size,0);
+  } finally {
+    await act(async()=>mounted.unmount());window.setTimeout=previous.set;window.clearTimeout=previous.clear;
+    globalThis.window=previous.window;globalThis.document=previous.document;globalThis.IS_REACT_ACT_ENVIRONMENT=previous.act;
   }
 });

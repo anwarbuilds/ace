@@ -155,17 +155,10 @@ Analytics. `GMAIL_AUTO_REJECTIONS` (default true) is the server switch. No migra
 See `ACE_NEXT_KNOWLEDGE.md`, Inbox automatic rejections.
 
 
-**2026-10-26 automatic employer logos:** Review branch
-`company-logo-consistency-20261026`, draft PR #1, now handles future employers
-automatically through `/api/company-logo`. The 59 bundled icons/71 aliases are
-an optional fast path. Exact registered sources provide employer branding;
-no guessed domains, ATS favicon substitutions or external history disclosure.
-A bounded, private asset cache and image decoder serve small PNGs while initial
-fallbacks stay visible. Auth, application state, polling and scheduler are
-unchanged; no migration or deployment. Shopify outside the bundle passed a
-real public discovery and authenticated local proxy check against fictional
-data. See `docs/architecture/2026-10-26-company-identity.md` for validation,
-limits and changed files. Browser screenshots remain pending due to cooling.
+**2026-10-26 platform logo coverage:** 78 reviewed icons, JP Morgan Chase alias,
+Ashby/Greenhouse/Workable discovery, bounded failure recovery and company marks
+in filters/Inbox are tested locally. Marvell/Funnel image hosts refuse reads.
+Deployment pending; see `architecture/2026-10-26-platform-company-logos.md`.
 
 Historical state notes from earlier extension and platform releases are retained
 in [the handoff state archive](knowledge/11-handoff-state-archive.md). Use

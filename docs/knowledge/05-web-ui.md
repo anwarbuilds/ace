@@ -926,3 +926,17 @@ company/job/Opportunities logo references and Pulls window data; totals stayed
 930. API/web health and source hashes pass. Environment, schema and scheduler
 are unchanged. Browser rendering remains untested due to cooling. Full release
 evidence and private rollback location are in the architecture note.
+
+### Platform company-logo coverage, 2026-10-26
+
+A second owner review found gaps throughout Analytics. The optional bundle has
+78 reviewed logos and the JP Morgan Chase spelling is mapped explicitly. Shared
+provider extraction now covers Ashby, Workable and Greenhouse branding fields
+without accepting generic previews. A dynamic image gets at most two retries
+and cancels work on unmount. Include/exclude company choices, active company
+chips, Analytics' selected company and Inbox application/audit references use
+the same shared mark. The 18 new PNGs have official provenance and visual review.
+Marvell/Funnel Leasing remain unavailable because their declared image hosts
+refuse reads. Local test results and eventual deployment verification are in
+`docs/architecture/2026-10-26-platform-company-logos.md`. No browser run due
+to cooling; no unrelated behavior or database record changes.
