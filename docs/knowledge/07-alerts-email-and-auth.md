@@ -13,15 +13,21 @@ smaller reads succeeded. Token refresh and access worked; creating another
 client or reconnecting does not fix this quota response. No email content,
 tokens or owner screenshots are retained here.
 
-Prepared local remediation: bounded exponential retries for explicit Google
+Implemented remediation: bounded exponential retries for explicit Google
 quota/temporary failures, respect Retry-After, skip already-imported message
 detail reads and deleted messages, retain authorization state on temporary
 failure and return a clear 429 instead of a generic connection failure.
 Ordinary permission refusals are never retried. Tests use fictional responses
 and isolated databases; the final focused set passed 112 tests with clean
-whitespace and zero-hit dash checks. This is pending an explicitly approved API-only release;
-it requires no migration, scheduler operation, permission expansion or
-automatic-outcome enablement. See the root continuity file for current status.
+whitespace and zero-hit dash checks. With explicit owner approval, API-only
+release `dde926f` became healthy on 2026-10-25 at 20:01 Pacific. A fresh private
+backup was verified; protected counts matched and other container IDs were
+unchanged. No migration, scheduler operation, permission expansion or
+automatic-outcome enablement occurred. Post-release Gmail reads and Analytics
+totals/cohorts/drilldowns passed read-only. The owner still needs Resume sync and
+completion of the historical preview/review; no full mailbox import or outcome
+confirmation was performed during this release. See the root continuity file
+for exact evidence and backup location.
 
 ## Baseline suppression was removed, then replaced by freshness
 

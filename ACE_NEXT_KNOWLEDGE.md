@@ -422,7 +422,7 @@ application records, scopes, grants or sync state. Production still had an
 unfinished initial import, no successful-sync timestamp/cursor and an error
 state at that check. Reconnecting or creating another client is unnecessary.
 
-A local fix is prepared in `backend/app/inbox/gmail.py` and
+A fix is implemented in `backend/app/inbox/gmail.py` and
 `backend/app/api/routers/inbox.py`: four bounded attempts with exponential
 backoff/jitter for explicit quota, transport and transient server failures;
 respect for Retry-After; no retry of ordinary permission refusals; sanitized
@@ -433,10 +433,34 @@ automatic outcome setting, schema, scheduler or frontend change is involved.
 `backend/tests/test_gmail_reads.py` uses only fictional Google responses and
 isolated SQLite data. The final focused Gmail/Inbox/Analytics/API/marks/petition/
 Pulls set passed 112 tests; whitespace and zero-hit dash checks passed. No
-frontend changed and no browser suite was run. This fix is not deployed; a new API-only production
-release needs the owner's explicit approval. Existing error-state connections
-still need the owner's Resume sync action; the fix does not silently reset
-their saved state or run a mailbox import.
+frontend changed and no browser suite was run. After the owner's explicit
+approval, API-only release `dde926fe93efc9c1aa4f029527d8742682af840b` became
+healthy at 2026-10-25 20:01 Pacific (2026-10-26T03:01Z). The deployed source
+hashes matched both changed backend files. The web image remains
+`922640f73a00c445139771347b2b3a1cb4ccba0a`; `/healthz` reports the frontend
+SHA, not the API commit, so different API/web SHAs are expected for this release.
+
+A fresh private backup,
+`private-backups/gmail-release-20261026T030018Z/database.dump.gz`, passed complete
+gzip integrity and PostgreSQL archive-list checks before activation. Rollback
+API image ID and before/after aggregate inventories are beside it. Eight
+protected table counts and the applied-mark count matched. Only API was built
+and replaced; web, scheduler, PostgreSQL and Caddy container IDs were unchanged,
+all relevant services were healthy, and schema remained `0050`. No migration,
+scheduler operation, Gmail scope/configuration change, automatic-outcome
+enablement or production application/evidence import ran during deployment.
+
+Post-release read-only diagnostics passed token refresh, live Gmail profile and
+listing reads, all four Analytics date ranges, 919 unique application totals
+against existing marks, cohort partitions, record drilldowns and deduplication.
+Anonymous Analytics returned 401 and public health was ok. Global and owner
+automatic outcomes remained false. The existing connection still had its saved
+error state, no successful-sync timestamp and incomplete preview: the owner
+must refresh, select Resume sync and complete the historical preview pages.
+This release does not silently reset their saved state, import a mailbox or
+confirm outcomes. Full historical import and signed-in UI recovery remain to
+be verified through that owner action; the rate limit itself is not claimed
+to have disappeared.
 
 The existing Inbox `Emails reviewed`/review tiles use the bounded displayed
 message list; 100 displayed emails is not a full-mailbox count or evidence of
