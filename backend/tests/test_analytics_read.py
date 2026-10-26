@@ -262,3 +262,24 @@ def test_rejected_records_search_dates_and_link_the_email(db):
     assert [r["key"] for r in found["records"]]==[late] and found["record_query"]=="northwind platform"
     assert read(db,records=True,evidence="rejection",q="northwind data")["record_total"]==0
     assert read(db,records=True,q=late)["record_total"]==1  # The record key is searchable too.
+
+
+def test_email_outcomes_count_despite_the_inbox_audit_entry_every_email_has(db):
+    # Production shape: Inbox logs "email_classified" under "email:<id>" for every
+    # imported email, so that entry must not look like a second application.
+    from backend.app.db.models import GmailConnectionRecord
+    key=app(db,1,status="rejected");other=app(db,2,status="rejected")
+    conn=GmailConnectionRecord(owner_id=1,email="fictional@example.test",encrypted_refresh_token=b"",scope="gmail.readonly",state="disconnected")
+    db.add(conn);db.flush()
+    for target,received,decision,actor,kind in ((key,NOW-timedelta(days=3),"automatic","verified_automation","rejection"),
+                                                (other,NOW-timedelta(days=2),"manual","owner","manual_correction")):
+        mail=GmailMessageRecord(connection_id=conn.id,gmail_id=f"fictional-{target}",received_at=received,sender="fixture@example.test",subject="Fictional update",snippet="",classification="rejection",decision=decision,selected_application_key=target,decision_reason="Fictional fixture",parser_version="fixture")
+        db.add(mail);db.flush()
+        audit=outcome(db,f"email:{mail.id}","email_classified",stamp=received,gmail_message_id=mail.id);audit.actor="classifier"
+        row=outcome(db,target,kind,stamp=received,gmail_message_id=mail.id,new_status="rejected");row.actor=actor
+    d=read(db)
+    assert d["rejection_summary"]["dated"]==2
+    assert {r["latest_at"] for r in d["rejected_companies"]}=={(NOW-timedelta(days=2)).isoformat()}
+    records=read(db,records=True,evidence="rejection")["records"]
+    assert [r["key"] for r in records]==[other,key]
+    assert all(r["evidence"][0]["message_id"] for r in records)

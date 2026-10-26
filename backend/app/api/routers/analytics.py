@@ -71,13 +71,15 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
     messages = {m.id: m for m in session.scalars(select(GmailMessageRecord).where(GmailMessageRecord.id.in_(message_ids)))} if message_ids else {}
     # One message can substantiate only one identity. Exclude conflicts even
     # when the competing application falls outside the selected date range.
+    # Inbox's own audit entries (key "email:<id>") are not applications; every
+    # imported email has one, so counting them excluded every email outcome.
     message_targets = defaultdict(set)
     if message_ids:
         linked_events = session.scalars(select(ApplicationEventRecord).where(ApplicationEventRecord.gmail_message_id.in_(message_ids))).all()
         linked_ids = {e.id for e in linked_events}
         linked_undos = set(session.scalars(select(ApplicationEventRecord.undo_of_id).where(ApplicationEventRecord.undo_of_id.in_(linked_ids))))
         for linked in linked_events:
-            if linked.id not in linked_undos and linked.kind != "undo":
+            if linked.id not in linked_undos and linked.kind != "undo" and linked.application_key.startswith(("job:", "external:")):
                 message_targets[linked.gmail_message_id].add(linked.application_key)
     events: dict[str, dict[str, datetime | None]] = defaultdict(dict)
     # The email behind each counted event, so a record can open it in Inbox.
