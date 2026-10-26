@@ -903,3 +903,22 @@ Shopify outside the bundle passed actual public discovery and the built local
 website's authenticated proxy path with fictional application data. Full
 checks, file inventory and remaining browser limitations are in
 `docs/architecture/2026-10-26-company-identity.md`. No production deployment.
+
+### Tenant metadata follow-up (2026-10-26)
+
+The owner found Hive/Vizient initials on live Pulls. Workday's verified site's
+`og:image` is accepted only when it names the same host and exact site-specific
+`/assets/logo` endpoint. This avoids requiring Workday's payroll legal name to
+match its display name. Lever's explicit employer header is accepted on a
+verified Lever tenant even after a rebrand; footer/provider marks and arbitrary
+social preview images remain excluded. Parser-versioned source keys retire old
+negative caches. These changes apply to future registered companies too.
+
+Hive's official homepage confirms Hive is now Deploy and its careers page
+links to the registered Lever tenant. That tenant's image CDN disallowed reads;
+Hive's official favicon was downloaded, decoded, visually reviewed and added
+with provenance, bringing the optional bundle to 60. No unrelated Hive employer
+is an alias and application company names are not rewritten. Candidate parser
+retrieval from the VM returned Vizient's authentic 96 x 44 PNG. Fictional tests:
+135 backend and 7 React contracts pass. Deployment/HTTP verification is pending;
+browser rendering remains untested due to cooling.

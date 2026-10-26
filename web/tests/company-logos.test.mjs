@@ -43,12 +43,12 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root,"public/company-logos
 const html = (Component,props) => renderToStaticMarkup(React.createElement(Component,props));
 
 test("requested employers and reviewed legal variants resolve consistently",()=>{
-  for(const [name,asset] of [["Apple","apple.ico"],[" APPLE, INC. ","apple.ico"],["FedEx Freight","fedex-freight.png"],["FedEx Freight, Inc.","fedex-freight.png"],["GM","general-motors.png"],["General Motors LLC","general-motors.png"],["Southern Company","southern-company.png"]]){
+  for(const [name,asset] of [["Apple","apple.ico"],[" APPLE, INC. ","apple.ico"],["FedEx Freight","fedex-freight.png"],["FedEx Freight, Inc.","fedex-freight.png"],["GM","general-motors.png"],["General Motors LLC","general-motors.png"],["Southern Company","southern-company.png"],["Hive","hive.ico"]]){
     assert.equal(companyLogoFor(name)?.asset,asset);assert.ok(html(CompanyLogo,{name}).includes(`/company-logos/${asset}`));
   }
 });
 test("similar names, unknown subsidiaries and prototype properties never borrow marks",()=>{
-  for(const name of ["Applewood Fictional Labs","Not Apple","Apple Fictional Subsidiary","General Motorsports","FedEx Freight Services Fictional","Workday tenant: Apple","toString","__proto__",""]){
+  for(const name of ["Applewood Fictional Labs","Not Apple","Apple Fictional Subsidiary","General Motorsports","FedEx Freight Services Fictional","Workday tenant: Apple","Fictional Hive Logistics","toString","__proto__",""]){
     assert.equal(companyLogoFor(name),undefined,name);assert.doesNotMatch(html(CompanyLogo,{name}),/src="\/company-logos\//);
   }
 });

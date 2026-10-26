@@ -119,7 +119,12 @@ and pages. Released with a verified backup; only API/web changed. `c7d3451` also
 Analytics count outcomes recorded from email (they were dropped). Owner: press Sync now once.
 See `ACE_NEXT_KNOWLEDGE.md`, Inbox clarity and Rejected companies deployed.
 
-**2026-10-26 production release:** API/web are healthy at `21f563a`; logo work,
+**2026-10-26 tenant logos:** Workday site-bound logo metadata and Lever employer
+headers now resolve without equating payroll/rebrand names. Hive uses its reviewed
+official icon; 60 bundled icons. 135 backend and 7 React tests pass. Deployment
+pending. See `architecture/2026-10-26-company-identity.md`, tenant follow-up.
+
+**2026-10-26 earlier production release:** API/web were healthy at `21f563a`; logo work,
 quick fill 1.29.0 and the existing Inbox fixes are included. All Analytics tabs
 and logo assets passed signed-in HTTP checks; application records stayed 929.
 Only API/web containers changed; schema 0050, environment and scheduler remain.

@@ -27,14 +27,35 @@ def normalized(value):
 
 
 class BrandingHTML(HTMLParser):
-    def __init__(self, company):
+    def __init__(self, company, page_url=""):
         super().__init__(convert_charrefs=True)
         self.company = normalized(company)
         self.icons, self.logos, self.organizations = [], [], []
         self.script, self.text = False, []
+        self.page_url = page_url
+        page = urlsplit(page_url)
+        self.lever = page.hostname == "jobs.lever.co" and bool(page.path.strip("/"))
+        self.workday = bool(re.fullmatch(r"[a-z0-9-]+\.wd\d+\.myworkdayjobs\.com", page.hostname or ""))
+        self.tenant_header = False
+
+    def tenant_meta_logo(self, value):
+        # Workday's social image is its tenant's dedicated branding endpoint,
+        # not a generic preview image. Require the same host and site path.
+        page, image = urlsplit(self.page_url), urlsplit(urljoin(self.page_url, value))
+        site = page.path.strip("/").split("/", 1)[0]
+        return (self.workday and bool(site) and image.scheme == "https"
+                and image.netloc == page.netloc
+                and image.path == f"/{site}/assets/logo"
+                and not image.query and not image.fragment)
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
+        if tag == "a":
+            self.tenant_header = self.lever and "main-header-logo" in (a.get("class") or "").split()
+        if tag == "meta" and a.get("property") == "og:image":
+            candidate = a.get("content") or ""
+            if self.tenant_meta_logo(candidate):
+                self.logos.append(candidate)
         if tag == "link" and ("icon" in (a.get("rel") or "").lower().split() or a.get("rel") == "apple-touch-icon"):
             self.icons.append(a.get("href", ""))
         if tag == "img":
@@ -44,7 +65,9 @@ class BrandingHTML(HTMLParser):
             # Generic employer-logo markers belong to this verified tenant.
             # A provider-specific logo or generic og:image is never accepted.
             generic = alt in ("company logo", "employer logo") or (not alt and marker.strip() in ("company-logo", "employer-logo"))
-            if employer_alt or generic:
+            # Lever's dedicated employer header remains the tenant's mark if
+            # it rebrands. Do not accept its footer/provider or generic og:image.
+            if employer_alt or generic or self.tenant_header:
                 self.logos.append(a.get("src", ""))
         if tag == "script" and (a.get("type") or "").lower() == "application/ld+json":
             self.script, self.text = True, []
@@ -54,6 +77,8 @@ class BrandingHTML(HTMLParser):
             self.text.append(data)
 
     def handle_endtag(self, tag):
+        if tag == "a":
+            self.tenant_header = False
         if tag == "script" and self.script:
             self.script = False
             try:
@@ -116,7 +141,7 @@ def discover_logo(seed: LogoSeed, fetch) -> LogoAsset | None:
             result = fetch(page.url, 800_000, deadline)
             if result.status != 200 or "html" not in result.content_type.lower():
                 continue
-            parser = BrandingHTML(seed.company)
+            parser = BrandingHTML(seed.company, result.url)
             parser.feed(result.data.decode("utf-8", "replace"))
             candidates = list(parser.logos)
             for org in parser.organizations:

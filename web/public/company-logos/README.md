@@ -3,6 +3,7 @@
 These are unmodified icon bytes downloaded from the exact official company
 URLs in `provenance.json`. The initial 11 were reviewed on 2026-10-25; 48 more
 were downloaded and visually inspected on 2026-10-26, for 59 employers total.
+One more official Hive icon was reviewed on 2026-10-26, for 60 employers total.
 Checksums record the cached versions. They identify employers, never ACE.
 No marks were generated or reconstructed. Some official pages declare icons
 on their own CDN; `website` records the employer page that supplied that URL.
@@ -42,6 +43,16 @@ declared icon, download exact bytes and review the image. Record source, date,
 SHA-256, local filename and reviewed aliases in the manifest. Run
 `npm run test:company-logos` from `web/`. This manual fast path is optional;
 automatic future-company discovery does not depend on this list.
+
+The tenant-branding update also recognizes Lever's dedicated employer header
+and Workday's same-host, same-site `/assets/logo` metadata. Generic social
+preview images and shared provider marks remain excluded. Workday payroll
+organization names need not equal the display company when the asset is bound
+to the verified tenant/site. Parser revisions invalidate older cached misses.
+Hive's official website confirms its rebrand to Deploy and links to the
+registered Lever `hive` tenant. The Lever image CDN did not permit automated
+reading, so the bundle uses the authentic icon from `https://thehive.ai/favicon.ico`.
+Company/history names stay unchanged. No unrelated Hive company is an alias.
 
 The 2026-10-26 review did not cache Oracle, Intel, Cisco, Dell, Tesla,
 Mastercard, Ford, DoorDash or Akamai because their sites refused access; Uber

@@ -155,6 +155,58 @@ def test_explicit_tenant_logo_is_supported_without_hardcoded_employer_names():
     assert discover_logo(seed(owned=False, url=page), fetch).source == ICON
 
 
+def test_lever_tenant_header_survives_an_employer_rebrand_without_borrowing_provider_logo():
+    page = "https://jobs.lever.co/future-fictional/1"
+    html = (f'<meta property="og:image" content="https://assets.future.example/preview.png">'
+            f'<a class="main-header-logo" href="https://future.example/"><img alt="Renamed Fictional logo" src="{ICON}"></a>'
+            '<footer><img alt="Lever logo" src="/provider.png"></footer>')
+    fetch = fake_fetch({page: html, ICON: image_bytes()})
+    asset = discover_logo(seed(owned=False, url=page), fetch)
+    assert asset and asset.source == ICON and asset.evidence == page
+    assert fetch.calls == [page, ICON]
+    # The same CSS class on a different shared provider is not evidence.
+    other = "https://jobs.ashbyhq.com/future-fictional/1"
+    fetch = fake_fetch({other: html, ICON: image_bytes()})
+    assert discover_logo(seed(owned=False, url=other), fetch) is None
+
+
+def test_lever_footer_and_arbitrary_social_preview_remain_excluded():
+    page = "https://jobs.lever.co/future-fictional"
+    fetch = fake_fetch({page: f'<meta property="og:image" content="{ICON}">'
+                        '<a class="main-header-logo"></a>'
+                        f'<footer><img alt="Lever logo" src="{ICON}"></footer>', ICON: image_bytes()})
+    assert discover_logo(seed(owned=False, url=page), fetch) is None
+    assert fetch.calls == [page]
+
+
+def test_workday_tenant_branding_does_not_require_a_matching_payroll_organization_name():
+    page = "https://fictional.wd12.myworkdayjobs.com/External/job/Seattle/Engineer_123"
+    icon = "https://fictional.wd12.myworkdayjobs.com/External/assets/logo"
+    html = (f'<meta name="image" property="og:image" content="{icon}">'
+            '<script type="application/ld+json">' + json.dumps({"hiringOrganization": {
+                "name": "7 Fictional Payroll Entity Inc.", "sameAs": ""}}) + '</script>')
+    fetch = fake_fetch({page: html, icon: image_bytes(size=(2395, 1087))})
+    asset = discover_logo(seed(owned=False, url=page), fetch)
+    assert asset and asset.source == icon and asset.evidence == page
+    assert max(Image.open(io.BytesIO(asset.png)).size) == 96
+    assert fetch.calls == [page, icon]
+
+
+@pytest.mark.parametrize("icon", [
+    "https://another.wd12.myworkdayjobs.com/External/assets/logo",
+    "https://fictional.wd12.myworkdayjobs.com/OtherSite/assets/logo",
+    "https://fictional.wd12.myworkdayjobs.com/External/preview.png",
+    "https://fictional.wd12.myworkdayjobs.com/External/assets/logo?redirect=1",
+    "https://fictional.wd12.myworkdayjobs.com.evil.example/External/assets/logo",
+    "http://fictional.wd12.myworkdayjobs.com/External/assets/logo",
+])
+def test_workday_social_metadata_cannot_supply_another_tenant_or_arbitrary_image(icon):
+    page = "https://fictional.wd12.myworkdayjobs.com/External/job/1"
+    fetch = fake_fetch({page: f'<meta property="og:image" content="{icon}">', icon: image_bytes()})
+    assert discover_logo(seed(owned=False, url=page), fetch) is None
+    assert fetch.calls == [page]
+
+
 def test_structured_hiring_organization_must_match_the_exact_employer():
     def html(name):
         return '<script type="application/ld+json">' + json.dumps({"@type":"JobPosting", "hiringOrganization":{"name":name, "logo":{"url":ICON}}}) + '</script>'

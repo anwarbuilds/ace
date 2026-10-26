@@ -706,5 +706,15 @@
     "aliases": [
       "Formlabs Inc."
     ]
+  },
+  {
+    "company": "Hive",
+    "asset": "hive.ico",
+    "source": "https://thehive.ai/favicon.ico",
+    "website": "https://thehive.ai/",
+    "identity": "Official Hive website favicon; official homepage confirms Hive is now Deploy and careers link confirms the existing Lever hive tenant. No unrelated Hive businesses are aliases.",
+    "verified_on": "2026-10-26",
+    "sha256": "db27cb8187e8ae959a91f5f36d3676696c77032c61c31e30ad3e49757c2ba662",
+    "aliases": []
   }
 ]

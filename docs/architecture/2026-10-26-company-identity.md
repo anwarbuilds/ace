@@ -12,6 +12,45 @@ clarified that every newly pulled employer must use automatic discovery. The
 outside the bundle uses ACE's owner-only `/api/company-logo?name=...` route,
 without adding another company to source code or a branding allowlist.
 
+## Tenant follow-up, 2026-10-26
+
+Status: tested candidate on `company-logo-tenants-20261026`, deployment pending.
+The owner reported Hive and Vizient initials on live Pulls. Registered public
+source pages returned 200 but neither matched the original extraction rules.
+
+- Workday exposes branding via `og:image` at its own site's `/assets/logo`.
+  Vizient's structured payroll entity name differs from the display name, so
+  requiring exact organization text skipped the asset. Only a same-HTTPS-host,
+  same-site exact branding endpoint is now accepted. Other tenants, sites,
+  preview images, query variants and lookalike hosts are rejected.
+- Lever's dedicated `a.main-header-logo` contains the tenant's image, while the
+  provider logo is in its footer. This header now works across employer rebrands
+  on verified Lever tenants. Generic `og:image` remains excluded.
+- [Hive's official homepage](https://thehive.ai/) announces that Hive is now
+  Deploy; [its careers page](https://thehive.ai/careers) links to the registered
+  Lever `hive` tenant. That tenant now displays Deploy branding. Its S3 image
+  CDN's robots response does not authorize automated reads. The unmodified
+  [official website favicon](https://thehive.ai/favicon.ico) was available,
+  decoded and visually reviewed, and is bundled with exact provenance.
+  The bundle now has 60 icons. No unrelated Hive businesses or guessed aliases
+  are included. Existing company/history names are preserved.
+- Parser-versioned seed keys invalidate old six-hour negative cache entries
+  without touching application/source records. Fetch bounds, robots/refusal
+  handling, owner-only access and PNG re-encoding remain unchanged.
+
+135 fictional backend logo/auth/source contracts and 7 React contracts pass.
+The candidate parser fetched Vizient's authentic 96 x 44 PNG using the actual
+registered production source and existing bounded public fetcher, with no
+service replacement. Both public images were visually inspected as standalone
+assets. TypeScript, lint and the production build pass. Nine Playwright cases
+collect; execution/screenshots remain suspended for cooling. Deployment checks
+are pending.
+No scheduler, migration, Gmail sync or application status operation is needed.
+
+Changed files: branding `discovery.py`/`sources.py`, backend logo tests, frontend
+logo contracts, `hive.ico`, provenance and logo README, this architecture note,
+web knowledge, handoff and the root knowledge record.
+
 ## Behavior
 
 The shared CompanyLogo inherits the existing company's name on every supported

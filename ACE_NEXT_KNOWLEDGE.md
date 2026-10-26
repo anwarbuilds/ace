@@ -13,6 +13,30 @@ a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
+## 2026-10-26: Missing Hive and Vizient logos, tenant metadata correction
+
+Status: tested candidate, production deployment pending. The owner found initials
+for Hive and Vizient on Pulls. Their enabled registered sources/pages return 200,
+but the prior exact-name parser skipped Workday's site-bound `og:image` because
+its payroll hiringOrganization differs from the display name, and Lever's
+employer header now says Deploy. Hive's own homepage confirms the rebrand and
+its careers page links to the registered Lever tenant. No unrelated Hive company
+is used as evidence; existing application/company labels are preserved.
+
+The parser accepts Workday branding only at the same HTTPS host and exact site
+`/assets/logo` path, and Lever's dedicated employer-header image on its verified
+tenant. Generic previews and platform/footer logos remain excluded. Source
+cache keys include the parser revision so six-hour earlier misses expire on
+upgrade. This works for future registered employers, without hardcoded domains.
+Hive's Lever image CDN disallows reads; its official website favicon is usable
+and was decoded, visually inspected and added with checksum/source provenance.
+The optional bundle now contains 60 icons. Actual candidate retrieval on the
+VM returned Vizient's authentic 96 x 44 PNG. 135 fictional logo/auth/source
+tests and 7 React contracts pass. No browser launch or screenshots due to the
+cooling restriction. No schema, scheduler, auth, Gmail or application-data
+change is part of this fix. Full evidence and release status:
+`docs/architecture/2026-10-26-company-identity.md`, tenant follow-up.
+
 ## 2026-10-26: Explicit filling and Workday corrections, extension 1.29.1
 
 The owner clarified that filling must start only after clicking Fill or using
