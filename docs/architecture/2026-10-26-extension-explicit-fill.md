@@ -45,8 +45,8 @@ in the public repository; no private records were changed.
   old preferences, late data arrival, exact Yes/No separation, toolbar intent,
   current-job No, segmented dates, locations and employer-identity ambiguity.
 - All 258 matcher cases and Memory safety cases passed.
-- JS syntax, TypeScript, lint and forbidden-dash/diff checks passed.
-- Playwright fixtures were updated and collected only. No Chrome launch,
+- JS syntax, TypeScript, lint, the merged-source production build and forbidden-dash/diff checks passed.
+- All 39 extension Playwright fixtures were collected only. No Chrome launch,
   employer submission or owner browser verification was performed because
   the documented laptop cooling restriction remains.
 - Node fixture assertions use boolean identity checks where appropriate to

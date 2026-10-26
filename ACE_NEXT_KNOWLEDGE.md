@@ -51,8 +51,8 @@ advances employer steps or marks an application Applied, and motivation answers
 remain excluded from reading, filling and learning.
 
 Validation: 75 fictional DOM contracts, 258 rule cases, Memory safety, JavaScript
-syntax, TypeScript, lint and forbidden-dash checks pass. Updated Playwright
-fixtures collect only; no Chrome launch due to the documented cooling restriction.
+syntax, TypeScript, lint, the merged-source production build and forbidden-dash
+checks pass. The 39 updated extension Playwright fixtures collect only; no Chrome launch due to the documented cooling restriction.
 These are local control contracts, not verification inside the owner's real
 Workday session. Reload the unpacked extension at `chrome://extensions`, then
 refresh employer tabs to activate 1.29.1. This correction changes extension
