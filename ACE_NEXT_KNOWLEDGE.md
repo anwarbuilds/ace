@@ -203,6 +203,16 @@ Owner decisions this session, in order (later ones win):
    Cambridge Investment Research); suggestions also use company names in the
    email text and tenant initials. Wide fixed-width emails are scaled to fit
    the viewer instead of scrolling sideways.
+   **Status: pushed as `6163f59`, NOT yet live.** The VM checkout is at that
+   commit and the API and web images are built (TypeScript passed), but the
+   production swap was refused by the agent permission check and needs the
+   owner's go-ahead. Production still runs `40254e7`/`bd5c364` until then.
+   Activation (only API and web, as in earlier releases): on the VM,
+   `cd /opt/ace && export ACE_BUILD_SHA=$(git rev-parse HEAD) && docker compose
+   --env-file .env -f deploy/oracle/compose.yaml up -d --no-build --no-deps
+   --wait --wait-timeout 180 api web`, then check `/healthz` shows `6163f59`.
+   Rollback is the previous images recorded in
+   `private-backups/inbox-clarity-20261026T194634Z/`.
 
 Found during release verification and fixed in `c7d3451`: Analytics dropped
 every outcome recorded from an email, because Inbox's own `email:<id>` audit
