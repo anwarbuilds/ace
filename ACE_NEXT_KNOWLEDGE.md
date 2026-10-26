@@ -2313,6 +2313,39 @@ does not send a second code after a successful Google callback. A verified
 Google profile name fills a blank display name. It never changes the owner's
 email or authentication scope.
 
+#### Existing Google Console project and client, owner-confirmed 2026-10-25
+
+The owner already has a Google Cloud project named `acee`. Their Console
+screenshot shows an enabled Web application OAuth client named `acee prod`
+(referred to conversationally as Ace Pro), created on 2026-10-19. Do not tell
+the owner to recreate this project or replace/delete the existing sign-in client.
+Its screenshot-confirmed configuration is:
+
+- Authorized JavaScript origin: `https://ace.opik.net`.
+- Authorized redirect URI: `https://ace.opik.net/api/auth/google/callback`.
+- Legacy authorized redirect URI:
+  `https://ace.161-153-89-170.sslip.io/api/auth/google/callback`.
+- An enabled client secret exists; its value is masked in the Console and
+  belongs only in private server configuration. Neither secret values nor the
+  owner's Console screenshot belong in this public repository.
+
+Those callbacks are for Google sign-in. The screenshot does not show the Gmail
+callback `https://ace.opik.net/api/inbox/google/callback`, and does not establish
+that Gmail API, the read-only scope, test-user access or server settings are
+configured. A production presence-only check during Gmail setup guidance found
+`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET` and `GMAIL_TOKEN_KEY` absent, with the
+Gmail callback not configured; setup readiness was false and global automatic
+outcomes were disabled. No credential values were printed or configuration
+changed.
+
+Continue Gmail setup inside the existing `acee` project. A dedicated Gmail Web
+OAuth client there keeps `GMAIL_*` credentials independent of the existing
+`GOOGLE_*` sign-in configuration. Preserve the current sign-in client and its
+callbacks, and do not change the project's publishing status merely to follow
+a generic testing tutorial. Gmail consent is a separate owner action even when
+the same Google Cloud project is used. No Gmail scope/configuration change is
+authorized by documenting these facts.
+
 Required cloud values:
 
 ```text
