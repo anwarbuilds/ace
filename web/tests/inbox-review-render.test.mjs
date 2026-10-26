@@ -18,10 +18,11 @@ function loadSource(filename) {
   const loadedModule = { exports: {} };
   cache.set(filename, loadedModule);
   const output = ts.transpileModule(fs.readFileSync(filename, "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020 },
     fileName: filename,
   }).outputText;
   const sourceRequire = (name) => {
+    if (name.startsWith(".")) return createRequire(filename)(name);
     if (!name.startsWith("@/")) return nodeRequire(name);
     const base = path.join(sourceRoot, name.slice(2));
     const found = [base + ".ts", base + ".tsx"].find(fs.existsSync);

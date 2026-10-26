@@ -1,3 +1,4 @@
+import { CompanyIdentity } from "@/components/CompanyIdentity";
 import Link from "next/link";
 
 import { ApplicationCount, ApplicationStageCount } from "@/components/applications/ApplicationCount";
@@ -202,7 +203,7 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
             </div>
             {external.items.map((a) => (
               <div className="ext-row" key={a.id}>
-                <span className="co-name">{a.company}</span>
+                <span className="co-name"><CompanyIdentity name={a.company} /></span>
                 <span>{clean(a.title)}</span>
                 <span>{a.application_status ? <StatusBadge status={a.application_status} /> : null}</span>
                 <span className="c-when">{a.applied_at ? shortDate(a.applied_at, tz) : ""}</span>

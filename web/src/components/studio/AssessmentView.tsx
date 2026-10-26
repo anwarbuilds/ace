@@ -1,3 +1,4 @@
+import { CompanyIdentity } from "@/components/CompanyIdentity";
 import { clean } from "@/lib/format";
 import Link from "next/link";
 
@@ -83,11 +84,11 @@ export function AssessmentView({ a, versionLabel }: { a: Assessment; versionLabe
           <h2 className="st-h2">
             {a.job_source === "stored" && a.job_id ? (
               <Link href={`/app/jobs/${a.job_id}`} prefetch={false}>
-                {a.job_company ? `${a.job_company}, ` : ""}
+                {a.job_company ? <><CompanyIdentity name={a.job_company} />, </> : null}
                 {clean(a.job_title) || "Job"}
               </Link>
             ) : (
-              <>{clean(a.job_title) || a.job_company || "Pasted job description"}</>
+              <>{clean(a.job_title) || (a.job_company ? <CompanyIdentity name={a.job_company} /> : "Pasted job description")}</>
             )}
           </h2>
           <p className="why" style={{ margin: 0 }}>

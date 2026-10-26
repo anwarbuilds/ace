@@ -1,3 +1,4 @@
+import { CompanyIdentity } from "@/components/CompanyIdentity";
 import { AddSource } from "@/components/pages/AddSource";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGet } from "@/lib/api";
@@ -27,7 +28,7 @@ function Names({ rows }: { rows: CoverageGap[] }) {
     <div className="cov-names">
       {rows.map((r) => (
         <span key={r.company} className="cov-name" title={r.detail || ""}>
-          {r.company}
+          <CompanyIdentity name={r.company} />
         </span>
       ))}
     </div>
@@ -86,7 +87,7 @@ export default async function CoveragePage() {
                 <div className="cov-grid cov-dark">
                   {c.dark.map((r) => (
                     <div className="cov-row" key={`${r.source_type}/${r.source_account}`} title={`${r.source_type}, ${r.source_account}`}>
-                      <span className="cov-name">{r.company}</span>
+                      <span className="cov-name"><CompanyIdentity name={r.company} /></span>
                       <span className="cov-n">{r.source_type}</span>
                       <span className="cov-pct">{r.last_success_at ? `since ${shortDate(r.last_success_at, tz)}` : "never answered"}</span>
                     </div>
@@ -115,7 +116,7 @@ export default async function CoveragePage() {
                   {late.rows.map((x, i) => (
                     <div className="cov-row" key={i} title={x.cause}>
                       <span className="cov-name">
-                        {x.company}, {clean(x.title)}
+                        <CompanyIdentity name={x.company}>{x.company}, {clean(x.title)}</CompanyIdentity>
                       </span>
                       <span className="cov-n">
                         {x.cause === LATE_BOARD_ADDED ? "board added late" : x.cause === LATE_REPUBLISHED ? "republished" : "seen late"}
@@ -137,7 +138,7 @@ export default async function CoveragePage() {
                 <div className="cov-grid cov-feedonly">
                   {c.feed_only.map((r) => (
                     <div className="cov-row" key={r.company}>
-                      <span className="cov-name">{r.company}</span>
+                      <span className="cov-name"><CompanyIdentity name={r.company} /></span>
                       <span className="cov-n">{r.board_read ? "board read, role missing" : "no board yet"}</span>
                       <span className="cov-pct">{r.passing}</span>
                     </div>
@@ -195,7 +196,7 @@ export default async function CoveragePage() {
                       className={`cov-row${r.share >= 1 ? " cov-row-all" : ""}`}
                       title={`${r.refusing} of ${r.readable} readable postings say no sponsorship`}
                     >
-                      <span className="cov-name">{r.company}</span>
+                      <span className="cov-name"><CompanyIdentity name={r.company} /></span>
                       <span className="cov-n">
                         {r.refusing} of {r.readable}
                       </span>

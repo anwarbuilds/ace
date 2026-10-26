@@ -862,3 +862,26 @@ The verified private backup preceded activation; no migration or scheduler
 operation ran. Read-only production totals, deduplication, cohorts and
 drilldowns passed; all 11 public logo hashes matched. Actual Gmail connections
 and petition reports are both zero, so these panels correctly remain unavailable.
+
+
+## Consistent employer logos across website views (2026-10-26, local)
+
+The owner found real icons in Pulls but initials for FedEx Freight and GM and
+an A tile inside Apple. A shared manifest-backed identity resolver now serves
+59 official cached icons and 71 explicit aliases. Company `Avatar` delegates
+to `CompanyLogo`, covering table rows and job details, while company evidence
+headers, Pulls dialogs, external history, Analytics employer history, Inbox
+application records, Coverage and Resume Studio share the same mark. Existing
+controls and layouts are retained. Source bytes, origins and hashes live in
+`web/public/company-logos/provenance.json`; failed or unknown icons always have
+visible accessible initials. No inferred domains, third-party logo tracking,
+generated marks or automatic parent-company substitutions.
+
+A built-site check found escaped company route params, so the company page
+now decodes once before both logo resolution and backend evidence queries.
+Malformed bookmarks remain usable. Tests cover alias confusion, checksum
+integrity, empty names, cached/error fallbacks and recovery after navigation.
+See `docs/architecture/2026-10-26-company-identity.md` for the final checks,
+unavailable sources and changed-file inventory. This is local work with no
+production deployment, scheduler operation or migration. Chrome and screenshot
+runs remain suspended by the laptop cooling restriction.

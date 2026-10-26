@@ -100,6 +100,17 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
+**2026-10-26 employer logo update:** Local website work centralizes employer
+identity across lists, job/company details, Analytics, Inbox, Coverage and
+Resume Studio. There are 59 authentic local icons and 71 explicit aliases;
+FedEx Freight, GM and Southern Company are covered. Encoded company route
+names are decoded before evidence queries and logo matching. Unknown, refused
+or broken icons retain accessible initials and failed-image state resets when
+the employer changes. No backend, Career Dashboard, extension, scheduler or
+production data changes. See `docs/architecture/2026-10-26-company-identity.md`
+for validation and unavailable sources. Deployment still requires approval;
+no browser execution or fresh screenshots due to the cooling restriction.
+
 **2026-10-26 question-following update:** Local 1.28.6 follows clicked/focused
 employer questions, fills equivalent known routine answers on focus and records
 committed owner answers as Answered on form without duplicate approval. Protected

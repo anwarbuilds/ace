@@ -633,6 +633,53 @@ Workday listing and search routes outside `/apply/` stay quiet, including after
 single-page navigation back from an application. The toolbar Wake override
 remains available.
 
+### Consistent employer logos across the website (2026-10-26, local)
+
+Review branch: `company-logo-consistency-20261026`, based on
+`wine-rose-platform` at `cdefb3f`. Merge target is `wine-rose-platform`.
+
+The owner requested authentic logos for more employers and the same branding
+inside job and company pages. The former system supported only 11 exact names
+in Pulls/Analytics while job tables and detail pages always used initials.
+
+- `web/public/company-logos/provenance.json` now holds 59 reviewed employer
+  identities and 71 explicit aliases, including separate FedEx and FedEx Freight
+  icons, General Motors and Southern Company. The 48 added assets are exact
+  bytes declared by official employer websites, with source/page, review date
+  and SHA-256. A local contact sheet was visually inspected; it contains only
+  public brand marks and was not committed.
+- `web/src/lib/companyLogos.ts` is the single identity resolver. It normalizes
+  Unicode, case, whitespace and periods/commas, then matches reviewed canonical
+  names or explicit aliases. No substring matching, guessed domains, arbitrary
+  legal-suffix stripping or automatic parent/subsidiary substitution.
+- `CompanyLogo`, `CompanyIdentity` and the existing company `Avatar` now share
+  this resolver. Logos appear in Pulls, its company dialog, job tables, job
+  detail heroes, company evidence pages, external application history,
+  Analytics employer history, Inbox application records, Coverage and Resume
+  Studio/check history. Company-first rows, controls, routes, application
+  identities and the approved Wine and Rose layout remain. Career Dashboard,
+  extension, backend, auth, data and scheduler code were not changed.
+- Empty names show an accessible Company/C fallback; unknown and failed images
+  retain visible initials. Failed-image state resets on identity changes,
+  including a cached failure before the React error listener attaches. Sizes
+  preserve the 36/64 px table/hero tiles and 26/48 px sizing below 720 px.
+- An authenticated check of the built site found that this installed Next.js
+  runtime supplies escaped company path segments. The company page now decodes
+  once before both logo lookup and evidence queries; malformed old bookmarks
+  stay usable. The regression covers FedEx%20Freight and General%20Motors.
+- No browser contacts an external logo service. Assets are served locally and
+  no source registration, scheduler fetch, migration or production data edit
+  is involved. This does not promise authentic logos for every employer in the
+  dynamic source catalog. Oracle, Intel, Cisco, Dell, Tesla, Mastercard, Ford,
+  DoorDash, Akamai and Uber refused access during this review; HPE timed out
+  and Walmart had no usable raster icon. These and unreviewed employers retain
+  the visible fallback until an official asset is reviewed.
+
+Validation and the exact scope are recorded in
+`docs/architecture/2026-10-26-company-identity.md`. Browser execution and fresh
+screenshots remain suspended by the laptop cooling restriction. This change
+is local work, not a production deployment or production visual verification.
+
 ### Follow the actual question and avoid duplicate work (2026-10-26)
 
 The owner reported that Review remained on an old question and asked again

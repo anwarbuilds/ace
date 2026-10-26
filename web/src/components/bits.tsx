@@ -1,31 +1,21 @@
 // Small presentational pieces, usable from server and client components
 // alike (no hooks, no state).
 
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
+import { CompanyLogo } from "@/components/CompanyLogo";
 
 import {
   STATUS_LABEL,
   UNSCORED,
   TIER_LABEL,
-  hueOf,
-  monogram,
   tierLabel,
   tierOf,
 } from "@/lib/format";
 import type { ApplicationStatus, MatchState, Tier } from "@/lib/types";
 
-/** Initials on a tone of their own, so a column of employers can be
- *  scanned by shape before it is read. */
+/** One employer identity across lists and detail pages. */
 export function Avatar({ name, large = false }: { name: string; large?: boolean }) {
-  return (
-    <span
-      className={`co-av${large ? " lg" : ""}`}
-      style={{ "--h": hueOf(name) } as CSSProperties}
-      aria-hidden="true"
-    >
-      {monogram(name)}
-    </span>
-  );
+  return <CompanyLogo name={name} size={large ? "large" : "table"} className={`co-av${large ? " lg" : ""}`} />;
 }
 
 export function CompanyCell({ name, tier }: { name: string; tier: Tier }) {

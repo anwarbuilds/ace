@@ -9,23 +9,23 @@ export function PageHero({
   subtitle,
   count,
   actions,
+  leading,
 }: {
   eyebrow: string;
   title: string;
   subtitle?: ReactNode;
   count?: string | null;
   actions?: ReactNode;
+  leading?: ReactNode;
 }) {
+  const heading = <>
+    <div className="eyebrow">{eyebrow}</div>
+    <h1 className="h1">{title}{count ? <span className="h1-count">{count}</span> : null}</h1>
+    {subtitle ? <p className="subtitle">{subtitle}</p> : null}
+  </>;
   return (
     <div className="page-hero">
-      <div>
-        <div className="eyebrow">{eyebrow}</div>
-        <h1 className="h1">
-          {title}
-          {count ? <span className="h1-count">{count}</span> : null}
-        </h1>
-        {subtitle ? <p className="subtitle">{subtitle}</p> : null}
-      </div>
+      {leading ? <div className="page-hero-identity">{leading}<div>{heading}</div></div> : <div>{heading}</div>}
       {actions ? <div className="btns">{actions}</div> : null}
     </div>
   );

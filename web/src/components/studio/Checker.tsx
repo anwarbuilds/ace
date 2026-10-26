@@ -1,5 +1,6 @@
 "use client";
 
+import { CompanyIdentity } from "@/components/CompanyIdentity";
 import Link from "next/link";
 import { clean } from "@/lib/format";
 import { useEffect, useState } from "react";
@@ -106,7 +107,7 @@ export function Checker({
             job ? (
               <div className="st-picked">
                 <span>
-                  <b>{job.company}</b>, {clean(job.title)}
+                  <CompanyIdentity name={job.company}><b>{job.company}</b>, {clean(job.title)}</CompanyIdentity>
                 </span>
                 <button className="link-btn" onClick={() => setJob(null)}>
                   Change
@@ -126,7 +127,7 @@ export function Checker({
                   <div className="st-picklist">
                     {results.map((r) => (
                       <button key={r.id} onClick={() => setJob(r)}>
-                        <b>{r.company}</b> {clean(r.title)}
+                        <CompanyIdentity name={r.company}><b>{r.company}</b> {clean(r.title)}</CompanyIdentity>
                       </button>
                     ))}
                   </div>

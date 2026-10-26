@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CompanyIdentity } from "@/components/CompanyIdentity";
 
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { ScoreDial } from "@/components/studio/AssessmentView";
@@ -28,7 +29,7 @@ export default async function HistoryPage() {
                 <Link className="st-hrow" key={a.id} href={`/app/resume-studio/history/${a.id}`}>
                   <ScoreDial value={a.aggregate} size={40} />
                   <span className="st-hrow-t">
-                    <b>{a.job_company || (a.job_source === "pasted" ? "Pasted job" : "Job")}</b>
+                    <b>{a.job_company ? <CompanyIdentity name={a.job_company} /> : (a.job_source === "pasted" ? "Pasted job" : "Job")}</b>
                     <span>{clean(a.job_title)}</span>
                   </span>
                   <span className="st-hrow-comps">

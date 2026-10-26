@@ -1,3 +1,4 @@
+import { CompanyIdentity } from "@/components/CompanyIdentity";
 import Link from "next/link";
 
 import { EmptyBox } from "@/components/bits";
@@ -131,7 +132,7 @@ export default async function StudioOverviewPage() {
                   <>
                     <p className="studio-v2-role">
                       <strong>{clean(o.recent[0].job_title) || "Saved opportunity"}</strong>
-                      <span>{o.recent[0].job_company || "Pasted job description"}</span>
+                      <span>{o.recent[0].job_company ? <CompanyIdentity name={o.recent[0].job_company} /> : "Pasted job description"}</span>
                     </p>
                     <div className="studio-v2-match">
                       <ScoreDial value={o.recent[0].aggregate} size={76} />
@@ -206,7 +207,7 @@ export default async function StudioOverviewPage() {
                   <Link className="st-hrow" key={a.id} href={`/app/resume-studio/history/${a.id}`}>
                     <ScoreDial value={a.aggregate} size={40} />
                     <span className="st-hrow-t">
-                      <b>{a.job_company || "Pasted job"}</b>
+                      <b>{a.job_company ? <CompanyIdentity name={a.job_company} /> : "Pasted job"}</b>
                       <span>{clean(a.job_title)}</span>
                     </span>
                     <span className="st-chip">{STATE_LABEL[a.state]}</span>

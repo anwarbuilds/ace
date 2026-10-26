@@ -5,7 +5,10 @@
     "identity": "Official company website favicon",
     "verified_on": "2026-10-25",
     "sha256": "6da5620880159634213e197fafca1dde0272153be3e4590818533fab8d040770",
-    "asset": "google.ico"
+    "asset": "google.ico",
+    "aliases": [
+      "Google LLC"
+    ]
   },
   {
     "company": "Apple",
@@ -13,7 +16,10 @@
     "identity": "Official company website favicon",
     "verified_on": "2026-10-25",
     "sha256": "5493c61cf725cf3a1d63cd9d07de75b0d6faa5564e772f7d0a6074f341442938",
-    "asset": "apple.ico"
+    "asset": "apple.ico",
+    "aliases": [
+      "Apple Inc."
+    ]
   },
   {
     "company": "Microsoft",
@@ -21,7 +27,10 @@
     "identity": "Official company website favicon",
     "verified_on": "2026-10-25",
     "sha256": "90cdaf487716184e4034000935c605d1633926d348116d198f355a98b8c6cd21",
-    "asset": "microsoft.ico"
+    "asset": "microsoft.ico",
+    "aliases": [
+      "Microsoft Corporation"
+    ]
   },
   {
     "company": "Stripe",
@@ -29,7 +38,10 @@
     "identity": "Official company website favicon",
     "verified_on": "2026-10-25",
     "sha256": "50630726cbd85299c64dbb510f051e5d70013abcd620fa2b23be82e618140150",
-    "asset": "stripe.ico"
+    "asset": "stripe.ico",
+    "aliases": [
+      "Stripe, Inc."
+    ]
   },
   {
     "company": "Amazon",
@@ -37,7 +49,11 @@
     "source": "https://www.amazon.jobs/favicon.ico",
     "identity": "Official company website favicon",
     "verified_on": "2026-10-25",
-    "sha256": "17d02e2db6dbedb95dd449d06868c147ac2c3b5371497bcb9407e75336a99e09"
+    "sha256": "17d02e2db6dbedb95dd449d06868c147ac2c3b5371497bcb9407e75336a99e09",
+    "aliases": [
+      "Amazon.com, Inc.",
+      "Amazon.com Services LLC"
+    ]
   },
   {
     "company": "NVIDIA",
@@ -45,7 +61,10 @@
     "source": "https://www.nvidia.com/favicon.ico",
     "identity": "Official company website favicon",
     "verified_on": "2026-10-25",
-    "sha256": "bedcb14e0470ff8abe26405a630e9604ac4fa581b385a7cfb00420c22f541b6e"
+    "sha256": "bedcb14e0470ff8abe26405a630e9604ac4fa581b385a7cfb00420c22f541b6e",
+    "aliases": [
+      "NVIDIA Corporation"
+    ]
   },
   {
     "company": "Adobe",
@@ -53,7 +72,10 @@
     "source": "https://www.adobe.com/favicon.ico",
     "identity": "Official company website favicon",
     "verified_on": "2026-10-25",
-    "sha256": "5eed69e764f1d40b943a19b4b36aca72519b2626dd519891173d7728a74d821c"
+    "sha256": "5eed69e764f1d40b943a19b4b36aca72519b2626dd519891173d7728a74d821c",
+    "aliases": [
+      "Adobe Inc."
+    ]
   },
   {
     "company": "IBM",
@@ -61,7 +83,11 @@
     "source": "https://www.ibm.com/favicon.ico",
     "identity": "Official company website favicon",
     "verified_on": "2026-10-25",
-    "sha256": "3a2e015580f7185539eb91f5ae7952ffee9d02c5e4914d3370ff1a755b0048af"
+    "sha256": "3a2e015580f7185539eb91f5ae7952ffee9d02c5e4914d3370ff1a755b0048af",
+    "aliases": [
+      "International Business Machines",
+      "International Business Machines Corporation"
+    ]
   },
   {
     "company": "Salesforce",
@@ -69,7 +95,10 @@
     "source": "https://www.salesforce.com/favicon.ico",
     "identity": "Official company website favicon",
     "verified_on": "2026-10-25",
-    "sha256": "92842fc6c2f66b46f69458c14621fc2eca5d6c02d7937f9124fe8a3a9a55bc91"
+    "sha256": "92842fc6c2f66b46f69458c14621fc2eca5d6c02d7937f9124fe8a3a9a55bc91",
+    "aliases": [
+      "Salesforce, Inc."
+    ]
   },
   {
     "company": "Meta",
@@ -77,7 +106,10 @@
     "source": "https://www.meta.com/favicon.ico",
     "identity": "Official company website favicon",
     "verified_on": "2026-10-25",
-    "sha256": "b96d739c3a8ac4ef0b34212c8a2b7f23dcb7b039e0dd14ef170d8e9232972bf7"
+    "sha256": "b96d739c3a8ac4ef0b34212c8a2b7f23dcb7b039e0dd14ef170d8e9232972bf7",
+    "aliases": [
+      "Meta Platforms, Inc."
+    ]
   },
   {
     "company": "ServiceNow",
@@ -85,6 +117,594 @@
     "source": "https://www.servicenow.com/favicon.ico",
     "identity": "Official company website favicon",
     "verified_on": "2026-10-25",
-    "sha256": "dc396aed077e7beff58d741b036a1c15fb6607f2531dea18dda47087645c868a"
+    "sha256": "dc396aed077e7beff58d741b036a1c15fb6607f2531dea18dda47087645c868a",
+    "aliases": [
+      "ServiceNow, Inc."
+    ]
+  },
+  {
+    "company": "FedEx",
+    "asset": "fedex.ico",
+    "source": "https://www.fedex.com/etc.clientlibs/designs/fedex-common/images/resources/fx-favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.fedex.com/global/choose-location.html",
+    "verified_on": "2026-10-26",
+    "sha256": "eab1b9a0ef942d84e3a8ed8c3e3996acb7a46af9a0b9f914ced662bcbe0e54be",
+    "aliases": [
+      "FedEx Corporation"
+    ]
+  },
+  {
+    "company": "FedEx Freight",
+    "asset": "fedex-freight.png",
+    "source": "https://cms.jibecdn.com/prod/fedexfreight/assets/FAVICON-en-us-1776790509278.png",
+    "identity": "Official company website icon",
+    "website": "https://careers.fedexfreight.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "5861463422fd6c5b979d13662cba700813483be670720510996fcf9ab17dabbc",
+    "aliases": [
+      "FedEx Freight, Inc.",
+      "FedEx Freight Holding Company, Inc."
+    ]
+  },
+  {
+    "company": "General Motors",
+    "asset": "general-motors.png",
+    "source": "https://www.gm.com/content/dam/company/img/us/en/gmcom/v4_webready/favicons/icon-192.png",
+    "identity": "Official company website icon",
+    "website": "https://www.gm.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "a366aa8cda16535879773580c4cb466e148bdb7ebed7969e3544942f260a6688",
+    "aliases": [
+      "GM",
+      "General Motors Company",
+      "General Motors LLC"
+    ]
+  },
+  {
+    "company": "Southern Company",
+    "asset": "southern-company.png",
+    "source": "https://www.southerncompany.com/etc.clientlibs/global/clientlibs/clientlib-site/resources/icon-192x192.png",
+    "identity": "Official company website icon",
+    "website": "https://www.southerncompany.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "5c7d3abe08cfb6a64de708bccba1bcd0d84ebd529c1bd0a2c16aed664c08accc",
+    "aliases": [
+      "The Southern Company"
+    ]
+  },
+  {
+    "company": "AMD",
+    "asset": "amd.ico",
+    "source": "https://www.amd.com/content/dam/code/images/favicon/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.amd.com/en.html",
+    "verified_on": "2026-10-26",
+    "sha256": "028434e4bbb42cfd4554998bd89f7e6eb71f32a2cbc8ca618d0470280cd1e28a",
+    "aliases": [
+      "Advanced Micro Devices",
+      "Advanced Micro Devices, Inc."
+    ]
+  },
+  {
+    "company": "Qualcomm",
+    "asset": "qualcomm.ico",
+    "source": "https://www.qualcomm.com/etc.clientlibs/qcomm-martech/clientlibs/clientlib-react/resources/favicon/qualcomm/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.qualcomm.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "6cfaecee8a051804c81aea57bb1c7a38ac8c6572b1c025b344710bc22e4835d6",
+    "aliases": [
+      "Qualcomm Incorporated"
+    ]
+  },
+  {
+    "company": "HP",
+    "asset": "hp.png",
+    "source": "https://www.hp.com/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.hp.com/us-en/home.html",
+    "verified_on": "2026-10-26",
+    "sha256": "49680babe4f6f5f9f535f0b3aa0529f3fa953b68c6a08c05ac6b8cc15f42b5dd",
+    "aliases": [
+      "HP Inc."
+    ]
+  },
+  {
+    "company": "Netflix",
+    "asset": "netflix.ico",
+    "source": "https://assets.nflxext.com/us/ffe/siteui/common/icons/nficon2023.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.netflix.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "9c5f7722c5df8eb24dda20ecc01c9f73e3103e10052fd980da4e7d9f753a97d3",
+    "aliases": [
+      "Netflix, Inc."
+    ]
+  },
+  {
+    "company": "Airbnb",
+    "asset": "airbnb.png",
+    "source": "https://a0.muscache.com/airbnb/static/icons/apple-touch-icon-76x76-3b313d93b1b5823293524b9764352ac9.png",
+    "identity": "Official company website icon",
+    "website": "https://www.airbnb.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "34ef20800623f6f8e5e0d0c99445d756a3e58863843e72268aed19f98f98a91c",
+    "aliases": [
+      "Airbnb, Inc."
+    ]
+  },
+  {
+    "company": "Spotify",
+    "asset": "spotify.png",
+    "source": "https://open.spotifycdn.com/cdn/images/favicon32.b64ecc03.png",
+    "identity": "Official company website icon",
+    "website": "https://open.spotify.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "b64ecc030dcc47688f94d6c4b14d747f2b8dbcdc7012e5c69574f8354eac7257",
+    "aliases": [
+      "Spotify USA Inc."
+    ]
+  },
+  {
+    "company": "LinkedIn",
+    "asset": "linkedin.ico",
+    "source": "https://static.licdn.com/aero-v1/sc/h/al2o9zrvru7aqj8e1x2rzsrca",
+    "identity": "Official company website icon",
+    "website": "https://www.linkedin.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "19b079c09197fba68d021fa3ba394ec91703909ffd237efa3eb9a2bca13148ec",
+    "aliases": [
+      "LinkedIn Corporation"
+    ]
+  },
+  {
+    "company": "GitHub",
+    "asset": "github.png",
+    "source": "https://github.githubassets.com/favicons/favicon.png",
+    "identity": "Official company website icon",
+    "website": "https://github.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "74cf90ac2fe6624ab1056cacea11cf7ed4f8bef54bbb0e869638013bba45bc08",
+    "aliases": [
+      "GitHub, Inc."
+    ]
+  },
+  {
+    "company": "GitLab",
+    "asset": "gitlab.ico",
+    "source": "https://about.gitlab.com/images/ico/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://about.gitlab.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "378996a8488bf3a9e18aa56be0689878c60ed6fdb26c9445f2f55fbf88623e93",
+    "aliases": [
+      "GitLab Inc."
+    ]
+  },
+  {
+    "company": "Atlassian",
+    "asset": "atlassian.ico",
+    "source": "https://www.atlassian.com/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.atlassian.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "43baad43fa76aa0cf465221172dd48c8acee360fcb2852d191aed588e23daf19",
+    "aliases": [
+      "Atlassian Corporation"
+    ]
+  },
+  {
+    "company": "Intuit",
+    "asset": "intuit.png",
+    "source": "https://www.intuit.com/oidam/intuit/ic/en_us/images/01-g/Intuit_FavIcon_48x48.png",
+    "identity": "Official company website icon",
+    "website": "https://www.intuit.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "ad15509008bb6431bbe706b73a96f04e9ce3ee45e36180a975d7e3ab36c28cee",
+    "aliases": [
+      "Intuit Inc."
+    ]
+  },
+  {
+    "company": "PayPal",
+    "asset": "paypal.png",
+    "source": "https://www.paypalobjects.com/marketing/web/icons/monogram/pp64.png",
+    "identity": "Official company website icon",
+    "website": "https://www.paypal.com/us/home",
+    "verified_on": "2026-10-26",
+    "sha256": "cb0a75c08e1899dc91cdc2ceabd12a871dbaff8f34899d2d329c6ae9d229ca49",
+    "aliases": [
+      "PayPal, Inc.",
+      "PayPal Holdings, Inc."
+    ]
+  },
+  {
+    "company": "Block",
+    "asset": "block.png",
+    "source": "https://block.xyz/apple-touch-icon-reskin.png",
+    "identity": "Official company website icon",
+    "website": "https://block.xyz/",
+    "verified_on": "2026-10-26",
+    "sha256": "46879e0991b68f0d6759eec8bd7e3f416dde30247f18a999e29f318aa92741f3",
+    "aliases": [
+      "Block, Inc."
+    ]
+  },
+  {
+    "company": "Square",
+    "asset": "square.ico",
+    "source": "https://pw-renderer-production-c.squarecdn.com/35e348b405dd3ce887ad8ea4147cfac818688d32/_svelte/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://squareup.com/us/en",
+    "verified_on": "2026-10-26",
+    "sha256": "770e0889aefd823056c7cdbb066a445be0f0754c1b4d4cba877e120fdbcb63e6",
+    "aliases": []
+  },
+  {
+    "company": "Visa",
+    "asset": "visa.ico",
+    "source": "https://www.visa.com/vcom-assets/content/dam/visa/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.visa.com/en-us",
+    "verified_on": "2026-10-26",
+    "sha256": "3d7dd058cf1ba56277b3e62c0b520398aeecd1e49e1e2cacb74779f75f475bec",
+    "aliases": [
+      "Visa Inc."
+    ]
+  },
+  {
+    "company": "JPMorgan Chase",
+    "asset": "jpmorgan-chase.png",
+    "source": "https://www.jpmorganchase.com/etc.clientlibs/cws/clientlibs/clientlib-base/resources/jpmc/images/jpmc-favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.jpmorganchase.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "62a36457dd2a780bb74e5ad63bb6f745b9d74f497920ec35569e5edd98d93df8",
+    "aliases": [
+      "JPMorganChase",
+      "JPMorgan Chase & Co."
+    ]
+  },
+  {
+    "company": "Goldman Sachs",
+    "asset": "goldman-sachs.ico",
+    "source": "https://cdn.gs.com/images/goldman-sachs/v2/gs-favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.goldmansachs.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "a3d8a2fc8a7fbd75f6cb858de55a8c3c485680fd30603eea654c5f60c327823b",
+    "aliases": [
+      "The Goldman Sachs Group, Inc."
+    ]
+  },
+  {
+    "company": "Capital One",
+    "asset": "capital-one.ico",
+    "source": "https://www.capitalone.com/assets/shell/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.capitalone.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "5f2123af80970c0478de7f373c9d861d886e070592ebcd55fa372d8dfc9752ec",
+    "aliases": [
+      "Capital One Financial Corporation"
+    ]
+  },
+  {
+    "company": "Bloomberg",
+    "asset": "bloomberg.ico",
+    "source": "https://www.bloomberg.com/favicon-black.png",
+    "identity": "Official company website icon",
+    "website": "https://www.bloomberg.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "fd1ace0f3033ff036069e86ffec8806531ed3465ccb7d16d27dea0f6d368cbbb",
+    "aliases": [
+      "Bloomberg L.P."
+    ]
+  },
+  {
+    "company": "Target",
+    "asset": "target.ico",
+    "source": "https://corporate.target.com/assets/images/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://corporate.target.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "d5fa0d3670fb6d113c5e23a66d160672732a3d3b0ec1e666718c24f58c5f6bf6",
+    "aliases": [
+      "Target Corporation"
+    ]
+  },
+  {
+    "company": "Boeing",
+    "asset": "boeing.ico",
+    "source": "https://www.boeing.com/favicon.ico?v=1",
+    "identity": "Official company website icon",
+    "website": "https://www.boeing.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "c6ef1aab1164902257a05875fbf8d3597f70bfa61a8d4312e1aef75426490ce1",
+    "aliases": [
+      "The Boeing Company"
+    ]
+  },
+  {
+    "company": "Lockheed Martin",
+    "asset": "lockheed-martin.ico",
+    "source": "https://www.lockheedmartin.com/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.lockheedmartin.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "d474f603dd702b484b81a56b7f4a16b78f21790f4f30ec65f5009c425078a91f",
+    "aliases": [
+      "Lockheed Martin Corporation"
+    ]
+  },
+  {
+    "company": "Northrop Grumman",
+    "asset": "northrop-grumman.ico",
+    "source": "https://www.northropgrumman.com/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.northropgrumman.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "93e30c726b16da06ba9208e991bf0c41ad579265926cdab5bfd626d897a0103d",
+    "aliases": [
+      "Northrop Grumman Corporation"
+    ]
+  },
+  {
+    "company": "Workday",
+    "asset": "workday.ico",
+    "source": "https://www.workday.com/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.workday.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "191c6208283772cc7287e4b6ecc19b06bce92b0963bf3c763245d4bd267d02eb",
+    "aliases": [
+      "Workday, Inc."
+    ]
+  },
+  {
+    "company": "Snowflake",
+    "asset": "snowflake.png",
+    "source": "https://www.snowflake.com/etc.clientlibs/snowflake-site/clientlibs/clientlib-react/resources/apple-touch-icon.png?v=3",
+    "identity": "Official company website icon",
+    "website": "https://www.snowflake.com/en/",
+    "verified_on": "2026-10-26",
+    "sha256": "236c3a6b3771412e1c525781097f1d1496c94d1192f27347c21be1882ff75514",
+    "aliases": [
+      "Snowflake Inc."
+    ]
+  },
+  {
+    "company": "Databricks",
+    "asset": "databricks.png",
+    "source": "https://www.databricks.com/en-website-assets/favicon-32x32.png?v=c9b9916c3b27dc51866c46b79a6e9b88",
+    "identity": "Official company website icon",
+    "website": "https://www.databricks.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "3c01c2e8237a9d5fbbb1e77df230223d9c2b3b4148ad4eff2b9e7dc5ce9bb60f",
+    "aliases": [
+      "Databricks, Inc."
+    ]
+  },
+  {
+    "company": "Datadog",
+    "asset": "datadog.ico",
+    "source": "https://www.datadoghq.com/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.datadoghq.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "3a243712ab55af7cad0200c046bef1760f677da2e2baf93d489c15374c209464",
+    "aliases": [
+      "Datadog, Inc."
+    ]
+  },
+  {
+    "company": "Cloudflare",
+    "asset": "cloudflare.png",
+    "source": "https://www.cloudflare.com/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.cloudflare.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "5414bc6e4b3f6e10f99b5d37abf4420da4dcaece66f8f2c08e090e87267adbc5",
+    "aliases": [
+      "Cloudflare, Inc."
+    ]
+  },
+  {
+    "company": "MongoDB",
+    "asset": "mongodb.ico",
+    "source": "https://www.mongodb.com/assets/images/global/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.mongodb.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "1143ff8a5619ad9d016e3d94462f44ae9047ab4ac4c39722d265c88961591a1a",
+    "aliases": [
+      "MongoDB, Inc."
+    ]
+  },
+  {
+    "company": "Palantir",
+    "asset": "palantir.ico",
+    "source": "https://www.palantir.com/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.palantir.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "bcb8975e6e37afaa6695c39e21b3dd45be205635d1e183ebc4c511f437d9fc71",
+    "aliases": [
+      "Palantir Technologies",
+      "Palantir Technologies Inc."
+    ]
+  },
+  {
+    "company": "Lyft",
+    "asset": "lyft.png",
+    "source": "https://www.lyft.com/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.lyft.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "f439d0914343548fb7cecfa5a2f051b63186abf92b73e0705623886aeb7c6098",
+    "aliases": [
+      "Lyft, Inc."
+    ]
+  },
+  {
+    "company": "Dropbox",
+    "asset": "dropbox.ico",
+    "source": "https://cfl.dropboxstatic.com/static/metaserver/static/images/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.dropbox.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "c0906d540d89dbe1f09b24f17b7f35b81350e8d381c1558b075c28ea913c450d",
+    "aliases": [
+      "Dropbox, Inc."
+    ]
+  },
+  {
+    "company": "Box",
+    "asset": "box.png",
+    "source": "https://www.box.com/apple-touch-icon.png?tnbutl",
+    "identity": "Official company website icon",
+    "website": "https://www.box.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "ea62105770008f36bc96ad075d9fdaf97df8a9b3d6a7929fcee55daff9df3eef",
+    "aliases": [
+      "Box, Inc."
+    ]
+  },
+  {
+    "company": "Pinterest",
+    "asset": "pinterest.png",
+    "source": "https://s.pinimg.com/webapp/logo_transparent_144x144-3da7a67b.png",
+    "identity": "Official company website icon",
+    "website": "https://www.pinterest.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "5410764149903d1db37bbd92d37aa6e08ff4c129bd13d7d9e65762312d4da774",
+    "aliases": [
+      "Pinterest, Inc."
+    ]
+  },
+  {
+    "company": "Reddit",
+    "asset": "reddit.png",
+    "source": "https://www.redditstatic.com/shreddit/assets/favicon/64x64.png",
+    "identity": "Official company website icon",
+    "website": "https://www.reddit.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "f60ae5a33ee8d16c71a0ff6b45e3c2524f9ccaf3cd33e6636c6493dd4ec2d953",
+    "aliases": [
+      "Reddit, Inc."
+    ]
+  },
+  {
+    "company": "Snap",
+    "asset": "snap.png",
+    "source": "https://images.ctfassets.net/dwtpq5hdcqjg/5S0EwGbv1lNk3uVF25ocBe/bfddb3bbc878432eabc4a2a8b6282e8e/Snap_Inc_Favicon.png?fm=png",
+    "identity": "Official company website icon",
+    "website": "https://www.snap.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "6d74a55bfca207fa619190a950bafe53573ff68c62de19c982f4fdd91acab713",
+    "aliases": [
+      "Snap Inc."
+    ]
+  },
+  {
+    "company": "Zoom",
+    "asset": "zoom.ico",
+    "source": "https://st1.zoom.us/homepage/20261022-1234/primary/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.zoom.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "58b6fee1a883d9b798dea9dbf8f262fb8875e035bfa571792b8967c4c0434d26",
+    "aliases": [
+      "Zoom Video Communications",
+      "Zoom Communications, Inc."
+    ]
+  },
+  {
+    "company": "Figma",
+    "asset": "figma.png",
+    "source": "https://static.figma.com/app/icon/2/icon-128.png",
+    "identity": "Official company website icon",
+    "website": "https://www.figma.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "a7012c890bc4ae056dd944dff7152415995cd2a3e00c7a751924e97dd6dbebbd",
+    "aliases": [
+      "Figma, Inc."
+    ]
+  },
+  {
+    "company": "Notion",
+    "asset": "notion.ico",
+    "source": "https://www.notion.com/front-static/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.notion.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "541fc85f92e348bcf46f70944b95fd558d16adbc5a0698eaa1239dccd8c9e455",
+    "aliases": [
+      "Notion Labs",
+      "Notion Labs, Inc."
+    ]
+  },
+  {
+    "company": "Roblox",
+    "asset": "roblox.png",
+    "source": "https://images.rbxcdn.com/905bd722ee0a6ceda3caacde54c0b081.png",
+    "identity": "Official company website icon",
+    "website": "https://www.roblox.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "7afe92edde27ce7949b0ebea760d2a009eac696db5686a8efe9c7d17ef590af3",
+    "aliases": [
+      "Roblox Corporation"
+    ]
+  },
+  {
+    "company": "Electronic Arts",
+    "asset": "electronic-arts.ico",
+    "source": "https://www.ea.com/_next/static/media/favicon.3156aee2.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.ea.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "f91662fcf9369d49ac30f8c4fac39db6f81455037594e92820421ea81c27f060",
+    "aliases": [
+      "EA",
+      "Electronic Arts Inc."
+    ]
+  },
+  {
+    "company": "Schweitzer Engineering Laboratories",
+    "asset": "sel.ico",
+    "source": "https://selinc.com/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://selinc.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "9624cd45054f0c43cdcfac6b027903d24acc5457b464482eb1151cbba9fab214",
+    "aliases": [
+      "SEL",
+      "Schweitzer Engineering Laboratories, Inc."
+    ]
+  },
+  {
+    "company": "Nationwide",
+    "asset": "nationwide.ico",
+    "source": "https://www.nationwide.com/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://www.nationwide.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "a449d20ace7f57906a34624bb19250d4ec9c771c530771a67a7ef1f45880feb7",
+    "aliases": [
+      "Nationwide Insurance"
+    ]
+  },
+  {
+    "company": "Formlabs",
+    "asset": "formlabs.ico",
+    "source": "https://formlabs.com/favicon.ico",
+    "identity": "Official company website icon",
+    "website": "https://formlabs.com/",
+    "verified_on": "2026-10-26",
+    "sha256": "ffba1ed1f34effe63b4e1e5eca587381d993b9ffce3f275733537d11c77daccf",
+    "aliases": [
+      "Formlabs Inc."
+    ]
   }
 ]

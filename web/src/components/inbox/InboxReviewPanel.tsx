@@ -1,5 +1,6 @@
 "use client";
 
+import { CompanyIdentity } from "@/components/CompanyIdentity";
 import { useState } from "react";
 import { clean, STATUS_LABEL } from "@/lib/format";
 import { sendJson } from "@/lib/client";
@@ -38,7 +39,7 @@ export function InboxReviewPanel({message,applications,busy,action,showPending}:
         {matching.map(a=><option key={a.key} value={a.key}>{clean(a.company)} · {clean(a.title)} · {dates(a.applied_at)}{a.requisition_id?` · ${clean(a.requisition_id)}`:""}</option>)}
       </select></label>
       {!matching.length&&<p>No applications match that search. Clear the search or defer this message.</p>}
-      {target&&<p>Selected: <strong>{clean(target.company)} · {clean(target.title)}</strong>. Submitted {dates(target.applied_at)}. Current status: {STATUS_LABEL[target.status as ApplicationStatus]??clean(target.status)}.</p>}
+      {target&&<p>Selected: <strong><CompanyIdentity name={target.company} /> · {clean(target.title)}</strong>. Submitted {dates(target.applied_at)}. Current status: {STATUS_LABEL[target.status as ApplicationStatus]??clean(target.status)}.</p>}
       <h3>2. Choose what the email confirms</h3>
       <label>Outcome<select value={stage} onChange={event=>{setStage(event.target.value);setConfirmed(false);}}><option value="">Choose an outcome after reading the email</option>{stages.map(s=><option value={s} key={s}>{s==="applied"?"Application received or submitted":s==="screening"?"Screening, assessment or recruiter reply":STATUS_LABEL[s]}</option>)}</select></label>
       <p>A receipt can stay Applied. Choose Rejected only for an explicit rejection of this exact application. No reply is not rejection.</p>

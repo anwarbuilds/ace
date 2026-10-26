@@ -1,3 +1,4 @@
+import { CompanyLogo } from "@/components/CompanyLogo";
 import Link from "next/link";
 
 import { PageHero } from "@/components/page/PageParts";
@@ -22,10 +23,13 @@ interface Intelligence { company: string; petition_history: Report[]; hiring_spo
 
 export default async function CompanyPage({ params }: { params: Promise<{name: string}> }) {
   const { name } = await params;
-  const company = name;
+  // This route receives escaped path segments. Decode once before identity
+  // lookup and API queries; malformed legacy bookmarks still remain usable.
+  let company = name;
+  try { company = decodeURIComponent(name); } catch { /* Keep a literal malformed name. */ }
   const data = await apiGetOr<Intelligence | null>("/api/company-intelligence", null, { name: company });
   return <ScrollArea><div className="pg">
-    <PageHero eyebrow="Company intelligence" title={clean(company)} subtitle="Official employer evidence, with its legal entity and reporting period." actions={<Link className="btn" href={`/app/opportunities?company=${encodeURIComponent(company)}`}>View opportunities</Link>} />
+    <PageHero eyebrow="Company intelligence" leading={<CompanyLogo name={company} size="large" />} title={clean(company)} subtitle="Official employer evidence, with its legal entity and reporting period." actions={<Link className="btn" href={`/app/opportunities?company=${encodeURIComponent(company)}`}>View opportunities</Link>} />
     {!data ? <section className="panel"><p>Company evidence could not be loaded. Reload to try again.</p></section> :
       data.petition_history.length === 0 ? <section className="panel"><h2>H-1B petition history</h2><p>Not available. No verified official report has been connected to this company.</p><p>Company workforce sponsorship rate: Not available.</p></section> :
       <section className="panel"><h2>Verified petition history</h2><p>Petition decisions describe an employer and reporting period. They do not predict sponsorship for this job.</p>

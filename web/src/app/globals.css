@@ -1841,10 +1841,28 @@ html[data-theme="light"] .wine-home .wine-art-a{opacity:.5;filter:drop-shadow(0 
 }
 @media(prefers-reduced-motion:reduce){.wine-button,.auth-provider{transition:none}}
 
-/* Verified, local employer icons, shared only by Analytics and Pulls. */
-.company-logo{width:28px;height:28px;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;background:var(--surface-2);color:var(--text-secondary);vertical-align:middle;overflow:hidden}
-.company-logo img{width:24px;height:24px;object-fit:contain;background:#fff;border-radius:4px}
+/* Verified, local employer icons shared by lists and company detail views. */
+.company-logo{--logo-size:28px;width:var(--logo-size);height:var(--logo-size);flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;background:var(--surface-2);color:var(--text-secondary);vertical-align:middle;overflow:hidden}
+.company-logo img{width:calc(var(--logo-size) - 4px);height:calc(var(--logo-size) - 4px);object-fit:contain;background:#fff;border-radius:4px}
 .company-logo>span{font-size:var(--text-tick);font-weight:var(--weight-semibold);line-height:var(--leading-compact)}
+.company-logo--compact{--logo-size:20px;border-radius:4px}
+.company-logo--table{--logo-size:36px}
+.company-logo--large{--logo-size:64px}
+.company-logo--large img{width:56px;height:56px;border-radius:12px}
+.company-logo--large>span{font-size:var(--text-title)}
+.company-identity{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%;vertical-align:middle}
+.company-identity-text{min-width:0;overflow-wrap:anywhere}
+.co-name .company-identity{display:flex}
+.co-name .company-identity-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.page-hero-identity,.company-dialog-identity{display:flex;align-items:center;gap:18px;min-width:0}
+.page-hero-identity>div,.company-dialog-identity>div{min-width:0}
+.an-history-table .company-identity{display:flex}
+@media(max-width:720px){
+  .company-logo--table{--logo-size:26px}
+  .company-logo--large{--logo-size:48px}
+  .company-logo--large img{width:40px;height:40px;border-radius:8px}
+  .page-hero-identity,.company-dialog-identity{gap:12px}
+}
 .job-line>.company-logo{width:36px;height:36px}
 .pull-calendar h3{margin-top:0}.pull-calendar .calendar-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 10px;font-size:var(--text-nav)}
 .pull-calendar .calendar-head button{padding:4px 9px;border:1px solid var(--border);border-radius:7px}.pull-calendar .calendar-head button:disabled{opacity:.4;cursor:default}
