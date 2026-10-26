@@ -15,6 +15,7 @@ export interface AnalyticsData {
   roles: (AnalyticsGroup & { family: string })[];
   attribution: { resume: string; channel: string; combinations: unknown[] };
   companies: AnalyticsCompany[]; selected_company: string;
+  rejected_companies: { name: string; rejections: number; applications: number; latest_at: string | null }[];
   verified_companies: (AnalyticsGroup & { name: string; reports: number })[];
   reports: PetitionReport[]; annual: { period: string; approvals: number; denials: number; rate: number | null }[];
 }

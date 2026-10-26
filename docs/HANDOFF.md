@@ -100,6 +100,15 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
+**2026-10-26 Inbox and Analytics update:** Clear rejection emails matched to exactly one
+application (job ID including "Ref:", exact title, or the only application at the named
+company) are recorded automatically from sync, historical import and a new recheck, with
+Undo; receipts are filed; everything else is one click with the full email (read live) and
+ACE's best-guess application preselected. Analytics lists the companies that rejected the
+owner. Career Dashboard and `/api/intelligence` are removed; `/app/dashboard` redirects to
+Analytics. `GMAIL_AUTO_REJECTIONS` (default true) is the server switch. No migration.
+See `ACE_NEXT_KNOWLEDGE.md`, Inbox automatic rejections.
+
 **2026-10-26 question-following update:** Local 1.28.6 follows clicked/focused
 employer questions, fills equivalent known routine answers on focus and records
 committed owner answers as Answered on form without duplicate approval. Protected

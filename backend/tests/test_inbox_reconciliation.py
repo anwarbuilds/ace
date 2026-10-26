@@ -88,3 +88,129 @@ def test_gmail_grant_uses_read_only_scope_pkce_and_encrypted_refresh_token():
     stored = gmail.encrypt_token("fictional-refresh-token", key)
     assert b"fictional-refresh-token" not in stored
     assert gmail.decrypt_token(stored, key) == "fictional-refresh-token"
+
+
+# Owner decision 2026-10-26: clear rejections are recorded automatically when
+# exactly one application fits; everything uncertain stays in review.
+
+import base64
+
+import pytest
+
+from backend.app.inbox.reconcile import classify
+
+
+def ats_mail(subject: str, body: str, display: str = "Northwind Robotics", address: str = "no-reply@us.greenhouse-mail.io",
+             received: datetime = NOW, authenticated: bool = True) -> EmailEvidence:
+    return EmailEvidence(f"{display} <{address}>", subject, body, received, authenticated)
+
+
+def northwind(key: str = "job:7", title: str = "Software Engineer, New Grad", req: str | None = None,
+              status: str = "applied", submitted: datetime = NOW - timedelta(days=12)) -> ApplicationIdentity:
+    return ApplicationIdentity(key, "Northwind Robotics, Inc.", title, req, submitted, status, "https://boards.greenhouse.io/northwind")
+
+
+@pytest.mark.parametrize("sentence", [
+    "Unfortunately, we won't be moving forward with your application.",
+    "We have decided to pursue other candidates for this role.",
+    "We are not able to move forward with your application at this time.",
+    "The position you applied for has been filled.",
+    "After careful consideration, we've decided to move forward with another candidate.",
+    "Your application was not successful on this occasion.",
+    "We regret to inform you that the team chose another path for this position.",
+    "We have decided to go in a different direction for this role.",
+    "We have moved forward with other applicants whose experience fits more closely.",
+])
+def test_common_rejection_wording_is_recognized(sentence):
+    assert classify(ats_mail("Your application", sentence))[0] == "rejection"
+
+
+@pytest.mark.parametrize("sentence,expected", [
+    ("We understand you have decided not to proceed with your application.", "unknown"),
+    ("We are continuing to interview other candidates and will update you soon about the role.", "unknown"),
+    ("Thank you for applying! We have received your application.", "application_confirmation"),
+])
+def test_withdrawals_updates_and_receipts_are_not_rejections(sentence, expected):
+    assert classify(ats_mail("Your application", sentence))[0] == expected
+
+
+def test_reference_label_counts_as_a_job_id():
+    apps = [northwind(req="137787"), northwind("job:8", "Software Engineer, Platform", "137790")]
+    result = reconcile(ats_mail("Update", "Ref: 137787. We have decided to move forward with other candidates."), apps)
+    assert (result.disposition, result.target) == ("verified", "job:7")
+    assert result.reason == "Clear rejection matched by its job ID"
+
+
+def test_only_application_at_the_named_company_is_matched():
+    result = reconcile(ats_mail("Thank you for your interest in Northwind Robotics",
+                                "Thank you for applying for the Software Engineer role. Unfortunately, we will not be moving forward."),
+                       [northwind(), ApplicationIdentity("job:9", "Bluefin Analytics", "Software Engineer", None, NOW - timedelta(days=3), "applied")])
+    assert (result.disposition, result.target) == ("verified", "job:7")
+    assert result.reason == "Clear rejection matched by your only application there"
+
+
+def test_a_different_role_at_the_same_company_waits_with_the_likely_application_first():
+    result = reconcile(ats_mail("Northwind Robotics application update",
+                                "Thank you for applying for the Data Analyst position. We regret to inform you that it has been filled."),
+                       [northwind()])
+    assert result.disposition == "review" and result.target is None
+    assert result.candidates == ("job:7",)
+
+
+def test_exact_title_picks_one_of_several_applications():
+    apps = [northwind(), northwind("job:8", "Machine Learning Engineer")]
+    result = reconcile(ats_mail("Northwind Robotics", "About your Machine Learning Engineer application: you have not been selected."), apps)
+    assert (result.disposition, result.target) == ("verified", "job:8")
+    generic = reconcile(ats_mail("Northwind Robotics", "We regret to inform you that we will not be moving forward with your application."), apps)
+    assert generic.disposition == "review" and set(generic.candidates) == {"job:7", "job:8"}
+
+
+def test_rejection_rules_keep_their_protections():
+    body = "We regret to inform you that we will not be moving forward with your application."
+    personal = reconcile(ats_mail("Northwind Robotics", body, address="recruiter@gmail.com"), [northwind()])
+    assert personal.disposition == "review" and personal.reason == "Sender could not be authenticated"
+    unauthenticated = reconcile(ats_mail("Northwind Robotics", body, authenticated=False), [northwind()])
+    assert unauthenticated.target is None
+    accepted = reconcile(ats_mail("Northwind Robotics", body), [northwind(status="accepted")])
+    assert accepted.reason == "Existing final status is protected"
+
+
+def test_marking_applied_after_a_quick_rejection_still_matches():
+    early = reconcile(ats_mail("Northwind Robotics", "You have not been selected for this role.", received=NOW - timedelta(hours=2)),
+                      [ApplicationIdentity("job:7", "Northwind Robotics", "Software Engineer", None, NOW, "applied", None, NOW)])
+    assert early.disposition == "verified"
+
+
+def test_an_already_rejected_application_gets_the_email_date():
+    result = reconcile(ats_mail("Northwind Robotics", "We have decided to pursue other candidates for this role."),
+                       [ApplicationIdentity("job:7", "Northwind Robotics", "Software Engineer", None, NOW - timedelta(days=9), "rejected", None, NOW)])
+    assert (result.disposition, result.target) == ("verified", "job:7")
+
+
+def test_positive_outcomes_from_a_shared_platform_still_need_the_owner():
+    result = reconcile(ats_mail("Northwind Robotics interview", "Job ID 137787. We would like to invite you to interview."),
+                       [northwind(req="137787")])
+    assert result.disposition == "review" and result.candidates[0] == "job:7"
+
+
+def test_receipts_are_filed_and_years_are_not_job_ids():
+    receipt = reconcile(ats_mail("Northwind Robotics", "Thank you for applying to the 2026 Software Engineer, New Grad role."),
+                        [northwind(req="2026")])
+    assert receipt.disposition == "receipt"
+    assert receipt.requisition_id is None
+
+
+def test_html_only_email_is_read_as_text():
+    markup = ("<html><head><style>p{color:red}</style></head><body><p>Hello,</p><p>Thank you for applying to Northwind Robotics."
+              "</p><div>Unfortunately, we&rsquo;ve decided to move forward with other candidates.</div><script>alert(1)</script></body></html>")
+    data = {"internalDate": str(int(NOW.timestamp() * 1000)), "snippet": "Hello, Thank you for applying",
+            "payload": {"mimeType": "multipart/alternative", "headers": [
+                {"name": "Authentication-Results", "value": "mx.google.com; dmarc=pass header.from=us.greenhouse-mail.io"},
+                {"name": "From", "value": "Northwind Robotics <no-reply@us.greenhouse-mail.io>"},
+                {"name": "Subject", "value": "Your application"}],
+                "parts": [{"mimeType": "text/html", "headers": [{"name": "Content-Type", "value": 'text/html; charset="utf-8"'}],
+                           "body": {"data": base64.urlsafe_b64encode(markup.encode()).decode()}}]}}
+    evidence = _message_evidence(data)
+    assert "alert" not in evidence.body and "color" not in evidence.body
+    assert "we’ve decided to move forward with other candidates" in evidence.body
+    assert reconcile(evidence, [northwind()]).target == "job:7"

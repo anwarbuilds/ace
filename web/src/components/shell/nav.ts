@@ -25,7 +25,6 @@ export const NAV: NavGroup[] = [
       { href: "/app/opportunities", label: "Opportunities", short: "Jobs", icon: "briefcase", also: ["/app/jobs", "/app/saved"] },
       { href: "/app/applications", label: "Applications", short: "Applied", icon: "send" },
       { href: "/app/analytics", label: "Analytics", short: "Analytics", icon: "chart" },
-      { href: "/app/dashboard", label: "Career Dashboard", short: "Dashboard", icon: "chart" },
       { href: "/app/applications/inbox", label: "Inbox Intelligence", short: "Inbox", icon: "send" },
     ],
   },

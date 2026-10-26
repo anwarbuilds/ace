@@ -51,6 +51,8 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: "/app/queue", destination: "/app/opportunities", permanent: false },
+      // Career Dashboard was removed on 2026-10-26; Analytics covers it.
+      { source: "/app/dashboard", destination: "/app/analytics", permanent: false },
       { source: "/app/activity", destination: "/app/pulls", permanent: false },
       { source: "/app/applied", destination: "/app/applications", permanent: false },
       { source: "/app/resume", destination: "/app/resume-studio", permanent: false },

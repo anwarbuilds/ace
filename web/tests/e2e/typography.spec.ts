@@ -11,7 +11,6 @@ const ROUTES = [
   "/app/opportunities",
   "/app/applications",
   "/app/analytics",
-  "/app/dashboard",
   "/app/resume-studio",
   "/app/coverage",
   "/app/settings",

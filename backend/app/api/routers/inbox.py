@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import base64
+import html
 import re
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr, parsedate_to_datetime
+from html.parser import HTMLParser
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
@@ -24,12 +27,17 @@ from backend.app.db.models import (
     GmailMessageRecord, JobMarkRecord, JobRecord, UserRecord,
 )
 from backend.app.inbox import gmail
-from backend.app.inbox.reconcile import ApplicationIdentity, EmailEvidence, PARSER_VERSION, reconcile
+from backend.app.inbox.reconcile import ApplicationIdentity, Decision, EmailEvidence, PARSER_VERSION, conflict, reconcile
 
 router = APIRouter()
 STATE_COOKIE = "ace_gmail_state"
 NONCE_COOKIE = "ace_gmail_nonce"
 VERIFIER_COOKIE = "ace_gmail_verifier"
+PENDING = ("review", "exact_preview", "deferred")
+# Emails ACE has not applied to an application can still be decided by hand.
+DECIDABLE = PENDING + ("ignored", "receipt", "unrelated")
+_OUTCOME_STATUS = {"rejection": "rejected", "interview": "interviewing", "offer": "offer"}
+_TOKENS: dict[tuple[int, bytes], tuple[float, str]] = {}
 
 
 def _secure(request: Request) -> bool:
@@ -54,6 +62,7 @@ def _public(conn: GmailConnectionRecord | None) -> dict:
         "last_error": conn.last_error if conn else None,
         "auto_outcomes_enabled": bool(conn and conn.auto_outcomes_enabled),
         "automation_available": get_settings().gmail_auto_outcomes_allowed,
+        "auto_rejections": get_settings().gmail_auto_rejections,
     }
 
 
@@ -168,15 +177,73 @@ def _identities(session: Session) -> list[ApplicationIdentity]:
     return identities
 
 
-def _body(payload: dict) -> str:
-    """Use only plain text. Never execute, render or persist HTML email."""
-    if payload.get("mimeType") == "text/plain":
-        encoded = payload.get("body", {}).get("data", "")
-        try:
-            return base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)).decode("utf-8", "replace")[:10000]
-        except (ValueError, TypeError):
-            return ""
-    return "\n".join(_body(part) for part in payload.get("parts", []) if isinstance(part, dict))[:10000]
+class _Text(HTMLParser):
+    """Readable text from an HTML email. Nothing is rendered or fetched."""
+
+    _SKIP = {"script", "style", "head", "title", "noscript"}
+    _BREAK = {"br", "p", "div", "tr", "li", "ul", "ol", "table", "section", "article", "header", "footer",
+              "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "hr"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.skip = 0
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag in self._SKIP:
+            self.skip += 1
+        elif tag in self._BREAK:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self._SKIP:
+            self.skip = max(0, self.skip - 1)
+        elif tag in self._BREAK:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if not self.skip:
+            self.parts.append(data)
+
+
+def _html_text(markup: str) -> str:
+    parser = _Text()
+    parser.feed(markup)
+    parser.close()
+    lines = (" ".join(line.split()) for line in "".join(parser.parts).splitlines())
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
+def _decode(part: dict) -> str:
+    encoded = part.get("body", {}).get("data", "")
+    content_type = next((str(h.get("value", "")) for h in part.get("headers", []) if str(h.get("name", "")).casefold() == "content-type"), "")
+    charset = re.search(r'(?i)charset="?([\w.-]+)', content_type)
+    try:
+        raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+    except (ValueError, TypeError):
+        return ""
+    try:
+        return raw.decode(charset.group(1) if charset else "utf-8", "replace")
+    except LookupError:
+        return raw.decode("utf-8", "replace")
+
+
+def _parts(payload: dict, mime: str) -> list[str]:
+    if payload.get("mimeType") == mime:
+        return [_decode(payload)]
+    return [text for part in payload.get("parts", []) if isinstance(part, dict) for text in _parts(part, mime)]
+
+
+def _body(payload: dict, limit: int = 10000) -> str:
+    """Plain text when the email has it, else the text of its HTML.
+
+    HTML is never rendered, executed or stored; many employer systems send
+    only HTML, and reading its text is how their wording and job IDs count.
+    """
+    plain = "\n".join(text for text in _parts(payload, "text/plain") if text.strip())
+    if plain:
+        return plain[:limit]
+    return "\n".join(_html_text(text) for text in _parts(payload, "text/html"))[:limit]
 
 
 def _message_evidence(data: dict) -> EmailEvidence:
@@ -194,7 +261,20 @@ def _message_evidence(data: dict) -> EmailEvidence:
         stamp = parsedate_to_datetime(headers.get("date", ""))
     except (TypeError, ValueError):
         stamp = datetime.fromtimestamp(int(data["internalDate"]) / 1000, timezone.utc)
-    return EmailEvidence(headers.get("from", "")[:320], headers.get("subject", "")[:500], _body(data.get("payload", {})) or str(data.get("snippet", ""))[:500], stamp, authenticated)
+    return EmailEvidence(headers.get("from", "")[:320], headers.get("subject", "")[:500], _body(data.get("payload", {})) or html.unescape(str(data.get("snippet", "")))[:500], stamp, authenticated)
+
+
+def _access(conn: GmailConnectionRecord) -> str:
+    """A Gmail access token, reused for half an hour instead of one per email."""
+    key = (conn.id, bytes(conn.encrypted_refresh_token))
+    cached = _TOKENS.get(key)
+    if cached and cached[0] > time.monotonic():
+        return cached[1]
+    s = get_settings()
+    token = gmail.access_token(gmail.decrypt_token(conn.encrypted_refresh_token, s.gmail_token_key), client_id=s.gmail_client_id, client_secret=s.gmail_client_secret)
+    _TOKENS.clear()
+    _TOKENS[key] = (time.monotonic() + 1800, token)
+    return token
 
 
 def _target(session: Session, key: str):
@@ -223,52 +303,64 @@ def _ingest(session: Session, conn: GmailConnectionRecord, data: dict, identitie
     if existing:
         return "duplicate"
     evidence = _message_evidence(data)
-    # Company/title text is only used to present plausible review candidates.
-    # Exact IDs are checked against the full application set in reconcile().
     decision = reconcile(evidence, identities)
-    candidate_keys = list(decision.candidates)
-    if decision.requisition_id is None:
-        text = (evidence.subject + " " + evidence.body).casefold()
-        candidate_keys = [a.key for a in identities if a.company.casefold() in text][:20]
-    disposition = "exact_preview" if preview and decision.disposition == "verified" else decision.disposition
     row = GmailMessageRecord(
         connection_id=conn.id, gmail_id=gmail_id, thread_id=data.get("threadId"),
         received_at=evidence.received_at, sender=evidence.sender, subject=evidence.subject,
-        snippet=str(data.get("snippet", ""))[:500], classification=decision.classification,
-        requisition_id=decision.requisition_id, decision=disposition,
-        candidate_keys=candidate_keys, decision_reason=decision.reason,
-        selected_application_key=decision.target if disposition == "verified" else None,
+        snippet=html.unescape(str(data.get("snippet", "")))[:500], classification=decision.classification,
+        requisition_id=decision.requisition_id, decision=decision.disposition,
+        candidate_keys=list(decision.candidates), decision_reason=decision.reason,
         parser_version=PARSER_VERSION,
     )
     session.add(row)
     session.flush()
-    _append_event(session, f"email:{row.id}", "email_classified", None, disposition,
-                  actor="classifier", reason=decision.reason, message_id=row.id,
+    _apply(session, conn, row, decision, evidence, preview=preview)
+    _append_event(session, f"email:{row.id}", "email_classified", None, row.decision,
+                  actor="classifier", reason=row.decision_reason, message_id=row.id,
                   occurred_at=evidence.received_at,
                   dedupe_key=f"gmail:{conn.id}:{gmail_id}:classification")
-    if decision.disposition == "verified" and not preview and conn.auto_outcomes_enabled and get_settings().gmail_auto_outcomes_allowed and decision.target:
-        target = _target(session, decision.target)
-        changed = target.status_changed_at if target else None
-        if changed is not None and changed.tzinfo is None:
-            changed = changed.replace(tzinfo=timezone.utc)
-        received = evidence.received_at if evidence.received_at.tzinfo else evidence.received_at.replace(tzinfo=timezone.utc)
-        if not target or target.application_status in {"accepted", "rejected", "withdrawn"} or (changed is not None and changed > received):
-            row.decision = "review"
-            row.selected_application_key = None
-            row.decision_reason = "A newer or terminal application status is protected"
-        else:
-            before = target.application_status
-            after = {"rejection": "rejected", "interview": "interviewing", "offer": "offer"}.get(decision.classification, before)
-            if after != before:
-                target.application_status = after
-                target.status_changed_at = evidence.received_at
-            _append_event(session, decision.target, decision.classification, before, after, actor="verified_automation", reason=decision.reason, message_id=row.id, occurred_at=evidence.received_at, dedupe_key=f"gmail:{conn.id}:{gmail_id}:{decision.classification}")
-            row.decision = "automatic"
-            row.selected_application_key = decision.target
-    elif decision.disposition == "verified" and not preview:
-        row.decision = "review"
-        row.decision_reason = "Verified identity, but automatic outcomes are disabled"
     return row.decision
+
+
+def _apply(session: Session, conn: GmailConnectionRecord, row: GmailMessageRecord, decision: Decision, evidence: EmailEvidence, *, preview: bool) -> None:
+    """Record what an email decided, changing a status only when allowed.
+
+    A clear rejection matched to exactly one application is recorded at once,
+    from a historical import too, unless the server switch turns that off.
+    Other outcomes still need the separately approved automation and a live
+    import. Every change is in the audit trail with Undo.
+    """
+    row.decision = decision.disposition
+    row.selected_application_key = decision.target if decision.disposition == "receipt" else None
+    if decision.disposition != "verified" or not decision.target:
+        return
+    s = get_settings()
+    rejection = decision.classification == "rejection"
+    allowed = s.gmail_auto_rejections if rejection else (not preview and conn.auto_outcomes_enabled and s.gmail_auto_outcomes_allowed)
+    if not allowed:
+        row.decision = "exact_preview" if preview else "review"
+        if not preview:
+            row.decision_reason = decision.reason + "; automatic updates are off"
+        return
+    if session.scalar(select(ApplicationEventRecord.id).where(ApplicationEventRecord.gmail_message_id == row.id, ApplicationEventRecord.actor == "verified_automation").limit(1)):
+        row.decision = "review"
+        row.decision_reason = "You undid ACE's change for this email"
+        return
+    target = _target(session, decision.target)
+    live = ApplicationIdentity(decision.target, "", "", None, target.applied_at, target.application_status or "applied", None, target.status_changed_at) if target else None
+    reason = conflict(live, decision.classification, evidence.received_at) if live else "The application no longer exists"
+    if reason:
+        row.decision = "review"
+        row.decision_reason = reason
+        return
+    before = target.application_status
+    after = _OUTCOME_STATUS.get(decision.classification, before)
+    if after != before:
+        target.application_status = after
+        target.status_changed_at = evidence.received_at
+    _append_event(session, decision.target, decision.classification, before, after, actor="verified_automation", reason=decision.reason, message_id=row.id, occurred_at=evidence.received_at, dedupe_key=f"gmail:{conn.id}:{row.gmail_id}:{decision.classification}")
+    row.decision = "automatic"
+    row.selected_application_key = decision.target
 
 
 class EmailDisposition(BaseModel):
@@ -279,13 +371,17 @@ class EmailDisposition(BaseModel):
 def decide_message(message_id: int, body: EmailDisposition, request: Request, session: Session = Depends(get_session)) -> dict:
     conn = _connection(session, current_owner(request))
     row = session.get(GmailMessageRecord, message_id)
-    if not conn or not row or row.connection_id != conn.id or row.decision not in {"review", "exact_preview", "deferred"}:
-        raise HTTPException(409, "This email is not in the review queue.")
-    if body.action not in {"unrelated", "deferred"}:
-        raise HTTPException(422, "Choose unrelated or deferred.")
+    if not conn or not row or row.connection_id != conn.id:
+        raise HTTPException(404, "Email not found.")
+    if row.decision not in DECIDABLE:
+        raise HTTPException(409, "This email already changed an application. Undo that change first.")
+    reasons = {"unrelated": "You marked it not about your applications", "deferred": "You chose to decide later",
+               "receipt": "You marked it an application receipt"}
+    if body.action not in reasons:
+        raise HTTPException(422, "Choose unrelated, receipt or deferred.")
     before = row.decision
     row.decision = body.action
-    row.decision_reason = "Owner marked the email " + body.action
+    row.decision_reason = reasons[body.action]
     _append_event(session, f"email:{row.id}", "email_review", before, body.action,
                   actor="owner", reason=row.decision_reason, message_id=row.id)
     session.commit()
@@ -394,7 +490,7 @@ class SyncRequest(BaseModel):
 
 @router.post("/api/inbox/backfill")
 def backfill(body: SyncRequest, request: Request, session: Session = Depends(get_session)) -> dict:
-    """Historical import is always preview-only, regardless of settings."""
+    """Historical import. Clear rejections are recorded; other outcomes wait for review."""
     conn = _connection(session, current_owner(request))
     if not conn or not conn.encrypted_refresh_token or conn.state == "disconnected":
         raise HTTPException(409, "Connect Gmail before previewing a backfill.")
@@ -437,8 +533,8 @@ def backfill(body: SyncRequest, request: Request, session: Session = Depends(get
 def _message_query(connection_id: int, decision: str | None = None):
     query = select(GmailMessageRecord).where(GmailMessageRecord.connection_id == connection_id)
     if decision == "pending":
-        query = query.where(GmailMessageRecord.decision.in_(("review", "exact_preview", "deferred")))
-    elif decision in {"review", "exact_preview", "deferred", "ignored", "manual", "automatic", "unrelated"}:
+        query = query.where(GmailMessageRecord.decision.in_(PENDING))
+    elif decision in {"review", "exact_preview", "deferred", "ignored", "manual", "automatic", "unrelated", "receipt"}:
         query = query.where(GmailMessageRecord.decision == decision)
     elif decision == "ambiguous":
         query = query.where(GmailMessageRecord.decision == "review", GmailMessageRecord.candidate_keys[1].as_string().is_not(None))
@@ -459,17 +555,93 @@ def messages(request: Request, session: Session = Depends(get_session), decision
     conn = _connection(session, current_owner(request))
     if not conn:
         return {"items": [], "review_count": 0, "total": 0, "offset": offset, "has_more": False,
-                "counts": {"stored": 0, "needs_review": 0, "automatic": 0, "reviewed": 0}}
+                "counts": {"stored": 0, "needs_review": 0, "automatic": 0, "reviewed": 0, "receipts": 0, "stale": 0}}
     by_decision = dict(session.execute(select(GmailMessageRecord.decision, func.count()).where(
         GmailMessageRecord.connection_id == conn.id).group_by(GmailMessageRecord.decision)).all())
-    review_count = sum(by_decision.get(key, 0) for key in ("review", "exact_preview", "deferred"))
+    review_count = sum(by_decision.get(key, 0) for key in PENDING)
+    # Waiting emails read under older rules; recheck applies the current ones.
+    stale = session.scalar(select(func.count()).select_from(GmailMessageRecord).where(
+        GmailMessageRecord.connection_id == conn.id, GmailMessageRecord.decision.in_(PENDING),
+        GmailMessageRecord.parser_version != PARSER_VERSION)) or 0
     total = session.scalar(select(func.count()).select_from(_message_query(conn.id, decision).subquery())) or 0
     rows = _message_rows(session, conn.id, decision, offset, limit)
-    return {"items": [{"id": r.id, "received_at": r.received_at.isoformat(), "sender": r.sender, "subject": r.subject, "snippet": r.snippet, "classification": r.classification, "requisition_id": r.requisition_id, "decision": r.decision, "candidate_keys": r.candidate_keys or [], "reason": r.decision_reason, "selected_application_key": r.selected_application_key} for r in rows],
+    return {"items": [{"id": r.id, "received_at": r.received_at.isoformat(), "sender": r.sender, "subject": r.subject, "snippet": html.unescape(r.snippet), "classification": r.classification, "requisition_id": r.requisition_id, "decision": r.decision, "candidate_keys": r.candidate_keys or [], "reason": r.decision_reason, "selected_application_key": r.selected_application_key} for r in rows],
             "review_count": review_count, "total": total, "offset": offset, "has_more": offset + len(rows) < total,
             "counts": {"stored": sum(by_decision.values()), "needs_review": review_count,
                        "automatic": by_decision.get("automatic", 0),
-                       "reviewed": sum(by_decision.get(key, 0) for key in ("manual", "automatic", "unrelated"))}}
+                       "reviewed": sum(by_decision.get(key, 0) for key in ("manual", "automatic", "unrelated")),
+                       "receipts": by_decision.get("receipt", 0), "stale": stale}}
+
+
+@router.get("/api/inbox/messages/{message_id}/full")
+def full_message(message_id: int, request: Request, session: Session = Depends(get_session)) -> dict:
+    """The whole email as readable text, read from Gmail now and never stored."""
+    conn = _connection(session, current_owner(request))
+    row = session.get(GmailMessageRecord, message_id)
+    if not conn or not conn.encrypted_refresh_token or not row or row.connection_id != conn.id:
+        raise HTTPException(404, "Email not found.")
+    try:
+        data = gmail.get_json("/messages/" + row.gmail_id, _access(conn), {"format": "full"})
+    except gmail.GmailCursorExpired as exc:
+        raise HTTPException(404, "This email is no longer in Gmail.") from exc
+    except gmail.GmailError as exc:
+        if not isinstance(exc, gmail.GmailTemporaryError):
+            _TOKENS.clear()
+        raise HTTPException(429 if isinstance(exc, gmail.GmailRateLimited) else 502, str(exc)) from exc
+    text = _body(data.get("payload", {}), 60000) or html.unescape(str(data.get("snippet", "")))
+    return {"id": row.id, "sender": row.sender, "subject": row.subject, "received_at": row.received_at.isoformat(), "text": text}
+
+
+class RecheckRequest(BaseModel):
+    limit: int = Field(25, ge=1, le=50)
+
+
+@router.post("/api/inbox/recheck")
+def recheck(body: RecheckRequest, request: Request, session: Session = Depends(get_session)) -> dict:
+    """Decide waiting emails again under the current rules.
+
+    Each email is read from Gmail again (the full text is not stored) and
+    decided as a historical import would be: a clear rejection is recorded,
+    anything else stays waiting. Run it again until nothing remains.
+    """
+    conn = _connection(session, current_owner(request))
+    if not conn or not conn.encrypted_refresh_token or conn.state == "disconnected":
+        raise HTTPException(409, "Connect Gmail before rechecking email.")
+    stale = select(GmailMessageRecord).where(GmailMessageRecord.connection_id == conn.id, GmailMessageRecord.decision.in_(PENDING),
+                                             GmailMessageRecord.parser_version != PARSER_VERSION)
+    rows = list(session.scalars(stale.order_by(GmailMessageRecord.received_at.desc(), GmailMessageRecord.id.desc()).limit(body.limit)))
+    counts: dict[str, int] = {}
+    identities = _identities(session) if rows else []
+    for row in rows:
+        try:
+            data = gmail.get_json("/messages/" + row.gmail_id, _access(conn), {"format": "full"})
+            evidence = _message_evidence(data)
+        except gmail.GmailCursorExpired:
+            # Deleted from Gmail: decide from what was kept, which cannot
+            # prove the sender, so nothing changes automatically.
+            evidence = EmailEvidence(row.sender, row.subject, html.unescape(row.snippet), row.received_at)
+        except gmail.GmailError as exc:
+            if not isinstance(exc, gmail.GmailTemporaryError):
+                _TOKENS.clear()
+            raise HTTPException(429 if isinstance(exc, gmail.GmailRateLimited) else 502, str(exc)) from exc
+        decision = reconcile(evidence, identities)
+        before = row.decision
+        row.classification = decision.classification
+        row.requisition_id = decision.requisition_id
+        row.candidate_keys = list(decision.candidates)
+        row.decision_reason = decision.reason
+        row.parser_version = PARSER_VERSION
+        _apply(session, conn, row, decision, evidence, preview=True)
+        if before == "deferred" and row.decision in PENDING:
+            row.decision = "deferred"
+        _append_event(session, f"email:{row.id}", "email_rechecked", before, row.decision, actor="classifier",
+                      reason=row.decision_reason, message_id=row.id, occurred_at=row.received_at,
+                      dedupe_key=f"gmail:{conn.id}:{row.gmail_id}:recheck:{PARSER_VERSION}")
+        session.commit()
+        identities = _identities(session) if row.decision == "automatic" else identities
+        counts[row.decision] = counts.get(row.decision, 0) + 1
+    remaining = session.scalar(select(func.count()).select_from(stale.subquery())) or 0
+    return {"checked": len(rows), "counts": counts, "remaining": remaining}
 
 
 @router.get("/api/inbox/applications")
@@ -491,16 +663,20 @@ class ManualDecision(BaseModel):
     status: str
     expected_status: str
     confirmed: bool = False
+    # What the owner says the email is, so Analytics counts it that way.
+    kind: str | None = None
 
 
 @router.post("/api/inbox/review")
 def review(body: ManualDecision, request: Request, session: Session = Depends(get_session)) -> dict:
     conn = _connection(session, current_owner(request))
     message = session.get(GmailMessageRecord, body.message_id)
-    if not body.confirmed or not conn or not message or message.connection_id != conn.id or message.decision not in {"review", "exact_preview", "deferred"}:
+    if not body.confirmed or not conn or not message or message.connection_id != conn.id or message.decision not in DECIDABLE:
         raise HTTPException(409, "Choose a pending email and confirm the exact application.")
     if body.status not in APPLICATION_STATUSES:
         raise HTTPException(422, "Unknown application status.")
+    if body.kind is not None and body.kind not in {"rejection", "interview", "online_assessment", "offer", "recruiter_reply"}:
+        raise HTTPException(422, "Unknown email outcome.")
     target = _target(session, body.application_key)
     if not target or (target.application_status or "applied") != body.expected_status:
         raise HTTPException(409, "Application status changed. Reload before confirming.")
@@ -510,6 +686,8 @@ def review(body: ManualDecision, request: Request, session: Session = Depends(ge
     event = _append_event(session, body.application_key, "manual_correction", before, body.status, actor="owner", reason="Owner selected the exact application after reviewing email evidence", message_id=message.id, occurred_at=message.received_at)
     message.decision = "manual"
     message.selected_application_key = body.application_key
+    if body.kind:
+        message.classification = body.kind
     session.commit()
     return {"event_id": event.id, "application_key": body.application_key, "status": body.status}
 
@@ -528,5 +706,11 @@ def undo(event_id: int, request: Request, session: Session = Depends(get_session
     target.application_status = event.previous_status
     target.status_changed_at = datetime.now(timezone.utc)
     correction = _append_event(session, event.application_key, "undo", event.new_status, event.previous_status, actor="owner", reason="Owner undid an earlier reconciliation", undo_of=event.id)
+    # The email goes back to the queue, so the owner can say what it means.
+    message = session.get(GmailMessageRecord, event.gmail_message_id) if event.gmail_message_id else None
+    if message and message.decision in {"automatic", "manual"} and message.selected_application_key == event.application_key:
+        message.decision = "review"
+        message.selected_application_key = None
+        message.decision_reason = "You undid the change this email made"
     session.commit()
     return {"event_id": correction.id, "application_key": event.application_key, "status": event.previous_status}

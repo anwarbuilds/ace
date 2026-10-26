@@ -221,3 +221,14 @@ def test_application_drilldowns_match_chart_filters_and_remain_unique(db):
     assert read(db,records=True,limit=1,offset=1)["record_total"]==2
     assert len(read(db,records=True,limit=1,offset=1)["records"])==1
     with pytest.raises(HTTPException):read(db,records=True,status="silently_rejected")
+
+
+def test_companies_that_rejected_you_lists_every_employer_once(db):
+    first=app(db,1,company="Silverpine Labs");app(db,2,company="Silverpine Labs",status="rejected")
+    outcome(db,first,"rejection",stamp=NOW-timedelta(days=5))
+    app(db,3,company="Northwind Robotics",status="rejected")
+    app(db,4,company="Bluefin Analytics")
+    rows=read(db)["rejected_companies"]
+    assert rows==[{"name":"Silverpine Labs","rejections":2,"applications":2,"latest_at":(NOW-timedelta(days=5)).isoformat()},
+                  {"name":"Northwind Robotics","rejections":1,"applications":1,"latest_at":None}]
+    assert read(db,start=NOW.date()-timedelta(days=10),end=NOW.date()-timedelta(days=1))["rejected_companies"]==[]

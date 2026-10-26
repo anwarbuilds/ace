@@ -406,6 +406,60 @@ After the first release (JIT off) it measured, in ms: `/api/stats` 216,
 
 ## Current working state on 2026-10-25
 
+### Inbox automatic rejections, one-click review, Career Dashboard removed (2026-10-26)
+
+The owner found the Inbox unusable: nearly every email waited for review, and
+the review form made them pick one of 40 applications from a list, an outcome
+from another list and a confirmation checkbox. They asked for clear rejections
+("we regret to", matched to the job) to be recorded automatically, the whole
+email to be shown when ACE is unsure, simple choices, a list of the companies
+that rejected them in Analytics, and Career Dashboard to be removed entirely.
+
+Why almost everything waited: only three rejection phrasings were known; a job
+ID was found only after "requisition", "req id" or "job id" (not "Ref:"); the
+sender had to be the employer's own domain (never Greenhouse, Workday and the
+other platforms that send most rejections); only text/plain bodies were read,
+so HTML-only email was judged on its 500-character snippet; backfill was
+preview-only; receipts went to review; and the server switch and connection
+setting for automation were both off.
+
+What changed (rules in the Gmail evidence contract below):
+
+- `reconcile.py` parser version 2: wider rejection wording with a withdrawal
+  guard, labelled IDs including Ref, company identity from the sender's display
+  name, subject or domain (platform domains excluded), exact-title and
+  only-application matching with a title check, ranked candidates (best first)
+  for review, receipts, and a 24 hour grace for marking Applied after a quick
+  rejection. `conflict()` is shared with the live re-check before writing.
+- `inbox.py`: HTML text extraction, `_apply()` (automatic rejections from any
+  import; positive outcomes unchanged), `receipt` decisions, `/messages/{id}/full`
+  (live, never stored, token cached 30 minutes in memory), `/recheck` for email
+  read under parser version 1, counts `receipts` and `stale`, owner decisions on
+  ignored/receipt/unrelated email, `kind` on review, undo returning the email to
+  the queue, `auto_rejections` in the connection state. `GMAIL_AUTO_REJECTIONS`
+  (default true) is the server switch; no migration.
+- Inbox page: Waiting for you, Recorded automatically and Receipts counters,
+  "Check waiting emails again" for stale email (loops `/recheck`), clear email
+  views, and a review panel with the full email, ACE's preselected application
+  (Change to search) and one-click Rejected, Interview, Assessment, Offer, Just a
+  receipt, Not about my applications and Decide later.
+- Analytics: `rejected_companies` and the "Companies that rejected you" panel on
+  the Companies tab, linking to the exact rejected records per company.
+- Career Dashboard removed: `/app/dashboard` page and loading screen,
+  `components/intelligence/ActionQueue.tsx`, `routers/intelligence.py`
+  (`/api/intelligence` and its actions), its test, nav entry and unused styles.
+  `/app/dashboard` redirects to `/app/analytics`. `/api/dashboard` (an older
+  aggregate) is untouched. Stored action rows remain in the database, unused.
+
+Validation: 1,322 backend tests (new: matcher wording, Ref IDs, ATS display
+names, title checks, HTML email, receipts, automatic rejection from imports,
+switch off, undo and recheck, full email, rejected companies), 8 Inbox render
+tests in Node, TypeScript, ESLint, dash scan and production build. Playwright
+specs were updated (Inbox one-click flow, dashboard redirect) but not run: the
+laptop cooling restriction stands. After release the owner should open Inbox
+and press "Check waiting emails again" once; it reads each waiting email from
+Gmail again and records the clear rejections.
+
 ### Gmail connection and rate-limit diagnosis, 2026-10-25 Pacific
 
 #### Corrective review interface and error persistence
@@ -1553,14 +1607,15 @@ Required routes and contracts:
 - `/app/applications`: real application history, stages, dates, notes, filters
   and export.
 - `/app/analytics`: the approved four-tab application Analytics interface,
-  using `/api/analytics`, separate from Career Dashboard.
+  using `/api/analytics`. Its Companies tab also lists the companies that
+  rejected the owner.
 - `/app/applications/analytics`: read-only application records matching the
   exact Analytics selection, with links to existing stored-job controls.
-- `/app/dashboard`: Career Dashboard for combined application intelligence.
-- `/app/applications/inbox`: owner-controlled Gmail Inbox Intelligence,
-  evidence review and outcome reconciliation. This route is present in the
-  current code. The 2026-10-25 production check found zero Gmail connections;
-  Google sign-in does not mean Gmail is connected.
+- `/app/dashboard`: redirects to `/app/analytics`. Career Dashboard was removed
+  at the owner's request on 2026-10-26 because Analytics covers it.
+- `/app/applications/inbox`: owner-controlled Gmail Inbox Intelligence:
+  automatic clear rejections, one-click review with the full email, receipts
+  and outcome reconciliation. Google sign-in does not mean Gmail is connected.
 - `/app/resume-studio`: documents, knowledge, versions, ATS checker and history.
 - `/app/extension`: pairing, token revocation, setup and answer-memory access.
 - `/app/archive`: historical reviewed and dismissed state.
@@ -1571,7 +1626,7 @@ Required routes and contracts:
 
 Old Browse and Companies routes redirect to Opportunities. Saved data still
 exists even though Saved is secondary and not in primary navigation. Pulls is
-home; the separate Career Dashboard does not replace it. Supporting routes
+home; Analytics does not replace it. Supporting routes
 also exist for Saved, Answers, skill insights, company detail, Resume Studio
 subpages, More and sign-out. Do not replace Pulls with a generic Dashboard or
 Queue. The owner rejected a global Search or Jump command palette.
@@ -1932,7 +1987,8 @@ The backend is organized by responsibility:
 - `backend/app/api/main.py` contains the established jobs, marks, resumes,
   answers, history, coverage and source endpoints. `backend/app/api/routers/`
   contains Analytics, auth, Pulls, Studio, company intelligence, dashboard, inbox,
-  combined intelligence, owner export and system routes.
+  owner export and system routes. The combined intelligence router behind Career
+  Dashboard was removed on 2026-10-26.
 - `backend/app/db/models.py` is the ORM schema map. `db/session.py` creates
   sessions and `db/base.py` defines shared SQLAlchemy metadata.
 - `backend/scripts/` contains explicit operational and audit entry points. A
@@ -2022,13 +2078,14 @@ prefix for every Studio suffix listed in its row.
 | Company | `GET /api/companies`, `GET /api/company-intelligence`, `GET /api/company-intelligence/batch` | Company lists and evidence-backed company intelligence. |
 | Dashboard | `GET /api/dashboard` | Preserved discovery/resume-fit/application aggregate used by the former Analytics page. |
 | Analytics | `GET /api/analytics` | Read-only submission-date/role-filtered application metrics, evidence, official petition series and exact paginated drilldowns with `records=1`. |
-| Intelligence | `GET /api/intelligence`, `GET /api/intelligence/actions`, `POST /api/intelligence/actions` | Combined metrics and owner action queue. |
 | Inbox | `GET /api/inbox/connection`, `PATCH /api/inbox/connection`, `DELETE /api/inbox/connection` | Gmail connection state, settings and disconnect. |
 | Inbox | `GET /api/inbox/google/start`, `GET /api/inbox/google/callback` | Separate Gmail read-only OAuth. |
-| Inbox | `POST /api/inbox/sync`, `POST /api/inbox/backfill` | Owner-triggered incremental sync and preview-only backfill. |
+| Inbox | `POST /api/inbox/sync`, `POST /api/inbox/backfill` | Owner-triggered incremental sync and historical import (clear rejections recorded; other outcomes wait). |
 | Inbox | `GET /api/inbox/messages`, `GET /api/inbox/applications`, `GET /api/inbox/events` | Evidence, reconciled applications and event ledger. |
-| Inbox | `PATCH /api/inbox/messages/{message_id}/decision`, `PATCH /api/inbox/automation` | Review decision and tightly gated automation preference. |
-| Inbox | `POST /api/inbox/review`, `POST /api/inbox/events/{event_id}/undo` | Apply reviewed evidence or undo one event. |
+| Inbox | `GET /api/inbox/messages/{message_id}/full` | The whole email as text, read live from Gmail and never stored. |
+| Inbox | `POST /api/inbox/recheck` | Re-decide waiting email read under an older parser version, 25 to 50 at a time. |
+| Inbox | `PATCH /api/inbox/messages/{message_id}/decision`, `PATCH /api/inbox/automation` | Receipt, unrelated or later; tightly gated positive-outcome automation. |
+| Inbox | `POST /api/inbox/review`, `POST /api/inbox/events/{event_id}/undo` | One-click owner outcome (with the email kind) or undo one event; undo returns the email to the queue. |
 | Inbox | `DELETE /api/inbox/snippets` | Purge retained message snippets. |
 | Studio | `GET /api/studio` | Resume Studio overview. |
 | Studio | `POST /api/studio/documents`, `GET /api/studio/documents/{document_id}`, `GET /api/studio/documents/{document_id}/file` | Upload, inspect and privately download original documents. |
@@ -2134,8 +2191,8 @@ Current page routes in code are:
   `/privacy`, `/terms` and the web `/healthz` route.
 - Daily workspace: `/app` redirects to the authenticated home, `/app/pulls`,
   `/app/opportunities`, `/app/jobs/[id]`, `/app/applications`,
-  `/app/analytics`, `/app/applications/analytics`, `/app/dashboard` and
-  `/app/applications/inbox`.
+  `/app/analytics`, `/app/applications/analytics` and
+  `/app/applications/inbox`. `/app/dashboard` only redirects to Analytics.
 - Career tools: `/app/resume-studio`, `/app/resume-studio/check`,
   `/app/resume-studio/documents`, `/app/resume-studio/documents/[id]`,
   `/app/resume-studio/facts`, `/app/resume-studio/history` and
@@ -2144,8 +2201,8 @@ Current page routes in code are:
 - Supporting state: `/app/saved`, `/app/company/[name]`, `/app/coverage`,
   `/app/settings`, `/app/more` and `/app/sign-out`.
 
-The actual sidebar order is Pulls, Opportunities, Applications, Analytics,
-Career Dashboard and Inbox Intelligence; then Resume Studio, Autofill Extension
+The actual sidebar order is Pulls, Opportunities, Applications, Analytics
+and Inbox Intelligence; then Resume Studio, Autofill Extension
 and Archive; then Coverage and Settings. Pulls remains the authenticated home.
 Opportunities also owns job details and Saved navigation state. Resume Studio
 owns skill insights. Extension owns Answers.
@@ -2185,11 +2242,13 @@ failed optimistic changes must roll back; all tabs must converge.
 
 ### Approved Analytics implementation contract
 
-Analytics is a separate read projection. Do not replace Career Dashboard's
-`/api/intelligence` or its existing components with the new Analytics model.
-The Analytics change itself did not modify Career Dashboard, the extension,
-authentication, discovery, scheduler or migrations. The deployed release also
-preserves the independently approved performance updates already on the branch.
+Analytics is a separate read projection. It replaced Career Dashboard, which
+the owner removed on 2026-10-26 together with `/api/intelligence` and its action
+queue. The Analytics change did not modify the extension, authentication,
+discovery, scheduler or migrations. Since 2026-10-26 the projection also
+returns `rejected_companies` (every employer with a recorded rejection in the
+selection: rejections, applications there, latest dated rejection or null),
+shown as "Companies that rejected you" on the Companies tab.
 
 | Tab | Implemented modules and accuracy rules |
 | --- | --- |
@@ -2356,26 +2415,46 @@ Validation and acceptance evidence:
   are installed tools. Production rollback metadata is retained privately on
   the VM, separately from these local scratch files.
 
-### Combined Intelligence and Gmail evidence contract
+### Gmail evidence contract
 
 Migration 0044 added the application event ledger, Gmail connection/message
-evidence and petition-report evidence. Career Dashboard and Inbox Intelligence
-are preserved current features, not demo-only pages.
+evidence and petition-report evidence. Inbox Intelligence is a current feature,
+not a demo page. Career Dashboard was removed on 2026-10-26.
 
 Gmail authorization is owner opt-in and `gmail.readonly`. It uses separate
-client credentials, state, nonce, PKCE and an encrypted refresh token. Backfill
-is preview-only. Incremental sync uses the Gmail history cursor. The owner can
-pause, disconnect, purge snippets, review a decision, correct evidence and undo
-an event. `backend/scripts/sync_gmail.py` is a one-shot command; this file does
+client credentials, state, nonce, PKCE and an encrypted refresh token.
+Incremental sync uses the Gmail history cursor. The owner can pause,
+disconnect, purge snippets, decide an email, correct evidence and undo an
+event. `backend/scripts/sync_gmail.py` is a one-shot command; this file does
 not record a production timer for it.
 
-Automatic outcomes require both the global
-`GMAIL_AUTO_OUTCOMES_ALLOWED=true` and the connection's owner-approved setting.
-The default is false. A candidate email must have explicit newest unquoted
-outcome text, an exact requisition, exactly one matching application, aligned
-DMARC, an employer-matching sender host, a submission before the email, no
-newer state and no protected terminal-state conflict. Shared ATS senders or
-personal mail alone are insufficient. Backfill never auto-writes status.
+Automatic rejections (owner decision 2026-10-26, supersedes "backfill is
+preview-only" and "nothing is rejected automatically"): `backend/app/inbox/
+reconcile.py` parser version 2 records a rejection without a manual step when
+the newest unquoted text has explicit rejection wording plus a recruiting word
+(not a withdrawal), Gmail's own DMARC result aligns with the visible sender,
+the sender is not a personal mailbox, and exactly one application fits: its
+job ID (labelled forms such as Ref, Req, Job ID, Requisition), its exact title
+at the named company, or the only application at a company named in the
+sender, subject or sender domain whose title the email does not contradict.
+Two possible applications, an email more than 24 hours before the application
+was marked, a final status (accepted, withdrawn, offer) or a later owner stage
+send it to review instead. A rejection of an already rejected application only
+adds the email's date. This applies to live sync, historical import and
+`/api/inbox/recheck`. `GMAIL_AUTO_REJECTIONS=false` turns it off server-side.
+Each change is a `verified_automation` event with Undo; undo returns the email
+to the queue and a later recheck never repeats an undone change.
+
+Interviews, assessments and offers keep the earlier rule: both the global
+`GMAIL_AUTO_OUTCOMES_ALLOWED=true` and the connection's owner setting, a live
+(not historical) import, an exact job ID and an employer-domain sender. Receipts
+("thank you for applying") are filed as decision `receipt` with no status
+change. Plain text is read when present, otherwise text extracted from HTML
+(never rendered or stored); only the 500-character snippet is retained. Review
+is one click: the full email is fetched live by `/messages/{id}/full`, the
+likeliest application is preselected, and Rejected, Interview, Assessment,
+Offer, receipt, unrelated and later are single actions. `POST /api/inbox/review`
+takes an optional `kind` so an owner-chosen assessment counts as one.
 
 Metrics are deliberately conservative:
 
@@ -2504,9 +2583,8 @@ Important backend commands are intentionally explicit:
 - `data_inventory.py`, persistence smoke scripts and source snapshot smoke
   scripts verify database behavior without printing private content.
 - `time_pages.py` times requests read-only in-process without a login session.
-  Its Analytics entry still calls the former `/api/dashboard`; update that
-  diagnostic entry to the new `/api/analytics` reads before using its Analytics
-  timing as evidence for the redesigned page. Other page timings remain useful.
+  Its Analytics entry calls `/api/analytics?days=30`. Inbox routes need an
+  owner session, so they are not timed there.
 - `create_owner.py` and `set_owner_email.py` mutate owner identity and require
   deliberate use against the intended database.
 - `import_petition_reports.py` accepts only reviewed official evidence.

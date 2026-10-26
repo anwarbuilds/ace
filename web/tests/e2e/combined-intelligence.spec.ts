@@ -56,42 +56,18 @@ for (const theme of ["dark", "light"] as const) {
       expect(await page.evaluate(() => window.scrollY)).toBe(beforeScroll);
     });
 
-    for (const [tab, name] of [["overview", "command-center"], ["outcomes", "outcome-lab"], ["strategy", "strategy-studio"], ["companies", "company-radar"], ["market", "market-signals"], ["international", "international-lens"], ["actions", "action-center"]] as const) {
-      test(`dashboard ${name} uses persisted data`, async ({ page }, info) => {
-        const errors = watchErrors(page);
-        await page.goto(`/app/dashboard?tab=${tab}`);
-        await expect(page.getByRole("heading", { name: "Career Intelligence" })).toBeVisible();
-        await expect(page.getByText("ACE records as of")).toBeVisible();
-        expect(await page.evaluate(TEXT_SCAN)).toEqual([]);
-        expect(await page.evaluate(DRAWN_SCAN)).toEqual([]);
-        expect(errors).toEqual([]);
-        await page.screenshot({ path: capturePath(info, theme, name), fullPage: true });
-      });
-    }
-
-    test("action center can complete and reopen without changing applications", async ({ page }) => {
-      await page.goto("/app/dashboard?tab=actions");
-      const before = (await (await page.request.get("/api/marks")).json()).applications_total;
-      const actions = page.locator(".intelligence-actions");
-      await expect(actions.getByRole("heading", {name: "Evidence-linked actions"})).toBeVisible();
-      const first = actions.locator(".intelligence-action").first();
-      await expect(first).toBeVisible();
-      const title = await first.locator("strong").innerText();
-      await first.getByRole("button", {name: "Complete"}).click();
-      await page.reload();
-      await actions.locator("details").getByText(/handled actions/).click();
-      const handled = actions.locator("details .intelligence-action").filter({hasText:title}).first();
-      await handled.getByRole("button", {name: "Reopen"}).click();
-      await expect(actions.locator(".intelligence-action").filter({hasText:title}).first().getByRole("button", {name: "Complete"})).toBeVisible();
-      expect((await (await page.request.get("/api/marks")).json()).applications_total).toBe(before);
+    test("Career Dashboard links now open Analytics", async ({ page }) => {
+      await page.goto("/app/dashboard?tab=overview");
+      await expect(page).toHaveURL(/\/app\/analytics/);
+      await expect(page.getByRole("link", { name: /Career Dashboard/ })).toHaveCount(0);
     });
 
     test("Inbox remains honest without Gmail configuration", async ({ page }, info) => {
       const errors = watchErrors(page);
       await page.goto("/app/applications/inbox");
-      await expect(page.getByRole("heading", { name: "Never guess the application." })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Inbox Intelligence", level: 1 })).toBeVisible();
       await expect(page.getByText("Setup required")).toBeVisible();
-      await expect(page.getByText("Pending status protection: ON")).toBeVisible();
+      await expect(page.getByText("Automatic rejections: ON")).toBeVisible();
       expect(await page.evaluate(TEXT_SCAN)).toEqual([]);
       expect(await page.evaluate(DRAWN_SCAN)).toEqual([]);
       expect(errors).toEqual([]);
