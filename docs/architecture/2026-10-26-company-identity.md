@@ -1,7 +1,10 @@
 # Shared company identity and automatic future logos, 2026-10-26
 
-Status: implemented and tested locally on `company-logo-consistency-20261026`,
-based on `wine-rose-platform` at `cdefb3f`, draft PR #1. Not deployed.
+Status: released in `21f563a` on 2026-10-26 after owner approval. PR #1 is merged.
+All 59 live assets passed hash checks; Apple details and automatic Shopify
+retrieval passed signed-in HTTP checks. Browser validation remains pending.
+See `2026-10-26-quick-fill-release.md` for production evidence and rollback.
+The following records the original local implementation audit.
 
 The owner requested the same authentic logo inside details and on lists, then
 clarified that every newly pulled employer must use automatic discovery. The

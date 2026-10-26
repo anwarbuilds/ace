@@ -100,6 +100,13 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
+**2026-10-26 production release:** API/web are healthy at `21f563a`; logo work,
+quick fill 1.29.0 and the existing Inbox fixes are included. All Analytics tabs
+and logo assets passed signed-in HTTP checks; application records stayed 929.
+Only API/web containers changed; schema 0050, environment and scheduler remain.
+Reload the unpacked extension and refresh employer tabs. Browser checks remain
+pending due to cooling. Evidence: `architecture/2026-10-26-quick-fill-release.md`.
+
 **2026-10-26 quick fill:** Local extension **1.29.0** replaces the main review/
 remember workflow with one **Fill all known answers** action and a shorter
 question editor. One verified routine answer fills equivalent empty prompts;

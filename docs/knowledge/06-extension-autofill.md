@@ -1118,3 +1118,31 @@ shell, no-submit boundary, motivation exclusion and protected choices remain.
   To use it, reload the unpacked extension at `chrome://extensions`, then refresh
   employer tabs. The owner will supply additional common questions while using
   applications; their private answers must never be committed to this repository.
+
+## 2026-10-26: Logos and quick fill deployed
+
+The owner explicitly requested all changes live after testing. Production API
+and website now run `21f563a5d36cf016391c034d6a5e4b8971ecf803`, healthy at
+12:17 Pacific. The current Inbox fixes from `3e4e25b` were merged and preserved.
+All four Analytics tabs and six other signed-in pages returned 200; Apple
+company/job details contain its logo, all 59 production assets match provenance,
+and automatic Shopify retrieval returned a verified 32 x 32 PNG. Anonymous logo
+access returned 401 and an unknown employer returned 204. Application records
+stayed 929 (882 posting applications, 47 external history) during verification.
+Gmail remained connected/ready; no sync or outcome operation was triggered.
+
+65 extension DOM tests, 258 matcher cases, Memory safety, 126 logo/auth backend
+tests, 60 Inbox/Analytics backend tests, 7 company and 8 Inbox render tests,
+TypeScript, lint and local/VM production builds passed. The 37 extension
+Playwright cases were collected only; Chrome is still prohibited for cooling.
+No browser screenshots or real employer-form verification are claimed.
+
+The private 445 MiB database backup passed gzip and pg_restore list checks at
+`private-backups/logos-quick-fill-20261026T191230Z/` on the VM. Only API/web
+containers changed. Scheduler/PostgreSQL/Caddy IDs, .env bytes and schema 0050
+are unchanged. Verification used a five-minute owner session revoked immediately
+afterward; no credentials entered source or logs. Extension runtime source
+hashes match local **1.29.0**. Reload the unpacked extension in Chrome and refresh
+employer tabs; production deployment does not reload injected scripts. No Web
+Store publication occurred. Logo PR #1 is merged. Full evidence and rollback:
+`docs/architecture/2026-10-26-quick-fill-release.md`.
