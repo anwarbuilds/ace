@@ -8,7 +8,11 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import math
 import secrets
+import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlencode
 
 import httpx
@@ -25,6 +29,14 @@ class GmailError(ValueError):
 
 
 class GmailCursorExpired(GmailError):
+    pass
+
+
+class GmailTemporaryError(GmailError):
+    """Retry later without invalidating the owner's existing grant."""
+
+
+class GmailRateLimited(GmailTemporaryError):
     pass
 
 
@@ -108,20 +120,70 @@ def access_token(refresh: str, *, client_id: str, client_secret: str) -> str:
         raise GmailError("Gmail authorization expired or could not be refreshed.") from error
 
 
-def get_json(path: str, token: str, params: dict | None = None) -> dict:
+def _rate_limited(response: httpx.Response) -> bool:
+    if response.status_code == 429:
+        return True
+    if response.status_code != 403:
+        return False
     try:
-        response = httpx.get(API + path, headers={"Authorization": "Bearer " + token}, params=params, timeout=20)
-        if response.status_code == 404:
-            raise GmailCursorExpired("Gmail history cursor expired.")
-        response.raise_for_status()
-        value = response.json()
-        if not isinstance(value, dict):
-            raise ValueError("invalid response")
-        return value
-    except (httpx.HTTPError, ValueError) as error:
-        if isinstance(error, GmailError):
+        errors = response.json().get("error", {}).get("errors", [])
+        return any(item.get("reason") in {"rateLimitExceeded", "userRateLimitExceeded"}
+                   for item in errors if isinstance(item, dict))
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+
+def _retry_wait(response: httpx.Response | None, attempt: int) -> float:
+    delay = float(2 ** attempt)
+    header = response.headers.get("Retry-After", "") if response is not None else ""
+    if header:
+        try:
+            requested = float(header)
+            if math.isfinite(requested):
+                delay = max(delay, requested)
+        except ValueError:
+            try:
+                stamp = parsedate_to_datetime(header)
+                delay = max(delay, (stamp - datetime.now(timezone.utc)).total_seconds())
+            except (ValueError, TypeError, OverflowError):
+                pass
+    return delay
+
+
+def get_json(path: str, token: str, params: dict | None = None) -> dict:
+    # Only Google's explicit quota errors and transient failures are retried.
+    # Permission refusals are never bypassed; response bodies/tokens stay private.
+    for attempt in range(4):
+        response = None
+        error = None
+        limited = False
+        try:
+            response = httpx.get(API + path, headers={"Authorization": "Bearer " + token}, params=params, timeout=20)
+            if response.status_code == 404:
+                raise GmailCursorExpired("Gmail history cursor expired.")
+            limited = _rate_limited(response)
+            if not limited and response.status_code not in {500, 502, 503, 504}:
+                if response.status_code == 401:
+                    raise GmailError("Gmail authorization is no longer valid. Reconnect Gmail.")
+                if response.status_code == 403:
+                    raise GmailError("Google denied Gmail access. Check Gmail API and read-only permission in the Google project.")
+                response.raise_for_status()
+                value = response.json()
+                if not isinstance(value, dict):
+                    raise ValueError("invalid response")
+                return value
+        except GmailError:
             raise
-        raise GmailError("Gmail read could not be completed.") from error
+        except httpx.TransportError as exc:
+            error = exc
+        except (httpx.HTTPError, ValueError) as exc:
+            raise GmailError("Gmail read could not be completed.") from exc
+        delay = _retry_wait(response, attempt)
+        if attempt == 3 or delay > 8:
+            if limited:
+                raise GmailRateLimited("Google temporarily limited Gmail reads. Wait before retrying the preview or catch-up. Your Gmail connection is still authorized.")
+            raise GmailTemporaryError("Gmail is temporarily unavailable. Try again later; your saved connection is unchanged.") from error
+        time.sleep(delay + secrets.randbelow(250) / 1000)
 
 
 def revoke(refresh: str) -> None:

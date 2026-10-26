@@ -309,6 +309,14 @@ def automation(body: AutomationUpdate, request: Request, session: Session = Depe
     return _public(conn)
 
 
+def _new_message_ids(session: Session, conn: GmailConnectionRecord, message_ids: list[str]) -> tuple[list[str], int]:
+    """Already imported evidence needs no second Gmail detail read."""
+    unique = list(dict.fromkeys(message_ids))
+    existing = set(session.scalars(select(GmailMessageRecord.gmail_id).where(
+        GmailMessageRecord.connection_id == conn.id, GmailMessageRecord.gmail_id.in_(unique)))) if unique else set()
+    return [key for key in unique if key not in existing], len(existing)
+
+
 def sync_once(session: Session, conn: GmailConnectionRecord) -> dict:
     """Resumable catch-up. Advance the cursor only after evidence commits."""
     if conn.state != "ready" or not conn.encrypted_refresh_token:
@@ -345,7 +353,10 @@ def sync_once(session: Session, conn: GmailConnectionRecord) -> dict:
         if not partial:
             profile = gmail.get_json("/profile", token)
             next_cursor = str(profile.get("historyId")) if profile.get("historyId") else None
-    for message_id in dict.fromkeys(message_ids):
+    new_ids, duplicates = _new_message_ids(session, conn, message_ids)
+    if duplicates:
+        counts["duplicate"] = duplicates
+    for message_id in new_ids:
         try:
             data = gmail.get_json("/messages/" + message_id, token, {"format": "full"})
         except gmail.GmailCursorExpired:
@@ -370,9 +381,10 @@ def sync(request: Request, session: Session = Depends(get_session)) -> dict:
         return sync_once(session, conn)
     except gmail.GmailError as exc:
         conn.last_error = str(exc)
-        conn.state = "error"
+        if not isinstance(exc, gmail.GmailTemporaryError):
+            conn.state = "error"
         session.commit()
-        raise HTTPException(502, str(exc)) from exc
+        raise HTTPException(429 if isinstance(exc, gmail.GmailRateLimited) else 502, str(exc)) from exc
 
 
 class SyncRequest(BaseModel):
@@ -396,8 +408,14 @@ def backfill(body: SyncRequest, request: Request, session: Session = Depends(get
         batch = gmail.get_json("/messages", token, {"q": f"after:{cutoff}", "maxResults": 100, **({"pageToken": body.page_token} if body.page_token else {})})
         identities = _identities(session)
         counts: dict[str, int] = {}
-        for item in batch.get("messages", []):
-            data = gmail.get_json("/messages/" + str(item["id"]), token, {"format": "full"})
+        new_ids, duplicates = _new_message_ids(session, conn, [str(item["id"]) for item in batch.get("messages", [])])
+        if duplicates:
+            counts["duplicate"] = duplicates
+        for message_id in new_ids:
+            try:
+                data = gmail.get_json("/messages/" + message_id, token, {"format": "full"})
+            except gmail.GmailCursorExpired:
+                continue  # Deleted after listing; no evidence or outcome exists.
             outcome = _ingest(session, conn, data, identities, preview=True)
             counts[outcome] = counts.get(outcome, 0) + 1
         conn.last_synced_at = datetime.now(timezone.utc)
@@ -413,7 +431,7 @@ def backfill(body: SyncRequest, request: Request, session: Session = Depends(get
         assert conn is not None
         conn.last_error = str(exc)
         session.commit()
-        raise HTTPException(502, str(exc)) from exc
+        raise HTTPException(429 if isinstance(exc, gmail.GmailRateLimited) else 502, str(exc)) from exc
 
 
 def _message_rows(session: Session, connection_id: int, decision: str | None = None) -> list[GmailMessageRecord]:

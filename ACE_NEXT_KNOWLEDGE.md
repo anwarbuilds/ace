@@ -404,6 +404,45 @@ After the first release (JIT off) it measured, in ms: `/api/stats` 216,
 
 ## Current working state on 2026-10-25
 
+### Gmail connection and rate-limit diagnosis, 2026-10-25 Pacific
+
+The owner subsequently created the separate Web OAuth client `ace gmail` in
+project `acee`, with the correct Inbox callback, saved the Gmail read-only and
+basic identity scopes, and added a test user. The owner configured private
+`GMAIL_*` values and authorized Gmail. Earlier zero-connection observations
+below describe the Analytics release snapshot, not the current connection.
+Neither the owner's email address, credential values nor Console/Inbox
+screenshots are retained in this public document.
+
+Read-only diagnostics verified token refresh, profile, message listing and 100
+message reads. A larger bounded diagnostic reproduced HTTP 403 with Google's
+`rateLimitExceeded` reason at message 261. This is a quota/read failure, not
+invalid credentials. The diagnostic imported no evidence and changed no
+application records, scopes, grants or sync state. Production still had an
+unfinished initial import, no successful-sync timestamp/cursor and an error
+state at that check. Reconnecting or creating another client is unnecessary.
+
+A local fix is prepared in `backend/app/inbox/gmail.py` and
+`backend/app/api/routers/inbox.py`: four bounded attempts with exponential
+backoff/jitter for explicit quota, transport and transient server failures;
+respect for Retry-After; no retry of ordinary permission refusals; sanitized
+actionable messages; skip detail downloads for already imported IDs; tolerate
+messages deleted after listing; preserve ready authorization on temporary
+failure; and return 429 for exhausted rate limits. No new Gmail permission,
+automatic outcome setting, schema, scheduler or frontend change is involved.
+`backend/tests/test_gmail_reads.py` uses only fictional Google responses and
+isolated SQLite data. The final focused Gmail/Inbox/Analytics/API/marks/petition/
+Pulls set passed 112 tests; whitespace and zero-hit dash checks passed. No
+frontend changed and no browser suite was run. This fix is not deployed; a new API-only production
+release needs the owner's explicit approval. Existing error-state connections
+still need the owner's Resume sync action; the fix does not silently reset
+their saved state or run a mailbox import.
+
+The existing Inbox `Emails reviewed`/review tiles use the bounded displayed
+message list; 100 displayed emails is not a full-mailbox count or evidence of
+complete observation coverage. Completing email import does not unlock missing
+submitted-resume/channel attribution, response-rate coverage or petition data.
+
 ### Approved Analytics redesign, released on 2026-10-25
 
 The four-tab Analytics design in `design/ace-analytics-pixel-lock/` is implemented

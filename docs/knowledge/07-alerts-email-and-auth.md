@@ -4,6 +4,25 @@
 >
 > Read this when: you touch alert emails, freshness or Resend, or you start the sign-in work (read the authentication entry first).
 
+## Gmail connected, quota failure during initial import (2026-10-25)
+
+The owner configured the separate Gmail OAuth client and read-only grant.
+Production's generic `Gmail read could not be completed` was reproduced by a
+read-only diagnostic as HTTP 403 `rateLimitExceeded` on message 261, after
+smaller reads succeeded. Token refresh and access worked; creating another
+client or reconnecting does not fix this quota response. No email content,
+tokens or owner screenshots are retained here.
+
+Prepared local remediation: bounded exponential retries for explicit Google
+quota/temporary failures, respect Retry-After, skip already-imported message
+detail reads and deleted messages, retain authorization state on temporary
+failure and return a clear 429 instead of a generic connection failure.
+Ordinary permission refusals are never retried. Tests use fictional responses
+and isolated databases; the final focused set passed 112 tests with clean
+whitespace and zero-hit dash checks. This is pending an explicitly approved API-only release;
+it requires no migration, scheduler operation, permission expansion or
+automatic-outcome enablement. See the root continuity file for current status.
+
 ## Baseline suppression was removed, then replaced by freshness
 
 The first design suppressed all alerts on a source's first poll. That
