@@ -15,6 +15,10 @@ everything uncertain goes to review with the likeliest application first.
 Parser version 3 (2026-10-26) never files an email as a receipt when it also
 sounds like a decision, or when only part of it could be read: a rejection
 that opens with "thank you for applying" must reach the owner.
+
+Parser version 4 (2026-10-26) reads the employer from a Workday sender:
+Workday mails from <tenant>@myworkday.com, and the tenant names the employer
+("generalmotors" is General Motors), so those emails can match by company.
 """
 
 from __future__ import annotations
@@ -25,7 +29,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from urllib.parse import urlparse
 
-PARSER_VERSION = "3"
+PARSER_VERSION = "4"
 
 _OTHERS = r"(?:other|another|a\s+different|different|more\s+qualified|alternative)\s+(?:candidates?|applicants?|individuals?|profiles?)"
 _ONWARD = r"(?:moving\s+(?:forward|ahead)|proceeding|progressing|advancing|continuing)"
@@ -241,7 +245,11 @@ def _sender_trusted(evidence: EmailEvidence) -> bool:
 def _sender_parts(sender: str) -> tuple[str, list[str]]:
     """The display name, and the labels of a domain that can name an employer."""
     name, address = parseaddr(sender)
-    domain = address.rpartition("@")[2].casefold()
+    local, _, domain = address.casefold().rpartition("@")
+    if domain == "myworkday.com" or domain.endswith(".myworkday.com"):
+        # Workday sends as the employer's tenant: generalmotors@myworkday.com.
+        tenant = re.sub(r"\d+$", "", local)
+        return name, [tenant] if re.fullmatch(r"[a-z][a-z0-9]{2,}", tenant) else []
     if not domain or domain in _UNTRUSTED_DOMAIN or any(platform in domain for platform in _PLATFORM):
         return name, []
     return name, [label for label in domain.split(".")[:-1] if len(label) >= 2]

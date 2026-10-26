@@ -277,3 +277,15 @@ def test_html_with_an_unclosed_head_is_still_read():
     evidence = _message_evidence(data)
     assert evidence.complete and "won't be moving forward" in evidence.body
     assert classify(evidence)[0] == "rejection"
+
+
+def test_a_workday_tenant_names_the_employer():
+    gm = [ApplicationIdentity("job:21", "General Motors", "Software Engineer", None, NOW - timedelta(days=5), "applied"),
+          ApplicationIdentity("job:22", "Fictional Labs", "Software Engineer", None, NOW - timedelta(days=5), "applied")]
+    evidence = EmailEvidence("generalmotors@myworkday.com", "Your interest in Software Engineer at GM",
+                             "Thank you for applying. Unfortunately, we have decided to pursue other candidates.", NOW, True)
+    result = reconcile(evidence, gm)
+    assert (result.disposition, result.target) == ("verified", "job:21")
+    # Other platforms still never name an employer by their address.
+    other = reconcile(EmailEvidence("generalmotors@us.greenhouse-mail.io", evidence.subject, evidence.body, NOW, True), gm)
+    assert other.target is None

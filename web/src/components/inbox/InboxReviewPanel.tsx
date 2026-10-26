@@ -48,7 +48,32 @@ const loaded = new Map<number,FullEmail>();
 /** "Wayfern Talent <no-reply@ashbyhq.example>" as its name and address. */
 export function senderParts(value:string): {name:string; address:string} {
   const match = value.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
-  return match ? {name:match[1].trim()||match[2], address:match[2]} : {name:value.trim(), address:""};
+  if (match) return {name:match[1].trim()||match[2], address:match[2]};
+  return {name:value.trim(), address:value.includes("@")?value.trim():""};
+}
+
+// Letters and digits only, and initials: "General Motors" is generalmotors and gm.
+const squash=(value:string)=>value.toLocaleLowerCase().replace(/[^a-z0-9]/g,"");
+const initials=(value:string)=>value.split(/[^A-Za-z0-9]+/).filter(Boolean).map(word=>word[0]).join("").toLocaleLowerCase();
+// Shared recruiting platforms and personal mail never name the employer.
+const SHARED=/greenhouse|lever|workday|smartrecruiters|ashby|icims|jobvite|taleo|successfactors|workable|bamboohr|eightfold|avature|phenom|oraclecloud|brassring|rippling|teamtailor|recruitee|paylocity|ultipro|ukg|adp|applytojob|breezy|csod|hirevue|hackerrank|codesignal|linkedin|gmail|googlemail|outlook|hotmail|yahoo|icloud|proton/;
+
+/** Applications the sender or subject seems to name, offered when ACE could not tell. */
+export function likelyApplications(message:InboxMessage, applications:InboxApplication[]): InboxApplication[] {
+  const {name,address}=senderParts(message.sender);
+  const [local="",domain=""]=address.toLocaleLowerCase().split("@");
+  const hints=[name.includes("@")?"":squash(name)];
+  // Workday sends as the employer's tenant: generalmotors@myworkday.com.
+  if(domain.endsWith("myworkday.com"))hints.push(squash(local.replace(/\d+$/,"")));
+  else if(!SHARED.test(domain))hints.push(...domain.split(".").slice(0,-1).map(squash));
+  const named=squash(message.subject);
+  const acronyms=new Set(message.subject.match(/\b[A-Z][A-Z0-9&]{1,4}\b/g)?.map(word=>squash(word))??[]);
+  return applications.filter(app=>{
+    const company=squash(app.company);
+    if(company.length<2)return false;
+    return hints.some(hint=>hint.length>=3&&(hint===company||hint.startsWith(company)||(company.length>=5&&company.startsWith(hint))))
+      ||(company.length>=4&&named.includes(company))||acronyms.has(initials(app.company));
+  }).slice(0,8);
 }
 
 /** "3 minutes ago"; empty until the page knows the time. */
@@ -100,7 +125,9 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
   const target=byKey.get(targetKey);
   const candidates=message.candidate_keys.map(key=>byKey.get(key)).filter((a):a is InboxApplication=>Boolean(a));
   const query=search.trim().toLocaleLowerCase();
-  const options=query?applications.filter(a=>`${a.company} ${a.title} ${a.requisition_id??""}`.toLocaleLowerCase().includes(query)).slice(0,30):candidates;
+  const guesses=!query&&!candidates.length?likelyApplications(message,applications):[];
+  // Search also finds "gm" and "generalmotors" for General Motors.
+  const options=query?applications.filter(a=>`${a.company} ${a.title} ${a.requisition_id??""} ${squash(a.company)} ${initials(a.company)}`.toLocaleLowerCase().includes(query)).slice(0,30):candidates.length?candidates:guesses;
   const linked=message.selected_application_key?byKey.get(message.selected_application_key):undefined;
   const change=events.find(e=>e.gmail_message_id===message.id&&e.kind!=="undo"&&e.application_key===message.selected_application_key&&["owner","verified_automation"].includes(e.actor)&&!events.some(other=>other.undo_of_id===e.id));
   const decide=(outcome:typeof OUTCOMES[number])=>{if(target)void action(()=>sendJson("POST","/api/inbox/review",{message_id:message.id,application_key:target.key,status:outcome.status,expected_status:target.status,confirmed:true,kind:outcome.kind}),`${outcome.done}: ${clean(target.company)}`);};
@@ -116,7 +143,7 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
       <div className="inbox-chips">{message.classification!=="unknown"&&<span className={`inbox-kind k-${message.classification}`}>{KIND[message.classification]??clean(message.classification)}</span>}<span className={`inbox-state d-${message.decision}`}>{STATE[message.decision]??clean(message.decision)}</span></div>
       <h2>{clean(full?.subject??message.subject)||"No subject"}</h2>
       <dl className="inbox-mail-meta">
-        <dt>From</dt><dd><strong>{clean(sender.name)}</strong>{sender.address&&<span className="inbox-address"> &lt;{sender.address}&gt;</span>}</dd>
+        <dt>From</dt><dd><strong>{clean(sender.name)}</strong>{sender.address&&sender.address!==sender.name&&<span className="inbox-address"> &lt;{sender.address}&gt;</span>}</dd>
         {full?.to?<><dt>To</dt><dd>{clean(full.to)}</dd></>:null}
         <dt>Received</dt><dd>{parseDate(message.received_at)?.toLocaleString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"})}{ago?<span className="inbox-address"> ({ago})</span>:null}</dd>
       </dl>
@@ -141,6 +168,7 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
         <div className="inbox-target-head"><h3>{target?guessed?"ACE thinks this is about":"Application":"Which application?"}</h3>{target&&!choosing&&<button className="btn btn-sm" onClick={()=>setChoosing(true)}>Change</button>}</div>
         {target&&!choosing?<AppCard app={target}/>:<div className="inbox-picker">
           <input autoComplete="off" aria-label="Search your applications" placeholder="Search company, role or job ID" value={search} onChange={event=>setSearch(event.target.value)}/>
+          {guesses.length>0&&<p className="inbox-muted">Possible matches from the sender and subject. Click the right one, or search above.</p>}
           {options.length?<div className="inbox-options">{options.map(a=><button key={a.key} className={a.key===targetKey?"on":""} onClick={()=>{setTargetKey(a.key);setChoosing(false);setSearch("");}}><AppCard app={a}/></button>)}</div>:<p className="inbox-muted">{query?"No application matches that search.":"ACE could not tell which application this is. Search for it above."}</p>}
         </div>}
       </div>
