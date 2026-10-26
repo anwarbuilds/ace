@@ -181,7 +181,7 @@ def get_json(path: str, token: str, params: dict | None = None) -> dict:
         delay = _retry_wait(response, attempt)
         if attempt == 3 or delay > 8:
             if limited:
-                raise GmailRateLimited("Google temporarily limited Gmail reads. Wait before retrying the preview or catch-up. Your Gmail connection is still authorized.")
+                raise GmailRateLimited("Google limited Gmail reads. Wait, then retry. Your connection is still authorized.")
             raise GmailTemporaryError("Gmail is temporarily unavailable. Try again later; your saved connection is unchanged.") from error
         time.sleep(delay + secrets.randbelow(250) / 1000)
 

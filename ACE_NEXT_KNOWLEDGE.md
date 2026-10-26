@@ -406,6 +406,51 @@ After the first release (JIT off) it measured, in ms: `/api/stats` 216,
 
 ### Gmail connection and rate-limit diagnosis, 2026-10-25 Pacific
 
+#### Corrective review interface and error persistence
+
+The owner then reported a sync 500 and could not find any review controls after
+selecting a 90-day import window. Sanitized production stack/error-category
+inspection identified `StringDataRightTruncation`: the previous explanatory
+quota error exceeded `gmail_connections.last_error`'s 120-character column.
+The earlier SQLite tests did not enforce that PostgreSQL limit. The corrective
+change shortens the message and bounds stored error strings in both request
+handlers and the optional one-shot Gmail script, without a migration.
+
+Read-only counts at diagnosis were 145 imported messages and 43 pending reviews.
+The old screen's 100/30 tiles described only its latest 100-message response,
+and its default Review queue included ignored mail. Selecting ignored mail
+intentionally had no manual-outcome form, making pending review inaccessible
+to the owner. `90 days` is an import window; `30` was a message count, not days.
+
+The correction adds global owner-connection counts, pending-only filtering
+before pagination and 50-message UI pages. The default queue includes review,
+exact-preview and deferred messages; all/ignored mail remain separate views.
+Needs your review is clickable. The guided panel contains application search,
+a human-readable application selector, an initially blank outcome selector,
+explicit confirmation and defer/unrelated controls. Selecting another email
+clears all choices. There is no default Rejected status. Import-window changes
+reset the page token and retain the chosen window in the URL; progress wording
+distinguishes importing mail from confirming outcomes. New reviewed events use
+the original email timestamp while recorded-at remains the audit time. Existing
+events and application states are not backfilled or automatically changed.
+
+Verification: 116 focused backend tests, four additional runs against a
+disposable local PostgreSQL fixture, and eight actual React markup render
+checks passed. The test PostgreSQL container was stopped and removed. Four
+fictional Playwright interaction regressions were added and collected, but not
+executed: the laptop's cooling restriction still prohibits Chrome. TypeScript,
+ESLint and production build passed. No production mailbox content or screenshots
+enter fixtures. This correction continues the owner-requested Gmail/Analytics
+rollout; deployment evidence is recorded after activation rather than inferred
+from these local checks.
+
+New files: `web/src/components/inbox/InboxReviewPanel.tsx`,
+`web/tests/inbox-review-render.test.mjs` and
+`web/tests/e2e/inbox-review.spec.ts`. Existing Inbox client, shared Inbox CSS,
+router, Gmail client/script and focused regression tests carry the other
+changes. Career Dashboard, the extension, discovery, schema, Gmail grants and
+automatic-outcome preferences remain unchanged.
+
 The owner subsequently created the separate Web OAuth client `ace gmail` in
 project `acee`, with the correct Inbox callback, saved the Gmail read-only and
 basic identity scopes, and added a test user. The owner configured private

@@ -8,10 +8,10 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr, parsedate_to_datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
@@ -380,7 +380,7 @@ def sync(request: Request, session: Session = Depends(get_session)) -> dict:
     try:
         return sync_once(session, conn)
     except gmail.GmailError as exc:
-        conn.last_error = str(exc)
+        conn.last_error = str(exc)[:120]
         if not isinstance(exc, gmail.GmailTemporaryError):
             conn.state = "error"
         session.commit()
@@ -429,30 +429,47 @@ def backfill(body: SyncRequest, request: Request, session: Session = Depends(get
         session.rollback()
         conn = _connection(session, current_owner(request))
         assert conn is not None
-        conn.last_error = str(exc)
+        conn.last_error = str(exc)[:120]
         session.commit()
         raise HTTPException(429 if isinstance(exc, gmail.GmailRateLimited) else 502, str(exc)) from exc
 
 
-def _message_rows(session: Session, connection_id: int, decision: str | None = None) -> list[GmailMessageRecord]:
-    """Apply Analytics review filters before the existing bounded mailbox page."""
+def _message_query(connection_id: int, decision: str | None = None):
     query = select(GmailMessageRecord).where(GmailMessageRecord.connection_id == connection_id)
-    if decision in {"review", "exact_preview"}:
+    if decision == "pending":
+        query = query.where(GmailMessageRecord.decision.in_(("review", "exact_preview", "deferred")))
+    elif decision in {"review", "exact_preview", "deferred", "ignored", "manual", "automatic", "unrelated"}:
         query = query.where(GmailMessageRecord.decision == decision)
     elif decision == "ambiguous":
         query = query.where(GmailMessageRecord.decision == "review", GmailMessageRecord.candidate_keys[1].as_string().is_not(None))
     elif decision is not None:
         raise HTTPException(422, "Choose a supported evidence review filter.")
-    return list(session.scalars(query.order_by(GmailMessageRecord.received_at.desc(), GmailMessageRecord.id.desc()).limit(100)))
+    return query
+
+
+def _message_rows(session: Session, connection_id: int, decision: str | None = None, offset: int = 0, limit: int = 100) -> list[GmailMessageRecord]:
+    """Filter before pagination, so ignored mail cannot hide pending evidence."""
+    return list(session.scalars(_message_query(connection_id, decision).order_by(
+        GmailMessageRecord.received_at.desc(), GmailMessageRecord.id.desc()).offset(offset).limit(limit)))
 
 
 @router.get("/api/inbox/messages")
-def messages(request: Request, session: Session = Depends(get_session), decision: str | None = None) -> dict:
+def messages(request: Request, session: Session = Depends(get_session), decision: str | None = None,
+             offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=100)) -> dict:
     conn = _connection(session, current_owner(request))
     if not conn:
-        return {"items": [], "review_count": 0}
-    rows = _message_rows(session, conn.id, decision)
-    return {"items": [{"id": r.id, "received_at": r.received_at.isoformat(), "sender": r.sender, "subject": r.subject, "snippet": r.snippet, "classification": r.classification, "requisition_id": r.requisition_id, "decision": r.decision, "candidate_keys": r.candidate_keys or [], "reason": r.decision_reason, "selected_application_key": r.selected_application_key} for r in rows], "review_count": sum(r.decision in {"review", "exact_preview"} for r in rows)}
+        return {"items": [], "review_count": 0, "total": 0, "offset": offset, "has_more": False,
+                "counts": {"stored": 0, "needs_review": 0, "automatic": 0, "reviewed": 0}}
+    by_decision = dict(session.execute(select(GmailMessageRecord.decision, func.count()).where(
+        GmailMessageRecord.connection_id == conn.id).group_by(GmailMessageRecord.decision)).all())
+    review_count = sum(by_decision.get(key, 0) for key in ("review", "exact_preview", "deferred"))
+    total = session.scalar(select(func.count()).select_from(_message_query(conn.id, decision).subquery())) or 0
+    rows = _message_rows(session, conn.id, decision, offset, limit)
+    return {"items": [{"id": r.id, "received_at": r.received_at.isoformat(), "sender": r.sender, "subject": r.subject, "snippet": r.snippet, "classification": r.classification, "requisition_id": r.requisition_id, "decision": r.decision, "candidate_keys": r.candidate_keys or [], "reason": r.decision_reason, "selected_application_key": r.selected_application_key} for r in rows],
+            "review_count": review_count, "total": total, "offset": offset, "has_more": offset + len(rows) < total,
+            "counts": {"stored": sum(by_decision.values()), "needs_review": review_count,
+                       "automatic": by_decision.get("automatic", 0),
+                       "reviewed": sum(by_decision.get(key, 0) for key in ("manual", "automatic", "unrelated"))}}
 
 
 @router.get("/api/inbox/applications")
@@ -490,7 +507,7 @@ def review(body: ManualDecision, request: Request, session: Session = Depends(ge
     before = target.application_status
     target.application_status = body.status
     target.status_changed_at = datetime.now(timezone.utc)
-    event = _append_event(session, body.application_key, "manual_correction", before, body.status, actor="owner", reason="Owner selected the exact application after reviewing email evidence", message_id=message.id)
+    event = _append_event(session, body.application_key, "manual_correction", before, body.status, actor="owner", reason="Owner selected the exact application after reviewing email evidence", message_id=message.id, occurred_at=message.received_at)
     message.decision = "manual"
     message.selected_application_key = body.application_key
     session.commit()

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from backend.app.api.routers.inbox import sync_once
 from backend.app.db.models import GmailConnectionRecord
 from backend.app.db.session import SessionLocal
-from backend.app.inbox.gmail import GmailError
+from backend.app.inbox.gmail import GmailError, GmailTemporaryError
 
 
 def main() -> int:
@@ -20,8 +20,9 @@ def main() -> int:
             try:
                 sync_once(session, connection)
             except GmailError as exc:
-                connection.state = "error"
-                connection.last_error = str(exc)
+                if not isinstance(exc, GmailTemporaryError):
+                    connection.state = "error"
+                connection.last_error = str(exc)[:120]
                 session.commit()
                 failed += 1
         return 1 if failed else 0
