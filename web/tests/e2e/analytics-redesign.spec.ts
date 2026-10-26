@@ -87,9 +87,9 @@ test("company selector, verified petitions, logo asset and monogram fallback wor
   await page.getByLabel("Company evidence").selectOption("Google");
   await expect(page).toHaveURL(/company=Google/);
   await expect(page.getByText("No verified USCIS approval and denial series for Google.", {exact:true})).toBeVisible();
-  await page.locator("a[href='#analytics-methodology']").click();
-  await page.locator("#analytics-methodology summary").click();
-  await expect(page.getByText(/Neither measure represents total hiring/)).toBeVisible();
+  // The owner removed the sponsorship methodology section on 2026-10-26.
+  await expect(page.getByText("Sponsorship evidence methodology")).toHaveCount(0);
+  await expect(page.locator("a[href='#analytics-methodology']")).toHaveCount(0);
 });
 
 test("chart controls, data table and keyboard navigation work",async({page})=>{

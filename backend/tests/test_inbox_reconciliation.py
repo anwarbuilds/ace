@@ -244,6 +244,9 @@ def test_rejection_that_opens_with_thanks_from_a_shared_platform_is_recorded():
     "We regret that we cannot offer you this role.",
     "Your application was not selected for the next stage.",
     "The position is no longer available.",
+    "We have chosen to pursue other candidates at this time.",
+    "We have decided to pursue other candidates who align more closely with the role requirements.",
+    "After review, the team has chosen to pursue another candidate for this position.",
 ])
 def test_more_rejection_wording_is_recognized(sentence):
     assert classify(ats_mail("Your application", "Thank you for applying. " + sentence))[0] == "rejection"

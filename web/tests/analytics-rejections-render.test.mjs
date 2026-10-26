@@ -60,21 +60,34 @@ const base = {
 };
 const render = (d) => renderToStaticMarkup(React.createElement(AnalyticsView, { d, connection: null, tab: "companies", query: { tab: "companies" } }));
 
-test("Rejected companies shows totals, roles, progress and dates, newest first", () => {
+test("Rejected companies keeps the card grid, newest first, with no table or paging here", () => {
   const html = render(base);
   assert.match(html, /<h2>Rejected companies<\/h2>/);
   assert.doesNotMatch(html, /Companies that rejected you/);
-  assert.match(html, /3 rejected applications at 2 companies in this selection, newest rejection first\./);
-  assert.match(html, /<strong>1<\/strong><span>Dated by an email<\/span>/);
-  assert.match(html, /<strong>Oct 26, 2026<\/strong><span>Latest rejection<\/span>/);
-  assert.match(html, /Full-Stack Software Engineer; Machine Learning Engineer, Perception<span class="an-muted"> and 1 more<\/span>/);
-  assert.match(html, /<span class="an-rejected-count">2 of 6<\/span>/);
-  assert.match(html, /data-label="Still in progress there">4</);
-  assert.match(html, /No date/);
+  assert.match(html, /2 companies, 3 rejections, for applications in this selection\./);
+  assert.match(html, /<ul class="an-rejected-list">/);
+  assert.match(html, /<strong>Wayfern<\/strong><small>Latest Oct 26, 2026<\/small><\/span><b>2 of 6<\/b>/);
+  assert.match(html, /<strong>Northwind Robotics<\/strong><small>Date not recorded<\/small>/);
   assert.ok(html.indexOf("Wayfern") < html.indexOf("Northwind Robotics"));
   assert.match(html, /company=Wayfern&amp;evidence=rejection/);
   assert.match(html, /View rejected applications/);
+  assert.doesNotMatch(html, /an-rejected-table|an-rejection-stats|Dated by an email/);
+  assert.doesNotMatch(html, /Newest \d+ of/);
   assert.doesNotMatch(html, /[\u2013\u2014]/);
+});
+
+test("many rejected companies show the newest 15 and send the rest to the searchable list", () => {
+  const many = Array.from({ length: 20 }, (_, i) => ({ name: `Fiction ${i + 1}`, rejections: 1, applications: 1, latest_at: null, dated: 0, roles: [], in_progress: 0 }));
+  const html = render({ ...base, rejected_companies: many });
+  assert.equal((html.match(/<li>/g) ?? []).length, 15);
+  assert.match(html, /Newest 15 of 20 companies\./);
+  assert.match(html, /Search all rejected applications/);
+});
+
+test("the sponsorship methodology section is gone from the Companies tab", () => {
+  const html = render(base);
+  assert.doesNotMatch(html, /Sponsorship evidence methodology|analytics-methodology|>Methodology/);
+  assert.match(html, /Companies with verified sponsorship evidence/);
 });
 
 test("with no rejection the panel says so instead of showing an empty table", () => {
