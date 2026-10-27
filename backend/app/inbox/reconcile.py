@@ -31,7 +31,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from urllib.parse import urlparse
 
-PARSER_VERSION = "7"
+PARSER_VERSION = "8"
 MAX_CLASSIFIER_BODY = 10000
 
 _OTHERS = r"(?:other|another|a\s+different|different|more\s+qualified|alternative)\s+(?:candidates?|applicants?|individuals?|profiles?)"
@@ -221,6 +221,22 @@ def _labelled_ids(text: str) -> set[str]:
     return found
 
 
+def routine_notification(evidence: EmailEvidence) -> bool:
+    """Primary account/job-alert subjects do not establish an application outcome.
+
+    Do not search footers for these words: a real interview can contain links
+    to account settings or job alerts without becoming a notification.
+    """
+    subject = evidence.subject.casefold()
+    if _REJECTION.search(subject) or _INTERVIEW.search(subject) or _OFFER.search(subject):
+        return False
+    return bool(re.search(
+        r"\b(?:verify your (?:email|account)|(?:email|account) verification|verification code"
+        r"|reset (?:your )?password|password reset|sign[ -]?in code|one[ -]time (?:code|password)"
+        r"|job alerts?|job recommendations?|recommended jobs?|jobs? for you|new jobs? (?:for|matching)"
+        r"|job digest|jobs? you might|weekly (?:jobs?|career) digest)\b", subject))
+
+
 def classify(evidence: EmailEvidence) -> tuple[str, str | None]:
     subject = "" if _forwarded(evidence.subject) else evidence.subject
     text = f"{subject}\n{_new_text(evidence.body)}"
@@ -391,12 +407,14 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
 def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], account: str | None = None) -> Decision:
     if account and parseaddr(evidence.sender)[1].casefold() == account.casefold():
         return Decision("unknown", None, (), None, "ignored", "Sent by the connected account", False)
+    if routine_notification(evidence):
+        return Decision("unknown", None, (), None, "ignored", "Routine account notification or job alert", False)
     classification, req = classify(evidence)
     if classification == "unknown" and not application_related(evidence, applications):
         return Decision(classification, req, (), None, "ignored", "No explicit recruiting outcome", False)
     found = _match(evidence, applications, req)
     if classification == "unknown":
-        return Decision("unclear", found.requisition, found.ranked, None, "review", UNCLEAR_REASON, False)
+        return Decision("unclear", found.requisition, found.ranked, None, "update", "Saved application correspondence; no confirmed outcome to record", False)
     # A clipped body or snippet cannot establish that a later sentence names
     # another role or changes the apparent outcome. Preserve it for review.
     if not evidence.complete:

@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-27, all developed Inbox/Analytics changes live; parser-7 historical recheck running
+Last updated: 2026-10-27 11:06 Pacific, job-mail-only triage draft saved for continuation; live parser 7; exhaustive operator stopped
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -13,7 +13,308 @@ not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
-## Current live release, 2026-10-27T16:30Z
+## START HERE: job-related Inbox triage continuation, 2026-10-27 11:06 Pacific (18:06Z)
+
+This is the latest owner scope and handoff. It supersedes older statements that
+all Inbox work is finished, that parser 8 is live, or that the exhaustive
+parser-7 operator recheck should continue. The owner requested this knowledge
+save so a new chat can resume efficiently. **Implementation stopped at an
+unfinished local backend draft. No new job-mail-only release occurred.**
+
+### Owner intent, scope and approval boundary
+
+The owner objected that reviewing 1,318 messages defeats the purpose of Inbox
+Intelligence. Their latest instruction was: “Then do that. I'm still seeing this
+13018 waiting for me and you need not to go through each and every message.
+Only job-related should be fine, right? Why are you going through everything
+like trash and spam?” They then requested this handoff, specifically in
+`ACE_NEXT_KNOWLEDGE.md`. Do not create a second competing knowledge file.
+
+- Cover **job-application-related mail across ALL dates**, including archived
+  mail. Do not reintroduce a 30-day limit or silently discard old job evidence.
+- Exclude Spam, Trash and ordinary personal mail from normal discovery and
+  automatic body rechecks. The previous exhaustive ID audit included Spam/Trash
+  to establish a completeness baseline; that is not the desired ongoing product.
+- Automatically handle clear outcomes and routine mail; connect related evidence
+  when justified. Owner review is for a specific genuine ambiguity, not every
+  message a rule-based classifier fails to understand. Do not merely hide the
+  badge or label unprocessed outcomes as reviewed.
+- Retain searchable original evidence, recorded outcomes, owner filings, Undo,
+  application identities and truthful Analytics. Do not invent applications or
+  count pending mail as confirmed outcomes. Do not remove mail from Gmail.
+- The owner explicitly authorized building this improvement. The earlier
+  “everything live” approval activated exact parser-7 commit `3294139`; it does
+  not preapprove this new unfinished parser-8 implementation. Finish the code,
+  fictional focused tests and reviewable evidence, then ask for approval of the
+  specific API/web release. No migration/scheduler change/extension publication
+  is authorized as an incidental step.
+
+### Exact workspace and source state
+
+Work in **`/home/ubuntu/Documents/ace-inbox`**, branch
+`inbox-clarity-20261026`, Git remote `anwarbuilds/ace`. Before the handoff save,
+HEAD and the canonical `origin/wine-rose-platform` were
+`d1b9fd2` (documentation of the approved parser-7 activation). PR #7 is merged.
+This worktree is based on the fully released P1-P5/full-history implementation.
+Inspect status/log and fetch before editing or publishing; preserve concurrent
+owner work. Do not reset the draft or blindly overwrite it with remote source.
+
+The default session folder `/home/ubuntu/Documents/ace-next` is a separate
+worktree on **`extension-context-reuse-20261026` at `b5531ab`**. Its tracked
+runtime code is older. Its knowledge file is synchronized for this handoff,
+but Inbox development belongs in `ace-inbox`. Do not check out/merge or deploy
+that older extension branch just because it is the initial working directory.
+The existing untracked `ace-inbox/.venv` symlink and `web/node_modules` link
+must never be staged as project files.
+
+Unfinished runtime changes relative to the released `d1b9fd2` baseline are
+these six edited files plus one new module. This save retains them in a local
+WIP checkpoint commit on the Inbox branch, not a release or canonical push.
+Inspect `git log` and `git diff d1b9fd2 HEAD -- backend` as well as unstaged
+changes; a clean working tree does not make the draft validated:
+
+1. `backend/app/api/routers/inbox.py`.
+2. `backend/app/inbox/gmail.py`.
+3. `backend/app/inbox/full_history.py`.
+4. `backend/app/inbox/reconcile.py`.
+5. `backend/app/inbox/queue.py` (new; preserve it with the other draft edits).
+6. `backend/app/api/routers/analytics.py`.
+7. `backend/scripts/inbox_analytics_audit.py`.
+
+No frontend or test file has been updated for this new scope yet. The WIP
+checkpoint has not been pushed or deployed; canonical runtime remains parser 7. The new code
+is a **draft, not ready to release**. Only Python compilation and
+`git diff --check` have passed for it. No new focused tests, TypeScript, lint,
+DOM/browser checks, build or production verification has run for parser 8.
+The 293-pass result below belongs to the released parser-7 candidate only.
+
+### What is actually live and what was stopped
+
+- Website: https://ace.opik.net. API runtime exact commit
+  `3294139f27eaae8985b58ce6294aae0242bd747a`, **parser 7**. Web runtime
+  `5ab6b1a90decfcddf8b3866fe99a9627f0f2e574`. Schema `0050`.
+- Parser 7 fixes a reproduced long-email failure: extraction allowed 10,000
+  characters but classification previously stopped at 8,000. Both now use the
+  shared 10,000 limit with a one-character truncation sentinel; recognizable
+  outcomes from partial bodies/snippets require review. Existing status,
+  sender-authentication, historical-positive, exact-match and Undo guards remain.
+- All P1-P5 reliability and all-time Analytics changes are already live. Fresh
+  backup, API-only activation, exact source hashes, public health/auth checks
+  and protected inventory evidence are in the dated release section below.
+- The one-time exhaustive parser-7 recheck was **explicitly stopped to honor the
+  owner's narrowed scope at 2026-10-27T16:36:09Z (09:36 Pacific)**. Only its
+  Python operator process was terminated; saved per-message progress remains.
+  Its runner exit status is **143, expected SIGTERM**, not successful completion.
+  A later read confirmed **zero operator processes**. Do not restart it.
+- Private VM records are under
+  `/opt/ace/private-backups/inbox-parser7-20261027/`: `parser7-recheck.log`,
+  `recheck-exit-status`, `stopped-by-owner-scope-change` and
+  `stopped-by-owner-scope-change-at`. The final post-run verification sequence
+  did not complete because the owner stopped the run. Do not claim it passed.
+  Google had returned quota 403s and the driver was cooling down before stop.
+- This did **not** deploy scoped Gmail discovery or stop the existing API
+  worker's page-open checks. Live parser 7 still has the prior broad behavior;
+  the owner's displayed queue has not been fixed by the local draft. Avoid
+  claiming all background activity was disabled or that parser 8 is active.
+- Latest read-only aggregate snapshot during handoff: connection ready, parser
+  7; **7,931 stored** messages, **1,320 review**, 5,637 ignored, 781 receipts,
+  167 automatic and 26 manual; 6,918 eligible stale under the *live old rules*.
+  New mail/owner activity can change these. Do not resume exhaustive reads to
+  force that old stale count to zero under the superseded scope.
+- Earlier independently verified ID snapshot at 16:29Z was **7,928/7,928,
+  zero missing**, including Spam/Trash; this is a dated whole-mailbox baseline,
+  not a current scoped job-mail result. Analytics at 16:29Z reconciled 945
+  identities = 897 Applied marks + 48 external records: 751 Applied,
+  192 Rejected, 2 Screening, 177 dated rejections, 1,318 pending. All range,
+  uniqueness, cohort, status and evidence checks passed. Do not describe all
+  192 rejections as independently email-dated.
+- Before/after parser-7 activation all 199 protected Inbox decisions were
+  unchanged; a second retained snapshot covers the earlier 147. A concurrent
+  job-mark increase 1,237 to 1,238 was privately compared against the fresh
+  backup: zero existing rows changed/removed, exactly one new unapplied
+  dismissal. No repair or owner override was performed.
+
+### Review-queue diagnosis, measured read-only at 16:34:05Z
+
+The UI number reported as “13018” has not been independently verified as 13,018.
+The database audit found **1,318**, later 1,320 with arrivals. Check the real API
+count/number formatting when finishing the UI; never hardcode either number.
+
+Of the audited 1,318 pending messages:
+
+| Classification | Count |
+| --- | ---: |
+| Unclear application correspondence | 1,093 |
+| Online assessment | 121 |
+| Rejection | 89 |
+| Interview | 8 |
+| Offer | 5 |
+| Possible rejection | 2 |
+
+**83% are unclassified correspondence promoted to personal work by a broad
+keyword fallback.** The engine currently uses deterministic wording rules,
+not a general semantic model. `application_related()` treats application words
+plus a recruiting platform, job term or known company as sufficient to create
+`unclear/review`. It does not separate “not understood” from an owner decision.
+`_ASSESSMENT` also matches bare platform names (CodeSignal/HackerRank/HireVue),
+which can label account/marketing mail as an assessment.
+
+Reasons: 1,093 unclear wording; 105 no confident application; 60 multiple roles;
+17 multiple companies; 12 positive-outcome policy; 10 unauthenticated sender;
+10 email before application; 8 company only in body; 2 possible rejections;
+1 duplicate job ID. The 1,093 generic cases plus 225 recognized outcomes are
+not 1,318 proven genuine ambiguities.
+
+Candidate counts: 312 none, 203 one, 803 multiple. **855 predate the earliest
+recorded application** (overlap with categories above). Year counts: 2020=35,
+2021=69, 2022=79, 2023=307, 2024=111, 2025=126, 2026=591. Snippet-only
+indicators included 48 job alerts/recommendations and 19 verification/account
+messages; these are inspection indicators, not proven classifications of the
+entire body. No private body, sender, subject, real application ID or credential
+belongs in this public knowledge file.
+
+Known remaining data-review limits from the completed earlier Analytics audit:
+two potential cross-history duplicate groups, two older timestamp conflicts,
+one recorded message represented only by undated status fallback, and six
+outcome-worded emails the owner explicitly filed as acknowledgements. Preserve
+those owner decisions. Do not merge, repair or override them automatically.
+
+### What the unfinished local draft currently attempts
+
+- `gmail.py`: `JOB_MAIL_QUERY` / `job_query(days)` searches candidate recruiting
+  terms and ATS senders, explicitly `-in:spam -in:trash`; all dates by default.
+  This is only an initial heuristic. Assess missing wording/sender variants
+  and non-job false positives. Do not call query matches all job mail with
+  perfect recall or treat a zero query gap as proof of semantic completeness.
+- `inbox.py`: both all-time and narrower sync paths share the bounded manifest;
+  list requests use the job query and `includeSpamTrash=false`. Since Gmail
+  history has no search filter, history additions/Spam/Trash label changes
+  trigger a scoped re-list before new body reads. `FullMailboxScan` gains
+  `live_ids`, `history_added`, `history_dirty` to preserve the historical/live
+  distinction. Detail-time Spam/Trash excludes new ingestion. Existing rows
+  and events are retained; no data cleanup/migration was performed.
+- `queue.py`: shared SQL and Python projected decision helpers for legacy
+  pending rows, used by Inbox lists/counts, Analytics and the audit. Draft
+  turns generic unclassified mail into searchable `update` correspondence
+  without rewriting rows/events. It preserves deferred, manual, automatic,
+  owner-filed decisions and the explicit owner-Undo reason. It also contains
+  a **provisional age/history cutoff** of earliest recorded application minus
+  24 hours. This age policy is **not validated or accepted** and must be
+  reconsidered so it never silently hides genuine historical outcomes.
+- `reconcile.py`: draft parser version `8`, unknown recruiting correspondence
+  becomes `update`; primary-subject account verification/password/job-alert
+  notifications are ignored before outcome matching. This routine guard is
+  also provisional: guard against losing a real body outcome under a generic
+  subject. Never filter a true interview/rejection because its footer contains
+  account settings or job recommendations.
+- `_stale_query` omits generic `unclear` rows. `_recheck_locked` additionally
+  requires a completed scoped manifest, intersects IDs and preserves original
+  mail on Spam/Trash moves. It currently returns `scope_pending` with zero
+  remaining when no scope is ready; **the client does not yet handle that flag**.
+  Do not present it as a successful completed recheck.
+- No thread-based matching, grouped decisions, historical application linking,
+  expanded semantic recognition or additional safe positive automation has
+  been implemented. Those were discussed as ways to reduce real manual work;
+  a smaller badge alone does not finish the owner's request.
+
+### Resume checklist and acceptance
+
+1. Read this full knowledge file, `AGENTS.md`, `docs/HANDOFF.md` and
+   `docs/knowledge/04-matching-and-applications.md`. Work in `ace-inbox` and
+   inspect the saved runtime draft plus shared branch history. Preserve the
+   extension/auth/data/discovery and current owner decisions.
+2. Review and finish the draft before testing. In particular: verify SQLite
+   and PostgreSQL SQL/Python queue projection agreement; reconsider the age
+   cutoff; keep urgent unmatched outcomes visible; align stale counts with
+   actual scoped eligibility; avoid repeated scoped re-lists starving progress;
+   preserve cursor/positive-automation safeguards; remove stale comments and
+   the now-unused cutoff local in `_backfill_locked`.
+3. Update frontend `web/src/lib/inboxSync.ts`: it still declares scope only
+   `"all"` and falsely describes all-time coverage as including Spam/Trash.
+   Support `job_mail`, truthful scope/coverage/partial wording and `scope_pending`
+   rechecks. Update `InboxIntelligence.tsx` labels, rules and counts, and
+   `inboxLabels.ts` so saved correspondence is not misleadingly called an
+   applied status update or owner-reviewed work. Keep a searchable view for
+   retained evidence. Verify the reported review number's rendering.
+4. Update `backend/scripts/inbox_coverage_report.py` with an explicit job-mail
+   scope matching production selection; it currently lists all retained mail
+   including Spam/Trash. Do not run an exhaustive body audit. Independent
+   read-only ID comparison and DB aggregate preview are sufficient for measuring
+   scoped observation and proposed queue changes. Run the reusable Analytics
+   audit to verify arithmetic; never equate either report with perfect wording.
+5. Add meaningful fictional regressions before claiming the change works:
+   no body reads of personal/Spam/Trash mail (including history additions and
+   label moves); archived old job mail still eligible; >500 IDs/all pages,
+   quota/restart/deletion/malformed responses and pause/grant races; unknown
+   correspondence searchable without manual task; routine account notices
+   versus real outcomes; explicit owner/deferred/Undo preserved; actual
+   ambiguous outcome remains pending; consistent SQL/API/Analytics counts and
+   pagination; historical/live positive and exact matching restrictions.
+   Existing full-history fixtures explicitly assert no query and inclusion of
+   Spam/Trash, and some recheck tests invoke recheck with no completed manifest.
+   Update their fixtures for the new scope while preserving their real safety
+   assertions. Do not simply weaken tests to make the draft pass.
+6. Focused backend command, sequential/cool on this machine:
+
+   ```bash
+   nice -n 15 taskset -c 0 .venv/bin/python -m pytest -q backend/tests/test_inbox_persistence.py backend/tests/test_inbox_reconciliation.py backend/tests/test_inbox_full_history.py backend/tests/test_gmail_reads.py backend/tests/test_inbox_display.py backend/tests/test_analytics_read.py backend/tests/test_job_marks.py backend/tests/test_external_applications_api.py backend/tests/test_auth.py
+   ```
+
+   Run focused Inbox DOM/render checks with `npm run test:inbox`, then relevant
+   TypeScript/lint/dash/whitespace checks. Read `web/AGENTS.md` and the installed
+   Next.js docs before web edits. No local Chrome because of cooling; use
+   suitable hosted fictional browser CI. Node DOM heap 256 MB, TypeScript
+   768 MB, pin heavy work to CPU 0 and avoid concurrent heavy commands.
+7. Previous exact parser-7 checks: 293 focused backend pass, hosted backend/web
+   pass, 47 extension browser and 30 focused Inbox/Analytics browser pass.
+   Broader app suite 196 passed/20 failed, exactly the same failure set as
+   parser-6 baseline. Do not claim overall browser CI green. These results
+   do not validate the new draft. Exact prior run 40526589769, focused job
+   122268531501, step 13. No local production signed-in browser test was done.
+8. After new tests and read-only preview, present the concrete proposed release
+   and measured queue effect; ask for specific API/web activation approval.
+   Do not deploy parser 8 under parser-7 approval. Never restart the old
+   exhaustive operator or perform cleanup/merges/destructive data operations
+   merely to clear the badge.
+
+### Operations and persistence notes for the next chat
+
+Production: SSH via `~/.ssh/ace_oracle` to `ubuntu@161.153.89.170`, checkout
+`/opt/ace`; Compose uses `--env-file .env -f deploy/oracle/compose.yaml`.
+Use existing read-only reports and aggregate Python via `exec -T api python -`
+without printing tokens/bodies. SSH `bash -s` non-input Compose exec commands
+need `</dev/null` so they do not consume following script commands. Standalone
+Python scripts in container `/tmp` need `PYTHONPATH=/app` or stdin execution.
+No fake owner sessions or signed-in production mutation tests.
+
+Current API image, private backups/rollback tag, file hashes and nine inventory
+counts are in the dated parser-7 release section below. A future approved
+activation requires a fresh backup and exact prepared/running source match;
+replacing API/web only with `--no-deps`, never migrations/scheduler/Postgres/Caddy
+as an incidental step. Backup integrity/catalog checks are not a restore drill.
+Keep logs/data private with umask 077; source/build files need umask 022.
+
+Local `/tmp` helper scripts and report files from earlier turns were absent at
+handoff. Do not depend on them or rerun `/tmp/ace-job-mail-edit.py`; doing so could
+apply the initial string replacements twice or overwrite further work. Source,
+this knowledge file and private VM artifacts are the durable references.
+
+### Prompt for the next chat
+
+> Continue the reliable Inbox triage work in /home/ubuntu/Documents/ace-inbox.
+> Read ACE_NEXT_KNOWLEDGE.md completely, especially “START HERE: job-related
+> Inbox triage continuation”, then AGENTS.md, docs/HANDOFF.md and the relevant
+> knowledge file. Preserve the saved unfinished backend draft and inspect the
+> working tree/shared branch first. I want job-related mail across all dates,
+> excluding Spam, Trash and personal mail. Automatically handle routine mail
+> and clear outcomes; require my review only for genuine ambiguities. Do not
+> just hide old or unrecognized outcomes to lower the counter. The live API is
+> parser 7; the local parser-8 draft is unfinished and untested. The exhaustive
+> operator was stopped at my request; do not restart it. Finish the scoped
+> sync, real triage, UI/Analytics consistency and fictional focused tests, use
+> production read-only for measurement, then ask before the new release.
+
+## Historical live release checkpoint, 2026-10-27T16:30Z
 
 The owner answered the separate parser-7 deployment question with: “What about
 the developments you did? I need everything to be live.” This authorizes the
@@ -57,7 +358,7 @@ in every shorter comparison query. The real-data read-only Analytics audit at
 both have 1,318 pending messages. The duplicate/date/status-fallback limits in
 the earlier final verification remain; no merges or owner overrides occurred.
 
-**Parser-7 historical rechecks are still running, not complete.** A one-time
+**Historical in-progress note, superseded above: parser-7 historical rechecks were running and were later stopped at owner request.** A one-time
 operator runner started at approximately 16:30Z, with 7,729 eligible older-parser
 messages; the other 199 are protected. It re-listed all retained mail and
 confirmed 7,928/7,928, zero missing, at 16:30:12Z before rechecking. Gmail reads
@@ -485,6 +786,11 @@ Detailed supporting release record:
 `docs/architecture/2026-10-26-context-answer-reuse.md`.
 
 ## OPEN WORK for the next chat: a reliable Inbox (measured 2026-10-26 evening)
+
+**Superseded scope:** Start with the latest START HERE section above. The owner
+now wants all-date job-related mail only, excluding Spam/Trash, and effective
+automatic triage. P1-P5/parser 7 are live; parser-8 triage is an unfinished draft.
+Do not restart the stopped exhaustive operator.
 
 **Current status, 2026-10-27T16:01Z:** P1 to P5 and all-history scope are live on
 `5ab6b1a`; 7,928/7,928 retained messages are imported, 441 old-parser rechecks

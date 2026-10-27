@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
 from backend.app.api.routers.inbox import _identities, _stale_query, PENDING
+from backend.app.inbox.queue import decision_expression, history_cutoff
 from backend.app.db.models import ApplicationEventRecord, CompanyPetitionReportRecord, GmailMessageRecord, JobEvaluationRecord, GmailConnectionRecord
 from backend.app.inbox.reconcile import _MARKING_GRACE
 
@@ -248,11 +249,12 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
             timed_keys.add(a.key)
             lags.append(lag)
             timing["0 to 7 days" if lag <= 7 else "8 to 14 days" if lag <= 14 else "15 to 30 days" if lag <= 30 else "30+ days"] += 1
-    review_counts = dict(session.execute(select(GmailMessageRecord.decision, func.count()).group_by(GmailMessageRecord.decision)).all())
+    queue_decision = decision_expression(history_cutoff(session))
+    review_counts = dict(session.execute(select(queue_decision, func.count()).group_by(queue_decision)).all())
     stale = sum(session.scalar(select(func.count()).select_from(_stale_query(connection_id).subquery())) or 0
                 for connection_id in session.scalars(select(GmailConnectionRecord.id)))
     ambiguous = sum(len(candidate_keys or []) > 1 for candidate_keys in session.scalars(
-        select(GmailMessageRecord.candidate_keys).where(GmailMessageRecord.decision == "review")))
+        select(GmailMessageRecord.candidate_keys).where(queue_decision == "review")))
     reports = session.scalars(select(CompanyPetitionReportRecord).where(CompanyPetitionReportRecord.ace_company.in_(employers), CompanyPetitionReportRecord.entity_verified.is_(True))).all() if employers else []
     # Exact entity + metric + year reconciliation; newer revisions replace old
     # releases instead of adding duplicate totals. DOL stays a separate metric.

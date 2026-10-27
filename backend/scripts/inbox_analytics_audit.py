@@ -19,6 +19,7 @@ from backend.app.api.routers.inbox import PENDING, _identities
 from backend.app.config import get_settings
 from backend.app.db.models import ApplicationEventRecord, GmailMessageRecord, JobMarkRecord, ExternalApplicationRecord
 from backend.app.inbox.reconcile import PARSER_VERSION
+from backend.app.inbox.queue import projected_decision, history_cutoff
 
 
 def audit(db: Session, *, now: datetime | None = None) -> dict:
@@ -104,7 +105,8 @@ def audit(db: Session, *, now: datetime | None = None) -> dict:
                 reconciliation["only_undated_status_fallback_no_email_link"] += 1
     output["recorded_messages"] = len(recorded)
     output["recorded_message_reconciliation"] = dict(reconciliation)
-    output["review_queue"] = {"inbox_pending": sum(m.decision in PENDING for m in messages),
+    cutoff = history_cutoff(db)
+    output["review_queue"] = {"inbox_pending": sum(projected_decision(m, cutoff) in PENDING for m in messages),
                               "analytics_pending": sum(d["review"].get(key, 0) for key in ("needs_review", "exact_preview", "deferred")),
                               "deferred": sum(m.decision == "deferred" for m in messages)}
     output["orphan_active_outcome_events"] = sum(

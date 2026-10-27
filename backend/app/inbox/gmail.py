@@ -22,6 +22,22 @@ from backend.app.auth.google import DISCOVERY_URL, GoogleAuthError, verify_id_to
 
 SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 API = "https://gmail.googleapis.com/gmail/v1/users/me"
+# All dates, including archived mail. Gmail selects candidates before any body
+# read. These are search candidates, never a claim of semantic completeness.
+JOB_MAIL_QUERY = ('-in:spam -in:trash {'
+    'application applications applied applying candidacy requisition '
+    'interview assessment recruiting recruitment "talent acquisition" '
+    '"phone screen" "coding challenge" "coding test" "take home" '
+    '"offer letter" "employment offer" "offer of employment" '
+    '"your interest" "your position" "your role" '
+    'from:(myworkday.com) from:(greenhouse-mail.io) from:(lever.co) '
+    'from:(ashbyhq.com) from:(smartrecruiters.com) from:(icims.com) '
+    'from:(jobvite.com) from:(taleo.net) from:(successfactors.com) '
+    'from:(oraclecloud.com) from:(workablemail.com)}')
+
+
+def job_query(days: int = 0) -> str:
+    return JOB_MAIL_QUERY + (" " + window_query(days) if days else "")
 
 
 class GmailError(ValueError):

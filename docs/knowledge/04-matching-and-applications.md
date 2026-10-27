@@ -677,3 +677,29 @@ are **not yet complete**. Check private VM directory
 `/opt/ace/private-backups/inbox-parser7-20261027/`, `parser7-recheck.log` and
 `recheck-exit-status` before resuming. Details are in the root Current live
 release and `../architecture/2026-10-27-full-history-inbox.md`.
+
+
+## 2026-10-27: owner narrows Inbox scope; triage draft saved unfinished
+
+The owner objected that 1,318 manual tasks defeats Inbox Intelligence. A live
+aggregate audit at 16:34Z found 1,093 generic unclear messages, 225 recognized
+outcomes with unresolved matching/policy, and 855 messages older than the first
+recorded application (overlap). A later handoff snapshot is 7,931 stored and
+1,320 review; the reported “13018” UI number has not been verified as 13,018.
+
+The owner wants job-related mail across all dates, excluding Spam/Trash and
+personal mail, with routine correspondence handled automatically and genuine
+ambiguities only for review. The exhaustive parser-7 operator was stopped at
+16:36:09Z, expected exit 143, no operator left; never restart it under the new
+scope. Live API is still parser 7, web `5ab6b1a`, schema `0050`.
+
+The local parser-8 backend draft adds Gmail job candidate selection, scoped
+history re-listing, shared SQL/Python queue projection for searchable passive
+correspondence, and initial routine-subject handling. It is unfinished and
+untested beyond compilation/whitespace. Its age cutoff and routine guard are
+provisional and require careful review to preserve real historical outcomes.
+Frontend, independent scoped coverage report, tests and actual context/thread
+matching remain unfinished. No new deployment or production queue cleanup ran.
+The full standalone continuation is the root START HERE section; resume in
+`/home/ubuntu/Documents/ace-inbox`, preserve the seven draft runtime files, test
+with fictional data, measure production read-only and ask for a specific release.

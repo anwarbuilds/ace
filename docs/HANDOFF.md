@@ -1,5 +1,20 @@
 # ace handoff
 
+**Latest continuation, 2026-10-27 11:06 Pacific:** Read the new root
+“START HERE: job-related Inbox triage continuation” section first. The owner
+rejected the 1,318-item manual burden and narrowed processing to job-related
+mail across all dates, excluding Spam/Trash and personal mail. The exhaustive
+operator was stopped at 16:36:09Z, exit 143 expected; do not restart it. Live
+API remains parser 7 (`3294139`), web `5ab6b1a`, schema `0050`. A new parser-8
+backend draft exists in `/home/ubuntu/Documents/ace-inbox`, including new
+`backend/app/inbox/queue.py`; compilation/whitespace only, no focused tests,
+frontend changes, new release or production queue reduction yet. Latest DB
+snapshot: 7,931 stored, 1,320 review. Build/test the scoped triage properly,
+retain evidence and owner decisions, then ask before a new API/web release.
+The root handoff has complete diagnosis, files, provisional-design risks,
+exact baseline checks, operator records and a ready-to-use next-chat prompt.
+The preceding 16:30 running-job checkpoint below is historical.
+
 **Current 2026-10-27T16:30Z:** All developed Inbox/Analytics changes are live.
 The owner explicitly requested the remaining parser-7 fix be included; PR #7 is
 merged, API runtime `3294139` (parser 7) is healthy, web remains the complete

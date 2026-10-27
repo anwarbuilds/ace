@@ -21,3 +21,6 @@ class FullMailboxScan:
     snapshot_at: str | None = None
     snapshot: str | None = None
     live: bool = False
+    live_ids: set[str] = field(default_factory=set)
+    history_added: set[str] = field(default_factory=set)
+    history_dirty: bool = False
