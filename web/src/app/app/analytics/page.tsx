@@ -1,4 +1,3 @@
-import { AnalyticsRefresh } from "@/components/analytics/AnalyticsRefresh";
 import { AnalyticsView } from "@/components/analytics/AnalyticsView";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGetOr } from "@/lib/api";
@@ -24,5 +23,5 @@ export default async function AnalyticsPage({ searchParams }: PageProps<"/app/an
   const connection = results[1].status === "fulfilled" ? results[1].value : null;
   if (!d) return <div className="an-page"><h1>Analytics</h1><p role="alert">Analytics could not be loaded. Check the date range or reload to try again.</p><a className="btn" href="/app/analytics">Reset filters</a></div>;
   const tab = ["overview","outcomes","role-resume","companies"].includes(query.tab) ? query.tab : "overview";
-  return <ScrollArea><AnalyticsRefresh/><AnalyticsView d={d} connection={connection} tab={tab} query={query}/></ScrollArea>;
+  return <ScrollArea><AnalyticsView d={d} connection={connection} tab={tab} query={query}/></ScrollArea>;
 }

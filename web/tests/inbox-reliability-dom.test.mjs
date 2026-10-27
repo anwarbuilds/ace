@@ -29,11 +29,16 @@ const mocks={
   "next/link":{__esModule:true,default:({href,children,className})=>React.createElement("a",{href,className},children)},
   "next/form":{__esModule:true,default:({children,...props})=>React.createElement("form",props,children)},
   "@/lib/client":{getJson:(...args)=>read(...args),sendJson:(...args)=>send(...args),RequestError:class extends Error{}},
-  "@/components/shell/AppProvider":{useApp:()=>app},
+  "@/components/shell/AppProvider":{useApp:()=>app,AppProvider:passthrough},
   "@/components/shell/ScrollArea":{ScrollArea:passthrough},
   "@/components/analytics/AnalyticsRefresh":{AnalyticsRefresh:()=>null},
-  "@/lib/api":{apiGetOr:(...args)=>serverRead(...args)},
-  "@/lib/prefs":{getPrefs:async()=>({tz:"America/Los_Angeles"})},
+  "@/lib/api":{apiGetOr:(...args)=>serverRead(...args),authStatus:async()=>({signed_in:true})},
+  "@/lib/prefs":{getPrefs:async()=>({tz:"America/Los_Angeles"}),getPrevVisit:async()=>null},
+  "@/components/analytics/AnalyticsView":{AnalyticsView:()=>React.createElement("h1",null,"Fictional Analytics")},
+  "@/components/shell/AnswersDock":{AnswersDock:()=>null},
+  "@/components/shell/NavigationState":{NavigationState:()=>null},
+  "@/components/shell/Sidebar":{Sidebar:()=>null},
+  "@/components/shell/Topbar":{Topbar:()=>null,MobileBar:()=>null},
 };
 function load(filename){
   if(cache.has(filename))return cache.get(filename).exports;
@@ -304,4 +309,50 @@ test("review totals render as one formatted number without concatenated counters
     assert.match(container.querySelector(".inbox-queue-tools select").textContent,/Waiting for you \(1,318\)/);
     assert.doesNotMatch(container.textContent,/13018/);
   });
+});
+
+
+test("Analytics response replacement cannot restart refresh coordination in the persistent shell",async()=>{
+  const ActualRefresh=load(path.join(sourceRoot,"components/analytics/AnalyticsRefresh.tsx")).AnalyticsRefresh;
+  const originalRefresh=mocks["@/components/analytics/AnalyticsRefresh"].AnalyticsRefresh;
+  const originalRouter=mocks["next/navigation"].useRouter;
+  const previousChannel=globalThis.BroadcastChannel;
+  const channels=[];
+  globalThis.BroadcastChannel=class {constructor(){channels.push(this);}close(){this.closed=true;}};
+  mocks["@/components/analytics/AnalyticsRefresh"].AnalyticsRefresh=ActualRefresh;
+  // Next can return a new contextual router wrapper after a route response.
+  mocks["next/navigation"].useRouter=()=>({...router});
+  serverRead=async(route,fallback)=>route==="/api/analytics"?{}:fallback;
+  const Layout=load(path.join(sourceRoot,"app/app/layout.tsx")).default;
+  const Page=load(path.join(sourceRoot,"app/app/analytics/page.tsx")).default;
+  const response=async generation=>Layout({children:React.cloneElement(await Page({searchParams:Promise.resolve({})}),{key:generation})});
+  const before=projectionRefreshes;
+  try{
+    pathname="/app/analytics";
+    await mounted(await response(0),async(container,window,root)=>{
+      assert.equal(projectionRefreshes,before+1);
+      for(let generation=1;generation<=4;generation++){
+        const tree=await response(generation);
+        await act(async()=>{root.render(tree);});
+      }
+      assert.equal(projectionRefreshes,before+1,"server page replacement must settle without requesting another response");
+      assert.equal(channels.length,1,"one persistent evidence listener, independent of page replacements");
+      pathname="/app/applications/inbox";
+      const inbox=await Layout({children:React.createElement("h1",null,"Fictional Inbox")});
+      await act(async()=>{root.render(inbox);});
+      await act(async()=>{window.dispatchEvent(new window.Event("focus"));});
+      assert.equal(projectionRefreshes,before+1,"Analytics must not refresh other routes");
+      assert.equal(channels[0].closed,true);
+      pathname="/app/analytics";
+      const back=await response(5);
+      await act(async()=>{root.render(back);});
+      assert.equal(projectionRefreshes,before+2,"return navigation refreshes exactly once");
+    });
+    assert.ok(channels.every(channel=>channel.closed));
+  }finally{
+    mocks["@/components/analytics/AnalyticsRefresh"].AnalyticsRefresh=originalRefresh;
+    mocks["next/navigation"].useRouter=originalRouter;
+    globalThis.BroadcastChannel=previousChannel;
+    pathname="/app/analytics";
+  }
 });

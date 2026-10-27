@@ -1,5 +1,15 @@
 # ace handoff
 
+**2026-10-27 13:04 Pacific:** Analytics refresh-loop correction is local and
+under verification, not live. Read the new root Analytics refresh-loop section.
+Production logs confirm 366 Analytics requests in four minute buckets. The
+refresh coordinator now lives once in the persistent app layout, guarded by
+route entry; response replacement cannot remount and restart it. Fictional DOM
+regression fails old code (5 requests vs 1) and passes the fix; existing DOM,
+TypeScript and full lint pass. Hosted quiet-page/evidence-refresh browser tests
+are pending. Live API/web remain approved 3cd87a5, parser 8. Obtain specific new
+web activation approval; never restart the stopped exhaustive operator.
+
 **LIVE, 2026-10-27 12:27 Pacific:** Owner-approved `3cd87a5` now runs API/web,
 parser 8, schema 0050. PR #8 is merged. Live read-only Inbox/Analytics both
 report 227 pending; 1,093 legacy correspondence messages remain searchable.

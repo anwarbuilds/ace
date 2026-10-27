@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { AnalyticsRefresh } from "@/components/analytics/AnalyticsRefresh";
 import { AnswersDock } from "@/components/shell/AnswersDock";
 import { AppProvider } from "@/components/shell/AppProvider";
 import { NavigationState } from "@/components/shell/NavigationState";
@@ -74,6 +75,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
       </div>
       <MobileBar />
       <AnswersDock answers={answers.items} />
+      <AnalyticsRefresh />
       <NavigationState />
     </AppProvider>
   );

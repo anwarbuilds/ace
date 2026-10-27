@@ -249,3 +249,35 @@ test("Rejected companies opens rejected applications that can be searched and pa
   await expect(page).not.toHaveURL(/q=/);
   expect(errors).toEqual([]);
 });
+
+
+for (const route of ["/app/analytics?days=all", "/app/applications/analytics?days=all"]) {
+  test(`Analytics settles after opening and after an evidence refresh: ${route}`,async({page})=>{
+    const requests:string[]=[];
+    const errors=watchErrors(page);
+    page.on("request",request=>{
+      const url=new URL(request.url());
+      const headers=request.headers();
+      if(url.pathname===new URL(route,"http://fixture.test").pathname && headers.rsc==="1" && !headers["next-router-prefetch"])requests.push(request.url());
+    });
+    await page.goto(route);
+    await expect(page.getByRole("heading",{name:route.startsWith("/app/analytics?")?"Analytics":"Application records",exact:true})).toBeVisible();
+    // Catch the continuous half-second response cycle, allowing initial loading
+    // to finish. The shell's intentional two-minute poll is outside this window.
+    await page.waitForTimeout(1500);
+    const opened=requests.length;
+    await page.waitForTimeout(3000);
+    expect(requests.length,"opening Analytics must settle").toBe(opened);
+    await page.evaluate(()=>{
+      const channel=new BroadcastChannel("ace-marks");
+      channel.postMessage("changed");
+      channel.close();
+    });
+    await expect.poll(()=>requests.length).toBeGreaterThan(opened);
+    await page.waitForTimeout(1500);
+    const updated=requests.length;
+    await page.waitForTimeout(3000);
+    expect(requests.length,"an evidence refresh must also settle").toBe(updated);
+    expect(errors).toEqual([]);
+  });
+}

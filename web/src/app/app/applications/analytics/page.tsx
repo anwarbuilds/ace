@@ -1,6 +1,5 @@
 import Form from "next/form";
 import Link from "next/link";
-import { AnalyticsRefresh } from "@/components/analytics/AnalyticsRefresh";
 import { CompanyLogo } from "@/components/CompanyLogo";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGetOr } from "@/lib/api";
@@ -47,7 +46,7 @@ export default async function ApplicationAnalyticsRecordsPage({searchParams}:{se
   const kept=Object.entries(query).filter(([key])=>!["records","q","offset"].includes(key));
   const shownFrom=data.record_total?data.record_offset+1:0;
   const shownTo=Math.min(data.record_total,data.record_offset+data.records.length);
-  return <ScrollArea list><AnalyticsRefresh/><div className="an-page an-records-page">
+  return <ScrollArea list><div className="an-page an-records-page">
     <div className="an-hero"><div><div className="an-eyebrow">Applications / Analytics selection</div><h1>{rejected?"Rejected applications":"Application records"}</h1><p>{data.record_total.toLocaleString("en-US")} unique {data.record_total===1?"application":"applications"} ·{data.days==="all"?"All time":`${data.start} to ${data.end}`} · {data.timezone}</p></div></div>
     <div className="an-record-links"><Link className="btn" href={href({days:"all",start:null,end:null,offset:null})}>All time</Link><Link className="btn" href={`/app/analytics?${analyticsQuery}`}>Back to Analytics</Link><Link className="btn" href="/app/applications">All applications and controls</Link><a className="btn" href="/api/applications/export.csv" download>Export full application history</a></div>
     {selected.length>0&&<p className="an-record-selection">{selected.join(" · ")}</p>}

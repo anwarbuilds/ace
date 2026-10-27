@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-27, owner-approved job-mail release 3cd87a5 live on API/web; parser 8 verified; exhaustive operator remains stopped
+Last updated: 2026-10-27, Analytics refresh-loop correction under verification; live API/web remain approved 3cd87a5; exhaustive operator remains stopped
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -12,6 +12,36 @@ repository instructions. Dated observations below are evidence from that date,
 not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
+
+## Analytics refresh loop: local correction, 2026-10-27T20:04Z
+
+The owner reported indefinite refreshing when opening Analytics from Inbox.
+Read-only production log aggregation confirms **366 successful Analytics GETs**
+in the 19:56 to 19:59 UTC minute buckets, with 92, 118, 128 and 28 respectively.
+No raw logs, owner data, Gmail calls or database changes were used by diagnosis.
+Runtime remains the approved **3cd87a5**, parser 8; this correction is not live.
+
+`AnalyticsRefresh` was mounted inside both server-rendered Analytics pages and
+refreshed on mount. A replacement page could therefore start another request.
+The new fictional regression renders the actual layout and page repeatedly,
+replacing the page subtree and varying the contextual router wrapper: old code
+requests five refreshes for five responses; corrected code requests just one.
+This is a simulated lifecycle reproduction, not a signed-in production browser
+trace. The coordinator now lives once in persistent `/app/layout.tsx`, tracks
+route entry before requesting a refresh, and depends on the refresh method
+rather than the router wrapper. Both Analytics pages remove their coordinators.
+It listens to evidence messages, focus and visibility only on the two Analytics
+routes. Returning from Inbox refreshes once; replacing a server page, changing
+the router wrapper and ordinary unrelated-route focus do not restart it. The
+existing two-minute shell poll and Inbox checks retain their normal behavior.
+
+Local fictional Inbox/Analytics DOM suites, TypeScript and full web lint pass.
+Added hosted browser regressions check both overview and application records
+settle after opening and after an `ace-marks` evidence notification. Hosted
+verification is pending; no local Chrome runs under the cooling restriction.
+A new, specific web activation approval is required after the correction is
+reviewable and verified. Prior approval covered 3cd87a5 only. No API changes,
+release, migration, scheduler operation or stopped exhaustive recheck ran.
 
 ## Approved job-mail release LIVE, verified 2026-10-27T19:27Z
 

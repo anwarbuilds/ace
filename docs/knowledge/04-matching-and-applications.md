@@ -759,3 +759,22 @@ operator is absent with saved exit 143. Refresh Inbox for the new UI and normal
 scoped checking; deployment alone does not prove all candidate bodies have been
 reclassified or that the search has perfect semantic recall. Root live record
 contains exact SHA, image IDs, timestamps, preservation counts and limits.
+
+
+## Analytics refresh coordination survives page replacement (2026-10-27)
+
+The owner reported Analytics endlessly refreshing. Aggregate read-only live API
+logs confirm 366 Analytics GETs in four minute buckets. The coordinator lived
+inside each server page and refreshed on mount, allowing response replacement
+to request another response. It now lives once in the persistent app layout,
+refreshes once per Analytics route entry, and uses the refresh method rather
+than contextual router-object identity. Listeners exist only on overview and
+application-record routes; evidence saves, focus and return navigation stay
+fresh without a second local application ledger. Both page-local coordinators
+were removed. A fictional actual-layout/page replacement test fails old code
+(5 requests for 5 responses) and passes corrected code (1 request), also checking
+listener cleanup, unrelated routes and return navigation. Existing fictional
+DOM suites, TypeScript and full lint pass; hosted idle/evidence browser checks
+are pending. This fix is not deployed; specific web activation approval is
+required. Runtime remains approved 3cd87a5/parser 8. No data, API, scheduler or
+exhaustive-operator operation ran. Root record has the incident and limits.
