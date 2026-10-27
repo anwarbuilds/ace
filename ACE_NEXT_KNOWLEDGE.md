@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-27, Analytics refresh-loop correction under verification; live API/web remain approved 3cd87a5; exhaustive operator remains stopped
+Last updated: 2026-10-27, Analytics refresh correction verified on 2bceb2b and awaiting web-only approval; live remains 3cd87a5; exhaustive operator remains stopped
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -13,7 +13,33 @@ not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
-## Analytics refresh loop: local correction, 2026-10-27T20:04Z
+## Analytics refresh correction ready for web-only approval, 2026-10-27T20:27Z
+
+**Current candidate:** tested runtime **`2bceb2bb835e7ca78ef68248444022f26b70d95b`**,
+[draft PR #9](https://github.com/anwarbuilds/ace/pull/9), branch
+`inbox-analytics-refresh-20261027`. Hosted run **40577319214** passes **45 Inbox/
+Analytics DOM tests**, 82 extension DOM, 11 company contracts, TypeScript, full
+lint, production web build, **1,586 backend tests**, 258 matcher cases, 47
+extension browser cases and **all 32 focused Inbox/Analytics browser cases**.
+The expanded regression covers Inbox sidebar navigation, evidence notification,
+return navigation and bounded idle request counts on overview and records.
+All responsive widths and Day/Night checks pass. Web job **122447111497**,
+backend **122447112099**, e2e **122447859847**, focused step 13 is successful.
+The broader app browser step is still running at this checkpoint; do not claim
+overall CI is green or invent its results from the older 19-failure baseline.
+Subsequent continuity-only commits have identical runtime source.
+
+**Not deployed.** Public HTTPS at 20:23 UTC confirms API healthy and web/header
+still approved **3cd87a5**. Production diagnosis was read-only. Obtain specific
+owner approval for this web correction, then prepare a fresh private backup,
+retain the current web rollback image, and build/recreate **web only** with
+`--no-deps`. Do not rebuild/recreate API, run a migration, change the scheduler,
+modify data or restart the stopped exhaustive operator. Verify the approved
+web SHA, public auth/assets and unchanged API/scheduler/PostgreSQL/Caddy and
+protected evidence after activation. The previous 3cd87a5 approval is historical.
+
+The incident and candidate-verification history below preserve intermediate
+observations and failed checks; their pending statements are superseded above.
 
 The owner reported indefinite refreshing when opening Analytics from Inbox.
 Read-only production log aggregation confirms **366 successful Analytics GETs**
@@ -25,7 +51,7 @@ Runtime remains the approved **3cd87a5**, parser 8; this correction is not live.
 refreshed on mount. A replacement page could therefore start another request.
 The new fictional regression renders the actual layout and page repeatedly,
 replacing the page subtree and varying the contextual router wrapper: old code
-requests five refreshes for five responses; corrected code requests just one.
+requests five refreshes for five responses; the first candidate 2319739 requests just one.
 This is a simulated lifecycle reproduction, not a signed-in production browser
 trace. The coordinator now lives once in persistent `/app/layout.tsx`, tracks
 route entry before requesting a refresh, and depends on the refresh method
@@ -62,7 +88,11 @@ another route requests one. This removes an unnecessary streaming overlap
 rather than depending on its timing. Persistent layout coordination and all
 evidence/focus/visibility updates remain. The earlier five-versus-one DOM
 measurement describes the first candidate; the final regression expects zero
-extra initial/response requests and one on return. Final hosted rerun pending.
+extra initial/response requests and one on return. Final hosted run
+40577319214 on 2bceb2b passes all 32 focused browser cases, including the expanded
+navigation fixture, and all 45 DOM contracts. No assertion is skipped or
+quarantined. The final initial-load expectation is intentionally zero because
+the actual server response already supplies fresh data.
 No local Chrome runs
 under the cooling restriction.
 

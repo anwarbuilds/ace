@@ -1,5 +1,19 @@
 # ace handoff
 
+**2026-10-27 13:27 Pacific:** Analytics refresh fix is verified and awaiting
+specific web-only activation approval in draft PR #9. Tested runtime 2bceb2b,
+hosted run 40577319214: 45 Inbox/Analytics DOM, all 32 focused browser cases,
+backend 1,586, matcher 258, extension browser 47, web checks/build pass. Broader
+app browser step is still running; do not claim overall CI green. Persistent
+layout coordination requests no redundant initial-load refresh and exactly
+one on return; Inbox navigation, evidence updates and responsive layouts pass.
+Earlier streaming/sandbox test failures and their remedies remain in the root
+record. Live API/web are still approved 3cd87a5, healthy over HTTPS at 20:23 UTC.
+No deployment, data, API, migration, scheduler or exhaustive recheck operation
+ran. Next: obtain approval, fresh private backup/rollback, build/recreate web
+only with no dependencies, then verify public source/auth/assets and retained
+services/data. The root first section has exact candidate, CI jobs and limits.
+
 **2026-10-27 13:04 Pacific:** Analytics refresh-loop correction is local and
 under verification, not live. Read the new root Analytics refresh-loop section.
 Production logs confirm 366 Analytics requests in four minute buckets. The

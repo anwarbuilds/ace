@@ -778,3 +778,20 @@ DOM suites, TypeScript and full lint pass; hosted idle/evidence browser checks
 are pending. This fix is not deployed; specific web activation approval is
 required. Runtime remains approved 3cd87a5/parser 8. No data, API, scheduler or
 exhaustive-operator operation ran. Root record has the incident and limits.
+
+
+### Analytics correction verified, awaiting web-only approval (2026-10-27 13:27 Pacific)
+
+Final runtime candidate 2bceb2b is in draft PR #9. The initial server response
+is already fresh, so no hydration refresh is issued; persistent route tracking
+refreshes once on return, and evidence/focus/visibility updates remain. Final
+DOM regression expects zero extra initial/page-replacement requests and one
+on return. Hosted 40577319214 passes 45 Inbox/Analytics DOM, all 32 focused
+browser cases, backend 1,586, matcher 258, extension browser 47 and web checks/
+build. The broader browser step is still running. Intermediate 29/3 and 30/2
+focused results remain in root history; exact retrying count assertions retain
+all layout checks, and the navigation fixture uses an empty fictional Inbox
+to isolate routing from the email sandbox. No assertion or test is skipped.
+Production remains healthy on 3cd87a5; no correction release has run. Obtain
+specific web-only approval; preserve API/data/scheduler and the stopped
+exhaustive operator. Root current-candidate section supersedes pending notes.
