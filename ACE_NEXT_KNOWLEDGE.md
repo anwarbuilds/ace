@@ -25,9 +25,23 @@ The expanded regression covers Inbox sidebar navigation, evidence notification,
 return navigation and bounded idle request counts on overview and records.
 All responsive widths and Day/Night checks pass. Web job **122447111497**,
 backend **122447112099**, e2e **122447859847**, focused step 13 is successful.
-The broader app browser step is still running at this checkpoint; do not claim
-overall CI is green or invent its results from the older 19-failure baseline.
-Subsequent continuity-only commits have identical runtime source.
+The completed broader browser run is **166 passed / 20 failed** (10.4m), so
+overall CI remains non-green. Exact title comparison with the previous live
+runtime job **122404261309** finds its same 19 failures plus one additional
+`navigation.spec.ts` search-shortcut focus failure. That exact title and error
+(`#q` inactive after pressing `/` immediately after `page.goto`) already occurred
+before this correction in job **122393874866** (165 passed / 21 failed). All 20
+current failure titles therefore exist in that earlier 21-failure history; none
+are newly observed across those historical runs. There is one extra failure
+versus the latest 19-failure run, not zero. The shortcut handler, list controls
+and navigation test have no source differences from the live 3cd87a5 runtime.
+An early keyboard event before hydration is a plausible timing explanation,
+not a proven production diagnosis. No unrelated search/extension assertion was
+changed, skipped or quarantined. Final e2e job: **122447859847**; focused **32/32**
+and extension browser **47/47** pass. This follow-up was checked at 20:39 UTC.
+Subsequent continuity-only commits have identical runtime source. The prepared
+web-only release plan is `/tmp/ace-analytics-web-release-plan.md`; execution still
+requires specific owner approval of the final reviewed SHA.
 
 **Not deployed.** Public HTTPS at 20:23 UTC confirms API healthy and web/header
 still approved **3cd87a5**. Production diagnosis was read-only. Obtain specific

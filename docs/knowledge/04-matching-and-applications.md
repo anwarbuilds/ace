@@ -795,3 +795,16 @@ to isolate routing from the email sandbox. No assertion or test is skipped.
 Production remains healthy on 3cd87a5; no correction release has run. Obtain
 specific web-only approval; preserve API/data/scheduler and the stopped
 exhaustive operator. Root current-candidate section supersedes pending notes.
+
+
+Final broader CI comparison at 2026-10-27 20:39 UTC: 166 passed / 20 failed in
+job 122447859847. These are the 19 failures in prior live-runtime job 122404261309
+plus the exact search-shortcut `#q` focus failure already observed in earlier
+job 122393874866 (21 failures). No current failure title is new across those
+historical runs, but there is one extra versus the latest 19-failure run;
+overall CI remains non-green. Shortcut handler, list controls and navigation
+test source are unchanged from 3cd87a5. Early pre-hydration keypress timing is
+a plausible explanation, not a proven production diagnosis. All 32 focused
+Inbox/Analytics and 47 extension browser cases pass. No assertion was skipped
+or quarantined. Await specific web-only release approval; production is still
+3cd87a5. Root candidate record holds the full comparison and release plan.

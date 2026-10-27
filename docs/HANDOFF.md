@@ -1,5 +1,17 @@
 # ace handoff
 
+**2026-10-27 13:39 Pacific, final CI:** Analytics candidate 2bceb2b / draft PR
+#9 passes 32 focused browser and 45 DOM cases plus web build/checks. Completed
+broader suite: 166 pass / 20 fail; same 19 as the live-runtime run plus the exact
+search-shortcut focus failure seen before this correction in job 122393874866.
+All 20 titles occur in that earlier 21-failure history; there is one extra versus
+the latest 19-failure run, so overall CI is not green. Search handler/test source
+is unchanged. Root first section records the exact comparison and timing limits.
+No correction release ran: live stays 3cd87a5. Obtain approval for the concrete
+web-only candidate, then follow the prepared private release plan at
+`/tmp/ace-analytics-web-release-plan.md`. Earlier pending-browser notes are dated
+checkpoints and superseded by this completed result.
+
 **2026-10-27 13:27 Pacific:** Analytics refresh fix is verified and awaiting
 specific web-only activation approval in draft PR #9. Tested runtime 2bceb2b,
 hosted run 40577319214: 45 Inbox/Analytics DOM, all 32 focused browser cases,
