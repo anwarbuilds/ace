@@ -481,8 +481,11 @@ fixture expected the removed legacy Queue at `/` (20 tests passed, 27 setup
 errors). The same failure existed on `e6e6a93`. The follow-up isolates fictional
 extension forms on unique blank pages and fixes stale workflow labels without
 changing extension runtime or skipping assertions. Hosted CI must validate the
-final head; no local Chrome. The coverage report also uses a one-day date-cutoff
-buffer and default Spam/Trash exclusions, not exact rolling 24-hour intervals.
+final head; no local Chrome. The first fixture follow-up `e3419f7` removed the
+setup errors but had 12 failures/35 passes: its fragment-only unique URL retained
+prior document/extension state. The final fixture changes the actual data payload
+and awaits that exact ready document. No assertions or runtime behavior changed.
+The coverage report also uses a one-day date-cutoff buffer and default Spam/Trash exclusions, not exact rolling 24-hour intervals.
 
 ### Measured in production (read-only, aggregate, 2026-10-26 about 17:30 Pacific)
 

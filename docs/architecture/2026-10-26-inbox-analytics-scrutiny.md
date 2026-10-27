@@ -165,3 +165,10 @@ before each fictional form, and updates stale workflow descriptions. It does
 not alter extension runtime behavior, remove assertions or skip tests. Chrome
 remains prohibited locally; hosted CI must validate the fixture and then run
 the new app suite. Check the final branch's CI result before release.
+
+The first fixture follow-up `e3419f7` eliminated the setup errors but exposed
+12 failures/35 passes. Its unique marker was only a URL fragment, allowing
+same-document navigation and prior extension state to survive. The final
+correction changes the data payload itself and waits for that exact URL and
+ready body; assertions and extension runtime remain unchanged. Do not interpret
+that contaminated run as proof of extension behavior or passing Inbox tests.
