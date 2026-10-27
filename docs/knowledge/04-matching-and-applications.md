@@ -518,3 +518,20 @@ employer), and the review panel suggests applications the sender or subject name
 before the owner types. The owner also rejected a richer Rejected companies table in favour of the original card grid:
 summary panels stay compact, and search and paging live on the drill-down page. Tests:
 `test_a_workday_tenant_names_the_employer` and the suggestion case in `web/tests/inbox-review-render.test.mjs`.
+
+## Inbox looked reliable and was not: coverage, ignored mail and wording (2026-10-26)
+
+The owner showed an employer update email from a week earlier that never reached Rejected applications. Measured
+against production (read-only): Gmail listed 946 emails for 30 days and ACE held 512, because a sync with no history
+cursor lists one page of 500 and never pages on, so the cursor is never set and everything older than the newest 500 is
+only reachable through the manual 100 per page import (1,110 of 1,622 missing for 90 days). Of the stored emails, 248
+were decided `ignored` ("No outcome found") and the recheck never reads ignored mail again, so 319 emails sat under an
+older parser; 112 ignored emails came from recruiting systems and 179 had application words. The reported email said the
+employer's immigration policy does not include sponsorship: no rejection phrase matched, so it was ignored although the
+application existed and its acknowledgement had been linked by the Workday tenant.
+
+Lessons: a "caught up" status must be proven against the source (Gmail's own listing), not inferred from a timestamp; a
+classifier needs a safety net so that anything about an application that it cannot read reaches the owner instead of an
+ignored pile; and a re-read must cover every decision the new rules could change, ignored included. Plan and acceptance
+tests are in `ACE_NEXT_KNOWLEDGE.md`, "OPEN WORK for the next chat: a reliable Inbox". Tool:
+`backend/scripts/inbox_coverage_report.py` (read-only, counts only).

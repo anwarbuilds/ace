@@ -27,17 +27,18 @@ This checkpoint is a documentation update, not a new deployment or live check.
 | Item | Last recorded state |
 | --- | --- |
 | Repository / canonical branch | `/home/ubuntu/Documents/ace-next`, `wine-rose-platform`, remote `anwarbuilds/ace`; fetch and inspect before editing because parallel chats advance it |
-| Last directly verified live API/web | `0fef238c9a3c5575927786e823109ad351b78245`, 2026-10-26 at 13:49 Pacific, public `https://ace.opik.net/healthz` |
-| Newer Inbox source | `6163f59`, documented by `35a055c`: add-from-email, parser 5 and wide-email fit; images reportedly built, activation blocked by permission review and still pending in that record |
+| Last directly verified live API/web | `6163f59f3ebdeee55f15e88dbf8551f6cb088623`, public `https://ace.opik.net/healthz` on 2026-10-27T00:10Z (2026-10-26 17:10 Pacific); API and web containers up about three hours and healthy, Inbox parser 5 confirmed inside the running API. It contains the logo release `0fef238` and the Inbox work below |
+| Newer source not yet live | `origin/wine-rose-platform` is ahead of production (another session's logo recovery commits, `d0342d4` and documentation). Releasing the branch tip ships them too: confirm with the owner and recheck `/healthz` first |
 | Important runtime distinction | The pending Inbox entry's references to `40254e7`/`bd5c364` are older releases; the logo session directly verified `0fef238`. Recheck health and running image/source hashes before any future activation rather than assuming either checkout or image tags are live |
 | Installed source of unpacked extension | Manifest **1.29.1**; browser activation still requires extension Reload and refreshed employer tabs; no Web Store publication |
 | Database | Last verified schema `0050`; no migration was run for the logo releases |
 | Last logo verification totals | 931 applications, 884 posting applications plus 47 external history; a timestamped observation, never a UI constant |
 
-Saving this knowledge does not authorize activation of the pending Inbox build.
-Do not run an old activation line blindly: check which images were built, what
-commit they contain, whether newer changes exist and the owner's authorization
-for that operation. A documentation commit requires no application rebuild.
+Saving this knowledge does not authorize any activation. The Inbox build
+`6163f59` is already live. The reliable-Inbox work in the next section is NOT
+built and nothing in it is deployed. Before any release check which commit the
+images contain, whether newer changes exist and the owner's authorization. A
+documentation commit requires no application rebuild.
 
 ### Current product contracts
 
@@ -148,6 +149,158 @@ actual availability of official sponsorship/resume/channel evidence, and owner
 verification of the reloaded extension on real forms. Do not silently turn
 these pending items into completed work or start them merely because they are
 listed here.
+
+## OPEN WORK for the next chat: a reliable Inbox (measured 2026-10-26 evening)
+
+**Owner request.** After Inbox and Rejected applications shipped, the owner
+showed an employer update email from a week earlier that was not recorded, and a
+search for that employer in Rejected applications found nothing. They said they
+cannot tell how far to rely on Inbox Intelligence and want "this reliable
+system" built. They also approved **read-only production queries** for this work
+(in chat, 2026-10-26 evening). Releases still need their go-ahead.
+
+**Status of the work: nothing below is built.** This session only diagnosed and
+documented. The only new file is the read-only report script
+`backend/scripts/inbox_coverage_report.py` (counts only, no senders, subjects or
+text). Continue in the worktree `/home/ubuntu/Documents/ace-inbox` (branch
+`inbox-clarity-20261026`; `.venv` and `web/node_modules` are symlinks to
+`ace-next`), after `git fetch` and a fast-forward to `origin/wine-rose-platform`.
+
+### Measured in production (read-only, aggregate, 2026-10-26 about 17:30 Pacific)
+
+Run it again any time (the owner approved read-only runs; it only lists Gmail IDs):
+
+```bash
+ssh -i ~/.ssh/ace_oracle ubuntu@161.153.89.170 'cd /opt/ace && docker compose --env-file .env -f deploy/oracle/compose.yaml exec -T api python -' < backend/scripts/inbox_coverage_report.py
+```
+
+| Check | Result |
+| --- | --- |
+| Gmail messages listed for the last 7 / 30 / 90 days | 271 / 946 / 1,622 |
+| Of those already stored in ACE | 270 / 512 / 512 |
+| Missing from ACE | 1 / 434 / 1,110 |
+| Stored emails | 512, received 2026-10-12 to 2026-10-26 |
+| Decisions | ignored 248, receipt 190, automatic 50, manual 24 |
+| Classifications | unknown 248, acknowledgement 185, rejection 74, offer 2, assessment 1, possible rejection 1, interview 1 |
+| Parser versions | v1 143, v2 74, v3 95, v4 7, v5 193 (319 stored under an older parser) |
+| Ignored ("No outcome found") from recruiting systems / with application words | 112 / 179 |
+| Acknowledgements linked to an application | 126 of 190 |
+| Applications | 888 applied marks (oldest 2026-08-23) plus 47 external |
+| Gmail connection | ready, no history cursor, preview not complete, no error, last check 2026-10-26 21:59Z |
+
+### Root causes (all confirmed in code, three also in data)
+
+1. **The import never completes.** `sync_once` in `backend/app/api/routers/inbox.py`,
+   with no cursor, lists ONE page (`maxResults` 500) of the 30 day window and never
+   follows `nextPageToken`. `partial` is then true, so the cursor is never set and
+   every sync only re-reads the newest 500. The window holds 946 emails and 434
+   are not in ACE (45 percent); the 90 day window is missing 1,110. The manual
+   100 per page "Import past email" is the only other way in. Rejections for
+   applications made since late August can sit in the missing part.
+2. **"No outcome found" is a silent dead end.** 248 of 512 stored emails were
+   decided `ignored` and never appear in Waiting for you. `_stale_query` (what
+   `/api/inbox/recheck` re-reads) covers only waiting email and ACE-filed
+   acknowledgements, never `ignored`, so every wording improvement skips them.
+3. **Wording gap, reproduced locally with a fictional employer.** The reported
+   email (an update from a Workday tenant) said the employer's immigration policy
+   does not include sponsorship for the role and does not hire students or F-1
+   graduates. `classify()` returns `unknown` and `reconcile()` returns `ignored`.
+   The application existed and the earlier acknowledgement from the same tenant
+   was linked to it, so tenant matching works; only the wording and the missing
+   re-read failed.
+4. **Rejected applications hides why.** The drill-down is scoped by SUBMISSION date
+   (30 days by default) plus `evidence=rejection`. Searching an application that is
+   not recorded as rejected, or was submitted earlier, returns "0 matches" with no
+   explanation.
+5. **A wrong pick went unwarned.** One owner-recorded rejection from a Workday
+   tenant (a parent brand, its subject naming a role) is linked to a different
+   employer's application, while the subsidiary's application with that exact role
+   title still shows Applied. The picker allows any application and says nothing
+   when the chosen company is not named in the email. The owner-specific names are
+   in private memory, not in this public file.
+
+### The plan, in priority order (build, test with fictional fixtures, then ask to release)
+
+- **P1 Complete, verifiable import (parser independent).** Add
+  `gmail.list_message_ids(token, query, max_pages)` returning IDs newest first and
+  whether the listing finished. In `sync_once`: read `/profile` first (its
+  `historyId` becomes the cursor), list the WHOLE window (`days` at least 30, up to
+  365), compute IDs not stored (chunk the `IN` query by 500), fetch at most about 60
+  per call newest first, commit after each message, return `remaining` and
+  `coverage = {days, gmail, in_ace, missing, checked_at}`. Set `history_id` and
+  `preview_complete` only when `remaining == 0` and the listing finished. Add a
+  per connection `threading.Lock` (return `busy`) and tolerate `IntegrityError`.
+  Keep the last coverage per connection and window in memory and return it from
+  `/api/inbox/connection`; null after an API restart, so opening the page verifies
+  again. The page loops `POST /api/inbox/sync {days}` until `remaining == 0` with
+  progress text, and the status card says "Gmail has N emails from the last D days.
+  All are in ACE." (or how many are not). Replace the page by page import UI by
+  "Verify further back" (30, 90, 365 days) using the same loop; leave
+  `/api/inbox/backfill` in place.
+- **P2 Safety net and wording (parser 6).** In `backend/app/inbox/reconcile.py`:
+  widen `_REJECTION` and `_DECLINE` for sponsorship and eligibility wording ("does
+  not include sponsorship", "unable to sponsor", "not eligible for", "does not meet
+  the requirements", "decided to move on", "will not be considering", "was not
+  selected", "not able to offer"), keeping a recruiting word required. Add a new
+  classification `unclear`: when `classify()` returns `unknown` but the email is
+  about an application (not from a job board sender such as LinkedIn, Indeed,
+  Handshake, Glassdoor, ZipRecruiter; has application words; AND the sender is a
+  recruiting system, or it has a job term, or it names one of the owner's
+  companies) return disposition `review` with reason "Looks like it is about an
+  application, but ACE could not tell what it says" and the ranked candidates.
+  Skip mail sent by the connected account. In the web, `KIND.unclear` is
+  "Application email". Nothing about an application may stay "No outcome found".
+- **P3 Re-read ignored mail.** Extend `_stale_query` to ignored rows under an older
+  parser from the last 120 days whose sender, subject or excerpt look recruiting
+  (share the word lists from `reconcile.py`; build the SQL with `ilike`), and make
+  the page run the recheck loop automatically on open, not only on Sync now.
+- **P4 "Where is my application?"** When a records search returns nothing,
+  `analytics_read(records=True, q=...)` in `routers/analytics.py` should also
+  return `not_listed`: applications matching the words regardless of status and
+  date (with status, submitted date and whether they fall outside the selected
+  range) and stored emails matching sender, subject or excerpt (decision,
+  classification, id). `app/app/applications/analytics/page.tsx` shows them with
+  links (the application, `/app/applications/inbox?message=<id>`) and an "All time"
+  link. Consider defaulting the rejection drill-down to all time.
+- **P5 Wrong pick guard.** In `InboxReviewPanel.tsx` warn before recording when the
+  chosen application's company (squashed and as initials) appears nowhere in the
+  email's sender, subject or text, and consider a small parent brand alias list.
+- **P6 Finish.** Docs, tests, release (below). After release the owner opens Inbox
+  (it verifies and re-reads by itself) and you rerun the report script.
+
+**What "reliable" must mean (acceptance):** (1) Inbox states "Gmail has N emails
+from the last D days, all N are in ACE" and the number matches
+`inbox_coverage_report.py`; (2) no application related email is left as "No
+outcome found" without the owner seeing it as Needs you; (3) the sponsorship
+wording example is recorded as a rejection automatically when exactly one
+application fits, with Undo, and ignored mail is re-read after a parser bump;
+(4) searching any application explains where it is (status, date range, email);
+(5) choosing a company the email never names warns.
+
+### Fixtures, tests and cautions for this work
+
+- Fictional fixtures only. Reproduction used: sender `Workday <fictionalmac@myworkday.com>`,
+  subject "Fictional Mac - Application Update", body "Thank you for your interest in
+  the Software Engineer Professional position. We would like to inform you that
+  Fictional Mac's immigration policy does not include sponsorship for this role..."
+- Tests likely to need updates: `backend/tests/test_gmail_reads.py::test_existing_evidence_skips_google_detail_reads`
+  (its mocked `get_json` answers only `/profile` and `/messages`), the sync error
+  tests that monkeypatch `sync_once` as `fail(*args)` (call it positionally),
+  `test_inbox_persistence.py` stale count expectations (ignored fixture rows whose
+  subject and excerpt say "Fictional" must stay out of the stale set), the e2e
+  `web/tests/e2e/inbox-review.spec.ts` sync/recheck fixture and the page by page
+  import test, and `web/tests/inbox-review-render.test.mjs`.
+- Gmail facts: `messages.list` returns at most 500 IDs per page and excludes spam
+  and trash; `messages.get` is the expensive call. A burst once hit
+  `rateLimitExceeded` near 260 reads, so keep about 60 sequential reads per request;
+  `gmail.get_json` already backs off. Never store bodies or widen the read-only scope.
+- Keep the safeguards: automatic recording only when exactly one application fits,
+  an authenticated sender, protected final statuses, an event and Undo.
+- Release (owner approval needed; the permission check refuses unapproved
+  activation): API and web only with the steps in "Safe production release". The
+  laptop overheats: `nice`, no Chrome, focused tests, one build at a time (the VM
+  build, started with `nohup` and polled, is the type check gate). Fetch before
+  every push; other sessions push often.
 
 ## 2026-10-26: Pulls employer logos and automatic provider recovery
 
@@ -363,20 +516,12 @@ Owner decisions this session, in order (later ones win):
    Cambridge Investment Research); suggestions also use company names in the
    email text and tenant initials. Wide fixed-width emails are scaled to fit
    the viewer instead of scrolling sideways.
-   **Status: pushed as `6163f59`, NOT yet live.** The VM checkout is at that
-   commit and the API and web images are built (TypeScript passed), but the
-   production swap was refused by the agent permission check and needs the
-   owner's go-ahead. That session's `40254e7`/`bd5c364` runtime references are
-   older than the logo session's directly verified `0fef238` release. No fresh
-   runtime verification is implied by this documentation update. Recheck live
-   health, image/source hashes and authorization before activation.
-   Historical proposed activation for that prepared build, only after matching
-   the checkout/image commit and obtaining the required authorization: on the VM,
-   `cd /opt/ace && export ACE_BUILD_SHA=$(git rev-parse HEAD) && docker compose
-   --env-file .env -f deploy/oracle/compose.yaml up -d --no-build --no-deps
-   --wait --wait-timeout 180 api web`, then check `/healthz` shows `6163f59`.
-   Rollback is the previous images recorded in
-   `private-backups/inbox-clarity-20261026T194634Z/`.
+   **Status: LIVE as `6163f59`.** The images were built on the VM and the owner
+   activated them after the permission check refused the agent's own activation
+   attempt. Verified read-only on 2026-10-27T00:10Z: public health reports that
+   commit, API and web are up about three hours and healthy, parser 5 is
+   running, scheduler, PostgreSQL and Caddy are unchanged. Rollback is the
+   previous images recorded in `private-backups/inbox-clarity-20261026T194634Z/`.
 
 Found during release verification and fixed in `c7d3451`: Analytics dropped
 every outcome recorded from an email, because Inbox's own `email:<id>` audit

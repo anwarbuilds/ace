@@ -100,6 +100,16 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
+**2026-10-26 evening, OPEN WORK, start here for Inbox:** production runs `6163f59`
+(add-from-email, parser 5). The owner asked for a RELIABLE Inbox after a rejection
+email was never recorded. Measured read-only: Gmail lists 946 emails for 30 days and
+only 512 are in ACE (the sync never pages past 500 and never sets its cursor), 248
+stored emails sit as ignored "No outcome found" and are never re-read, and the
+sponsorship style rejection wording is not recognized. Nothing of the fix is built.
+The plan P1 to P6, the numbers and the report script
+`backend/scripts/inbox_coverage_report.py` are in `ACE_NEXT_KNOWLEDGE.md`, section
+"OPEN WORK for the next chat: a reliable Inbox".
+
 **Current cross-session checkpoint:** See the opening continuation checkpoint in
 `ACE_NEXT_KNOWLEDGE.md` for live `0fef238`, extension 1.29.1, the newer built-but-
 unactivated Inbox change `6163f59`, code/test maps and outstanding verification.
