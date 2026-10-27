@@ -195,3 +195,22 @@ def test_only_new_scoped_history_additions_can_automate_opted_in_exact_positives
     assert finish(session,conn)["coverage"]["complete"]
     assert row_for(session,"live-positive").decision==("automatic" if exact else "review")
     assert statuses(session)==["applied","interviewing" if exact else "applied","applied"]
+
+
+@pytest.mark.parametrize("body,kind",[
+    ("We will not proceed with your application.","rejection"),
+    ("We cannot continue with your candidacy.","rejection"),
+    ("We regret the outcome of your application review.","possible_rejection"),
+    ("There has been a decision on your application involving other candidates.","possible_rejection"),
+])
+def test_outcome_like_wording_without_a_receipt_opening_cannot_become_passive(body,kind):
+    from backend.tests.test_inbox_reconciliation import app
+    evidence=EmailEvidence("talent@careers.silverpine.example","Application update",body,NOW,True)
+    decision=reconcile(evidence,[app("job:1","SE-101")])
+    assert decision.classification==kind and decision.disposition in {"review","verified"}
+
+
+def test_ordinary_application_progress_without_an_outcome_is_still_saved_automatically():
+    evidence=EmailEvidence("talent@careers.silverpine.example","Application update",
+        "Your application for the Software Engineer role is still being compared with other candidates.",NOW,True)
+    assert reconcile(evidence,[]).disposition=="update"

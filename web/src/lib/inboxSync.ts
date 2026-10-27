@@ -44,7 +44,7 @@ export async function verifyInbox({days,stale,post,progress,active=()=>true}:{da
   if(days===0||stale>0)for(let round=0;;round++){
     check();
     if(round>=1000)throw new Error("More older email remains to re-read. Check again to continue.");
-    progress(`Reading older email again with the newest rules: ${rechecked} of ${stale}`);
+    progress(`Rechecking job-related email: ${rechecked.toLocaleString("en-US")} read so far`);
     const step=await post<RecheckStep>("/api/inbox/recheck",{limit:25});
     check();
     if(step.state&&step.state!=="ready")throw new Error(step.state==="busy"?"Another Inbox check is running. Try again shortly.":"Gmail recheck stopped because the connection was paused or changed. Saved progress is kept.");

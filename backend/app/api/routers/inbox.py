@@ -802,9 +802,9 @@ def _message_rows(session: Session, connection_id: int, decision: str | None = N
 
 
 def _stale_query(connection_id: int):
-    """Re-read every stale undecided/ACE-filed email, without age/keyword gaps.
+    """Old-parser candidates before intersection with verified job-mail scope.
 
-    Owner filings and recorded outcomes remain protected across all history.
+    Owner filings, deferred choices, Undo and recorded outcomes stay protected.
     """
     return select(GmailMessageRecord).where(
         GmailMessageRecord.connection_id == connection_id, GmailMessageRecord.parser_version != PARSER_VERSION,
@@ -926,10 +926,10 @@ class RecheckRequest(BaseModel):
 def recheck(body: RecheckRequest, request: Request, session: Session = Depends(get_session)) -> dict:
     """Decide email read under older rules again, under the current ones.
 
-    That is every waiting email and every receipt ACE filed itself. Each is
-    read from Gmail again (the full text is not stored) and decided as a
-    historical import would be: a clear rejection is recorded, a receipt
-    stays a receipt, anything unclear waits. Run it again until none remain.
+    Only the completed all-date job-mail manifest can authorize automatic
+    body reads. Clear rejections can record with Undo, routine correspondence
+    saves without an owner task, and specific outcome ambiguities remain for
+    review. Owner filings and recorded outcomes are never re-decided.
     """
     conn = _connection(session, current_owner(request))
     if not conn or not conn.encrypted_refresh_token or conn.state == "disconnected":

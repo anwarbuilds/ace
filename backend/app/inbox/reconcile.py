@@ -50,6 +50,7 @@ _REJECTION = re.compile(
     r"|(?:move\s+forward|proceed)\s+with\s+(?:a\s+)?candidates?\s+whose"
     r"|(?:decided|chosen|elected)\s+(?:not\s+to|to\s+not)\s+(?:move\s+forward|proceed|progress|continue|pursue|advance)"
     r"|(?:will|would|are|is)\s+not\s+be\s+" + _ONWARD +
+    r"|(?:will\s+not|cannot|can[’']t)\s+(?:move\s+forward|proceed|progress|continue|advance)\s+with\s+your\s+(?:application|candidacy)" +
     r"|won[’']t\s+be\s+(?:" + _ONWARD + r"|able\s+to\s+(?:move\s+forward|proceed|progress|offer\s+you))"
     r"|not\s+(?:be\s+)?able\s+to\s+(?:move\s+forward|proceed|progress|offer\s+you)"
     r"|not\s+(?:be\s+)?moving\s+forward\s+with\s+your\s+(?:application|candidacy)"
@@ -260,6 +261,15 @@ def classify(evidence: EmailEvidence) -> tuple[str, str | None]:
         return "recruiter_reply", requisition
     if _CONFIRMATION.search(text):
         return ("possible_rejection" if _DECLINE.search(text) else "application_confirmation"), requisition
+    # Decision-like wording can be real evidence even without a receipt
+    # opening. Preserve that specific uncertainty instead of filing it as
+    # routine unclassified correspondence.
+    uncertain_decision = any(not re.search(r"\b(?:if|unless|whether|in\s+case|does\s+not\s+mean)\b[^.!?\n]{0,160}$",
+                                           text[max(0, match.start()-180):match.start()], re.I)
+                             for match in _DECLINE.finditer(text))
+    if (uncertain_decision and _RECRUITING.search(text) and not _WITHDRAWN.search(text)
+            and re.search(r"\b(?:decision|outcome|results?)\b", text, re.I)):
+        return "possible_rejection", requisition
     return "unknown", requisition
 
 
