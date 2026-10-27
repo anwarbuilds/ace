@@ -143,9 +143,18 @@ function AppCard({app}:{app:InboxApplication}) {
 
 export function InboxReviewPanel({message,applications,events,busy,action,account,now=0}: {message:InboxMessage|null; applications:InboxApplication[]; events:InboxEvent[]; busy:boolean; action:Action; account?:string|null; now?:number}) {
   const id=message?.id;
+  const decision=message?.decision;
   const [full,setFull]=useState<FullEmail|null>(()=>id==null?null:loaded.get(id)??null);
   const [fullError,setFullError]=useState("");
   const [plain,setPlain]=useState(false);
+  const [messageEvents,setMessageEvents]=useState<InboxEvent[]>([]);
+  useEffect(()=>{
+    if(id==null||!["automatic","manual"].includes(decision??""))return;
+    let live=true;
+    getJson<{items:InboxEvent[]}>("/api/inbox/events",new URLSearchParams({message_id:String(id)}))
+      .then(result=>{if(live)setMessageEvents(result.items);}).catch(()=>{});
+    return ()=>{live=false;};
+  },[id,decision]);
   const [targetKey,setTargetKey]=useState(()=>message?.selected_application_key??message?.candidate_keys[0]??"");
   const [choosing,setChoosing]=useState(false);
   const [search,setSearch]=useState("");
@@ -170,7 +179,8 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
   // Search also finds "gm" and "generalmotors" for General Motors.
   const options=query?applications.filter(a=>`${a.company} ${a.title} ${a.requisition_id??""} ${squash(a.company)} ${initials(a.company)}`.toLocaleLowerCase().includes(query)).slice(0,30):candidates.length?candidates:guesses;
   const linked=message.selected_application_key?byKey.get(message.selected_application_key):undefined;
-  const change=events.find(e=>e.gmail_message_id===message.id&&e.kind!=="undo"&&e.application_key===message.selected_application_key&&["owner","verified_automation"].includes(e.actor)&&!events.some(other=>other.undo_of_id===e.id));
+  const history=[...new Map([...events,...messageEvents].map(event=>[event.id,event])).values()];
+  const change=history.find(e=>e.gmail_message_id===message.id&&e.kind!=="undo"&&e.application_key===message.selected_application_key&&["owner","verified_automation"].includes(e.actor)&&!history.some(other=>other.undo_of_id===e.id));
   const ready=draft?Boolean(draft.company.trim()&&draft.title.trim()):Boolean(target);
   const chosenCompany=draft?.company.trim()||target?.company||"";
   const mismatch=Boolean(chosenCompany)&&!companyNamed(message,chosenCompany,full?.text??"");

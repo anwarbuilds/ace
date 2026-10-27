@@ -49,7 +49,7 @@ function described(counts: Record<string, number>, rechecked: number, recorded: 
 }
 
 export function InboxIntelligence() {
-  const { refreshMarks, toast } = useApp();
+  const { refreshMarks, settleMarks, toast } = useApp();
   const router = useRouter();
   const params = useSearchParams();
   const requested = params.get("decision") ?? "auto";
@@ -107,9 +107,14 @@ export function InboxIntelligence() {
     return () => window.clearInterval(timer);
   }, []);
 
+  const notifyEvidence = useCallback(() => {
+    settleMarks();
+    router.refresh();
+  }, [settleMarks, router]);
+
   async function action(run: () => Promise<unknown>, success: string | (() => string)) {
     setBusy(true); setError("");
-    try { await run(); await Promise.all([load(), refreshMarks()]); toast(typeof success === "function" ? success() : success); }
+    try { await run(); notifyEvidence(); await Promise.all([load(), refreshMarks()]); toast(typeof success === "function" ? success() : success); }
     catch (cause) { setError(cause instanceof RequestError && cause.status === 500 ? "Email import could not finish. Reload to see saved progress, then try again." : cause instanceof Error ? clean(cause.message) : "The operation failed. Reload and try again."); await load().catch(() => {}); }
     finally { setBusy(false); }
   }
@@ -130,6 +135,7 @@ export function InboxIntelligence() {
         },
       });
       const note = described(counts, rechecked, recorded);
+      notifyEvidence();
       await Promise.all([load(), refreshMarks()]);
       setSync({running: false, note, error: "", progress: ""});
       const fresh = Object.entries(counts).some(([key, value]) => key !== "duplicate" && key !== "ignored" && value > 0);
@@ -138,11 +144,12 @@ export function InboxIntelligence() {
       if (!mounted.current) return;
       restUntil.current = Date.now() + (cause instanceof RequestError && cause.status === 429 ? 10 : 1) * 60_000;
       setSync({running: false, note: "", progress: "", error: cause instanceof Error ? clean(cause.message) : "Gmail could not be checked."});
+      notifyEvidence();
       await Promise.all([load(), refreshMarks()]).catch(() => {});
     } finally {
       syncing.current = false;
     }
-  }, [load, refreshMarks, toast]);
+  }, [load, refreshMarks, toast, notifyEvidence]);
 
   // Opening the page checks Gmail, and so does coming back to it later.
   const ready = connection?.connected && connection.state === "ready";

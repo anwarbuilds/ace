@@ -433,6 +433,10 @@ def conflict(app: ApplicationIdentity, classification: str, received_at: datetim
     if app.current_status in {"accepted", "withdrawn"} or (classification == "rejection" and app.current_status == "offer") \
             or (classification != "rejection" and app.current_status == "rejected"):
         return "Existing final status is protected"
+    stages = {"applied": 0, "screening": 1, "interviewing": 2, "offer": 3, "accepted": 4}
+    positive_stage = {"online_assessment": 1, "recruiter_reply": 1, "interview": 2, "offer": 3}.get(classification)
+    if positive_stage is not None and stages.get(app.current_status, 0) > positive_stage:
+        return "Existing later application stage is protected"
     # Marking Applied also stamps the change time, and the grace above
     # already covers it; only a later stage is protected here.
     if app.current_status != "applied" and app.status_changed_at is not None and _aware(app.status_changed_at) > received:

@@ -359,3 +359,14 @@ def test_non_application_and_self_sent_mail_do_not_change_applications():
 def test_conditional_eligibility_wording_never_automates_a_rejection(sentence):
     result = reconcile(ats_mail("Northwind Robotics application", sentence), [northwind()])
     assert result.disposition == "review" and result.target is None
+
+
+@pytest.mark.parametrize("status,classification,body", [
+    ("offer","interview","Req ID: SE-102. We invite you to interview."),
+    ("interviewing","online_assessment","Req ID: SE-102. Complete the online assessment."),
+    ("offer","online_assessment","Req ID: SE-102. Complete the online assessment."),
+])
+def test_automatic_positive_outcome_cannot_regress_a_later_stage(status,classification,body):
+    result=reconcile(mail(body),[app("job:1","SE-102",status)])
+    assert result.classification==classification and result.disposition=="review"
+    assert result.reason=="Existing later application stage is protected"

@@ -1,12 +1,14 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 /** Invalidate the server projection after the existing marks bus settles a save.
  * No second application count or optimistic ledger is kept by Analytics. */
 export function AnalyticsRefresh() {
   const router=useRouter();
+  const pathname=usePathname();
+  useEffect(()=>{ router.refresh(); },[router,pathname]);
   useEffect(()=>{
     const refresh=()=>router.refresh();
     const channel=typeof BroadcastChannel === "function" ? new BroadcastChannel("ace-marks") : null;

@@ -104,11 +104,11 @@ def test_positive_outcomes_keep_the_stricter_path(database):
     assert _ingest(session, conn, assessment, identities, preview=False) == "automatic"
     interview = message("new-interview", "Req ID: SE-102. We invite you to interview.")
     assert _ingest(session, conn, interview, identities, preview=False) == "automatic"
-    assert statuses(session) == ["applied", "applied", "interviewing"]
+    assert statuses(session) == ["screening", "applied", "interviewing"]
     # A rejection older than the interview cannot undo the newer stage.
     older = message("old-rejection", "Req ID: SE-102. We have decided to move forward with other candidates.", NOW - timedelta(days=1))
     assert _ingest(session, conn, older, _identities(session), preview=False) == "review"
-    assert statuses(session) == ["applied", "applied", "interviewing"]
+    assert statuses(session) == ["screening", "applied", "interviewing"]
     assert {e.kind for e in job_events(session)} == {"online_assessment", "interview"}
     assert mark_counts(session)["applications_total"] == 3
 
@@ -394,3 +394,26 @@ def test_verifying_further_back_never_automates_historical_positive_outcomes(dat
     result = inbox.sync_once(session, conn, 90)
     assert result["counts"] == {"automatic" if in_history else "exact_preview": 1}
     assert statuses(session) == ["applied", "interviewing" if in_history else "applied", "applied"]
+
+
+def test_old_email_change_remains_reachable_after_100_newer_audit_events(database):
+    session,conn=database
+    assert _ingest(session,conn,message("old-audit-rejection","Req ID: SE-101. You have not been selected."),_identities(session),preview=True)=="automatic"
+    row=row_for(session,"old-audit-rejection")
+    event=job_events(session)[0]
+    event.recorded_at=NOW-timedelta(days=10)
+    for index in range(110):
+        session.add(ApplicationEventRecord(application_key="email:fictional",kind="email_classified",actor="classifier",reason="Fictional newer noise",dedupe_key=f"newer-noise:{index}",recorded_at=NOW))
+    session.commit()
+    assert event.id not in {item["id"] for item in inbox.events(owner_request(),session)["items"]}
+    detail=inbox.events(owner_request(),session,row.id)
+    assert event.id in {item["id"] for item in detail["items"]}
+    result=inbox.undo(event.id,owner_request(),session)
+    detail=inbox.events(owner_request(),session,row.id)
+    assert any(item["id"]==result["event_id"] and item["undo_of_id"]==event.id for item in detail["items"])
+
+
+def test_message_specific_event_history_requires_an_owned_email(database):
+    session,conn=database
+    with pytest.raises(HTTPException) as error:inbox.events(owner_request(),session,999999)
+    assert error.value.status_code==404

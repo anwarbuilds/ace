@@ -560,3 +560,34 @@ emails absent from ACE (516 stored); it imported or changed nothing. Tests are
 fictional, not production verification. Release and subsequent source-versus-ACE
 comparison remain pending owner approval. Details and commands:
 `../architecture/2026-10-26-reliable-inbox.md` and the root OPEN WORK checkpoint.
+
+
+## Stored counts can reconcile while Inbox evidence is still incomplete (2026-10-26)
+
+Status: local audit corrections awaiting release approval; live parser 5 is unchanged.
+
+The owner's request for a deeper scrutiny confirmed 433 missing 30-day Gmail
+messages and independently reconciled all 939 stored application identities.
+Matching sums proved the projection's arithmetic, not exhaustive source recall
+or distinct submissions: two company/title/date pairs across job and external
+history lack enough posting evidence to deduplicate safely.
+
+Four recorded emails lost Analytics dates/links; two fit Inbox's existing
+24-hour marking grace and are recovered locally without a negative or invented
+response time. Two older conflicts remain explicitly excluded and reviewable.
+Repeated outcomes exposed the use of earliest timestamps for "latest" labels.
+Separate first/latest projections now preserve response timing while correcting
+recency, evidence links and chronological cohort precedence. Deferred messages
+are accounted for and the existing marks bus refreshes Analytics after Inbox
+changes. A selected email's filtered event history makes Undo reachable beyond
+the global 100-event audit page. Undated stages no longer acquire an invented
+owner actor. Opted-in live assessments set Screening and cannot regress a later
+Interviewing/Offer stage.
+
+Read-only production replay of the candidate projection corrected 7 links and
+6 company dates, kept 939 records and all status/outcome totals, and preserved
+the timing sample/median. Five owner acknowledgement choices stayed intact.
+The repeatable aggregate audit is `backend/scripts/inbox_analytics_audit.py`;
+mailbox coverage still comes from `inbox_coverage_report.py`. A green count check
+cannot certify that every email was fetched or understood. Full evidence:
+`../architecture/2026-10-26-inbox-analytics-scrutiny.md`.

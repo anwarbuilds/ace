@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-26, reliable Inbox P1 to P5 implemented locally; release awaiting approval
+Last updated: 2026-10-26, reliable Inbox and Analytics scrutiny complete locally; release awaiting approval
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -29,7 +29,7 @@ update does not deploy code, reload the browser or perform a fresh live check.
 | --- | --- |
 | Repository / canonical branch | `/home/ubuntu/Documents/ace-next`, `wine-rose-platform`, remote `anwarbuilds/ace`; fetch and inspect before editing because parallel chats advance it |
 | Last directly verified live API/web | API `9d05673248ce6ead30652e62bb1d5e569404848c`, web `1fee67127877838f09b9a42f5edef6bc4669f34e`, healthy through public/signed-in HTTPS on 2026-10-27T00:59Z (2026-10-26 17:59 Pacific). Contextual Memory API is live; existing `6163f59` Inbox behavior and branding parser 4 are preserved |
-| Newer source not yet live | Reliable-Inbox P1 to P5 implemented and tested in `/home/ubuntu/Documents/ace-inbox`, parser 6. Owner release approval, API/web image build and live verification remain pending. See the implementation checkpoint under OPEN WORK |
+| Newer source not yet live | Reliable-Inbox P1 to P5 plus the Inbox-to-Analytics audit corrections are implemented and tested in `/home/ubuntu/Documents/ace-inbox`, parser 6. Owner release approval, API/web image build and live verification remain pending. See the implementation checkpoint under OPEN WORK |
 | Important runtime distinction | API-only Memory release runs `9d05673`; web stays `1fee671`. Existing Inbox parser 5 is live; reliable-Inbox parser 6 is implemented locally and not deployed. Recheck health and source/image hashes before another release |
 | Unpacked extension source / browser state | Manifest **1.30.0** for contextual reuse; supporting Memory API is deployed. Browser activation needs Reload/refreshed employer tabs. No Web Store publication |
 | Database | Last verified schema `0050`; no migration was run for the logo or contextual Memory releases |
@@ -409,6 +409,71 @@ and rollback inventory intact. Production stays on API `9d05673`, web `1fee671`
 until an approved activation verifies otherwise. Then the owner opens Inbox to
 verify/re-read automatically, and reruns the read-only report to compare actual
 Gmail/ACE counts. Browser visuals still require suitable hardware.
+
+### Subsequent Inbox-to-Analytics scrutiny, 2026-10-26 evening
+
+The owner requested a senior-level completeness audit before deciding on
+release approval. **Verdict: the live Analytics uses real records, but exhaustive mailbox
+coverage and distinct real-world application totals cannot yet be certified.**
+The initial P1 to P5 commit `e6e6a93` is on draft PR #6, not deployed. The audit
+adds tested corrections on the same review branch; approval must refer to its
+new final commit, not the superseded initial release candidate.
+
+Read-only production evidence, 18:49 through 19:10 Pacific:
+
+- Gmail still lists 949 emails for 30 days versus 516 stored (433 missing);
+  90 days lists 1,625 versus 516 stored (1,109 missing). Parser 5 remains live,
+  249 messages are ignored and 319 were read under older parsers. These are
+  mailbox messages, not a claim that every missing item is a job outcome.
+- All 939 stored application identities reconcile to 892 applied marks plus
+  47 external records. Four selected ranges (14/30/90/all) pass unique-row,
+  status, cohort, outcome-record and persisted-total checks. All-time statuses
+  are 850 Applied, 86 Rejected, 3 Screening. Thirty-day submission filtering
+  shows 559 records and 66 rejections; all time shows 939 and 86.
+- Of 74 recorded email messages, 64 have counted evidence links, 6 deduplicate
+  to another email for the same application/outcome kind, and 4 retain only an
+  undated stage. Two of those four are within Inbox's 24-hour marking grace;
+  Analytics incorrectly dropped their dates/links. The other two predate the
+  application by more than a day and remain excluded with review links.
+- A repeatable read-only comparison of the reviewed projection in a separate
+  diagnostic process restores 2 dated rejections (64 to 66 all time), corrects
+  7 evidence links and 6 latest-company dates. Application IDs, statuses,
+  rejection/positive totals, the 65-application timing sample and median stay
+  unchanged. No running service or source file was replaced. The projection
+  source SHA-256 was `e67da61ff031f447653dc74a17f584a5d475fdebc93ce064eb49f27ca54cfd1f`.
+- Five outcome-worded messages were explicitly owner-filed as acknowledgements
+  (classifier labels: rejection, possible rejection, interview and two offers).
+  They are preserved, not silently promoted. Four apparently orphaned ledger
+  rows are old Applied/cleared bookkeeping, not missing outcome evidence;
+  orphan active outcome count is zero.
+- Two exact company/title/submission-date groups span a job mark and external
+  history. Both external rows lack a posting URL, so they are **potential**
+  duplicates requiring owner review, not proof of duplicate submissions. No
+  identity was merged, removed or reclassified. Do not describe 939 persisted
+  identities as a proven count of distinct real-world submissions.
+
+Additional local corrections: keep first response timing separate from latest
+outcome dates/links; let a later verified positive outcome supersede an older
+rejection in the cohort while preserving both historical events; account for
+deferred mail; disclose coverage and excluded evidence on Analytics; distinguish
+undated recorded stages from explicit actor provenance; notify the existing
+marks bus and refresh Analytics on open/return; load a recorded email's own
+event history so Undo remains usable beyond the global latest 100 events.
+Opted-in live assessment/recruiter outcomes now set Screening, and positive
+automation cannot regress an Interviewing or Offer stage. Opt-in, exact-ID,
+authenticated origin and historical-preview restrictions remain unchanged.
+
+The new reusable `backend/scripts/inbox_analytics_audit.py` uses a repeatable
+read-only PostgreSQL snapshot, prints aggregates only and makes no Gmail calls.
+Use it alongside `inbox_coverage_report.py`. A green `projection_checks_pass`
+never implies mailbox completeness; `mailbox_coverage_certified` stays false.
+Fictional tests also prove no SQL writes/private text in the audit output.
+
+Validation: 255 focused backend tests, 37 React render/workflow/DOM contracts,
+TypeScript, focused ESLint, whitespace and forbidden-dash checks pass. No Chrome
+or real browser rendering; application image builds and release approval remain
+pending. Full evidence, limitations and operator commands:
+`docs/architecture/2026-10-26-inbox-analytics-scrutiny.md`.
 
 ### Measured in production (read-only, aggregate, 2026-10-26 about 17:30 Pacific)
 

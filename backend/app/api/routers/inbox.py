@@ -45,7 +45,8 @@ DECIDABLE = PENDING + ("ignored", "receipt", "unrelated", "update")
 # Subject words that put an email ACE found no outcome in among the
 # recruiting email, so an outcome ACE could not read is still in view.
 _ABOUT_APPLICATIONS = ("application", "applying", "applied", "candidacy", "interview", "assessment")
-_OUTCOME_STATUS = {"rejection": "rejected", "interview": "interviewing", "offer": "offer"}
+_OUTCOME_STATUS = {"rejection": "rejected", "interview": "interviewing", "offer": "offer",
+                   "online_assessment": "screening", "recruiter_reply": "screening"}
 # What the owner can say an email was.
 _KINDS = {"rejection", "interview", "online_assessment", "offer", "recruiter_reply"}
 _TOKENS: dict[tuple[int, bytes], tuple[float, str]] = {}
@@ -834,9 +835,16 @@ def applications(request: Request, session: Session = Depends(get_session)) -> d
 
 
 @router.get("/api/inbox/events")
-def events(request: Request, session: Session = Depends(get_session)) -> dict:
+def events(request: Request, session: Session = Depends(get_session),
+           message_id: Annotated[int | None, Query(ge=1)] = None) -> dict:
     current_owner(request)
-    rows = session.scalars(select(ApplicationEventRecord).where(~ApplicationEventRecord.application_key.like("action:%")).order_by(ApplicationEventRecord.recorded_at.desc()).limit(100)).all()
+    query = select(ApplicationEventRecord).where(~ApplicationEventRecord.application_key.like("action:%"))
+    if message_id is not None:
+        _owned(session, request, message_id)
+        linked = ApplicationEventRecord.__table__.alias("linked_email_events")
+        query = query.where(or_(ApplicationEventRecord.gmail_message_id == message_id,
+                               ApplicationEventRecord.undo_of_id.in_(select(linked.c.id).where(linked.c.gmail_message_id == message_id))))
+    rows = session.scalars(query.order_by(ApplicationEventRecord.recorded_at.desc()).limit(100)).all()
     return {"items": [{"id": e.id, "application_key": e.application_key, "kind": e.kind, "before": e.previous_status, "after": e.new_status, "actor": e.actor, "reason": e.reason, "occurred_at": e.occurred_at.isoformat() if e.occurred_at else None, "recorded_at": e.recorded_at.isoformat(), "undo_of_id": e.undo_of_id, "gmail_message_id": e.gmail_message_id} for e in rows]}
 
 

@@ -312,3 +312,139 @@ def test_empty_search_finds_stored_email_and_treats_sql_wildcards_literally(db):
     assert not analytics_read(db, now=NOW, records=True, q="%_")["not_listed"]["emails"]
     assert "not_listed" not in analytics_read(db, now=NOW, q="Fictional Mac")
     assert not analytics_read(db, now=NOW, records=True)["not_listed"]["emails"]
+
+
+# Audit regressions: reproduce data crossing the real Inbox event boundary.
+def email_outcome(db, key, kind="rejection", received=None, actor="verified_automation"):
+    from backend.app.db.models import GmailConnectionRecord
+    received=received or NOW-timedelta(days=2)
+    conn=db.scalar(select(GmailConnectionRecord).limit(1))
+    if conn is None:
+        conn=GmailConnectionRecord(owner_id=1,email="fictional@example.test",encrypted_refresh_token=b"",scope="gmail.readonly",state="disconnected")
+        db.add(conn);db.flush()
+    index=db.scalar(select(func.count()).select_from(GmailMessageRecord))
+    message=GmailMessageRecord(connection_id=conn.id,gmail_id=f"audit-fictional-{index}",received_at=received,sender="talent@fictional.example",subject="Fictional application update",snippet="Fictional",classification=kind,decision="automatic" if actor=="verified_automation" else "manual",selected_application_key=key,candidate_keys=[key],decision_reason="Fictional confirmed evidence",parser_version="6")
+    db.add(message);db.flush()
+    outcome(db,key,kind,stamp=received,gmail_message_id=message.id).actor=actor
+    # The audit entry present on real ingestion must not create a second identity.
+    outcome(db,f"email:{message.id}","email_classified",stamp=received,gmail_message_id=message.id).actor="classifier"
+    return message
+
+
+def test_confirmed_email_within_inbox_marking_grace_keeps_link_but_has_no_invented_response_time(db):
+    key=app(db,901,age=40,status="rejected")
+    received=NOW-timedelta(days=40,hours=2)
+    mail=email_outcome(db,key,received=received)
+    d=read(db,records=True)
+    assert d["records"][0]["evidence"][0]["message_id"]==mail.id
+    assert d["records"][0]["evidence"][0]["at"]==received.isoformat()
+    assert d["rejection_summary"]["dated"]==1
+    assert d["median_days"] is None and d["timing_sample"]==0
+    assert read(db,records=True,timed=True)["record_total"]==0
+
+
+def test_email_more_than_one_day_before_submission_stays_excluded_and_is_accounted_for(db):
+    key=app(db,902,age=40,status="rejected")
+    email_outcome(db,key,received=NOW-timedelta(days=42))
+    d=read(db,records=True)
+    assert d["rejection_summary"]["dated"]==0
+    assert d["records"][0]["evidence"][0]["message_id"] is None
+    assert d["inbox_audit"]["excluded_events"]["before_application_window"]==1
+
+
+def test_repeated_outcomes_show_latest_company_and_email_without_changing_first_response_timing(db):
+    key=app(db,903,age=40,status="rejected")
+    email_outcome(db,key,received=NOW-timedelta(days=35))
+    latest=email_outcome(db,key,received=NOW-timedelta(days=2))
+    d=read(db,records=True)
+    assert d["companies"][0]["latest_at"]==(NOW-timedelta(days=2)).isoformat()
+    assert d["rejected_companies"][0]["latest_at"]==(NOW-timedelta(days=2)).isoformat()
+    assert d["records"][0]["evidence"][0]["message_id"]==latest.id
+    assert d["median_days"]==5 and d["evidence"]["rejected"]==1
+
+
+def test_later_positive_outcome_controls_cohort_after_a_reconsidered_rejection(db):
+    key=app(db,904,age=40,status="offer")
+    email_outcome(db,key,received=NOW-timedelta(days=35))
+    email_outcome(db,key,kind="offer",received=NOW-timedelta(days=2),actor="owner")
+    d=read(db)
+    assert d["cohort"]["positive"]==1 and d["cohort"]["rejected"]==0
+    assert d["evidence"]["rejected"]==d["evidence"]["positive"]==1  # History retains both.
+
+
+def test_deferred_mail_is_visible_in_analytics_pending_total(db):
+    from backend.app.db.models import GmailConnectionRecord
+    conn=GmailConnectionRecord(owner_id=1,email="fictional@example.test",encrypted_refresh_token=b"",scope="gmail.readonly",state="disconnected")
+    db.add(conn);db.flush()
+    db.add(GmailMessageRecord(connection_id=conn.id,gmail_id="deferred-fictional",received_at=NOW,sender="talent@fictional.example",subject="Application message",snippet="Fictional",classification="unclear",decision="deferred",candidate_keys=[],decision_reason="Owner deferred",parser_version="6"))
+    d=read(db)
+    assert d["review"]["deferred"]==1
+    assert d["inbox_audit"]["pending_messages"]==1
+
+
+def test_undated_current_rejection_remains_authoritative_over_an_older_positive(db):
+    key=app(db,905,status="rejected")
+    email_outcome(db,key,kind="interview",received=NOW-timedelta(days=30))
+    d=read(db)
+    assert d["cohort"]["rejected"]==1 and d["cohort"]["positive"]==0
+    assert d["median_days"]==10
+
+
+def test_real_inbox_ingest_undo_and_reassignment_reconcile_to_exactly_one_application(db, monkeypatch):
+    from types import SimpleNamespace
+    from backend.app.api.routers import inbox
+    from backend.app.auth.guard import Principal
+    from backend.app.config import get_settings
+    from backend.app.db.models import GmailConnectionRecord
+    from backend.tests.test_inbox_persistence import message
+    monkeypatch.setenv("GMAIL_AUTO_REJECTIONS","true");get_settings.cache_clear()
+    first=app(db,906);second=app(db,907,company="Other Fictional Labs")
+    conn=GmailConnectionRecord(owner_id=1,email="owner-fixture@example.test",encrypted_refresh_token=b"fictional",scope="gmail.readonly",state="ready")
+    db.add(conn);db.flush()
+    body=message("pipeline-fictional","We have decided to move forward with other candidates for this role.",received_at=NOW-timedelta(days=2))
+    assert inbox._ingest(db,conn,body,inbox._identities(db),preview=True)=="automatic"
+    db.commit()
+    d=read(db,records=True,evidence="rejection")
+    assert d["record_total"]==1 and d["records"][0]["key"]==first
+    assert d["records"][0]["evidence"][0]["message_id"] is not None
+    request=SimpleNamespace(state=SimpleNamespace(principal=Principal(kind="session",user=SimpleNamespace(id=1))))
+    event=db.scalar(select(ApplicationEventRecord).where(ApplicationEventRecord.kind=="rejection"))
+    inbox.undo(event.id,request,db)
+    assert read(db)["evidence"]["rejected"]==0
+    mail=db.scalar(select(GmailMessageRecord).where(GmailMessageRecord.gmail_id=="pipeline-fictional"))
+    inbox.review(inbox.ManualDecision(message_id=mail.id,application_key=second,status="rejected",expected_status="applied",confirmed=True,kind="rejection"),request,db)
+    d=read(db,records=True,evidence="rejection")
+    assert d["record_total"]==1 and d["records"][0]["key"]==second
+    assert d["records"][0]["evidence"][0]["message_id"]==mail.id
+    get_settings.cache_clear()
+
+
+def test_aggregate_audit_is_select_only_and_cannot_certify_mailbox_coverage(db):
+    import json
+    from backend.scripts.inbox_analytics_audit import audit
+    key=app(db,908,status="rejected")
+    mail=email_outcome(db,key)
+    db.flush()
+    statements=[]
+    def capture(conn,cursor,statement,parameters,context,executemany):statements.append(statement)
+    event.listen(db.bind,"before_cursor_execute",capture)
+    result=audit(db,now=NOW)
+    event.remove(db.bind,"before_cursor_execute",capture)
+    assert result["projection_checks_pass"] and not result["mailbox_coverage_certified"]
+    assert result["recorded_message_reconciliation"]=={"counted_with_email_link":1}
+    assert result["recorded_events_need_review"]==0 and result["orphan_active_outcome_events"]==0
+    assert all(statement.lstrip().upper().startswith("SELECT") for statement in statements)
+    serialized=json.dumps(result)
+    for private in [mail.sender,mail.subject,"Silverpine Labs",key]:assert private not in serialized
+
+
+def test_aggregate_audit_does_not_call_owner_filed_outcome_wording_a_missing_outcome(db):
+    from backend.scripts.inbox_analytics_audit import audit
+    key=app(db,909)
+    mail=email_outcome(db,key,kind="interview")
+    mail.decision="receipt";mail.decision_reason="You marked it an application receipt"
+    db.flush()
+    result=audit(db,now=NOW)
+    assert result["owner_filed_outcome_worded_emails"]==1
+    assert result["recorded_messages"]==0
+    assert result["ranges"]["all"]["interviews"]==0

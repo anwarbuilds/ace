@@ -113,6 +113,16 @@ The plan P1 to P6, the numbers and the report script
 `backend/scripts/inbox_coverage_report.py` are in `ACE_NEXT_KNOWLEDGE.md`, section
 "OPEN WORK for the next chat: a reliable Inbox".
 
+**2026-10-26 subsequent Analytics scrutiny:** production is still parser 5;
+P1 to P5 and additional audit corrections remain on draft PR #6 awaiting
+approval. Read-only checks found 433 missing 30-day emails, 2 recoverable lost
+email dates, 2 older timestamp conflicts and 2 potential cross-history duplicate
+groups requiring owner review. Stored identities/status partitions reconcile;
+this does not certify complete Gmail observation. The local projection corrects
+latest dates/links, cohort order, deferred counts, refresh and old-email Undo.
+See `architecture/2026-10-26-inbox-analytics-scrutiny.md` and the root OPEN WORK
+checkpoint before release. No data repair or deployment was performed.
+
 **Current cross-session checkpoint:** See `ACE_NEXT_KNOWLEDGE.md` for live web
 `1fee671`, API `9d05673`, extension source 1.30.0 and the locally implemented
 reliable-Inbox P1 to P5 awaiting release approval. All 85 logo hashes and the five reported company/job/detail

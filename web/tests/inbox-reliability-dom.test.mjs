@@ -17,12 +17,15 @@ const sourceRoot=fileURLToPath(new URL("../src",import.meta.url));
 const cache=new Map();
 let read,send,serverRead;
 let refreshes=0;
-const app={refreshMarks:async()=>{refreshes++;},toast:()=>{}};
-const router={replace:()=>{},refresh:()=>{}};
+let notifications=0;
+const app={refreshMarks:async()=>{refreshes++;},settleMarks:()=>{notifications++;},toast:()=>{}};
+let projectionRefreshes=0;
+let pathname="/app/analytics";
+const router={replace:()=>{},refresh:()=>{projectionRefreshes++;}};
 const params=new URLSearchParams();
 const passthrough=({children})=>React.createElement("div",null,children);
 const mocks={
-  "next/navigation":{useRouter:()=>router,useSearchParams:()=>params},
+  "next/navigation":{useRouter:()=>router,useSearchParams:()=>params,usePathname:()=>pathname},
   "next/link":{__esModule:true,default:({href,children,className})=>React.createElement("a",{href,className},children)},
   "next/form":{__esModule:true,default:({children,...props})=>React.createElement("form",props,children)},
   "@/lib/client":{getJson:(...args)=>read(...args),sendJson:(...args)=>send(...args),RequestError:class extends Error{}},
@@ -62,7 +65,7 @@ async function mounted(element,run){
   const root=createRoot(container);
   try{
     await act(async()=>{root.render(element);});
-    await run(container,window);
+    await run(container,window,root);
   }finally{
     await act(async()=>{root.unmount();});
     for(const [key,value] of original)if(value===undefined)delete globalThis[key];else globalThis[key]=value;
@@ -110,11 +113,15 @@ test("a parser bump rechecks on open even after a recent verified Gmail check",a
 test("failed verification displays the failure and refreshes already saved changes",async()=>{
   const {calls}=fixture({coverage:null,fail:true});
   const before=refreshes;
+  const beforeNotifications=notifications;
+  const beforeProjection=projectionRefreshes;
   await mounted(React.createElement(InboxIntelligence),async container=>{
     assert.equal(calls.length,1);
     assert.match(container.textContent,/Fictional Google read failure/);
     assert.doesNotMatch(container.textContent,/All caught up/);
     assert.equal(refreshes,before+1);
+    assert.equal(notifications,beforeNotifications+1);
+    assert.equal(projectionRefreshes,beforeProjection+1);
   });
 });
 
@@ -188,4 +195,57 @@ test("retrying an interrupted wider verification keeps its 90-day window",async(
       assert.match(container.textContent,/All caught up/);
     });
   }finally{params.delete("days");}
+});
+
+
+test("Analytics refreshes on opening, cross-tab evidence messages, focus and return navigation",async()=>{
+  const ActualRefresh=load(path.join(sourceRoot,"components/analytics/AnalyticsRefresh.tsx")).AnalyticsRefresh;
+  const previous=globalThis.BroadcastChannel;
+  const channels=[];
+  globalThis.BroadcastChannel=class {constructor(name){this.name=name;channels.push(this);}close(){this.closed=true;}};
+  try{
+    const before=projectionRefreshes;
+    await mounted(React.createElement(ActualRefresh),async(container,window,root)=>{
+      assert.equal(projectionRefreshes,before+1);
+      assert.equal(channels[0].name,"ace-marks");
+      await act(async()=>{channels[0].onmessage({data:"changed"});});
+      assert.equal(projectionRefreshes,before+2);
+      await act(async()=>{window.dispatchEvent(new window.Event("focus"));});
+      assert.equal(projectionRefreshes,before+3);
+      pathname="/app/applications/analytics";
+      await act(async()=>{root.render(React.createElement(ActualRefresh));});
+      assert.equal(projectionRefreshes,before+4);
+    });
+    assert.equal(channels[0].closed,true);
+  }finally{globalThis.BroadcastChannel=previous;pathname="/app/analytics";}
+});
+
+test("records expose excluded email links separately from counted evidence",async()=>{
+  serverRead=async()=>({record_total:1,record_limit:50,record_offset:0,record_query:"",records:[{key:"job:88",company:"Fictional Labs",title:"Engineer",status:"rejected",family:"SOFTWARE_ENGINEERING",submitted_at:"2026-10-01T12:00:00Z",href:"/app/jobs/88",evidence:[{kind:"rejection",at:null,message_id:null}],excluded_evidence:[{message_id:909,reason:"before_application_window"}]}],days:"all",start:"2026-10-01",end:"2026-10-26",timezone:"America/Los_Angeles"});
+  const html=renderToStaticMarkup(await RecordsPage({searchParams:Promise.resolve({})}));
+  assert.match(html,/Email predates the application window/);
+  assert.match(html,/Not counted as verified email evidence/);
+  assert.match(html,/inbox\?message=909/);
+  assert.match(html,/Review excluded email/);
+});
+
+
+test("an old recorded email loads its own event history so Undo survives the global 100-event limit",async()=>{
+  const message={id:9292,sender:"Fictional Labs <talent@fictional.example>",subject:"Fictional application update",snippet:"Fictional",received_at:"2026-10-01T12:00:00Z",classification:"rejection",decision:"automatic",candidate_keys:["job:3"],reason:"Fictional confirmed rejection",selected_application_key:"job:3"};
+  const application={key:"job:3",company:"Fictional Labs",title:"Engineer",status:"rejected",applied_at:"2026-09-01T12:00:00Z"};
+  const calls=[];
+  read=async(route,params)=>{
+    if(route==="/api/inbox/events"){
+      assert.equal(params.get("message_id"),"9292");
+      return {items:[{id:12,application_key:"job:3",kind:"rejection",before:"applied",after:"rejected",actor:"verified_automation",gmail_message_id:9292,undo_of_id:null}]};
+    }
+    return {...message,text:"Fictional update",document:"<p>Fictional</p>",blocked_images:0};
+  };
+  send=async(method,route)=>{calls.push(route);};
+  await mounted(React.createElement(InboxReviewPanel,{message,applications:[application],events:[],busy:false,action:async run=>run()}),async(container,window)=>{
+    const undo=[...container.querySelectorAll("button")].find(button=>button.textContent==="Undo this change");
+    assert.equal(Boolean(undo),true);
+    await act(async()=>{undo.dispatchEvent(new window.Event("click",{bubbles:true}));});
+    assert.deepEqual(calls,["/api/inbox/events/12/undo"]);
+  });
 });
