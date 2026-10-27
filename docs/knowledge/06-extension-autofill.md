@@ -1215,3 +1215,17 @@ environment and tracked data counts stayed unchanged. A verified private backup
 and previous API image were retained. Extension Reload and refreshed employer
 tabs remain necessary. No Chrome or real employer verification.
 Full boundaries: `../architecture/2026-10-26-context-answer-reuse.md`.
+
+
+### Knowledge consolidation after deployment (2026-10-26)
+
+The owner requested a complete update of `ACE_NEXT_KNOWLEDGE.md`. Its opening
+checkpoint and contextual-adoption section now carry the full reviewed fact
+catalog, ATS context boundaries, save/receipt/correction behavior, API namespace
+and revision rules, tested-source versus running-image state, private rollback
+location, aggregate preservation counts, source hashes and public verification
+limits. This is a documentation-only continuation update, not a new deployment
+or fresh live check. Supporting summary pointers were aligned. Old rejected
+saves still need entering once; owner Reload and real-form confirmation remain
+outstanding. Historical evidence and the unimplemented reliable-Inbox plan are
+retained separately from the current live state.

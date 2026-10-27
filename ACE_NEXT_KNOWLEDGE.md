@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-26
+Last updated: 2026-10-26, after the 17:59 Pacific contextual Memory verification
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -20,7 +20,8 @@ sessions. Read this complete file and repository instructions before changes.
 Use the dated release evidence below to distinguish tested source, built images
 and running production. Later explicit owner decisions supersede older designs
 or behavior notes only in the area they actually change. Preserve the history.
-This checkpoint is a documentation update, not a new deployment or live check.
+This checkpoint incorporates the dated deployments below. This knowledge-only
+update does not deploy code, reload the browser or perform a fresh live check.
 
 ### Source and runtime state
 
@@ -30,12 +31,13 @@ This checkpoint is a documentation update, not a new deployment or live check.
 | Last directly verified live API/web | API `9d05673248ce6ead30652e62bb1d5e569404848c`, web `1fee67127877838f09b9a42f5edef6bc4669f34e`, healthy through public/signed-in HTTPS on 2026-10-27T00:59Z (2026-10-26 17:59 Pacific). Contextual Memory API is live; existing `6163f59` Inbox behavior and branding parser 4 are preserved |
 | Newer source not yet live | Reliable-Inbox P1 to P6 below remain a plan, not implemented or deployed. The read-only diagnosis script is now present in the API image but was not run by this release. Documentation updates need no rebuild |
 | Important runtime distinction | API-only Memory release runs `9d05673`; web stays `1fee671`. Existing Inbox parser 5 is preserved; proposed reliable-Inbox parser 6 is not built. Recheck health and source/image hashes before another release |
-| Installed source of unpacked extension | Manifest **1.30.0** for contextual reuse; supporting Memory API is deployed. Browser activation needs Reload/refreshed employer tabs. No Web Store publication |
+| Unpacked extension source / browser state | Manifest **1.30.0** for contextual reuse; supporting Memory API is deployed. Browser activation needs Reload/refreshed employer tabs. No Web Store publication |
 | Database | Last verified schema `0050`; no migration was run for the logo or contextual Memory releases |
+| Latest recorded preservation totals | 2026-10-26 17:57 Pacific API swap: 1,231 job marks, including 892 Applied; 47 external applications; 104 answer-bank and 67 Memory rows; 111 career facts; 2 history entries; 5 resumes; 6 resume documents; 6 resume versions; 1 user. All matched before/after; these are observations, never UI constants |
 | Last logo verification totals | 936 applications, 889 posting applications plus 47 external history, stable during 2026-10-26 17:19 Pacific verification; a timestamped observation, never a UI constant |
 
 Saving this knowledge does not authorize any activation. The Inbox build
-`6163f59` behavior is preserved in the live logo release. The reliable-Inbox work in the next section is NOT
+`6163f59` behavior is preserved in the live logo release. The reliable-Inbox P1 to P6 plan below is NOT
 built and nothing in it is deployed. Before any release check which commit the
 images contain, whether newer changes exist and the owner's authorization. A
 documentation commit requires no application rebuild.
@@ -84,7 +86,11 @@ documentation commit requires no application rebuild.
   actual text/select/radio/checkbox controls and exact question labels; never
   use selected text such as Yes Required as the question. Reuse equivalent
   owner-provided routine answers without duplicate approval; keep correction,
-  delete and Undo controls. Work-history dates, location and current-job flags
+  delete and Undo controls. The reviewed factual binary screenings can also save
+  under `scoped` Memory with exact country, status-set, employer, subsidiary and
+  timeframe boundaries. Saving a committed edit is separate from filling; only
+  a successful save earns "saved for next time". Unsupported protected decisions
+  remain manual. Work-history dates, location and current-job flags
   belong to their matched entry, not global answers. Preserve drag across the
   viewport/frames, minimize, Close and themes. Company motivation answers stay
   entirely on the employer form. Never default every question to Yes, submit
@@ -98,22 +104,30 @@ documentation commit requires no application rebuild.
 | Shared logos | `web/src/components/CompanyLogo.tsx`, `CompanyIdentity.tsx`, `web/src/lib/companyLogos.ts`, `web/public/company-logos/provenance.json`; `backend/app/branding/{sources,discovery,transport,cache}.py` and `backend/app/api/routers/companies.py` |
 | Logo cache and recovery | Four workers, 32 pending, 512 entries; seven-day success/six-hour miss; parser v4 keys; dynamic image retries at 2 and 15 seconds, at most twice, with cleanup. Unavailable evidence can still retain initials; no universal external-image guarantee |
 | Inbox | `backend/app/inbox/{gmail,reconcile,display}.py`, `backend/app/api/routers/inbox.py`, `web/src/components/inbox/`; source parser version and deployed parser version must be checked separately |
-| Extension | `extension/{content,fields,popup,background}.js`, manifest, `web/tests/extension-review.test.mjs`; approved V5.1 package plus later explicit-fill decisions |
-| Exact logo release inventory, sources and rollback | `docs/architecture/2026-10-26-platform-company-logos.md`, `2026-10-26-company-identity.md`, `2026-10-26-quick-fill-release.md` |
-| Extension behavior and proofs | `docs/architecture/2026-10-26-extension-explicit-fill.md`, `docs/knowledge/06-extension-autofill.md` |
-| Latest private rollback on VM | `private-backups/platform-company-logos-20261026/`; prior API/web image tags and custom-format backup/restore catalog. Never copy private artifacts into Git or automatically restore a database for a UI rollback |
+| Extension | `extension/{content,fields,memory,popup,background}.js`, manifest; approved V5.1 package plus later explicit-fill and contextual reuse decisions |
+| Scoped screening Memory | `backend/app/answers/screening.py`, `ExtensionMemoryInput` and existing `/api/extension/memory` handler in `backend/app/api/main.py`; `backend/tests/test_screening_memory.py`, `backend/tests/fixtures/screening_memory.json`, `extension/test-memory.js`, `web/tests/extension-review.test.mjs` |
+| Exact logo release inventory, sources and rollback | Latest: `docs/architecture/2026-10-26-pulls-company-logos.md`; earlier platform, company-identity and quick-fill records remain historical |
+| Extension behavior and proofs | `docs/architecture/2026-10-26-context-answer-reuse.md`, `2026-10-26-extension-explicit-fill.md`, `docs/knowledge/06-extension-autofill.md` |
+| Latest private rollback on VM | API Memory release: `/opt/ace/private-backups/memory-context-20261026/`, previous image `oracle-api:before-memory-context`; logo API/web release: `/opt/ace/private-backups/pulls-company-logos-20261026/`, tags `oracle-api:before-pulls-company-logos` and `oracle-web:before-pulls-company-logos`. Never copy private artifacts into Git or automatically restore a database for a UI/API rollback |
 
 ### Validation, operating lessons and next work
 
-Recorded logo-release checks passed 142 fictional backend logo/auth/source
-tests, 10 company React contracts, 12 Inbox and 4 Analytics render tests,
-TypeScript, lint, production builds and the dash guard. Live signed-in HTTP
-checked all 80 image hashes, all 21 reviewed company detail references, the
-default Analytics view and Greenhouse/Ashby discovery. Application totals,
-schema, environment bytes and scheduler/PostgreSQL/Caddy IDs were preserved.
-Extension 1.29.1 passed 75 fictional DOM contracts, 258 matcher cases and Memory
-safety checks. These are dated results, not tests rerun by this documentation
-update and not proof of a live employer form or browser visual rendering.
+Latest contextual Memory checks: 82 fictional DOM contracts, 173 fictional
+backend Memory/auth/logo tests (20 screening, 67 auth, 86 logo), 258 matcher
+cases, Memory safety/scope/paraphrase tests, syntax, TypeScript, lint and
+whitespace/dash checks passed. The running API image also passed the 20 focused
+screening tests with isolated SQLite fixtures. Public HTTPS verified the new
+handler's refusal guards, existing private Memory reads, unchanged web SHA,
+Pulls, Inbox, Analytics and the five reported logo hashes. No real answers were
+saved by release verification.
+
+The earlier Pulls logo release passed 159 backend logo/auth tests plus nine
+source contracts, 11 company React contracts and existing Inbox/Analytics
+render checks, TypeScript, lint, production builds and dash/whitespace checks.
+Live checks covered all 85 bundled hashes, all five automatic routes and 15
+company/job/Opportunities references. The earlier 80-image and extension 1.29.1
+results below remain historical. These are recorded results, not tests rerun by
+this documentation update or proof of a live employer form/browser rendering.
 
 - Do not launch Chrome/browser tests on this laptop while the cooling
   restriction stands. Nine logo and 39 extension Playwright cases were collected
@@ -132,6 +146,10 @@ update and not proof of a live employer form or browser visual rendering.
   Pass actual intended stdin explicitly for Python scripts or restore-catalog
   checks. A `pg_restore --list` consumer can close a gzip pipe early; distinguish
   expected SIGPIPE from a failed backup rather than suppressing all errors.
+- Use umask 022 for Git checkouts/public source files and umask 077 for private
+  backups. The web image grants public files read/traversal access before
+  switching to its unprivileged runtime user. Verify hashes through public HTTPS;
+  healthy `/healthz` alone did not catch unreadable new assets.
 - Prepare/build/test before an authorized API/web activation. Do not restart
   schedulers, migrate, publish the extension, change Gmail permissions or
   perform destructive operations as incidental release steps. Both legacy and
@@ -142,9 +160,9 @@ update and not proof of a live employer form or browser visual rendering.
   owner edits, record exact files/tests/limits and use the owner's Git identity
   without co-author trailers. No user-facing em dashes. Keep replies short.
 
-Next work must follow the owner's next request. Known outstanding checks are
-the pending Inbox activation decision/runtime verification, browser visual
-validation on suitable hardware, ongoing independent discovery comparison,
+Next work must follow the owner's next request. Known outstanding work includes
+the unimplemented reliable-Inbox P1 to P6 plan, browser visual validation on
+suitable hardware, ongoing independent discovery comparison,
 actual availability of official sponsorship/resume/channel evidence, and owner
 verification of the reloaded extension on real forms. Do not silently turn
 these pending items into completed work or start them merely because they are
@@ -152,31 +170,166 @@ listed here.
 
 ## 2026-10-26: Contextual answer adoption, API live, extension 1.30.0
 
-Status: **API deployed with explicit owner approval**, `9d05673`, activated
-2026-10-26 17:57 Pacific and verified 17:59. The owner wants completed answers
-adopted and reused for meaning-equivalent questions. The previous server's
-blanket protected/company rejection prevented saving most pictured screenings. The new
-reviewed `scoped` policy permits exact factual binary screenings with status-set,
-country, employer/subsidiary and timeframe boundaries, while unknown protected
-questions, consent/attestations and motivation remain excluded. This specific
-owner-authorized policy supersedes the older blanket per-application-only rule
-for those reviewed facts; it does not authorize loose keyword matching.
+### Owner request, root cause and final behavior
 
-Extension source is **1.30.0**; browser activation still needs extension Reload
-and refreshed employer tabs. The supporting API-only release is live. No schema or
-migration is required. New saved receipts, late-connection adoption, bounded
-paraphrases, identical-duplicate handling, correction invalidation and failure
-retry are tested. 82 DOM contracts, 173 fictional backend Memory/auth/logo tests,
-258 matcher cases, Memory safety, syntax, TypeScript, lint and dash checks pass.
-No Chrome or real employer verification. Only the API container was replaced;
-web, scheduler, PostgreSQL, Caddy and environment stayed unchanged. A verified
-470,305,554-byte private backup and previous-image rollback were retained. All
-tracked data counts stayed unchanged (including 67 Memory rows). Public owner
-Memory read/no-store, anonymous 401 and new invalid-scope/namespace 422 guards
-passed without saving answers. Twenty deployed-image SQLite fixture tests pass.
-Pulls, Inbox and Analytics return 200; five logo assets still match hashes.
-Existing parser 5 is preserved; reliable-Inbox P1 to P6 remain unimplemented.
-Source and release boundaries:
+The owner reported repeated screening questions after already answering them and
+asked for reuse based on compatible meaning/context rather than exact wording.
+The old API deliberately rejected protected/company questions, so one-form
+completion could never become future Memory for most pictured screenings.
+Routine canonicalization also missed common paraphrases, identical duplicate
+entries were treated as conflicts, and a trusted edit committed before Memory
+connected was not retried. Source `9d05673248ce6ead30652e62bb1d5e569404848c`
+fixes these paths. PR #5 is merged into `wine-rose-platform`; documentation
+commit `d15b2f3` records the completed deployment. Later documentation SHAs do
+not identify different running images.
+
+This specific owner-authorized `scoped` policy supersedes older blanket
+per-application-only rules for the reviewed facts below. It does not authorize
+loose keyword matching, inferring unknown answers or reusing arbitrary protected
+questions. Existing V5.1 employer-motivation exclusion remains in force.
+
+- **Adoption and receipts:** with **Auto-save reusable answers** enabled, a real
+  committed owner edit can save once without duplicate approval. Existing
+  `aceAutoLearnRoutine` preference is retained. A delayed Memory connection
+  retries only the still-current trusted edit; it never initiates filling.
+  Native and supported custom choices must verify committed employer state.
+  Uncommitted search text/unknown options stay unlearned. Successful saving
+  alone adds "N saved for next time"; failed saving preserves completion and
+  offers Retry. Local completion is not proof of persistence.
+- **Routine equivalence:** reviewed prompt/verb variants normalize, including
+  building/developing/implementing and using/utilizing. Question kind, negation,
+  numeric values and timeframe remain significant. Identical duplicate answers
+  can resolve; differing answers stay conflicts requiring correction.
+- **Reviewed binary screenings:** exact two-status US citizen/permanent-resident
+  and four-status citizen/permanent-resident/refugee/asylee questions; combined
+  present/future visa sponsorship; named-employer current/past work; temporary
+  work and interview history; agency submission within the last 12 months; and
+  the complete current/former-employer post-employment-obligations question.
+  Only explicit Yes/No answers with the computed scope can save. Do not derive
+  compound eligibility from one status, combined sponsorship from only one
+  timeframe, or all post-employment obligations from a narrow non-compete fact.
+- **Context boundaries:** named employer, subsidiary scope, previous versus ever,
+  status sets, country and timeframe remain distinct. Explicit US sponsorship
+  is separate from unspecified-country wording. Relative employer wording,
+  agency submission and unspecified work country bind to the hiring tenant/site.
+  Workday locale/site paths, myworkdaysite recruiting tenant/site and Oracle
+  sites stay separate. Greenhouse, EU Lever, Ashby, Workable, SmartRecruiters and
+  Gem use recognized employer tenant paths; unsupported shared-host variants
+  are rejected. Employer-owned sites bind to their actual host.
+- **Private API:** existing `/api/extension/memory` accepts `reusable` or `scoped`
+  policy. Scoped keys use `fact:v1:` and are checked against the server's reviewed
+  question/key/scope/binary-answer catalog. The reserved namespace cannot enter
+  through ordinary reusable policy. Existing rows keep their policy and revision
+  checks; incompatible edits fail instead of silently broadening reuse. The
+  existing schema 0050 `reuse_policy` column suffices; no migration or historical
+  answer-bank/profile rewrite. Corrections/deletions invalidate on-form reuse
+  copies. Existing employer-entered values are preserved.
+- **Unchanged boundaries:** Fill, toolbar Fill or Alt+A remains explicit. Opening,
+  focusing, hovering, typing and late responses never start filling. Motivation
+  is excluded before reading values. Attestations, signatures, consent,
+  demographic choices and unsupported protected facts stay manual. No submission,
+  step navigation, Applied mark, Gmail scope, auth-model or discovery change.
+
+Runtime files: `extension/{memory,content}.js`, manifest **1.30.0**,
+`backend/app/answers/screening.py` and the existing Memory handler/input in
+`backend/app/api/main.py`. Fictional tests are in `extension/test-memory.js`,
+`web/tests/extension-review.test.mjs`, `backend/tests/test_screening_memory.py`
+and shared `backend/tests/fixtures/screening_memory.json` (18 scope cases).
+Local checks passed 82 DOM contracts, 173 backend Memory/auth/logo tests,
+258 matcher cases, Memory safety, syntax, TypeScript, lint and dash/whitespace
+checks. Thirty-nine Playwright cases in nine files collected only. Chrome and
+real employer verification were not performed due to the cooling restriction.
+
+### Approved API deployment and verified preservation
+
+The owner explicitly said **Deploy** after the separate API change was prepared.
+Activated 2026-10-27T00:57:27Z (2026-10-26 17:57 Pacific); public verification
+finished 2026-10-27T00:59:08Z (17:59 Pacific). API runs `9d05673`; website remains
+`1fee67127877838f09b9a42f5edef6bc4669f34e`. API branding parser 4 and the existing
+`6163f59` Inbox parser 5/add-from-email behavior remain. Reliable-Inbox P1 to P6
+below are still unimplemented; their read-only report script is present in the
+API image but was not run by this release.
+
+A fresh private PostgreSQL backup passed full gzip integrity and PostgreSQL
+restore-catalog checks, not a restore drill:
+`/opt/ace/private-backups/memory-context-20261026/database.dump.gz`,
+470,305,554 bytes. The directory also retains private inventories, container/image
+records, source hashes and preparation/activation/verification logs. Prior API
+image tag: `oracle-api:before-memory-context`. Rollback replaces only the API
+image; never automatically restore production data for this release.
+
+Built only API and activated with:
+
+```bash
+docker compose --env-file .env -f deploy/oracle/compose.yaml up -d --no-build --no-deps --wait --wait-timeout 180 api
+```
+
+The prepared/running healthy image ID is
+`sha256:f0a2546982ff00316276f71081654dff70ef01ec35fd393da6a93814855aede3`.
+Web, scheduler, PostgreSQL and Caddy container IDs and private environment
+checksum were identical before/after. Schema stayed `0050`. No migration,
+scheduler invocation, data restore, Gmail sync/recheck, application write or
+extension publication ran. Before/after protected aggregate counts matched:
+
+| Resource | Count |
+| --- | ---: |
+| Job marks / Applied marks | 1,231 / 892 |
+| External applications | 47 |
+| Answer-bank rows / private Memory rows | 104 / 67 |
+| Career facts / history entries | 111 / 2 |
+| Resumes / resume documents / resume versions | 5 / 6 / 6 |
+| Users | 1 |
+
+These timestamped counts are release evidence, never UI constants. The earlier
+17:19 logo verification had different application totals; subsequent owner
+activity is not a release migration or a reason to rewrite history.
+
+Public `/healthz` returned 200 with healthy API and unchanged web SHA. Anonymous
+Memory GET returned 401; owner GET returned 200/no-store with 67 existing rows
+without printing questions/answers. Intentionally invalid fictional scoped and
+reserved-namespace writes returned the new handler's exact 422 refusals and
+saved nothing. Memory count remained 67. Temporary five-minute verification
+sessions were revoked in `finally`, including incomplete verification attempts.
+Signed-in `/app/pulls`, `/app/applications/inbox` and
+`/app/applications/analytics` returned 200. Uber, Optiver, Chime, temporal and
+twitch assets still matched their reviewed public hashes.
+
+Twenty focused screening tests passed inside the deployed image using isolated
+fictional SQLite fixtures, not production writes. Test-process overrides were
+`DATABASE_URL=sqlite://`, `ACE_AUTH=required`,
+`REQUIRE_LOGIN_EMAIL_CODE=false`, `WEB_BASE_URL=http://localhost:3000`.
+The initial run without local sign-in overrides passed 18 catalog cases and
+failed two pairing fixtures before reaching the handler because it inherited
+the production email-code requirement. Service configuration was not changed.
+The first HTTPS script used root-level page paths rather than `/app/...`; its
+corrected run used the actual routes. Logo preservation compares expected local
+hashes because public website assets are intentionally absent from the API image.
+These verification-script corrections did not change or redeploy runtime code.
+
+Running source SHA-256 values matched the tested checkout:
+
+| File | SHA-256 |
+| --- | --- |
+| `backend/app/api/main.py` | `bba3e8fec5eb68a91b774646f71d1acb4c688a37c4798d87857cc61456a22c73` |
+| `backend/app/answers/screening.py` | `ac913c93b57a2eaf5bf70ab06871a204fc00adef9f9ed9426cfd9cc590d67845` |
+| `backend/app/branding/discovery.py` | `b91c2b7722d7e748cd15d4d636576bd9f69dcd5d30dfc4df77610eda4e4f613c` |
+| `backend/app/branding/sources.py` | `5a9dcdc81ecc2eae842aa0b119c46be20ec74daa9bd632ca71bd717ad91fba89` |
+
+### Owner activation and remaining limits
+
+1. At `chrome://extensions`, Reload ACE from the unpacked source directory
+   `/home/ubuntu/Documents/ace-next/extension` (manifest 1.30.0).
+2. Refresh each employer/application tab so it gets the updated scripts.
+3. Keep Auto-save reusable answers enabled, commit one eligible answer and
+   confirm "saved for next time". Completion alone is not a saved receipt.
+4. On a later context-compatible question, use explicit Fill to reuse it.
+
+Previously rejected saves cannot be reconstructed from closed forms; newly
+eligible facts need entering once. Existing saved routine/profile facts remain.
+Browser Reload, installed MV3 state and the owner's actual Workday interaction
+have not been confirmed; do not call these production-employer verification.
+No new permission or activation was granted by the knowledge-only follow-up.
+Detailed supporting release record:
 `docs/architecture/2026-10-26-context-answer-reuse.md`.
 
 ## OPEN WORK for the next chat: a reliable Inbox (measured 2026-10-26 evening)
@@ -1444,7 +1597,7 @@ commits (`54e939a`, `61debd6`, `8d84141`), the reconciled Focus Mode V5.1
 commits (`559ee84`, `5b8ab4b`, equivalents of local `4ce3570` and `cb7bb5e`),
 the V5.1 typography pass and theme sync/Close (`386bed9`). It contains the
 existing V4 Answer Memory implementation (`2e7c1dc`). The
-extension manifest is now `1.29.1` (explicit filling, Workday month/year and question-label corrections, completed-answer receipts, full-viewport dragging and optional routine-answer saving described above). The V5.1 extension has not been published; it
+extension manifest is now `1.30.0` (contextual reuse and saved receipts, preserving explicit filling, Workday month/year and question-label corrections, full-viewport dragging and optional answer saving described above). The V5.1 extension has not been published; it
 runs as an unpacked installation loaded from
 `/home/ubuntu/Documents/ace-next/extension`. An unpacked installation must be
 reloaded at `chrome://extensions`; employer tabs must then be refreshed.
@@ -2586,7 +2739,8 @@ reassuring success state when the backend has not confirmed one.
 
 The extension is Manifest V3. Important implementation areas are
 `extension/content.js`, `fields.js`, `background.js`, the popup/side panel,
-storage, pairing and rule tests. The current local manifest version is 1.29.1.
+storage, pairing and rule tests. The current local manifest version is 1.30.0;
+see the latest contextual adoption section for deployed API and scope rules.
 The approved interface is ACE Focus Mode V5.1; older extension interfaces are
 historical.
 

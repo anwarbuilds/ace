@@ -111,11 +111,15 @@ The plan P1 to P6, the numbers and the report script
 "OPEN WORK for the next chat: a reliable Inbox".
 
 **Current cross-session checkpoint:** See `ACE_NEXT_KNOWLEDGE.md` for live web
-`1fee671`, API logo source `d0342d4`, extension 1.29.1 and the unimplemented
+`1fee671`, API `9d05673`, extension source 1.30.0 and the unimplemented
 reliable-Inbox plan. All 85 logo hashes and the five reported company/job/detail
 references plus general dynamic routes passed signed-in HTTPS at 17:19 Pacific.
-Schema 0050 and protected services/configuration are preserved. Evidence:
-`architecture/2026-10-26-pulls-company-logos.md`. No browser rendering claimed.
+The Memory API was subsequently deployed and verified at 17:59 Pacific;
+only API changed and data counts stayed intact. Schema 0050 and protected
+services/configuration are preserved. Browser Reload and employer-tab refresh
+remain unconfirmed. Evidence:
+`architecture/2026-10-26-pulls-company-logos.md` and
+`architecture/2026-10-26-context-answer-reuse.md`. No browser rendering claimed.
 
 **2026-10-26 explicit-fill correction:** Local extension **1.29.1** fills only
 after Fill or Alt+A. Focus, hover, typing and late data responses stay passive.

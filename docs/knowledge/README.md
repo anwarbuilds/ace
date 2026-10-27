@@ -8,9 +8,11 @@ The root knowledge file now opens with a consolidated continuation checkpoint:
 latest owner decisions, separately recorded source/build/runtime states, shared
 logo and Analytics contracts, extension behavior, test recipes and unresolved
 checks. Use it to navigate after the required continuity read. The last directly
-verified release is `0fef238`; the newer Inbox `6163f59` build was recorded as
-awaiting activation. Documentation updates are not deployments or fresh live
-verification. Keep this distinction when continuing in a new chat.
+verified runtime is API `9d05673` and web `1fee671` at 2026-10-26 17:59
+Pacific. Contextual Memory API is deployed; extension source 1.30.0 still needs
+owner Reload and employer-tab refresh. Existing Inbox `6163f59` parser 5 is
+preserved, while reliable-Inbox P1 to P6 remain an unimplemented plan.
+Documentation updates are not deployments or fresh live verification. Keep this distinction when continuing in a new chat.
 
 | File | Covers | Read when | Size |
 | --- | --- | --- | --- |
