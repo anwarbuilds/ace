@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-27, live full-history import/rechecks independently verified; parser-7 fix awaiting approval
+Last updated: 2026-10-27, all developed Inbox/Analytics changes live; parser-7 historical recheck running
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -12,6 +12,72 @@ repository instructions. Dated observations below are evidence from that date,
 not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
+
+## Current live release, 2026-10-27T16:30Z
+
+The owner answered the separate parser-7 deployment question with: “What about
+the developments you did? I need everything to be live.” This authorizes the
+remaining API-only activation and the eligible historical rechecks described in
+that question. **All developed Inbox/Analytics changes are now live.** PR #7 is
+merged. The canonical branch includes `ab8d6f1`; the API image was built from the
+exact tested runtime commit `3294139f27eaae8985b58ce6294aae0242bd747a`.
+The merge differs from that candidate only in four continuity documents.
+The existing web release remains `5ab6b1a90decfcddf8b3866fe99a9627f0f2e574`;
+there are no additional web changes to release. Older pending-approval notes
+below are dated history, superseded by this checkpoint.
+
+API-only activation was verified at 16:27Z: parser 7, healthy API, unchanged
+web/scheduler/PostgreSQL/Caddy container and image IDs, schema `0050`. Running
+Inbox SHA-256 is `e3149312a7d2b15a95ad2ff0e79d2827a9453090921d7390a1a69b11e1e280fc`;
+reconciler is `5eac2e8ef37408100f448f545940b3fb772d968bee82ed8fea0d6da7f225885f`;
+Analytics remains `80db50ddcf0cb87a129680d8729ac1390fdb9947680ee79940f1cde6abd17074`.
+The running API image is
+`sha256:c95437dd07cc9e90c766b28f07cbf5e9edc8aa388ce358ea1cdf1e16a5c13333`.
+Public HTTPS health/auth/assets passed at 16:26:51Z with the exact existing web
+SHA. No migration, scheduler operation, extension publication or signed-in
+production browser mutation test ran.
+
+A fresh private consistent backup is under
+`/opt/ace/private-backups/inbox-parser7-20261027/`, directory mode 700 and
+`database.dump.gz` mode 600, 477,571,512 bytes. Gzip integrity and PostgreSQL
+archive listing passed; this is not a restore drill. The previous API image is
+retained as `oracle-api:before-inbox-parser7-20261027`. Eight of nine inventory
+counts matched activation exactly. Job marks rose 1,237→1,238 during live use;
+a private backup-to-live row comparison proves zero removed/changed existing
+rows and exactly one additional dismissed, unapplied job. Applied marks remain
+897, external applications 48, with the other seven protected counts unchanged.
+All **199** current recorded/owner-filed Inbox decisions match their private
+pre-activation snapshot; the earlier 147-row snapshot was also retained.
+
+Independent read-only coverage at **16:29:29Z** again confirms **7,928 retained
+Gmail IDs, 7,928 stored, zero missing**, including Spam/Trash, and zero missing
+in every shorter comparison query. The real-data read-only Analytics audit at
+**16:29:31Z** passes all 14/30/90/all-time projection checks: 945 identities,
+751 Applied, 192 Rejected, 2 Screening, 177 dated rejections; Inbox and Analytics
+both have 1,318 pending messages. The duplicate/date/status-fallback limits in
+the earlier final verification remain; no merges or owner overrides occurred.
+
+**Parser-7 historical rechecks are still running, not complete.** A one-time
+operator runner started at approximately 16:30Z, with 7,729 eligible older-parser
+messages; the other 199 are protected. It re-listed all retained mail and
+confirmed 7,928/7,928, zero missing, at 16:30:12Z before rechecking. Gmail reads
+are paced at least 0.7 seconds apart, with retry/cooldown handling and committed
+per-message progress. The runner survives SSH disconnects; no persistent service
+or scheduler was added. Its first startup failed before any work because a
+standalone script lacked the application import path; explicit `PYTHONPATH=/app`
+fixed that, and the failed startup log is kept separately. Runtime code is
+unchanged by this operator correction.
+
+To continue, inspect the private `parser7-recheck.log`, `recheck-runner-pid` and
+`recheck-exit-status` in the backup directory. Absence of exit status means the
+runner has not reported completion; check its process/log before starting any
+second runner. Success runs the independent coverage and Analytics reports,
+compares both protected snapshots, requires zero eligible stale messages and
+zero missing IDs, and writes `parser7-final-*.json` / `parser7-final-coverage.txt`.
+The runner is `/tmp/ace-inbox-parser7-runner.sh` on the VM. A container/VM restart
+can interrupt it; committed SQL progress remains and must be resumed through
+the same eligible service operations. Do not infer completion from code being
+live, and do not claim perfect semantic recognition from full ID coverage.
 
 ## Final live verification, 2026-10-27T16:01Z
 
@@ -114,8 +180,8 @@ update does not deploy code, reload the browser or perform a fresh live check.
 | Item | Last recorded state |
 | --- | --- |
 | Repository / canonical branch | `/home/ubuntu/Documents/ace-next`, `wine-rose-platform`, remote `anwarbuilds/ace`; fetch and inspect before editing because parallel chats advance it |
-| Last directly verified live API/web | API/web `5ab6b1a90decfcddf8b3866fe99a9627f0f2e574`, verified healthy with exact public frontend SHA at 2026-10-27T16:01Z; parser 6. Full-history import/rechecks completed and independently verified; see Final live verification above |
-| Newer source not yet live | Parser 7 truncation-safety candidate, 293 focused backend tests pass; separate API-only release approval required |
+| Last directly verified live API/web | API `3294139` (parser 7), web `5ab6b1a`, verified healthy 2026-10-27T16:27Z; all retained mail stored, zero missing. Parser-7 historical rechecks running; see Current live release above |
+| Newer source not yet live | No outstanding developed Inbox/Analytics runtime change. Owner-approved parser 7 is live; historical rechecks running |
 | Important runtime distinction | Both API and web now run the approved reliable-Inbox release. API Analytics source hash matches the reviewed projection. No extension runtime publication, migration or scheduler change |
 | Unpacked extension source / browser state | Manifest **1.30.0** for contextual reuse; supporting Memory API is deployed. Browser activation needs Reload/refreshed employer tabs. No Web Store publication |
 | Database | Last verified schema `0050`; no migration was run for the logo or contextual Memory releases |

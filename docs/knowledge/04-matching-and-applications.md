@@ -656,3 +656,24 @@ Inbox/Analytics browser checks pass. The broader app suite has the exact same
 20 failures as the approved baseline, with zero new failing cases (196 app
 browser passes total). It has not been deployed; another API activation awaits
 owner approval. See the root Final live verification and the full-history report.
+
+
+## 2026-10-27T16:30Z: remaining parser-7 development approved and live
+
+The owner answered the specific API-only parser-7 release question by requesting
+all developments be live. PR #7 is merged; exact tested API runtime `3294139`
+(parser 7) is live and healthy. Web already contains all developed changes and
+remains `5ab6b1a`. Fresh private backup/rollback image retained, schema `0050`,
+web/scheduler/PostgreSQL/Caddy identities unchanged. All 199 protected Inbox
+rows match their snapshot. A one-row job-mark increase is a new unapplied
+dismissal; private comparison proves zero existing rows changed or disappeared.
+
+Independent 16:29Z coverage still verifies all 7,928 retained Gmail IDs stored,
+zero missing. Analytics invariants pass with 945 identities, 192 Rejected,
+177 dated rejections and 1,318 pending. Semantic and owner-review limits remain.
+The additional 7,729 eligible parser-7 rechecks run in a one-time paced operator
+process with per-message commits and automatic final read-only reports. They
+are **not yet complete**. Check private VM directory
+`/opt/ace/private-backups/inbox-parser7-20261027/`, `parser7-recheck.log` and
+`recheck-exit-status` before resuming. Details are in the root Current live
+release and `../architecture/2026-10-27-full-history-inbox.md`.

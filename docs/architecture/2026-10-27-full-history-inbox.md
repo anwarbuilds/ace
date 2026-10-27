@@ -1,11 +1,12 @@
 # Full-history Inbox and Analytics, 2026-10-27
 
-Status: owner-approved API/web `5ab6b1a` is live. Full-history import and
-old-parser rechecks completed at 2026-10-27T16:01Z. Independent read-only reports
-verify all 7,928 retained messages are stored, zero missing, and Analytics
-arithmetic passes. Outcome recognition remains subject to review. The additional
-parser-7 candidate `3294139` awaits separate API-release approval. Earlier
-measurements below are historical baselines, superseded by the completion section.
+Status, 2026-10-27T16:30Z: **all developed Inbox/Analytics changes are live**.
+The owner separately approved parser 7 by requesting everything be live; PR #7
+is merged. API runtime `3294139` is live and healthy, web remains `5ab6b1a` with
+all developed dashboard changes. Independent 16:29Z reports again confirm
+7,928/7,928 retained Gmail IDs stored, zero missing, and passing Analytics
+arithmetic. Additional parser-7 rechecks are running, not complete. Earlier
+approval-pending notes below are dated history, superseded by the latest section.
 
 ## Owner requirement and verdict
 
@@ -344,3 +345,77 @@ sets match the approved parser-6 baseline, with zero new failing cases; the
 overall e2e job remains failed. Exact candidate proof: run 40526589769, job
 122268531501, focused step 13 completed 15:03:21Z. Do not deploy this candidate
 under the earlier approval for `5ab6b1a`.
+
+
+## Approved parser-7 API activation and ongoing rechecks, 16:30Z
+
+The owner's reply to the specific parser-7 approval question was: “What about
+the developments you did? I need everything to be live.” That authorizes the
+remaining API activation and historical rechecks described in that question.
+Canonical `wine-rose-platform` includes review merge `ab8d6f1`; its runtime/test
+files are byte-identical to exact tested candidate
+`3294139f27eaae8985b58ce6294aae0242bd747a`. The API image was built from that
+exact candidate. PR #7 is merged. No web runtime changes remain beyond deployed
+`5ab6b1a90decfcddf8b3866fe99a9627f0f2e574`.
+
+API-only `up --no-build --no-deps --wait` was verified at 16:27Z. Parser 7 is
+running and API/web are healthy. Web/scheduler/PostgreSQL/Caddy container and
+image identities are unchanged. Schema remains `0050`. Running API image:
+`sha256:c95437dd07cc9e90c766b28f07cbf5e9edc8aa388ce358ea1cdf1e16a5c13333`.
+Source SHA-256:
+
+- Inbox: `e3149312a7d2b15a95ad2ff0e79d2827a9453090921d7390a1a69b11e1e280fc`.
+- Reconciler: `5eac2e8ef37408100f448f545940b3fb772d968bee82ed8fea0d6da7f225885f`.
+- Analytics unchanged: `80db50ddcf0cb87a129680d8729ac1390fdb9947680ee79940f1cde6abd17074`.
+
+A new private consistent backup is in
+`/opt/ace/private-backups/inbox-parser7-20261027/`: mode-700 directory,
+mode-600 `database.dump.gz`, 477,571,512 bytes, gzip and PostgreSQL archive
+listing verified. No restore drill. Previous API image retained as
+`oracle-api:before-inbox-parser7-20261027`. Eight inventory counts match exactly;
+job marks rose 1,237→1,238. A private comparison against the fresh backup proves
+zero existing job-mark rows changed or disappeared and exactly one added
+dismissed, unapplied, unsaved job. Existing owner activity was preserved.
+All 199 protected recorded/owner Inbox decisions match their fresh snapshot;
+the prior 147-row snapshot was copied out before container replacement.
+
+Public HTTPS health at 16:26:51Z returns the exact unchanged frontend commit
+and healthy API; Inbox/Analytics require authentication, public images load.
+Independent enforced-read-only reports at 16:29:29Z and 16:29:31Z verify:
+
+- 7,928 retained Gmail IDs, all stored, zero missing, including Spam/Trash;
+  every shorter comparison query also has zero missing.
+- 945 identities = 897 applied marks + 48 external applications.
+- 751 Applied, 192 Rejected, 2 Screening; 177 dated rejections.
+- Inbox pending = Analytics pending = 1,318; all projection invariants pass.
+- No orphan active outcome events. The two possible duplicate groups, two old
+  date conflicts, one status-only record and six owner-filed outcome-worded
+  acknowledgements retain their previously documented review limits.
+
+A one-time paced operator runner started at approximately 16:30Z and re-listed
+7,928/7,928 retained mail IDs with zero missing at 16:30:12Z. It is rechecking
+**7,729 eligible historical messages** using deployed business rules; the other
+199 decisions are protected. **These rechecks have not yet completed.** Reads
+are spaced at least 0.7 seconds with quota cooldown handling and per-message
+commits. The runner survives SSH disconnects, adds no scheduler/service, and
+runs independent coverage, Analytics and both preservation comparisons after
+completion. It requires zero eligible stale mail, zero missing IDs in every
+query and passing Analytics checks. Private outputs use `parser7-final-*`.
+A startup-only Python import-path failure was corrected with explicit
+`PYTHONPATH=/app`; the failed attempt made no mail changes and is logged apart.
+
+For continuation, inspect `parser7-recheck.log`, `recheck-runner-pid`,
+`recheck-exit-status`, and the runner process in that backup directory before
+starting another operation. `0` exit status plus final reports certifies the
+checks ran; absent status does not certify completion. VM runner:
+`/tmp/ace-inbox-parser7-runner.sh`. Container/VM restarts interrupt it but retain
+committed SQL progress. Any later owner actions that change protected snapshots
+must be investigated, never automatically undone.
+
+All 293 focused backend tests and exact-candidate hosted backend/web, 47
+extension browser and 30 focused Inbox/Analytics cases passed before activation.
+The broader browser job remains failed on the same 20 cases as the prior live
+baseline; no new failing cases were introduced. No migration, scheduler change,
+extension publication, destructive repair or signed-in production browser test
+was performed. Code activation and full ID coverage do not certify perfect
+semantic recognition or completion of the ongoing parser-7 recheck.
