@@ -283,3 +283,32 @@ def test_email_outcomes_count_despite_the_inbox_audit_entry_every_email_has(db):
     records=read(db,records=True,evidence="rejection")["records"]
     assert [r["key"] for r in records]==[other,key]
     assert all(r["evidence"][0]["message_id"] for r in records)
+
+
+def test_empty_search_explains_applications_outside_rejection_date_status_and_role_filters(db):
+    old = app(db, 801, age=80, company="Fictional Mac")
+    recent = app(db, 802, age=3, company="Fictional Mac", family="ML_ENGINEERING")
+    db.add(ExternalApplicationRecord(company="Fictional Mac", title="Fictional external role", match_key="fictional-mac", applied_at=None, application_status="screening"))
+    db.flush()
+    before = db.scalar(select(func.count()).select_from(ApplicationEventRecord))
+    d = analytics_read(db, now=NOW, records=True, days="30", evidence="rejection", q="fictional mac", family="SOFTWARE_ENGINEERING")
+    assert not d["records"] and d["record_total"] == 0
+    other = d["not_listed"]
+    assert other["application_total"] == 3
+    by_key = {a["key"]: a for a in other["applications"]}
+    assert by_key[old]["outside_range"] and not by_key[recent]["outside_range"]
+    assert by_key[old]["status"] == "applied" and by_key[old]["href"].startswith("/app/jobs/")
+    assert db.scalar(select(func.count()).select_from(ApplicationEventRecord)) == before
+
+
+def test_empty_search_finds_stored_email_and_treats_sql_wildcards_literally(db):
+    for index in range(30):
+        db.add(GmailMessageRecord(connection_id=1, gmail_id=f"fictional-email-{index}", received_at=NOW,
+            sender="workday@fictional.example", subject="Fictional Mac application", snippet="Fictional excerpt", classification="unclear", decision="review", candidate_keys=[], decision_reason="Fictional", parser_version="6"))
+    db.flush()
+    result = analytics_read(db, now=NOW, records=True, days="30", evidence="rejection", q="Fictional Mac")
+    assert result["not_listed"]["email_total"] == 30 and len(result["not_listed"]["emails"]) == 25
+    assert result["not_listed"]["emails"][0]["classification"] == "unclear"
+    assert not analytics_read(db, now=NOW, records=True, q="%_")["not_listed"]["emails"]
+    assert "not_listed" not in analytics_read(db, now=NOW, q="Fictional Mac")
+    assert not analytics_read(db, now=NOW, records=True)["not_listed"]["emails"]

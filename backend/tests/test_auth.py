@@ -1179,3 +1179,26 @@ def test_setup_from_a_public_address_needs_the_setup_code(factory, monkeypatch) 
     assert remote.post("/api/auth/setup", json={"email": EMAIL, "password": PASSWORD,
                                                 "setup_token": "fictional-setup-code"}).status_code == 200
     get_settings.cache_clear()
+
+
+@pytest.mark.parametrize("payload,expected_status,expected_days", [
+    (None, 200, 30), ({}, 200, 30), ({"days": 90}, 200, 90), ({"days": 365}, 200, 365),
+    ({"days": 7}, 422, None), ({"days": 366}, 422, None),
+])
+def test_inbox_verification_window_body_and_legacy_no_body_are_owner_authenticated(client, factory, monkeypatch, payload, expected_status, expected_days):
+    from backend.app.api.routers import inbox
+    from backend.app.db.models import GmailConnectionRecord
+    with factory.begin() as session:
+        session.add(GmailConnectionRecord(owner_id=1, email="fictional@example.test", encrypted_refresh_token=b"fictional", scope="gmail.readonly", state="ready"))
+    calls = []
+    def sync_fixture(session, conn, days):
+        calls.append(days)
+        return {"state": "ready", "counts": {}, "remaining": 0, "partial": False,
+                "coverage": {"days": days, "gmail": 0, "in_ace": 0, "missing": 0, "complete": True, "checked_at": NOW.isoformat()}}
+    monkeypatch.setattr(inbox, "sync_once", sync_fixture)
+    assert _login(client).status_code == 200
+    kwargs = {} if payload is None else {"json": payload}
+    response = client.post("/api/inbox/sync", headers=_csrf(client), **kwargs)
+    assert response.status_code == expected_status
+    assert calls == ([] if expected_days is None else [expected_days])
+    assert "no-store" in response.headers["cache-control"]

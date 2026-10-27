@@ -31,10 +31,16 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from urllib.parse import urlparse
 
-PARSER_VERSION = "5"
+PARSER_VERSION = "6"
 
 _OTHERS = r"(?:other|another|a\s+different|different|more\s+qualified|alternative)\s+(?:candidates?|applicants?|individuals?|profiles?)"
 _ONWARD = r"(?:moving\s+(?:forward|ahead)|proceeding|progressing|advancing|continuing)"
+_ELIGIBILITY_DECLINE = (
+    r"(?:does\s+not\s+include\s+(?:visa\s+)?sponsorship|unable\s+to\s+sponsor"
+    r"|not\s+eligible\s+for|does\s+not\s+meet\s+the\s+requirements"
+    r"|decided\s+to\s+move\s+on|will\s+not\s+be\s+considering"
+    r"|was\s+not\s+selected|not\s+able\s+to\s+offer)"
+)
 _REJECTION = re.compile(
     r"\b(?:"
     r"we\s+regret\s+to\s+(?:inform|let\s+you\s+know|advise|tell)|we\s+regret\s+that\s+(?:we|your)"
@@ -56,14 +62,14 @@ _REJECTION = re.compile(
     r"|not\s+(?:be\s+)?extend(?:ing)?\s+(?:you\s+)?an\s+offer"
     r"|(?:decided|chosen)\s+to\s+go\s+(?:in\s+)?(?:a\s+)?different\s+direction"
     r"|no\s+longer\s+(?:considering|being\s+considered|under\s+consideration)"
-    r")\b",
+    r"|" + _ELIGIBILITY_DECLINE + r")\b",
     re.I,
 )
 # Wording that sounds like a decision. An email that also thanks you for
 # applying is shown to you rather than filed as a receipt.
 _DECLINE = re.compile(
     r"\b(?:(?:won[’']t|will\s+not|not)\s+(?:be\s+)?" + _ONWARD +
-    r"|regret|(?:other|another|more\s+qualified)\s+(?:candidates?|applicants?))\b",
+    r"|regret|(?:other|another|more\s+qualified)\s+(?:candidates?|applicants?)|" + _ELIGIBILITY_DECLINE + r")\b",
     re.I,
 )
 # The owner withdrawing is not an employer rejection.
@@ -123,6 +129,33 @@ _PLATFORM = ("greenhouse", "lever.co", "myworkday", "workday", "smartrecruiters"
              "successfactors", "workable", "bamboohr", "jazzhr", "eightfold", "avature", "phenompeople", "oraclecloud",
              "brassring", "gem.com", "rippling", "teamtailor", "recruitee", "paylocity", "ultipro", "ukg", "adp.com",
              "applytojob", "breezy", "csod", "hirevue", "hackerrank", "codesignal", "linkedin")
+# Shared by the conservative safety net and the SQL stale-mail selector.
+RECRUITING_SENDERS = _PLATFORM
+APPLICATION_WORDS = ("application", "applying", "applied", "candidacy", "candidate", "interest", "interview", "assessment")
+JOB_WORDS = ("position", "role", "job", "engineer", "developer", "recruit", "hiring", "opportunity")
+_JOB_BOARDS = {"linkedin.com", "indeed.com", "joinhandshake.com", "handshake.com", "glassdoor.com", "ziprecruiter.com"}
+UNCLEAR_REASON = "Looks like it is about an application, but ACE could not tell what it says"
+
+
+def is_job_board(sender: str) -> bool:
+    domain = parseaddr(sender)[1].rpartition("@")[2].casefold()
+    return any(domain == host or domain.endswith("." + host) for host in _JOB_BOARDS)
+
+
+def application_related(evidence: EmailEvidence, applications: list[ApplicationIdentity]) -> bool:
+    if is_job_board(evidence.sender):
+        return False
+    text = _words(f"{evidence.subject if not _forwarded(evidence.subject) else ''} {_new_text(evidence.body)}")
+    if not any(re.search(r"\b" + word + r"\w*\b", text) for word in APPLICATION_WORDS):
+        return False
+    domain = parseaddr(evidence.sender)[1].rpartition("@")[2].casefold()
+    display, labels = _sender_parts(evidence.sender)
+    return (any(platform in domain for platform in RECRUITING_SENDERS)
+            or any(re.search(r"\b" + word + r"\w*\b", text) for word in JOB_WORDS)
+            or any(_named(_company_words(app.company), _words(f"{display} {text}"))
+                   or _in_domain(_company_words(app.company), labels) for app in applications))
+
+
 _LEGAL_SUFFIX = re.compile(r"\s+(?:inc|incorporated|llc|ltd|limited|corp|corporation|co|company|plc|gmbh|lp|llp)$")
 # An email received slightly before the owner marked Applied in ACE is
 # still about that application: some employers reject within minutes.
@@ -192,7 +225,12 @@ def classify(evidence: EmailEvidence) -> tuple[str, str | None]:
     text = f"{subject}\n{_new_text(evidence.body)}"
     reqs = _labelled_ids(text)
     requisition = next(iter(reqs)) if len(reqs) == 1 else None
-    if _REJECTION.search(text) and _RECRUITING.search(text) and not _WITHDRAWN.search(text):
+    # A conditional instruction ("if you are not eligible ...") does not
+    # establish that the employer has rejected this particular application.
+    asserted = any(not re.search(r"\b(?:if|unless|whether|in\s+case|does\s+not\s+mean)\b[^.!?\n]{0,160}$",
+                                 text[max(0, match.start()-180):match.start()], re.I)
+                   for match in _REJECTION.finditer(text))
+    if asserted and _RECRUITING.search(text) and not _WITHDRAWN.search(text):
         return "rejection", requisition
     if _OFFER.search(text):
         return "offer", requisition
@@ -349,11 +387,15 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
     return _Match(None, "The email may be about a different role there", keys, labelled)
 
 
-def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity]) -> Decision:
+def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], account: str | None = None) -> Decision:
+    if account and parseaddr(evidence.sender)[1].casefold() == account.casefold():
+        return Decision("unknown", None, (), None, "ignored", "Sent by the connected account", False)
     classification, req = classify(evidence)
-    if classification == "unknown":
+    if classification == "unknown" and not application_related(evidence, applications):
         return Decision(classification, req, (), None, "ignored", "No explicit recruiting outcome", False)
     found = _match(evidence, applications, req)
+    if classification == "unknown":
+        return Decision("unclear", found.requisition, found.ranked, None, "review", UNCLEAR_REASON, False)
     if classification == "application_confirmation":
         if not evidence.complete:
             return Decision(classification, found.requisition, found.ranked, None, "review", PARTIAL_REASON, False)

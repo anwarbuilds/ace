@@ -6,6 +6,7 @@ import html
 import re
 import secrets
 import time
+from threading import Lock
 from datetime import date, datetime, time as day_time, timedelta, timezone
 from email.utils import parseaddr, parsedate_to_datetime
 from html.parser import HTMLParser
@@ -16,6 +17,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from backend.app.api.deps import get_session
 from backend.app.api.marks import APPLICATION_STATUSES
@@ -30,6 +32,7 @@ from backend.app.db.models import (
 from backend.app.inbox import display, gmail
 from backend.app.inbox.reconcile import (
     ApplicationIdentity, Decision, EmailEvidence, PARSER_VERSION, RECEIPT_REASON, conflict, reconcile,
+    APPLICATION_WORDS, JOB_WORDS, RECRUITING_SENDERS,
 )
 
 router = APIRouter()
@@ -46,6 +49,26 @@ _OUTCOME_STATUS = {"rejection": "rejected", "interview": "interviewing", "offer"
 # What the owner can say an email was.
 _KINDS = {"rejection", "interview", "online_assessment", "offer", "recruiter_reply"}
 _TOKENS: dict[tuple[int, bytes], tuple[float, str]] = {}
+_LOCKS: dict[int, Lock] = {}
+_LOCKS_GUARD = Lock()
+# Ephemeral verification, keyed by connection, grant and selected window.
+# Never persist an "all imported" claim across an API restart or reconnection.
+_COVERAGE: dict[tuple[int, bytes, int], dict] = {}
+
+
+def _sync_lock(connection_id: int):
+    with _LOCKS_GUARD:
+        return _LOCKS.setdefault(connection_id, Lock())
+
+
+def _coverage_key(conn: GmailConnectionRecord, days: int) -> tuple[int, bytes, int]:
+    return conn.id, bytes(conn.encrypted_refresh_token), days
+
+
+def _forget_coverage(connection_id: int) -> None:
+    for key in list(_COVERAGE):
+        if key[0] == connection_id:
+            _COVERAGE.pop(key, None)
 
 
 def _secure(request: Request) -> bool:
@@ -69,6 +92,8 @@ def _public(conn: GmailConnectionRecord | None) -> dict:
         # The last check for new email. Importing older email does not move it.
         "last_synced_at": conn.last_synced_at.isoformat() if conn and conn.last_synced_at else None,
         "following_changes": bool(conn and conn.history_id),
+        "coverage": next((value for key, value in reversed(list(_COVERAGE.items()))
+                          if conn and key[:2] == (conn.id, bytes(conn.encrypted_refresh_token))), None),
         "last_error": conn.last_error if conn else None,
         "auto_outcomes_enabled": bool(conn and conn.auto_outcomes_enabled),
         "automation_available": get_settings().gmail_auto_outcomes_allowed,
@@ -116,6 +141,8 @@ def callback(request: Request, code: str = "", state: str = "", error: str = "",
     if conn is None:
         conn = GmailConnectionRecord(owner_id=owner.id, email=email, encrypted_refresh_token=b"", scope=gmail.SCOPE)
         session.add(conn)
+    if conn.id is not None:
+        _forget_coverage(conn.id)
     conn.email = email
     conn.encrypted_refresh_token = gmail.encrypt_token(refresh, s.gmail_token_key)
     conn.state = "paused"  # A new grant never starts background sync.
@@ -153,6 +180,7 @@ def disconnect(request: Request, session: Session = Depends(get_session)) -> dic
             gmail.revoke(gmail.decrypt_token(conn.encrypted_refresh_token, get_settings().gmail_token_key))
         except gmail.GmailError:
             pass
+        _forget_coverage(conn.id)
         conn.encrypted_refresh_token = b""
         conn.state = "disconnected"
         conn.auto_outcomes_enabled = False
@@ -307,7 +335,7 @@ def _ingest(session: Session, conn: GmailConnectionRecord, data: dict, identitie
     if existing:
         return "duplicate"
     evidence = _message_evidence(data)
-    decision = reconcile(evidence, identities)
+    decision = reconcile(evidence, identities, conn.email)
     row = GmailMessageRecord(
         connection_id=conn.id, gmail_id=gmail_id, thread_id=data.get("threadId"),
         received_at=evidence.received_at, sender=evidence.sender, subject=evidence.subject,
@@ -413,73 +441,127 @@ def automation(body: AutomationUpdate, request: Request, session: Session = Depe
 def _new_message_ids(session: Session, conn: GmailConnectionRecord, message_ids: list[str]) -> tuple[list[str], int]:
     """Already imported evidence needs no second Gmail detail read."""
     unique = list(dict.fromkeys(message_ids))
-    existing = set(session.scalars(select(GmailMessageRecord.gmail_id).where(
-        GmailMessageRecord.connection_id == conn.id, GmailMessageRecord.gmail_id.in_(unique)))) if unique else set()
+    existing: set[str] = set()
+    for offset in range(0, len(unique), 500):
+        existing.update(session.scalars(select(GmailMessageRecord.gmail_id).where(
+            GmailMessageRecord.connection_id == conn.id, GmailMessageRecord.gmail_id.in_(unique[offset:offset + 500]))))
     return [key for key in unique if key not in existing], len(existing)
 
 
-def sync_once(session: Session, conn: GmailConnectionRecord) -> dict:
-    """Resumable catch-up. Advance the cursor only after evidence commits."""
+def sync_once(session: Session, conn: GmailConnectionRecord, days: int = 30) -> dict:
+    """Verify the entire selected window, saving at most 60 new emails per call."""
+    lock = _sync_lock(conn.id)
+    if not lock.acquire(blocking=False):
+        return {"state": "busy", "counts": {}}
+    try:
+        # A waiting HTTP request may have loaded the connection before a prior
+        # batch committed. Read its current cursor/settings after taking the lock.
+        session.refresh(conn)
+        return _sync_locked(session, conn, max(30, min(days, 365)))
+    finally:
+        lock.release()
+
+
+def _sync_locked(session: Session, conn: GmailConnectionRecord, days: int) -> dict:
     if conn.state != "ready" or not conn.encrypted_refresh_token:
         return {"state": conn.state, "counts": {}}
-    s = get_settings()
-    token = gmail.access_token(gmail.decrypt_token(conn.encrypted_refresh_token, s.gmail_token_key), client_id=s.gmail_client_id, client_secret=s.gmail_client_secret)
-    identities = _identities(session)
-    counts: dict[str, int] = {}
-    next_cursor: str | None = None
-    message_ids: list[str] = []
-    partial = False
+    key = _coverage_key(conn, days)
+    # Invalidate the old claim before any network operation can fail.
+    _COVERAGE.pop(key, None)
+    token = _access(conn)
+    # Baseline BEFORE listing, so mail arriving during the listing is picked
+    # up by history on the next call. Never use a profile read after listing.
+    profile = gmail.get_json("/profile", token)
+    baseline = str(profile["historyId"]) if profile.get("historyId") else None
+    if not baseline:
+        raise gmail.GmailTemporaryError("Gmail did not return a history cursor. Try again later.")
+    window_ids, complete = gmail.list_message_ids(token, gmail.window_query(days))
+    history_ids: list[str] = []
+    history_complete = True
     if conn.history_id:
         try:
-            page_token: str | None = None
-            while True:
-                params = {"startHistoryId": conn.history_id, "historyTypes": "messageAdded", "maxResults": 100}
-                if page_token:
-                    params["pageToken"] = page_token
+            page = None
+            for _ in range(60):
+                params = {"startHistoryId": conn.history_id, "historyTypes": "messageAdded", "maxResults": 500}
+                if page:
+                    params["pageToken"] = page
                 batch = gmail.get_json("/history", token, params)
-                next_cursor = str(batch.get("historyId") or conn.history_id)
                 for history in batch.get("history", []):
-                    message_ids.extend(str(item["message"]["id"]) for item in history.get("messagesAdded", []) if item.get("message", {}).get("id"))
-                page_token = batch.get("nextPageToken")
-                if not page_token:
+                    history_ids.extend(str(item["message"]["id"]) for item in history.get("messagesAdded", []) if item.get("message", {}).get("id"))
+                page = batch.get("nextPageToken")
+                if not page:
                     break
+            history_complete = not bool(page)
         except gmail.GmailCursorExpired:
             conn.history_id = None
-            next_cursor = None
-    if not conn.history_id:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y/%m/%d")
-        batch = gmail.get_json("/messages", token, {"q": f"after:{cutoff}", "maxResults": 500})
-        message_ids = [str(item["id"]) for item in batch.get("messages", [])]
-        partial = bool(batch.get("nextPageToken"))
-        if not partial:
-            profile = gmail.get_json("/profile", token)
-            next_cursor = str(profile.get("historyId")) if profile.get("historyId") else None
-    new_ids, duplicates = _new_message_ids(session, conn, message_ids)
-    if duplicates:
-        counts["duplicate"] = duplicates
-    for message_id in new_ids:
+            conn.preview_complete = False
+    new_ids, duplicates = _new_message_ids(session, conn, window_ids + history_ids)
+    counts: dict[str, int] = {"duplicate": duplicates} if duplicates else {}
+    identities = _identities(session)
+    preview = not bool(conn.preview_complete and conn.history_id)
+    deleted: set[str] = set()
+    live_ids = set(history_ids)
+    for message_id in new_ids[:60]:
+        session.refresh(conn)
+        if conn.state != "ready" or bytes(conn.encrypted_refresh_token) != key[1]:
+            break
         try:
             data = gmail.get_json("/messages/" + message_id, token, {"format": "full"})
         except gmail.GmailCursorExpired:
-            continue  # Message was deleted after it appeared in history.
-        result = _ingest(session, conn, data, identities, preview=not bool(conn.preview_complete and conn.history_id))
+            deleted.add(message_id)
+            continue
+        session.refresh(conn)
+        if conn.state != "ready" or bytes(conn.encrypted_refresh_token) != key[1]:
+            break
+        try:
+            # A wider verification is a historical import even after the
+            # connection has a cursor. Only new history IDs are live outcomes.
+            result = _ingest(session, conn, data, identities, preview=preview or message_id not in live_ids)
+            session.commit()  # A later quota failure cannot lose saved progress.
+        except IntegrityError:
+            session.rollback()
+            if _new_message_ids(session, conn, [message_id])[0]:
+                raise  # Never hide an integrity failure unrelated to a duplicate.
+            result = "duplicate"
         counts[result] = counts.get(result, 0) + 1
-    if not partial and next_cursor:
-        conn.history_id = next_cursor
+        if result == "automatic":
+            identities = _identities(session)
+    # Deleted messages are not evidence. Re-list them away, without claiming a
+    # verified count for the earlier listing that still contained them.
+    if deleted:
+        window_ids, complete = gmail.list_message_ids(token, gmail.window_query(days))
+    missing, _ = _new_message_ids(session, conn, window_ids)
+    remaining_ids, _ = _new_message_ids(session, conn, window_ids + [item for item in history_ids if item not in deleted])
+    remaining = len(remaining_ids)
+    session.refresh(conn)
+    if conn.state != "ready" or bytes(conn.encrypted_refresh_token) != key[1]:
+        return {"state": conn.state if conn.state != "ready" else "disconnected", "counts": counts,
+                "remaining": remaining, "partial": True}
+    finished = complete and history_complete and remaining == 0
+    if finished and baseline:
+        conn.history_id = baseline
         conn.preview_complete = True
     conn.last_synced_at = datetime.now(timezone.utc)
     conn.last_error = None
     session.commit()
-    return {"state": conn.state, "counts": counts, "partial": partial, "as_of": conn.last_synced_at.isoformat()}
+    coverage = {"days": days, "gmail": len(window_ids), "in_ace": len(window_ids) - len(missing),
+                "missing": len(missing), "checked_at": conn.last_synced_at.isoformat(), "complete": complete}
+    _COVERAGE[key] = coverage
+    return {"state": conn.state, "counts": counts, "remaining": remaining,
+            "partial": not finished, "coverage": coverage, "as_of": coverage["checked_at"]}
+
+
+class VerifyRequest(BaseModel):
+    days: int = Field(30, ge=30, le=365)
 
 
 @router.post("/api/inbox/sync")
-def sync(request: Request, session: Session = Depends(get_session)) -> dict:
+def sync(request: Request, session: Session = Depends(get_session), body: VerifyRequest | None = None) -> dict:
     conn = _connection(session, current_owner(request))
     if not conn:
         raise HTTPException(409, "Connect Gmail before syncing.")
     try:
-        return sync_once(session, conn)
+        return sync_once(session, conn, body.days if body else 30)
     except gmail.GmailError as exc:
         conn.last_error = str(exc)[:120]
         if not isinstance(exc, gmail.GmailTemporaryError):
@@ -499,6 +581,17 @@ def backfill(body: SyncRequest, request: Request, session: Session = Depends(get
     conn = _connection(session, current_owner(request))
     if not conn or not conn.encrypted_refresh_token or conn.state == "disconnected":
         raise HTTPException(409, "Connect Gmail before previewing a backfill.")
+    lock = _sync_lock(conn.id)
+    if not lock.acquire(blocking=False):
+        return {"state": "busy", "counts": {}}
+    try:
+        session.refresh(conn)
+        return _backfill_locked(body, request, session, conn)
+    finally:
+        lock.release()
+
+
+def _backfill_locked(body: SyncRequest, request: Request, session: Session, conn: GmailConnectionRecord) -> dict:
     s = get_settings()
     try:
         token = gmail.access_token(gmail.decrypt_token(conn.encrypted_refresh_token, s.gmail_token_key), client_id=s.gmail_client_id, client_secret=s.gmail_client_secret)
@@ -568,11 +661,19 @@ def _message_rows(session: Session, connection_id: int, decision: str | None = N
 
 def _stale_query(connection_id: int):
     """Email read under older rules that the current rules may decide differently:
-    everything waiting, and receipts ACE filed itself (never the owner's)."""
+    waiting email, ACE-filed receipts and recent ignored recruiting mail.
+    Owner filings and older unrelated mail remain unchanged."""
     return select(GmailMessageRecord).where(
         GmailMessageRecord.connection_id == connection_id, GmailMessageRecord.parser_version != PARSER_VERSION,
         or_(GmailMessageRecord.decision.in_(PENDING),
-            and_(GmailMessageRecord.decision == "receipt", GmailMessageRecord.decision_reason == RECEIPT_REASON)))
+            and_(GmailMessageRecord.decision == "receipt", GmailMessageRecord.decision_reason == RECEIPT_REASON),
+            and_(GmailMessageRecord.decision == "ignored",
+                 GmailMessageRecord.received_at >= datetime.now(timezone.utc) - timedelta(days=120),
+                 or_(*(column.ilike(f"%{word}%")
+                       for column, words in ((GmailMessageRecord.sender, RECRUITING_SENDERS),
+                                             (GmailMessageRecord.subject, APPLICATION_WORDS + JOB_WORDS),
+                                             (GmailMessageRecord.snippet, APPLICATION_WORDS + JOB_WORDS))
+                       for word in words)))))
 
 
 def _item(r: GmailMessageRecord) -> dict:
@@ -679,6 +780,17 @@ def recheck(body: RecheckRequest, request: Request, session: Session = Depends(g
     conn = _connection(session, current_owner(request))
     if not conn or not conn.encrypted_refresh_token or conn.state == "disconnected":
         raise HTTPException(409, "Connect Gmail before rechecking email.")
+    lock = _sync_lock(conn.id)
+    if not lock.acquire(blocking=False):
+        return {"state": "busy", "checked": 0, "counts": {}, "remaining": 0}
+    try:
+        session.refresh(conn)
+        return _recheck_locked(body, session, conn)
+    finally:
+        lock.release()
+
+
+def _recheck_locked(body: RecheckRequest, session: Session, conn: GmailConnectionRecord) -> dict:
     stale = _stale_query(conn.id)
     rows = list(session.scalars(stale.order_by(GmailMessageRecord.received_at.desc(), GmailMessageRecord.id.desc()).limit(body.limit)))
     counts: dict[str, int] = {}
@@ -695,7 +807,7 @@ def recheck(body: RecheckRequest, request: Request, session: Session = Depends(g
             if not isinstance(exc, gmail.GmailTemporaryError):
                 _TOKENS.clear()
             raise HTTPException(429 if isinstance(exc, gmail.GmailRateLimited) else 502, str(exc)) from exc
-        decision = reconcile(evidence, identities)
+        decision = reconcile(evidence, identities, conn.email)
         before = row.decision
         row.classification = decision.classification
         row.requisition_id = decision.requisition_id

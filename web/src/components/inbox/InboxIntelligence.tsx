@@ -11,10 +11,11 @@ import { CompanyIdentity } from "@/components/CompanyIdentity";
 import { useApp } from "@/components/shell/AppProvider";
 import { getJson, RequestError, sendJson } from "@/lib/client";
 import { clean, parseDate } from "@/lib/format";
+import { coverageText, verifyInbox, type InboxCoverage } from "@/lib/inboxSync";
 import { InboxReviewPanel, KIND, PENDING, senderParts, since, STATE, type InboxEvent as Event, type InboxMessage as Message, type InboxApplication as Application } from "./InboxReviewPanel";
 
 type Tab = "emails" | "register" | "audit" | "rules";
-interface Connection {available: boolean; connected: boolean; state: string; email: string | null; last_synced_at: string | null; following_changes: boolean; last_error: string | null; auto_outcomes_enabled: boolean; automation_available: boolean; auto_rejections: boolean}
+interface Connection {coverage: InboxCoverage | null; available: boolean; connected: boolean; state: string; email: string | null; last_synced_at: string | null; following_changes: boolean; last_error: string | null; auto_outcomes_enabled: boolean; automation_available: boolean; auto_rejections: boolean}
 interface Counts {stored: number; needs_review: number; automatic: number; manual: number; reviewed: number; receipts: number; updates: number; stale: number}
 interface Page {items: Message[]; total: number; has_more: boolean; counts: Counts; view: string; latest_received_at: string | null}
 interface Sync {running: boolean; note: string; error: string; progress: string}
@@ -68,11 +69,12 @@ export function InboxIntelligence() {
   const [sync, setSync] = useState<Sync>({running: false, note: "", error: "", progress: ""});
   const [now, setNow] = useState(0);
   const [query, setQuery] = useState(searched);
-  const [backfillDays, setBackfillDays] = useState(() => [7,30,90,365].includes(Number(params.get("days"))) ? Number(params.get("days")) : 30);
-  const [previewPages, setPreviewPages] = useState(0);
-  const [nextPage, setNextPage] = useState<string | null>(null);
+  const [backfillDays, setBackfillDays] = useState(() => [30,90,365].includes(Number(params.get("days"))) ? Number(params.get("days")) : 30);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const loadSequence = useRef(0);
   const syncing = useRef(false);
+  const verificationDays = useRef(30);
   const restUntil = useRef(0);
   const latest = useRef<{connection: Connection | null; stale: number}>({connection: null, stale: 0});
   const inspector = useRef<HTMLDivElement>(null);
@@ -112,32 +114,31 @@ export function InboxIntelligence() {
     finally { setBusy(false); }
   }
 
-  /** Check Gmail for new email. By hand it also reads email kept under older rules again. */
-  const syncNow = useCallback(async (byHand: boolean) => {
+  /** Verify the whole window and re-read stale evidence, including on page open. */
+  const syncNow = useCallback(async (byHand: boolean, days = verificationDays.current) => {
     if (syncing.current || latest.current.connection?.state !== "ready") return;
     syncing.current = true;
+    verificationDays.current = days;
     setSync(old => ({...old, running: true, error: "", progress: "Checking Gmail for new email"}));
     try {
-      const result = await sendJson<{counts: Record<string, number>}>("POST", "/api/inbox/sync", {});
-      let rechecked = 0, recorded = 0;
-      if (byHand && latest.current.stale > 0) {
-        const total = latest.current.stale;
-        for (let round = 0; round < 40; round++) {
-          setSync(old => ({...old, progress: `Reading older email again with the newest rules: ${Math.min(rechecked, total)} of ${total}`}));
-          const step = await sendJson<{checked: number; remaining: number; counts: Record<string, number>}>("POST", "/api/inbox/recheck", {limit: 25});
-          rechecked += step.checked; recorded += step.counts.automatic ?? 0;
-          if (!step.remaining || !step.checked) break;
-        }
-      }
-      const note = described(result.counts, rechecked, recorded);
+      const {counts, rechecked, recorded} = await verifyInbox({days, stale: latest.current.stale,
+        post: (path, body) => sendJson("POST", path, body),
+        active: () => mounted.current && latest.current.connection?.state === "ready",
+        progress: (progress, coverage) => {
+          setSync(old => ({...old, progress}));
+          if (coverage) setConnection(old => old && ({...old, coverage}));
+        },
+      });
+      const note = described(counts, rechecked, recorded);
       await Promise.all([load(), refreshMarks()]);
       setSync({running: false, note, error: "", progress: ""});
-      const fresh = Object.entries(result.counts).some(([key, value]) => key !== "duplicate" && key !== "ignored" && value > 0);
+      const fresh = Object.entries(counts).some(([key, value]) => key !== "duplicate" && key !== "ignored" && value > 0);
       if (byHand || fresh || recorded) toast(note);
     } catch (cause) {
-      if (cause instanceof RequestError && cause.status === 429) restUntil.current = Date.now() + 10 * 60_000;
+      if (!mounted.current) return;
+      restUntil.current = Date.now() + (cause instanceof RequestError && cause.status === 429 ? 10 : 1) * 60_000;
       setSync({running: false, note: "", progress: "", error: cause instanceof Error ? clean(cause.message) : "Gmail could not be checked."});
-      await load().catch(() => {});
+      await Promise.all([load(), refreshMarks()]).catch(() => {});
     } finally {
       syncing.current = false;
     }
@@ -149,7 +150,8 @@ export function InboxIntelligence() {
     if (!ready) return;
     const due = () => {
       const last = parseDate(latest.current.connection?.last_synced_at)?.getTime() ?? 0;
-      return document.visibilityState === "visible" && Date.now() > restUntil.current && Date.now() - last > FRESH_MS;
+      return document.visibilityState === "visible" && Date.now() > restUntil.current &&
+        (!latest.current.connection?.coverage || latest.current.stale > 0 || Date.now() - last > FRESH_MS);
     };
     const check = () => { if (due()) void syncNow(false); };
     void Promise.resolve().then(check);
@@ -192,12 +194,13 @@ export function InboxIntelligence() {
     buttons = <button className="btn primary" onClick={() => window.location.assign("/api/inbox/google/start")}>Reconnect Gmail</button>;
   } else if (connection) {
     const checked = connection.last_synced_at ? `Gmail checked ${checkedAgo || "recently"} (${stamp(connection.last_synced_at)}).` : "Gmail has not been checked for new email yet.";
+    const coverage = coverageText(connection.coverage);
     const newest = page.latest_received_at ? ` Newest email in ACE arrived ${stamp(page.latest_received_at)}.` : "";
     if (sync.running) { tone = "busy"; headline = sync.progress || "Checking Gmail for new email"; detail = checked; }
     else if (sync.error) { tone = "warn"; headline = "Gmail could not be checked"; detail = `${sync.error} ${checked}`; }
-    else if (counts.needs_review) { tone = "wait"; headline = `${plural(counts.needs_review, "email")} ${counts.needs_review === 1 ? "needs" : "need"} you`; detail = checked + newest; }
-    else if (connection.last_synced_at) { tone = "ok"; headline = "All caught up"; detail = `${checked} Every email up to then is in ACE and nothing is waiting for you.${newest}`; }
-    else { tone = "wait"; headline = "Not checked yet"; detail = checked; }
+    else if (counts.needs_review) { tone = "wait"; headline = `${plural(counts.needs_review, "email")} ${counts.needs_review === 1 ? "needs" : "need"} you`; detail = `${coverage} ${checked}${newest}`; }
+    else if (connection.coverage?.complete && !connection.coverage.missing && !counts.stale) { tone = "ok"; headline = "All caught up"; detail = `${coverage} ${checked}${newest}`; }
+    else { tone = "wait"; headline = "Email coverage needs checking"; detail = `${coverage} ${checked}`; }
     buttons = <>{counts.needs_review > 0 && view !== "pending" && <button className="btn" onClick={() => changeView("pending")}>Review {counts.needs_review === 1 ? "it" : "them"}</button>}<button className="btn primary" disabled={sync.running || busy} onClick={() => void syncNow(true)}>{sync.running ? "Syncing" : "Sync now"}</button></>;
   }
 
@@ -209,7 +212,7 @@ export function InboxIntelligence() {
         <h2>{headline}</h2>
         {detail && <p>{detail}</p>}
         {!sync.running && sync.note && <p className="inbox-status-note">Last check: {sync.note}</p>}
-        {ready && counts.stale > 0 && !sync.running && <p className="inbox-status-note">{plural(counts.stale, "email")} {counts.stale === 1 ? "was" : "were"} read under ACE&rsquo;s earlier rules. Sync now reads {counts.stale === 1 ? "it" : "them"} again and records any clear rejection.</p>}
+        {ready && counts.stale > 0 && !sync.running && <p className="inbox-status-note">{plural(counts.stale, "email")} {counts.stale === 1 ? "was" : "were"} read under ACE&rsquo;s earlier rules. ACE re-reads {counts.stale === 1 ? "it" : "them"} when this page checks Gmail and records any clear rejection.</p>}
         {connection?.connected && <p className="inbox-status-meta">{connection.email} · Clear rejections recorded automatically: {connection.auto_rejections ? "on" : "off"} · <button className="link-btn" disabled={busy} onClick={() => action(() => sendJson("PATCH", "/api/inbox/connection", {paused: connection.state === "ready"}), connection.state === "ready" ? "Sync paused" : "Sync resumed")}>{connection.state === "ready" ? "Pause sync" : "Resume sync"}</button> · <button className="link-btn" disabled={busy} onClick={() => { if (window.confirm("Disconnect Gmail and revoke the saved grant? Stored audit history will remain.")) action(() => sendJson("DELETE", "/api/inbox/connection"), "Gmail disconnected"); }}>Disconnect</button></p>}
       </div>
       {buttons && <div className="btns">{buttons}</div>}
@@ -249,9 +252,9 @@ export function InboxIntelligence() {
         <div ref={inspector} className="inbox-inspector-wrap"><InboxReviewPanel key={active?.id ?? "empty"} message={active} applications={applications} events={events} busy={busy} action={action} account={connection?.email} now={now}/></div>
       </div>
       {connection?.connected && <details className="inbox-import">
-        <summary>Import older email</summary>
-        <p>Sync brings in new email. To read email from before you connected Gmail, import it here a page at a time. Clear rejections in it are recorded; interviews, assessments and offers wait for you.</p>
-        <div className="inbox-backfill"><label>Import email from the last<select value={backfillDays} disabled={busy} onChange={event => { const days = Number(event.target.value); setBackfillDays(days); setNextPage(null); setPreviewPages(0); const next = new URLSearchParams(params); next.set("days", String(days)); router.replace(`/app/applications/inbox?${next}`, {scroll: false}); }}><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option><option value={365}>1 year</option></select></label><button className="btn" disabled={busy} onClick={() => action(async () => { const result = await sendJson<{next_page_token: string | null}>("POST", "/api/inbox/backfill", {days: backfillDays, page_token: nextPage}); setNextPage(result.next_page_token); setPreviewPages(value => value + 1); }, "Import page saved.")}>{busy ? "Working" : nextPage ? "Import next page" : "Import past email"}</button><span>{previewPages ? `${plural(previewPages, "page")} imported for ${backfillDays} days. ${nextPage ? "More pages remain." : "Selected window complete."}` : "Changing the window does not import by itself."}</span></div>
+        <summary>Verify further back</summary>
+        <p>Check every email in a wider window and bring in anything missing. Progress is saved automatically. Clear rejections are recorded; anything unclear waits for you.</p>
+        <div className="inbox-backfill"><label>Verify email from the last<select value={backfillDays} disabled={busy || sync.running} onChange={event => { const days = Number(event.target.value); setBackfillDays(days); const next = new URLSearchParams(params); next.set("days", String(days)); router.replace(`/app/applications/inbox?${next}`, {scroll: false}); }}><option value={30}>30 days</option><option value={90}>90 days</option><option value={365}>365 days</option></select></label><button className="btn" disabled={busy || sync.running || !ready} onClick={() => void syncNow(true, backfillDays)}>{sync.running ? "Verifying" : "Verify selected window"}</button></div>
       </details>}
     </>}
     {tab === "register" && <section className="panel"><h2>Application register</h2><p>Each key identifies one submitted record. Rejected applications stay in the total.</p><div className="inbox-table"><div className="inbox-row head"><span>Application</span><span>Role</span><span>Submitted</span><span>Status</span></div>{applications.map(a => <div className="inbox-row" key={a.key}><span><strong><CompanyIdentity name={a.company} /></strong><small>{a.key}</small></span><span>{clean(a.title)}<small>{a.requisition_id ?? "No requisition recorded"}</small></span><span>{stamp(a.applied_at)}</span><span>{clean(a.status)}</span></div>)}</div>{!applications.length && <p>No applications are recorded.</p>}</section>}

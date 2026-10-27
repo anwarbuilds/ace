@@ -8,6 +8,7 @@ import type { ApplicationAnalyticsRecords } from "@/lib/analytics";
 import { clean, familyLabel, STATUS_LABEL } from "@/lib/format";
 import { getPrefs } from "@/lib/prefs";
 import type { ApplicationStatus } from "@/lib/types";
+import { KIND, STATE } from "@/lib/inboxLabels";
 import "../../analytics/analytics.css";
 
 export const metadata={title:"Application records · ace"};
@@ -26,6 +27,7 @@ export default async function ApplicationAnalyticsRecordsPage({searchParams}:{se
   const prefs=await getPrefs();
   const query:Record<string,string>={records:"1",tz:prefs.tz};
   for(const key of FILTERS) if(typeof sp[key]==="string"&&sp[key])query[key]=sp[key];
+  if(query.evidence==="rejection"&&!query.days&&!query.start&&!query.end)query.days="all";
   const data=await apiGetOr<ApplicationAnalyticsRecords|null>("/api/analytics",null,query);
   if(!data)return <div className="pg"><h1>Application records</h1><p role="alert">This selection could not be loaded. Check the filters or return to Analytics.</p><Link className="btn" href="/app/analytics">Back to Analytics</Link></div>;
   const analyticsQuery=new URLSearchParams();
@@ -46,7 +48,7 @@ export default async function ApplicationAnalyticsRecordsPage({searchParams}:{se
   const shownTo=Math.min(data.record_total,data.record_offset+data.records.length);
   return <ScrollArea list><AnalyticsRefresh/><div className="an-page an-records-page">
     <div className="an-hero"><div><div className="an-eyebrow">Applications / Analytics selection</div><h1>{rejected?"Rejected applications":"Application records"}</h1><p>{data.record_total.toLocaleString("en-US")} unique {data.record_total===1?"application":"applications"} ·{data.days==="all"?"All time":`${data.start} to ${data.end}`} · {data.timezone}</p></div></div>
-    <div className="an-record-links"><Link className="btn" href={`/app/analytics?${analyticsQuery}`}>Back to Analytics</Link><Link className="btn" href="/app/applications">All applications and controls</Link><a className="btn" href="/api/applications/export.csv" download>Export full application history</a></div>
+    <div className="an-record-links"><Link className="btn" href={href({days:"all",start:null,end:null,offset:null})}>All time</Link><Link className="btn" href={`/app/analytics?${analyticsQuery}`}>Back to Analytics</Link><Link className="btn" href="/app/applications">All applications and controls</Link><a className="btn" href="/api/applications/export.csv" download>Export full application history</a></div>
     {selected.length>0&&<p className="an-record-selection">{selected.join(" · ")}</p>}
     <section className="an-panel">
       <div className="an-panel-head"><div><h2>{rejected?"Rejections in this selection":"Applications in this selection"}</h2><p>{rejected?"Newest rejection first. A date and View email appear when an email recorded it.":"Submission records and current stages. Open a stored job to use its existing application controls."}</p></div></div>
@@ -66,6 +68,22 @@ export default async function ApplicationAnalyticsRecordsPage({searchParams}:{se
         <td data-label="Application">{record.href?<Link className="an-jump" href={record.href}>Open application</Link>:<span>External history record</span>}</td>
       </tr>)}</tbody></table></div>
       {!data.records.length&&<p>{data.record_query?"No applications in this selection match that search. Check the spelling or clear the search.":"No applications match this selection. No status or evidence has been inferred."}</p>}
+      {!data.record_total&&data.record_query&&<section className="an-panel" aria-label="Where is my application?">
+        <h2>Where is my application?</h2>
+        <p>This list uses submission dates and the selected status, role and evidence filters. An email may be imported without a recorded rejection.</p>
+        <Link className="an-jump" href={href({days:"all",start:null,end:null,offset:null,evidence:null,status:null,family:null,company:null,eligible:null,timed:null})}>Search all applications, all time</Link>
+        <h3>Applications across all dates and statuses</h3>
+        <p>{data.not_listed?.application_total??0} found{(data.not_listed?.application_total??0)>25?", showing the newest 25":""}.</p>
+        {data.not_listed?.applications.map(record=><div className="an-record-selection" key={record.key}>
+          <div className="an-record-company"><CompanyLogo name={record.company}/><strong>{clean(record.company)}</strong></div>
+          <p>{clean(record.title)} · {STATUS_LABEL[record.status as ApplicationStatus]??clean(record.status)} · Submitted {record.submitted_at?day(record.submitted_at):"date not recorded"}{record.outside_range?" · Outside the selected submission dates":record.submitted_at?" · Within the selected submission dates":" · Submission date not recorded"}</p>
+          <Link className="an-jump" href={record.href}>Open application</Link>
+        </div>)}
+        <h3>Related imported emails</h3>
+        <p>{data.not_listed?.email_total??0} found{(data.not_listed?.email_total??0)>25?", showing the newest 25":""}.</p>
+        {data.not_listed?.emails.map(email=><p key={email.id}><Link className="an-jump" href={`/app/applications/inbox?message=${email.id}`}>{clean(email.subject)||"No subject"}</Link> · {STATE[email.decision]??clean(email.decision)} · {KIND[email.classification]??clean(email.classification)} · {day(email.received_at)}</p>)}
+        <p><Link className="an-jump" href={`/app/applications/inbox?decision=all&q=${encodeURIComponent(data.record_query)}`}>Search imported email and verify Gmail coverage</Link></p>
+      </section>}
       <div className="an-record-pagination">
         <span>{data.record_total?`${shownFrom} to ${shownTo} of ${data.record_total.toLocaleString("en-US")} · Page ${current} of ${pages}`:"0 records"}</span>
         {pages>1&&<nav className="an-pager" aria-label="Record pages">

@@ -55,6 +55,8 @@ jobs:
         run: npm run test:extension-dom
       - name: Company identity and image failure contracts (fictional records, no browser)
         run: npm run test:company-logos
+      - name: Inbox reliability and review (fictional records, no browser)
+        run: npm run test:inbox
       - run: npx next typegen
       - run: npx tsc --noEmit
       - run: npx eslint src tests

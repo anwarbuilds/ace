@@ -105,14 +105,17 @@ excluded kinds unless the user asks.
 email was never recorded. Measured read-only: Gmail lists 946 emails for 30 days and
 only 512 are in ACE (the sync never pages past 500 and never sets its cursor), 248
 stored emails sit as ignored "No outcome found" and are never re-read, and the
-sponsorship style rejection wording is not recognized. Nothing of the fix is built.
+sponsorship style rejection wording is not recognized. P1 to P5 are now implemented
+and tested locally in `/home/ubuntu/Documents/ace-inbox` (parser 6), awaiting
+owner release approval. Live parser 5 remains unchanged. The latest read-only
+baseline found 949 Gmail / 516 stored / 433 missing in the 30-day window.
 The plan P1 to P6, the numbers and the report script
 `backend/scripts/inbox_coverage_report.py` are in `ACE_NEXT_KNOWLEDGE.md`, section
 "OPEN WORK for the next chat: a reliable Inbox".
 
 **Current cross-session checkpoint:** See `ACE_NEXT_KNOWLEDGE.md` for live web
-`1fee671`, API `9d05673`, extension source 1.30.0 and the unimplemented
-reliable-Inbox plan. All 85 logo hashes and the five reported company/job/detail
+`1fee671`, API `9d05673`, extension source 1.30.0 and the locally implemented
+reliable-Inbox P1 to P5 awaiting release approval. All 85 logo hashes and the five reported company/job/detail
 references plus general dynamic routes passed signed-in HTTPS at 17:19 Pacific.
 The Memory API was subsequently deployed and verified at 17:59 Pacific;
 only API changed and data counts stayed intact. Schema 0050 and protected

@@ -15,7 +15,9 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+import re
+
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
@@ -285,6 +287,27 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
                                             for kind, stamp in sorted(events.get(a.key, {}).items())],
                                "href": f"/app/jobs/{a.key.split(':')[1]}" if a.key.startswith("job:") else None}
                               for a in matching[offset:offset + limit]]
+        result["not_listed"] = {"applications": [], "emails": [], "application_total": 0, "email_total": 0}
+        if words and not matching:
+            other = [a for a in identities if found(a)]
+            other.sort(key=lambda a: (aware(a.submitted_at) if a.submitted_at else datetime.min.replace(tzinfo=timezone.utc), a.key), reverse=True)
+            mail_query = select(GmailMessageRecord)
+            for word in words:
+                pattern = "%" + re.sub(r"([\\%_])", r"\\\1", word) + "%"
+                mail_query = mail_query.where(or_(*(column.ilike(pattern, escape="\\") for column in
+                                                    (GmailMessageRecord.sender, GmailMessageRecord.subject, GmailMessageRecord.snippet))))
+            email_total = session.scalar(select(func.count()).select_from(mail_query.subquery())) or 0
+            related_mail = session.scalars(mail_query.order_by(GmailMessageRecord.received_at.desc(), GmailMessageRecord.id.desc()).limit(25))
+            result["not_listed"] = {
+                "applications": [{"key": a.key, "company": a.company, "title": a.title, "status": a.current_status,
+                                  "submitted_at": aware(a.submitted_at).isoformat() if a.submitted_at else None,
+                                  "outside_range": (days != "all" if a.key not in dated else not start <= dated[a.key] <= end),
+                                  "href": f"/app/jobs/{a.key.split(':')[1]}" if a.key.startswith("job:") else "/app/applications"}
+                                 for a in other[:25]],
+                "emails": [{"id": m.id, "subject": m.subject, "decision": m.decision, "classification": m.classification,
+                            "received_at": aware(m.received_at).isoformat()} for m in related_mail],
+                "application_total": len(other), "email_total": email_total,
+            }
     return result
 
 

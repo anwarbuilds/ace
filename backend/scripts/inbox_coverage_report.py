@@ -39,8 +39,8 @@ def gmail_ids(token: str, days: int) -> tuple[list[str], bool]:
         ids += [str(item["id"]) for item in batch.get("messages", []) if item.get("id")]
         page = batch.get("nextPageToken")
         if not page:
-            return ids, True
-    return ids, False
+            return list(dict.fromkeys(ids)), True
+    return list(dict.fromkeys(ids)), False
 
 
 def main() -> int:

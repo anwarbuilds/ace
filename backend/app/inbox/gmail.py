@@ -11,7 +11,7 @@ import hashlib
 import math
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlencode
 
@@ -184,6 +184,35 @@ def get_json(path: str, token: str, params: dict | None = None) -> dict:
                 raise GmailRateLimited("Google limited Gmail reads. Wait, then retry. Your connection is still authorized.")
             raise GmailTemporaryError("Gmail is temporarily unavailable. Try again later; your saved connection is unchanged.") from error
         time.sleep(delay + secrets.randbelow(250) / 1000)
+
+
+def window_query(days: int) -> str:
+    # Calendar boundary shared with the read-only coverage report. Gmail dates
+    # use Pacific midnight; include the boundary day rather than miss evidence.
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days + 1)).strftime("%Y/%m/%d")
+    return f"after:{cutoff}"
+
+
+def list_message_ids(token: str, query: str, max_pages: int = 60) -> tuple[list[str], bool]:
+    """List IDs newest first, deduplicated; never call a partial list complete."""
+    ids: dict[str, None] = {}
+    page = None
+    seen_pages: set[str] = set()
+    for _ in range(max_pages):
+        params = {"q": query, "maxResults": 500}
+        if page:
+            params["pageToken"] = page
+        batch = get_json("/messages", token, params)
+        for item in batch.get("messages", []):
+            if item.get("id"):
+                ids[str(item["id"])] = None
+        page = batch.get("nextPageToken")
+        if not page:
+            return list(ids), True
+        if page in seen_pages:
+            break
+        seen_pages.add(page)
+    return list(ids), False
 
 
 def revoke(refresh: str) -> None:

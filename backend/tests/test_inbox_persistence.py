@@ -149,7 +149,9 @@ def test_one_click_review_records_what_the_owner_says_and_undo_returns_the_email
 
 def test_owner_can_decide_an_email_ace_ignored_but_not_one_already_applied(database):
     session, conn = database
-    _ingest(session, conn, message("noise", "Weekly newsletter about our culture."), _identities(session), preview=True)
+    newsletter = message("noise", "Weekly newsletter about our culture.")
+    next(h for h in newsletter["payload"]["headers"] if h["name"] == "Subject")["value"] = "Fictional newsletter"
+    _ingest(session, conn, newsletter, _identities(session), preview=True)
     noise = row_for(session, "noise")
     assert noise.decision == "ignored"
     assert inbox.decide_message(noise.id, inbox.EmailDisposition(action="receipt"), owner_request(), session)["decision"] == "receipt"
@@ -346,3 +348,49 @@ def test_an_application_ace_never_knew_about_can_be_added_from_its_email(databas
     with pytest.raises(HTTPException) as error:
         inbox.add_application(inbox.AddedApplication(message_id=row.id, company=" ", title="Role", status="rejected"), owner_request(), session)
     assert error.value.status_code == 422
+
+
+def test_ignored_recruiting_mail_is_reread_but_owner_filings_and_old_mail_stay(database, gmail_reads, monkeypatch):
+    session, conn = database
+    ignored = stored(session, conn, "forgotten-rejection", "ignored", subject="Application update", snippet="Your application", version="5")
+    old = stored(session, conn, "old-ignored", "ignored", subject="Application update", version="5")
+    old.received_at = NOW-timedelta(days=121)
+    unrelated = stored(session, conn, "unrelated-ignored", "ignored", subject="Fictional news", snippet="Fictional", version="5")
+    owner = stored(session, conn, "owner-filed", "unrelated", subject="Application update", version="5")
+    manual = stored(session, conn, "owner-recorded", "manual", subject="Application update", version="5")
+    session.commit()
+    monkeypatch.setattr(inbox.gmail, "get_json", lambda *args: message("forgotten-rejection", "Req ID: SE-101. Our immigration policy does not include sponsorship for this role."))
+    result = inbox.recheck(inbox.RecheckRequest(), owner_request(), session)
+    assert result == {"checked": 1, "counts": {"automatic": 1}, "remaining": 0}
+    assert ignored.decision == "automatic" and ignored.parser_version == "6"
+    assert statuses(session) == ["applied", "rejected", "applied"]
+    assert [row.parser_version for row in [old, unrelated, owner, manual]] == ["5"]*4
+    event = job_events(session)[0]
+    inbox.undo(event.id, owner_request(), session)
+    assert ignored.decision == "review" and statuses(session) == ["applied"]*3
+
+
+def test_unknown_recruiting_mail_recheck_exposes_ranked_candidates(database, gmail_reads, monkeypatch):
+    session, conn = database
+    ignored = stored(session, conn, "unclear-recruiting", "ignored", subject="Application message", version="5")
+    session.commit()
+    monkeypatch.setattr(inbox.gmail, "get_json", lambda *args: message("unclear-recruiting", "There is an update in your application portal for the Software Engineer role."))
+    result = inbox.recheck(inbox.RecheckRequest(), owner_request(), session)
+    assert result["counts"] == {"review": 1}
+    assert ignored.classification == "unclear" and len(ignored.candidate_keys) == 3
+    assert not job_events(session)
+
+
+@pytest.mark.parametrize("in_history", [True, False])
+def test_verifying_further_back_never_automates_historical_positive_outcomes(database, gmail_reads, monkeypatch, in_history):
+    session, conn = database
+    conn.history_id = "fictional-baseline"; conn.preview_complete = True; session.commit()
+    def get(path, *args):
+        if path == "/profile": return {"historyId": "before-listing"}
+        if path == "/messages": return {"messages": [{"id": "fictional-interview"}]}
+        if path == "/history": return {"history": [{"messagesAdded": [{"message": {"id": "fictional-interview"}}]}]} if in_history else {}
+        return message("fictional-interview", "Req ID: SE-101. We invite you to interview.")
+    monkeypatch.setattr(inbox.gmail, "get_json", get)
+    result = inbox.sync_once(session, conn, 90)
+    assert result["counts"] == {"automatic" if in_history else "exact_preview": 1}
+    assert statuses(session) == ["applied", "interviewing" if in_history else "applied", "applied"]

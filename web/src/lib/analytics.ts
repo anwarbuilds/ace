@@ -42,5 +42,7 @@ export interface ApplicationAnalyticsRecord {
   evidence:{kind:string; at:string|null; message_id:number|null}[];
 }
 export interface ApplicationAnalyticsRecords extends AnalyticsData {
+  not_listed?: {applications:{key:string;company:string;title:string;status:string;submitted_at:string|null;outside_range:boolean;href:string}[];
+    emails:{id:number;subject:string;decision:string;classification:string;received_at:string}[];application_total:number;email_total:number};
   records:ApplicationAnalyticsRecord[]; record_total:number; record_offset:number; record_limit:number; record_query:string;
 }

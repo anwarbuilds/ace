@@ -171,3 +171,78 @@ test("the email text and initials tenants suggest the stored application", () =>
   assert.deepEqual(likelyApplications(other, apps, "Thank you for your interest in a role with Cambridge.").map(a => a.key), ["job:31"]);
   assert.deepEqual(likelyApplications(other, apps, "A global team of fictional people."), []);
 });
+
+
+const { companyNamed, confirmCompany } = loadSource(path.join(sourceRoot, "components/inbox/InboxReviewPanel.tsx"));
+const { coverageText, verifyInbox } = loadSource(path.join(sourceRoot, "lib/inboxSync.ts"));
+
+test("unclear recruiting mail is labeled Application email and stays actionable", () => {
+  const html = render({...message, classification:"unclear"});
+  assert.match(html, /Application email/);
+  assert.doesNotMatch(choice(html,"Rejection"), /disabled/);
+});
+
+test("an absent company warns before any outcome is recorded and requires a deliberate override", () => {
+  const html = render(message);
+  assert.match(html, /This email does not name Fictional Labs/);
+  let prompts=0;
+  const confirm=warning=>{prompts++;assert.match(warning,/Record it for Fictional Labs anyway/);return false;};
+  assert.equal(confirmCompany(message,"Fictional Labs","",confirm),false);
+  assert.equal(prompts,1);
+  assert.equal(confirmCompany(message,"Fictional Labs","",()=>true),true);
+  assert.equal(confirmCompany(message,"Fictional Labs","Thank you for applying to Fictional Labs.",()=>{throw Error("Named employer needs no extra confirmation");}),true);
+});
+
+test("company warning recognizes squashed names, initials and exact Workday tenants", () => {
+  assert.equal(companyNamed({...message,sender:"fictionallabs@myworkday.com"},"Fictional Labs"),true);
+  assert.equal(companyNamed({...message,subject:"FL application update"},"Fictional Labs"),true);
+  assert.equal(companyNamed({...message,subject:"An update"},"Imaginary Systems","IS Application Update"),true);
+  assert.equal(companyNamed({...message,subject:"An update"},"Imaginary Systems","This is an application update."),false);
+  assert.equal(companyNamed({...message,sender:"frr@myworkday.com"},"Fictional Robotics Research"),true);
+  assert.equal(companyNamed(message,"Imaginary Systems"),false);
+});
+
+const coverage=(missing=0,complete=true)=>({days:90,gmail:125,in_ace:125-missing,missing,complete,checked_at:"2026-10-26T12:00:00Z"});
+test("coverage copy never calls an unverified or partial listing complete", () => {
+  assert.match(coverageText(null),/has not been verified/);
+  assert.match(coverageText(coverage()),/Gmail has 125 emails from the last 90 days. All are in ACE/);
+  assert.match(coverageText(coverage(65)),/65 are not in ACE yet/);
+  assert.match(coverageText(coverage(0,false)),/listing is incomplete/);
+  assert.doesNotMatch(coverageText(coverage(0,false)),/All are in ACE/);
+});
+
+test("verification loops until every email is saved and automatically rechecks old evidence", async () => {
+  const calls=[],progress=[];
+  const replies=[
+    {state:"ready",counts:{ignored:60},remaining:65,partial:true,coverage:coverage(65)},
+    {state:"ready",counts:{review:60},remaining:5,partial:true,coverage:coverage(5)},
+    {state:"ready",counts:{automatic:5},remaining:0,partial:false,coverage:coverage()},
+    {checked:25,remaining:2,counts:{automatic:4,review:21}},
+    {checked:2,remaining:0,counts:{review:2}},
+  ];
+  const result=await verifyInbox({days:90,stale:27,post:async(path,body)=>{calls.push({path,body});return replies.shift();},progress:note=>progress.push(note)});
+  assert.equal(calls.length,5);
+  assert.deepEqual(calls.slice(0,3).map(c=>c.body),[{days:90},{days:90},{days:90}]);
+  assert.deepEqual(calls.slice(3).map(c=>c.path),["/api/inbox/recheck","/api/inbox/recheck"]);
+  assert.deepEqual(result,{counts:{ignored:60,review:60,automatic:5},rechecked:27,recorded:4});
+  assert.match(progress[0],/60 of 125 emails in ACE/);
+});
+
+test("quota failure propagates after saved progress without claiming success", async () => {
+  let calls=0;
+  const failure=Error("Fictional quota");
+  await assert.rejects(verifyInbox({days:90,stale:2,post:async()=>{if(calls++)throw failure;return {state:"ready",counts:{ignored:60},remaining:65,partial:true,coverage:coverage(65)};},progress:()=>{}}),error=>error===failure);
+  assert.equal(calls,2);
+});
+
+test("busy, paused, incomplete listing, cancellation and stalled recheck never finish as success", async () => {
+  for(const state of ["busy","paused"]){
+    let calls=0;
+    await assert.rejects(verifyInbox({days:30,stale:0,post:async()=>{calls++;return {state};},progress:()=>{}}),/running|paused/);
+    assert.equal(calls,1);
+  }
+  await assert.rejects(verifyInbox({days:90,stale:0,post:async()=>({state:"ready",counts:{},remaining:0,partial:true,coverage:coverage(0,false)}),progress:()=>{}}),/listing could not finish/);
+  await assert.rejects(verifyInbox({days:90,stale:0,active:()=>false,post:()=>{throw Error("Must not send after leaving");},progress:()=>{}}),/stopped/);
+  let calls=0;
+  await assert.rejects(verifyInbox({days:90,stale:2,post:async()=>calls++?{checked:0,remaining:2,counts:{}}:{state:"ready",counts:{},remaining:0,partial:false,coverage:coverage()},progress:()=>{}}),/could not finish rechecking/);
+});

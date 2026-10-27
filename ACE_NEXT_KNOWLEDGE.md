@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-26, after the 17:59 Pacific contextual Memory verification
+Last updated: 2026-10-26, reliable Inbox P1 to P5 implemented locally; release awaiting approval
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -29,16 +29,16 @@ update does not deploy code, reload the browser or perform a fresh live check.
 | --- | --- |
 | Repository / canonical branch | `/home/ubuntu/Documents/ace-next`, `wine-rose-platform`, remote `anwarbuilds/ace`; fetch and inspect before editing because parallel chats advance it |
 | Last directly verified live API/web | API `9d05673248ce6ead30652e62bb1d5e569404848c`, web `1fee67127877838f09b9a42f5edef6bc4669f34e`, healthy through public/signed-in HTTPS on 2026-10-27T00:59Z (2026-10-26 17:59 Pacific). Contextual Memory API is live; existing `6163f59` Inbox behavior and branding parser 4 are preserved |
-| Newer source not yet live | Reliable-Inbox P1 to P6 below remain a plan, not implemented or deployed. The read-only diagnosis script is now present in the API image but was not run by this release. Documentation updates need no rebuild |
-| Important runtime distinction | API-only Memory release runs `9d05673`; web stays `1fee671`. Existing Inbox parser 5 is preserved; proposed reliable-Inbox parser 6 is not built. Recheck health and source/image hashes before another release |
+| Newer source not yet live | Reliable-Inbox P1 to P5 implemented and tested in `/home/ubuntu/Documents/ace-inbox`, parser 6. Owner release approval, API/web image build and live verification remain pending. See the implementation checkpoint under OPEN WORK |
+| Important runtime distinction | API-only Memory release runs `9d05673`; web stays `1fee671`. Existing Inbox parser 5 is live; reliable-Inbox parser 6 is implemented locally and not deployed. Recheck health and source/image hashes before another release |
 | Unpacked extension source / browser state | Manifest **1.30.0** for contextual reuse; supporting Memory API is deployed. Browser activation needs Reload/refreshed employer tabs. No Web Store publication |
 | Database | Last verified schema `0050`; no migration was run for the logo or contextual Memory releases |
 | Latest recorded preservation totals | 2026-10-26 17:57 Pacific API swap: 1,231 job marks, including 892 Applied; 47 external applications; 104 answer-bank and 67 Memory rows; 111 career facts; 2 history entries; 5 resumes; 6 resume documents; 6 resume versions; 1 user. All matched before/after; these are observations, never UI constants |
 | Last logo verification totals | 936 applications, 889 posting applications plus 47 external history, stable during 2026-10-26 17:19 Pacific verification; a timestamped observation, never a UI constant |
 
 Saving this knowledge does not authorize any activation. The Inbox build
-`6163f59` behavior is preserved in the live logo release. The reliable-Inbox P1 to P6 plan below is NOT
-built and nothing in it is deployed. Before any release check which commit the
+`6163f59` behavior is preserved in production. Reliable-Inbox P1 to P5 are
+implemented and tested locally; nothing from this work is deployed. Before any release check which commit the
 images contain, whether newer changes exist and the owner's authorization. A
 documentation commit requires no application rebuild.
 
@@ -73,8 +73,8 @@ documentation commit requires no application rebuild.
   remain only in private environment configuration, never this public file.
   Never claim Gmail is connected from a client ID alone. Show real ready/error/
   paused/disconnected states. Live Inbox parser 5/add-from-email and the existing audit/Undo
-  rules are preserved in the verified release. Reliable-Inbox parser 6 remains
-  unimplemented. Preserve conservative identity matching,
+  rules are preserved in the verified release. Reliable-Inbox parser 6 is
+  implemented locally and awaits release approval. Preserve conservative identity matching,
   ambiguity review, protected newer statuses and owner-controlled automation.
   Clear rejections can be recorded automatically under the approved exact
   matching rules; interviews/assessments/offers retain their stricter evidence
@@ -161,8 +161,8 @@ this documentation update or proof of a live employer form/browser rendering.
   without co-author trailers. No user-facing em dashes. Keep replies short.
 
 Next work must follow the owner's next request. Known outstanding work includes
-the unimplemented reliable-Inbox P1 to P6 plan, browser visual validation on
-suitable hardware, ongoing independent discovery comparison,
+approval and runtime verification of reliable-Inbox P1 to P5, browser visual
+validation on suitable hardware, ongoing independent discovery comparison,
 actual availability of official sponsorship/resume/channel evidence, and owner
 verification of the reloaded extension on real forms. Do not silently turn
 these pending items into completed work or start them merely because they are
@@ -247,8 +247,9 @@ Activated 2026-10-27T00:57:27Z (2026-10-26 17:57 Pacific); public verification
 finished 2026-10-27T00:59:08Z (17:59 Pacific). API runs `9d05673`; website remains
 `1fee67127877838f09b9a42f5edef6bc4669f34e`. API branding parser 4 and the existing
 `6163f59` Inbox parser 5/add-from-email behavior remain. Reliable-Inbox P1 to P6
-below are still unimplemented; their read-only report script is present in the
-API image but was not run by this release.
+were unimplemented at that release; their read-only report script was present
+in the API image but was not run by the Memory release. The later local Inbox
+implementation and its read-only baseline are recorded in OPEN WORK below.
 
 A fresh private PostgreSQL backup passed full gzip integrity and PostgreSQL
 restore-catalog checks, not a restore drill:
@@ -341,12 +342,73 @@ cannot tell how far to rely on Inbox Intelligence and want "this reliable
 system" built. They also approved **read-only production queries** for this work
 (in chat, 2026-10-26 evening). Releases still need their go-ahead.
 
-**Status of the work: nothing below is built.** This session only diagnosed and
-documented. The only new file is the read-only report script
-`backend/scripts/inbox_coverage_report.py` (counts only, no senders, subjects or
-text). Continue in the worktree `/home/ubuntu/Documents/ace-inbox` (branch
-`inbox-clarity-20261026`; `.venv` and `web/node_modules` are symlinks to
-`ace-next`), after `git fetch` and a fast-forward to `origin/wine-rose-platform`.
+**Status: P1 to P5 implemented locally, release awaiting owner approval.**
+The original diagnosis/plan below is retained as historical evidence. The
+implementation is in `/home/ubuntu/Documents/ace-inbox` on
+`inbox-clarity-20261026`, fast-forwarded through concurrent source/documentation
+commit `b5531ab`. `.venv` and `web/node_modules` are existing symlinks to
+`ace-next`; do not commit those local links.
+
+### Implementation checkpoint, 2026-10-26 evening
+
+- P1 follows all Gmail ID pages, checks stored IDs in chunks of 500, downloads
+  at most 60 new emails per call newest first and commits every message. The
+  profile baseline is read before listing; cursor/preview completion waits for
+  the full window and history to finish. Expired history falls back safely;
+  incomplete listings, deleted messages, quota failures and duplicate races
+  cannot earn a false completion claim. Per-connection locks serialize sync,
+  recheck and the retained backfill endpoint within the API process. Pause or
+  disconnect stops further batch work. Only history-added IDs can enter the
+  opted-in live positive-outcome path; wider-window positives remain previews.
+- Coverage `{days,gmail,in_ace,missing,checked_at,complete}` is in memory per
+  connection/grant/window, returned by sync and connection, null after restart
+  or reconnect. The page verifies automatically, loops batches with saved
+  progress, rechecks old evidence automatically and offers Verify further back
+  for 30/90/365 days. Failures remain visible; a wider interrupted verification
+  keeps its selected window for retry. Counts use the same calendar boundary
+  (including the boundary day) as the independent report script.
+- P2 parser 6 recognizes the fictional sponsorship/eligibility wording; unknown
+  application-related mail becomes `unclear` / Application email / Needs you,
+  with ranked candidates. Job-board unknown mail and self-sent mail stay out of
+  this review safety net. Conditional eligibility instructions do not automate
+  rejection. Existing authentication, exact-identity, ambiguity, timing, final
+  status, opt-in, event and Undo rules remain.
+- P3 rechecks recent (120-day) ignored recruiting rows under older parsers using
+  shared sender/application/job word lists and SQL `ilike`. Owner filings and
+  manual/automatic outcomes remain untouched. Recheck runs on page open even
+  after a recent Gmail timestamp.
+- P4 empty records searches return bounded `not_listed` application matches
+  across all dates/statuses/roles plus stored sender/subject/excerpt matches.
+  The page explains current status, submission dates/range, decisions and email
+  classifications, with existing application/Inbox links and all-time search.
+  A direct rejection drilldown without explicit dates defaults to all time;
+  chart-selected dates remain intact. Nothing is inferred or mutated.
+- P5 warns inline and asks for an explicit override before an outcome when the
+  chosen company's name or initials appear nowhere in the email. Works for
+  both existing and add-from-email applications. No speculative parent aliases
+  were added; automatic company matching is unchanged.
+
+Validation: 241 focused fictional backend tests; 32 React render/workflow/DOM
+contracts; TypeScript, focused ESLint, whitespace and zero-hit dash guard. The
+Inbox Node contracts now run in CI with `npm run test:inbox`. Browser fixtures
+were updated and collected only; no Chrome, screenshots, real employer tests or
+production build/activation. Source implementation, release steps and exact
+checks: `docs/architecture/2026-10-26-reliable-inbox.md`.
+
+The approved read-only report ran once against the existing live parser 5:
+516 stored emails; Gmail 7/30/90-day listings 274/949/1,625, all listing pages
+complete; present 274/516/516; missing 0/433/1,109. Decisions ignored 249,
+receipt 193, automatic 50, manual 24; 319 stored under older parsers. Connection
+ready with no cursor and incomplete preview. These are a dated baseline,
+not evidence of a completed import. No production sync, recheck, review,
+application mutation, migration, scheduler operation or deployment ran.
+
+**Remaining P6:** obtain approval for the exact implementation commit; build and
+activate API/web only under Safe production release, keeping schema/services
+and rollback inventory intact. Production stays on API `9d05673`, web `1fee671`
+until an approved activation verifies otherwise. Then the owner opens Inbox to
+verify/re-read automatically, and reruns the read-only report to compare actual
+Gmail/ACE counts. Browser visuals still require suitable hardware.
 
 ### Measured in production (read-only, aggregate, 2026-10-26 about 17:30 Pacific)
 

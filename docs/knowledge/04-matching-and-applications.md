@@ -521,6 +521,8 @@ summary panels stay compact, and search and paging live on the drill-down page. 
 
 ## Inbox looked reliable and was not: coverage, ignored mail and wording (2026-10-26)
 
+Status: diagnosis retained; P1 to P5 implementation below is local and awaiting release approval.
+
 The owner showed an employer update email from a week earlier that never reached Rejected applications. Measured
 against production (read-only): Gmail listed 946 emails for 30 days and ACE held 512, because a sync with no history
 cursor lists one page of 500 and never pages on, so the cursor is never set and everything older than the newest 500 is
@@ -535,3 +537,26 @@ classifier needs a safety net so that anything about an application that it cann
 ignored pile; and a re-read must cover every decision the new rules could change, ignored included. Plan and acceptance
 tests are in `ACE_NEXT_KNOWLEDGE.md`, "OPEN WORK for the next chat: a reliable Inbox". Tool:
 `backend/scripts/inbox_coverage_report.py` (read-only, counts only).
+
+
+## Reliable Inbox P1 to P5 implemented locally (2026-10-26)
+
+Complete ID listing plus independently saved 60-email batches replaces the
+one-page catch-up. Coverage is measured against Gmail IDs, stored only in memory
+per connection/grant/window and reverified after restart. Listing/profile order,
+history expiry, partial listings, concurrent requests, quota failures, deletion
+and pause/disconnect have fictional regressions. Historical positive outcomes
+never become live automation just because the connection already has a cursor.
+
+Parser 6 recognizes explicit sponsorship/eligibility declines while conditional
+instructions stay manual. Unknown application mail reaches Needs you; recent
+ignored recruiting email is reread after the bump, including on page open.
+Empty search results explain matching applications across filters and related
+imported mail. A manual company mismatch warns and requires an explicit override.
+No historical owner decision is silently repaired. Events and Undo remain.
+
+The fresh approved read-only baseline still found 433 of 949 listed 30-day
+emails absent from ACE (516 stored); it imported or changed nothing. Tests are
+fictional, not production verification. Release and subsequent source-versus-ACE
+comparison remain pending owner approval. Details and commands:
+`../architecture/2026-10-26-reliable-inbox.md` and the root OPEN WORK checkpoint.
