@@ -1,5 +1,7 @@
 """Safety properties of the Gmail matcher, using fictional records only."""
 
+import base64
+
 from datetime import datetime, timedelta, timezone
 
 from backend.app.inbox.reconcile import ApplicationIdentity, EmailEvidence, reconcile
@@ -74,7 +76,10 @@ def test_gmail_authentication_result_must_align_with_visible_sender():
     base["payload"]["headers"][0]["value"] = "mx.google.com; dmarc=pass header.from=careers.silverpine.example"
     evidence = _message_evidence(base)
     assert evidence.sender_authenticated
-    assert reconcile(evidence, [app("job:1", "SE-102")]).target == "job:1"
+    partial = reconcile(evidence, [app("job:1", "SE-102")])
+    assert partial.disposition == "review" and partial.reason == "Only part of this email could be read"
+    base["payload"].update({"mimeType": "text/plain", "body": {"data": base64.urlsafe_b64encode(base["snippet"].encode()).decode()}})
+    assert reconcile(_message_evidence(base), [app("job:1", "SE-102")]).target == "job:1"
 
 
 def test_gmail_grant_uses_read_only_scope_pkce_and_encrypted_refresh_token():

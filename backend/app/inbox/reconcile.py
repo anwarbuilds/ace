@@ -31,7 +31,8 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from urllib.parse import urlparse
 
-PARSER_VERSION = "6"
+PARSER_VERSION = "7"
+MAX_CLASSIFIER_BODY = 10000
 
 _OTHERS = r"(?:other|another|a\s+different|different|more\s+qualified|alternative)\s+(?:candidates?|applicants?|individuals?|profiles?)"
 _ONWARD = r"(?:moving\s+(?:forward|ahead)|proceeding|progressing|advancing|continuing)"
@@ -202,7 +203,7 @@ class Decision:
 
 def _new_text(body: str) -> str:
     """Drop common quoted/forwarded material before looking for intent."""
-    return re.split(r"(?im)^\s*(?:on .{5,160} wrote:|[- ]*forwarded message[- ]*|from:\s.+$|>.*$)", body, maxsplit=1)[0][:8000]
+    return re.split(r"(?im)^\s*(?:on .{5,160} wrote:|[- ]*forwarded message[- ]*|from:\s.+$|>.*$)", body, maxsplit=1)[0][:MAX_CLASSIFIER_BODY]
 
 
 def _forwarded(subject: str) -> bool:
@@ -396,9 +397,11 @@ def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], 
     found = _match(evidence, applications, req)
     if classification == "unknown":
         return Decision("unclear", found.requisition, found.ranked, None, "review", UNCLEAR_REASON, False)
+    # A clipped body or snippet cannot establish that a later sentence names
+    # another role or changes the apparent outcome. Preserve it for review.
+    if not evidence.complete:
+        return Decision(classification, found.requisition, found.ranked, None, "review", PARTIAL_REASON, False)
     if classification == "application_confirmation":
-        if not evidence.complete:
-            return Decision(classification, found.requisition, found.ranked, None, "review", PARTIAL_REASON, False)
         return Decision(classification, found.requisition, found.ranked, found.target, "receipt", RECEIPT_REASON, False)
     if classification == "possible_rejection":
         return Decision(classification, found.requisition, found.ranked, None, "review",

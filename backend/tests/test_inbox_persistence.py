@@ -372,9 +372,9 @@ def test_all_ignored_history_is_reread_but_owner_filings_stay(database, gmail_re
     assert result["checked"]==3 and result["remaining"]==0
     assert set(reads)=={"forgotten-rejection","old-ignored","unrelated-ignored"}
     assert result["counts"]["automatic"]==1
-    assert ignored.decision == "automatic" and ignored.parser_version == "6"
+    assert ignored.decision == "automatic" and ignored.parser_version == PARSER_VERSION
     assert statuses(session) == ["applied", "rejected", "applied"]
-    assert [row.parser_version for row in [old, unrelated, owner, manual]] == ["6","6","5","5"]
+    assert [row.parser_version for row in [old, unrelated, owner, manual]] == [PARSER_VERSION,PARSER_VERSION,"5","5"]
     assert old.decision=="review"  # Its outcome predates the application; no unsafe status update.
     event = job_events(session)[0]
     inbox.undo(event.id, owner_request(), session)
@@ -479,3 +479,50 @@ def test_recheck_cannot_overwrite_owner_changes_made_during_a_gmail_read(databas
     assert row.decision==(change if change in {"receipt","manual"} else "ignored")
     if change in {"pause","reconnect"}:
         assert result["state"]==("paused" if change=="pause" else "disconnected")
+
+
+@pytest.mark.parametrize("html_body", [False, True])
+def test_rejection_after_old_inner_body_limit_is_not_filed_as_a_receipt(database, html_body):
+    session, conn = database
+    body = "Req ID: SE-101. Thank you for applying.\n" + "Role details. " * 650 + "\nWe have decided not to proceed with your application."
+    assert 8000 < len(body) < 10000
+    data = message("long-rejection", body)
+    if html_body:
+        data["payload"]["mimeType"] = "text/html"
+        data["payload"]["body"]["data"] = base64.urlsafe_b64encode(("<p>" + body + "</p>").encode()).decode()
+    assert _ingest(session, conn, data, _identities(session), preview=True) == "automatic"
+    assert statuses(session) == ["applied", "rejected", "applied"]
+    assert row_for(session, "long-rejection").classification == "rejection"
+    assert job_events(session)[0].kind == "rejection"
+
+
+@pytest.mark.parametrize("prefix_outcome", ["Thank you for applying.", "We have decided not to proceed with your application.", "We invite you to interview."])
+def test_truncated_body_cannot_file_a_receipt_or_automate_an_outcome(database, prefix_outcome):
+    session, conn = database
+    body = "Req ID: SE-101. " + prefix_outcome + "\n" + "Role details. " * 900
+    data = message("truncated", body)
+    evidence = inbox._message_evidence(data)
+    assert len(evidence.body) == 10000 and not evidence.complete
+    assert _ingest(session, conn, data, _identities(session), preview=False) == "review"
+    assert row_for(session, "truncated").decision_reason == "Only part of this email could be read"
+    assert statuses(session) == ["applied", "applied", "applied"]
+    assert job_events(session) == []
+
+
+def test_body_exactly_at_limit_is_complete_but_one_extra_character_is_not():
+    body = "Thank you for applying. "
+    body = body + "x" * (10000 - len(body))
+    assert inbox._message_evidence(message("boundary", body)).complete
+    assert not inbox._message_evidence(message("overflow", body + "x")).complete
+
+
+def test_parser_seven_rechecks_receipts_and_ignored_from_the_live_parser_six(database, gmail_reads, monkeypatch):
+    session, conn = database
+    from backend.app.inbox.reconcile import RECEIPT_REASON
+    stored(session, conn, "six-receipt", "receipt", "Application update", version="6", reason=RECEIPT_REASON)
+    stored(session, conn, "six-ignored", "ignored", "Application update", version="6")
+    monkeypatch.setattr(inbox.gmail, "get_json", lambda path, *a, **k: message(path.rsplit("/", 1)[-1], "Req ID: SE-101. We have decided not to proceed with your application."))
+    result = inbox.recheck(inbox.RecheckRequest(limit=25), owner_request(), session)
+    assert result["checked"] == 2 and result["remaining"] == 0
+    assert all(row_for(session, key).parser_version == PARSER_VERSION for key in ("six-receipt", "six-ignored"))
+    assert all(row_for(session, key).decision == "automatic" for key in ("six-receipt", "six-ignored"))

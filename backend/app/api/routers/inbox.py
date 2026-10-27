@@ -33,7 +33,7 @@ from backend.app.db.models import (
 from backend.app.inbox import display, gmail
 from backend.app.inbox.full_history import FullMailboxScan
 from backend.app.inbox.reconcile import (
-    ApplicationIdentity, Decision, EmailEvidence, PARSER_VERSION, RECEIPT_REASON, conflict, reconcile,
+    ApplicationIdentity, Decision, EmailEvidence, MAX_CLASSIFIER_BODY, PARSER_VERSION, RECEIPT_REASON, conflict, reconcile,
 )
 
 router = APIRouter()
@@ -264,7 +264,7 @@ def _parts(payload: dict, mime: str) -> list[str]:
     return [display.decode(part) for part in display.parts(payload, mime)]
 
 
-def _body(payload: dict, limit: int = 10000) -> str:
+def _body(payload: dict, limit: int = MAX_CLASSIFIER_BODY) -> str:
     """Plain text when the email has it, else the text of its HTML.
 
     HTML is never executed or stored here; many employer systems send only
@@ -295,11 +295,15 @@ def _message_evidence(data: dict) -> EmailEvidence:
         stamp = parsedate_to_datetime(headers.get("date", ""))
     except (TypeError, ValueError):
         stamp = datetime.fromtimestamp(int(data["internalDate"]) / 1000, timezone.utc)
-    body = _body(data.get("payload", {}))
+    # Read one extra character to distinguish a complete boundary-sized body
+    # from text clipped before the classifier sees the outcome or role ID.
+    body = _body(data.get("payload", {}), MAX_CLASSIFIER_BODY + 1)
+    complete = bool(body) and len(body) <= MAX_CLASSIFIER_BODY
+    body = body[:MAX_CLASSIFIER_BODY]
     # Gmail's snippet is a couple of hundred characters; a rejection further
     # down an email that opens with thanks would be missed, so say so.
     return EmailEvidence(headers.get("from", "")[:320], headers.get("subject", "")[:500],
-                         body or html.unescape(str(data.get("snippet", "")))[:500], stamp, authenticated, bool(body))
+                         body or html.unescape(str(data.get("snippet", "")))[:500], stamp, authenticated, complete)
 
 
 def _access(conn: GmailConnectionRecord) -> str:

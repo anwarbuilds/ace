@@ -233,3 +233,33 @@ bounded cooldowns, and retains its manifest between attempts. This adjusts only
 the one-time operator process, not the approved runtime source or scheduler.
 The live UI's bounded temporary-failure path still keeps committed progress and
 requires a later check if Google's short retries cannot recover.
+
+
+## Additional candidate: parser 7 truncation safety (not released)
+
+Continued scrutiny after the approved parser-6 release reproduced another
+false-negative with fictional data: a 9,508-character email began with thanks
+for applying and ended with an explicit rejection. The extraction accepted up
+to 10,000 characters and claimed completeness, but a second classifier cutoff
+at 8,000 characters discarded the rejection and filed a receipt.
+
+The separate candidate uses a shared 10,000-character decision limit and reads
+one extra character as a truncation sentinel. Rejections between the former
+8,000-character cutoff and the decision limit are recognized. Snippets and
+clipped bodies cannot authorize any outcome or file a receipt: recognized
+recruiting outcomes wait for review with the existing partial-read reason.
+The full-email viewer is unchanged. This remains bounded text recognition;
+mailbox completeness never certifies arbitrary wording or attachment outcomes.
+
+Parser version 7 makes existing eligible parser-6 receipts/ignored/pending mail
+recheckable under the fix. Owner filings, recorded outcomes and Undo protections
+are unchanged. Releasing it would require a further API-only activation and
+rechecks, not a schema, scheduler or web change. It has not been deployed under
+the approval for `5ab6b1a`.
+
+All 293 focused backend tests pass. Added fictional regressions cover long
+plain/HTML rejection tails, truncated receipts/rejections/interviews staying for
+review without status/events, exact-size versus one-character overflow, and
+parser-6 receipt/ignored rechecks. The authentication test now verifies that a
+complete authenticated email can authorize a rejection while a snippet cannot.
+No private email text was copied into tests.

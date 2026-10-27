@@ -42,6 +42,19 @@ yet certified while this import runs. Follow the release evidence in
 `docs/architecture/2026-10-27-full-history-inbox.md` before making any claim.
 Earlier unreleased/read-only notes below describe their historical checkpoints.
 
+### Additional local candidate: parser 7, separate approval required
+
+Deeper scrutiny reproduced a fictional long-email false-negative in live parser
+6: a 9,508-character rejection was filed as a receipt because the classifier's
+8,000-character cutoff was shorter than extraction's 10,000-character limit.
+The candidate shares one limit, detects truncation with an extra character,
+and requires review for partial-body/snippet outcomes. Parser 7 makes eligible
+parser-6 mail recheckable while preserving owner filings, recorded outcomes and
+Undo. All 293 focused backend tests pass. It is not included in the approved
+`5ab6b1a` running release; obtain separate owner approval before API activation.
+The monitored all-history import continues on the deployed parser 6. See the
+additional-candidate section of the full-history report for scope and limits.
+
 ## Continuation checkpoint for new chats, 2026-10-26
 
 This checkpoint consolidates the owner's latest decisions and the work across
@@ -58,7 +71,7 @@ update does not deploy code, reload the browser or perform a fresh live check.
 | --- | --- |
 | Repository / canonical branch | `/home/ubuntu/Documents/ace-next`, `wine-rose-platform`, remote `anwarbuilds/ace`; fetch and inspect before editing because parallel chats advance it |
 | Last directly verified live API/web | API/web `5ab6b1a90decfcddf8b3866fe99a9627f0f2e574`, verified healthy with exact public frontend SHA at 2026-10-27T14:24Z; parser 6. Full-history import is running; see Current release above |
-| Newer source not yet live | Release evidence/continuity updates only; no newer runtime candidate prepared in this session |
+| Newer source not yet live | Parser 7 truncation-safety candidate, 293 focused backend tests pass; separate API-only release approval required |
 | Important runtime distinction | Both API and web now run the approved reliable-Inbox release. API Analytics source hash matches the reviewed projection. No extension runtime publication, migration or scheduler change |
 | Unpacked extension source / browser state | Manifest **1.30.0** for contextual reuse; supporting Memory API is deployed. Browser activation needs Reload/refreshed employer tabs. No Web Store publication |
 | Database | Last verified schema `0050`; no migration was run for the logo or contextual Memory releases |
