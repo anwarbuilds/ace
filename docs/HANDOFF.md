@@ -1,12 +1,17 @@
 # ace handoff
 
-**Current 2026-10-27T14:24Z:** Owner-approved API/web release `5ab6b1a` is live at
-https://ace.opik.net, parser 6, schema `0050`. Public health/version/auth checks
-and protected inventory preservation passed; fresh backup verified. All-history
-mail import and old-parser rechecks are in progress, so coverage is not yet
-certified. See the root Current release checkpoint and
-`architecture/2026-10-27-full-history-inbox.md`. Older pending-release notes are
-historical. No scheduler, migration or extension publication ran.
+**Current 2026-10-27T16:01Z:** Owner-approved API/web `5ab6b1a` is live at
+https://ace.opik.net, parser 6, schema `0050`. Full-history import and all 441
+eligible older-parser rechecks completed: the independent report confirms
+7,928/7,928 retained Gmail messages including Spam/Trash, zero missing. Real
+Analytics checks pass: 945 identities, 192 Rejected (previously 89), 177 dated
+rejections, 1,318 messages awaiting review. All 147 snapshotted protected
+decisions and all nine application/profile inventory counts are unchanged.
+The separate tested parser-7 fix `3294139` in PR #7 awaits another API-only
+release approval; the earlier release approval does not activate that candidate.
+See the root Final live verification and
+`architecture/2026-10-27-full-history-inbox.md` for source hashes, limits, backup
+and remaining data-review issues. Older pending/in-progress notes are historical.
 
 For a fresh session, cloud or local, picking this project up cold. Read it
 top to bottom (about ten minutes), then start at section 9. Written on
