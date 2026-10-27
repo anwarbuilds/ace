@@ -1,7 +1,7 @@
 # Every pull request and every push to main runs the whole safety net:
 # the backend unit tests, the extension's matcher cases, the web app's
-# typecheck, lint and build, and both browser suites (the old UI's and
-# the new app's) against the fictional demo database. Nothing here
+# typecheck, lint and build, and both browser suites (fictional extension forms and
+# the new app) against the fictional demo database. Nothing here
 # touches real data, and no secrets are needed.
 name: ci
 
@@ -84,18 +84,17 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Build the demo database
         run: python -m backend.scripts.seed_demo
-      # The old UI suite runs through the rollback switch (sign-in off,
-      # this machine only), which proves the switch still works; the
-      # old UI with sign-in on is covered by web/tests/e2e/old-ui.spec.ts.
+      # Extension mechanics use isolated fictional pages, not the removed
+      # legacy Queue. Keep API health available for the shared browser fixture.
       - name: Start the API on the demo database, sign-in off
         run: |
           ACE_AUTH=disabled nohup python -m uvicorn backend.app.api.main:app --port 8000 > uvicorn.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:8000/healthz && break; sleep 1; done
-      - name: Old UI browser tests
+      - name: Extension browser tests
         env:
           ACE_BROWSER_TEST_URL: http://127.0.0.1:8000
         run: python -m pytest backend/tests/browser -q -rs
-      - name: Reseed (the old UI suite writes marks), sign-in on
+      - name: Reseed the isolated demo database, sign-in on
         run: |
           pkill -f "uvicorn backend.app.api.main" || true
           python -m backend.scripts.seed_demo

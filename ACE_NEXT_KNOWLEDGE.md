@@ -475,6 +475,15 @@ or real browser rendering; application image builds and release approval remain
 pending. Full evidence, limitations and operator commands:
 `docs/architecture/2026-10-26-inbox-analytics-scrutiny.md`.
 
+Hosted CI on audit source `c54a352` passed backend/web, including full hermetic
+tests and a Next build, but stopped before new-app tests: an unchanged extension
+fixture expected the removed legacy Queue at `/` (20 tests passed, 27 setup
+errors). The same failure existed on `e6e6a93`. The follow-up isolates fictional
+extension forms on unique blank pages and fixes stale workflow labels without
+changing extension runtime or skipping assertions. Hosted CI must validate the
+final head; no local Chrome. The coverage report also uses a one-day date-cutoff
+buffer and default Spam/Trash exclusions, not exact rolling 24-hour intervals.
+
 ### Measured in production (read-only, aggregate, 2026-10-26 about 17:30 Pacific)
 
 Run it again any time (the owner approved read-only runs; it only lists Gmail IDs):

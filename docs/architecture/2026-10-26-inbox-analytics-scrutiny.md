@@ -31,6 +31,9 @@ finished at 19:10:52 (2026-10-27T02:10:52Z); the projection comparison was at
 | 30 days | 949 | 516 | 433 |
 | 90 days | 1,625 | 516 | 1,109 |
 
+The report uses date cutoffs with a one-day buffer and Gmail default Spam/Trash
+exclusions. Its window labels are not exact rolling 24-hour intervals.
+
 There are 516 stored emails: ignored 249, receipt 193, automatic 50, manual 24.
 319 rows are under older parsers. The ready connection still lacks a history
 cursor and completed preview. Missing mailbox messages are not automatically
@@ -146,3 +149,19 @@ rerun both audits. Separately review the two old date conflicts and two possible
 duplicate groups. Do not repair or delete them automatically. Complete fetched
 ID coverage does not prove perfect wording recognition or establish full
 historical response rates, resume attribution or channel attribution.
+
+## Hosted CI follow-up
+
+On source commit `c54a352`, GitHub backend and web jobs passed, including the
+full hermetic backend suite, TypeScript, lint and a Next.js build. The hosted
+browser job failed before any new-app tests: 20 extension tests passed and 27
+failed fixture setup because the fixture opened `/`, expecting the removed
+legacy Queue's global `render`. That unchanged API route redirects to Next.js,
+which the job had not started. The same failure occurred on the initial
+`e6e6a93` candidate. These failures are not passing Inbox browser verification.
+
+The follow-up changes only that extension fixture to load a unique blank page
+before each fictional form, and updates stale workflow descriptions. It does
+not alter extension runtime behavior, remove assertions or skip tests. Chrome
+remains prohibited locally; hosted CI must validate the fixture and then run
+the new app suite. Check the final branch's CI result before release.
