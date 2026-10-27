@@ -1,5 +1,18 @@
 # ace handoff
 
+**LIVE, 2026-10-27 12:27 Pacific:** Owner-approved `3cd87a5` now runs API/web,
+parser 8, schema 0050. PR #8 is merged. Live read-only Inbox/Analytics both
+report 227 pending; 1,093 legacy correspondence messages remain searchable.
+All 10 protected tables, 259 protected Inbox decisions and existing events match
+full pre/post row hashes; scheduler/PostgreSQL/Caddy and environment unchanged.
+Fresh private backup and exact hashes are in the root live-release record.
+HTTPS health/auth, the Inbox bundle and all 85 logo hashes pass. Final hosted
+checks: backend 1,586; extension browser 47; focused Inbox/Analytics browser 30;
+web build/checks pass. Broader browser: 167 pass / 19 fail, zero new failure
+names versus parser-7 baseline; overall CI is not green. Exhaustive operator
+stays stopped (zero processes, saved 143). Refresh Inbox for normal scoped
+checks; no body replay or completed semantic coverage is claimed by deployment.
+
 **Final job-mail candidate: `2554569`, draft PR #8.** Hosted backend 1,586 tests
 and web checks/build pass; 44 DOM contracts and 30 focused Inbox/Analytics browser
 tests pass on identical UI source. Last completed broader browser run is

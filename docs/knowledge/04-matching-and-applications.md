@@ -737,3 +737,25 @@ differences pre-existing. Python extension browser runner: 1 pass / 46 skipped.
 The final e2e rerun is still running; overall CI is not claimed green. Draft
 PR #8 is ready for a specific API/web release decision, with production parser 7
 untouched and the stopped exhaustive operator absent (saved exit status 143).
+
+
+## 2026-10-27 12:27 Pacific: approved job-mail scope release live
+
+Owner-approved `3cd87a5` runs on API/web at ace.opik.net, parser 8; PR #8 is
+merged. Live read-only SQL/Python/Inbox/Analytics agree on 227 pending, with
+1,093 legacy correspondence messages searchable and 952 identities reconciled.
+Every row in 10 protected tables, all 259 protected Inbox decisions and existing
+audit events match pre/post hashes. Schema 0050, environment and scheduler/
+PostgreSQL/Caddy remain unchanged. Fresh 471,244,094-byte private backup passes
+gzip/catalog checks; rollback tags and all verification artifacts are under
+`private-backups/inbox-job-mail-20261027T1918Z/` on the VM. No restore/migration,
+scheduler operation, body replay or exhaustive-operator restart ran.
+
+HTTPS health/auth, the new Inbox bundle and 85 logo hashes pass. Final hosted
+backend 1,586, matcher 258, extension browser 47, focused Inbox/Analytics browser
+30 and web checks/build pass. Broader browser 167 pass / 19 fail; every failure
+name is in the earlier 20-failure baseline. Overall CI stays non-green. The
+operator is absent with saved exit 143. Refresh Inbox for the new UI and normal
+scoped checking; deployment alone does not prove all candidate bodies have been
+reclassified or that the search has perfect semantic recall. Root live record
+contains exact SHA, image IDs, timestamps, preservation counts and limits.

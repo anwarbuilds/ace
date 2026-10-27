@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-27, final job-mail candidate 2554569 validated; API/web release still requires approval
+Last updated: 2026-10-27, owner-approved job-mail release 3cd87a5 live on API/web; parser 8 verified; exhaustive operator remains stopped
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -12,6 +12,88 @@ repository instructions. Dated observations below are evidence from that date,
 not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
+
+## Approved job-mail release LIVE, verified 2026-10-27T19:27Z
+
+The owner explicitly approved the prepared release with "Approved. I want it to
+live." Exact approved commit **`3cd87a5948f0ac68768c5b9e0a815d25b5abcc31`** now
+runs on API and web at **https://ace.opik.net**. This supersedes all pending
+approval, parser-7-live and unfinished-draft statements below. Canonical
+`wine-rose-platform` was fast-forwarded to that exact SHA; GitHub records PR #8
+as merged and closed. Later documentation commits do not change running images.
+Runtime source is identical to tested `2554569`; their difference is three
+continuity documents only.
+
+API started at **19:25:03Z**, web at **19:25:09Z** (12:25 Pacific). Both are
+healthy. Running parser is **8**; all six Inbox/Analytics runtime source hashes
+match the approved checkout and prepared image. Prepared/running image IDs:
+
+- API: `sha256:008a0af93eed1bf1fddab600d4ccfa108bca7287934e205ff1b499ee88935af2`.
+- Web: `sha256:249cd2421f94bb44a41d25da341052908ec431ac3c968ae2def822acc124c38a`.
+
+Public HTTPS verification at **19:26:59Z** returns healthy API and the exact
+approved frontend SHA in both `/healthz` and `X-Ace-Frontend-Commit`. Anonymous
+Inbox/connection/Analytics requests return 401; Inbox/Analytics pages redirect
+307 to sign-in. The deployed Inbox client bundle containing the job-mail scope
+and new status wording matches its served hash. All **85** bundled logo hashes
+match through HTTPS. This verifies HTTP, source and packaged assets; it is not
+a signed-in production browser interaction test.
+
+The enforced read-only live audit at **19:25:50Z** reconciles **227 pending** in
+Inbox and Analytics, versus 1,320 raw legacy pending rows. The 1,093 passive
+correspondence messages remain searchable, with original rows/events retained.
+SQL and Python agree. Four selected date ranges pass all identity/status/cohort/
+evidence invariants. There are **952** application identities: 904 applied marks
+plus 48 external records; all time 757 Applied, 193 Rejected, 2 Screening and
+178 dated rejections. These are observations, not UI constants. Existing possible
+duplicate/date/fallback limits and six owner-filed outcome-worded receipts stay
+untouched. The audit made **zero Gmail calls and zero body reads**.
+
+Preservation is verified by full row hashes, beyond aggregate counts: all rows
+in **10 protected tables**, all **259 protected Inbox decisions**, and every
+existing audit event are identical across activation, with zero additions,
+changes or removals in those snapshots. Applied marks remain 904. Protected
+table counts before/after: job marks 1,248; external applications 48; answer-bank
+104; private Memory 97; career facts 111; history entries 2; resumes 5; resume
+documents 6; resume versions 6; users 1. The schema stays **0050**. Environment
+bytes and scheduler/PostgreSQL/Caddy container/image IDs match exactly. Only API
+and web were recreated using `--no-build --no-deps --wait`. No migration,
+scheduler operation, extension publication, data cleanup or restore ran.
+
+A fresh consistent private backup is retained at
+`/opt/ace/private-backups/inbox-job-mail-20261027T1918Z/database.dump.gz`,
+**471,244,094 bytes**, mode 600 in a mode-700 directory. Full gzip integrity and
+PostgreSQL archive catalog checks passed; this was not a restore drill. The
+folder retains preparation/activation logs, exact image/source records, private
+row-hash inventories, `verification.json`, `live-queue.json` and
+`public-check.json`. Rollback images are
+`oracle-api:before-job-mail-20261027T1918Z` and
+`oracle-web:before-job-mail-20261027T1918Z`; rollback replaces API/web only and
+never restores production data automatically. An initial read-only inventory
+attempt failed before backup/activation because `dict(CursorResult)` needs
+`.all()` here. Its log is retained separately. Fixing that diagnostic did not
+change runtime source; the corrected preservation checks passed.
+
+Final hosted run **40564903560** on runtime `2554569` completed: **1,586 backend
+tests**, 258 matcher cases, web checks/build, **47 extension browser tests** and
+**30 focused Inbox/Analytics browser tests** pass. The broader browser step is
+**167 passed / 19 failed**. Exact failure-title comparison finds zero new names
+versus the parser-7 20-failure baseline (job 122268531501); the former scrolling
+failure passes. The two additional shortcut-focus failures in the earlier
+candidate run also pass in this final run. Overall CI is still not green, and
+no assertion was weakened or skipped to hide those 19 failures. Final e2e job:
+122404261309. No local Chrome ran.
+
+The exhaustive parser-7 operator remains absent: **zero processes**, saved exit
+status **143** preserved. It was never restarted. This release verification did
+not import mail, replay bodies, file owner decisions or claim completion of the
+1,661 previously measured scoped old-parser reads. Existing page-open checks now
+select job-mail candidates across all dates, excluding Spam/Trash, and reclassify
+eligible evidence through the new guarded code. **Refresh Inbox to load the new
+UI and begin its normal scoped check.** The separate 18:29Z ID-only scope snapshot
+(1,869 candidates / 1,860 stored / 9 missing) remains dated evidence; neither
+that search nor the current 227 count certifies perfect wording recognition or
+completed body processing. No fresh coverage claim is invented from deployment.
 
 ## Job-mail triage completed locally, 2026-10-27 11:31 Pacific
 
