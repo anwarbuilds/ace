@@ -1194,7 +1194,7 @@ source only; no backend, database, Gmail, scheduler or website runtime change
 is needed. Full details: `docs/architecture/2026-10-26-extension-explicit-fill.md`.
 
 
-## Contextual adoption and scoped screening facts (2026-10-26, prepared 1.30.0)
+## Contextual adoption and scoped screening facts (2026-10-26, API live, 1.30.0)
 
 The owner requested reuse of committed answers when differently worded questions
 ask for the same fact. The API had been deliberately refusing all protected and
@@ -1205,7 +1205,13 @@ Routine paraphrases and identical duplicate records resolve conservatively.
 A late Memory connection retries still-current trusted edits without filling;
 success gets a saved receipt and failure keeps completion with Retry. Corrections
 invalidate immediate form copies. Old records and private profile/history remain.
-82 fictional DOM and 173 backend contracts pass. No Chrome or production claim.
-The new Memory API operation awaits owner approval, then extension Reload and
-refreshed employer tabs. No schema, scheduler, website or application mutation.
+82 fictional DOM and 173 backend contracts pass. The owner explicitly approved
+Deploy: API `9d05673` activated 17:57 Pacific and public HTTPS checks passed
+17:59. Twenty focused tests also pass in the running image using isolated
+fictional SQLite fixtures. New invalid-scope and reserved-namespace 422 guards
+were verified without saving production answers; 67 Memory rows stayed intact.
+Only the API container changed; schema 0050, scheduler, website, database, Caddy,
+environment and tracked data counts stayed unchanged. A verified private backup
+and previous API image were retained. Extension Reload and refreshed employer
+tabs remain necessary. No Chrome or real employer verification.
 Full boundaries: `../architecture/2026-10-26-context-answer-reuse.md`.

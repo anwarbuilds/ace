@@ -27,11 +27,11 @@ This checkpoint is a documentation update, not a new deployment or live check.
 | Item | Last recorded state |
 | --- | --- |
 | Repository / canonical branch | `/home/ubuntu/Documents/ace-next`, `wine-rose-platform`, remote `anwarbuilds/ace`; fetch and inspect before editing because parallel chats advance it |
-| Last directly verified live API/web | Web `1fee67127877838f09b9a42f5edef6bc4669f34e`, API logo source `d0342d4` (branding hashes match current source), healthy and verified through public/signed-in HTTPS on 2026-10-27T00:19Z (2026-10-26 17:19 Pacific). Contains the existing `6163f59` Inbox behavior |
-| Newer source not yet live | Reliable-Inbox P1 to P6 below remain a plan, not implemented or deployed. The read-only diagnosis script was added to the branch concurrently; it was not included in the API logo image. Documentation updates need no rebuild |
-| Important runtime distinction | The logo API image contains `d0342d4`; the later web-only packaging correction runs `1fee671`. The existing Inbox parser 5 is preserved; the proposed reliable-Inbox parser 6 is not built. Recheck health and source/image hashes before another release |
-| Installed source of unpacked extension | Manifest **1.30.0** prepared for contextual reuse; new scoped saving also requires the pending Memory API release. Browser activation needs Reload/refreshed employer tabs. No Web Store publication |
-| Database | Last verified schema `0050`; no migration was run for the logo releases |
+| Last directly verified live API/web | API `9d05673248ce6ead30652e62bb1d5e569404848c`, web `1fee67127877838f09b9a42f5edef6bc4669f34e`, healthy through public/signed-in HTTPS on 2026-10-27T00:59Z (2026-10-26 17:59 Pacific). Contextual Memory API is live; existing `6163f59` Inbox behavior and branding parser 4 are preserved |
+| Newer source not yet live | Reliable-Inbox P1 to P6 below remain a plan, not implemented or deployed. The read-only diagnosis script is now present in the API image but was not run by this release. Documentation updates need no rebuild |
+| Important runtime distinction | API-only Memory release runs `9d05673`; web stays `1fee671`. Existing Inbox parser 5 is preserved; proposed reliable-Inbox parser 6 is not built. Recheck health and source/image hashes before another release |
+| Installed source of unpacked extension | Manifest **1.30.0** for contextual reuse; supporting Memory API is deployed. Browser activation needs Reload/refreshed employer tabs. No Web Store publication |
+| Database | Last verified schema `0050`; no migration was run for the logo or contextual Memory releases |
 | Last logo verification totals | 936 applications, 889 posting applications plus 47 external history, stable during 2026-10-26 17:19 Pacific verification; a timestamped observation, never a UI constant |
 
 Saving this knowledge does not authorize any activation. The Inbox build
@@ -70,9 +70,9 @@ documentation commit requires no application rebuild.
   `/api/inbox/google/callback`, with a private token-encryption key. Credentials
   remain only in private environment configuration, never this public file.
   Never claim Gmail is connected from a client ID alone. Show real ready/error/
-  paused/disconnected states. Live Inbox parser 4 and the existing audit/Undo
-  rules are in the last verified release. Parser 5/add-from-email are pending
-  activation, not verified live. Preserve conservative identity matching,
+  paused/disconnected states. Live Inbox parser 5/add-from-email and the existing audit/Undo
+  rules are preserved in the verified release. Reliable-Inbox parser 6 remains
+  unimplemented. Preserve conservative identity matching,
   ambiguity review, protected newer statuses and owner-controlled automation.
   Clear rejections can be recorded automatically under the approved exact
   matching rules; interviews/assessments/offers retain their stricter evidence
@@ -150,25 +150,33 @@ verification of the reloaded extension on real forms. Do not silently turn
 these pending items into completed work or start them merely because they are
 listed here.
 
-## 2026-10-26: Contextual answer adoption, prepared 1.30.0
+## 2026-10-26: Contextual answer adoption, API live, extension 1.30.0
 
-Status: tested source, **not deployed**. The owner wants completed answers adopted
-and reused for meaning-equivalent questions. The current server's blanket
-protected/company rejection prevents saving most pictured screenings. The new
+Status: **API deployed with explicit owner approval**, `9d05673`, activated
+2026-10-26 17:57 Pacific and verified 17:59. The owner wants completed answers
+adopted and reused for meaning-equivalent questions. The previous server's
+blanket protected/company rejection prevented saving most pictured screenings. The new
 reviewed `scoped` policy permits exact factual binary screenings with status-set,
 country, employer/subsidiary and timeframe boundaries, while unknown protected
 questions, consent/attestations and motivation remain excluded. This specific
 owner-authorized policy supersedes the older blanket per-application-only rule
 for those reviewed facts; it does not authorize loose keyword matching.
 
-Extension source is **1.30.0**; activation needs the separately approved Memory
-API-only release, extension Reload and refreshed employer tabs. No schema or
+Extension source is **1.30.0**; browser activation still needs extension Reload
+and refreshed employer tabs. The supporting API-only release is live. No schema or
 migration is required. New saved receipts, late-connection adoption, bounded
 paraphrases, identical-duplicate handling, correction invalidation and failure
 retry are tested. 82 DOM contracts, 173 fictional backend Memory/auth/logo tests,
 258 matcher cases, Memory safety, syntax, TypeScript, lint and dash checks pass.
-No Chrome or real employer verification. No production change or actual answer
-write was made for this correction. Source and release boundaries:
+No Chrome or real employer verification. Only the API container was replaced;
+web, scheduler, PostgreSQL, Caddy and environment stayed unchanged. A verified
+470,305,554-byte private backup and previous-image rollback were retained. All
+tracked data counts stayed unchanged (including 67 Memory rows). Public owner
+Memory read/no-store, anonymous 401 and new invalid-scope/namespace 422 guards
+passed without saving answers. Twenty deployed-image SQLite fixture tests pass.
+Pulls, Inbox and Analytics return 200; five logo assets still match hashes.
+Existing parser 5 is preserved; reliable-Inbox P1 to P6 remain unimplemented.
+Source and release boundaries:
 `docs/architecture/2026-10-26-context-answer-reuse.md`.
 
 ## OPEN WORK for the next chat: a reliable Inbox (measured 2026-10-26 evening)

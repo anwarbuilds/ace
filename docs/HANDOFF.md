@@ -188,11 +188,14 @@ marks, now 85 total; parser v4. Fresh runtime inspection found `6163f59` already
 live, superseding the earlier pending Inbox observation. Final logo release
 status and verification: `architecture/2026-10-26-pulls-company-logos.md`.
 
-**2026-10-26 contextual Memory, prepared:** extension 1.30.0 plus a narrow
+**2026-10-26 contextual Memory, API live:** extension 1.30.0 plus a narrow
 Memory API update adopt reviewed factual screenings with exact context/scope,
 broaden routine paraphrases and confirm successful saves. 82 DOM and 173
-backend contracts pass. This API change is not deployed; it needs separate
-approval and then extension Reload. No migration or scheduler change.
+backend contracts pass. With explicit owner approval, API `9d05673` deployed
+at 17:57 Pacific; public checks and 20 isolated deployed-image tests pass. Web,
+scheduler, database, Caddy, environment and tracked data counts are unchanged.
+Reload extension 1.30.0 and refresh employer tabs. No migration. Real employer
+interaction still needs owner verification.
 See `architecture/2026-10-26-context-answer-reuse.md`.
 
 ## 4. System map
