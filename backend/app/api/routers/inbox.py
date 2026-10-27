@@ -34,7 +34,7 @@ from backend.app.inbox import display, gmail
 from backend.app.inbox.full_history import FullMailboxScan
 from backend.app.inbox.queue import (decision_expression, projected_decision, projected_reason)
 from backend.app.inbox.reconcile import (
-    ApplicationIdentity, Decision, EmailEvidence, MAX_CLASSIFIER_BODY, PARSER_VERSION, RECEIPT_REASON, conflict, reconcile,
+    ApplicationIdentity, Decision, EmailEvidence, MAX_CLASSIFIER_BODY, PARSER_VERSION, RECEIPT_REASON, _MARKING_GRACE, conflict, reconcile,
 )
 
 router = APIRouter()
@@ -338,7 +338,7 @@ def _append_event(session: Session, key: str, kind: str, before: str | None, aft
     return event
 
 
-def _thread_keys(session, conn, data, evidence):
+def _thread_keys(session, conn, data, evidence, identities):
     if not data.get("threadId"):
         return ()
     # No body history or inferred applications: use retained exact matches only.
@@ -351,8 +351,16 @@ def _thread_keys(session, conn, data, evidence):
         GmailMessageRecord.selected_application_key.is_not(None),
         GmailMessageRecord.decision.in_(("receipt", "manual", "automatic"))))
     sender = parseaddr(evidence.sender)[1].casefold()
+    apps = {app.key: app for app in identities}
+    def compatible(row):
+        app = apps.get(row.selected_application_key)
+        stamp = row.received_at.replace(tzinfo=timezone.utc) if row.received_at.tzinfo is None else row.received_at
+        submitted = app.submitted_at if app else None
+        if submitted is not None and submitted.tzinfo is None:
+            submitted = submitted.replace(tzinfo=timezone.utc)
+        return app is not None and (submitted is None or stamp >= submitted - _MARKING_GRACE)
     return tuple(sorted({row.selected_application_key for row in rows
-                         if parseaddr(row.sender)[1].casefold() == sender}))
+                         if parseaddr(row.sender)[1].casefold() == sender and compatible(row)}))
 
 
 def _scoped_detail(message_id: str, token: str, active=lambda: True) -> dict:
@@ -377,7 +385,7 @@ def _ingest(session: Session, conn: GmailConnectionRecord, data: dict, identitie
     if {"SPAM", "TRASH"}.intersection(data.get("labelIds", [])):
         return "excluded"
     evidence = _message_evidence(data)
-    decision = reconcile(evidence, identities, conn.email, thread_keys=_thread_keys(session, conn, data, evidence))
+    decision = reconcile(evidence, identities, conn.email, thread_keys=_thread_keys(session, conn, data, evidence, identities))
     row = GmailMessageRecord(
         connection_id=conn.id, gmail_id=gmail_id, thread_id=data.get("threadId"),
         received_at=evidence.received_at, sender=evidence.sender, subject=evidence.subject,
@@ -992,7 +1000,7 @@ def _recheck_locked(body: RecheckRequest, session: Session, conn: GmailConnectio
         if current is None:
             continue
         row = current
-        decision = reconcile(evidence, identities, conn.email, thread_keys=_thread_keys(session, conn, data, evidence))
+        decision = reconcile(evidence, identities, conn.email, thread_keys=_thread_keys(session, conn, data, evidence, identities))
         before = row.decision
         row.classification = decision.classification
         row.requisition_id = decision.requisition_id

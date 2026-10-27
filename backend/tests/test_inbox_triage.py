@@ -214,3 +214,12 @@ def test_ordinary_application_progress_without_an_outcome_is_still_saved_automat
     evidence=EmailEvidence("talent@careers.silverpine.example","Application update",
         "Your application for the Software Engineer role is still being compared with other candidates.",NOW,True)
     assert reconcile(evidence,[]).disposition=="update"
+
+
+def test_receipt_from_before_the_recorded_application_cannot_supply_thread_identity(database):
+    session,conn=database
+    receipt=message("old-thread-anchor","Req ID: SE-101. Thank you for applying.",NOW-timedelta(days=2500))
+    assert inbox._ingest(session,conn,receipt,inbox._identities(session),preview=True)=="receipt"
+    outcome=message("new-thread-rejection","We have decided to move forward with other candidates.")
+    assert inbox._ingest(session,conn,outcome,inbox._identities(session),preview=True)=="review"
+    assert statuses(session)==["applied"]*3 and not job_events(session)
