@@ -132,6 +132,9 @@ for(const width of [1600,1440,1280,1024,390]) {
       await page.goto(`/app/analytics?tab=${tab}&days=90`);
       await expect(page.getByRole("heading",{name:title,exact:true})).toBeVisible();
       expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
+      // Streaming can briefly stage a second hidden page. Require one committed
+      // page before measuring; keep every overflow and clipping assertion.
+      await expect(page.locator(".an-page")).toHaveCount(1);
       const clipped=await page.locator(".an-page").evaluate(root=>Array.from(root.querySelectorAll("h1,h2,.an-metric strong,.an-filters button,.an-tabs a")).filter(el=>el.scrollWidth>el.clientWidth+2).map(el=>el.textContent));
       expect(clipped).toEqual([]);
       if(width===390)await page.screenshot({path:path.join(root,`mobile-${tab}.png`),fullPage:true});
@@ -260,7 +263,10 @@ for (const route of ["/app/analytics?days=all", "/app/applications/analytics?day
       const headers=request.headers();
       if(url.pathname===new URL(route,"http://fixture.test").pathname && headers.rsc==="1" && !headers["next-router-prefetch"])requests.push(request.url());
     });
-    await page.goto(route);
+    if(route.startsWith("/app/analytics?")){
+      await page.goto("/app/applications/inbox");
+      await page.getByRole("link",{name:"Analytics",exact:true}).click();
+    }else await page.goto(route);
     await expect(page.getByRole("heading",{name:route.startsWith("/app/analytics?")?"Analytics":"Application records",exact:true})).toBeVisible();
     // Catch the continuous half-second response cycle, allowing initial loading
     // to finish. The shell's intentional two-minute poll is outside this window.
@@ -278,6 +284,16 @@ for (const route of ["/app/analytics?days=all", "/app/applications/analytics?day
     const updated=requests.length;
     await page.waitForTimeout(3000);
     expect(requests.length,"an evidence refresh must also settle").toBe(updated);
+    if(route.startsWith("/app/analytics?")){
+      await page.getByRole("link",{name:"Inbox Intelligence",exact:true}).click();
+      await expect(page.getByRole("heading",{name:"Inbox Intelligence",exact:true})).toBeVisible();
+      await page.goBack();
+      await expect(page.getByRole("heading",{name:"Analytics",exact:true})).toBeVisible();
+      await page.waitForTimeout(1500);
+      const returned=requests.length;
+      await page.waitForTimeout(3000);
+      expect(requests.length,"returning from Inbox must settle").toBe(returned);
+    }
     expect(errors).toEqual([]);
   });
 }

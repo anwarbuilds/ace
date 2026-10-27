@@ -38,7 +38,23 @@ existing two-minute shell poll and Inbox checks retain their normal behavior.
 Local fictional Inbox/Analytics DOM suites, TypeScript and full web lint pass.
 Added hosted browser regressions check both overview and application records
 settle after opening and after an `ace-marks` evidence notification. Hosted
-verification is pending; no local Chrome runs under the cooling restriction.
+run **40574704624** on **2319739** passed both new quiet-page regressions,
+45 DOM contracts, backend 1,586, matcher 258, extension browser 47 and web build/
+checks. Its focused browser step was **29 pass / 3 fail**: three existing width
+checks read `.an-page` while React staged a second hidden streaming fragment
+under `S:0`. Fictional failure screenshots show one correctly drawn page. The
+width test now additionally requires exactly one `.an-page` before retaining
+all original overflow/clipping assertions; none are removed or narrowed. The
+overview regression also opens via the actual Analytics sidebar link in Inbox
+and checks return navigation. A hosted rerun is pending. No local Chrome runs
+under the cooling restriction.
+
+The later complete read-only 19:56:00 to 20:00:00 UTC log window counted **464**
+Analytics GETs and **one** Inbox sync POST; the earlier 366 count was a snapshot
+while that fourth minute was still in progress. Other paths were aggregated,
+never printed as raw logs. This supports page feedback, not repeated Gmail
+sync notifications. Production service start times/health were reconfirmed
+unchanged during diagnosis.
 A new, specific web activation approval is required after the correction is
 reviewable and verified. Prior approval covered 3cd87a5 only. No API changes,
 release, migration, scheduler operation or stopped exhaustive recheck ran.
