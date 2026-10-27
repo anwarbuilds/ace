@@ -100,8 +100,8 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
-**2026-10-26 evening, OPEN WORK, start here for Inbox:** production runs `6163f59`
-(add-from-email, parser 5). The owner asked for a RELIABLE Inbox after a rejection
+**2026-10-26 evening, OPEN WORK, start here for Inbox:** production preserves
+`6163f59` Inbox behavior (add-from-email, parser 5) in the newer logo release. The owner asked for a RELIABLE Inbox after a rejection
 email was never recorded. Measured read-only: Gmail lists 946 emails for 30 days and
 only 512 are in ACE (the sync never pages past 500 and never sets its cursor), 248
 stored emails sit as ignored "No outcome found" and are never re-read, and the
@@ -110,10 +110,12 @@ The plan P1 to P6, the numbers and the report script
 `backend/scripts/inbox_coverage_report.py` are in `ACE_NEXT_KNOWLEDGE.md`, section
 "OPEN WORK for the next chat: a reliable Inbox".
 
-**Current cross-session checkpoint:** See the opening continuation checkpoint in
-`ACE_NEXT_KNOWLEDGE.md` for live `0fef238`, extension 1.29.1, the newer built-but-
-unactivated Inbox change `6163f59`, code/test maps and outstanding verification.
-This knowledge-only update performs no deployment or production operation.
+**Current cross-session checkpoint:** See `ACE_NEXT_KNOWLEDGE.md` for live web
+`1fee671`, API logo source `d0342d4`, extension 1.29.1 and the unimplemented
+reliable-Inbox plan. All 85 logo hashes and the five reported company/job/detail
+references plus general dynamic routes passed signed-in HTTPS at 17:19 Pacific.
+Schema 0050 and protected services/configuration are preserved. Evidence:
+`architecture/2026-10-26-pulls-company-logos.md`. No browser rendering claimed.
 
 **2026-10-26 explicit-fill correction:** Local extension **1.29.1** fills only
 after Fill or Alt+A. Focus, hover, typing and late data responses stay passive.
@@ -180,7 +182,7 @@ in [the handoff state archive](knowledge/11-handoff-state-archive.md). Use
 `ACE_NEXT_KNOWLEDGE.md` for current verified production state, deployment controls,
 backups and migration evidence before operating production.
 
-**2026-10-26 Pulls logo follow-up:** Owner-requested fix/deploy for Uber,
+**2026-10-26 Pulls logo follow-up, live:** Owner-requested fix/deploy for Uber,
 Optiver, Chime, temporal and twitch. General provider recovery plus 5 reviewed
 marks, now 85 total; parser v4. Fresh runtime inspection found `6163f59` already
 live, superseding the earlier pending Inbox observation. Final logo release

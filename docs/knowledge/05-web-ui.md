@@ -958,3 +958,22 @@ marks join the optional 85-image bundle with provenance. Company identities,
 application data and discovery are unchanged. Final tests/runtime evidence are
 in `../architecture/2026-10-26-pulls-company-logos.md`. A universal guarantee of
 an external authentic logo remains impossible when evidence is absent/refused.
+
+
+Released API logo source `d0342d4` and web `1fee671` at 17:19 Pacific. The first
+live hash check caught new public files with mode 0600 inherited from the private
+release umask. The web image now ensures public assets are readable by its Node
+user, and all 85 live hashes plus five dynamic routes and company/job/Opportunities
+references pass. Application totals stayed 936 during final verification, schema
+and protected services/configuration are unchanged. Detailed backup, concurrent
+mark-count increase and rollback evidence are in the architecture note. HTTP and
+asset verification passed; browser rendering remains unverified due to cooling.
+
+
+Released 2026-10-26 17:19 Pacific: web `1fee671`, API branding `d0342d4`.
+All 85 image hashes, five dynamic routes and fifteen company/job/Opportunities
+pages pass live signed-in HTTP checks. The first check found private-umask
+0600 public files; the web runtime image now normalizes public read/traversal
+permissions. Final totals stayed 936, schema/environment/protected container
+IDs held. No browser visual claim; see the architecture note for backup,
+rollback, concurrent mark-count change and verification limits.

@@ -27,15 +27,15 @@ This checkpoint is a documentation update, not a new deployment or live check.
 | Item | Last recorded state |
 | --- | --- |
 | Repository / canonical branch | `/home/ubuntu/Documents/ace-next`, `wine-rose-platform`, remote `anwarbuilds/ace`; fetch and inspect before editing because parallel chats advance it |
-| Last directly verified live API/web | `6163f59f3ebdeee55f15e88dbf8551f6cb088623`, public `https://ace.opik.net/healthz` on 2026-10-27T00:10Z (2026-10-26 17:10 Pacific); API and web containers up about three hours and healthy, Inbox parser 5 confirmed inside the running API. It contains the logo release `0fef238` and the Inbox work below |
-| Newer source not yet live | `origin/wine-rose-platform` is ahead of production (another session's logo recovery commits, `d0342d4` and documentation). Releasing the branch tip ships them too: confirm with the owner and recheck `/healthz` first |
-| Important runtime distinction | The pending Inbox entry's references to `40254e7`/`bd5c364` are older releases; the logo session directly verified `0fef238`. Recheck health and running image/source hashes before any future activation rather than assuming either checkout or image tags are live |
+| Last directly verified live API/web | Web `1fee67127877838f09b9a42f5edef6bc4669f34e`, API logo source `d0342d4` (branding hashes match current source), healthy and verified through public/signed-in HTTPS on 2026-10-27T00:19Z (2026-10-26 17:19 Pacific). Contains the existing `6163f59` Inbox behavior |
+| Newer source not yet live | Reliable-Inbox P1 to P6 below remain a plan, not implemented or deployed. The read-only diagnosis script was added to the branch concurrently; it was not included in the API logo image. Documentation updates need no rebuild |
+| Important runtime distinction | The logo API image contains `d0342d4`; the later web-only packaging correction runs `1fee671`. The existing Inbox parser 5 is preserved; the proposed reliable-Inbox parser 6 is not built. Recheck health and source/image hashes before another release |
 | Installed source of unpacked extension | Manifest **1.29.1**; browser activation still requires extension Reload and refreshed employer tabs; no Web Store publication |
 | Database | Last verified schema `0050`; no migration was run for the logo releases |
-| Last logo verification totals | 931 applications, 884 posting applications plus 47 external history; a timestamped observation, never a UI constant |
+| Last logo verification totals | 936 applications, 889 posting applications plus 47 external history, stable during 2026-10-26 17:19 Pacific verification; a timestamped observation, never a UI constant |
 
 Saving this knowledge does not authorize any activation. The Inbox build
-`6163f59` is already live. The reliable-Inbox work in the next section is NOT
+`6163f59` behavior is preserved in the live logo release. The reliable-Inbox work in the next section is NOT
 built and nothing in it is deployed. Before any release check which commit the
 images contain, whether newer changes exist and the owner's authorization. A
 documentation commit requires no application rebuild.
@@ -58,7 +58,7 @@ documentation commit requires no application rebuild.
   separate from DOL LCAs, hiring totals or new-graduate sponsorship eligibility.
   Keep missing evidence visibly unavailable instead of inventing a number.
 - **Company identity:** use `CompanyLogo`/`CompanyIdentity` on every structured
-  company surface. The 80 reviewed assets are an optional fast path, with
+  company surface. The 85 reviewed assets are an optional fast path, with
   exact aliases and source/hash provenance; newly pulled employers use the
   owner-only same-origin route. Respect refusal/robots, verified tenant
   identity, public-address pinning and raster validation. Never guess a domain,
@@ -96,7 +96,7 @@ documentation commit requires no application rebuild.
 | --- | --- |
 | Analytics | `web/src/components/analytics/`, `web/src/lib/analytics.ts`, `web/src/app/app/analytics/`, `backend/app/api/routers/analytics.py`; drilldown `web/src/app/app/applications/analytics/page.tsx` |
 | Shared logos | `web/src/components/CompanyLogo.tsx`, `CompanyIdentity.tsx`, `web/src/lib/companyLogos.ts`, `web/public/company-logos/provenance.json`; `backend/app/branding/{sources,discovery,transport,cache}.py` and `backend/app/api/routers/companies.py` |
-| Logo cache and recovery | Four workers, 32 pending, 512 entries; seven-day success/six-hour miss; parser v3 keys; dynamic image retries at 2 and 15 seconds, at most twice, with cleanup. Unavailable evidence can still retain initials; no universal external-image guarantee |
+| Logo cache and recovery | Four workers, 32 pending, 512 entries; seven-day success/six-hour miss; parser v4 keys; dynamic image retries at 2 and 15 seconds, at most twice, with cleanup. Unavailable evidence can still retain initials; no universal external-image guarantee |
 | Inbox | `backend/app/inbox/{gmail,reconcile,display}.py`, `backend/app/api/routers/inbox.py`, `web/src/components/inbox/`; source parser version and deployed parser version must be checked separately |
 | Extension | `extension/{content,fields,popup,background}.js`, manifest, `web/tests/extension-review.test.mjs`; approved V5.1 package plus later explicit-fill decisions |
 | Exact logo release inventory, sources and rollback | `docs/architecture/2026-10-26-platform-company-logos.md`, `2026-10-26-company-identity.md`, `2026-10-26-quick-fill-release.md` |
@@ -304,9 +304,9 @@ application fits, with Undo, and ignored mail is re-read after a parser bump;
 
 ## 2026-10-26: Pulls employer logos and automatic provider recovery
 
-Status: tested source in preparation for the owner-requested deployment.
-See `docs/architecture/2026-10-26-pulls-company-logos.md` for final runtime
-status once verified. The owner reported missing Uber, Optiver, Chime, temporal
+Status: deployed and verified at 17:19 Pacific. API logo source `d0342d4`,
+web `1fee671` including the public-file permission packaging correction.
+See `docs/architecture/2026-10-26-pulls-company-logos.md` for runtime evidence. The owner reported missing Uber, Optiver, Chime, temporal
 and twitch logos and explicitly requested a live fix that preserves backend work.
 All five candidate automatic lookups succeeded from the VM without changing its
 running API or application data. Their authentic images were visually inspected
@@ -324,7 +324,29 @@ change. Its activation occurred outside this session; preserve it. This replaces
 the opening checkpoint's older pending-runtime observation, without claiming
 this session verified Inbox browser behavior. Schema/discovery/auth/application
 behavior and the extension are outside this logo correction. Browser tests remain
-prohibited by cooling. Final live evidence is recorded after activation.
+prohibited by cooling. Final signed-in HTTPS checks passed all 85 asset hashes,
+all five dynamic logo hashes/cache bytes, each employer's company/job/Opportunities
+logo references, Pulls, four Analytics tabs and Inbox. Anonymous logo access stays
+401; unknown employers stay 204. Temporary verification sessions were revoked.
+
+The first live check caught 0600 public files copied from a restrictive-umask
+checkout into the unprivileged web runtime. `web/Dockerfile` now grants only
+public read/traversal access before switching to Node; the web-only correction
+passed runtime-user read checks and all public hashes. Health alone was not
+accepted as proof. Local checks passed 159 logo/auth plus 9 source contracts,
+11 company React contracts, existing Inbox/Analytics render contracts, TypeScript,
+lint, production builds and dash/whitespace checks. No Chrome or screenshots.
+
+A fresh 470,001,414-byte private backup passed gzip and restore-catalog checks
+at `private-backups/pulls-company-logos-20261026/` on the VM. API/web are healthy;
+schema stays 0050, environment bytes and scheduler/PostgreSQL/Caddy IDs match.
+Nine protected table counts and applied count matched at initial activation.
+During the web-only correction, one additional applied mark appeared concurrently
+(no mark/status API was invoked by this release); all other protected counts
+stayed equal. Final verification totals remained 889 plus 47, or 936. No data
+restore, migration, Gmail sync, scheduler change or extension publication ran.
+Prior images are tagged `oracle-api:before-pulls-company-logos` and
+`oracle-web:before-pulls-company-logos`. Refresh website tabs to load the bundle.
 
 ## 2026-10-26: Platform-wide logo coverage follow-up
 
