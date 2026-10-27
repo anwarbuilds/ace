@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-27 11:06 Pacific, job-mail-only triage draft saved for continuation; live parser 7; exhaustive operator stopped
+Last updated: 2026-10-27 11:31 Pacific, scoped job-mail implementation validated locally; API/web release still requires approval
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -12,6 +12,81 @@ repository instructions. Dated observations below are evidence from that date,
 not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
+
+## Job-mail triage completed locally, 2026-10-27 11:31 Pacific
+
+This supersedes the unfinished-draft status in START HERE below. Continued from
+checkpoint `053ae41` in `/home/ubuntu/Documents/ace-inbox`. Canonical remote
+`wine-rose-platform` was fetched and remains `d1b9fd2`. No release, production
+mail import/recheck, migration, scheduler change or destructive operation ran.
+The stopped exhaustive parser-7 operator was not restarted. Live API parser 7
+was reconfirmed over SSH. Parser 8 remains a candidate until specific API/web
+activation approval and verification.
+
+Completed behavior:
+
+- All-date job-mail candidate search includes archived mail and excludes
+  Spam/Trash. It uses application phrases and recruiting senders, with no date
+  cutoff by default. It is a heuristic search, not certified semantic recall.
+  Ordinary personal history additions trigger ID selection, never direct body
+  reads. Metadata label preflights prevent full-body reads of excluded mail.
+- Listing follows every page in bounded batches. History additions and excluded
+  label changes cause one scoped re-list at the captured cursor; continuing
+  personal arrivals cannot perpetually restart that pass. Next checks catch
+  later changes. Initial/restarted history is never treated as live positive
+  evidence. Pause/regrant checks cover metadata-to-body and body-to-write races.
+- Removed the provisional age cutoff and predating-email suppression. Every
+  recognized unmatched historical outcome remains visible. Only legacy
+  classifier-generated `unclear` correspondence projects to searchable `update`;
+  partial-read reasons, owner filings, deferred and both historical Undo reasons
+  remain protected. No legacy rows or events are rewritten by this projection.
+- Scoped old-parser `unclear` mail is actually re-read, so a newly recognized
+  outcome can still become an automatic rejection. The badge and Analytics use
+  the same SQL/Python queue policy. Stale counts intersect the same completed
+  all-date candidate manifest as the worker; scope-pending is an explicit client
+  failure, not successful zero remaining. The client asks for recheck after
+  discovery even when its pre-discovery stale count was zero.
+- Removed bare assessment-platform-name classification. Complete account notices
+  and job alerts are routine; an explicit body outcome takes precedence even
+  under a generic account subject. Correspondence never claims an application
+  status change or owner review. UI formats the single pending number with
+  separators and explains the search scope/limits in Inbox and Analytics.
+- A previously linked same-sender Gmail thread can narrow several roles at one
+  company to one consistent target for a rejection. Conflicting thread targets,
+  IDs, companies, roles, timing, sender authentication, final/newer statuses and
+  positive-outcome opt-in/live/exact-ID rules retain their existing guards.
+
+Read-only production candidate preview at **2026-10-27T18:29:00Z** (11:29 Pacific):
+1,869 all-date job-mail search IDs, 1,860 stored, 9 missing; 6,071 retained stored
+messages outside that search. No bodies were downloaded. PostgreSQL default
+read-only transactions and a repeatable snapshot enforced no database writes.
+Candidate modules ran only in a separate diagnostic process; running application
+modules/files/services were not changed. Raw pending 1,320 projects to **227**,
+with **1,093** legacy correspondence messages searchable without owner tasks;
+all **226 recognized pending outcomes** remain visible. SQL/Python agree and
+Inbox/Analytics both return 227. **1,661** stored messages are eligible for a
+scoped parser recheck after an approved activation. This is a queue projection,
+not a claim that 1,093 full bodies were newly understood or that the remaining
+227 all require a new owner decision after reclassification.
+
+Analytics arithmetic passes for 14/30/90/all selections: **952** identities =
+904 applied marks + 48 external records; all time 757 Applied, 193 Rejected,
+2 Screening, 178 dated rejections. These are dated observations during owner
+activity. Two possible duplicate groups, two old date conflicts, one undated-only
+recorded message and six owner-filed outcome-worded receipts remain untouched.
+Private aggregate report: `/tmp/inbox-production-preview.json` on this laptop
+(disposable). It contains no sender, subject, body, real application ID or token.
+The initial diagnostic failed on a detached SQLAlchemy connection ID; storing
+that scalar before rollback fixed it, without any production mutation.
+
+Local validation: **319 focused fictional backend tests** and **44 React/DOM
+contracts** pass, plus TypeScript, changed-file lint, forbidden-dash scan (zero)
+and whitespace. New `backend/tests/test_inbox_triage.py` covers scope, history,
+label preflight, routine/outcome precedence, queue agreement, old outcomes,
+thread matching and Undo. Existing full-history/quota/pause/pagination fixtures
+now assert the new scope and retain their safety boundaries. No local Chrome
+was launched. Hosted build/browser validation and exact candidate SHA are
+recorded in the follow-up below before approval is requested.
 
 ## START HERE: job-related Inbox triage continuation, 2026-10-27 11:06 Pacific (18:06Z)
 

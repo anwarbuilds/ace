@@ -337,10 +337,10 @@ def test_fictional_workday_sponsorship_rejection_retains_ambiguity_auth_and_fina
     ats_mail("Your application", "There is another update about your Software Engineer role.", display="Talent", address="talent@fictional.example"),
     ats_mail("Northwind Robotics application", "An update is available.", display="Talent", address="talent@fictional.example"),
 ])
-def test_unclear_application_email_reaches_review_instead_of_ignored(evidence):
+def test_unclear_application_email_is_saved_without_a_manual_task(evidence):
     result = reconcile(evidence, [northwind()])
-    assert (result.classification, result.disposition, result.target) == ("unclear", "review", None)
-    assert "could not tell" in result.reason
+    assert (result.classification, result.disposition, result.target) == ("unclear", "update", None)
+    assert "Saved application correspondence" in result.reason
 
 
 @pytest.mark.parametrize("domain", ["linkedin.com", "mail.indeed.com", "joinhandshake.com", "glassdoor.com", "ziprecruiter.com"])
@@ -363,7 +363,7 @@ def test_non_application_and_self_sent_mail_do_not_change_applications():
 ])
 def test_conditional_eligibility_wording_never_automates_a_rejection(sentence):
     result = reconcile(ats_mail("Northwind Robotics application", sentence), [northwind()])
-    assert result.disposition == "review" and result.target is None
+    assert result.disposition == "update" and result.target is None
 
 
 @pytest.mark.parametrize("status,classification,body", [

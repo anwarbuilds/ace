@@ -176,9 +176,9 @@ test("the email text and initials tenants suggest the stored application", () =>
 const { companyNamed, confirmCompany } = loadSource(path.join(sourceRoot, "components/inbox/InboxReviewPanel.tsx"));
 const { coverageText, verifyInbox } = loadSource(path.join(sourceRoot, "lib/inboxSync.ts"));
 
-test("unclear recruiting mail is labeled Application email and stays actionable", () => {
+test("unclear recruiting mail is labeled Application correspondence and stays actionable", () => {
   const html = render({...message, classification:"unclear"});
-  assert.match(html, /Application email/);
+  assert.match(html, /Application correspondence/);
   assert.doesNotMatch(choice(html,"Rejection"), /disabled/);
 });
 
@@ -202,10 +202,10 @@ test("company warning recognizes squashed names, initials and exact Workday tena
   assert.equal(companyNamed(message,"Imaginary Systems"),false);
 });
 
-const coverage=(missing=0,complete=true)=>({days:90,gmail:125,in_ace:125-missing,missing,complete,checked_at:"2026-10-26T12:00:00Z"});
+const coverage=(missing=0,complete=true)=>({days:90,scope:"job_mail",includes_spam_trash:false,gmail:125,in_ace:125-missing,missing,complete,checked_at:"2026-10-26T12:00:00Z"});
 test("coverage copy never calls an unverified or partial listing complete", () => {
   assert.match(coverageText(null),/has not been verified/);
-  assert.match(coverageText(coverage()),/Gmail has 125 emails from the last 90 days. All are in ACE/);
+  assert.match(coverageText(coverage()),/Gmail has 125 job-mail search candidates from the last 90 days. All are in ACE/);
   assert.match(coverageText(coverage(65)),/65 are not in ACE yet/);
   assert.match(coverageText(coverage(0,false)),/listing is incomplete/);
   assert.doesNotMatch(coverageText(coverage(0,false)),/All are in ACE/);
@@ -249,16 +249,16 @@ test("busy, paused, incomplete listing, cancellation and stalled recheck never f
 
 
 test("full history continues through zero-pending listing/history phases and discloses its scope",async()=>{
-  const full={...coverage(),days:0,scope:"all",includes_spam_trash:true};
+  const full={...coverage(),days:0,scope:"job_mail",includes_spam_trash:false};
   const replies=[
     {state:"ready",counts:{},remaining:0,more:true,partial:true,coverage:{...full,complete:false,phase:"listing"}},
     {state:"ready",counts:{},remaining:0,more:true,partial:true,coverage:{...full,complete:false,phase:"history"}},
     {state:"ready",counts:{},remaining:0,more:false,partial:false,coverage:{...full,complete:true,phase:"complete"}},
   ];
   const calls=[];
-  await verifyInbox({days:0,stale:0,post:async(path,body)=>{calls.push(body);return replies.shift();},progress:()=>{}});
-  assert.deepEqual(calls,[{days:0},{days:0},{days:0}]);
-  assert.match(coverageText(full),/all retained history, including Spam and Trash/);
+  await verifyInbox({days:0,stale:0,post:async(path,body)=>{calls.push(body);return path==="/api/inbox/recheck"?{checked:0,remaining:0,counts:{}}:replies.shift();},progress:()=>{}});
+  assert.deepEqual(calls,[{days:0},{days:0},{days:0},{limit:25}]);
+  assert.match(coverageText(full),/job-mail search across all dates/);
   assert.match(coverageText(full),/Permanently deleted mail is unavailable/);
   assert.doesNotMatch(coverageText({...full,complete:false}),/All are in ACE/);
   await assert.rejects(verifyInbox({days:0,stale:0,post:async()=>({state:"ready",counts:{},remaining:0,partial:false,coverage:coverage()}),progress:()=>{}}),/different history selection/);
@@ -270,4 +270,13 @@ test("rechecks stop when the owner pauses or changes the Gmail connection",async
   for(const state of ["paused","disconnected"]){
     await assert.rejects(verifyInbox({days:90,stale:1,post:async path=>path==="/api/inbox/sync"?{state:"ready",counts:{},remaining:0,partial:false,coverage:coverage()}:{state,checked:1,remaining:1,counts:{}},progress:()=>{}}),/connection was paused or changed/);
   }
+});
+
+
+test("a pending scope cannot masquerade as a completed zero-remaining recheck",async()=>{
+  const full={...coverage(),days:0,scope:"job_mail",includes_spam_trash:false};
+  await assert.rejects(verifyInbox({days:0,stale:0,post:async path=>path==="/api/inbox/sync"?
+    {state:"ready",counts:{},remaining:0,partial:false,coverage:full}:
+    {checked:0,remaining:0,scope_pending:true,counts:{}},progress:()=>{}}),/scope needs verification/);
+  assert.match(coverageText(full),/Search terms may miss some job mail/);
 });

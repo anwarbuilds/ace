@@ -24,3 +24,4 @@ class FullMailboxScan:
     live_ids: set[str] = field(default_factory=set)
     history_added: set[str] = field(default_factory=set)
     history_dirty: bool = False
+    rescoped: bool = False

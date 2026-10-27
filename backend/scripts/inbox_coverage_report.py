@@ -27,17 +27,12 @@ APPLICATION_WORDS = ("applica", "interest", "candida", "interview", "position")
 
 
 def gmail_ids(token: str, days: int | None) -> tuple[list[str], bool]:
-    """Follow every ID page. None means all retained mail, including Spam/Trash."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days + 1)).strftime("%Y/%m/%d") if days is not None else None
+    """Follow every job-candidate ID page across all dates by default."""
     ids: dict[str, None] = {}
     page: str | None = None
     seen: set[str] = set()
     while True:
-        params = {"maxResults": 500}
-        if cutoff:
-            params["q"] = f"after:{cutoff}"
-        else:
-            params["includeSpamTrash"] = "true"
+        params = {"maxResults": 500, "q": gmail.job_query(days or 0), "includeSpamTrash": "false"}
         if page:
             params["pageToken"] = page
         batch = gmail.get_json("/messages", token, params)
@@ -86,14 +81,14 @@ def main() -> int:
     token = gmail.access_token(gmail.decrypt_token(refresh, settings.gmail_token_key), client_id=settings.gmail_client_id, client_secret=settings.gmail_client_secret)
     complete_all = True
     print("Windowed queries include one cutoff-buffer day and default Spam/Trash exclusions.")
-    print("All time has no date cutoff and includes retained Spam and Trash. Permanently deleted mail is unavailable.")
+    print("Scope: job-mail search candidates, all dates including archived mail; Spam/Trash excluded. Search recall is not certified.")
     for days in WINDOWS:
         ids, complete = gmail_ids(token, days)
         present = sum(1 for item in ids if item in stored_ids)
-        label = "all time, including Spam/Trash" if days is None else f"last {days} days"
+        label = "all-time job-mail candidates" if days is None else f"last {days} days"
         print(f"gmail, {label}: {len(ids)} listed (complete={complete}); in ACE: {present}; missing: {len(ids) - present}")
         if days is None:
-            print(f"stored evidence no longer in the retained mailbox listing: {len(stored_ids - set(ids))}")
+            print(f"retained stored evidence outside the current job-mail search: {len(stored_ids - set(ids))}")
         complete_all = complete_all and complete
     return 0 if complete_all else 1
 

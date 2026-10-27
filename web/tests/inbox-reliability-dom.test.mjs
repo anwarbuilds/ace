@@ -71,13 +71,13 @@ async function mounted(element,run){
     for(const [key,value] of original)if(value===undefined)delete globalThis[key];else globalThis[key]=value;
   }
 }
-const complete={days:0,scope:"all",includes_spam_trash:true,gmail:125,in_ace:125,missing:0,complete:true,checked_at:new Date().toISOString()};
-function fixture({coverage=complete,stale=0,state="ready",fail=false}={}){
+const complete={days:0,scope:"job_mail",includes_spam_trash:false,gmail:125,in_ace:125,missing:0,complete:true,checked_at:new Date().toISOString()};
+function fixture({coverage=complete,stale=0,state="ready",fail=false,pending=0}={}){
   const calls=[];
   const connection={coverage,state,connected:true,available:true,email:"owner-fixture@example.test",last_synced_at:new Date().toISOString(),following_changes:true,auto_rejections:true};
   read=async route=>{
     if(route==="/api/inbox/connection")return {...connection};
-    if(route==="/api/inbox/messages")return {items:[],total:0,has_more:false,view:"recruiting",latest_received_at:null,counts:{stored:125,needs_review:0,automatic:0,manual:0,reviewed:0,receipts:0,updates:0,stale}};
+    if(route==="/api/inbox/messages")return {items:[],total:0,has_more:false,view:"recruiting",latest_received_at:null,counts:{stored:125,needs_review:pending,automatic:0,manual:0,reviewed:0,receipts:0,updates:0,stale}};
     if(route==="/api/inbox/applications"||route==="/api/inbox/events")return {items:[]};
     throw Error(`Unexpected fictional read ${route}`);
   };
@@ -95,8 +95,8 @@ test("opening Inbox with a recent timestamp but no coverage verifies all batches
   const {calls}=fixture({coverage:null,stale:2});
   await mounted(React.createElement(InboxIntelligence),async container=>{
     assert.deepEqual(calls.map(c=>c.route),["/api/inbox/sync","/api/inbox/sync","/api/inbox/recheck"]);
-    assert.match(container.textContent,/Gmail has 125 emails across all retained history, including Spam and Trash. All are in ACE/);
-    assert.match(container.textContent,/All caught up/);
+    assert.match(container.textContent,/Gmail has 125 emails matching the job-mail search across all dates.*All are in ACE/);
+    assert.match(container.textContent,/Job-mail check complete/);
     assert.match(container.textContent,/Read 2 older emails again/);
     assert.match(container.textContent,/Verify mailbox history/);
     assert.doesNotMatch(container.textContent,/Import next page/);
@@ -118,7 +118,7 @@ test("failed verification displays the failure and refreshes already saved chang
   await mounted(React.createElement(InboxIntelligence),async container=>{
     assert.equal(calls.length,1);
     assert.match(container.textContent,/Fictional Google read failure/);
-    assert.doesNotMatch(container.textContent,/All caught up/);
+    assert.doesNotMatch(container.textContent,/Job-mail check complete/);
     assert.equal(refreshes,before+1);
     assert.equal(notifications,beforeNotifications+1);
     assert.equal(projectionRefreshes,beforeProjection+1);
@@ -168,7 +168,7 @@ test("the actual records page explains empty rejection searches with status, dat
   assert.match(html,/Outside the selected submission dates/);
   assert.match(html,/Applied/);
   assert.match(html,/Needs you/);
-  assert.match(html,/Application email/);
+  assert.match(html,/Application correspondence/);
   assert.match(html,/href="\/app\/jobs\/7"/);
   assert.match(html,/href="\/app\/applications\/inbox\?message=52"/);
   assert.match(html,/Search all applications, all time/);
@@ -192,7 +192,7 @@ test("retrying an interrupted wider verification keeps its 90-day window",async(
       assert.match(container.textContent,/Fictional interrupted window/);
       await act(async()=>{container.querySelector(".inbox-status .btn.primary").dispatchEvent(new window.Event("click",{bubbles:true}));});
       assert.deepEqual(calls.map(c=>c.body.days),[90,90,90]);
-      assert.doesNotMatch(container.textContent,/All caught up/);
+      assert.doesNotMatch(container.textContent,/Job-mail check complete/);
       assert.match(container.textContent,/does not verify your full mailbox history/);
     });
   }finally{params.delete("days");}
@@ -258,7 +258,7 @@ test("Inbox opens on full retained history and never treats a recent-window chec
     assert.ok(calls.length>0);
     assert.ok(calls.filter(c=>c.route==="/api/inbox/sync").every(c=>c.body.days===0));
     assert.equal(container.querySelector(".inbox-backfill select").value,"0");
-    assert.match(container.textContent,/including Spam and Trash/);
+    assert.match(container.textContent,/Spam and Trash excluded/);
   });
 });
 
@@ -293,5 +293,15 @@ test("filing acknowledgements and updates uses only the email decision endpoint"
     }
     assert.deepEqual(calls.map(c=>({route:c.route,action:c.body.action})),[{route:"/api/inbox/messages/70991/decision",action:"receipt"},{route:"/api/inbox/messages/70991/decision",action:"update"}]);
     assert.doesNotMatch(container.textContent,/The operation failed/);
+  });
+});
+
+
+test("review totals render as one formatted number without concatenated counters",async()=>{
+  fixture({pending:1318});
+  await mounted(React.createElement(InboxIntelligence),async container=>{
+    assert.match(container.querySelector(".inbox-status").textContent,/1,318 emails need you/);
+    assert.match(container.querySelector(".inbox-queue-tools select").textContent,/Waiting for you \(1,318\)/);
+    assert.doesNotMatch(container.textContent,/13018/);
   });
 });

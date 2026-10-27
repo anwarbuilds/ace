@@ -703,3 +703,24 @@ matching remain unfinished. No new deployment or production queue cleanup ran.
 The full standalone continuation is the root START HERE section; resume in
 `/home/ubuntu/Documents/ace-inbox`, preserve the seven draft runtime files, test
 with fictional data, measure production read-only and ask for a specific release.
+
+
+## 2026-10-27: job-mail triage candidate completed, not released
+
+Resumed checkpoint `053ae41`. Removed provisional historical suppression,
+protected partial/owner/deferred/Undo evidence, made old unclear mail eligible
+for actual scoped reclassification, added metadata label preflights and bounded
+history re-selection, and shared the queue policy across Inbox and Analytics.
+Routine notices and bare assessment brands no longer create outcome tasks;
+explicit body outcomes win over generic account subjects. Consistent same-sender
+thread evidence can disambiguate rejections without relaxing status/auth/timing
+or positive-automation guards. All retained evidence remains searchable.
+
+319 focused fictional backend and 44 DOM tests pass, with TypeScript/lint/dash/
+whitespace checks. No local Chrome. Read-only production preview at 18:29Z:
+1,869 job-mail search IDs, 1,860 stored, 9 missing; pending 1,320 to 227 projected,
+1,093 passive correspondence and all 226 recognized pending outcomes retained.
+SQL/Python/Analytics agree; 952 application identities and four date selections
+reconcile. This is not full-body replay, perfect search recall or live parser 8.
+No production write, import, exhaustive operator restart, migration or release.
+See the root candidate continuation for complete behavior, limits and approval.

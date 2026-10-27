@@ -141,6 +141,7 @@ def test_existing_evidence_skips_google_detail_reads(monkeypatch, database, prev
             return {"historyId": "fixture-cursor"}
         if path == "/messages":
             return {"messages": [{"id": "already-imported"}, {"id": "already-imported"}]}
+        if path == "/history": return {"historyId": "fixture-cursor"}
         raise AssertionError("Already imported message must not be downloaded again")
     monkeypatch.setattr(inbox.gmail, "get_json", get)
     result = inbox.backfill(inbox.SyncRequest(days=30), owner_request(), session) if preview else inbox.sync_once(session, conn, 30)
@@ -217,7 +218,7 @@ def test_review_counts_and_pagination_include_older_pending_messages(database):
     assert [len(page["items"]) for page in pages] == [50,50,27]
     assert all(page["total"] == page["review_count"] == 127 for page in pages)
     assert [page["has_more"] for page in pages] == [True,True,False]
-    assert pages[0]["counts"] == {"stored":284,"needs_review":127,"automatic":3,"manual":4,"reviewed":7,"receipts":0,"updates":0,"stale":277}
+    assert pages[0]["counts"] == {"stored":284,"needs_review":127,"automatic":3,"manual":4,"reviewed":7,"receipts":0,"updates":0,"stale":0}
     ids=[row["id"] for page in pages for row in page["items"]]
     assert len(ids)==len(set(ids))==127
     assert all(row["decision"] != "ignored" for page in pages for row in page["items"])
@@ -272,21 +273,24 @@ def test_window_larger_than_500_finishes_in_saved_60_message_batches(monkeypatch
             return {"messages": [{"id": key} for key in ids[page:page+500]],
                     **({"nextPageToken": str(page+500)} if page+500 < len(ids) else {})}
         if path == "/history": return {"historyId": "later-history"}
+        if params.get("format") == "minimal": return {"id": path.split("/")[-1]}
         details.append(path.split("/")[-1])
         return fictional_mail(details[-1])
     monkeypatch.setattr(gmail, "get_json", get)
-    for round in range(19):
+    for round in range(30):
+        before = len(details)
         step = inbox.sync_once(session, conn, 90)
-        assert step["remaining"] == max(0, 1107 - (round+1)*60)
-        assert step["coverage"]["gmail"] == 1107
-        assert step["coverage"]["missing"] == step["remaining"]
+        assert len(details) - before <= 60
         assert step["coverage"]["in_ace"] == len(details)
-        assert conn.history_id == ("before-listing" if round == 18 else None)
+        if not step["more"]: break
+        assert conn.history_id is None
+    assert step["coverage"]["gmail"] == 1107 and step["coverage"]["missing"] == 0
+    assert conn.history_id == "later-history"
     assert details == ids and calls[:2] == ["/profile", "/messages"]
     assert conn.preview_complete and not step["partial"]
     assert inbox.connection(owner_request(), session)["coverage"] == step["coverage"]
     again = inbox.sync_once(session, conn, 90)
-    assert again["counts"] == {"duplicate": 1107} and len(details) == 1107
+    assert not again["more"] and len(details) == 1107
     inbox._COVERAGE.clear()
     inbox._FULL_SCANS.clear()  # An API restart cannot retain a coverage claim.
     assert inbox.connection(owner_request(), session)["coverage"] is None
@@ -315,24 +319,39 @@ def test_quota_failure_keeps_each_saved_email_and_never_sets_cursor(monkeypatch,
 
 def test_incomplete_listing_never_marks_coverage_or_cursor_complete(monkeypatch, database):
     session, conn = database
-    monkeypatch.setattr(gmail, "get_json", lambda *args: {"historyId": "fictional"})
-    monkeypatch.setattr(gmail, "list_message_ids", lambda *args: ([], False))
+    def get(path, *args):
+        if path == "/profile": return {"historyId": "fictional"}
+        if path == "/messages": return {"messages": [], "nextPageToken": "fictional-next-" + str(len(calls))}
+        raise AssertionError("History cannot run while listing is incomplete")
+    calls=[]
+    def counted(*args):
+        calls.append(1);return get(*args)
+    monkeypatch.setattr(gmail, "get_json", counted)
     result = inbox.sync_once(session, conn, 30)
-    assert result["remaining"] == 0 and result["partial"]
+    assert result["remaining"] == 0 and result["partial"] and result["more"]
     assert not result["coverage"]["complete"] and conn.history_id is None and not conn.preview_complete
 
 
 def test_history_expiry_recovers_by_verifying_the_window(monkeypatch, database):
     session, conn = database
-    conn.history_id = "expired"; conn.preview_complete = True; session.commit()
+    from backend.app.inbox.full_history import FullMailboxScan
+    inbox._FULL_SCANS[inbox._coverage_key(conn, 30)] = FullMailboxScan("expired", phase="complete", snapshot="expired")
     def get(path, *args):
         if path == "/history": raise gmail.GmailCursorExpired("Fictional expiry")
-        if path == "/profile": return {"historyId": "safe-baseline"}
-        if path == "/messages": return {"messages": [{"id": "fictional-1"}]}
+        raise AssertionError("Expired cursor must fail visibly")
+    monkeypatch.setattr(gmail,"get_json",get)
+    with pytest.raises(gmail.GmailTemporaryError):inbox.sync_once(session,conn,30)
+    assert inbox._coverage_key(conn,30) not in inbox._FULL_SCANS
+    def fresh(path,*args):
+        if path=="/profile":return {"historyId":"safe-baseline"}
+        if path=="/history":return {"historyId":"safe-snapshot"}
+        if path=="/messages":return {"messages":[{"id":"fictional-1"}]}
         return fictional_mail("fictional-1")
-    monkeypatch.setattr(gmail, "get_json", get)
-    step = inbox.sync_once(session, conn, 30)
-    assert step["remaining"] == 0 and conn.history_id == "safe-baseline"
+    monkeypatch.setattr(gmail,"get_json",fresh)
+    for _ in range(3):
+        step=inbox.sync_once(session,conn,30)
+        if not step["more"]:break
+    assert step["coverage"]["complete"] and conn.history_id=="safe-snapshot"
 
 
 def test_new_email_during_listing_is_not_skipped_by_the_cursor(monkeypatch, database):
@@ -343,13 +362,13 @@ def test_new_email_during_listing_is_not_skipped_by_the_cursor(monkeypatch, data
         if path == "/profile": return {"historyId": "baseline"}
         if path == "/messages":
             listed += 1
-            return {"messages": []}  # Fictional new arrival is after this snapshot.
+            return {"messages": [] if listed == 1 else [{"id":"late-fictional"}]}
         if path == "/history":
             return {"historyId": "after-arrival", "history": [{"messagesAdded": [{"message": {"id": "late-fictional"}}]}]}
         return fictional_mail("late-fictional")
     monkeypatch.setattr(gmail, "get_json", get)
     inbox.sync_once(session, conn, 30)
-    assert conn.history_id == "baseline"
+    assert conn.history_id is None
     assert inbox.sync_once(session, conn, 30)["counts"] == {"ignored": 1}
     assert session.scalar(select(func.count()).select_from(GmailMessageRecord)) == 1
 
@@ -365,17 +384,15 @@ def test_busy_connection_does_not_start_another_mailbox_operation(monkeypatch, d
         assert inbox.recheck(inbox.RecheckRequest(), owner_request(), session)["state"] == "busy"
 
 
-def test_deleted_message_is_relisted_before_claiming_full_coverage(monkeypatch, database):
+def test_deleted_message_requires_history_confirmation_before_full_coverage(monkeypatch, database):
     session, conn = database
-    listed = 0
     def get(path, *args):
-        nonlocal listed
         if path == "/profile": return {"historyId": "safe"}
-        if path == "/messages":
-            listed += 1
-            return {"messages": [{"id": "deleted-fictional"}]} if listed == 1 else {}
+        if path == "/messages":return {"messages": [{"id": "deleted-fictional"}]}
+        if path == "/history":return {"historyId":"deleted-snapshot", "history":[{"messagesDeleted":[{"message":{"id":"deleted-fictional"}}]}]}
         raise gmail.GmailCursorExpired("Fictional deletion")
     monkeypatch.setattr(gmail, "get_json", get)
+    assert inbox.sync_once(session,conn,30)["partial"]
     result = inbox.sync_once(session, conn, 30)
     assert result["coverage"]["gmail"] == result["coverage"]["missing"] == 0
     assert not result["partial"]
@@ -385,7 +402,7 @@ def test_duplicate_integrity_race_is_safe_but_other_integrity_errors_propagate(m
     from sqlalchemy.exc import IntegrityError
     session, conn = database
     def get(path, *args):
-        if path == "/profile": return {"historyId": "safe"}
+        if path in {"/profile","/history"}: return {"historyId": "safe"}
         if path == "/messages": return {"messages": [{"id": "race-fictional"}]}
         return fictional_mail("race-fictional")
     monkeypatch.setattr(gmail, "get_json", get)
@@ -396,6 +413,7 @@ def test_duplicate_integrity_race_is_safe_but_other_integrity_errors_propagate(m
     monkeypatch.setattr(inbox, "_ingest", race)
     assert inbox.sync_once(session, conn, 30)["counts"] == {"duplicate": 1}
     session.query(GmailMessageRecord).delete(); session.commit()
+    inbox._FULL_SCANS.clear()
     def broken(*args, **kwargs): raise IntegrityError("fictional unrelated failure", {}, Exception("fictional"))
     monkeypatch.setattr(inbox, "_ingest", broken)
     with pytest.raises(IntegrityError): inbox.sync_once(session, conn, 30)

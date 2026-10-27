@@ -92,7 +92,8 @@ _RECRUITING = re.compile(
 )
 _ASSESSMENT = re.compile(
     r"\b(?:online\s+assessment|coding\s+(?:assessment|challenge|test)|technical\s+assessment"
-    r"|take[\s-]home\s+(?:assessment|assignment|challenge)|hackerrank|codesignal|codility|hirevue|karat"
+    r"|take[\s-]home\s+(?:assessment|assignment|challenge)"
+    r"|(?:invited|invite you|invitation)\s+(?:to\s+)?(?:a\s+)?(?:hackerrank|codesignal|codility|hirevue|karat)"
     r"|complete\s+(?:the|an|your)\s+assessment)\b",
     re.I,
 )
@@ -404,17 +405,30 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
     return _Match(None, "The email may be about a different role there", keys, labelled)
 
 
-def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], account: str | None = None) -> Decision:
+def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], account: str | None = None, *, thread_keys: tuple[str, ...] = ()) -> Decision:
     if account and parseaddr(evidence.sender)[1].casefold() == account.casefold():
         return Decision("unknown", None, (), None, "ignored", "Sent by the connected account", False)
-    if routine_notification(evidence):
-        return Decision("unknown", None, (), None, "ignored", "Routine account notification or job alert", False)
     classification, req = classify(evidence)
+    # A generic account subject cannot suppress an explicit outcome in the body.
+    if classification in {"unknown", "application_confirmation"} and evidence.complete and routine_notification(evidence):
+        return Decision("unknown", None, (), None, "ignored", "Routine account notification or job alert", False)
     if classification == "unknown" and not application_related(evidence, applications):
         return Decision(classification, req, (), None, "ignored", "No explicit recruiting outcome", False)
     found = _match(evidence, applications, req)
+    if classification == "unknown" and not evidence.complete:
+        return Decision("unclear", found.requisition, found.ranked, None, "review", PARTIAL_REASON, False)
     if classification == "unknown":
         return Decision("unclear", found.requisition, found.ranked, None, "update", "Saved application correspondence; no confirmed outcome to record", False)
+    # A single retained, previously matched message in this Gmail thread can
+    # disambiguate roles at the same company. It cannot override a named ID,
+    # company conflict, different role, positive policy or timing/status guards.
+    if (classification == "rejection" and found.target is None and len(set(thread_keys)) == 1
+            and found.basis == "You applied to several roles there and the email does not say which"
+            and thread_keys[0] in found.ranked):
+        linked = [app for app in applications if app.key == thread_keys[0]]
+        narrowed = _match(evidence, linked, req)
+        if narrowed.target:
+            found = _Match(narrowed.target, "a previously linked message in this thread", found.ranked, narrowed.requisition)
     # A clipped body or snippet cannot establish that a later sentence names
     # another role or changes the apparent outcome. Preserve it for review.
     if not evidence.complete:

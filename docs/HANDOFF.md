@@ -1,5 +1,14 @@
 # ace handoff
 
+**2026-10-27 11:31 Pacific:** The job-mail draft from `053ae41` is completed
+locally with 319 focused backend and 44 DOM tests passing. Production remains
+parser 7; release approval is still required. Read the new root "Job-mail triage
+completed locally" section before the older unfinished-draft notes below. The
+read-only preview is 1,320 raw pending to 227 projected pending; 1,093 searchable
+correspondence, all 226 recognized outcomes preserved. All-date search lists
+1,869 candidates, 1,860 stored, 9 missing. No body audit, import, recheck or
+activation ran; never restart the stopped exhaustive operator.
+
 **Latest continuation, 2026-10-27 11:06 Pacific:** Read the new root
 “START HERE: job-related Inbox triage continuation” section first. The owner
 rejected the 1,318-item manual burden and narrowed processing to job-related

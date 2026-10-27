@@ -25,7 +25,8 @@ API = "https://gmail.googleapis.com/gmail/v1/users/me"
 # All dates, including archived mail. Gmail selects candidates before any body
 # read. These are search candidates, never a claim of semantic completeness.
 JOB_MAIL_QUERY = ('-in:spam -in:trash {'
-    'application applications applied applying candidacy requisition '
+    '"your application" "my application" "application update" "application status" '
+    '"application for" "application to" "thank you for applying" candidacy requisition '
     'interview assessment recruiting recruitment "talent acquisition" '
     '"phone screen" "coding challenge" "coding test" "take home" '
     '"offer letter" "employment offer" "offer of employment" '
@@ -33,7 +34,10 @@ JOB_MAIL_QUERY = ('-in:spam -in:trash {'
     'from:(myworkday.com) from:(greenhouse-mail.io) from:(lever.co) '
     'from:(ashbyhq.com) from:(smartrecruiters.com) from:(icims.com) '
     'from:(jobvite.com) from:(taleo.net) from:(successfactors.com) '
-    'from:(oraclecloud.com) from:(workablemail.com)}')
+    'from:(oraclecloud.com) from:(workablemail.com) from:(bamboohr.com) '
+    'from:(applytojob.com) from:(teamtailor.com) from:(recruitee.com) '
+    'from:(avature.net) from:(brassring.com) from:(rippling.com) '
+    '"not selected" "position has been filled" "pursue other candidates"}')
 
 
 def job_query(days: int = 0) -> str:

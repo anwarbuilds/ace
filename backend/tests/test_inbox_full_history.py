@@ -25,8 +25,8 @@ class Mailbox:
         if path == "/profile":
             return {"historyId": "baseline-before-list"}
         if path == "/messages":
-            assert "q" not in params and "labelIds" not in params
-            assert params["includeSpamTrash"] == "true"
+            assert params["q"] == gmail.job_query() and "labelIds" not in params
+            assert params["includeSpamTrash"] == "false"
             offset = int(params.get("pageToken", 0))
             return {"messages": [{"id": key} for key in self.ids[offset:offset+self.page_size]],
                     **({"nextPageToken": str(offset+self.page_size)} if offset+self.page_size < len(self.ids) else {})}
@@ -36,6 +36,8 @@ class Mailbox:
         if self.failure_at is not None and len(self.details) == self.failure_at:
             self.failure_at = None
             raise gmail.GmailRateLimited("Fictional quota interruption")
+        if params.get("format") == "minimal":
+            return {"id": key, "labelIds": []}
         self.details.append(key)
         data = fictional_mail(key)
         data["internalDate"] = "1262304000000"  # January 2010, outside every recent window.
@@ -66,7 +68,7 @@ def test_full_history_imports_more_than_500_old_messages_in_committed_batches(mo
         assert not result["coverage"]["complete"] and conn.history_id is None
     assert len(box.details) == len(set(box.details)) == 1107
     assert result["coverage"]["gmail"] == result["coverage"]["in_ace"] == 1107
-    assert result["coverage"]["days"] == 0 and result["coverage"]["includes_spam_trash"]
+    assert result["coverage"]["days"] == 0 and not result["coverage"]["includes_spam_trash"]
     assert conn.history_id == "snapshot-complete" and conn.preview_complete
     assert session.scalar(select(func.count()).select_from(GmailMessageRecord)) == 1107
     assert session.scalar(select(func.min(GmailMessageRecord.received_at))).year == 2010
@@ -108,6 +110,7 @@ def test_history_after_listing_catches_arrivals_deletions_and_more_than_five_pag
     history_calls = []
     def history(params):
         history_calls.append(params)
+        box.ids = ["retained-fictional", "arrived-during-scan"]
         offset = int(params.get("pageToken", 0))
         assert params["startHistoryId"] == "baseline-before-list"
         return {"historyId": "caught-up-history", "history": ([{"messagesAdded": [{"message": {"id": "arrived-during-scan"}}],
@@ -133,13 +136,16 @@ def test_full_incremental_cursor_is_independent_of_a_later_narrow_window(monkeyp
     finish(session, conn)
     conn.history_id = "narrow-window-cursor"; session.commit()
     def history(params):
+        box.ids = ["initial-fictional", "next-fictional"]
         assert params["startHistoryId"] == "snapshot-complete"
         return {"historyId": "next-snapshot", "history": [{"messagesAdded": [{"message": {"id": "next-fictional"}}]}]}
     box.history = history
     result = inbox.sync_once(session, conn, 0)
+    assert result["more"]  # History IDs are never body-read before a scoped re-list.
+    result = finish(session, conn)
     assert not result["more"] and conn.history_id == "next-snapshot"
     assert result["coverage"]["gmail"] == 2
-    assert sum(path == "/messages" for path, params in box.calls) == 1
+    assert sum(path == "/messages" for path, params in box.calls) == 2
 
 
 def test_expired_history_forces_fresh_scan_without_losing_committed_evidence(monkeypatch, database):
@@ -182,7 +188,7 @@ def test_read_only_coverage_report_lists_every_page_with_no_date_filter(monkeypa
     from backend.scripts.inbox_coverage_report import gmail_ids
     calls = []
     def get(path, token, params):
-        assert path == "/messages" and "q" not in params and params["includeSpamTrash"] == "true"
+        assert path == "/messages" and params["q"] == gmail.job_query() and params["includeSpamTrash"] == "false"
         offset = int(params.get("pageToken", 0)); calls.append(offset)
         return {"messages": [{"id": f"report-fictional-{offset}"}],
                 **({"nextPageToken": str(offset+1)} if offset < 65 else {})}
