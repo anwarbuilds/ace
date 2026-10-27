@@ -953,8 +953,15 @@ def _recheck_locked(body: RecheckRequest, session: Session, conn: GmailConnectio
     stale = _stale_query(conn.id)
     rows = list(session.scalars(stale.order_by(GmailMessageRecord.received_at.desc(), GmailMessageRecord.id.desc()).limit(body.limit)))
     counts: dict[str, int] = {}
+    grant = bytes(conn.encrypted_refresh_token)
+    checked = 0
+    stopped = None
     identities = _identities(session) if rows else []
     for row in rows:
+        session.refresh(conn)
+        if conn.state != "ready" or bytes(conn.encrypted_refresh_token) != grant:
+            stopped = conn.state if conn.state != "ready" else "disconnected"
+            break
         data = {}
         try:
             data = gmail.get_json("/messages/" + row.gmail_id, _access(conn), {"format": "full"})
@@ -967,6 +974,19 @@ def _recheck_locked(body: RecheckRequest, session: Session, conn: GmailConnectio
             if not isinstance(exc, gmail.GmailTemporaryError):
                 _TOKENS.clear()
             raise HTTPException(429 if isinstance(exc, gmail.GmailRateLimited) else 502, str(exc)) from exc
+        checked += 1
+        session.refresh(conn)
+        if conn.state != "ready" or bytes(conn.encrypted_refresh_token) != grant:
+            stopped = conn.state if conn.state != "ready" else "disconnected"
+            break
+        # Network reads hold no row lock. The owner may file/confirm/undo this
+        # email while Gmail responds. Re-select eligibility from the database,
+        # refreshing the identity map and locking only for the short write.
+        current = session.scalar(stale.where(GmailMessageRecord.id == row.id)
+                                 .with_for_update().execution_options(populate_existing=True))
+        if current is None:
+            continue
+        row = current
         decision = reconcile(evidence, identities, conn.email)
         before = row.decision
         row.classification = decision.classification
@@ -984,7 +1004,8 @@ def _recheck_locked(body: RecheckRequest, session: Session, conn: GmailConnectio
         identities = _identities(session) if row.decision == "automatic" else identities
         counts[row.decision] = counts.get(row.decision, 0) + 1
     remaining = session.scalar(select(func.count()).select_from(stale.subquery())) or 0
-    return {"checked": len(rows), "counts": counts, "remaining": remaining}
+    return {"checked": checked, "counts": counts, "remaining": remaining,
+            **({"state": stopped} if stopped else {})}
 
 
 @router.get("/api/inbox/applications")

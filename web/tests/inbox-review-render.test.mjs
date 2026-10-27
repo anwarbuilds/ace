@@ -263,3 +263,11 @@ test("full history continues through zero-pending listing/history phases and dis
   assert.doesNotMatch(coverageText({...full,complete:false}),/All are in ACE/);
   await assert.rejects(verifyInbox({days:0,stale:0,post:async()=>({state:"ready",counts:{},remaining:0,partial:false,coverage:coverage()}),progress:()=>{}}),/different history selection/);
 });
+
+
+
+test("rechecks stop when the owner pauses or changes the Gmail connection",async()=>{
+  for(const state of ["paused","disconnected"]){
+    await assert.rejects(verifyInbox({days:90,stale:1,post:async path=>path==="/api/inbox/sync"?{state:"ready",counts:{},remaining:0,partial:false,coverage:coverage()}:{state,checked:1,remaining:1,counts:{}},progress:()=>{}}),/connection was paused or changed/);
+  }
+});

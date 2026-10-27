@@ -106,7 +106,7 @@ default to all time, including archived mail and retained Spam/Trash. The latest
 read-only report lists 7,927 Gmail IDs, 524 stored, 7,403 missing. This is mail,
 not a count of missing job outcomes. All-time Analytics reconciles 945 persisted
 identities, but duplicates/date conflicts and wording recognition remain review
-limits. The implementation has 282 focused backend/40 DOM tests passing; check
+limits. The implementation has 286 focused backend/42 DOM tests passing; check
 final hosted CI and obtain owner approval before API/web release. No production
 import, recheck, data repair, migration or release ran. Earlier window-based
 checkpoints below are historical. See `architecture/2026-10-27-full-history-inbox.md`

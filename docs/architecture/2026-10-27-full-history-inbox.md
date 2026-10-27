@@ -114,7 +114,7 @@ it does not simulate the new all-ignored recheck selector or classify unread mai
 
 ## Validation and release gate
 
-282 focused fictional backend tests and 40 React render/workflow/DOM tests pass.
+286 focused fictional backend tests and 42 React render/workflow/DOM tests pass.
 TypeScript, focused ESLint, whitespace and the forbidden-dash guard pass. Tests
 cover 2010 mail, 1,107 messages, more than 60 pages, per-request work limits,
 restart/quota recovery, independent cursors, arrivals/deletions during scanning,
@@ -138,3 +138,25 @@ read-only audits. Review ambiguous/unlinked outcomes, the two date conflicts and
 two potential duplicate groups separately. No automatic merge, deletion or
 repair is authorized. Complete ID coverage alone cannot certify semantic
 recognition, unique real-world submissions or every historical outcome.
+
+Final scrutiny also reproduced a recheck/owner-action race: all four fictional
+cases (owner acknowledgement, owner-confirmed outcome, pause, reconnection)
+incorrectly wrote an automatic rejection after the Gmail read returned. The fix
+rechecks connection/grant state and reselects current stale eligibility with a
+short PostgreSQL row lock after network access, refreshing the identity map.
+An owner filing/confirmation is skipped rather than overwritten. Pause/grant
+changes stop the batch and the client reports saved progress. No row lock spans
+a Gmail request. These are local reproductions/fixes, not production repairs.
+
+Hosted run `40511676317` on `4b79e50` passed backend/web and all 47 extension
+browser cases, then reported 190 app-browser passes/26 failures. Four Analytics
+cases expected the richer `seed_analytics_demo` fixture, while CI only seeded the
+basic demo (no Gmail evidence, assessment events, verified series or Google
+external record). The acknowledgement browser case also failed, while its
+actual full-component handler and fixture routing pass offline. The focused
+browser step now runs those two files against the existing isolated rich SQLite
+fixture, waits for the email frame before filing, then restores the basic demo
+and runs every remaining browser file. No assertions are skipped. Failure
+accessibility trees/screenshots contain fictional CI data only. The whole suite
+is not green; unrelated old extension/navigation expectations remain outside
+this Inbox implementation. Check focused and broad results separately.

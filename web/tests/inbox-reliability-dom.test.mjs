@@ -272,3 +272,26 @@ test("Analytics overview and records request all time unless the owner selects d
   await AnalyticsPage({searchParams:Promise.resolve({start:"2026-10-01",end:"2026-10-26"})});
   assert.deepEqual(queries.map(q=>q.days),["all","all","30","custom"]);
 });
+
+
+
+test("filing acknowledgements and updates uses only the email decision endpoint",async()=>{
+  const {calls}=fixture();
+  const previousRead=read;
+  const message={id:70991,sender:"Fictional Talent <fixture@example.test>",subject:"Fictional interview at Fictional Labs",snippet:"Please schedule an interview for requisition FIX-1.",received_at:"2026-01-10T12:00:00Z",classification:"interview",decision:"review",candidate_keys:["job:1"],reason:"Positive outcome needs confirmation",selected_application_key:null};
+  read=async(route,...args)=>{
+    if(route==="/api/inbox/messages"){const page=await previousRead(route,...args);return {...page,items:[message],total:1,counts:{...page.counts,needs_review:1}};}
+    if(route==="/api/inbox/applications")return {items:[{key:"job:1",company:"Fictional Labs",title:"Fictional engineer",status:"applied",applied_at:"2026-01-01T12:00:00Z"}]};
+    if(route.endsWith("/full"))return {...message,text:"Fictional Labs application",document:"<p>Fictional</p>",blocked_images:0};
+    return previousRead(route,...args);
+  };
+  await mounted(React.createElement(InboxIntelligence),async(container,window)=>{
+    for(const label of ["Acknowledgement","Status update"]){
+      const button=[...container.querySelectorAll("button")].find(b=>b.querySelector("strong")?.textContent===label);
+      assert.ok(button);
+      await act(async()=>{button.dispatchEvent(new window.Event("click",{bubbles:true}));});
+    }
+    assert.deepEqual(calls.map(c=>({route:c.route,action:c.body.action})),[{route:"/api/inbox/messages/70991/decision",action:"receipt"},{route:"/api/inbox/messages/70991/decision",action:"update"}]);
+    assert.doesNotMatch(container.textContent,/The operation failed/);
+  });
+});

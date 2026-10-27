@@ -457,3 +457,25 @@ def test_full_mailbox_retains_spam_and_trash_outcomes_for_owner_review(database,
     assert _ingest(session,conn,data,_identities(session),preview=True)=="review"
     assert "Spam or Trash" in row_for(session,data["id"]).decision_reason
     assert statuses(session)==["applied"]*3 and not job_events(session)
+
+
+
+@pytest.mark.parametrize("change",["receipt","manual","pause","reconnect"])
+def test_recheck_cannot_overwrite_owner_changes_made_during_a_gmail_read(database,gmail_reads,monkeypatch,change):
+    session,conn=database
+    row=stored(session,conn,"concurrent-owner-fictional","ignored",subject="Application update",version="5")
+    session.commit()
+    def get(*args):
+        if change in {"receipt","manual"}:
+            row.decision=change;row.decision_reason="You marked this email"
+        elif change=="pause":conn.state="paused"
+        else:conn.encrypted_refresh_token=b"new-fictional-grant"
+        session.commit()  # An owner action commits while the Gmail read waits.
+        return message("concurrent-owner-fictional","Req ID: SE-101. We have decided to move forward with other candidates.")
+    monkeypatch.setattr(inbox.gmail,"get_json",get)
+    result=inbox.recheck(inbox.RecheckRequest(),owner_request(),session)
+    assert statuses(session)==["applied"]*3 and not job_events(session)
+    assert row.parser_version=="5"
+    assert row.decision==(change if change in {"receipt","manual"} else "ignored")
+    if change in {"pause","reconnect"}:
+        assert result["state"]==("paused" if change=="pause" else "disconnected")

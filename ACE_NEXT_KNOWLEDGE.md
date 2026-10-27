@@ -445,7 +445,7 @@ corrects seven links and six latest-company dates. SHA-256 of replayed Analytics
 Live parser-5 helpers were imported in that process; it is not a full mail or
 parser-6 replay. Nothing was written to production or deployed.
 
-**Local validation:** 282 focused fictional backend tests, 40 React workflow/DOM
+**Local validation:** 286 focused fictional backend tests, 42 React workflow/DOM
 contracts, TypeScript, focused lint, dash and whitespace checks pass. Full-history
 tests include 2010 mail, >60 pages, quota/restart, cursor/deletion races and
 unconfirmed missing details. Hosted CI's obsolete extension Queue fixture was
@@ -454,6 +454,10 @@ assertion now matches the approved protected/scoped-Memory behavior. No extensio
 runtime or skipped assertions. Verify the final hosted CI before release; no
 local Chrome. Owner approval remains required for the final branch commit,
 then API/web-only build/activation and actual full import/recheck verification.
+Four additional failed-then-fixed fictional cases pin a recheck race with owner
+filing/confirmation, pause and reconnection during a Gmail read. Rechecks now
+refresh connection/grant state and reselect current eligibility with a short
+PostgreSQL row lock only after network access, so owner actions are preserved.
 Full evidence: `docs/architecture/2026-10-27-full-history-inbox.md`.
 
 ### Subsequent Inbox-to-Analytics scrutiny, 2026-10-26 evening

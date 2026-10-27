@@ -14,6 +14,7 @@ export default defineConfig({
   use: {
     baseURL: process.env.WEB_URL ?? "http://localhost:3000",
     trace: "retain-on-failure",
+    screenshot: "only-on-failure",
     launchOptions: process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : undefined,
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } }],

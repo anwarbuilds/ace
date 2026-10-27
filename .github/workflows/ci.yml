@@ -107,11 +107,39 @@ jobs:
           npx next build
           nohup npx next start -p 3000 > next.log 2>&1 &
           for i in $(seq 1 30); do curl -sf -o /dev/null localhost:3000/login && break; sleep 1; done
-      - name: New app browser tests
+      - name: Install hosted browser
         working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Prepare the isolated Analytics fixture
         run: |
-          npx playwright install --with-deps chromium
-          npx playwright test
+          pkill -f "uvicorn backend.app.api.main" || true
+          python -m backend.scripts.seed_analytics_demo
+          DATABASE_URL=sqlite:////tmp/ace-analytics-fictional.db nohup python -m uvicorn backend.app.api.main:app --port 8000 > uvicorn.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8000/healthz && break; sleep 1; done
+      - name: Inbox and Analytics browser tests
+        working-directory: web
+        run: npx playwright test tests/e2e/inbox-review.spec.ts tests/e2e/analytics-redesign.spec.ts
+      - name: Restore the basic demo fixture for the remaining app tests
+        run: |
+          pkill -f "uvicorn backend.app.api.main" || true
+          python -m backend.scripts.seed_demo
+          nohup python -m uvicorn backend.app.api.main:app --port 8000 > uvicorn.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8000/healthz && break; sleep 1; done
+      - name: Remaining app browser tests
+        working-directory: web
+        # The two focused files ran above with their required fictional data.
+        # Every other file still runs; no assertion is skipped or quarantined.
+        run: npx playwright test 'tests/e2e/(?!analytics-redesign\.spec\.ts|inbox-review\.spec\.ts).*\.spec\.ts'
+      - name: Fictional browser failure context
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fictional-browser-failure-context
+          path: |
+            web/test-results/**/error-context.md
+            web/test-results/**/*.png
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Server logs on failure
         if: failure()
         run: tail -n 100 uvicorn.log web/next.log || true
