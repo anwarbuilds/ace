@@ -611,3 +611,20 @@ two old date conflicts remain for review. 286 focused backend/42 DOM contracts
 pass; final hosted CI, owner release approval and actual full import verification
 remain gates. No production write or release occurred. Evidence and exact UTC
 snapshots: `../architecture/2026-10-27-full-history-inbox.md`.
+
+
+## 2026-10-27: approved full-history Inbox release is live
+
+Owner-approved API/web commit `5ab6b1a` is live, parser 6, schema unchanged at
+`0050`. Health/version/auth checks and protected aggregate preservation passed
+after a fresh verified private backup. All-history imports and old-parser
+rechecks are now authorized and running through the deployed service, with
+manual decisions/Undo and existing automation safeguards retained. Coverage
+remains incomplete until the final independent Gmail-ID inventory verifies it.
+The live read-only projection audit passes all selection/count/cohort/evidence
+checks; at its 14:27Z snapshot, previously missing emails raised recorded
+rejection-evidence applications from 89 to 106 without creating applications
+(945 identities). Historical baseline/pending-release notes above are superseded
+by the root Current release checkpoint and
+`../architecture/2026-10-27-full-history-inbox.md`. Broader browser CI still fails;
+focused Inbox/Analytics 30, extension 47, backend and web checks pass.

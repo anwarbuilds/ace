@@ -1,5 +1,13 @@
 # ace handoff
 
+**Current 2026-10-27T14:24Z:** Owner-approved API/web release `5ab6b1a` is live at
+https://ace.opik.net, parser 6, schema `0050`. Public health/version/auth checks
+and protected inventory preservation passed; fresh backup verified. All-history
+mail import and old-parser rechecks are in progress, so coverage is not yet
+certified. See the root Current release checkpoint and
+`architecture/2026-10-27-full-history-inbox.md`. Older pending-release notes are
+historical. No scheduler, migration or extension publication ran.
+
 For a fresh session, cloud or local, picking this project up cold. Read it
 top to bottom (about ten minutes), then start at section 9. Written on
 2026-10-10. This repo is PUBLIC, so this file holds no personal data; the

@@ -1,8 +1,10 @@
 # Full-history Inbox and Analytics, 2026-10-27
 
-Status: locally implemented on `inbox-clarity-20261026`, draft PR #6. Nothing
-from this work is deployed. Owner approval is required for the final commit.
-This scope supersedes the initial 30/90/365-day reliable-Inbox candidate.
+Status: owner-approved commit `5ab6b1a` is live in API/web as of
+2026-10-27T14:24Z. Full-history import and parser rechecks are in progress;
+mailbox completeness is not yet certified. Earlier read-only measurements below
+are the pre-release baseline. This scope supersedes the initial 30/90/365-day
+reliable-Inbox candidate.
 
 ## Owner requirement and verdict
 
@@ -167,3 +169,67 @@ Acknowledgement matched both the overview KPI and the filing choice; Google
 logo matched the company table and outcome history. Final selectors target the
 email-decision group and company table respectively. Filing actions, no-status-
 change checks, image loading and image-error fallback assertions remain intact.
+
+
+## Approved live release, 2026-10-27
+
+The owner approved the exact reviewed commit `5ab6b1a90decfcddf8b3866fe99a9627f0f2e574`
+and requested accurate live dashboard data. It was fast-forwarded without force
+to `wine-rose-platform`, built on the VM and activated in API/web only.
+
+- Live public HTTPS health at 14:24:08Z: API healthy and frontend header/body
+  match the exact approved SHA. Running API parser 6 and Analytics source hash
+  match the reviewed candidate. Signed-out Inbox and Analytics return 401;
+  representative logo and auth-background assets return readable images.
+- API image: `sha256:5450e7ccf18399d6e5eff97548f194d026981b72a5b22e74a88ec64a18fccb77`.
+  Web image: `sha256:0bd5af244cbca295a8fe765d046bc8d490143d8101cd0dfc0722c6d972be7c61`.
+- Fresh private 474,638,141-byte consistent PostgreSQL backup verified with
+  gzip integrity and `pg_restore --list`, not a restore drill. VM location and
+  rollback image tags are in the root Current release checkpoint.
+- Schema `0050` and scheduler/PostgreSQL/Caddy container and image IDs were
+  unchanged. Protected counts matched before/after activation: 1,237 job marks,
+  897 Applied, 48 external applications, 104 answers, 111 career facts,
+  5 resumes, 6 resume documents, 6 resume versions, 1 user. No migration,
+  scheduler operation, extension publication or destructive repair ran.
+- Hosted exact-commit checks: backend/web jobs pass, 47 extension browser cases
+  and 30 focused Inbox/Analytics browser cases pass. Remaining app browser
+  tests fail; the overall e2e job is not green. This limitation was disclosed
+  before owner approval. Run 40517153741, focused step 13.
+
+The deployed service's `sync_once(..., 0)` and parser recheck functions are used
+by a monitored one-time operator process, with no added scheduler or new auth
+sessions. Only count/coverage output is retained. The existing ready grant and
+automation opt-ins, conservative historical/Spam/Trash handling, owner decisions
+and Undo are preserved. API-worker coverage caches are process-local: the
+owner's next Check Gmail independently verifies the retained listing and history;
+SQL imports remain durable. No complete claim is made merely from this process
+starting. Google rate-limited the first pass after 104 committed new emails;
+progress was preserved and the import resumed with paced reads and bounded
+cooldowns honoring Google's retry timing. No quota or permission refusal was
+bypassed. A private 147-row snapshot of previously protected Inbox decisions
+was captured before rechecks for a subsequent preservation comparison.
+Google documents per-project/per-user quotas and explicit retry/backoff behavior:
+[usage limits](https://developers.google.com/workspace/gmail/api/reference/quota),
+[error handling](https://developers.google.com/workspace/gmail/api/guides/handle-errors).
+The observed live limit is not inferred from documented defaults.
+
+An enforced read-only live audit at 14:27:21Z passed all projection checks for
+14/30/90/all-time selections: 945 identities, 106 rejection-evidence applications
+(previously 89), 3 positive-response applications, 37 pending review and no orphan
+active outcome events. This was an interim snapshot while imports continued,
+not the final mailbox-coverage result or signed-in browser verification.
+
+
+### Gmail pacing observed during the import
+
+The first unpaced run stopped safely on `GmailRateLimited`; short backoffs alone
+can exhaust before a minute-based quota resets. Google subsequently documents
+`messages.get(format=full)` as 60 units and the current per-user/project rate as
+6,000 units/minute, with different retained limits for some older projects.
+Repeated live 403 quota responses were observed; no exact configured project
+quota was claimed from documentation alone. The operator process now spaces
+reads by at least 0.7 seconds (under 86/minute), keeps server retry timing and
+bounded cooldowns, and retains its manifest between attempts. This adjusts only
+the one-time operator process, not the approved runtime source or scheduler.
+The live UI's bounded temporary-failure path still keeps committed progress and
+requires a later check if Google's short retries cannot recover.

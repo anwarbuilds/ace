@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-27, full-history Inbox and Analytics implemented locally; release awaiting approval
+Last updated: 2026-10-27, approved full-history Inbox API/web release live; full import in progress
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -12,6 +12,35 @@ repository instructions. Dated observations below are evidence from that date,
 not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
+
+## Current release, 2026-10-27T14:24Z
+
+The owner explicitly approved taking reviewed commit
+`5ab6b1a90decfcddf8b3866fe99a9627f0f2e574` live and requested accurate live
+Inbox/Analytics data. API and web now run that release at https://ace.opik.net.
+Parser 6 and the reviewed Analytics SHA-256
+`80db50ddcf0cb87a129680d8729ac1390fdb9947680ee79940f1cde6abd17074`
+were verified inside the running API. Public `/healthz` returns the exact frontend
+SHA and healthy API; signed-out Inbox/Analytics return 401; public image assets
+are readable. Schema remains `0050`; scheduler, PostgreSQL and Caddy container
+and image IDs are unchanged. All nine protected inventory aggregates matched
+before/after activation, including 897 applied marks and 48 external applications.
+
+A fresh consistent PostgreSQL backup is private on the VM under
+`/opt/ace/private-backups/reliable-inbox-20261027/`; gzip integrity and PostgreSQL
+archive listing passed. This was not a restore drill. Previous API/web images
+are retained as `oracle-api:before-reliable-inbox-20261027` and
+`oracle-web:before-reliable-inbox-20261027`. Activation used API/web only with
+`--no-deps`; no migration, scheduler change or extension publication ran.
+
+The approved live-data work is running the deployed service's all-history sync,
+then its parser rechecks, against the existing ready owner connection. These are
+real imports and audited decisions under existing automation rules; historical
+positive outcomes and uncertain/Spam/Trash matches remain for owner review.
+Manual owner decisions and Undo remain protected. Full mailbox coverage is NOT
+yet certified while this import runs. Follow the release evidence in
+`docs/architecture/2026-10-27-full-history-inbox.md` before making any claim.
+Earlier unreleased/read-only notes below describe their historical checkpoints.
 
 ## Continuation checkpoint for new chats, 2026-10-26
 
@@ -28,19 +57,18 @@ update does not deploy code, reload the browser or perform a fresh live check.
 | Item | Last recorded state |
 | --- | --- |
 | Repository / canonical branch | `/home/ubuntu/Documents/ace-next`, `wine-rose-platform`, remote `anwarbuilds/ace`; fetch and inspect before editing because parallel chats advance it |
-| Last directly verified live API/web | API `9d05673248ce6ead30652e62bb1d5e569404848c`, web `1fee67127877838f09b9a42f5edef6bc4669f34e`, healthy through public/signed-in HTTPS on 2026-10-27T00:59Z (2026-10-26 17:59 Pacific). Contextual Memory API is live; existing `6163f59` Inbox behavior and branding parser 4 are preserved |
-| Newer source not yet live | Reliable-Inbox P1 to P5 plus the Inbox-to-Analytics audit corrections are implemented and tested in `/home/ubuntu/Documents/ace-inbox`, parser 6. Owner release approval, API/web image build and live verification remain pending. See the implementation checkpoint under OPEN WORK |
-| Important runtime distinction | API-only Memory release runs `9d05673`; web stays `1fee671`. Existing Inbox parser 5 is live; reliable-Inbox parser 6 is implemented locally and not deployed. Recheck health and source/image hashes before another release |
+| Last directly verified live API/web | API/web `5ab6b1a90decfcddf8b3866fe99a9627f0f2e574`, verified healthy with exact public frontend SHA at 2026-10-27T14:24Z; parser 6. Full-history import is running; see Current release above |
+| Newer source not yet live | Release evidence/continuity updates only; no newer runtime candidate prepared in this session |
+| Important runtime distinction | Both API and web now run the approved reliable-Inbox release. API Analytics source hash matches the reviewed projection. No extension runtime publication, migration or scheduler change |
 | Unpacked extension source / browser state | Manifest **1.30.0** for contextual reuse; supporting Memory API is deployed. Browser activation needs Reload/refreshed employer tabs. No Web Store publication |
 | Database | Last verified schema `0050`; no migration was run for the logo or contextual Memory releases |
 | Latest recorded preservation totals | 2026-10-26 17:57 Pacific API swap: 1,231 job marks, including 892 Applied; 47 external applications; 104 answer-bank and 67 Memory rows; 111 career facts; 2 history entries; 5 resumes; 6 resume documents; 6 resume versions; 1 user. All matched before/after; these are observations, never UI constants |
 | Last logo verification totals | 936 applications, 889 posting applications plus 47 external history, stable during 2026-10-26 17:19 Pacific verification; a timestamped observation, never a UI constant |
 
-Saving this knowledge does not authorize any activation. The Inbox build
-`6163f59` behavior is preserved in production. Reliable-Inbox P1 to P5 are
-implemented and tested locally; nothing from this work is deployed. Before any release check which commit the
-images contain, whether newer changes exist and the owner's authorization. A
-documentation commit requires no application rebuild.
+Saving knowledge does not authorize another activation. The owner separately
+approved the live API/web release recorded above. Before any future release,
+check running images, newer shared work and approval for that operation.
+A documentation commit requires no application rebuild.
 
 ### Current product contracts
 
