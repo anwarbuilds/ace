@@ -808,3 +808,31 @@ a plausible explanation, not a proven production diagnosis. All 32 focused
 Inbox/Analytics and 47 extension browser cases pass. No assertion was skipped
 or quarantined. Await specific web-only release approval; production is still
 3cd87a5. Root candidate record holds the full comparison and release plan.
+
+
+## 2026-10-27 14:13 Pacific: approved Analytics web fix live
+
+Owner-approved 268e1fc runs on web; API stays 3cd87a5/parser 8, schema 0050.
+PR #9 is merged. Persistent layout coordination uses the fresh initial server
+response, guards one refresh on return, and retains evidence/focus/visibility
+updates. Only web was built/recreated with no dependencies. HTTPS exact SHA,
+auth boundaries, deployed Analytics/Inbox bundle hashes and 85 logos pass.
+No signed-in production browser test or local Chrome run is claimed.
+
+Read-only full-row preservation matches all 11 tables, including 7,948 stored
+mail rows, 334 protected decisions and 10,263 audit events across activation.
+All retained services, environment, schema and API source hashes are unchanged.
+One mark/event added by concurrent normal traffic during backup/build remains
+retained (909 to 910 applied); it is distinct from the zero-change activation
+snapshot. Live SQL/Python/Inbox/Analytics agree on 229 pending and 958 identities
+at 21:13 UTC. No Gmail calls, body replay, migration, scheduler change or stopped
+operator restart ran. Saved 143 and owner-stop hashes are intact. No search
+recall, semantic completion or all-old-parser-processing claim is made.
+
+Fresh private backup is 472,957,215 bytes, mode 600 under a mode-700 directory;
+gzip/catalog checks pass, not a restore drill. VM artifacts and rollback web
+tag are under analytics-refresh-20261027T2108Z. Root live record has exact
+paths, SHA/image/bundle hashes, CI evidence and operating lessons. Hosted scoped
+checks pass (32 browser/45 DOM); broader remains 166 pass/20 fail with the exact
+known historical failures and one extra previously observed focus failure versus
+latest baseline. No assertion was removed or skipped to claim green CI.

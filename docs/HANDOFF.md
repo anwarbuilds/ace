@@ -1,5 +1,21 @@
 # ace handoff
 
+**LIVE, 2026-10-27 14:13 Pacific:** Owner-approved Analytics refresh fix
+268e1fc is healthy on web; API remains 3cd87a5/parser 8, schema 0050. PR #9 is
+merged. Only web was recreated. HTTPS exact SHA/auth, deployed Analytics/Inbox
+bundle hashes and all 85 logos pass. All rows in 11 audited tables, 7,948 stored
+mail rows, 334 protected decisions and 10,263 events match across activation;
+API/scheduler/PostgreSQL/Caddy/environment unchanged. A concurrent mark/event
+added during the build (909 to 910 applied) was preserved. Read-only Inbox/
+Analytics agree on 229 pending, 958 identities; no Gmail/body reads by the audit.
+Fresh 472,957,215-byte private backup passes gzip/catalog checks. Root new live
+section contains exact image/bundle hashes, rollback, records and lessons.
+Focused CI 32 browser/45 DOM passes; broader 166/20 retains known historical
+failures, including one extra focus failure versus latest 19-failure baseline.
+Overall CI is not green. No signed-in production browser test is claimed.
+Reload Analytics once for new client code. The stopped runner and saved 143/
+owner-stop hashes remain unchanged. Earlier pending-release notes are history.
+
 **2026-10-27 13:39 Pacific, final CI:** Analytics candidate 2bceb2b / draft PR
 #9 passes 32 focused browser and 45 DOM cases plus web build/checks. Completed
 broader suite: 166 pass / 20 fail; same 19 as the live-runtime run plus the exact

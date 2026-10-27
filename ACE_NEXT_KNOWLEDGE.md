@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-27, Analytics refresh correction verified on 2bceb2b and awaiting web-only approval; live remains 3cd87a5; exhaustive operator remains stopped
+Last updated: 2026-10-27, approved Analytics refresh fix 268e1fc live on web; API remains 3cd87a5/parser 8; production preservation and HTTPS verified; exhaustive operator remains stopped
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -12,6 +12,136 @@ repository instructions. Dated observations below are evidence from that date,
 not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
+
+## Analytics refresh fix LIVE, owner-approved and verified 2026-10-27T21:13Z
+
+The owner explicitly approved: "Approved deploy this and whatever the knowledge
+you have possessed, update that in the ACE_NEXT_Knowledge.md." The approved
+review head **`268e1fc64634abe324f2a4f47503ae4f4fd4e41f`** is now live on **web**
+at **https://ace.opik.net**. API remains the prior approved **3cd87a5**, parser
+**8**, schema **0050**. This supersedes pending-approval/not-deployed and the
+older both-services-at-3cd87a5 statements below. No fresh approval is pending
+for this completed operation. Canonical `wine-rose-platform` was fast-forwarded
+to the exact approved head; GitHub records [PR #9](https://github.com/anwarbuilds/ace/pull/9)
+as merged and closed. Later knowledge commits do not rebuild running images.
+Runtime web/backend/extension/deploy source matches tested **2bceb2b** exactly;
+only continuity documents differ. Backend, extension and deployment files also
+match the previously running 3cd87a5 source.
+
+**Behavior and cause:** Analytics had a coordinator inside each refreshed server
+page that requested another refresh on mount. The observed production incident
+was 464 Analytics GETs versus one Inbox sync in a bounded four-minute window.
+The coordinator now lives once in the persistent app layout, depends on the
+stable refresh method and records the route before refreshing. The initial
+server response is already fresh, so hydration and replacement responses make
+zero extra refresh requests; returning from another route requests one. Both
+Analytics pages remove their page-local coordinators. Evidence notifications,
+focus and visibility updates remain on overview and application-record routes;
+unrelated routes have no Analytics listeners. The normal two-minute shell poll
+and scoped Inbox checks remain. This removes the continuous self-refresh cycle
+without keeping a second local application ledger or changing mail decisions.
+
+**Activation:** web started at **21:12:07Z** (14:12 Pacific), became healthy,
+and only web was recreated with `up -d --no-build --no-deps --wait`. API,
+scheduler, PostgreSQL and Caddy have identical container and image IDs before/
+after; environment bytes and schema are unchanged. No API build/recreation,
+migration, scheduler change, extension publication, data cleanup or restore ran.
+Running web image is
+`sha256:d9fbd34408304c006a8b716fa99455c3a10ce59f9229c4382c402fee87eba479`.
+Retained API image is
+`sha256:008a0af93eed1bf1fddab600d4ccfa108bca7287934e205ff1b499ee88935af2`.
+
+**Preservation:** enforced read-only row-hash snapshots at **21:12:06.485905Z**
+and **21:12:15.508699Z** match every row in **11 tables**, including all
+**7,948 stored mail rows**, all **334 protected Inbox decisions** and all
+**10,263 existing audit events**. Zero additions, changes or removals occurred
+across activation in these snapshots. Applied marks remain **910**. Table
+counts are: job marks 1,258; external applications 48; answers 104; private
+Memory 102; career facts 111; history entries 2; resumes 5; resume documents 6;
+resume versions 6; users 1; stored Gmail messages 7,948. The six protected
+backend source hashes also match the approved unchanged source.
+
+Do not confuse build-window app activity with deployment changes. Between the
+initial **21:07:50Z** inventory and pre-activation snapshot, one new job mark
+and one audit event appeared, with applied marks **909 to 910**. An aggregate
+API-log check confirms one concurrent `PUT /api/marks/:id` request. No existing
+row or protected mail changed or disappeared in that comparison. The release
+kept that legitimate activity; it did not freeze clients, undo it or restore
+older data. `preparation-activity.json` retains the aggregate evidence privately.
+
+**Fresh backup and rollback:**
+`/opt/ace/private-backups/analytics-refresh-20261027T2108Z/database.dump.gz`,
+**472,957,215 bytes**, mode **600**, containing directory **700**. Full gzip
+integrity and PostgreSQL archive-catalog checks pass; this is not a restore
+drill. Rollback web tag is
+`oracle-web:before-analytics-refresh-20261027T2108Z`, retaining the former
+3cd87a5 web image `sha256:249cd2421f94bb44a41d25da341052908ec431ac3c968ae2def822acc124c38a`.
+A web rollback replaces web only and never restores production data
+implicitly. The private folder retains preparation/activation logs, exact
+source/image/environment/service records, all three row-hash snapshots,
+`verification.json`, `live-queue.json`, `live-services.json`, operator-record
+hashes, `web-bundles.json`, `public-check.json` and the preparation activity
+comparison. The private local working folder is `/tmp/ace-analytics-release/`.
+
+**Live verification:** public HTTPS checks completed at **21:13:45Z**. Health
+reports API healthy and exact frontend **268e1fc**, matching
+`X-Ace-Frontend-Commit`. Anonymous Inbox messages/connection/Analytics return
+**401**; Inbox, Analytics and application-record pages redirect **307** to
+sign-in. The publicly served shared layout bundle containing the new coordinator
+and the Inbox bundle match hashes read from the running image; all **85** logo
+hashes match. Shared layout bundle:
+`/_next/static/chunks/app/app/layout-450f09c9a7722679.js`, SHA-256
+`d10a75a45dd5449d022f5c9ce0339d2880f0897904606787fda805da509234aa`.
+This verifies source, packaging and HTTP delivery, not a signed-in production
+browser interaction. Reload Analytics once to load the released client code.
+No local Chrome ran under the cooling restriction, and no owner session was
+fabricated to claim browser verification.
+
+The read-only live audit at **21:13:04Z** reconciles **229 pending** in Inbox,
+Analytics and SQL/Python queue projections, versus **1,250 raw pending** rows.
+All four date selections (14, 30, 90, all) pass identity/status/cohort/evidence
+invariants. Current identities are **958**: **910** applied marks plus **48**
+external applications. These are dated measurements, not UI constants; earlier
+227/952 observations remain historical. The audit made **zero Gmail calls and
+zero body reads**. The web fix changed no queue rule, stored decision or status.
+This release does not certify search recall, complete all old-parser body
+processing, or claim every stored email was understood.
+
+**Validation and known limits:** hosted run **40577319214** on runtime 2bceb2b
+passes **45 Inbox/Analytics DOM**, 82 extension DOM, 11 company contracts,
+TypeScript, full lint, production web build, **1,586 backend**, 258 matcher,
+**47 extension browser** and **32 focused Inbox/Analytics browser** cases.
+The focused browser tests cover Inbox sidebar entry, bounded idle requests,
+evidence notifications, return navigation, both Analytics routes, Day/Night
+and responsive layouts. Production image build also passes compilation and
+TypeScript. Broader browser results are **166 pass / 20 fail**, so overall CI
+is **not green**: the previous live-runtime run has the same 19 failures, plus
+one additional shortcut-focus failure whose exact title/error occurred in an
+earlier 21-failure run before this fix. All 20 titles exist in that earlier
+history; there is one extra versus the latest 19-failure run, not zero. Search
+handler/list-controls/navigation-test source is unchanged. Pre-hydration key
+handling is a plausible timing explanation, not a proven production diagnosis.
+Exact runs, intermediate failures and comparisons remain below; no unrelated
+assertion was removed, skipped or quarantined.
+
+**Operating lessons:** keep refresh coordinators outside the server subtree
+they refresh and avoid refetching an already fresh initial response. Test
+response replacement and changing contextual router wrappers, not just stable
+mocks. Streaming can briefly stage hidden `S:0` markup, so retain exact count
+and clipping assertions but wait for committed page/active-tab counts. Isolate
+route-refresh browser fixtures from unrelated Gmail bodies/iframe sandbox
+messages while retaining browser-error assertions; email sandbox protections
+stay enabled. On this VM `rg` is unavailable, so use available shell/Python
+fallbacks without installing tools incidentally. Keep SSH stdin explicit for
+compose exec, private artifacts mode 600 under mode-700 directories, and long
+builds durable with private logs and short progress polls. Distinguish concurrent
+owner actions during preparation from changes across actual activation.
+
+The exhaustive parser-7 runner stays **absent** (zero matching runner processes)
+and its saved exit **143** and both owner-stop records retain identical hashes.
+It was never restarted. Normal scoped page-open checks are separate and remain
+available. All requested knowledge is recorded here without mail bodies, real
+answers, credentials, private row data or owner screenshots in this public repo.
 
 ## Analytics refresh correction ready for web-only approval, 2026-10-27T20:27Z
 
