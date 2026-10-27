@@ -26,7 +26,7 @@ for (const theme of ["light","dark"] as const) {
       expect(await page.evaluate(TEXT_SCAN)).toEqual([]);
       expect(await page.evaluate(DRAWN_SCAN)).toEqual([]);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
-      expect(await page.locator('.an-tabs a[aria-current="page"]').count()).toBe(1);
+      await expect(page.locator('.an-tabs a[aria-current="page"]')).toHaveCount(1);
       await page.screenshot({path:path.join(root,`${theme}-${tab}.png`)});
       await page.screenshot({path:path.join(root,`${theme}-${tab}-full.png`),fullPage:true});
     }
@@ -258,10 +258,10 @@ for (const route of ["/app/analytics?days=all", "/app/applications/analytics?day
   test(`Analytics settles after opening and after an evidence refresh: ${route}`,async({page})=>{
     const requests:string[]=[];
     const errors=watchErrors(page);
-    // The seeded Inbox has stored excerpts, not a Gmail grant. Keep navigation
-    // fully fictional while the real Analytics page and refresh requests run.
-    await page.route(/\/api\/inbox\/messages\/\d+\/full(?:\?|$)/,request=>request.fulfill({
-      status:200,contentType:"application/json",body:JSON.stringify({sender:"Fictional Talent <fixture@example.test>",to:"owner@example.test",subject:"Fictional application correspondence",received_at:"2026-01-10T12:00:00Z",text:"A fictional application update.",document:"<p>A fictional application update.</p>",format:"html",blocked_images:0}),
+    // This regression needs Inbox navigation, not a Gmail body or email frame.
+    // Use an empty fictional Inbox; Analytics still reads the real demo API.
+    await page.route(/\/api\/inbox\/messages(?:\?|$)/,request=>request.fulfill({
+      status:200,contentType:"application/json",body:JSON.stringify({items:[],total:0,has_more:false,view:"pending",latest_received_at:null,counts:{stored:0,needs_review:0,automatic:0,manual:0,reviewed:0,receipts:0,updates:0,stale:0}}),
     }));
     page.on("request",request=>{
       const url=new URL(request.url());

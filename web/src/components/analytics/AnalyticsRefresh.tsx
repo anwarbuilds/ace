@@ -10,7 +10,9 @@ export function AnalyticsRefresh() {
   const { refresh } = useRouter();
   const pathname = usePathname();
   const active = pathname === "/app/analytics" || pathname === "/app/applications/analytics";
-  const lastPath = useRef<string | null>(null);
+  // The initial server response already contains fresh data. Avoid fetching it
+  // again during hydration; keep the guard in the layout for return navigation.
+  const lastPath = useRef(pathname);
 
   useEffect(() => {
     if (lastPath.current === pathname) return;

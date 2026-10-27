@@ -46,7 +46,24 @@ under `S:0`. Fictional failure screenshots show one correctly drawn page. The
 width test now additionally requires exactly one `.an-page` before retaining
 all original overflow/clipping assertions; none are removed or narrowed. The
 overview regression also opens via the actual Analytics sidebar link in Inbox
-and checks return navigation. A hosted rerun is pending. No local Chrome runs
+and checks return navigation. Run **40575974544** on **b6fc4f1** then passed all
+refresh-request assertions (opening, evidence, return), all five responsive
+widths and 30/32 focused cases, but failed an immediate active-tab count during
+streaming and the new navigation test's console check from an email iframe's
+sandbox refusal. These are retained failures, not a green CI claim. The active
+tab count now uses the same exact, retrying count assertion. The navigation
+fixture uses an empty fictional Inbox, so no Gmail body/iframe participates;
+all browser-error and request-count assertions remain intact.
+
+The final source also avoids any redundant refresh of the initial server
+response: `lastPath` starts with the rendered pathname. First load and server
+page replacement request zero extra refreshes; returning to Analytics from
+another route requests one. This removes an unnecessary streaming overlap
+rather than depending on its timing. Persistent layout coordination and all
+evidence/focus/visibility updates remain. The earlier five-versus-one DOM
+measurement describes the first candidate; the final regression expects zero
+extra initial/response requests and one on return. Final hosted rerun pending.
+No local Chrome runs
 under the cooling restriction.
 
 The later complete read-only 19:56:00 to 20:00:00 UTC log window counted **464**

@@ -204,7 +204,7 @@ test("retrying an interrupted wider verification keeps its 90-day window",async(
 });
 
 
-test("Analytics refreshes on opening, cross-tab evidence messages, focus and return navigation",async()=>{
+test("Analytics uses its initial server response and refreshes on evidence, focus and return navigation",async()=>{
   const ActualRefresh=load(path.join(sourceRoot,"components/analytics/AnalyticsRefresh.tsx")).AnalyticsRefresh;
   const previous=globalThis.BroadcastChannel;
   const channels=[];
@@ -212,15 +212,15 @@ test("Analytics refreshes on opening, cross-tab evidence messages, focus and ret
   try{
     const before=projectionRefreshes;
     await mounted(React.createElement(ActualRefresh),async(container,window,root)=>{
-      assert.equal(projectionRefreshes,before+1);
+      assert.equal(projectionRefreshes,before+0);
       assert.equal(channels[0].name,"ace-marks");
       await act(async()=>{channels[0].onmessage({data:"changed"});});
-      assert.equal(projectionRefreshes,before+2);
+      assert.equal(projectionRefreshes,before+1);
       await act(async()=>{window.dispatchEvent(new window.Event("focus"));});
-      assert.equal(projectionRefreshes,before+3);
+      assert.equal(projectionRefreshes,before+2);
       pathname="/app/applications/analytics";
       await act(async()=>{root.render(React.createElement(ActualRefresh));});
-      assert.equal(projectionRefreshes,before+4);
+      assert.equal(projectionRefreshes,before+3);
     });
     assert.equal(channels[0].closed,true);
   }finally{globalThis.BroadcastChannel=previous;pathname="/app/analytics";}
@@ -330,23 +330,23 @@ test("Analytics response replacement cannot restart refresh coordination in the 
   try{
     pathname="/app/analytics";
     await mounted(await response(0),async(container,window,root)=>{
-      assert.equal(projectionRefreshes,before+1);
+      assert.equal(projectionRefreshes,before);
       for(let generation=1;generation<=4;generation++){
         const tree=await response(generation);
         await act(async()=>{root.render(tree);});
       }
-      assert.equal(projectionRefreshes,before+1,"server page replacement must settle without requesting another response");
+      assert.equal(projectionRefreshes,before,"server page replacement must settle without requesting another response");
       assert.equal(channels.length,1,"one persistent evidence listener, independent of page replacements");
       pathname="/app/applications/inbox";
       const inbox=await Layout({children:React.createElement("h1",null,"Fictional Inbox")});
       await act(async()=>{root.render(inbox);});
       await act(async()=>{window.dispatchEvent(new window.Event("focus"));});
-      assert.equal(projectionRefreshes,before+1,"Analytics must not refresh other routes");
+      assert.equal(projectionRefreshes,before,"Analytics must not refresh other routes");
       assert.equal(channels[0].closed,true);
       pathname="/app/analytics";
       const back=await response(5);
       await act(async()=>{root.render(back);});
-      assert.equal(projectionRefreshes,before+2,"return navigation refreshes exactly once");
+      assert.equal(projectionRefreshes,before+1,"return navigation refreshes exactly once");
     });
     assert.ok(channels.every(channel=>channel.closed));
   }finally{
