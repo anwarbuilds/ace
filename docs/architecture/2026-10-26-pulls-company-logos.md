@@ -58,3 +58,19 @@ eligibility, adapters, Gmail configuration, application status, auth, extension
 or other backend feature changes are part of this release. Production activation
 will replace only API/web after a fresh private backup and verified rollback
 images, with service/container and protected-inventory comparisons.
+
+
+## Packaging verification correction
+
+The first live asset check caught HTTP 500 for the five new bundled files.
+The private release script's restrictive umask had also applied to Git's new
+public files, which Docker copied as root-owned mode 0600. The unprivileged
+Node process could not read them. The verification session was revoked and
+application totals remained unchanged. Public health alone did not expose it.
+
+The web runtime image now grants public assets read/traversal permissions
+before switching to Node, without granting write access or changing ownership.
+Validate every manifest asset's hash through public HTTPS and read access as
+the actual container user. Use umask 022 for future Git checkouts and retain
+umask 077 for private backups. This is a web packaging fix; no API/backend
+behavior changes or database rollback are needed.

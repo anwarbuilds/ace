@@ -29,6 +29,9 @@ COPY --from=build /app/package.json /app/package-lock.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
+# Public assets must remain readable by node even when a release checkout
+# inherits a restrictive umask. Keep ownership and write permissions intact.
+RUN chmod -R a+rX ./public
 
 USER node
 
