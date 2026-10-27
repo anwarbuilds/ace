@@ -161,12 +161,13 @@ test("official logo renders locally and failed image falls back cleanly",async({
   const day=stamp.toISOString().slice(0,10);
   const url=`/app/analytics?tab=companies&days=custom&start=${day}&end=${day}`;
   await page.goto(url);
-  const logo=page.getByRole("img",{name:"Google logo",exact:true});
+  const companies=page.locator(".an-company-table");
+  const logo=companies.getByRole("img",{name:"Google logo",exact:true});
   await expect(logo).toBeVisible();
   expect(await logo.evaluate((el:HTMLImageElement)=>el.complete&&el.naturalWidth>0)).toBe(true);
   await page.route("**/company-logos/google.ico",route=>route.abort());
   await page.reload();
-  await expect(page.getByLabel("Google monogram",{exact:true})).toBeVisible();
+  await expect(companies.getByLabel("Google monogram",{exact:true})).toBeVisible();
   await expect(logo).toHaveCount(0);
 });
 

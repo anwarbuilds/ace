@@ -160,3 +160,10 @@ and runs every remaining browser file. No assertions are skipped. Failure
 accessibility trees/screenshots contain fictional CI data only. The whole suite
 is not green; unrelated old extension/navigation expectations remain outside
 this Inbox implementation. Check focused and broad results separately.
+
+Hosted focused run `40515983693` on `4c79daa` passed 28/30 browser cases with
+rich fictional data. The remaining two failures were strict selector ambiguity:
+Acknowledgement matched both the overview KPI and the filing choice; Google
+logo matched the company table and outcome history. Final selectors target the
+email-decision group and company table respectively. Filing actions, no-status-
+change checks, image loading and image-error fallback assertions remain intact.

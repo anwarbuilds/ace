@@ -93,12 +93,10 @@ test("one click records the outcome for the suggested application",async({page})
 test("an acknowledgement or status update is filed without touching the application",async({page})=>{
   const fixture=await inboxFixture(page);
   await page.goto("/app/applications/inbox");
-  // Read the email before filing; wait for the asynchronously loaded frame
-  // rather than clicking while its placeholder is being replaced.
-  await expect(page.frameLocator("iframe.inbox-frame").locator("body")).toContainText("The fictional recruiting team");
-  await page.getByRole("button",{name:/^Acknowledgement/}).click();
+  const decisions=page.getByRole("group",{name:"What is this email?",exact:true});
+  await decisions.getByRole("button",{name:/^Acknowledgement/}).click();
   await expect.poll(()=>fixture.filed.length).toBe(1);
-  await page.getByRole("button",{name:/^Status update/}).click();
+  await decisions.getByRole("button",{name:/^Status update/}).click();
   await expect.poll(()=>fixture.filed.length).toBe(2);
   expect(fixture.filed).toEqual([{action:"receipt"},{action:"update"}]);
   expect(fixture.submitted).toEqual([]);
