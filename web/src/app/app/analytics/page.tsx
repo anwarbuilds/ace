@@ -12,6 +12,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps<"/app/an
   const prefs = await getPrefs();
   const query: Record<string,string> = {};
   for (const key of ["days", "family", "start", "end", "tab", "company", "interval"]) if (typeof sp[key] === "string") query[key] = sp[key];
+  if(!query.days)query.days=query.start&&query.end?"custom":"all";
   const params: Record<string,string> = {...query, tz:prefs.tz};
   delete params.tab;
   delete params.interval;

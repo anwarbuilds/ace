@@ -71,7 +71,7 @@ async function mounted(element,run){
     for(const [key,value] of original)if(value===undefined)delete globalThis[key];else globalThis[key]=value;
   }
 }
-const complete={days:30,gmail:125,in_ace:125,missing:0,complete:true,checked_at:new Date().toISOString()};
+const complete={days:0,scope:"all",includes_spam_trash:true,gmail:125,in_ace:125,missing:0,complete:true,checked_at:new Date().toISOString()};
 function fixture({coverage=complete,stale=0,state="ready",fail=false}={}){
   const calls=[];
   const connection={coverage,state,connected:true,available:true,email:"owner-fixture@example.test",last_synced_at:new Date().toISOString(),following_changes:true,auto_rejections:true};
@@ -95,10 +95,10 @@ test("opening Inbox with a recent timestamp but no coverage verifies all batches
   const {calls}=fixture({coverage:null,stale:2});
   await mounted(React.createElement(InboxIntelligence),async container=>{
     assert.deepEqual(calls.map(c=>c.route),["/api/inbox/sync","/api/inbox/sync","/api/inbox/recheck"]);
-    assert.match(container.textContent,/Gmail has 125 emails from the last 30 days. All are in ACE/);
+    assert.match(container.textContent,/Gmail has 125 emails across all retained history, including Spam and Trash. All are in ACE/);
     assert.match(container.textContent,/All caught up/);
     assert.match(container.textContent,/Read 2 older emails again/);
-    assert.match(container.textContent,/Verify further back/);
+    assert.match(container.textContent,/Verify mailbox history/);
     assert.doesNotMatch(container.textContent,/Import next page/);
   });
 });
@@ -178,7 +178,7 @@ test("the actual records page explains empty rejection searches with status, dat
 
 test("retrying an interrupted wider verification keeps its 90-day window",async()=>{
   params.set("days","90");
-  fixture();
+  fixture({coverage:{...complete,days:90}});
   const calls=[];
   send=async(method,route,body)=>{
     calls.push({route,body});
@@ -192,7 +192,8 @@ test("retrying an interrupted wider verification keeps its 90-day window",async(
       assert.match(container.textContent,/Fictional interrupted window/);
       await act(async()=>{container.querySelector(".inbox-status .btn.primary").dispatchEvent(new window.Event("click",{bubbles:true}));});
       assert.deepEqual(calls.map(c=>c.body.days),[90,90,90]);
-      assert.match(container.textContent,/All caught up/);
+      assert.doesNotMatch(container.textContent,/All caught up/);
+      assert.match(container.textContent,/does not verify your full mailbox history/);
     });
   }finally{params.delete("days");}
 });
@@ -248,4 +249,26 @@ test("an old recorded email loads its own event history so Undo survives the glo
     await act(async()=>{undo.dispatchEvent(new window.Event("click",{bubbles:true}));});
     assert.deepEqual(calls,["/api/inbox/events/12/undo"]);
   });
+});
+
+
+test("Inbox opens on full retained history and never treats a recent-window check as full coverage",async()=>{
+  const {calls}=fixture({coverage:{...complete,days:30}});
+  await mounted(React.createElement(InboxIntelligence),async container=>{
+    assert.ok(calls.length>0);
+    assert.ok(calls.filter(c=>c.route==="/api/inbox/sync").every(c=>c.body.days===0));
+    assert.equal(container.querySelector(".inbox-backfill select").value,"0");
+    assert.match(container.textContent,/including Spam and Trash/);
+  });
+});
+
+test("Analytics overview and records request all time unless the owner selects dates",async()=>{
+  const AnalyticsPage=load(path.join(sourceRoot,"app/app/analytics/page.tsx")).default;
+  const queries=[];
+  serverRead=async(route,fallback,query)=>{if(route==="/api/analytics")queries.push(query);return null;};
+  await AnalyticsPage({searchParams:Promise.resolve({})});
+  await RecordsPage({searchParams:Promise.resolve({})});
+  await AnalyticsPage({searchParams:Promise.resolve({days:"30"})});
+  await AnalyticsPage({searchParams:Promise.resolve({start:"2026-10-01",end:"2026-10-26"})});
+  assert.deepEqual(queries.map(q=>q.days),["all","all","30","custom"]);
 });

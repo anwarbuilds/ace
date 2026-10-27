@@ -28,7 +28,7 @@ export default async function ApplicationAnalyticsRecordsPage({searchParams}:{se
   const prefs=await getPrefs();
   const query:Record<string,string>={records:"1",tz:prefs.tz};
   for(const key of FILTERS) if(typeof sp[key]==="string"&&sp[key])query[key]=sp[key];
-  if(query.evidence==="rejection"&&!query.days&&!query.start&&!query.end)query.days="all";
+  if(!query.days)query.days=query.start&&query.end?"custom":"all";
   const data=await apiGetOr<ApplicationAnalyticsRecords|null>("/api/analytics",null,query);
   if(!data)return <div className="pg"><h1>Application records</h1><p role="alert">This selection could not be loaded. Check the filters or return to Analytics.</p><Link className="btn" href="/app/analytics">Back to Analytics</Link></div>;
   const analyticsQuery=new URLSearchParams();

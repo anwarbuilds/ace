@@ -40,12 +40,14 @@ def aware(stamp: datetime) -> datetime:
     return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
 
 
-def analytics_read(session: Session, *, days: str = "30", family: str | None = None,
+def analytics_read(session: Session, *, days: str = "all", family: str | None = None,
                    start: date | None = None, end: date | None = None, tz: str = "UTC",
                    company: str | None = None, now: datetime | None = None, records: bool = False,
                    status: str | None = None, evidence: str | None = None, eligible: bool = False,
                    timed: bool = False, offset: int = 0, limit: int = 50, q: str | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
+    explicit_dates = start is not None or end is not None
+    include_undated = days == "all" and not explicit_dates
     try:
         zone = ZoneInfo(tz)
     except (ZoneInfoNotFoundError, ValueError):
@@ -64,7 +66,7 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
     eligible_family = [a for a in identities if not family or role[a.key] == family]
     selected = [a for a in eligible_family if a.key in dated and start <= dated[a.key] <= end]
     # All-time keeps undated external history visible; it never invents a chart date.
-    if days == "all" and end == today:
+    if include_undated:
         selected += [a for a in eligible_family if a.key not in dated]
     keys = {a.key for a in selected}
     # Restrict event reads to selected application keys, including corresponding undos.
@@ -284,7 +286,7 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
                 incomplete_years.add(r.period)
     for period in incomplete_years:
         annual.pop(period, None)
-    result = {"as_of": now.isoformat(), "timezone": tz, "start": start.isoformat(), "end": end.isoformat(), "days": days, "family": family,
+    result = {"as_of": now.isoformat(), "timezone": tz, "start": start.isoformat(), "end": end.isoformat(), "days": "custom" if explicit_dates else days, "family": family,
             "available_families": sorted(set(role.values())), "total_submitted": len(identities), "submitted": len(selected), "undated": sum(a.key not in dated for a in eligible_family),
             "week_total": sum(weekly.values()), "positive": len(positive), "assessments": len(assessed), "interviews": len(interviewed),
             "has_outcome_evidence": bool(positive or rejected), "statuses": dict(Counter(a.current_status for a in selected)),
@@ -370,7 +372,7 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
             result["not_listed"] = {
                 "applications": [{"key": a.key, "company": a.company, "title": a.title, "status": a.current_status,
                                   "submitted_at": aware(a.submitted_at).isoformat() if a.submitted_at else None,
-                                  "outside_range": (days != "all" if a.key not in dated else not start <= dated[a.key] <= end),
+                                  "outside_range": (not include_undated if a.key not in dated else not start <= dated[a.key] <= end),
                                   "href": f"/app/jobs/{a.key.split(':')[1]}" if a.key.startswith("job:") else "/app/applications"}
                                  for a in other[:25]],
                 "emails": [{"id": m.id, "subject": m.subject, "decision": m.decision, "classification": m.classification,
@@ -381,7 +383,7 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
 
 
 @router.get("/api/analytics")
-def analytics(days: str = Query("30", pattern="^(14|30|90|all|custom)$"), family: str | None = None,
+def analytics(days: str = Query("all", pattern="^(14|30|90|all|custom)$"), family: str | None = None,
               start: date | None = None, end: date | None = None, tz: str = "UTC", company: str | None = None,
               records: bool = False, status: str | None = None, evidence: str | None = None,
               eligible: bool = False, timed: bool = False, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100),

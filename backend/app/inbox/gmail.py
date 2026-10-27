@@ -36,6 +36,10 @@ class GmailTemporaryError(GmailError):
     """Retry later without invalidating the owner's existing grant."""
 
 
+class GmailPageExpired(GmailTemporaryError):
+    """Restart pagination, without treating a page token as an OAuth failure."""
+
+
 class GmailRateLimited(GmailTemporaryError):
     pass
 
@@ -161,6 +165,8 @@ def get_json(path: str, token: str, params: dict | None = None) -> dict:
             response = httpx.get(API + path, headers={"Authorization": "Bearer " + token}, params=params, timeout=20)
             if response.status_code == 404:
                 raise GmailCursorExpired("Gmail history cursor expired.")
+            if response.status_code == 400 and path in {"/messages", "/history"} and params and params.get("pageToken"):
+                raise GmailPageExpired("Gmail pagination expired. Restart verification; saved email is kept.")
             limited = _rate_limited(response)
             if not limited and response.status_code not in {500, 502, 503, 504}:
                 if response.status_code == 401:

@@ -2042,8 +2042,10 @@ def test_named_employer_and_narrow_government_questions_do_not_borrow_answers(pa
     _fill_and_wait(page)
 
     assert page.eval("document.getElementById('school').value") == "Example University"
-    assert page.eval("document.getElementById('employer').value") == "No"
-    for field_id in ("pwc", "federal", "conflict", "signature", "privacy"):
+    # A legacy answer-bank label is not approved scoped Memory. In particular,
+    # "previously" does not establish the broader "ever" relationship. School
+    # above is the positive control; protected fields must remain untouched.
+    for field_id in ("employer", "pwc", "federal", "conflict", "signature", "privacy"):
         assert page.eval(
             f"document.getElementById('{field_id}').value"
             if field_id != "privacy" else

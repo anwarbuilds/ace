@@ -350,21 +350,32 @@ def test_an_application_ace_never_knew_about_can_be_added_from_its_email(databas
     assert error.value.status_code == 422
 
 
-def test_ignored_recruiting_mail_is_reread_but_owner_filings_and_old_mail_stay(database, gmail_reads, monkeypatch):
+def test_all_ignored_history_is_reread_but_owner_filings_stay(database, gmail_reads, monkeypatch):
     session, conn = database
     ignored = stored(session, conn, "forgotten-rejection", "ignored", subject="Application update", snippet="Your application", version="5")
     old = stored(session, conn, "old-ignored", "ignored", subject="Application update", version="5")
-    old.received_at = NOW-timedelta(days=121)
+    old.received_at = NOW-timedelta(days=2500)
     unrelated = stored(session, conn, "unrelated-ignored", "ignored", subject="Fictional news", snippet="Fictional", version="5")
     owner = stored(session, conn, "owner-filed", "unrelated", subject="Application update", version="5")
     manual = stored(session, conn, "owner-recorded", "manual", subject="Application update", version="5")
     session.commit()
-    monkeypatch.setattr(inbox.gmail, "get_json", lambda *args: message("forgotten-rejection", "Req ID: SE-101. Our immigration policy does not include sponsorship for this role."))
+    reads=[]
+    def get(path, *args):
+        key=path.rsplit("/",1)[-1]; reads.append(key)
+        if key=="forgotten-rejection":
+            return message(key,"Req ID: SE-101. Our immigration policy does not include sponsorship for this role.")
+        if key=="old-ignored":
+            return message(key,"Req ID: SE-102. We have decided to move forward with other candidates.", NOW-timedelta(days=2500))
+        return message(key,"Fictional newsletter with no application outcome.")
+    monkeypatch.setattr(inbox.gmail, "get_json", get)
     result = inbox.recheck(inbox.RecheckRequest(), owner_request(), session)
-    assert result == {"checked": 1, "counts": {"automatic": 1}, "remaining": 0}
+    assert result["checked"]==3 and result["remaining"]==0
+    assert set(reads)=={"forgotten-rejection","old-ignored","unrelated-ignored"}
+    assert result["counts"]["automatic"]==1
     assert ignored.decision == "automatic" and ignored.parser_version == "6"
     assert statuses(session) == ["applied", "rejected", "applied"]
-    assert [row.parser_version for row in [old, unrelated, owner, manual]] == ["5"]*4
+    assert [row.parser_version for row in [old, unrelated, owner, manual]] == ["6","6","5","5"]
+    assert old.decision=="review"  # Its outcome predates the application; no unsafe status update.
     event = job_events(session)[0]
     inbox.undo(event.id, owner_request(), session)
     assert ignored.decision == "review" and statuses(session) == ["applied"]*3
@@ -417,3 +428,32 @@ def test_message_specific_event_history_requires_an_owned_email(database):
     session,conn=database
     with pytest.raises(HTTPException) as error:inbox.events(owner_request(),session,999999)
     assert error.value.status_code==404
+
+
+def test_full_initial_history_never_automates_historical_positive_outcomes(database, gmail_reads, monkeypatch):
+    session,conn=database
+    monkeypatch.setattr(inbox,"_FULL_SCANS",{});monkeypatch.setattr(inbox,"_COVERAGE",{})
+    conn.history_id="earlier-narrow-window";conn.preview_complete=True;session.commit()
+    def get(path,token,params=None):
+        if path=="/profile":return {"historyId":"all-history-start"}
+        if path=="/messages":return {"messages":[{"id":"historical-positive-fictional"}]}
+        if path=="/history":return {"historyId":"all-history-end"}
+        return message("historical-positive-fictional","Req ID: SE-101. We invite you to interview.")
+    monkeypatch.setattr(inbox.gmail,"get_json",get)
+    for _ in range(3):
+        result=inbox.sync_once(session,conn,0)
+        if not result["more"]:break
+    assert result["coverage"]["complete"]
+    assert row_for(session,"historical-positive-fictional").decision=="exact_preview"
+    assert statuses(session)==["applied"]*3 and not job_events(session)
+
+
+
+@pytest.mark.parametrize("label",["SPAM","TRASH"])
+def test_full_mailbox_retains_spam_and_trash_outcomes_for_owner_review(database,label):
+    session,conn=database
+    data=message("label-fictional-"+label,"Req ID: SE-101. We have decided to move forward with other candidates.")
+    data["labelIds"]=[label]
+    assert _ingest(session,conn,data,_identities(session),preview=True)=="review"
+    assert "Spam or Trash" in row_for(session,data["id"]).decision_reason
+    assert statuses(session)==["applied"]*3 and not job_events(session)

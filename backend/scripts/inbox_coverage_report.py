@@ -20,30 +20,38 @@ from backend.app.config import get_settings
 from backend.app.inbox import gmail
 from backend.app.inbox.reconcile import PARSER_VERSION
 
-WINDOWS = (7, 30, 90)
+WINDOWS = (7, 30, 90, 365, None)
 # Senders that are recruiting systems, where an unrecognised email may still be about an application.
 PLATFORMS = ("workday", "greenhouse", "lever.co", "ashbyhq", "smartrecruiters", "icims", "jobvite", "taleo", "successfactors", "eightfold", "oraclecloud")
 APPLICATION_WORDS = ("applica", "interest", "candida", "interview", "position")
 
 
-def gmail_ids(token: str, days: int) -> tuple[list[str], bool]:
-    """Every message ID Gmail lists for the last ``days`` days, and whether the listing finished."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days + 1)).strftime("%Y/%m/%d")
-    ids: list[str] = []
+def gmail_ids(token: str, days: int | None) -> tuple[list[str], bool]:
+    """Follow every ID page. None means all retained mail, including Spam/Trash."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days + 1)).strftime("%Y/%m/%d") if days is not None else None
+    ids: dict[str, None] = {}
     page: str | None = None
-    for _ in range(60):
-        params = {"q": f"after:{cutoff}", "maxResults": 500}
+    seen: set[str] = set()
+    while True:
+        params = {"maxResults": 500}
+        if cutoff:
+            params["q"] = f"after:{cutoff}"
+        else:
+            params["includeSpamTrash"] = "true"
         if page:
             params["pageToken"] = page
         batch = gmail.get_json("/messages", token, params)
-        ids += [str(item["id"]) for item in batch.get("messages", []) if item.get("id")]
+        ids.update((str(item["id"]), None) for item in batch.get("messages", []) if item.get("id"))
         page = batch.get("nextPageToken")
         if not page:
-            return list(dict.fromkeys(ids)), True
-    return list(dict.fromkeys(ids)), False
+            return list(ids), True
+        if page in seen:
+            return list(ids), False
+        seen.add(page)
 
 
 def main() -> int:
+    print(f"observed_at: {datetime.now(timezone.utc).isoformat()}", flush=True)
     settings = get_settings()
     engine = create_engine(settings.database_url, connect_args={"options": "-c default_transaction_read_only=on"})
     with Session(engine) as db:
@@ -76,11 +84,18 @@ def main() -> int:
         refresh = bytes(conn[5])
         db.rollback()
     token = gmail.access_token(gmail.decrypt_token(refresh, settings.gmail_token_key), client_id=settings.gmail_client_id, client_secret=settings.gmail_client_secret)
+    complete_all = True
+    print("Windowed queries include one cutoff-buffer day and default Spam/Trash exclusions.")
+    print("All time has no date cutoff and includes retained Spam and Trash. Permanently deleted mail is unavailable.")
     for days in WINDOWS:
         ids, complete = gmail_ids(token, days)
         present = sum(1 for item in ids if item in stored_ids)
-        print(f"gmail, last {days} days: {len(ids)} listed (complete={complete}); in ACE: {present}; missing: {len(ids) - present}")
-    return 0
+        label = "all time, including Spam/Trash" if days is None else f"last {days} days"
+        print(f"gmail, {label}: {len(ids)} listed (complete={complete}); in ACE: {present}; missing: {len(ids) - present}")
+        if days is None:
+            print(f"stored evidence no longer in the retained mailbox listing: {len(stored_ids - set(ids))}")
+        complete_all = complete_all and complete
+    return 0 if complete_all else 1
 
 
 if __name__ == "__main__":

@@ -448,3 +448,24 @@ def test_aggregate_audit_does_not_call_owner_filed_outcome_wording_a_missing_out
     assert result["owner_filed_outcome_worded_emails"]==1
     assert result["recorded_messages"]==0
     assert result["ranges"]["all"]["interviews"]==0
+
+
+
+def test_default_analytics_covers_all_history_including_undated_external_records(db):
+    app(db,910,age=2000)
+    app(db,911,age=10)
+    db.add(ExternalApplicationRecord(company="Undated Fiction",title="Fictional",match_key="undated-default",application_status="applied"))
+    db.flush()
+    d=analytics_read(db,now=NOW,records=True)
+    assert d["days"]=="all" and d["submitted"]==d["record_total"]==3
+    assert d["undated"]==1
+    assert analytics_read(db,now=NOW,days="30")["submitted"]==1
+
+
+
+def test_explicit_date_range_still_excludes_undated_records_after_all_time_becomes_default(db):
+    app(db,912,age=10)
+    db.add(ExternalApplicationRecord(company="Undated Range Fiction",title="Fictional",match_key="undated-range",application_status="applied"))
+    db.flush()
+    d=analytics_read(db,now=NOW,start=(NOW-timedelta(days=30)).date(),end=NOW.date())
+    assert d["submitted"]==1 and d["undated"]==1 and d["days"]=="custom"

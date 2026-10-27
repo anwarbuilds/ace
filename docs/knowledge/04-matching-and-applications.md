@@ -591,3 +591,23 @@ The repeatable aggregate audit is `backend/scripts/inbox_analytics_audit.py`;
 mailbox coverage still comes from `inbox_coverage_report.py`. A green count check
 cannot certify that every email was fetched or understood. Full evidence:
 `../architecture/2026-10-26-inbox-analytics-scrutiny.md`.
+
+
+## 2026-10-27: owner requires all Inbox history
+
+All time is now the default for Inbox sync/backfill and Analytics. This supersedes
+the initial 365-day ceiling. Full listing includes retained Spam/Trash, uses a
+bounded resumable manifest and reconciles changes from the pre-list cursor before
+claiming a snapshot complete. Stale ignored mail has no age/keyword exclusion.
+Owner decisions and Undo stay protected; Spam/Trash outcomes require review and
+historical positives retain previews. No schema, scheduler or Gmail permission
+changes. Explicit date selections remain correctly bounded/labeled.
+
+Latest read-only evidence: 7,927 retained Gmail IDs, 524 stored, 7,403 missing;
+945 persisted application identities reconcile (897 job marks + 48 external),
+all-time rejections 89. Missing messages are not all missing outcomes, and
+permanently deleted mail cannot be recovered. Two possible duplicate pairs and
+two old date conflicts remain for review. 280 focused backend/40 DOM contracts
+pass; final hosted CI, owner release approval and actual full import verification
+remain gates. No production write or release occurred. Evidence and exact UTC
+snapshots: `../architecture/2026-10-27-full-history-inbox.md`.

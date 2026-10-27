@@ -1182,7 +1182,7 @@ def test_setup_from_a_public_address_needs_the_setup_code(factory, monkeypatch) 
 
 
 @pytest.mark.parametrize("payload,expected_status,expected_days", [
-    (None, 200, 30), ({}, 200, 30), ({"days": 90}, 200, 90), ({"days": 365}, 200, 365),
+    (None, 200, 0), ({}, 200, 0), ({"days": 0}, 200, 0), ({"days": 30}, 200, 30), ({"days": 90}, 200, 90), ({"days": 365}, 200, 365),
     ({"days": 7}, 422, None), ({"days": 366}, 422, None),
 ])
 def test_inbox_verification_window_body_and_legacy_no_body_are_owner_authenticated(client, factory, monkeypatch, payload, expected_status, expected_days):

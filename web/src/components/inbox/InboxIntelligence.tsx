@@ -69,12 +69,12 @@ export function InboxIntelligence() {
   const [sync, setSync] = useState<Sync>({running: false, note: "", error: "", progress: ""});
   const [now, setNow] = useState(0);
   const [query, setQuery] = useState(searched);
-  const [backfillDays, setBackfillDays] = useState(() => [30,90,365].includes(Number(params.get("days"))) ? Number(params.get("days")) : 30);
+  const [backfillDays, setBackfillDays] = useState(() => [0,30,90,365].includes(Number(params.get("days"))) ? Number(params.get("days")) : 0);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const loadSequence = useRef(0);
   const syncing = useRef(false);
-  const verificationDays = useRef(30);
+  const verificationDays = useRef(backfillDays);
   const restUntil = useRef(0);
   const latest = useRef<{connection: Connection | null; stale: number}>({connection: null, stale: 0});
   const inspector = useRef<HTMLDivElement>(null);
@@ -158,7 +158,7 @@ export function InboxIntelligence() {
     const due = () => {
       const last = parseDate(latest.current.connection?.last_synced_at)?.getTime() ?? 0;
       return document.visibilityState === "visible" && Date.now() > restUntil.current &&
-        (!latest.current.connection?.coverage || latest.current.stale > 0 || Date.now() - last > FRESH_MS);
+        (!latest.current.connection?.coverage || !latest.current.connection.coverage.complete || latest.current.connection.coverage.days !== verificationDays.current || latest.current.stale > 0 || Date.now() - last > FRESH_MS);
     };
     const check = () => { if (due()) void syncNow(false); };
     void Promise.resolve().then(check);
@@ -206,7 +206,7 @@ export function InboxIntelligence() {
     if (sync.running) { tone = "busy"; headline = sync.progress || "Checking Gmail for new email"; detail = checked; }
     else if (sync.error) { tone = "warn"; headline = "Gmail could not be checked"; detail = `${sync.error} ${checked}`; }
     else if (counts.needs_review) { tone = "wait"; headline = `${plural(counts.needs_review, "email")} ${counts.needs_review === 1 ? "needs" : "need"} you`; detail = `${coverage} ${checked}${newest}`; }
-    else if (connection.coverage?.complete && !connection.coverage.missing && !counts.stale) { tone = "ok"; headline = "All caught up"; detail = `${coverage} ${checked}${newest}`; }
+    else if (connection.coverage?.days === 0 && connection.coverage.complete && !connection.coverage.missing && !counts.stale) { tone = "ok"; headline = "All caught up"; detail = `${coverage} ${checked}${newest}`; }
     else { tone = "wait"; headline = "Email coverage needs checking"; detail = `${coverage} ${checked}`; }
     buttons = <>{counts.needs_review > 0 && view !== "pending" && <button className="btn" onClick={() => changeView("pending")}>Review {counts.needs_review === 1 ? "it" : "them"}</button>}<button className="btn primary" disabled={sync.running || busy} onClick={() => void syncNow(true)}>{sync.running ? "Syncing" : "Sync now"}</button></>;
   }
@@ -259,9 +259,9 @@ export function InboxIntelligence() {
         <div ref={inspector} className="inbox-inspector-wrap"><InboxReviewPanel key={active?.id ?? "empty"} message={active} applications={applications} events={events} busy={busy} action={action} account={connection?.email} now={now}/></div>
       </div>
       {connection?.connected && <details className="inbox-import">
-        <summary>Verify further back</summary>
-        <p>Check every email in a wider window and bring in anything missing. Progress is saved automatically. Clear rejections are recorded; anything unclear waits for you.</p>
-        <div className="inbox-backfill"><label>Verify email from the last<select value={backfillDays} disabled={busy || sync.running} onChange={event => { const days = Number(event.target.value); setBackfillDays(days); const next = new URLSearchParams(params); next.set("days", String(days)); router.replace(`/app/applications/inbox?${next}`, {scroll: false}); }}><option value={30}>30 days</option><option value={90}>90 days</option><option value={365}>365 days</option></select></label><button className="btn" disabled={busy || sync.running || !ready} onClick={() => void syncNow(true, backfillDays)}>{sync.running ? "Verifying" : "Verify selected window"}</button></div>
+        <summary>Verify mailbox history</summary>
+        <p>Verify your full retained mailbox, including archived mail, Spam and Trash. Progress is saved automatically. Spam and Trash outcomes wait for your review.</p>
+        <div className="inbox-backfill"><label>Email coverage<select value={backfillDays} disabled={busy || sync.running} onChange={event => { const days = Number(event.target.value); setBackfillDays(days); const next = new URLSearchParams(params); next.set("days", String(days)); router.replace(`/app/applications/inbox?${next}`, {scroll: false}); }}><option value={0}>All time, including Spam and Trash</option><option value={30}>Last 30 days</option><option value={90}>90 days</option><option value={365}>365 days</option></select></label><button className="btn" disabled={busy || sync.running || !ready} onClick={() => void syncNow(true, backfillDays)}>{sync.running ? "Verifying" : "Verify selected history"}</button></div>
       </details>}
     </>}
     {tab === "register" && <section className="panel"><h2>Application register</h2><p>Each key identifies one submitted record. Rejected applications stay in the total.</p><div className="inbox-table"><div className="inbox-row head"><span>Application</span><span>Role</span><span>Submitted</span><span>Status</span></div>{applications.map(a => <div className="inbox-row" key={a.key}><span><strong><CompanyIdentity name={a.company} /></strong><small>{a.key}</small></span><span>{clean(a.title)}<small>{a.requisition_id ?? "No requisition recorded"}</small></span><span>{stamp(a.applied_at)}</span><span>{clean(a.status)}</span></div>)}</div>{!applications.length && <p>No applications are recorded.</p>}</section>}

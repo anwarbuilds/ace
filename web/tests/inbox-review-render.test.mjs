@@ -246,3 +246,20 @@ test("busy, paused, incomplete listing, cancellation and stalled recheck never f
   let calls=0;
   await assert.rejects(verifyInbox({days:90,stale:2,post:async()=>calls++?{checked:0,remaining:2,counts:{}}:{state:"ready",counts:{},remaining:0,partial:false,coverage:coverage()},progress:()=>{}}),/could not finish rechecking/);
 });
+
+
+test("full history continues through zero-pending listing/history phases and discloses its scope",async()=>{
+  const full={...coverage(),days:0,scope:"all",includes_spam_trash:true};
+  const replies=[
+    {state:"ready",counts:{},remaining:0,more:true,partial:true,coverage:{...full,complete:false,phase:"listing"}},
+    {state:"ready",counts:{},remaining:0,more:true,partial:true,coverage:{...full,complete:false,phase:"history"}},
+    {state:"ready",counts:{},remaining:0,more:false,partial:false,coverage:{...full,complete:true,phase:"complete"}},
+  ];
+  const calls=[];
+  await verifyInbox({days:0,stale:0,post:async(path,body)=>{calls.push(body);return replies.shift();},progress:()=>{}});
+  assert.deepEqual(calls,[{days:0},{days:0},{days:0}]);
+  assert.match(coverageText(full),/all retained history, including Spam and Trash/);
+  assert.match(coverageText(full),/Permanently deleted mail is unavailable/);
+  assert.doesNotMatch(coverageText({...full,complete:false}),/All are in ACE/);
+  await assert.rejects(verifyInbox({days:0,stale:0,post:async()=>({state:"ready",counts:{},remaining:0,partial:false,coverage:coverage()}),progress:()=>{}}),/different history selection/);
+});

@@ -20,7 +20,7 @@ async function inboxFixture(page: import("@playwright/test").Page, options: {las
     const request=route.request(); const url=new URL(request.url()); const path=url.pathname;
     let body:unknown;
     const pending=rows.filter(row=>!reviewed.includes(row.id));
-    if(path==="/api/inbox/connection") body={available:true,connected:true,state:"ready",email:"fixture@example.test",last_synced_at:syncs.length?new Date().toISOString():lastSync,following_changes:true,last_error:null,auto_outcomes_enabled:false,automation_available:false,auto_rejections:true,coverage:{days:windows.at(-1)??30,gmail:407,in_ace:407,missing:0,complete:true,checked_at:new Date().toISOString()}};
+    if(path==="/api/inbox/connection") body={available:true,connected:true,state:"ready",email:"fixture@example.test",last_synced_at:syncs.length?new Date().toISOString():lastSync,following_changes:true,last_error:null,auto_outcomes_enabled:false,automation_available:false,auto_rejections:true,coverage:{days:windows.at(-1)??0,scope:"all",includes_spam_trash:true,gmail:407,in_ace:407,missing:0,complete:true,checked_at:new Date().toISOString()}};
     else if(path==="/api/inbox/applications"&&request.method()==="POST"){const data=request.postDataJSON();added.push(data);reviewed.push(data.message_id);body={event_id:2,application_key:"external:9",status:data.status,created:true};}
     else if(path==="/api/inbox/applications")body={items:applications};
     else if(path==="/api/inbox/events")body={items:[]};
@@ -44,7 +44,7 @@ async function inboxFixture(page: import("@playwright/test").Page, options: {las
       const data=request.postDataJSON();filed.push(data);reviewed.push(Number(path.split("/")[4]));
       body={id:Number(path.split("/")[4]),decision:data.action};
     }else if(path==="/api/inbox/sync"){
-      syncs.push(Date.now());windows.push(request.postDataJSON().days);body={state:"ready",counts:{automatic:1,ignored:2},remaining:0,partial:false,coverage:{days:windows.at(-1),gmail:407,in_ace:407,missing:0,complete:true,checked_at:new Date().toISOString()},as_of:new Date().toISOString()};
+      syncs.push(Date.now());windows.push(request.postDataJSON().days);body={state:"ready",counts:{automatic:1,ignored:2},remaining:0,partial:false,coverage:{days:windows.at(-1),scope:"all",includes_spam_trash:true,gmail:407,in_ace:407,missing:0,complete:true,checked_at:new Date().toISOString()},as_of:new Date().toISOString()};
     }else if(path==="/api/inbox/recheck"){
       body={checked:0,remaining:0,counts:{}};
     }else if(path==="/api/inbox/backfill"){
@@ -148,18 +148,19 @@ test("a link from Analytics opens that exact email",async({page})=>{
   await expect(page.getByText("ACE recorded this email.")).toBeVisible();
 });
 
-test("verify further back uses the same complete-window sync",async({page})=>{
+test("full history is the default and narrower checks never replace it silently",async({page})=>{
   const fixture=await inboxFixture(page);
   await page.goto("/app/applications/inbox");
-  await page.getByText("Verify further back").click();
-  await page.getByRole("button",{name:"Verify selected window",exact:true}).click();
+  await page.getByText("Verify mailbox history").click();
+  await page.getByRole("button",{name:"Verify selected history",exact:true}).click();
   await expect.poll(()=>fixture.windows.length).toBe(1);
-  await expect(page.getByRole("button",{name:"Verify selected window",exact:true})).toBeEnabled();
-  await page.getByLabel("Verify email from the last").selectOption("90");
+  await expect(page.getByRole("button",{name:"Verify selected history",exact:true})).toBeEnabled();
+  await page.getByLabel("Email coverage").selectOption("90");
   await expect(page).toHaveURL(/days=90/);
-  await page.getByRole("button",{name:"Verify selected window",exact:true}).click();
+  await page.getByRole("button",{name:"Verify selected history",exact:true}).click();
   await expect.poll(()=>fixture.windows.length).toBe(2);
-  expect(fixture.windows).toEqual([30,90]);
+  expect(fixture.windows).toEqual([0,90]);
+  await expect(page.locator(".inbox-status")).not.toContainText("All caught up");
   expect(fixture.previews).toEqual([]);
   await expect(page.getByRole("button",{name:/Waiting for you/})).toContainText("107");
 });

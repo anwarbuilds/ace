@@ -100,6 +100,18 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
+**2026-10-27 current Inbox scope: ALL history.** The owner explicitly rejected
+concentrating on 30 days. Full retained-mailbox sync/backfill and Analytics now
+default to all time, including archived mail and retained Spam/Trash. The latest
+read-only report lists 7,927 Gmail IDs, 524 stored, 7,403 missing. This is mail,
+not a count of missing job outcomes. All-time Analytics reconciles 945 persisted
+identities, but duplicates/date conflicts and wording recognition remain review
+limits. The implementation has 280 focused backend/40 DOM tests passing; check
+final hosted CI and obtain owner approval before API/web release. No production
+import, recheck, data repair, migration or release ran. Earlier window-based
+checkpoints below are historical. See `architecture/2026-10-27-full-history-inbox.md`
+and the root owner scope update before continuing.
+
 **2026-10-26 evening, OPEN WORK, start here for Inbox:** production preserves
 `6163f59` Inbox behavior (add-from-email, parser 5) in the newer logo release. The owner asked for a RELIABLE Inbox after a rejection
 email was never recorded. Measured read-only: Gmail lists 946 emails for 30 days and

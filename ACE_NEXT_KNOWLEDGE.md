@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-26, reliable Inbox and Analytics scrutiny complete locally; release awaiting approval
+Last updated: 2026-10-27, full-history Inbox and Analytics implemented locally; release awaiting approval
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -409,6 +409,52 @@ and rollback inventory intact. Production stays on API `9d05673`, web `1fee671`
 until an approved activation verifies otherwise. Then the owner opens Inbox to
 verify/re-read automatically, and reruns the read-only report to compare actual
 Gmail/ACE counts. Browser visuals still require suitable hardware.
+
+### Owner scope update, 2026-10-27: ALL history, not a recent window
+
+The owner explicitly said "I need all, everything." This supersedes the initial
+30/90/365-day plan above. Sync/backfill and Analytics now default to All time.
+Full scanning includes archived mail and retained Spam/Trash, with no date or
+page-count ceiling. It lists up to five pages/reads sixty details per request,
+saves each message independently, resumes the manifest while running and proves
+coverage afresh after restart without re-downloading committed messages. The
+pre-list history baseline is reconciled completely for arrivals/deletions before
+completion; narrow-window checks cannot advance this manifest's own cursor.
+No new schema, permission, scheduler or background service. Old ignored mail is
+rechecked without the former 120-day/keyword restriction; owner filings and Undo
+remain protected. Spam/Trash outcomes always require review; historical positive
+automation and exact-match/status/timing guards remain protected.
+
+**Latest full read-only coverage**, `2026-10-27T13:19:13Z`: Gmail all retained
+history lists **7,927** IDs, **524** stored, **7,403** missing; all pages complete,
+including Spam/Trash. Permanently deleted messages are unavailable. Mailbox
+messages are not equivalent to job outcomes. Parser 5 is still live: 250 ignored,
+197 receipts, 51 automatic, 26 manual; 319 under older parsers. No cursor or
+completed preview. The report also prints windowed comparisons but ALL history
+is the acceptance scope. These are dated observations while the owner uses ACE.
+
+The all-time aggregate audit at `13:10:24Z` reconciles **945** persisted identities
+to 897 applied marks plus 48 external records. All-time statuses: 853 Applied,
+89 Rejected, 3 Screening. The 90-day selection misses one older application and
+rejection. All projection invariants pass; two possible duplicate pairs, two old
+date conflicts and six owner-filed acknowledgements remain untouched. A separate
+read-only candidate replay at `13:16:58Z` keeps IDs/statuses/totals and the
+67-application timing sample/median, restores two dated rejections (67 to 69),
+corrects seven links and six latest-company dates. SHA-256 of replayed Analytics:
+`80db50ddcf0cb87a129680d8729ac1390fdb9947680ee79940f1cde6abd17074`.
+Live parser-5 helpers were imported in that process; it is not a full mail or
+parser-6 replay. Nothing was written to production or deployed.
+
+**Local validation:** 280 focused fictional backend tests, 40 React workflow/DOM
+contracts, TypeScript, focused lint, dash and whitespace checks pass. Full-history
+tests include 2010 mail, >60 pages, quota/restart, cursor/deletion races and
+unconfirmed missing details. Hosted CI's obsolete extension Queue fixture was
+isolated; 46/47 then passed, and the remaining old unscoped employer-answer
+assertion now matches the approved protected/scoped-Memory behavior. No extension
+runtime or skipped assertions. Verify the final hosted CI before release; no
+local Chrome. Owner approval remains required for the final branch commit,
+then API/web-only build/activation and actual full import/recheck verification.
+Full evidence: `docs/architecture/2026-10-27-full-history-inbox.md`.
 
 ### Subsequent Inbox-to-Analytics scrutiny, 2026-10-26 evening
 
