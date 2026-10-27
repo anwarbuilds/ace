@@ -114,7 +114,7 @@ it does not simulate the new all-ignored recheck selector or classify unread mai
 
 ## Validation and release gate
 
-280 focused fictional backend tests and 40 React render/workflow/DOM tests pass.
+282 focused fictional backend tests and 40 React render/workflow/DOM tests pass.
 TypeScript, focused ESLint, whitespace and the forbidden-dash guard pass. Tests
 cover 2010 mail, 1,107 messages, more than 60 pages, per-request work limits,
 restart/quota recovery, independent cursors, arrivals/deletions during scanning,

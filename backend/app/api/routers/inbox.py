@@ -742,13 +742,14 @@ def backfill(body: SyncRequest, request: Request, session: Session = Depends(get
     conn = _connection(session, current_owner(request))
     if not conn or not conn.encrypted_refresh_token or conn.state == "disconnected":
         raise HTTPException(409, "Connect Gmail before previewing a backfill.")
+    if body.days == 0:
+        # Share sync's bounded work, lock and Gmail error response handling.
+        return sync(request, session, VerifyRequest())
     lock = _sync_lock(conn.id)
     if not lock.acquire(blocking=False):
         return {"state": "busy", "counts": {}}
     try:
         session.refresh(conn)
-        if body.days == 0:
-            return _sync_full_locked(session, conn)
         return _backfill_locked(body, request, session, conn)
     finally:
         lock.release()

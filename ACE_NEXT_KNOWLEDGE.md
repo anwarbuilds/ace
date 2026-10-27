@@ -445,7 +445,7 @@ corrects seven links and six latest-company dates. SHA-256 of replayed Analytics
 Live parser-5 helpers were imported in that process; it is not a full mail or
 parser-6 replay. Nothing was written to production or deployed.
 
-**Local validation:** 280 focused fictional backend tests, 40 React workflow/DOM
+**Local validation:** 282 focused fictional backend tests, 40 React workflow/DOM
 contracts, TypeScript, focused lint, dash and whitespace checks pass. Full-history
 tests include 2010 mail, >60 pages, quota/restart, cursor/deletion races and
 unconfirmed missing details. Hosted CI's obsolete extension Queue fixture was

@@ -265,3 +265,20 @@ def test_expired_page_token_restarts_manifest_without_marking_oauth_invalid(monk
     with pytest.raises(gmail.GmailTemporaryError,match="verify all history"):
         inbox.sync_once(session,conn,0)
     assert conn.state=="ready" and inbox._public(conn)["coverage"] is None
+
+
+
+@pytest.mark.parametrize("temporary",[True,False])
+def test_full_backfill_preserves_gmail_failure_status_and_saved_connection(monkeypatch,database,temporary):
+    from fastapi import HTTPException
+    session,conn=database
+    def fail(*args,**kwargs):
+        error=gmail.GmailRateLimited if temporary else gmail.GmailError
+        raise error("Fictional Gmail failure "*30)
+    monkeypatch.setattr(gmail,"get_json",fail)
+    with pytest.raises(HTTPException) as error:
+        inbox.backfill(inbox.SyncRequest(),owner_request(),session)
+    assert error.value.status_code==(429 if temporary else 502)
+    assert conn.state==("ready" if temporary else "error")
+    assert len(conn.last_error)==120 and conn.history_id is None
+    assert session.scalar(select(func.count()).select_from(GmailMessageRecord))==0

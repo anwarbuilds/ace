@@ -607,7 +607,7 @@ Latest read-only evidence: 7,927 retained Gmail IDs, 524 stored, 7,403 missing;
 945 persisted application identities reconcile (897 job marks + 48 external),
 all-time rejections 89. Missing messages are not all missing outcomes, and
 permanently deleted mail cannot be recovered. Two possible duplicate pairs and
-two old date conflicts remain for review. 280 focused backend/40 DOM contracts
+two old date conflicts remain for review. 282 focused backend/40 DOM contracts
 pass; final hosted CI, owner release approval and actual full import verification
 remain gates. No production write or release occurred. Evidence and exact UTC
 snapshots: `../architecture/2026-10-27-full-history-inbox.md`.
