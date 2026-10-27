@@ -177,3 +177,21 @@ def test_thread_hint_never_overrides_conflicts_or_positive_and_date_guards(datab
     if variant=="different_sender":data["payload"]["headers"][1]["value"]="other@careers.silverpine.example"
     assert inbox._ingest(session,conn,data,inbox._identities(session),preview=True)=="review"
     assert statuses(session)==["applied"]*3 and not job_events(session)
+
+
+@pytest.mark.parametrize("exact",[True,False])
+def test_only_new_scoped_history_additions_can_automate_opted_in_exact_positives(database,gmail_reads,monkeypatch,exact):
+    session,conn=database
+    live=False
+    def get(path,token,params=None):
+        if path=="/profile":return {"historyId":"before-initial"}
+        if path=="/messages":return {"messages":[{"id":"live-positive"}] if live else []}
+        if path=="/history":return {"historyId":"after-live" if live else "after-initial", "history":
+            [{"messagesAdded":[{"message":{"id":"live-positive"}}]}] if live else []}
+        return message("live-positive",("Req ID: SE-101. " if exact else "")+"We invite you to interview.")
+    monkeypatch.setattr(gmail,"get_json",get)
+    assert finish(session,conn)["coverage"]["complete"]
+    live=True
+    assert finish(session,conn)["coverage"]["complete"]
+    assert row_for(session,"live-positive").decision==("automatic" if exact else "review")
+    assert statuses(session)==["applied","interviewing" if exact else "applied","applied"]
