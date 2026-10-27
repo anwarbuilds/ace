@@ -724,3 +724,16 @@ SQL/Python/Analytics agree; 952 application identities and four date selections
 reconcile. This is not full-body replay, perfect search recall or live parser 8.
 No production write, import, exhaustive operator restart, migration or release.
 See the root candidate continuation for complete behavior, limits and approval.
+
+
+Final candidate `2554569` adds a receipt/thread timestamp compatibility guard
+using the shared marking grace; older receipts cannot select newer applications.
+138 focused parser/persistence/triage cases pass, hosted backend passes 1,586,
+and web checks/build pass. Focused browser validation is 30 passes on identical
+UI source. Last broader browser run: 165 pass / 21 fail; 19 failures overlap the
+old list, two additional unchanged-code shortcut-focus assertions fail, and the
+old scrolling failure passes. No fresh baseline reproduction proves those two
+differences pre-existing. Python extension browser runner: 1 pass / 46 skipped.
+The final e2e rerun is still running; overall CI is not claimed green. Draft
+PR #8 is ready for a specific API/web release decision, with production parser 7
+untouched and the stopped exhaustive operator absent (saved exit status 143).

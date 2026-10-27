@@ -1,5 +1,15 @@
 # ace handoff
 
+**Final job-mail candidate: `2554569`, draft PR #8.** Hosted backend 1,586 tests
+and web checks/build pass; 44 DOM contracts and 30 focused Inbox/Analytics browser
+tests pass on identical UI source. Last completed broader browser run is
+165 passed / 21 failed, with two additional unchanged-code shortcut-focus
+failures versus the historical list; do not call overall CI green. A rerun on
+2554569 is still running. Final historical-thread guard has 138 focused parser/
+persistence tests passing. Production stays parser 7, no release approval yet.
+The root final-candidate section has the exact test, read-only measurement and
+release boundaries.
+
 **2026-10-27 11:31 Pacific:** The job-mail draft from `053ae41` is completed
 locally with 319 focused backend and 44 DOM tests passing. Production remains
 parser 7; release approval is still required. Read the new root "Job-mail triage

@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-27 11:31 Pacific, scoped job-mail implementation validated locally; API/web release still requires approval
+Last updated: 2026-10-27, final job-mail candidate 2554569 validated; API/web release still requires approval
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -87,6 +87,69 @@ thread matching and Undo. Existing full-history/quota/pause/pagination fixtures
 now assert the new scope and retain their safety boundaries. No local Chrome
 was launched. Hosted build/browser validation and exact candidate SHA are
 recorded in the follow-up below before approval is requested.
+
+### Final candidate and hosted validation follow-up
+
+Runtime candidate is **`2554569ea9a462ee7d7006384aa91abcac4b6472`**, draft
+[PR #8](https://github.com/anwarbuilds/ace/pull/8), review branch
+`inbox-job-mail-20261027`. The local worktree remains on
+`inbox-clarity-20261026`. Canonical `wine-rose-platform` and production have not
+been advanced. The GitHub connector could read CI but could not create the PR
+(403 integration permission); the configured owner-authenticated GitHub CLI
+created the draft instead. No merge or activation occurred.
+
+The final thread guard additionally rejects anchors received before the recorded
+application minus the shared 24-hour marking grace. Its 138-test fictional
+parser/persistence/triage run passed. The UI and extension sources are identical
+to browser-tested `fc5b006`; the only subsequent runtime change narrows this
+backend thread hint. Hosted run **40564903560** on exact final runtime `2554569`
+passes **1,586 backend tests**, 258 matcher cases and the web checks/build. Its
+full e2e rerun is still running at this save. No overall CI-green claim is made.
+
+The final wording safeguard recognizes direct "will not proceed with your
+application" declines and preserves specific outcome/decision-worded uncertainty
+even without an acknowledgement opening. Conditional instructions, withdrawals
+and routine progress remain non-outcomes. A final 137-test fictional parser/
+persistence/triage run passed after that correction; two additional cases pin
+opted-in exact live positives versus historical/ambiguous evidence. Recheck
+progress reports the count read so far instead of an obsolete pre-scan total.
+
+Hosted run **40561850063** on preceding runtime `fc5b006` passes all **1,585
+hermetic backend tests**, 258 extension matcher cases, the web checks including
+44 Inbox/Analytics DOM contracts, TypeScript, full lint and production build.
+The focused Inbox/Analytics browser step passes **30 tests** on that identical
+web source. The older Python extension browser step reports **1 passed / 46
+skipped** on that runner, not 47 exercised passes. The subsequent broader
+Playwright step reports **165 passed / 21 failed**. Compared by exact failure
+titles to parser-7 job 122268531501, 19 failures are shared, the old scrolling
+failure passed, and two additional `/` focus assertions failed in
+`navigation.spec.ts:68` and `search-and-navigation.spec.ts:22`. Those tests and
+their runtime files are unchanged by this branch. Their shape is consistent
+with the previously documented shortcut-before-hydration race, but no fresh
+baseline reproduction was run, so do not call the two differences proven
+pre-existing or describe this run as the same 20 failures. No assertion was
+skipped or weakened to hide these results. Full e2e job: 122393874866. No local Chrome or signed-in production
+browser mutation test was used. The earlier run 40560908265 tested 94ea47d and
+was superseded by the final safeguard.
+
+A final-candidate repeatable read-only PostgreSQL audit at **18:38:49Z**
+(11:38 Pacific) again confirms **1,320 raw pending, 227 projected pending**,
+SQL/Python agreement, equal Inbox/Analytics queues and 952 application identities
+with every four-range projection invariant passing. It made **zero Gmail calls
+and zero body reads**. Private disposable aggregate result:
+`/tmp/inbox-final-production-audit.json`. The separate 18:29Z all-date scoped-ID
+listing remains the source of the 1,869 / 1,860 / 9 coverage measurement above;
+do not describe that as a fresh or semantically complete final body audit.
+A separate read-only VM check confirms **zero exhaustive-operator processes**
+and the preserved saved exit status **143**. The stopped operator was never
+restarted.
+
+Approval scope: exact reviewed API/web candidate only, using a fresh private
+backup, prepared/running source match and `--no-deps`. No migration, scheduler,
+PostgreSQL/Caddy recreation, extension publication, cleanup or exhaustive
+operator is incidental to that approval. After approved activation, existing
+page-open checks perform only scoped job-mail catch-up/reclassification; the
+measured queue is a preview, and actual outcomes may change during that work.
 
 ## START HERE: job-related Inbox triage continuation, 2026-10-27 11:06 Pacific (18:06Z)
 
