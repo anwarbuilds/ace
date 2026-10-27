@@ -1,10 +1,11 @@
 # Full-history Inbox and Analytics, 2026-10-27
 
-Status: owner-approved commit `5ab6b1a` is live in API/web as of
-2026-10-27T14:24Z. Full-history import and parser rechecks are in progress;
-mailbox completeness is not yet certified. Earlier read-only measurements below
-are the pre-release baseline. This scope supersedes the initial 30/90/365-day
-reliable-Inbox candidate.
+Status: owner-approved API/web `5ab6b1a` is live. Full-history import and
+old-parser rechecks completed at 2026-10-27T16:01Z. Independent read-only reports
+verify all 7,928 retained messages are stored, zero missing, and Analytics
+arithmetic passes. Outcome recognition remains subject to review. The additional
+parser-7 candidate `3294139` awaits separate API-release approval. Earlier
+measurements below are historical baselines, superseded by the completion section.
 
 ## Owner requirement and verdict
 
@@ -13,7 +14,9 @@ on 30 days. Analytics and Inbox now default to All time. Date selections remain
 available for comparison; a completed recent window never earns an all-history
 "All caught up" claim.
 
-The live system uses real stored records, but its mailbox coverage is incomplete.
+Before release, the live system used real stored records but its mailbox coverage was incomplete.
+The completed retained-mailbox scan and independent report now verify zero missing
+messages in the checked snapshot.
 An exhaustive Gmail-ID inventory is different from proving that every outcome
 was recognized, linked to the right application and confirmed. Do not call this
 perfect tracking or certify full historical response rates.
@@ -263,3 +266,81 @@ review without status/events, exact-size versus one-character overflow, and
 parser-6 receipt/ignored rechecks. The authentication test now verifies that a
 complete authenticated email can authorize a rejection while a snippet cannot.
 No private email text was copied into tests.
+
+
+## Final independent production verification, 2026-10-27T16:01Z
+
+The one-time process finished successfully. Its final reconciled history snapshot
+at 16:01:16.587532Z contains 7,928 retained Gmail IDs, all 7,928 in SQL, zero
+missing. All 441 eligible older-parser messages were rechecked; no quota error
+lost committed progress. The process stopped after final catch-up, with no new
+scheduler or persistent background worker.
+
+The independent `backend/scripts/inbox_coverage_report.py` ran at
+16:01:48.093281Z with enforced read-only database connections and Gmail ID lists:
+
+| Scope | Gmail listed | In ACE | Missing |
+| --- | ---: | ---: | ---: |
+| 7-day query | 284 | 284 | 0 |
+| 30-day query | 959 | 959 | 0 |
+| 90-day query | 1,635 | 1,635 | 0 |
+| 365-day query | 2,279 | 2,279 | 0 |
+| All retained history, including Spam/Trash | **7,928** | **7,928** | **0** |
+
+All listings completed. No stored ID was absent from the retained-mailbox listing.
+The stored evidence dates span 2018-11-03 to 2026-10-27. These date bounds are
+stored email evidence dates, not a claim about permanently deleted mail. The
+connection is ready, has a history cursor and completed preview, and has no error.
+Final decisions: 5,636 ignored, 1,318 review, 781 receipts, 167 automatic, 26 manual.
+The 83 remaining old-parser rows are protected recorded/owner decisions; the
+eligible-stale query is zero. All 147 protected rows captured before rechecks
+match their private snapshot exactly.
+
+The independent Analytics audit at 16:01:47.394755Z uses a repeatable enforced
+read-only PostgreSQL snapshot. All 14/30/90/all-time uniqueness, lifetime totals,
+status/cohort partitions and assessment/rejection evidence checks pass. All time:
+
+- 945 identities = 897 applied marks + 48 external records, unchanged.
+- Statuses: 751 Applied, 192 Rejected, 2 Screening. Rejected increased from 89 to
+  192 through real imports/rechecks, not fabricated application records.
+- 177 rejections have dates. Recorded status fallback is distinguished from
+  verified email evidence; do not describe all 192 as independently email-dated.
+- 193 recorded messages reconcile as 178 chosen email links, 14 deduplicated
+  emails about the same application/kind and one undated status-only fallback.
+- Inbox and Analytics pending totals both equal 1,318; zero orphan active outcome
+  events. Pending messages are not silently counted as confirmed responses.
+- Two potential cross-history duplicate groups, two older date conflicts and the
+  one status-only message remain review limits. Six outcome-worded emails the
+  owner filed as acknowledgements remain protected. No merge, destructive repair
+  or override was performed.
+- The ignored-mail indicators are 11 recruiting-system senders and 114 messages
+  with application words, with overlap possible. Those are risk indicators rather
+  than proof of missed outcomes. Complete ID coverage does not certify semantic
+  recognition of every phrase, attachment or untracked historical application.
+
+The API/web still run the approved release. Public HTTPS health at 16:01:44Z
+returns exact frontend `5ab6b1a90decfcddf8b3866fe99a9627f0f2e574`, protected routes
+return 401 when signed out, and representative public assets return readable
+images. Running Analytics SHA-256 remains
+`80db50ddcf0cb87a129680d8729ac1390fdb9947680ee79940f1cde6abd17074`;
+Inbox SHA-256 is `e8847188e44163b375de8367971a437e9fc1f4b512259bd417c7099148bf99c2`,
+matching approved commit `5ab6b1a`. API/web/scheduler/Postgres are healthy. Schema
+`0050`, all nine protected inventory aggregates and all recorded service/image
+IDs remain unchanged. This is public HTTP and read-only live-data verification,
+not signed-in production browser or restore-drill evidence.
+
+Coverage caches are process-local. The owner's next authenticated Inbox check
+independently fills the API worker's snapshot by listing and reconciling history;
+already imported IDs are not re-downloaded. Ongoing checks run while Inbox is
+open. This release does not add an always-running Gmail worker. No additional
+production action is authorized by a documentation commit.
+
+The separately proposed parser-7 API fix remains unreleased, awaiting the
+approval question sent during the import. Its exact runtime candidate is
+`3294139f27eaae8985b58ce6294aae0242bd747a` in PR #7. All 293 focused backend tests,
+hosted backend/web jobs, 47 extension browser cases and 30 focused Inbox/Analytics
+cases pass. The full app browser result is 196 passed / 20 failed. Exact failure
+sets match the approved parser-6 baseline, with zero new failing cases; the
+overall e2e job remains failed. Exact candidate proof: run 40526589769, job
+122268531501, focused step 13 completed 15:03:21Z. Do not deploy this candidate
+under the earlier approval for `5ab6b1a`.

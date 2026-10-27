@@ -628,3 +628,31 @@ rejection-evidence applications from 89 to 106 without creating applications
 by the root Current release checkpoint and
 `../architecture/2026-10-27-full-history-inbox.md`. Broader browser CI still fails;
 focused Inbox/Analytics 30, extension 47, backend and web checks pass.
+
+
+## 2026-10-27T16:01Z: full-history live import and verification complete
+
+The owner-approved parser-6 API/web release `5ab6b1a` completed the full retained
+Gmail import and 441 eligible old-parser rechecks. The independent coverage
+report verifies 7,928 Gmail IDs, all 7,928 stored, zero missing, including
+Spam/Trash; all comparison windows also have zero missing. The history cursor
+and completed preview are set, with no eligible stale mail remaining. Eighty-three
+older-parser records remain intentionally protected. All 147 snapshotted
+recorded/owner decisions were preserved.
+
+The enforced read-only projection audit passes for 14/30/90/all-time selections:
+945 identities = 897 applied marks + 48 external records; current statuses are
+751 Applied, 192 Rejected, 2 Screening. Rejected rose from 89 to 192; dated
+rejections are 177. Inbox and Analytics both expose 1,318 pending messages.
+Counts reconcile, but outcome wording/matching and pending owner decisions are
+not certified perfect. Two potential duplicate groups, two old timestamp
+conflicts, one undated-only recorded message and six protected owner-filed
+acknowledgements remain explicit. Nothing was merged or repaired destructively.
+
+Separate candidate `3294139` (draft PR #7) fixes an additional fictional
+long-email truncation failure and requires review for partial outcomes. Its
+293 focused backend, hosted backend/web, 47 extension browser and 30 focused
+Inbox/Analytics browser checks pass. The broader app suite has the exact same
+20 failures as the approved baseline, with zero new failing cases (196 app
+browser passes total). It has not been deployed; another API activation awaits
+owner approval. See the root Final live verification and the full-history report.

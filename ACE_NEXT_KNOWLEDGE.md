@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-27, approved full-history Inbox API/web release live; full import in progress
+Last updated: 2026-10-27, live full-history import/rechecks independently verified; parser-7 fix awaiting approval
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -13,7 +13,54 @@ not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
-## Current release, 2026-10-27T14:24Z
+## Final live verification, 2026-10-27T16:01Z
+
+The approved API/web release `5ab6b1a90decfcddf8b3866fe99a9627f0f2e574`
+is live at https://ace.opik.net. The monitored full-history import and all 441
+eligible old-parser rechecks completed. A final catch-up snapshot at
+`2026-10-27T16:01:16.587532Z` verified **7,928 retained Gmail messages, 7,928 in
+ACE, zero missing**, including archived mail and Spam/Trash. The independent
+`backend/scripts/inbox_coverage_report.py` at 16:01:48Z confirms that result and
+zero missing in every comparison window. Stored evidence spans 2018-11-03 through
+2026-10-27. The ready connection now has a history cursor, completed preview and
+no error. Permanently deleted messages are unavailable.
+
+The enforced read-only live Analytics audit at 16:01:47Z passes all uniqueness,
+lifetime total, status, cohort and evidence checks for 14/30/90/all-time selections.
+There are still **945 application identities**, 897 applied marks plus 48 external
+records: **751 Applied, 192 Rejected, 2 Screening**. The Rejected count increased
+from 89 to 192 after importing/rechecking real email evidence; 177 rejections now
+have dates. Multiple emails about the same application do not create applications.
+**1,318 messages await review**, equal in Inbox and Analytics. All 147 snapshotted
+protected decisions are unchanged; eligible stale mail is zero. The 83 retained
+older-parser rows are protected recorded/owner decisions, not unprocessed mail.
+
+This verifies mailbox observation and projection arithmetic, not perfect outcome
+recognition. Two potential cross-history duplicate groups, two older date conflicts
+and one recorded message represented only by undated status fallback remain for
+review; no repair/merge or owner override was performed. Six owner-filed
+outcome-worded acknowledgements remain protected. Ignored-message indicators
+remain 11 recruiting-system senders and 114 application-word messages (overlap
+possible); these are inspection signals, not proven missed outcomes. The separate
+parser-7 truncation-safety candidate `3294139f27eaae8985b58ce6294aae0242bd747a`
+is in draft PR #7 and still awaits approval for another API activation. The
+approval question was sent during the import; no answer has arrived.
+
+Final public HTTPS health at 16:01:44Z matches the approved frontend SHA; Inbox
+and Analytics require authentication. Running API source hashes match the approved
+code. API/web are healthy; schema `0050`, all nine protected inventory aggregates
+and scheduler/PostgreSQL/Caddy container and image identities remain unchanged.
+The fresh private backup and rollback tags are recorded below. No migration,
+scheduler operation, extension publication, signed-in production browser test,
+destructive data repair or deployment of parser 7 occurred.
+
+Coverage caches are process-local by design. The one-time operator process has
+finished and imported rows are durable. Opening Inbox performs its authenticated
+listing/history check and populates the API worker's own coverage snapshot without
+re-downloading already stored messages. Ongoing checks run while Inbox is open;
+this release added no always-running Gmail worker or scheduler.
+
+## Approved activation, 2026-10-27T14:24Z
 
 The owner explicitly approved taking reviewed commit
 `5ab6b1a90decfcddf8b3866fe99a9627f0f2e574` live and requested accurate live
@@ -33,13 +80,10 @@ are retained as `oracle-api:before-reliable-inbox-20261027` and
 `oracle-web:before-reliable-inbox-20261027`. Activation used API/web only with
 `--no-deps`; no migration, scheduler change or extension publication ran.
 
-The approved live-data work is running the deployed service's all-history sync,
-then its parser rechecks, against the existing ready owner connection. These are
-real imports and audited decisions under existing automation rules; historical
+The authorized one-time full-history import and parser rechecks have now
+completed; the final verification above supersedes the in-progress checkpoint.
+Existing automation rules and owner decisions/Undo were preserved. Historical
 positive outcomes and uncertain/Spam/Trash matches remain for owner review.
-Manual owner decisions and Undo remain protected. Full mailbox coverage is NOT
-yet certified while this import runs. Follow the release evidence in
-`docs/architecture/2026-10-27-full-history-inbox.md` before making any claim.
 Earlier unreleased/read-only notes below describe their historical checkpoints.
 
 ### Additional local candidate: parser 7, separate approval required
@@ -52,7 +96,7 @@ and requires review for partial-body/snippet outcomes. Parser 7 makes eligible
 parser-6 mail recheckable while preserving owner filings, recorded outcomes and
 Undo. All 293 focused backend tests pass. It is not included in the approved
 `5ab6b1a` running release; obtain separate owner approval before API activation.
-The monitored all-history import continues on the deployed parser 6. See the
+The monitored all-history import completed on the deployed parser 6. See the
 additional-candidate section of the full-history report for scope and limits.
 
 ## Continuation checkpoint for new chats, 2026-10-26
@@ -70,7 +114,7 @@ update does not deploy code, reload the browser or perform a fresh live check.
 | Item | Last recorded state |
 | --- | --- |
 | Repository / canonical branch | `/home/ubuntu/Documents/ace-next`, `wine-rose-platform`, remote `anwarbuilds/ace`; fetch and inspect before editing because parallel chats advance it |
-| Last directly verified live API/web | API/web `5ab6b1a90decfcddf8b3866fe99a9627f0f2e574`, verified healthy with exact public frontend SHA at 2026-10-27T14:24Z; parser 6. Full-history import is running; see Current release above |
+| Last directly verified live API/web | API/web `5ab6b1a90decfcddf8b3866fe99a9627f0f2e574`, verified healthy with exact public frontend SHA at 2026-10-27T16:01Z; parser 6. Full-history import/rechecks completed and independently verified; see Final live verification above |
 | Newer source not yet live | Parser 7 truncation-safety candidate, 293 focused backend tests pass; separate API-only release approval required |
 | Important runtime distinction | Both API and web now run the approved reliable-Inbox release. API Analytics source hash matches the reviewed projection. No extension runtime publication, migration or scheduler change |
 | Unpacked extension source / browser state | Manifest **1.30.0** for contextual reuse; supporting Memory API is deployed. Browser activation needs Reload/refreshed employer tabs. No Web Store publication |
@@ -375,6 +419,14 @@ Detailed supporting release record:
 `docs/architecture/2026-10-26-context-answer-reuse.md`.
 
 ## OPEN WORK for the next chat: a reliable Inbox (measured 2026-10-26 evening)
+
+**Current status, 2026-10-27T16:01Z:** P1 to P5 and all-history scope are live on
+`5ab6b1a`; 7,928/7,928 retained messages are imported, 441 old-parser rechecks
+finished, and live Analytics arithmetic checks pass. Review the remaining
+uncertain evidence and obtain approval for the separate parser-7 candidate in
+PR #7. The measurements and pending-release statements below are historical;
+start with Final live verification above.
+
 
 **Owner request.** After Inbox and Rejected applications shipped, the owner
 showed an employer update email from a week earlier that was not recorded, and a
