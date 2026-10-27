@@ -30,7 +30,7 @@ This checkpoint is a documentation update, not a new deployment or live check.
 | Last directly verified live API/web | Web `1fee67127877838f09b9a42f5edef6bc4669f34e`, API logo source `d0342d4` (branding hashes match current source), healthy and verified through public/signed-in HTTPS on 2026-10-27T00:19Z (2026-10-26 17:19 Pacific). Contains the existing `6163f59` Inbox behavior |
 | Newer source not yet live | Reliable-Inbox P1 to P6 below remain a plan, not implemented or deployed. The read-only diagnosis script was added to the branch concurrently; it was not included in the API logo image. Documentation updates need no rebuild |
 | Important runtime distinction | The logo API image contains `d0342d4`; the later web-only packaging correction runs `1fee671`. The existing Inbox parser 5 is preserved; the proposed reliable-Inbox parser 6 is not built. Recheck health and source/image hashes before another release |
-| Installed source of unpacked extension | Manifest **1.29.1**; browser activation still requires extension Reload and refreshed employer tabs; no Web Store publication |
+| Installed source of unpacked extension | Manifest **1.30.0** prepared for contextual reuse; new scoped saving also requires the pending Memory API release. Browser activation needs Reload/refreshed employer tabs. No Web Store publication |
 | Database | Last verified schema `0050`; no migration was run for the logo releases |
 | Last logo verification totals | 936 applications, 889 posting applications plus 47 external history, stable during 2026-10-26 17:19 Pacific verification; a timestamped observation, never a UI constant |
 
@@ -149,6 +149,27 @@ actual availability of official sponsorship/resume/channel evidence, and owner
 verification of the reloaded extension on real forms. Do not silently turn
 these pending items into completed work or start them merely because they are
 listed here.
+
+## 2026-10-26: Contextual answer adoption, prepared 1.30.0
+
+Status: tested source, **not deployed**. The owner wants completed answers adopted
+and reused for meaning-equivalent questions. The current server's blanket
+protected/company rejection prevents saving most pictured screenings. The new
+reviewed `scoped` policy permits exact factual binary screenings with status-set,
+country, employer/subsidiary and timeframe boundaries, while unknown protected
+questions, consent/attestations and motivation remain excluded. This specific
+owner-authorized policy supersedes the older blanket per-application-only rule
+for those reviewed facts; it does not authorize loose keyword matching.
+
+Extension source is **1.30.0**; activation needs the separately approved Memory
+API-only release, extension Reload and refreshed employer tabs. No schema or
+migration is required. New saved receipts, late-connection adoption, bounded
+paraphrases, identical-duplicate handling, correction invalidation and failure
+retry are tested. 82 DOM contracts, 173 fictional backend Memory/auth/logo tests,
+258 matcher cases, Memory safety, syntax, TypeScript, lint and dash checks pass.
+No Chrome or real employer verification. No production change or actual answer
+write was made for this correction. Source and release boundaries:
+`docs/architecture/2026-10-26-context-answer-reuse.md`.
 
 ## OPEN WORK for the next chat: a reliable Inbox (measured 2026-10-26 evening)
 

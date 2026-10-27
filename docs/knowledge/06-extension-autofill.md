@@ -1192,3 +1192,20 @@ Workday session. Reload the unpacked extension at `chrome://extensions`, then
 refresh employer tabs to activate 1.29.1. This correction changes extension
 source only; no backend, database, Gmail, scheduler or website runtime change
 is needed. Full details: `docs/architecture/2026-10-26-extension-explicit-fill.md`.
+
+
+## Contextual adoption and scoped screening facts (2026-10-26, prepared 1.30.0)
+
+The owner requested reuse of committed answers when differently worded questions
+ask for the same fact. The API had been deliberately refusing all protected and
+company questions, so completion never became future Memory. A reviewed binary
+fact policy now preserves country/status-set/employer/subsidiary/timeframe
+boundaries; unsupported sensitive decisions and employer motivation stay out.
+Routine paraphrases and identical duplicate records resolve conservatively.
+A late Memory connection retries still-current trusted edits without filling;
+success gets a saved receipt and failure keeps completion with Retry. Corrections
+invalidate immediate form copies. Old records and private profile/history remain.
+82 fictional DOM and 173 backend contracts pass. No Chrome or production claim.
+The new Memory API operation awaits owner approval, then extension Reload and
+refreshed employer tabs. No schema, scheduler, website or application mutation.
+Full boundaries: `../architecture/2026-10-26-context-answer-reuse.md`.

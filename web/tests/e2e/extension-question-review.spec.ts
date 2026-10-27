@@ -254,9 +254,9 @@ test('native choices save without approval while synthetic page events cannot te
   expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
   await panel.getByRole('button', { name: 'Settings & activity', exact: true }).click();
   await panel.getByRole("button", { name: "Memory", exact: true }).click();
-  await expect(panel.getByRole('switch', { name: 'Auto-save routine answers: On' })).toBeChecked();
-  await panel.getByRole('switch', { name: 'Auto-save routine answers: On' }).click();
-  await expect(panel.getByRole('switch', { name: 'Auto-save routine answers: Off' })).not.toBeChecked();
+  await expect(panel.getByRole('switch', { name: 'Auto-save reusable answers: On' })).toBeChecked();
+  await panel.getByRole('switch', { name: 'Auto-save reusable answers: On' }).click();
+  await expect(panel.getByRole('switch', { name: 'Auto-save reusable answers: Off' })).not.toBeChecked();
 });
 
 

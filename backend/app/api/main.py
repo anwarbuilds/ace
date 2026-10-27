@@ -211,6 +211,7 @@ class ExtensionMemoryInput(BaseModel):
     answer_type: str = Field(pattern="^(text|choice|yesno)$")
     source_host: str = Field(default="", max_length=255)
     expected_revision: int | None = None
+    reuse_policy: str = Field(default="reusable", pattern="^(reusable|scoped)$")
 
 
 class HistoryItem(BaseModel):
@@ -1597,19 +1598,29 @@ def create_app() -> FastAPI:
     @app.put("/api/extension/memory")
     def put_extension_memory(payload: ExtensionMemoryInput, session: Session = Depends(get_session)) -> dict:
         # The extension token may write only this narrow, idempotent resource.
-        # An explicit approval in the extension is still required before this call.
+        # Explicit ACE answers and committed owner edits under the auto-save
+        # preference may save only routine answers or the reviewed scoped facts.
         question = payload.question.strip()
-        if re.search(
+        from backend.app.answers.screening import valid_screening_memory
+        scoped = payload.reuse_policy == "scoped"
+        if not scoped and payload.concept.strip().startswith("fact:v1:"):
+            raise HTTPException(status_code=422, detail="Screening facts require their scoped reuse policy.")
+        if scoped and not valid_screening_memory(question, payload.concept.strip(), payload.answer,
+                                                  payload.answer_type, payload.source_host):
+            raise HTTPException(status_code=422, detail="This screening answer has no compatible reusable scope.")
+        if not scoped and (re.search(
             r"\b(visa|sponsor(?:ship|ed|ing)?|work authori[sz]\w*|authorization to work|authorisation to work|authorized to work|authorised to work|right to work|citizen\w*|immigration|opt|cpt|practical training|f-?1|h-?1b|disability|veteran|ethnic\w*|race|gender|age|at least 18|18 years old|birth|criminal|felon|government|military|board of directors|export control|signature|certif\w*|attest\w*|privacy|consent\w*|acknowledg\w*|declar\w*|agree\w*|authoriz\w*|authoris\w*|salary|compensation|non.?compet\w*|non.?solicit\w*|signed|subject to any agreement|conflict of interest)\b",
             question, re.I,
-        ) or re.search(r"\b(why do you want to|why are you interested in|what makes you want to join|ever worked|previously worked|formerly worked|been employed|currently employed|previously employed|employee of|employed at|employed with|worked at|worked for|contracted with|contractor at|contractor for|current contractor|current or former|applied to|applied for|recruiters?|agencies|referred by|our footprint|our 6.state footprint|this hybrid schedule|onsite at the office at least|family members|relatives|personal relationship|work at [a-z]|work for [a-z])\b", question, re.I):
+        ) or re.search(r"\b(why do you want to|why are you interested in|what makes you want to join|ever worked|previously worked|formerly worked|been employed|currently employed|previously employed|employee of|employed at|employed with|worked at|worked for|temporary work for|interviewed for|search agency|employment agency|recruitment agency|contracted with|contractor at|contractor for|current contractor|current or former|applied to|applied for|recruiters?|agencies|referred by|our footprint|our 6.state footprint|this hybrid schedule|onsite at the office at least|family members|relatives|personal relationship|work at [a-z]|work for [a-z])\b", question, re.I)):
             raise HTTPException(status_code=422, detail="This question requires review on each application.")
         concept = payload.concept.strip()
         row = session.scalar(select(ExtensionAnswerMemoryRecord).where(ExtensionAnswerMemoryRecord.concept == concept))
         if row:
+            if row.reuse_policy != payload.reuse_policy:
+                raise HTTPException(status_code=409, detail="This memory has a different reuse policy. Keep its original record.")
             if payload.expected_revision is not None and payload.expected_revision != row.revision:
                 raise HTTPException(status_code=409, detail="This answer changed. Refresh memory before editing.")
-            if row.answer != payload.answer.strip() or row.question != question:
+            if row.answer != payload.answer.strip() or row.question != question or row.answer_type != payload.answer_type:
                 row.answer = payload.answer.strip()
                 row.question = question
                 row.answer_type = payload.answer_type
@@ -1619,7 +1630,7 @@ def create_app() -> FastAPI:
         else:
             row = ExtensionAnswerMemoryRecord(
                 concept=concept, question=question, answer=payload.answer.strip(),
-                answer_type=payload.answer_type, source_host=payload.source_host,
+                answer_type=payload.answer_type, source_host=payload.source_host, reuse_policy=payload.reuse_policy,
             )
             session.add(row)
         session.commit()

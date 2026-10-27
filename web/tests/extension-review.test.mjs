@@ -65,9 +65,9 @@ function fixture(body, config = {}) {
   class DOMEvent extends window.Event { constructor(type, init = {}) { super(type, init); Object.assign(this, init); } }
   const context = vm.createContext({ window, document, Node: window.Node, HTMLElement, HTMLInputElement,
     HTMLSelectElement, HTMLTextAreaElement: window.HTMLTextAreaElement, Event: window.Event, MouseEvent: DOMEvent, KeyboardEvent: DOMEvent,
-    location: { href: 'https://fixture.example/apply', hostname: 'fixture.example', pathname: '/apply' },
+    location: { href: config.url || 'https://fixture.example/apply', hostname: new URL(config.url || 'https://fixture.example/apply').hostname, pathname: new URL(config.url || 'https://fixture.example/apply').pathname },
     CSS: { escape: value => String(value).replace(/[^a-zA-Z0-9_-]/g, character => `\\${character}`) },
-    innerWidth: config.width || 1440, innerHeight: config.height || 900, console, crypto: webcrypto, TextEncoder,
+    innerWidth: config.width || 1440, innerHeight: config.height || 900, console, crypto: webcrypto, TextEncoder, URL,
     setTimeout(fn, ms) { const id = setTimeout(() => { timers.delete(id); fn(); }, ms); timers.add(id); return id; },
     clearTimeout(id) { clearTimeout(id); timers.delete(id); },
     MutationObserver: config.observeDOM ? window.MutationObserver : class { observe() {} disconnect() {} },
@@ -83,7 +83,7 @@ function fixture(body, config = {}) {
           saved.push(message.item);
           if (config.failSave) { reply({ ok: false, error: "unavailable" }); return; }
           const existing = memoryStore.find(entry => entry.concept === message.item.concept);
-          const entry = { ...message.item, id: existing?.id || memoryStore.length + 1, revision: (existing?.revision || 0) + 1, reuse_policy: 'reusable' };
+          const entry = { ...message.item, id: existing?.id || memoryStore.length + 1, revision: (existing?.revision || 0) + 1, reuse_policy: message.item.reuse_policy || 'reusable' };
           if (existing) Object.assign(existing, entry); else memoryStore.push(entry);
           reply({ ok: true, item: entry });
         }
@@ -1063,4 +1063,101 @@ test('an unchecked current-job choice is a completed No rather than an inferred 
   field.checked = false; ownerEvent(f, field, 'change'); await until(() => f.panel().textContent.includes('Answered on form') && f.panel().querySelector('.focus-question p')?.textContent === 'No', 'the explicit No leaves the queue');
   assert.equal(f.panel().querySelector('.focus-question p').textContent, 'No');
   assert.equal(f.saved.length, 0); assert.equal(field.checked, false);
+});
+
+const binaryScreen = (id, question) => `<label for="${id}">${question}</label><select id="${id}"><option value="">Select One</option><option value="yes-${id}">Yes</option><option value="no-${id}">No</option></select>`;
+
+test('committed scoped screening facts save and fill a later equivalent question only after Fill', async t => {
+  const memoryStore = [];
+  const question = 'Are you a U.S. citizen, lawful permanent resident, refugee, or person granted asylum?';
+  const first = fixture(binaryScreen('status', question), { memoryStore, autoLearn: true }); t.after(first.dispose);
+  const field = first.document.getElementById('status'); field.value = 'no-status'; ownerEvent(first, field, 'change');
+  await until(() => first.saved.length === 1, 'a committed applicant screening fact must save privately');
+  assert.equal(first.saved[0].reuse_policy, 'scoped'); assert.equal(first.saved[0].answer, 'No');
+  assert.equal(first.saved[0].concept, 'fact:v1:us-status:citizen,resident,refugee,asylee');
+  const later = fixture(binaryScreen('same', question.replace('U.S.', 'United States')) + binaryScreen('narrow', 'Are you a US citizen or permanent resident?'), { memoryStore }); t.after(later.dispose);
+  assert.equal(later.document.getElementById('same').value, '');
+  later.click('fill'); assert.equal(later.document.getElementById('same').value, 'no-same');
+  assert.equal(later.document.getElementById('narrow').value, '', 'four statuses never become two statuses');
+  assert.equal(first.submissions() + later.submissions(), 0);
+});
+
+test('employer facts survive paraphrases while other employers and different subsidiary scopes stay blank', async t => {
+  const memoryStore = [];
+  const question = 'Have you ever performed temporary work for Silverpine Labs or any of its subsidiaries?';
+  const first = fixture(binaryScreen('temporary', question), { memoryStore, autoLearn: true }); t.after(first.dispose);
+  const field = first.document.getElementById('temporary'); field.value = 'no-temporary'; ownerEvent(first, field, 'change');
+  await until(() => memoryStore.length === 1, 'the named-employer answer must be saved');
+  const later = fixture(binaryScreen('same', question.replace('performed', 'done')) + binaryScreen('other', question.replace('Silverpine Labs', 'Another Fictional Lab')) + binaryScreen('direct', question.replace(' or any of its subsidiaries', '')), { memoryStore }); t.after(later.dispose);
+  later.click('fill'); assert.equal(later.document.getElementById('same').value, 'no-same');
+  assert.equal(later.document.getElementById('other').value, ''); assert.equal(later.document.getElementById('direct').value, '');
+  assert.equal(first.submissions() + later.submissions(), 0);
+});
+
+test('implicit employer and rolling-window answers cannot cross shared ATS tenants', async t => {
+  const memoryStore = [];
+  const question = 'Has a search agency submitted your application for consideration within the last 12 months?';
+  const first = fixture(binaryScreen('agency', question), { memoryStore, autoLearn: true, url: 'https://job-boards.greenhouse.io/silverpine/jobs/1' }); t.after(first.dispose);
+  const field = first.document.getElementById('agency'); field.value = 'no-agency'; ownerEvent(first, field, 'change');
+  await until(() => memoryStore.length === 1, 'the implicit company scope must save');
+  for (const [tenant, expected] of [['silverpine', 'no-agency'], ['other-lab', '']]) {
+    const later = fixture(binaryScreen('agency', question), { memoryStore, url: `https://job-boards.greenhouse.io/${tenant}/jobs/2` }); t.after(later.dispose);
+    later.click('fill'); assert.equal(later.document.getElementById('agency').value, expected); assert.equal(later.submissions(), 0); later.dispose();
+  }
+});
+
+test('answers committed before a delayed Memory connection are adopted after connection without passive filling', async t => {
+  let replyMemory;
+  const f = fixture(routine + '<label for="later">Tell us about your experience building integration tests</label><textarea id="later"></textarea>', {
+    autoLearn: true, onSend(message, reply) { if (message.type === 'memory') { replyMemory = reply; return true; } return false; },
+  }); t.after(f.dispose);
+  const field = f.document.getElementById('detail'); field.value = 'Fictional verified testing experience'; ownerEvent(f, field, 'input'); ownerEvent(f, field, 'focusout');
+  await sleep(430); assert.equal(f.saved.length, 0);
+  replyMemory({ ok: true, items: [] });
+  await until(() => f.saved.length === 1, 'a late Memory response must not discard the committed owner answer');
+  assert.equal(f.document.getElementById('later').value, '', 'connecting to Memory never starts filling');
+  f.click('fill'); assert.equal(f.document.getElementById('later').value, field.value); assert.equal(f.submissions(), 0);
+});
+
+test('a scoped save failure leaves completion intact and exposes retry without overwriting manual edits', async t => {
+  const question = 'Have you ever worked for Silverpine Labs?';
+  const f = fixture(binaryScreen('history', question), { autoLearn: true, failSave: true }); t.after(f.dispose);
+  const field = f.document.getElementById('history'); field.value = 'no-history'; ownerEvent(f, field, 'change');
+  await until(() => f.saved.length === 1 && f.panel().textContent.includes('not saved to Memory'), 'the failed save must be visible');
+  assert.equal(field.value, 'no-history'); f.click('tab:review');
+  assert.ok(!f.panel().querySelector('[data-ace^="approve:"]'), 'the already committed employer choice needs no second approval');
+  assert.equal(f.submissions(), 0);
+});
+
+test('a committed Workday-style screening dropdown saves a binary fact for a later native dropdown', async t => {
+  const question = 'Are you a US citizen or permanent resident?';
+  const memoryStore = [];
+  const f = fixture(`<label id="status-label">${question}</label><div id="status" role="combobox" aria-labelledby="status-label" aria-controls="status-options" tabindex="0">Select One</div>`, { memoryStore, autoLearn: true }); t.after(f.dispose);
+  const field = f.document.getElementById('status');
+  field.addEventListener('click', event => { if (event.target !== field) return; setTimeout(() => {
+    if (f.document.getElementById('status-options')) return;
+    const menu = f.document.createElement('div'); menu.id = 'status-options'; menu.setAttribute('role', 'listbox');
+    const option = f.document.createElement('div'); option.setAttribute('role', 'option'); option.textContent = 'No';
+    option.addEventListener('click', () => setTimeout(() => { field.textContent = 'No'; menu.remove(); }, 0)); menu.append(option); field.append(menu);
+  }, 0); });
+  ownerEvent(f, field, 'click'); await until(() => f.document.querySelector('#status-options [role=option]'), 'the real employer menu must open');
+  ownerEvent(f, f.document.querySelector('#status-options [role=option]'), 'click');
+  await until(() => f.saved.length === 1, 'a committed associated custom choice must save');
+  assert.equal(f.saved[0].answer, 'No'); assert.equal(f.saved[0].reuse_policy, 'scoped');
+  await until(() => f.panel().textContent.includes('1 saved for next time'), 'only a confirmed private save earns the receipt');
+  const later = fixture(binaryScreen('later', question), { memoryStore }); t.after(later.dispose);
+  later.click('fill'); assert.equal(later.document.getElementById('later').value, 'no-later');
+  assert.equal(f.submissions() + later.submissions(), 0);
+});
+
+test('correcting a saved screening fact invalidates its earlier on-form reuse copy', async t => {
+  const question = 'Have you ever worked for Silverpine Labs?';
+  const f = fixture(binaryScreen('old', question), { autoLearn: true }); t.after(f.dispose);
+  const field = f.document.getElementById('old'); field.value = 'no-old'; ownerEvent(f, field, 'change');
+  await until(() => f.saved.length === 1, 'the first fact must save');
+  f.click('workspace'); f.click('tab:memory'); f.click('edit:1');
+  f.panel().querySelector('#studio-memory-edit').value = 'Yes'; f.click('save-edit:1');
+  f.document.querySelector('form').insertAdjacentHTML('beforeend', binaryScreen('new', question));
+  f.click('fill'); assert.equal(f.document.getElementById('new').value, 'yes-new');
+  assert.equal(field.value, 'no-old', 'the applicant\'s original employer answer remains intact'); assert.equal(f.submissions(), 0);
 });

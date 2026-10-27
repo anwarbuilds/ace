@@ -1,0 +1,74 @@
+[
+  {
+    "question": "Are you a U.S. citizen, lawful permanent resident, refugee, or person granted asylum?",
+    "key": "fact:v1:us-status:citizen,resident,refugee,asylee"
+  },
+  {
+    "question": "Are you a US citizen or permanent resident?",
+    "key": "fact:v1:us-status:citizen,resident"
+  },
+  {
+    "question": "Do you now or in the future require sponsorship for employment visa status?",
+    "key": "fact:v1:visa-sponsorship:now-or-future:tenant:fixture.example"
+  },
+  {
+    "question": "Will you now or in the future need visa sponsorship to work in the United States?",
+    "key": "fact:v1:visa-sponsorship:now-or-future:country:us"
+  },
+  {
+    "question": "Have you, or do you currently work for, or with Silverpine Labs?",
+    "key": "fact:v1:work-relationship:past-or-present:employer:silverpine labs"
+  },
+  {
+    "question": "Have you ever performed temporary work for Silverpine Labs or any of its subsidiaries?",
+    "key": "fact:v1:temporary-work:ever:employer:silverpine labs including subsidiaries"
+  },
+  {
+    "question": "Have you ever interviewed for a position at Silverpine Labs or any of its subsidiaries?",
+    "key": "fact:v1:interview:ever:employer:silverpine labs including subsidiaries"
+  },
+  {
+    "question": "Has a search agency submitted your application for consideration within the last 12 months?",
+    "key": "fact:v1:agency-submission:last-12-months:tenant:fixture.example"
+  },
+  {
+    "question": "Have you ever worked for Silverpine Labs?",
+    "key": "fact:v1:worked:ever:employer:silverpine labs"
+  },
+  {
+    "question": "Are you a US citizen or permanent resident and employed by a government?",
+    "key": null
+  },
+  {
+    "question": "Do you now or in the future require sponsorship to work in Canada?",
+    "key": null
+  },
+  {
+    "question": "I certify that I am a US citizen or permanent resident",
+    "key": null
+  },
+  {
+    "question": "Do you have any post-employment obligations that prohibit your employment?",
+    "key": null
+  },
+  {
+    "question": "Why do you want to join Silverpine Labs?",
+    "key": null
+  },
+  {
+    "question": "Have you ever worked for this company?",
+    "key": "fact:v1:worked:ever:tenant:fixture.example:this company"
+  },
+  {
+    "question": "Have you previously worked for Silverpine Labs?",
+    "key": "fact:v1:worked:previous:employer:silverpine labs"
+  },
+  {
+    "question": "Do you have any post-employment obligations to any current or former employer (i.e., non-compete, non-solicitation, etc.) that may prohibit or restrict your employment for a position?",
+    "key": "fact:v1:employment-obligations:current-or-former:any:restrict-employment"
+  },
+  {
+    "question": "Are you subject to any post-employment obligations to a current or former employer that may prevent or restrict your employment, including non-compete or non-solicitation agreements?",
+    "key": "fact:v1:employment-obligations:current-or-former:any:restrict-employment"
+  }
+]
