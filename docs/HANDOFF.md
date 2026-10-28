@@ -1,5 +1,29 @@
 # ace handoff
 
+**LIVE, 2026-10-28 11:27 Pacific, Inbox backlog correction and approved cleanup:**
+API `6ee2eb223ce91f5464c9e825bf3d66f8d11aadd3`, parser 10/schema 0050, PR #12 merged.
+Frontend remains exact 95f4a97; API alone was recreated. The separately approved
+explicit historical cohort is processed with classification/filing changes only,
+no application status changes, no new application outcomes, and protected owner
+choices/Undo intact. A reference disagreement gate stopped release; the owner
+then explicitly approved this exact source and guarded scope. Do not rewrite
+those protected choices or treat this as permission for blanket historical replay.
+Global historical rechecks stay disabled; old parser-7 operator stays stopped.
+All 344 backend files match live tested source. All protected cutover rows/events,
+all non-mail cleanup tables, original evidence metadata and outside-cohort mail
+are preserved; email audit events are appended. Inbox and Analytics reconcile.
+Backup, retained API rollback image and private journals are under
+`/opt/ace/private-backups/inbox-cleanup-20261028T1814Z/`. Roll back email fields
+with the guarded operator while parser-10 code is available, before code rollback;
+never restore the database automatically or overwrite later owner work.
+Full backend 1,735, focused backend 481, browser 36/extension 47, web checks/build
+pass. Broader browsers 166/20, all failed names seen in canonical history, with
+one extra search-debounce name versus the last deployed run; CI is not green.
+Read the new first root knowledge section and ignored private
+`artifacts/inbox-intelligence-review-20261028/backlog-cleanup/RELEASE.md` for exact
+measurements, reference conflicts and the remaining recognition/identity gaps.
+Root application code and concurrent worktrees remain preserved.
+
 **LIVE, 2026-10-28 09:43 Pacific, owner-approved Inbox Intelligence:**
 API/frontend **95f4a97318d10935c9183341627ff78f08f0a85b**, parser 9/schema 0050,
 healthy at https://ace.opik.net; PR #11 merged. Historical rechecks are disabled

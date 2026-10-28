@@ -6,6 +6,24 @@
 
 > **Status of the sheet entries:** The spreadsheet upload and import UI was removed on 2026-10-10 at the user's request, because applications are made through ace. Export CSV remains, and the API endpoints `/api/applications/preview` and `/api/applications/import` still exist, unused. The entries about the sheet are history; their lessons (never guess identity, wait for the write, show the user what was skipped) still apply.
 
+## Inbox parser 10 LIVE and explicit historical filing cleanup (2026-10-28)
+
+Exact API source `6ee2eb2` is live, schema 0050, PR #12 merged; frontend remains
+95f4a97. The completed, separately enumerated cleanup changes email fields only,
+preserves application statuses, owner decisions and Undo, and appends email audit
+history. The global historical gate stays false. Read the first root knowledge
+section before any further operation; this is not blanket reclassification approval.
+
+The reader now distinguishes substantive optional practice, account access,
+digests and non-hiring notices from old broad assessment/outcome readings.
+Additional true assessment, offer/completion and mislabelled-HTML patterns are
+covered. Workday notification branding is separated from employer identity;
+a unique longer exact title wins only when all shorter-title mentions are nested.
+Duplicate titles, subsidiaries, auth, chronology and positive policies stay guarded.
+Owner-reference links can conflict with actual requisition/title evidence; those
+choices remain protected and were explicitly retained by the owner after review.
+Do not turn reference agreement into an unsupported general accuracy claim.
+
 ## Inbox parser 9 LIVE; historical rechecks separately disabled (2026-10-28)
 
 Owner-approved API/frontend source `95f4a97` is live; PR #11 merged. Parser 9

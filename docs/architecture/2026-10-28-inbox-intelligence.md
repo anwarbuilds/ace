@@ -1,6 +1,6 @@
 # Inbox intelligence upgrade
 
-Parser 10 follow-up under validation: distinguish optional coding lessons,
+Parser 10 follow-up LIVE at API source `6ee2eb2`, schema 0050, PR #12 merged: distinguish optional coding lessons,
 account access, public digests and financial/administrative notices from hiring
 outcomes using substantive content. Recognize branded assessment invitations,
 due-in reminders, actual offers and named test completion; extract visible text
@@ -19,9 +19,9 @@ event. It never invokes status automation. Pause, grant changes, protected owner
 work, changed evidence or reconciliation stop the operation. A guarded row
 rollback appends corrections and refuses later owner work. The global historical
 recheck switch remains disabled. Private plans, backups and measurements must
-stay outside public source. No parser-10 release or cleanup is claimed here yet.
+stay outside public source. The explicitly enumerated cleanup is complete; original statuses/owner choices and evidence identities remain unchanged. Exact measurements and reference conflicts are private in `artifacts/inbox-intelligence-review-20261028/backlog-cleanup/RELEASE.md`.
 
-Status: **LIVE**, owner-approved API/frontend source `95f4a97318d10935c9183341627ff78f08f0a85b` at
+Earlier parser-9 release (superseded for API; frontend retained): owner-approved source `95f4a97318d10935c9183341627ff78f08f0a85b` at
 https://ace.opik.net, parser 9/schema 0050; PR #11 merged. The earlier reviewed
 classifier source was 7657b62. The released source adds a server default-off
 historical-recheck control required by the deployment approval; classification

@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-28 Pacific, owner-approved Inbox Intelligence LIVE at 95f4a97; API/web only, parser 9/schema 0050; historical rechecks disabled; exact release, preservation and rollback below
+Last updated: 2026-10-28 Pacific, owner-approved Inbox parser 10 LIVE at 6ee2eb2; explicit cohort cleanup complete; application statuses preserved; global historical rechecks disabled
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -13,6 +13,114 @@ not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
+
+## Inbox backlog correction LIVE with explicitly scoped cleanup, 2026-10-28 Pacific
+
+The owner approved exact API source **`6ee2eb223ce91f5464c9e825bf3d66f8d11aadd3`**
+and a separately enumerated historical classification/filing cleanup at
+**https://ace.opik.net**. [PR #12](https://github.com/anwarbuilds/ace/pull/12)
+is merged by canonical fast-forward. Parser is **10**, schema **0050**.
+Only API was built/recreated. Frontend remains the previously verified
+**`95f4a97318d10935c9183341627ff78f08f0a85b`**; the existing UI consumes the new
+API classifications. Later documentation commits do not rebuild these images.
+This record supersedes earlier parser-9/no-cleanup statements below.
+
+### Why ordinary mail remained pending and what changed
+
+A prior-outcome guard retained old machine assessment/offer/interview readings
+when the current reader returned unknown. Actual pending evidence showed that
+many were optional coding lessons, account notices, digests or other routine
+messages. Parser 10 identifies substantive purpose using paired body/context
+signals, without relying on the platform sender or silently treating every
+unknown as routine. It recognizes additional genuine branded/year-bearing test
+invitations, due-in reminders, actual offers and named test completion. HTML
+mislabelled as plain text is read as visible text. Workday notification branding
+does not create a competing employer, and nested generic titles do not defeat a
+unique longer exact title. Duplicate roles, subsidiary/agency identity, sender
+authentication, chronology, positive opt-ins, final stages and Undo stay guarded.
+
+### Explicit approval and historical scope
+
+The user separately approved an explicit pending cohort with **no application
+status changes**. A subsequent read-only comparison found protected owner links
+that disagree with requisition/title evidence. Release was stopped under the
+owner's critical-test condition; the owner explicitly approved the exact tested
+commit and cleanup while preserving those decisions and all application
+statuses. Those references were neither silently rewritten nor treated as
+independent proof of the new match. Private counts, target comparisons and the
+known remaining recognition gap are in the owner-local report.
+
+The completed operation uses `backend.scripts.inbox_historical_cleanup`, which
+defaults to enforced read-only preview. A complete private plan seals source,
+cohort, grant and proposed fields. At most 50 known records are read per call,
+with pacing and Spam/Trash metadata preflight. Apply rereads each body,
+reconciles current application records, checks the plan and locked row
+fingerprint, and updates **only email classification/filing fields**. It appends
+one email audit event per record and never invokes status automation. Owner
+choices, recorded outcomes, deferred mail and Undo remain protected. An initial
+small batch passed full preservation checks before the remaining batches ran.
+All original Gmail identities/metadata and out-of-scope evidence are retained;
+original mutable fields remain in the private rollback plan and fresh backup.
+
+**`GMAIL_HISTORICAL_RECHECKS_ENABLED` remains false.** This approval is for the
+completed enumerated cohort, not blanket historical replay or new bulk cohorts.
+Never restart the stopped exhaustive parser-7 operator. Its saved exit 143 and
+owner-stop marker hashes remain unchanged. New-message ingestion continues.
+
+### Runtime, backup and rollback
+
+All **344 tracked backend files** match the tested source in the prepared image
+and live API. API container is
+`5c46fe86e386975dea3313f8f8b6dacf3801d53d1602972c1de378ba16075d91`, image
+`sha256:3f8041f83ece93499013fd1d886d9dc2d5a4bd7c73dc7b0af0a248d8814b21dd`.
+The exact activation snapshots at **18:27:39.435884Z / 18:27:47.708442Z** prove
+every pre-existing row in twelve protected tables and the full event ledger
+unchanged, with no additions/removals across that cutover. Web, scheduler,
+PostgreSQL and Caddy retain their exact former container/image identities;
+environment bytes, schema, auth, Pulls, Studio, Memory/extension and discovery
+source remain unchanged. No migration or extension publication occurred.
+
+Fresh private backup/rollback directory:
+**`/opt/ace/private-backups/inbox-cleanup-20261028T1814Z/`**, mode 700.
+The database archive is mode 600 and passes full gzip integrity, catalog and
+complete expansion; no restore or restore drill occurred. The retained API
+image is **`oracle-api:before-inbox-cleanup-20261028T1814Z`**, exact prior image
+`sha256:dc54a2e88b8d849bc39cb4f5f17ae95eb286196d9c035c8341d6b129afe7440c`.
+`rollback.sh` validates it and recreates API only with no build/dependencies.
+Never restore the database automatically. Email rollback is separate: use the
+reviewed private manifest/plan/seal with the tested operator rollback while the
+parser-10 code is available, then revert API code if desired. It appends
+corrections, preserves old events, and refuses changed fields or later owner
+work. No rollback was executed.
+
+### Validation and practical limits
+
+Exact source full CI [40743695147](https://github.com/anwarbuilds/ace/actions/runs/40743695147)
+passes **1,735 backend**, **258 matcher**, web checks/build and **47 extension
+browser tests**. Dedicated [40743684914](https://github.com/anwarbuilds/ace/actions/runs/40743684914)
+passes **481 focused backend**, **22 calculation/render**, **55 DOM** and **36
+Inbox/Analytics browser tests**, TypeScript/lint/build. Final local Gmail/history/
+cleanup verification passes **346** tests, pinned to CPU 0. No local Chrome ran.
+Broader browsers finish **166 passed / 20 failed**, all names present in canonical
+40615561429. The last deployed source had 19; the additional search-debounce
+failure also appears in earlier canonical history. Identical names do not prove
+identical causes. **Overall CI is not green.**
+
+Live HTTPS/API health, unchanged exact frontend header, auth 401/307 boundaries,
+four served bundles and all 85 logo hashes pass. Read-only production route,
+mail, full-viewer and Analytics checks are separate from hosted fictional browser
+QA; no signed-in production browser or independent population accuracy is
+claimed. Available owner references are narrow and contain protected conflicts;
+representative non-rejection precision/recall and false-positive rates remain
+unmeasured. Remaining work mainly concerns safe application identity, protected
+policy/timing or incomplete evidence, with a known routine-recognition gap.
+Do not describe every remaining item as requiring semantic classification.
+
+Private complete evidence and exact before/after measurements:
+`artifacts/inbox-intelligence-review-20261028/backlog-cleanup/RELEASE.md`.
+Keep the entire package ignored and mode 700/600. The original review/release
+reports remain historical evidence. The restored root application code and
+concurrent ace-inbox worktree remain preserved; only continuity docs are synced.
 
 ## Inbox Intelligence LIVE, owner-approved and verified, 2026-10-28 Pacific
 

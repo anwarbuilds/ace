@@ -4,6 +4,33 @@
 >
 > Read this when: you deploy, restart, debug the scheduler, or write browser tests.
 
+## Inbox parser-10 API-only release and scoped cleanup (2026-10-28)
+
+Owner-approved `6ee2eb2` is live; frontend remains 95f4a97 and all four other
+service identities remain unchanged. Fresh backup passes full gzip, catalog and
+full expansion, with API-only code rollback. The guarded cleanup defaults to
+read-only preview, seals source/cohort/grant/plan, rechecks labels/body/current
+matching, compares locked rows and appends email audit events. It never mutates
+application statuses. Private before/after plans support row rollback with later
+owner work protected. Apply uses no more than 50 known records per invocation.
+Keep the global historical gate false and the exhaustive parser-7 runner stopped.
+
+A critical reference comparison stopped release; the owner explicitly approved
+the concrete tested source/scope while preserving conflicting historical links.
+Full cutover hashes and independent post-cleanup field/event checks pass. A broad
+private snapshot heuristic treated all reasons beginning `You ` as owner choices,
+including the classifier's `You applied to several roles...` explanation. Retain
+the original failed comparison; prove every difference belongs to the approved
+machine-review cohort, preserve all outside hashes and check actual owner actors/
+reasons. Do not silently force that heuristic to pass or change data to match it.
+
+Full CI passes backend 1,735, matcher 258, extension browser 47 and web checks;
+dedicated review passes focused backend 481, DOM/calculation 77 and browser 36.
+Broader browsers 166/20 have no new failure names versus canonical history but
+one extra versus the last deployed run; root causes are not proven identical,
+and overall CI is not green. Exact source/API, public/auth/assets, real-mail and
+Analytics probes are separate from a signed-in production browser test.
+
 ## Inbox API/frontend release with history disabled (2026-10-28)
 
 Owner-approved `95f4a97` is LIVE, parser 9/schema 0050, PR #11 merged. Build and
