@@ -10,7 +10,8 @@
 
 Status: parser 9 source `7657b62` complete for draft PR #11 review, not deployed;
 later release records control. Hosted focused checks/build and 36 browser tests
-pass; full backend passes 1,675. Broader browser failures remain disclosed.
+pass; full backend passes 1,675. Final broader browsers are 166/20, all 20 failed
+names shared with canonical's 21. Full CI remains not green.
 The released parser 8 remains the starting point. The candidate separates
 asserted intent, safe identity and mutation permission, distinguishes passive
 completion/cancellation from invitations, and rechecks eligible classifier-filed

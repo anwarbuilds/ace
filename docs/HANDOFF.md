@@ -6,7 +6,8 @@ new first Inbox section in `ACE_NEXT_KNOWLEDGE.md` and
 `d5c38dc` in `artifacts/inbox-intelligence-worktree`. Parser 8 was already live.
 Runtime source is `7657b62`; draft PR #11. Hosted focused validation passes 421
 backend, 77 DOM/calculation/render and 36 browser tests plus web checks/build.
-Full backend passes 1,675. Broader browser CI retains inherited failures. Exact
+Full backend passes 1,675; final broader browsers finish 166 passed / 20 failed,
+all 20 failed names shared with canonical's 21. Full CI remains not green. Exact
 results and limits are in knowledge and the ignored private owner package
 `artifacts/inbox-intelligence-review-20261028/REVIEW.md`. The entire observed
 unresolved cohort has read-only proposals; protected owner choices remain.

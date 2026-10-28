@@ -72,12 +72,14 @@ passes **421 focused backend**, **22 calculation/render**, **55 Inbox/Analytics
 DOM** and **36 browser tests**, TypeScript, full lint and production build.
 Full CI backend passes **1,675 tests** plus **258 matcher cases**; web checks/build
 pass. Local final-change verification passes **193 parser/persistence tests**.
-The completed preceding-source full run 40702467830 passes extension browser
-tests (47), focused browsers (36), and broader browsers **167/19**. All 19 failed
-names also occur in canonical run 40615561429 (**165/21**); no new names, while
-two former timeout names pass. Identical names do not prove identical causes.
-Full CI is not green. Final-source full-run status is retained in the private
-source manifest. A clock-dependent Studio fixture failure was reproduced on
+Final-source full run **40705078658** also passes extension browser tests (47)
+and focused browsers (36); broader browsers finish **166 passed / 20 failed**.
+All 20 failed names occur in canonical run 40615561429 (**165/21**); no new names.
+The former Pull navigation timeout passes. The prior candidate run was 167/19;
+the search-debounce browser case varies between those runs. Identical names do
+not prove identical causes. Full CI is not green. Final source/results and
+comparison logs are retained in the private manifest. A clock-dependent Studio
+fixture failure was reproduced on
 unchanged canonical source and fixed by freezing only the fictional test clock;
 assertions and runtime remain unchanged. No local Chrome ran. No signed-in
 production browser verification is claimed.

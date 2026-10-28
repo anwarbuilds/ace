@@ -133,10 +133,11 @@ The new review workflow changes no production scheduler.
 Final application source `7657b62a7dab37cd77d345fcff280fb45737c15f` passes hosted
 review run 40705070766: 421 focused backend, 22 calculation/render, 55 DOM and
 36 Inbox/Analytics browser tests, TypeScript, lint and production build. Full
-backend passes 1,675 plus 258 matcher cases. The preceding full run 40702467830
-has 167 broader browser passes and 19 failures, all sharing names with canonical
-run 40615561429 (165/21). Full CI is not green; identical failed names do not
-prove identical causes. The private source manifest retains final-run results.
+backend passes 1,675 plus 258 matcher cases. Final full run 40705078658 passes
+47 extension and 36 focused browser tests; broader browsers finish 166 passed /
+20 failed, all 20 names shared with canonical run 40615561429 (165/21).
+Full CI is not green; identical failed names do not prove identical causes.
+The private source manifest retains final results and the exact comparison.
 
 The owner-local review package is
 `artifacts/inbox-intelligence-review-20261028/REVIEW.md`. Its 14 deliverables
