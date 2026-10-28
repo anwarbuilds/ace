@@ -1,10 +1,13 @@
 # Inbox intelligence upgrade
 
-Status: parser 9 candidate, isolated `inbox-intelligence-20261028` branch based
-on released canonical `d5c38dc`, application source `7657b62`, draft PR #11.
-Implemented and tested for review, not deployed. The restored root checkout and
-existing `ace-inbox` worktree are preserved. Parser 8 was already released;
-the pasted brief's unfinished-parser-8 description is historical.
+Status: **LIVE**, owner-approved API/frontend source `95f4a97318d10935c9183341627ff78f08f0a85b` at
+https://ace.opik.net, parser 9/schema 0050; PR #11 merged. The earlier reviewed
+classifier source was 7657b62. The released source adds a server default-off
+historical-recheck control required by the deployment approval; classification
+and matching semantics are unchanged. The root checkout and concurrent worktree
+keep their application code. Complete release evidence and limits are in the
+first LIVE section of `ACE_NEXT_KNOWLEDGE.md` and the ignored owner-local
+`artifacts/inbox-intelligence-review-20261028/release/RELEASE.md`.
 
 ## Diagnosis and actual evidence
 
@@ -70,7 +73,9 @@ are filed without changing stages or manufacturing Analytics replies. Genuine
 document/information requests remain actionable owner tasks. Existing automatic
 correspondence can be rechecked under a later parser; owner filings, deferred
 choices, recorded decisions and both Undo reasons remain protected. Historical
-reprocessing is a proposed production operation requiring owner approval.
+reprocessing remains separately disabled and requires owner approval. The server
+default-off `GMAIL_HISTORICAL_RECHECKS_ENABLED` control governs both eligible
+stale counts/selection and recheck execution; new-message processing continues.
 
 Shared SQL/Python workflow states provide separate existing-list filters for
 filed evidence, safe-linkage work, owner decisions/actions and routine mail.
@@ -130,14 +135,14 @@ marks, external-application and auth contracts remain. Hosted CI supplies
 fictional browser execution and captures because local Chrome is prohibited.
 The new review workflow changes no production scheduler.
 
-Final application source `7657b62a7dab37cd77d345fcff280fb45737c15f` passes hosted
-review run 40705070766: 421 focused backend, 22 calculation/render, 55 DOM and
+Released application source `95f4a97318d10935c9183341627ff78f08f0a85b` passes hosted
+review run 40726740989: 422 focused backend, 22 calculation/render, 55 DOM and
 36 Inbox/Analytics browser tests, TypeScript, lint and production build. Full
-backend passes 1,675 plus 258 matcher cases. Final full run 40705078658 passes
-47 extension and 36 focused browser tests; broader browsers finish 166 passed /
-20 failed, all 20 names shared with canonical run 40615561429 (165/21).
+backend passes 1,676 plus 258 matcher cases. Full run 40726749948 passes
+47 extension and 36 focused browser tests; broader browsers finish 167 passed /
+19 failed, all 19 names shared with canonical run 40615561429 (165/21).
 Full CI is not green; identical failed names do not prove identical causes.
-The private source manifest retains final results and the exact comparison.
+The private release record retains exact source/verification and comparison.
 
 The owner-local review package is
 `artifacts/inbox-intelligence-review-20261028/REVIEW.md`. Its 14 deliverables
@@ -149,15 +154,16 @@ supplemental reads of known pending records absent from current search, with
 metadata preflight. This is not a full-body census or semantic mailbox-recall
 certification. Unestablished earlier outcomes remain visible review work.
 
-Live verification remains parser 8/schema 0050 with retained service identities.
-Audit transactions enforced read-only; no production mutation or deployment ran.
-The stopped exhaustive parser-7 operator and owner-stop/143 remain unchanged.
-No new all-row cryptographic before/after proof is claimed for this audit.
+Live verification confirms parser 9/schema 0050, exact API/frontend source and
+retained scheduler/PostgreSQL/Caddy identities. Cutover snapshots preserve every
+pre-existing protected row/event; concurrent owner activity is retained and
+reported separately. No historical reclassification or restore ran. Read-only
+live mail/viewer, filters, disabled recheck, public assets/auth and Analytics
+checks pass. The stopped operator and owner-stop/143 remain unchanged.
 
 No deployment, historical mutation, migration, OAuth scope, external AI provider,
 scheduler, discovery, extension, auth model, application creation policy,
-Resume Studio, Memory or logo change is authorized incidentally. Production
-release remains blocked until the exact candidate's tests, audit findings and
-accuracy limitations are reviewed and the owner explicitly approves that
-operation. Incorrect automatic rejection and wrong-application updates are
+Resume Studio, Memory or logo change is authorized incidentally. The owner approved the specific API/frontend release after review;
+it is now live. Later releases and historical reclassification require their own
+explicit approval, retaining the documented accuracy limitations. Incorrect automatic rejection and wrong-application updates are
 release-blocking defects, regardless of queue reduction.

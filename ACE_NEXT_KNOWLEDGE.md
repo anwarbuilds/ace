@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-28 Pacific, parser 9 Inbox candidate complete for draft review, not deployed; parser 8 and Analytics web 70d95a9 remain live; exact source, private review and validation below
+Last updated: 2026-10-28 Pacific, owner-approved Inbox Intelligence LIVE at 95f4a97; API/web only, parser 9/schema 0050; historical rechecks disabled; exact release, preservation and rollback below
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -14,7 +14,129 @@ It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
 
-## Inbox intelligence candidate complete for review, not deployed, 2026-10-28 Pacific
+## Inbox Intelligence LIVE, owner-approved and verified, 2026-10-28 Pacific
+
+The owner explicitly authorized production deployment of the reviewed Inbox
+Intelligence update, requiring fresh backup/rollback, API/frontend-only scope,
+preservation, no bulk historical reclassification and live verification. Exact
+runtime **`95f4a97318d10935c9183341627ff78f08f0a85b`** is live at **https://ace.opik.net**. Activation completed
+at **2026-10-28T16:43Z (09:43 Pacific)**; public verification completed at
+**2026-10-28T16:49:03Z**. [PR #11](https://github.com/anwarbuilds/ace/pull/11)
+is merged by canonical fast-forward without force. Later documentation commits
+do not rebuild these images. This LIVE record supersedes the candidate status
+below. No deployment approval remains pending for this completed operation.
+
+### Historical reclassification is separately disabled
+
+The deployment review found that the existing page-open verification loop can
+call `/api/inbox/recheck` automatically. Parser 9 would otherwise make older
+records eligible. To honor the owner's explicit exclusion, the tested release
+adds `gmail_historical_rechecks_enabled`, default **false**, configured by
+`GMAIL_HISTORICAL_RECHECKS_ENABLED`. Both eligible stale selection/counts and
+the server recheck handler enforce it. Disabled requests return zero reads,
+writes and remaining work with `historical_disabled: true`; new-message reading
+continues. Existing recheck tests explicitly exercise the separately authorized
+mode; the new regression verifies the default-off path and continued new-email
+processing. Production `.env` is unchanged and the real loaded setting is false.
+Do not enable it without separate owner approval. The private backlog reduction
+proposal remains unapplied. Manual owner decisions/Undo remain available.
+
+### Exact runtime, scope and preservation
+
+API and frontend alone were built and recreated using
+`up -d --no-build --no-deps --wait --wait-timeout 180 api web`. No migrate,
+scheduler, PostgreSQL or Caddy service was operated. Runtime parser is **9**;
+source migration head and live schema both remain **0050**. All **340 tracked
+backend files** match tested source in the prepared image and actual running
+API container. Public frontend commit/header and served assets match that SHA.
+
+- Running API image: `sha256:dc54a2e88b8d849bc39cb4f5f17ae95eb286196d9c035c8341d6b129afe7440c`.
+- Running frontend image: `sha256:6b2e71298f4e0f6ace548905e9eeae79e3e7e6bbdcaf861477a7d8d2266bda1c`.
+- API container: `ec63918fbe4ab05ae93bbb87f82d261ac7898c40057c86282ce679433d5cd594`.
+- Frontend container: `0f9a7368522012d4e4fcde7127f71f88e47f99c866eb2fa70202f1e6e7b2cf9d`.
+
+Scheduler/PostgreSQL/Caddy retain their exact original container/image IDs and
+health. Environment bytes, authentication, Pulls, Resume Studio, Memory/extension
+handlers, source discovery, creation/submission rules and all unrelated runtime
+source remain unchanged. The extension was not published/reloaded. ACE never
+submits employer applications or marks them Applied after filling.
+
+Fresh read-only snapshots immediately around activation prove every pre-existing
+row in twelve protected tables and the complete pre-existing event ledger
+unchanged. This includes existing applications, Gmail evidence/grant/decisions,
+answers, Memory, history, users and Studio documents/versions. A strict whole-set
+equality check initially failed on a concurrent owner-created application/event.
+The successful authenticated owner request, matching event link/timing and all
+unchanged prior hashes established preservation; the original failure report and
+exit status are retained. No data was removed/restored to force equality.
+During the longer verification interval normal owner application writes and
+extension-memory usage/upserts continued and were traced through authenticated
+requests. The private report distinguishes exact cutover preservation from
+ongoing owner activity; do not claim a frozen database across the whole release.
+All Gmail evidence, grant and prior application events remain unchanged.
+
+No migration, database restore, bulk historical reclassification, synthetic
+production record, auth-session creation, OAuth change, scheduler action or
+stopped-operator restart ran. The exhaustive parser-7 operator remains absent;
+saved exit **143** and both owner-stop hashes match before/after. Never restart it.
+
+### Backup, rollback and private evidence
+
+Fresh private release directory: **`/opt/ace/private-backups/inbox-intelligence-20261028T1633Z`**, mode **700**.
+`database.dump.gz` is mode **600** and passes full gzip integrity, PostgreSQL
+archive catalog and full archive expansion to `/dev/null`. No production restore
+or restore drill occurred. Backup size/hash, snapshots, manifests, failed strict
+comparison, owner-activity provenance, source/public/live-mail audits and service
+records are private. Do not commit them.
+
+Retained prior images are
+`oracle-api:before-inbox-intelligence-20261028T1633Z` and
+`oracle-web:before-inbox-intelligence-20261028T1633Z`, verified against the actual
+formerly running IDs. The checked `rollback.sh` in that directory validates
+the tags and recreates only API/frontend with `--no-build --no-deps --wait`.
+It retains the current database, newer owner records, schema, scheduler, Caddy
+and volumes. Never restore a database backup automatically for an app rollback.
+Rollback was prepared, not executed; live verification passes.
+
+Owner-local complete release record:
+`artifacts/inbox-intelligence-review-20261028/release/RELEASE.md`, with source
+manifest, CI logs/comparison, live verification, backup metadata and rollback.
+The original fourteen-deliverable assessment remains linked from `REVIEW.md`;
+its candidate status is historical. The entire ignored owner-local package is
+mode 700/600 and must never be staged. Actual mail measurements remain private.
+
+### Verification and remaining limits
+
+Exact source hosted review [40726740989](https://github.com/anwarbuilds/ace/actions/runs/40726740989)
+passes **422 focused backend**, **22 calculation/render**, **55 DOM** and
+**36 Inbox/Analytics browser tests**, TypeScript, lint and production build.
+Full run [40726749948](https://github.com/anwarbuilds/ace/actions/runs/40726749948)
+passes **1,676 backend**, **258 matcher cases**, web checks/build and **47 extension
+browser tests**. Broader browsers finish **167 passed / 19 failed**; all 19 failed
+names occur in canonical run 40615561429 (165/21), with no new names. Identical
+names do not prove identical causes; overall CI is not green. The final local
+Gmail/history/persistence safeguard run passes **281** tests. Hosted Day/Night
+desktop/mobile captures use fictional data; no local Chrome ran.
+
+Live HTTPS/API health, exact frontend header, anonymous 401/307 auth boundaries,
+four served application asset hashes and all **85** logo hashes pass. Separate
+read-only production route probes verify saved/current explanations, all new
+filters, the disabled historical endpoint, full mail viewer and a bounded real
+mail sample against reviewed readings. Nonempty owner-reference links agree;
+known body/outcome reference disagreements remain protected. Inbox/Analytics
+agree, all four range invariants pass and there are no orphan active outcomes.
+The probes used an in-memory owner principal in a separate process, not a real
+browser session or a change to live authentication. No signed-in production
+browser verification or universal classification accuracy is claimed.
+
+The owner chose existing decisions with remaining accuracy gaps reported.
+Representative non-rejection/multi-category labels, false-positive rate,
+unnecessary-review rate and semantic mailbox recall remain unmeasured. The
+private audit discloses reference disagreements and incomplete historical
+content. New mail and the improved inspector are live; historical cleanup is
+still a separate unapproved operation. Reload Inbox once for the new client.
+
+## Pre-deployment Inbox candidate assessment, superseded by the LIVE record above
 
 Parser 8 and the Analytics dashboard were already released. Parser 9 application
 source is **`7657b62a7dab37cd77d345fcff280fb45737c15f`**, based on canonical `d5c38dc`, in

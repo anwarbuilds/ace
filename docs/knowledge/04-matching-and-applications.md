@@ -6,6 +6,22 @@
 
 > **Status of the sheet entries:** The spreadsheet upload and import UI was removed on 2026-10-10 at the user's request, because applications are made through ace. Export CSV remains, and the API endpoints `/api/applications/preview` and `/api/applications/import` still exist, unused. The entries about the sheet are history; their lessons (never guess identity, wait for the write, show the user what was skipped) still apply.
 
+## Inbox parser 9 LIVE; historical rechecks separately disabled (2026-10-28)
+
+Owner-approved API/frontend source `95f4a97` is live; PR #11 merged. Parser 9
+separates intent, safe linkage and status permission, while existing evidence,
+owner decisions and Undo remain. Deployment added a tested server default-off
+`GMAIL_HISTORICAL_RECHECKS_ENABLED` control: stale counts/selection and the
+recheck endpoint return no work until separately authorized. New-message reading
+continues. No historical backlog proposal was applied and no migration ran;
+schema stays 0050. A read-only live sample reproduces reviewed body readings and
+nonempty owner-reference targets; Inbox and Analytics reconcile. All actual
+measurements, protected disagreements and accuracy gaps stay private. Full
+release/rollback and the distinction between exact cutover preservation and
+ongoing owner activity are in the first LIVE root knowledge section. Broader
+browser CI remains not green; affected checks/build pass. Earlier candidate
+entries below are historical, not current deployment status.
+
 ## Contextual Inbox intent and policy separation (2026-10-28)
 
 Status: parser 9 source `7657b62` complete for draft PR #11 review, not deployed;

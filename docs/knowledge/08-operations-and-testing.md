@@ -4,6 +4,31 @@
 >
 > Read this when: you deploy, restart, debug the scheduler, or write browser tests.
 
+## Inbox API/frontend release with history disabled (2026-10-28)
+
+Owner-approved `95f4a97` is LIVE, parser 9/schema 0050, PR #11 merged. Build and
+activate only API/frontend with `--no-build --no-deps --wait`; do not run migrate,
+scheduler, PostgreSQL or Caddy. Fresh backup checks include full gzip, archive
+catalog and full expansion to `/dev/null`, without a restore. Retain actual old
+API/web images before building; rollback those services only and retain newer
+owner data. The complete root LIVE record controls exact operation/evidence.
+
+A parser version bump is also a potential data operation: the page-open sync
+loop can call historical recheck automatically. This release therefore adds
+`GMAIL_HISTORICAL_RECHECKS_ENABLED`, default false, enforced by both stale
+selection/counts and the server recheck handler. Verify the real loaded setting,
+not just the image default. Never enable it incidentally during deployment.
+
+The strict whole-row-set comparison initially rejected a concurrent owner
+application addition even though every pre-existing row/event hash matched.
+Retain that original failure report; independently verify provenance and links
+before treating growth as legitimate. Do not erase owner additions to force
+snapshot equality. The extended verification also observes ordinary extension
+usage/upserts; report that active-owner interval separately from exact cutover
+preservation. Unexplained changes still require stopping for owner approval.
+Read-only route probes and source/HTTP asset checks do not certify a real
+signed-in browser interaction or independent semantic accuracy.
+
 ## Analytics web-only activation and continuity (2026-10-27)
 
 Owner-approved web `70d95a9` is live, PR #10 merged. The first root knowledge

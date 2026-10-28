@@ -1,6 +1,25 @@
 # ace handoff
 
-**2026-10-28: Inbox intelligence candidate ready for review, not deployed.** Read the
+**LIVE, 2026-10-28 09:43 Pacific, owner-approved Inbox Intelligence:**
+API/frontend **95f4a97318d10935c9183341627ff78f08f0a85b**, parser 9/schema 0050,
+healthy at https://ace.opik.net; PR #11 merged. Historical rechecks are disabled
+by default at the server and remain unapproved. New-email processing and the
+improved inspector are live. No migration, historical rewrite or scheduler /
+PostgreSQL / Caddy / auth / Studio / extension operation ran. Exact running
+backend source, public header, assets, auth, real-mail readings and Analytics
+checks pass. Cutover preserves all pre-existing protected rows/events; concurrent
+owner additions and subsequent extension use remain intact and traced privately.
+Fresh verified backup and retained API/web rollback images are under
+`/opt/ace/private-backups/inbox-intelligence-20261028T1633Z/`; never restore data as an automatic app rollback.
+Full backend 1,676, focused backend 422, focused browser 36, extension browser 47,
+web checks/build pass. Broader browsers 167/19, all failed names shared with
+canonical; CI remains not green. Read the first LIVE section in
+`ACE_NEXT_KNOWLEDGE.md` and private
+`artifacts/inbox-intelligence-review-20261028/release/RELEASE.md` for exact scope,
+verification limits, real counts and rollback. Root application code and the
+concurrent ace-inbox worktree remain preserved; docs alone are synchronized.
+
+**Earlier pre-deployment checkpoint, superseded by the LIVE record above.** Read the
 new first Inbox section in `ACE_NEXT_KNOWLEDGE.md` and
 `architecture/2026-10-28-inbox-intelligence.md`. Work is isolated from canonical
 `d5c38dc` in `artifacts/inbox-intelligence-worktree`. Parser 8 was already live.
