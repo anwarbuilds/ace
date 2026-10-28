@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-28 Pacific, owner-approved Inbox parser 10 LIVE at 6ee2eb2; explicit cohort cleanup complete; application statuses preserved; global historical rechecks disabled
+Last updated: 2026-10-28 Pacific, extension 1.31.1 learned answers and Workday date fix with API LIVE at 3662f0b; Inbox parser 10 unchanged; global historical rechecks disabled
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -14,11 +14,24 @@ It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
 
-## Extension 1.31.1: every owner answer is learned, Workday dates fixed (local, 2026-10-28 Pacific)
+## Extension 1.31.1 and learned-answer API LIVE, 2026-10-28 Pacific
 
-Status: extension source in the root checkout, loaded unpacked by Chrome after Reload. The matching
-API change is local and needs specific owner approval to deploy (API only, no migration). Until then
-learned answers are kept in the browser and used for filling. Not committed or pushed in this session.
+Status: the owner approved ("deploy. I need ace to work."). Canonical `wine-rose-platform` was
+fast-forwarded to **`3662f0bef4fc3cb59458e1adb5e0153888799bdf`** ([PR #14](https://github.com/anwarbuilds/ace/pull/14)).
+Only the API was built and recreated with `up -d --no-build --no-deps --wait`; activation ran
+**22:36:41Z to 22:36:48Z (15:36 Pacific)**. New API image
+`sha256:7ce4007cc67aede71334366c45ded4cb53275221096a920b2ab6bdf5d3091ae0`, container
+`408f1e9c71dc55887b8b360cfd95ab4dbe0639326ea1fb675bdff6f37e4cba39`. Web (95f4a97), scheduler, PostgreSQL,
+Caddy, environment bytes and schema 0050 are unchanged; no migration. The running `main.py` and
+`screening.py` match the release; 21 Memory tests pass inside the deployed image against in-memory
+SQLite; protected inventories (counts plus answer-bank and Memory row hashes) are identical before
+preparation, just before activation and after. Public health is ok; anonymous Memory GET and PUT
+return 401. Fresh private backup: `/opt/ace/private-backups/extension-learn-20261028T2233Z/`
+(mode 700, dump 600, 491,657,561 bytes, full gzip check and 293-entry catalog read; not a restore drill).
+Rollback image `oracle-api:before-extension-learn-20261028T2233Z` (the former
+`sha256:3f8041f83ece93499013fd1d886d9dc2d5a4bd7c73dc7b0af0a248d8814b21dd`); an app rollback replaces API
+only and never restores data. Answers saved in the browser before this release move to ACE on the next
+page load. The extension itself is the unpacked root checkout: Reload, then open tabs receive it.
 
 The owner reported a Workday From date failing as "Error: Invalid Date: 01/", voluntary disclosures and
 common screening questions (authorization, sponsorship, government ties, conflict of interest, other
@@ -57,6 +70,8 @@ Changes:
   source. The Memory switch is now "Save my answers for next time".
 - API (`backend/app/api/main.py`, `backend/app/answers/screening.py`): `reuse_policy=learned` only with
   `learn:` keys; refuses motivation and signatures. Routine and scoped rules unchanged; no migration.
+- Release note: a verification script under `set -euo pipefail` stopped at `diff | grep` when there
+  were no differences (grep exits 1). Use `|| true` around optional greps in release checks.
 
 Follow-up 1.31.1, same day. The owner reloaded the extension without refreshing an open Workday tab;
 its old content script showed "Extension context invalidated" when saving. Chrome never re-injects
