@@ -34,7 +34,7 @@ from backend.app.inbox import display, gmail
 from backend.app.inbox.full_history import FullMailboxScan
 from backend.app.inbox.queue import (decision_expression, projected_decision, projected_reason)
 from backend.app.inbox.reconcile import (
-    ApplicationIdentity, Decision, EmailEvidence, MAX_CLASSIFIER_BODY, PARSER_VERSION, RECEIPT_REASON, _MARKING_GRACE, conflict, reconcile, read_intent, CLASSIFICATION_REASONS,
+    ApplicationIdentity, Decision, EmailEvidence, MAX_CLASSIFIER_BODY, PARSER_VERSION, RECEIPT_REASON, _MARKING_GRACE, conflict, reconcile, reassess, read_intent, CLASSIFICATION_REASONS,
 )
 
 router = APIRouter()
@@ -1042,7 +1042,7 @@ def _recheck_locked(body: RecheckRequest, session: Session, conn: GmailConnectio
         if current is None:
             continue
         row = current
-        decision = reconcile(evidence, identities, conn.email, thread_keys=_thread_keys(session, conn, data, evidence, identities))
+        decision = reassess(evidence, identities, row.classification, conn.email, thread_keys=_thread_keys(session, conn, data, evidence, identities), previous_reason=row.decision_reason)
         before = row.decision
         row.snippet = read_intent(evidence).excerpt or row.snippet
         row.classification = decision.classification

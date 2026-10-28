@@ -45,6 +45,13 @@ explicit contradictions, actual requested actions and applicant-specific
 negative decisions control interpretation. Strict positive opt-ins, exact IDs,
 authentication, live-only positives, protected stages and Undo remain.
 
+A previously recognized outcome cannot silently become passive correspondence
+merely because a new parser does not establish it. Shared recheck/dry-run logic
+keeps that specific uncertainty visible, including across parser revisions.
+Affirmative routine account/practice/alert content can resolve an older false
+outcome; a generic subject alone cannot. This deliberately limits backlog
+reduction to evidence-supported changes.
+
 The shared body limit is 60,000 characters with a truncation sentinel. Incomplete
 outcomes still require review. HTML quote blocks are excluded from intent
 extraction; the sandboxed original HTML remains available. New imports and

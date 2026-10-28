@@ -205,3 +205,40 @@ def test_self_closing_html_elements_do_not_expose_a_quoted_rejection():
 ])
 def test_soft_wrapped_sentences_keep_their_meaning(body,kind):
     assert read_intent(evidence(body)).classification==kind
+
+
+
+def test_an_old_recognized_outcome_cannot_silently_become_unknown_correspondence():
+    from backend.app.inbox.reconcile import reassess
+    mail=evidence('A new chapter awaits. Please visit our portal for details.')
+    assert reconcile(mail,[APP]).disposition=='update'
+    for previous in ('rejection','interview','offer','online_assessment'):
+        result=reassess(mail,[APP],previous)
+        assert result.disposition=='review' and result.target is None
+        assert "earlier reading found" in result.reason
+
+
+def test_clear_practice_account_and_alert_messages_can_resolve_old_false_outcomes():
+    from backend.app.inbox.reconcile import reassess
+    for subject,body in [('Your CodeSignal report','Your practice score is ready.'),
+                         ('Verify your account','Please verify your email to use your account.'),
+                         ('Your job recommendations','New jobs for you are available.')]:
+        result=reassess(evidence(body,subject),[APP],'online_assessment')
+        assert result.disposition=='ignored' and result.target is None
+
+
+def test_a_routine_subject_needs_substantive_routine_body_evidence():
+    from backend.app.inbox.reconcile import reassess
+    result=reassess(evidence('A new chapter awaits. Please visit our candidate portal for details.','Verify your account'),[APP],'offer')
+    assert result.disposition=='review' and 'earlier reading found' in result.reason
+
+
+
+def test_unresolved_previous_outcome_survives_another_parser_revision():
+    from backend.app.inbox.reconcile import reassess
+    mail=evidence('A new chapter awaits. Please visit our portal for details.')
+    first=reassess(mail,[APP],'offer')
+    again=reassess(mail,[APP],first.classification,previous_reason=first.reason)
+    assert again.disposition=='review' and again.reason==first.reason
+    routine=reassess(evidence('Your practice score is ready.','Your CodeSignal report'),[APP],first.classification,previous_reason=first.reason)
+    assert routine.disposition=='ignored'

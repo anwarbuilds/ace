@@ -24,13 +24,13 @@ from backend.app.db.models import GmailConnectionRecord, GmailMessageRecord, App
 from backend.app.api.routers.inbox import _identities, _access, _scoped_detail, _message_evidence, _thread_keys, _stale_query
 from backend.app.inbox import gmail
 from backend.app.inbox.queue import projected_decision, PENDING
-from backend.app.inbox.reconcile import EmailEvidence, PARSER_VERSION, read_intent, reconcile
+from backend.app.inbox.reconcile import EmailEvidence, PARSER_VERSION, read_intent, reassess
 from backend.app.inbox.evaluation import evaluate
 
 
 def preview(row, evidence, applications, account=None, *, protected=True, thread_keys=()):
     reading = read_intent(evidence)
-    decision = reconcile(evidence, applications, account, thread_keys=thread_keys)
+    decision = reassess(evidence, applications, row.classification, account, thread_keys=thread_keys, previous_reason=row.decision_reason)
     # Historical positives always remain confirmation-only. This is a proposal,
     # never a call to _apply. Protected rows cannot change, including owner Undo.
     disposition = 'review' if decision.disposition=='verified' else decision.disposition
@@ -42,7 +42,7 @@ def preview(row, evidence, applications, account=None, *, protected=True, thread
         status_change = False
         record_outcome = False
     return {'message_id':row.id, 'current_classification':row.classification,
-            'current_decision':projected_decision(row), 'classification':reading.classification,
+            'current_decision':projected_decision(row), 'classification':decision.classification, 'current_body_classification':reading.classification,
             'proposed_decision':projected_decision(row) if protected else disposition,
             'reason':decision.reason, 'classification_reason':reading.explanation, 'excerpt':reading.excerpt,
             'complete':evidence.complete, 'variant':reading.variant, 'protected':protected,

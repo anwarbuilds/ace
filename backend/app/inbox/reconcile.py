@@ -26,7 +26,7 @@ initials ("cir" for Cambridge Investment Research).
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from urllib.parse import urlparse
@@ -233,11 +233,19 @@ def routine_notification(evidence: EmailEvidence) -> bool:
     subject = evidence.subject.casefold()
     if _REJECTION.search(subject) or _INTERVIEW.search(subject) or _OFFER.search(subject):
         return False
-    return bool(re.search(
+    primary = _new_text(evidence.body)[:1200]
+    subject_notice = bool(re.search(
         r"\b(?:verify your (?:email|account)|(?:email|account) verification|verification code"
         r"|reset (?:your )?password|password reset|sign[ -]?in code|one[ -]time (?:code|password)"
         r"|job alerts?|job recommendations?|recommended jobs?|jobs? for you|new jobs? (?:for|matching)"
         r"|job digest|jobs? you might|weekly (?:jobs?|career) digest)\b", subject))
+    account_action = re.search(
+        r"\b(?:(?:verify|verification|confirm) (?:your )?(?:email|account)|(?:reset|change) (?:your )?password"
+        r"|(?:verification|sign[ -]?in|one[ -]?time) code|(?:your )?account (?:is (?:ready|active)|has been (?:created|activated)))\b", primary, re.I)
+    recommendations = re.search(r"\b(?:recommended jobs|new jobs for you|job recommendations|jobs matching your)\b", primary, re.I)
+    practice = re.search(r"\b(?:your practice (?:score|results?)|practice (?:assessment|test) (?:results?|score))\b", primary, re.I)
+    return bool((subject_notice and (account_action or recommendations)) or practice)
+
 
 
 # The public catalog documents contextual requirements for these patterns.
@@ -635,6 +643,23 @@ def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], 
     return decided(classification, found.requisition, candidates, app.key, "verified",
                     "Clear " + classification.replace("_", " ") + " matched by " + found.basis, True)
 
+
+
+PREVIOUS_OUTCOME_UNRESOLVED = "An earlier reading found {kind}; the current body does not establish that outcome. Confirm the employer's actual decision"
+
+
+def reassess(evidence: EmailEvidence, applications: list[ApplicationIdentity], previous_classification: str,
+             account: str | None = None, *, thread_keys: tuple[str, ...] = (), previous_reason: str = "") -> Decision:
+    decision = reconcile(evidence, applications, account, thread_keys=thread_keys)
+    prior_uncertainty = previous_reason.startswith("An earlier reading found ")
+    if ((previous_classification in {"rejection", "possible_rejection", "offer", "interview", "online_assessment", "recruiter_reply"} or prior_uncertainty)
+            and decision.classification in {"unknown", "unclear"} and decision.disposition in {"ignored", "update"}
+            and evidence.complete and decision.reason != "Sent by the connected account" and not routine_notification(evidence)):
+        # A real change in interpretation is material uncertainty. Retain it in
+        # review instead of treating unknown wording as proof of routine intent.
+        return replace(decision, classification="unclear", disposition="review", target=None,
+                       reason=previous_reason if prior_uncertainty else PREVIOUS_OUTCOME_UNRESOLVED.format(kind=previous_classification.replace("_", " ")))
+    return decision
 
 def conflict(app: ApplicationIdentity, classification: str, received_at: datetime) -> str | None:
     """Why this outcome must not change the application, if it must not.
