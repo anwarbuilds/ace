@@ -38,8 +38,8 @@ def evaluate(examples: list[dict]) -> dict:
     matched = [r for r in examples if 'expected_target' in r]
     false_rejection = sum(r['classification']=='rejection' and r['expected_classification']!='rejection' for r in labelled)
     false_auto_rejection = sum(r['classification']=='rejection' and r['expected_classification']!='rejection'
-                               and r.get('would_change_status',False) for r in labelled)
-    wrong_update = sum(r.get('would_change_status',False) and r.get('target')!=r['expected_target'] for r in matched)
+                               and (r.get('would_record_outcome',False) or r.get('would_change_status',False)) for r in labelled)
+    wrong_update = sum((r.get('would_record_outcome',False) or r.get('would_change_status',False)) and r.get('target')!=r['expected_target'] for r in matched)
     return {'labelled': len(labelled), 'unlabelled': len(examples)-len(labelled), 'per_category': per_category,
             'confusion_matrix': {actual:{predicted:cells[actual,predicted] for predicted in categories} for actual in categories},
             'false_rejections': false_rejection,

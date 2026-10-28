@@ -105,8 +105,9 @@ Analytics visual redesign or projection change and no new review database.
 precision/recall, supports, confusion matrix, Wilson recall intervals, missed/
 false rejections and wrong-application mutations. Missing labels/denominators
 remain unavailable. An independently adjudicated representative multi-category
-corpus is still required before population accuracy or unnecessary-review-rate
-claims. Owner-recorded stages can supply a narrow reference; an owner filing
+corpus is unavailable, so population accuracy and unnecessary-review-rate claims
+remain unsupported. The owner explicitly chose existing owner decisions and
+reporting those accuracy gaps rather than requesting new labels. Owner-recorded stages can supply a narrow reference; an owner filing
 choice is not automatically a semantic gold label. Handwritten fictional tests
 are regression checks, not measured real-world accuracy.
 

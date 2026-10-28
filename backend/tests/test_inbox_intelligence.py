@@ -320,3 +320,12 @@ def test_a_domain_first_word_does_not_establish_a_different_longer_employer():
     parent=replace(APP,company='Silverpine Finance',official_url=None)
     mail=replace(evidence('Your application was rejected.','Your application'),sender='Silverpine Health <talent@silverpine.example>')
     assert reconcile(mail,[parent]).target is None
+
+
+
+def test_wrong_outcome_recording_blocks_release_even_without_a_stage_change():
+    from backend.app.inbox.evaluation import evaluate
+    result=evaluate([{'expected_classification':'application_confirmation','classification':'rejection',
+                      'expected_target':'job:1','target':'job:2','would_change_status':False,'would_record_outcome':True}])
+    assert result['false_automatic_rejections']==1 and result['wrong_application_updates']==1
+    assert result['release_blocking_errors']==2
