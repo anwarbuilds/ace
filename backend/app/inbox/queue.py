@@ -5,7 +5,7 @@ No age cutoff: historical evidence is as important as recent evidence.
 """
 from sqlalchemy import and_, case, func
 from backend.app.db.models import GmailMessageRecord as Mail
-from backend.app.inbox.reconcile import UNCLEAR_REASON
+from backend.app.inbox.reconcile import UNCLEAR_REASON, UNLINKED_REASON
 
 PENDING = ("review", "exact_preview", "deferred")
 OWNER_UNDO = "You undid ACE's change for this email"
@@ -19,10 +19,14 @@ def passive_clause():
 
 
 def decision_expression():
-    return case((passive_clause(), "update"), else_=Mail.decision)
+    return case((and_(Mail.decision == "update", Mail.classification == "rejection",
+                      Mail.decision_reason == UNLINKED_REASON), "unlinked"),
+                (passive_clause(), "update"), else_=Mail.decision)
 
 
 def projected_decision(row):
+    if row.decision == "update" and row.classification == "rejection" and row.decision_reason == UNLINKED_REASON:
+        return "unlinked"
     if (row.decision in ("review", "exact_preview") and row.classification == "unclear"
             and row.decision_reason == UNCLEAR_REASON):
         return "update"

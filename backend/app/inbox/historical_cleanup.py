@@ -41,7 +41,7 @@ def projection(session, conn, row, data) -> dict:
     decision = reassess(evidence, identities, row.classification, conn.email,
                        thread_keys=inbox._thread_keys(session, conn, data, evidence, identities),
                        previous_reason=row.decision_reason)
-    disposition = 'review' if decision.disposition == 'verified' else decision.disposition
+    disposition = 'review' if decision.disposition == 'verified' else 'update' if decision.disposition == 'unlinked' else decision.disposition
     reason = decision.reason
     if decision.disposition == 'verified':
         reason += '; historical cleanup preserves application statuses'

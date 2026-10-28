@@ -31,7 +31,10 @@ classification and decisive evidence intact. Explicit IDs/links pointing to a
 future application still require review. Unlinked outcomes are searchable and
 shown with their own Inbox filter/count and Analytics evidence-review entry;
 they never create applications or confirmed application outcomes. Linking is
-optional. This is an evidence state, not an age cutoff or an inference that the
+optional. The stored decision uses the existing `update` value and the explicit
+classifier reason; a shared SQL/Python projection exposes `unlinked`. The prior
+API can therefore still search and manually link that correspondence after an
+image rollback, without a database downgrade. This is an evidence state, not an age cutoff or an inference that the
 owner's newer application was rejected. Partial evidence, authentication or
 employer conflicts, contradictory meaning and real candidate actions remain
 review tasks. Existing records are not projected into this state automatically:

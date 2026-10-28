@@ -10,6 +10,7 @@ from backend.app.inbox.postings import contextual_links, posting_identity
 from backend.app.inbox.reconcile import reconcile
 from backend.tests.test_inbox_backlog import APP, evidence
 from backend.tests.test_inbox_persistence import message
+from backend.tests.test_inbox_persistence import database, row_for
 
 FIRST = 'https://jobs.lever.co/silverpine/aa111111-1111-1111-1111-111111111111'
 SECOND = 'https://jobs.lever.co/silverpine/bb222222-2222-2222-2222-222222222222'
@@ -206,6 +207,22 @@ def test_historical_assessment_invitation_and_ambiguous_wording_are_not_silently
     future = replace(APP, submitted_at=evidence('').received_at+timedelta(days=20))
     for body in ['Please complete your online assessment.', 'We regret the delay. Other candidates are still under review.']:
         assert reconcile(evidence(body), [future]).disposition != 'unlinked'
+
+
+def test_unlinked_ingestion_uses_a_rollback_compatible_persisted_decision(database):
+    from backend.app.inbox.queue import projected_decision
+    from backend.app.inbox.historical_cleanup import projection
+    from backend.tests.test_inbox_persistence import NOW, statuses, job_events
+    session,conn=database
+    data=message('old-unlinked','Your application was rejected.',NOW-timedelta(days=100))
+    assert inbox._ingest(session,conn,data,inbox._identities(session),preview=True)=='unlinked'
+    session.flush()
+    row=row_for(session,'old-unlinked')
+    assert row.decision=='update' and projected_decision(row)=='unlinked'
+    assert inbox._message_rows(session,conn.id,'unlinked_outcome')==[row]
+    assert inbox._message_rows(session,conn.id,'pending')==[]
+    assert projection(session,conn,row,data)['patch']['decision']=='update'
+    assert row.selected_application_key is None and statuses(session)==['applied']*3 and not job_events(session)
 
 
 def test_unlinked_evidence_sql_python_and_analytics_agree_without_outcome_inflation():

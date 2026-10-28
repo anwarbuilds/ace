@@ -471,7 +471,7 @@ def _ingest(session: Session, conn: GmailConnectionRecord, data: dict, identitie
                   actor="classifier", reason=row.decision_reason, message_id=row.id,
                   occurred_at=evidence.received_at,
                   dedupe_key=f"gmail:{conn.id}:{gmail_id}:classification")
-    return row.decision
+    return projected_decision(row)
 
 
 def _apply(session: Session, conn: GmailConnectionRecord, row: GmailMessageRecord, decision: Decision, evidence: EmailEvidence, *, preview: bool, allow_automation: bool = True) -> None:
@@ -483,6 +483,10 @@ def _apply(session: Session, conn: GmailConnectionRecord, row: GmailMessageRecor
     import. Every change is in the audit trail with Undo.
     """
     row.decision = decision.disposition
+    # Keep stored decisions compatible with the prior API for image rollback.
+    # The shared SQL/Python projection exposes the explicit unlinked state.
+    if row.decision == "unlinked":
+        row.decision = "update"
     row.selected_application_key = decision.matched_target or (decision.target if decision.disposition in {"receipt", "update"} else None)
     if decision.disposition != "verified" or not decision.target:
         return
