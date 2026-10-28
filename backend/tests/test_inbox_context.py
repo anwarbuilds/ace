@@ -170,6 +170,12 @@ def test_html_application_anchor_is_ephemeral_and_quotes_are_excluded():
     assert FIRST not in ev.body
 
 
+def test_mislabelled_html_preserves_primary_posting_evidence():
+    data=message('mislabelled-link',f'<html><body><p>Your application was rejected.</p><a href="{FIRST}">View job details</a></body></html>')
+    ev=inbox._message_evidence(data)
+    assert ev.posting_links==(FIRST,) and '<html' not in ev.body
+
+
 def test_unlabelled_recommendation_and_hidden_or_quoted_links_are_excluded():
     ev = inbox._message_evidence(html_message(f'<p>Your application was rejected.</p><p>Other jobs recommended for you:</p><a href="{FIRST}">Software Engineer</a><script><a href="{SECOND}">View job details</a></script>'))
     assert not ev.posting_links

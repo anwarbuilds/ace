@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 // All Inbox requests and mutations below are fictional and intercepted.
-async function inboxFixture(page: import("@playwright/test").Page, options: {lastSync?: string | null; ambiguous?:boolean} = {}) {
+async function inboxFixture(page: import("@playwright/test").Page, options: {lastSync?: string | null; ambiguous?:boolean; unlinked?:boolean; backgroundSyncEnabled?:boolean} = {}) {
   const reviewed: number[]=[];
   const submitted: Record<string,unknown>[]=[];
   const filed: Record<string,unknown>[]=[];
@@ -18,28 +18,33 @@ async function inboxFixture(page: import("@playwright/test").Page, options: {las
   if(options.ambiguous)applications.push({...applications[0],key:"job:3",title:"Fictional developer"});
   const rows=Array.from({length:107},(_,i)=>({id:i+1,received_at:"2026-01-10T12:00:00Z",sender:"Fictional Talent <fixture@example.test>",subject:`Fictional interview ${i+1} at Fictional Labs`,snippet:"Please schedule an interview for requisition FIX-1.",classification:"interview",requisition_id:"FIX-1",decision:"review",candidate_keys:options.ambiguous?["job:1","job:3"]:["job:1"],reason:"Matched by its job ID; positive outcomes need your confirmation",selected_application_key:null,understanding:{classification_reason:"The employer invites the candidate to an interview.",classification_state:"recognized",matching_state:options.ambiguous?"ambiguous":"unlinked",workflow_state:"awaiting_link",update_policy:"confirmation_required",review_reason:"Two applications share this requisition. Choose the correct application.",evidence_source:"retained_excerpt",evidence_excerpt:"Please schedule an interview for requisition FIX-1."}}));
   const recorded={id:500,received_at:"2026-01-11T12:00:00Z",sender:"Wayfern Talent <no-reply@ashbyhq.example>",subject:"Update on your application at Wayfern",snippet:"Thank you for applying",classification:"rejection",requisition_id:null,decision:"automatic",candidate_keys:["job:2"],reason:"Clear rejection matched by its exact title",selected_application_key:"job:2"};
+  const unlinked={id:600,received_at:"2025-12-15T12:00:00Z",sender:"Fictional Labs Talent <talent@fictional.example>",subject:"Earlier application update at Fictional Labs",snippet:"We will not move forward with your application.",classification:"rejection",requisition_id:null,decision:"unlinked",candidate_keys:[],reason:"Recognized rejection; all recorded applications at this employer were submitted after this email. Retained as unlinked evidence, excluded from application outcomes",selected_application_key:null,understanding:{decision_type:"Automatic classification",classification_reason:"The employer communicates a rejection.",classification_state:"recognized",matching_state:"unlinked",workflow_state:"unlinked_outcome",update_policy:"no_status_change",review_reason:null,evidence_source:"retained_excerpt",evidence_excerpt:"We will not move forward with your application."}};
   const lastSync=options.lastSync===undefined?new Date().toISOString():options.lastSync;
   await page.route("**/api/inbox/**",async route=>{
     const request=route.request(); const url=new URL(request.url()); const path=url.pathname;
     let body:unknown;
     const pending=rows.filter(row=>!reviewed.includes(row.id));
-    if(path==="/api/inbox/connection") body={available:true,connected:true,state:"ready",email:"fixture@example.test",last_synced_at:syncs.length?new Date().toISOString():lastSync,following_changes:true,last_error:null,auto_outcomes_enabled:false,automation_available:false,auto_rejections:true,coverage:{days:windows.at(-1)??0,scope:"job_mail",includes_spam_trash:false,gmail:407,in_ace:407,missing:0,complete:true,checked_at:new Date().toISOString()}};
+    if(path==="/api/inbox/connection") body={available:true,connected:true,state:"ready",email:"fixture@example.test",last_synced_at:syncs.length?new Date().toISOString():lastSync,following_changes:true,background_sync_enabled:options.backgroundSyncEnabled,last_error:null,auto_outcomes_enabled:false,automation_available:false,auto_rejections:true,coverage:{days:windows.at(-1)??0,scope:"job_mail",includes_spam_trash:false,gmail:407,in_ace:407,missing:0,complete:true,checked_at:new Date().toISOString()}};
     else if(path==="/api/inbox/applications"&&request.method()==="POST"){const data=request.postDataJSON();added.push(data);reviewed.push(data.message_id);body={event_id:2,application_key:"external:9",status:data.status,created:true};}
     else if(path==="/api/inbox/applications")body={items:applications};
     else if(path==="/api/inbox/events")body={items:[]};
     else if(/^\/api\/inbox\/messages\/\d+\/full$/.test(path)){
-      const selected=Number(path.split("/")[4])===recorded.id?recorded:rows.find(row=>row.id===Number(path.split("/")[4]))??rows[0];
-      body={sender:selected.sender,to:"fixture@example.test",subject:selected.subject,received_at:"2026-01-10T12:00:00Z",text:"Hello Fictional Labs,\n\nPlease schedule an interview for requisition FIX-1.\n\nThe fictional recruiting team",document:"<!doctype html><html><head><meta charset=\"utf-8\"></head><body><p>Hello Fictional Labs,</p><p>Please schedule an interview for requisition FIX-1.</p><p>The fictional recruiting team</p></body></html>",current_reading:{classification:"interview",reason:"The employer requests an interview time.",variant:"invitation",excerpt:"Please schedule an interview for requisition FIX-1.",complete:true},format:"html",blocked_images:0,message_id_header:"<fixture-1@example.test>",thread_id:"thread-1"};
+      const id=Number(path.split("/")[4]);
+      const selected=id===recorded.id?recorded:id===unlinked.id?unlinked:rows.find(row=>row.id===id)??rows[0];
+      const historical=selected.decision==="unlinked";
+      const content=historical?unlinked.snippet:"Please schedule an interview for requisition FIX-1.";
+      body={sender:selected.sender,to:"fixture@example.test",subject:selected.subject,received_at:selected.received_at,text:`Hello Fictional Labs,\n\n${content}\n\nThe fictional recruiting team`,document:`<!doctype html><html><head><meta charset="utf-8"></head><body><p>Hello Fictional Labs,</p><p>${content}</p><p>The fictional recruiting team</p></body></html>`,current_reading:{classification:historical?"rejection":"interview",reason:historical?"The employer communicates a rejection.":"The employer requests an interview time.",variant:historical?"explicit_rejection":"invitation",excerpt:content,complete:true},format:"html",blocked_images:0,message_id_header:`<fixture-${id}@example.test>`,thread_id:`thread-${id}`};
     }
-    else if(/^\/api\/inbox\/messages\/\d+$/.test(path))body=Number(path.split("/").pop())===recorded.id?recorded:rows[0];
+    else if(/^\/api\/inbox\/messages\/\d+$/.test(path)){const id=Number(path.split("/").pop());body=id===recorded.id?recorded:id===unlinked.id?unlinked:rows[0];}
     else if(path==="/api/inbox/messages"){
       const decision=url.searchParams.get("decision")??"all";
       const q=url.searchParams.get("q");
       if(q)searches.push(q);
       const view=decision==="auto"?(pending.length?"pending":"recruiting"):decision;
-      const listed=(view==="automatic"?[recorded]:pending).filter(row=>!q||row.subject.toLowerCase().includes(q.toLowerCase()));
+      const historical=options.unlinked?[unlinked]:[];
+      const listed=(view==="automatic"?[recorded]:view==="unlinked_outcome"?historical:["recruiting","all"].includes(view)?[...pending,...historical]:pending).filter(row=>!q||row.subject.toLowerCase().includes(q.toLowerCase()));
       const offset=Number(url.searchParams.get("offset")??0);
-      body={items:listed.slice(offset,offset+50),total:listed.length,offset,has_more:offset+50<listed.length,view,latest_received_at:"2026-01-11T12:00:00Z",counts:{stored:407,needs_review:pending.length,automatic:1,manual:0,reviewed:reviewed.length,receipts:0,updates:0,stale:0}};
+      body={items:listed.slice(offset,offset+50),total:listed.length,offset,has_more:offset+50<listed.length,view,latest_received_at:"2026-01-11T12:00:00Z",counts:{stored:407,needs_review:pending.length,automatic:1,manual:0,reviewed:reviewed.length,receipts:0,updates:0,unlinked:historical.length,stale:0}};
     }else if(path==="/api/inbox/review"){
       const data=request.postDataJSON();submitted.push(data);reviewed.push(data.message_id);
       body={event_id:1,application_key:data.application_key,status:data.status};
@@ -195,6 +200,41 @@ test("an application missing from ACE is added from the email with its outcome",
 
 
 for(const theme of ["light","dark"] as const){
+  test(`${theme}: recognized historical evidence remains searchable without an owner task`,async({page,context,baseURL})=>{
+    await setThemeCookies(context,baseURL!,theme);
+    const fixture=await inboxFixture(page,{unlinked:true,backgroundSyncEnabled:true});
+    await page.setViewportSize({width:1672,height:941});
+    await page.goto("/app/applications/inbox");
+    await expect(page.locator(".inbox-status")).toContainText("107 emails need you");
+    await expect(page.getByRole("button",{name:/Waiting for you/})).toContainText("107");
+    const evidence=page.getByRole("button",{name:"1 recognized historical outcomes without an eligible application",exact:true});
+    await expect(evidence.locator("..")).toContainText("excluded from application outcomes in Analytics. Linking is optional.");
+    await evidence.click();
+    await expect(page).toHaveURL(/decision=unlinked_outcome/);
+    await expect(page.getByLabel("Email view")).toHaveValue("unlinked_outcome");
+    await expect(page.locator(".inbox-mail")).toHaveCount(1);
+    await expect(page.locator(".inbox-mail")).not.toHaveClass(/needs/);
+    const inspector=page.locator(".inbox-inspector");
+    await expect(inspector.locator(".inbox-state")).toHaveText("Recognized, unlinked");
+    await expect(page.getByLabel("ACE understanding")).toContainText("Application linkage: unlinked. No application status changed.");
+    await expect(inspector).toContainText("No application outcome was recorded. Linking is optional; the email remains searchable.");
+    await expect(inspector).not.toContainText("Why it waits:");
+    await expect(page.getByRole("button",{name:/^Rejection/})).toBeDisabled();
+    await expect(page.getByRole("button",{name:/^Decide later/})).toHaveCount(0);
+    await expect(page.frameLocator("iframe.inbox-frame").locator("body")).toContainText("We will not move forward with your application.");
+    const root=path.resolve("../artifacts/inbox-intelligence-validation");
+    await fs.mkdir(root,{recursive:true});
+    await page.screenshot({path:path.join(root,`${theme}-inbox-unlinked.png`),fullPage:true});
+    await page.getByRole("button",{name:"How ACE decides",exact:true}).click();
+    await expect(page.getByText("While sync is on, ACE checks Gmail about every three minutes even when this page is closed.",{exact:false})).toBeVisible();
+    await expect(page.getByText("Google limits or a large import can delay a check.",{exact:false})).toBeVisible();
+    await page.screenshot({path:path.join(root,`${theme}-inbox-background-rules.png`),fullPage:true});
+    expect(fixture.submitted).toEqual([]);
+    expect(fixture.filed).toEqual([]);
+    expect(fixture.added).toEqual([]);
+    expect(fixture.syncs).toEqual([]);
+  });
+
   test(`${theme}: intent, linkage and authorization remain separate in the existing Inbox`,async({page,context,baseURL})=>{
     await setThemeCookies(context,baseURL!,theme);
     const fixture=await inboxFixture(page,{ambiguous:true});

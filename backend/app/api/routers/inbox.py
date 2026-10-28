@@ -236,7 +236,7 @@ class _Text(HTMLParser):
         self.parts: list[str] = []
         self.skip = 0
         self.quote_depth = 0
-        self.anchors: list[tuple[str, str, str]] = []
+        self.anchors: list[tuple[str, str]] = []
         self.anchor: tuple[str, int] | None = None
 
     def handle_starttag(self, tag: str, attrs) -> None:
@@ -266,7 +266,7 @@ class _Text(HTMLParser):
             self.skip = max(0, self.skip - 1)
         elif tag == "a" and self.anchor and not self.skip:
             href, start = self.anchor
-            self.anchors.append((href, "".join(self.parts[start:]), "".join(self.parts[:start])[-240:]))
+            self.anchors.append((href, "".join(self.parts[start:])))
             self.anchor = None
         elif tag in self._BREAK:
             self.parts.append("\n")
@@ -329,14 +329,17 @@ def _message_evidence(data: dict) -> EmailEvidence:
     complete = bool(body) and len(body) <= MAX_CLASSIFIER_BODY
     body = body[:MAX_CLASSIFIER_BODY]
     links = list(contextual_links(_new_text(body)))
-    for markup in _parts(data.get("payload", {}), "text/html"):
+    payload = data.get("payload", {})
+    markups = _parts(payload, "text/html") + [part for part in _parts(payload, "text/plain")
+        if re.match(r"\s*(?:<!doctype\s+html\b|<html\b|<head\b|<body\b)", part, re.I)]
+    for markup in markups:
         parser = _Text()
         parser.feed(markup)
         parser.close()
         # Ignore HTML-only claims absent from the chosen text/plain reading.
         anchors = []
         primary = " ".join(primary_link_text(_new_text(body)).split())
-        for url, label, _ in parser.anchors:
+        for url, label in parser.anchors:
             label = " ".join(label.split())
             if label and primary.count(label) == 1:
                 start = primary.index(label)
