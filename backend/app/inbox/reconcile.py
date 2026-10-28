@@ -287,6 +287,10 @@ def _routine_reading(evidence: EmailEvidence) -> tuple[str, str] | None:
         return ("The message reports product usage and writing statistics, not a hiring outcome.", primary[:500])
     if re.search(r"\b(?:livestream|webinar)\b", primary, re.I) and re.search(r"\b(?:grab a seat|join us|register|questions we will be discussing)\b", primary, re.I):
         return ("The message promotes a public learning event, not an individual hiring assessment.", primary[:500])
+    if (re.search(r"\bjoin us on\b", primary, re.I)
+            and re.search(r"\bas we (?:talk|speak) (?:to|with)\b", primary, re.I)
+            and re.search(r"\bregister(?: now)?\b", primary, re.I)):
+        return ("The message advertises a public speaker session and registration, not an individual hiring assessment.", primary[:500])
     if re.search(r"\bwe hired \d+\b", primary, re.I) and re.search(r"\blist of selected candidates\b", primary, re.I):
         return ("The message reports a public hiring competition's results, not this candidate's outcome.", primary[:500])
     if re.search(r"\b(?:we bring to you|we bring you) a challenge\b", primary, re.I) and re.search(r"\bcash prize\b", primary, re.I):
@@ -401,6 +405,18 @@ _OTHER_DECISION = re.compile(
     r"(?:move (?:forward|ahead)|pursue|proceed|progress|go)(?:\s+\w+){0,3}\s+" + _OTHERS +
     r"|(?:have |has |we['’]ve )(?:selected|chosen) " + _OTHERS +
     r"|(?:moving (?:forward|ahead)|pursuing|proceeding)(?:\s+\w+){0,3}\s+" + _OTHERS + r")\b", re.I)
+_CLOSER_APPLICANTS = re.compile(
+    r"\b(?:however|unfortunately|but)\s*,?\s*we\s+(?:have\s+)?(?:received|found)\s+"
+    r"(?:applications\s+from\s+)?other\s+(?:applicants|candidates)\s+"
+    r"(?:who|whose\s+(?:skills|experience|qualifications))\s+"
+    r"(?:(?:more\s+closely|better)\s+match(?:es)?|(?:match|matches)\s+more\s+closely)\s+"
+    r"(?:our|the)\s+(?:needs|requirements)\b", re.I)
+_CANDIDATE_INTEREST = re.compile(
+    r"\b(?:we\s+appreciate|thank\s+you\s+for)\s+your\s+interest\s+in\s+(?:(?:the|our)\s+)?"
+    r"([^.!?;\n]{2,140}?)\s+(?:role|position|opening)\s+(?:at|with)\s+[^.!?;\n]{2,100}", re.I)
+_SPECIFIC_DECISION = re.compile(
+    r"\bthis\s+decision\s+(?:pertains|applies|relates)\s+(?:only\s+)?to\s+(?:only\s+)?"
+    r"(?:this|the)\s+(?:specific\s+)?(?:[\w&+/#()’-]+\s+){0,12}(?:role|position|opening|application)\b", re.I)
 _ASSESSMENT_NOUN = r"(?:(?:(?:online|technical|pre-employment|hiring|coding) )?assessment|coding (?:challenge|test)|technical (?:evaluation|test)|screening test|work simulation|take[ -]home (?:assignment|challenge)|(?:HackerRank|CodeSignal|Codility|HireVue) (?:test|challenge))"
 _INTERVIEW_NOUN = r"(?:(?:technical |phone |video |virtual |onsite |hiring.manager |recruiter )?interview|(?:phone|recruiter) screen(?:ing)?|screening (?:call|conversation))"
 
@@ -421,6 +437,35 @@ def read_intent(evidence: EmailEvidence) -> Reading:
         return replace(_reading("unknown", req, routine[1], "routine"), explanation=routine[0]) if routine else _reading("unknown", req, "")
     negative = (list(_asserted(_ENDING, body)) + list(_asserted(_OTHER_DECISION, body))
                 + list(_asserted(_QUALIFIED_APPLICATION_ENDING, body)))
+    # A closer-fit comparison needs candidate-specific application context and
+    # a later explicit reference to this role's decision. Application volumes,
+    # generic praise or a comparison alone never establish a personal rejection.
+    comparison_decision = False
+    primary = primary_link_text(body)
+    application_contexts = list(_asserted(_CONFIRMATION, primary))
+    application_contexts += [span for span in _asserted(_CANDIDATE_INTEREST, primary)
+                             if _ROLE.search(span[0].group(1))]
+    references = list(_asserted(_SPECIFIC_DECISION, primary))
+    def personal_statement(span):
+        match, _ = span
+        start = max(primary.rfind(c, 0, match.start()) for c in ".!?\n") + 1
+        end = min((pos for c in ".!?\n" if (pos := primary.find(c, match.end())) >= 0), default=len(primary))
+        prefix = primary[start:match.start()]
+        return not (primary[end:end+1] == "?" or re.search(r"[\"“'‘]\s*$", prefix)
+                    or re.search(r"\b(?:example|sample|template|quoted)\b[^.!?\n]{0,100}$", prefix, re.I)
+                    or re.search(r"\b(?:not (?:true|correct|the case) that|not believe|cannot confirm|not sure)\s*$", prefix, re.I)
+                    or re.search(r"\b(?:example|sample|template|quoted)\s+(?:email|message|letter)\b", primary[:match.start()], re.I))
+    for comparison in _asserted(_CLOSER_APPLICANTS, primary):
+        for reference in references:
+            context = next((item for item in application_contexts if item[0].end() <= comparison[0].start()), None)
+            if (context and comparison[0].end() <= reference[0].start()
+                    and reference[0].end() - context[0].start() <= 3000
+                    and all(personal_statement(item) for item in (context, comparison, reference))):
+                negative.append((comparison[0], comparison[1] + " " + reference[1]))
+                comparison_decision = True
+                break
+        if comparison_decision:
+            break
     for span in _asserted(_REJECTION, body):
         wording = span[0].group().casefold()
         if (re.match(r"we\s+regret", wording) or re.search(r"sponsor|not eligible for|requirements|decided to move on", wording)
@@ -452,7 +497,11 @@ def read_intent(evidence: EmailEvidence) -> Reading:
     if interview_request and not negative and re.search(_ASSESSMENT_NOUN, body, re.I) and re.search(r"\b(?:completed|submitted|finished)\b", body, re.I):
         return _reading("interview", req, interview_request[0][1], "invitation")
     still_review = re.search(r"\byour application (?:is|remains) (?:still )?under (?:review|consideration)\b", body, re.I)
-    if negative and still_review and still_review.start() > min(span[0].start() for span in negative):
+    if comparison_decision:
+        still_review = re.search(
+            r"\byour\s+(?:application|candidacy)(?:\s+for\s+[^.!?;\n]{1,120}?)?\s+(?:is|remains)\s+(?:still\s+)?under\s+(?:review|consideration)\b"
+            r"|\bwe\s+(?:are\s+)?still\s+reviewing\s+your\s+(?:application|candidacy|qualifications|details)\b", body, re.I) or still_review
+    if negative and still_review and (comparison_decision or still_review.start() > min(span[0].start() for span in negative)):
         return _reading("possible_rejection", req, negative[0][1] + " " + still_review.group(), "conflicting_progress")
     if negative and interview_request:
         return _reading("possible_rejection", req, negative[0][1] + " " + interview_request[0][1], "conflicting_outcomes")

@@ -125,3 +125,105 @@ def test_qualified_rejection_reaches_the_application_and_audit_without_new_submi
     [event] = job_events(session)
     assert event.application_key == row.selected_application_key
     assert event.gmail_message_id == row.id and event.actor == 'verified_automation'
+
+
+RECEIPT = 'Thank you for applying for the Software Engineer position.'
+COMPARISON = 'However, we have received other candidates whose experience more closely matches our requirements.'
+DECISION = 'This decision applies only to this specific Software Engineer position.'
+
+
+@pytest.mark.parametrize('comparison', [
+    COMPARISON,
+    'Unfortunately we received other applicants who better match our needs.',
+    'But we found other candidates who match more closely the requirements.',
+    'However we have received applications from other applicants whose qualifications more closely match our needs.',
+])
+def test_contrastive_closer_fit_is_a_rejection_with_an_explicit_actual_decision(comparison):
+    ev = evidence(' '.join([RECEIPT, comparison, DECISION]))
+    reading = read_intent(ev)
+    assert reading.classification == 'rejection'
+    assert comparison.rstrip('.') in reading.excerpt and DECISION.rstrip('.') in reading.excerpt
+    assert reconcile(ev, [APP]).target == APP.key
+
+
+@pytest.mark.parametrize('context', [
+    'We appreciate your interest in the Software Engineer position at Silverpine Labs.',
+    'Thank you for your interest in our Software Engineer role with Silverpine Labs.',
+])
+def test_named_candidate_interest_provides_context_without_a_receipt(context):
+    body = ' '.join([context, 'You considered building your career with our team.', COMPARISON, DECISION])
+    ev = evidence(body)
+    assert read_intent(ev).classification == 'rejection'
+    assert reconcile(ev, [APP]).target == APP.key
+
+
+@pytest.mark.parametrize('body', [
+    RECEIPT + ' ' + COMPARISON,
+    COMPARISON + ' ' + DECISION,
+    RECEIPT + ' We received many other applications for this position. ' + DECISION,
+    RECEIPT + ' We received other candidates whose experience more closely matches our requirements. ' + DECISION,
+    RECEIPT + ' ' + COMPARISON + ' We will make a decision about this role next week.',
+    RECEIPT + ' ' + COMPARISON + ' This decision will apply only to this role.',
+    RECEIPT + ' ' + COMPARISON + ' This decision does not apply to this application.',
+    RECEIPT + ' If we receive other candidates who better match our needs, we will let you know. ' + DECISION,
+    RECEIPT + ' However, if we have received other candidates whose experience more closely matches our requirements, we will contact you. ' + DECISION,
+    RECEIPT + ' ' + COMPARISON + ' If this decision applies only to this role, please contact us.',
+    RECEIPT + ' ' + COMPARISON + ' We are discussing whether this decision applies only to this position.',
+    RECEIPT + ' ' + COMPARISON + ' This decision applies only to this specific role?',
+    RECEIPT + ' ' + COMPARISON + ' We cannot confirm this decision applies only to this role.',
+    RECEIPT + ' ' + COMPARISON + ' It is not true that this decision applies only to this position.',
+    DECISION + ' ' + RECEIPT + ' ' + COMPARISON,
+    'We appreciate your interest in Silverpine Labs. ' + COMPARISON + ' ' + DECISION,
+    'We appreciate your impressive background. ' + COMPARISON + ' ' + DECISION,
+    'We appreciate your interest in the position at Silverpine Labs. ' + COMPARISON + ' ' + DECISION,
+    'If we appreciate your interest in the Software Engineer position at Silverpine Labs, we will respond. ' + COMPARISON + ' ' + DECISION,
+])
+def test_comparisons_volumes_and_possible_future_decisions_are_insufficient(body):
+    assert read_intent(evidence(body)).classification != 'rejection'
+    assert reconcile(evidence(body), [APP]).disposition != 'verified'
+
+
+@pytest.mark.parametrize('wrapper', [
+    'Example letter: {body}',
+    'The sample message follows. {body}',
+    '"{body}"',
+    "'{body}'",
+    'For example: {body}',
+])
+def test_quoted_or_sample_comparative_decisions_do_not_automate(wrapper):
+    body = ' '.join([RECEIPT, COMPARISON, DECISION])
+    ev = evidence(wrapper.format(body=body))
+    assert read_intent(ev).classification != 'rejection'
+    assert reconcile(ev, [APP]).disposition != 'verified'
+
+
+def test_quoted_named_interest_cannot_supply_candidate_context():
+    body = '"We appreciate your interest in the Software Engineer position at Silverpine Labs." ' + COMPARISON + ' ' + DECISION
+    assert read_intent(evidence(body)).classification != 'rejection'
+
+
+@pytest.mark.parametrize('where', ['before', 'after'])
+@pytest.mark.parametrize('progress', [
+    'Your application remains under consideration.',
+    'Your candidacy is still under review.',
+    'Your application for the Software Engineer position remains under review.',
+    'We are still reviewing your application.',
+])
+def test_current_review_prevents_comparative_decision_from_being_recorded(where, progress):
+    parts = [RECEIPT, COMPARISON, DECISION]
+    parts.insert(1 if where == 'before' else len(parts), progress)
+    ev = evidence(' '.join(parts))
+    assert read_intent(ev).classification == 'possible_rejection'
+    assert reconcile(ev, [APP]).target is None
+
+
+def test_comparative_reference_does_not_override_current_offer_or_interview():
+    for suffix in ['We invite you to a technical interview.', 'We are pleased to offer you the position.']:
+        ev = evidence(' '.join([RECEIPT, COMPARISON, DECISION, suffix]))
+        assert read_intent(ev).classification == 'possible_rejection'
+        assert reconcile(ev, [APP]).target is None
+
+
+def test_comparative_decision_in_quoted_history_is_not_current():
+    ev = evidence('We received your application.\n----- Original Message -----\n' + ' '.join([RECEIPT, COMPARISON, DECISION]))
+    assert read_intent(ev).classification == 'application_confirmation'

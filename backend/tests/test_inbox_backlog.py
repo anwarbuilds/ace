@@ -131,6 +131,13 @@ def test_digest_articles_are_not_personal_interview_evidence():
     assert read_intent(actual).classification == 'rejection'
 
 
+def test_public_speaker_registration_without_webinar_keyword_is_routine():
+    ev=evidence('Join us on 18 January 2030 as we talk to a technology leader about distributed systems. Register now. We hope to see you there!', 'Technology speaker session')
+    assert reassess(ev,[APP],'online_assessment').disposition=='ignored'
+    actual=evidence('Please complete your online assessment for this application. '+ev.body,'Application next steps')
+    assert read_intent(actual).classification=='online_assessment'
+
+
 def test_named_test_completion_needs_completed_submission_and_delivery():
     ev = evidence("Thanks for completing LanternSWE. We've sent your submission to Silverpine.")
     assert read_intent(ev).classification == 'assessment_completed'
