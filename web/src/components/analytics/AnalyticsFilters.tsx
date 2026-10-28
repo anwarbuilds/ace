@@ -16,7 +16,7 @@ export function AnalyticsFilters({ families, today }: { families: string[]; toda
   const router = useRouter();
   const path = usePathname();
   const params = useSearchParams();
-  const [dates, setDates] = useState(params.get("days") === "custom");
+  const [dates, setDates] = useState(params.get("days") === "custom" || Boolean(params.get("start") || params.get("end")));
   const change = (key: string, value: string) => {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value); else next.delete(key);
@@ -28,7 +28,7 @@ export function AnalyticsFilters({ families, today }: { families: string[]; toda
     <select disabled={!ready} id="analytics-family" value={params.get("family") ?? ""} onChange={e => change("family", e.target.value)}>
       <option value="">All roles</option>{families.map(f => <option value={f} key={f}>{familyLabel(f)}</option>)}
     </select>
-    <div className="an-ranges" aria-label="Submission date range" role="group">{[["14", "14 days"], ["30", "30 days"], ["90", "90 days"], ["all", "All time"]].map(([value, label]) => <button disabled={!ready} type="button" key={value} aria-pressed={(params.get("days") ?? "30") === value} onClick={() => {setDates(false);change("days", value);}}>{label}</button>)}</div>
+    <div className="an-ranges" aria-label="Submission date range" role="group">{[["14", "14 days"], ["30", "30 days"], ["90", "90 days"], ["all", "All time"]].map(([value, label]) => <button disabled={!ready} type="button" key={value} aria-pressed={(params.get("days") ?? (params.get("start") || params.get("end") ? "custom" : "all")) === value} onClick={() => {setDates(false);change("days", value);}}>{label}</button>)}</div>
     <button disabled={!ready} className="an-date-toggle" aria-expanded={dates} onClick={() => setDates(!dates)}><span aria-hidden="true">▦</span> Choose dates</button>
     {dates && <form className="an-date-popover" onSubmit={e => {
       e.preventDefault();

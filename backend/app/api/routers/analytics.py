@@ -15,12 +15,16 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+import re
+
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
-from backend.app.api.routers.inbox import _identities
-from backend.app.db.models import ApplicationEventRecord, CompanyPetitionReportRecord, GmailMessageRecord, JobEvaluationRecord
+from backend.app.api.routers.inbox import _identities, _eligible_stale_query, PENDING
+from backend.app.inbox.queue import decision_expression
+from backend.app.db.models import ApplicationEventRecord, CompanyPetitionReportRecord, GmailMessageRecord, JobEvaluationRecord, GmailConnectionRecord
+from backend.app.inbox.reconcile import _MARKING_GRACE
 
 router = APIRouter()
 POSITIVE = {"recruiter_reply", "online_assessment", "screening", "interview", "interviewing", "offer", "accepted"}
@@ -37,12 +41,14 @@ def aware(stamp: datetime) -> datetime:
     return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
 
 
-def analytics_read(session: Session, *, days: str = "30", family: str | None = None,
+def analytics_read(session: Session, *, days: str = "all", family: str | None = None,
                    start: date | None = None, end: date | None = None, tz: str = "UTC",
                    company: str | None = None, now: datetime | None = None, records: bool = False,
                    status: str | None = None, evidence: str | None = None, eligible: bool = False,
                    timed: bool = False, offset: int = 0, limit: int = 50, q: str | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
+    explicit_dates = start is not None or end is not None
+    include_undated = days == "all" and not explicit_dates
     try:
         zone = ZoneInfo(tz)
     except (ZoneInfoNotFoundError, ValueError):
@@ -61,7 +67,7 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
     eligible_family = [a for a in identities if not family or role[a.key] == family]
     selected = [a for a in eligible_family if a.key in dated and start <= dated[a.key] <= end]
     # All-time keeps undated external history visible; it never invents a chart date.
-    if days == "all" and end == today:
+    if include_undated:
         selected += [a for a in eligible_family if a.key not in dated]
     keys = {a.key for a in selected}
     # Restrict event reads to selected application keys, including corresponding undos.
@@ -81,31 +87,65 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
         for linked in linked_events:
             if linked.id not in linked_undos and linked.kind != "undo" and linked.application_key.startswith(("job:", "external:")):
                 message_targets[linked.gmail_message_id].add(linked.application_key)
+    # First outcomes drive response timing; latest outcomes drive company
+    # recency, evidence links and the current cohort partition.
     events: dict[str, dict[str, datetime | None]] = defaultdict(dict)
+    latest_events: dict[str, dict[str, datetime | None]] = defaultdict(dict)
+    excluded: Counter = Counter()
+    excluded_by_key: dict[str, list[dict]] = defaultdict(list)
+    pre_mark = 0
+
+    def exclude(e, reason: str) -> None:
+        excluded[reason] += 1
+        if e.gmail_message_id:
+            excluded_by_key[e.application_key].append({"message_id": e.gmail_message_id, "reason": reason})
+
     # The email behind each counted event, so a record can open it in Inbox.
     emails: dict[str, dict[str, int]] = defaultdict(dict)
     actors: dict[str, set[str]] = defaultdict(set)
     selected_by_key = {a.key: a for a in selected}
     for e in raw_events:
-        if e.id in undone or e.kind == "undo" or e.actor not in {"owner", "verified_automation"}:
+        if e.id in undone or e.kind == "undo":
             continue
         kind = e.kind
         message = messages.get(e.gmail_message_id)
-        if e.gmail_message_id and (not message or len(message_targets[e.gmail_message_id]) != 1 or message.selected_application_key != e.application_key or message.decision not in {"manual", "automatic"}):
-            continue
         if kind == "manual_correction":
             kind = STAGE_KIND.get(e.new_status, "unknown")
             if message and message.classification == "online_assessment" and e.new_status == "screening":
                 kind = "online_assessment"
         if kind not in POSITIVE | {"rejection"}:
             continue
+        if e.actor not in {"owner", "verified_automation"}:
+            exclude(e, "unconfirmed_actor")
+            continue
+        if e.gmail_message_id:
+            if not message:
+                exclude(e, "missing_email")
+                continue
+            if len(message_targets[e.gmail_message_id]) != 1:
+                exclude(e, "conflicting_targets")
+                continue
+            if message.selected_application_key != e.application_key or message.decision not in {"manual", "automatic"}:
+                exclude(e, "email_not_confirmed_for_application")
+                continue
         app = selected_by_key[e.application_key]
         stamp = aware(e.occurred_at) if e.occurred_at else None
-        if stamp and (stamp > now or (app.submitted_at and stamp < aware(app.submitted_at))):
+        if stamp and stamp > now:
+            exclude(e, "future_timestamp")
             continue
+        if stamp and app.submitted_at and stamp < aware(app.submitted_at):
+            # Inbox accepts a quick response received just before the owner
+            # marks Applied. Retain that confirmed email, never a negative lag.
+            if not message or aware(app.submitted_at) - stamp > _MARKING_GRACE:
+                exclude(e, "before_application_window")
+                continue
+            pre_mark += 1
         previous = events[e.application_key].get(kind)
         if kind not in events[e.application_key] or (stamp and (previous is None or stamp < previous)):
             events[e.application_key][kind] = stamp
+        latest = latest_events[e.application_key].get(kind)
+        if kind not in latest_events[e.application_key] or (stamp and (latest is None or stamp >= latest)):
+            latest_events[e.application_key][kind] = stamp
             if e.gmail_message_id:
                 emails[e.application_key][kind] = e.gmail_message_id
             else:
@@ -123,16 +163,36 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
             kind = "screening"
         if kind and kind not in events[a.key]:
             events[a.key][kind] = None
-            actors[a.key].add("owner")
+            latest_events[a.key][kind] = None
+            actors[a.key].add("recorded_status")
     positive = {key for key, kinds in events.items() if POSITIVE.intersection(kinds)}
     rejected = {key for key, kinds in events.items() if "rejection" in kinds}
     assessed = {key for key, kinds in events.items() if "online_assessment" in kinds}
     interviewed = {key for key, kinds in events.items() if {"interview", "interviewing"}.intersection(kinds)}
     mature = {a.key for a in selected if a.submitted_at and aware(a.submitted_at) <= now - timedelta(days=30)}
-    # Outcome partitions are disjoint. An explicit rejection takes precedence for
-    # this cohort breakdown; the separate event chart retains the earlier reply.
-    confirmed_negative = mature & rejected
-    confirmed_positive = (mature & positive) - confirmed_negative
+    # A reconsidered rejection must not override a later interview or offer.
+    # Equal-time conflicts remain conservative; historical evidence keeps both.
+    def polarity(a) -> str | None:
+        kinds = events.get(a.key, {})
+        if not kinds:
+            return None
+        dated_outcomes = [(stamp, kind == "rejection", kind) for kind, stamp in latest_events[a.key].items() if stamp]
+        latest = max(dated_outcomes, default=None)
+        stage = STAGE_KIND.get(a.current_status)
+        status_kind = "screening" if a.current_status == "screening" and "screening" in kinds else stage
+        # An undated current stage remains authoritative without inventing
+        # when it happened or letting an older dated event erase it.
+        if status_kind in kinds and latest_events[a.key].get(status_kind) is None:
+            return "rejection" if stage == "rejection" else "positive"
+        if stage and a.status_changed_at and (latest is None or aware(a.status_changed_at) > latest[0]):
+            return "rejection" if stage == "rejection" else "positive"
+        if latest:
+            return "rejection" if latest[1] else "positive"
+        return "rejection" if "rejection" in kinds else "positive"
+
+    polarities = {a.key: polarity(a) for a in selected}
+    confirmed_negative = {key for key in mature if polarities[key] == "rejection"}
+    confirmed_positive = {key for key in mature if polarities[key] == "positive"}
     no_outcome = mature - positive - rejected
     withdrawn = {a.key for a in selected if a.current_status == "withdrawn"}
     pending = no_outcome - withdrawn
@@ -151,7 +211,7 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
         employers[a.company].append(a)
     company_rows = []
     for name, apps in sorted(employers.items(), key=lambda item: (-len(item[1]), item[0])):
-        stamps = [(stamp, kind) for a in apps for kind, stamp in events.get(a.key, {}).items() if stamp]
+        stamps = [(stamp, kind) for a in apps for kind, stamp in latest_events.get(a.key, {}).items() if stamp]
         latest = max(stamps, default=None)
         company_rows.append({"name": name, **group(apps), "latest": latest[1] if latest else "Not recorded", "latest_at": latest[0].isoformat() if latest else None})
     # Every employer with a recorded rejection in this selection, newest
@@ -160,13 +220,13 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
     rejected_companies = []
     for name, apps in employers.items():
         refused = sorted((a for a in apps if a.key in rejected),
-                         key=lambda a: (*_latest_first(events[a.key].get("rejection")), a.title.casefold()))
+                         key=lambda a: (*_latest_first(latest_events[a.key].get("rejection")), a.title.casefold()))
         if refused:
-            stamps = [events[a.key]["rejection"] for a in refused if events[a.key].get("rejection")]
+            stamps = [latest_events[a.key]["rejection"] for a in refused if latest_events[a.key].get("rejection")]
             rejected_companies.append({"name": name, "rejections": len(refused), "applications": len(apps),
                                        "latest": max(stamps, default=None), "dated": len(stamps),
                                        "roles": list(dict.fromkeys(a.title for a in refused)),
-                                       "in_progress": sum(a.key not in rejected and a.current_status in IN_PROGRESS for a in apps)})
+                                       "in_progress": sum(a.current_status in IN_PROGRESS and (a.key not in rejected or polarities[a.key] == "positive") for a in apps)})
     rejected_companies.sort(key=lambda row: (*_latest_first(row["latest"]), -row["rejections"], row["name"].casefold()))
     newest_rejection = max((row["latest"] for row in rejected_companies if row["latest"]), default=None)
     monday = today - timedelta(days=today.weekday())
@@ -181,15 +241,20 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
         cursor += timedelta(days=1)
     timing = Counter()
     lags = []
+    timed_keys = set()
     for a in selected:
         stamps = [stamp for stamp in events.get(a.key, {}).values() if stamp]
-        if a.submitted_at and stamps:
+        if a.submitted_at and stamps and min(stamps) >= aware(a.submitted_at):
             lag = (min(stamps) - aware(a.submitted_at)).total_seconds() / 86400
+            timed_keys.add(a.key)
             lags.append(lag)
             timing["0 to 7 days" if lag <= 7 else "8 to 14 days" if lag <= 14 else "15 to 30 days" if lag <= 30 else "30+ days"] += 1
-    review_counts = dict(session.execute(select(GmailMessageRecord.decision, func.count()).group_by(GmailMessageRecord.decision)).all())
+    queue_decision = decision_expression()
+    review_counts = dict(session.execute(select(queue_decision, func.count()).group_by(queue_decision)).all())
+    stale = sum(session.scalar(select(func.count()).select_from(_eligible_stale_query(connection).subquery())) or 0
+                for connection in session.scalars(select(GmailConnectionRecord)))
     ambiguous = sum(len(candidate_keys or []) > 1 for candidate_keys in session.scalars(
-        select(GmailMessageRecord.candidate_keys).where(GmailMessageRecord.decision == "review")))
+        select(GmailMessageRecord.candidate_keys).where(queue_decision == "review")))
     reports = session.scalars(select(CompanyPetitionReportRecord).where(CompanyPetitionReportRecord.ace_company.in_(employers), CompanyPetitionReportRecord.entity_verified.is_(True))).all() if employers else []
     # Exact entity + metric + year reconciliation; newer revisions replace old
     # releases instead of adding duplicate totals. DOL stays a separate metric.
@@ -223,7 +288,7 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
                 incomplete_years.add(r.period)
     for period in incomplete_years:
         annual.pop(period, None)
-    result = {"as_of": now.isoformat(), "timezone": tz, "start": start.isoformat(), "end": end.isoformat(), "days": days, "family": family,
+    result = {"as_of": now.isoformat(), "timezone": tz, "start": start.isoformat(), "end": end.isoformat(), "days": "custom" if explicit_dates else days, "family": family,
             "available_families": sorted(set(role.values())), "total_submitted": len(identities), "submitted": len(selected), "undated": sum(a.key not in dated for a in eligible_family),
             "week_total": sum(weekly.values()), "positive": len(positive), "assessments": len(assessed), "interviews": len(interviewed),
             "has_outcome_evidence": bool(positive or rejected), "statuses": dict(Counter(a.current_status for a in selected)),
@@ -232,8 +297,16 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
             "cohort": {"eligible": len(mature), "positive": len(confirmed_positive), "rejected": len(confirmed_negative), "pending": len(pending), "unknown": len(unknown), "rate": None, "coverage": "No complete observation coverage is recorded. Pending applications may have unrecorded responses."},
             "timing": [{"label": label, "count": timing[label]} for label in ("0 to 7 days", "8 to 14 days", "15 to 30 days", "30+ days")],
             "median_days": median(lags) if lags else None, "timing_sample": len(lags),
-            "evidence": {"positive": len(positive), "rejected": len(rejected), "manual": sum("owner" in value for value in actors.values()), "automatic": sum("verified_automation" in value for value in actors.values())},
-            "review": {"needs_review": review_counts.get("review", 0), "exact_preview": review_counts.get("exact_preview", 0), "ambiguous": ambiguous},
+            "evidence": {"positive": len(positive), "rejected": len(rejected), "manual": sum("owner" in value for value in actors.values()), "automatic": sum("verified_automation" in value for value in actors.values()),
+                         "recorded_status": sum("recorded_status" in value for value in actors.values())},
+            "review": {"needs_review": review_counts.get("review", 0), "exact_preview": review_counts.get("exact_preview", 0),
+                       "deferred": review_counts.get("deferred", 0), "ambiguous": ambiguous},
+            "inbox_audit": {"stored_messages": sum(review_counts.values()),
+                            "recorded_messages": sum(review_counts.get(key, 0) for key in ("manual", "automatic")),
+                            "pending_messages": sum(review_counts.get(key, 0) for key in PENDING),
+                            "ignored_messages": review_counts.get("ignored", 0), "stale_messages": stale,
+                            "pre_mark_email_outcomes": pre_mark, "excluded_events": dict(excluded),
+                            "event_scope": "selected_applications"},
             "roles": [{"family": key, **group(apps)} for key, apps in sorted(groups.items(), key=lambda item: -len(item[1]))],
             "attribution": {"resume": "Not recorded", "channel": "Not recorded", "combinations": []},
             "companies": company_rows, "selected_company": selected_company,
@@ -256,7 +329,7 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
                          "interview": interviewed, "response": positive | rejected}
         if evidence and evidence not in evidence_keys:
             raise HTTPException(422, "Choose a supported outcome evidence type.")
-        dated_responses = {a.key for a in selected if a.submitted_at and any(stamp for stamp in events.get(a.key, {}).values())}
+        dated_responses = timed_keys
         # Every word must appear in the company, role, job ID or record key.
         words = (q or "").casefold().split()[:8]
 
@@ -272,7 +345,7 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
         matching.sort(key=lambda a: (aware(a.submitted_at) if a.submitted_at else datetime.min.replace(tzinfo=timezone.utc), a.key), reverse=True)
         if evidence == "rejection":
             # Rejected applications read newest rejection first; undated last.
-            matching.sort(key=lambda a: _latest_first(events[a.key].get("rejection")))
+            matching.sort(key=lambda a: _latest_first(latest_events[a.key].get("rejection")))
         result["record_total"] = len(matching)
         result["record_offset"] = offset
         result["record_limit"] = limit
@@ -281,15 +354,38 @@ def analytics_read(session: Session, *, days: str = "30", family: str | None = N
                                "family": role[a.key], "submitted_at": aware(a.submitted_at).isoformat() if a.submitted_at else None,
                                "status": a.current_status, "event_types": sorted(events.get(a.key, {})),
                                "evidence": [{"kind": kind, "at": stamp.isoformat() if stamp else None,
-                                             "message_id": emails.get(a.key, {}).get(kind)}
-                                            for kind, stamp in sorted(events.get(a.key, {}).items())],
+                                             "message_id": emails.get(a.key, {}).get(kind),
+                                             **({"predates_mark": True} if stamp and a.submitted_at and stamp < aware(a.submitted_at) else {})}
+                                            for kind, stamp in sorted(latest_events.get(a.key, {}).items())],
+                               "excluded_evidence": excluded_by_key.get(a.key, [])[:25],
                                "href": f"/app/jobs/{a.key.split(':')[1]}" if a.key.startswith("job:") else None}
                               for a in matching[offset:offset + limit]]
+        result["not_listed"] = {"applications": [], "emails": [], "application_total": 0, "email_total": 0}
+        if words and not matching:
+            other = [a for a in identities if found(a)]
+            other.sort(key=lambda a: (aware(a.submitted_at) if a.submitted_at else datetime.min.replace(tzinfo=timezone.utc), a.key), reverse=True)
+            mail_query = select(GmailMessageRecord)
+            for word in words:
+                pattern = "%" + re.sub(r"([\\%_])", r"\\\1", word) + "%"
+                mail_query = mail_query.where(or_(*(column.ilike(pattern, escape="\\") for column in
+                                                    (GmailMessageRecord.sender, GmailMessageRecord.subject, GmailMessageRecord.snippet))))
+            email_total = session.scalar(select(func.count()).select_from(mail_query.subquery())) or 0
+            related_mail = session.scalars(mail_query.order_by(GmailMessageRecord.received_at.desc(), GmailMessageRecord.id.desc()).limit(25))
+            result["not_listed"] = {
+                "applications": [{"key": a.key, "company": a.company, "title": a.title, "status": a.current_status,
+                                  "submitted_at": aware(a.submitted_at).isoformat() if a.submitted_at else None,
+                                  "outside_range": (not include_undated if a.key not in dated else not start <= dated[a.key] <= end),
+                                  "href": f"/app/jobs/{a.key.split(':')[1]}" if a.key.startswith("job:") else "/app/applications"}
+                                 for a in other[:25]],
+                "emails": [{"id": m.id, "subject": m.subject, "decision": m.decision, "classification": m.classification,
+                            "received_at": aware(m.received_at).isoformat()} for m in related_mail],
+                "application_total": len(other), "email_total": email_total,
+            }
     return result
 
 
 @router.get("/api/analytics")
-def analytics(days: str = Query("30", pattern="^(14|30|90|all|custom)$"), family: str | None = None,
+def analytics(days: str = Query("all", pattern="^(14|30|90|all|custom)$"), family: str | None = None,
               start: date | None = None, end: date | None = None, tz: str = "UTC", company: str | None = None,
               records: bool = False, status: str | None = None, evidence: str | None = None,
               eligible: bool = False, timed: bool = False, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100),

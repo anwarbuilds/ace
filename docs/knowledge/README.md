@@ -11,7 +11,8 @@ checks. Use it to navigate after the required continuity read. The last directly
 verified runtime is API `9d05673` and web `1fee671` at 2026-10-26 17:59
 Pacific. Contextual Memory API is deployed; extension source 1.30.0 still needs
 owner Reload and employer-tab refresh. Existing Inbox `6163f59` parser 5 is
-preserved, while reliable-Inbox P1 to P6 remain an unimplemented plan.
+preserved in production. Reliable-Inbox P1 to P5 are implemented and tested
+locally in `ace-inbox`, awaiting release approval; parser 6 is not deployed.
 Documentation updates are not deployments or fresh live verification. Keep this distinction when continuing in a new chat.
 
 | File | Covers | Read when | Size |

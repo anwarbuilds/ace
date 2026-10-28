@@ -15,10 +15,8 @@ export interface FullEmail {sender:string; to:string; subject:string; received_a
 type Action = (run:()=>Promise<unknown>, success:string)=>Promise<void>;
 
 export const PENDING = ["review","exact_preview","deferred"];
-/** What ACE read the email as. */
-export const KIND: Record<string,string> = {rejection:"Rejection",possible_rejection:"Possible rejection",interview:"Interview",online_assessment:"Assessment",offer:"Offer",recruiter_reply:"Recruiter reply",application_confirmation:"Acknowledgement",unknown:"No outcome found"};
-/** What happened to it. */
-export const STATE: Record<string,string> = {review:"Needs you",exact_preview:"Needs you",deferred:"Decide later",automatic:"Recorded by ACE",manual:"Recorded by you",receipt:"Acknowledgement",update:"Status update",unrelated:"Not about applications",ignored:"Nothing recorded"};
+import { KIND, STATE } from "@/lib/inboxLabels";
+export { KIND, STATE } from "@/lib/inboxLabels";
 // One click each. The status is what the application becomes; the kind is
 // what the email was, so Analytics counts an assessment as an assessment.
 const OUTCOMES = [
@@ -85,6 +83,23 @@ export function likelyApplications(message:InboxMessage, applications:InboxAppli
   }).slice(0,8);
 }
 
+/** Guard an owner-selected application against an email naming another company.
+ * This is a warning only; it never aliases employers or changes automatic matching.
+ */
+export function companyNamed(message:InboxMessage, company:string, text=""):boolean {
+  const haystack=`${message.sender} ${message.subject} ${message.snippet} ${text}`;
+  const name=squash(company.replace(/\b(?:incorporated|inc|llc|ltd|corp|corporation|company|plc)\.?$/i,"").trim());
+  if(name.length>=4&&squash(haystack).includes(name))return true;
+  const tokens=haystack.match(/\b[A-Za-z0-9]+\b/g)??[];
+  const short=initials(company);
+  return tokens.some(token=>squash(token)===name || (short.length>=2&&short.length<=6&&token===token.toUpperCase()&&squash(token)===short))
+    || (short.length>=3&&squash(tenantOf(senderParts(message.sender).address))===short);
+}
+
+export function confirmCompany(message:InboxMessage,company:string,text:string,confirm:(warning:string)=>boolean):boolean {
+  return companyNamed(message,company,text)||confirm(`This email does not name ${clean(company)}. Check the employer and role before recording this outcome. Record it for ${clean(company)} anyway?`);
+}
+
 /** A company and role for an application ACE does not have, read from the email for the owner to check. */
 export function applicationFromEmail(message:InboxMessage, text=""): {company:string; title:string} {
   const body=(text||message.snippet).replace(/\s+/g," ");
@@ -128,9 +143,18 @@ function AppCard({app}:{app:InboxApplication}) {
 
 export function InboxReviewPanel({message,applications,events,busy,action,account,now=0}: {message:InboxMessage|null; applications:InboxApplication[]; events:InboxEvent[]; busy:boolean; action:Action; account?:string|null; now?:number}) {
   const id=message?.id;
+  const decision=message?.decision;
   const [full,setFull]=useState<FullEmail|null>(()=>id==null?null:loaded.get(id)??null);
   const [fullError,setFullError]=useState("");
   const [plain,setPlain]=useState(false);
+  const [messageEvents,setMessageEvents]=useState<InboxEvent[]>([]);
+  useEffect(()=>{
+    if(id==null||!["automatic","manual"].includes(decision??""))return;
+    let live=true;
+    getJson<{items:InboxEvent[]}>("/api/inbox/events",new URLSearchParams({message_id:String(id)}))
+      .then(result=>{if(live)setMessageEvents(result.items);}).catch(()=>{});
+    return ()=>{live=false;};
+  },[id,decision]);
   const [targetKey,setTargetKey]=useState(()=>message?.selected_application_key??message?.candidate_keys[0]??"");
   const [choosing,setChoosing]=useState(false);
   const [search,setSearch]=useState("");
@@ -155,9 +179,13 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
   // Search also finds "gm" and "generalmotors" for General Motors.
   const options=query?applications.filter(a=>`${a.company} ${a.title} ${a.requisition_id??""} ${squash(a.company)} ${initials(a.company)}`.toLocaleLowerCase().includes(query)).slice(0,30):candidates.length?candidates:guesses;
   const linked=message.selected_application_key?byKey.get(message.selected_application_key):undefined;
-  const change=events.find(e=>e.gmail_message_id===message.id&&e.kind!=="undo"&&e.application_key===message.selected_application_key&&["owner","verified_automation"].includes(e.actor)&&!events.some(other=>other.undo_of_id===e.id));
+  const history=[...new Map([...events,...messageEvents].map(event=>[event.id,event])).values()];
+  const change=history.find(e=>e.gmail_message_id===message.id&&e.kind!=="undo"&&e.application_key===message.selected_application_key&&["owner","verified_automation"].includes(e.actor)&&!history.some(other=>other.undo_of_id===e.id));
   const ready=draft?Boolean(draft.company.trim()&&draft.title.trim()):Boolean(target);
+  const chosenCompany=draft?.company.trim()||target?.company||"";
+  const mismatch=Boolean(chosenCompany)&&!companyNamed(message,chosenCompany,full?.text??"");
   const decide=(outcome:typeof OUTCOMES[number])=>{
+    if(!ready||!confirmCompany(message,chosenCompany,full?.text??"",warning=>window.confirm(warning)))return;
     if(draft){if(ready)void action(()=>sendJson("POST","/api/inbox/applications",{message_id:message.id,company:draft.company,title:draft.title,status:outcome.status,kind:outcome.kind,applied_on:draft.applied||null}),`${outcome.done}: ${clean(draft.company)} added to your applications`);}
     else if(target)void action(()=>sendJson("POST","/api/inbox/review",{message_id:message.id,application_key:target.key,status:outcome.status,expected_status:target.status,confirmed:true,kind:outcome.kind}),`${outcome.done}: ${clean(target.company)}`);
   };
@@ -213,6 +241,7 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
       <div className="inbox-outcomes" role="group" aria-label="What is this email?">
         <h3>What is this email?</h3>
         {pending&&message.reason&&<p className="inbox-muted">Why it waits: {clean(message.reason)}.</p>}
+        {mismatch&&<p className="inbox-error" role="status">This email does not name {clean(chosenCompany)}. Check the employer and role. Recording an outcome will ask you to confirm this choice.</p>}
         <p className="inbox-group">Changes the application</p>
         <div className="inbox-choices">{OUTCOMES.map(outcome=><button key={outcome.kind} className={`inbox-choice${suggest===outcome.kind?" suggested":""}`} disabled={busy||!ready} onClick={()=>decide(outcome)}><strong>{outcome.label}</strong><span>{outcome.hint}</span>{suggest===outcome.kind&&<em>ACE&rsquo;s reading</em>}</button>)}</div>
         {!ready&&<p className="inbox-muted">{draft?"Give the company and the role to record an outcome.":"Choose the application above, or add it from this email, to record an outcome."}</p>}

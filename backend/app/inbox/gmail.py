@@ -11,7 +11,7 @@ import hashlib
 import math
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlencode
 
@@ -22,6 +22,26 @@ from backend.app.auth.google import DISCOVERY_URL, GoogleAuthError, verify_id_to
 
 SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 API = "https://gmail.googleapis.com/gmail/v1/users/me"
+# All dates, including archived mail. Gmail selects candidates before any body
+# read. These are search candidates, never a claim of semantic completeness.
+JOB_MAIL_QUERY = ('-in:spam -in:trash {'
+    '"your application" "my application" "application update" "application status" '
+    '"application for" "application to" "thank you for applying" candidacy requisition '
+    'interview assessment recruiting recruitment "talent acquisition" '
+    '"phone screen" "coding challenge" "coding test" "take home" '
+    '"offer letter" "employment offer" "offer of employment" '
+    '"your interest" "your position" "your role" '
+    'from:(myworkday.com) from:(greenhouse-mail.io) from:(lever.co) '
+    'from:(ashbyhq.com) from:(smartrecruiters.com) from:(icims.com) '
+    'from:(jobvite.com) from:(taleo.net) from:(successfactors.com) '
+    'from:(oraclecloud.com) from:(workablemail.com) from:(bamboohr.com) '
+    'from:(applytojob.com) from:(teamtailor.com) from:(recruitee.com) '
+    'from:(avature.net) from:(brassring.com) from:(rippling.com) '
+    '"not selected" "position has been filled" "pursue other candidates"}')
+
+
+def job_query(days: int = 0) -> str:
+    return JOB_MAIL_QUERY + (" " + window_query(days) if days else "")
 
 
 class GmailError(ValueError):
@@ -34,6 +54,10 @@ class GmailCursorExpired(GmailError):
 
 class GmailTemporaryError(GmailError):
     """Retry later without invalidating the owner's existing grant."""
+
+
+class GmailPageExpired(GmailTemporaryError):
+    """Restart pagination, without treating a page token as an OAuth failure."""
 
 
 class GmailRateLimited(GmailTemporaryError):
@@ -161,6 +185,8 @@ def get_json(path: str, token: str, params: dict | None = None) -> dict:
             response = httpx.get(API + path, headers={"Authorization": "Bearer " + token}, params=params, timeout=20)
             if response.status_code == 404:
                 raise GmailCursorExpired("Gmail history cursor expired.")
+            if response.status_code == 400 and path in {"/messages", "/history"} and params and params.get("pageToken"):
+                raise GmailPageExpired("Gmail pagination expired. Restart verification; saved email is kept.")
             limited = _rate_limited(response)
             if not limited and response.status_code not in {500, 502, 503, 504}:
                 if response.status_code == 401:
@@ -184,6 +210,35 @@ def get_json(path: str, token: str, params: dict | None = None) -> dict:
                 raise GmailRateLimited("Google limited Gmail reads. Wait, then retry. Your connection is still authorized.")
             raise GmailTemporaryError("Gmail is temporarily unavailable. Try again later; your saved connection is unchanged.") from error
         time.sleep(delay + secrets.randbelow(250) / 1000)
+
+
+def window_query(days: int) -> str:
+    # Calendar boundary shared with the read-only coverage report. Gmail dates
+    # use Pacific midnight; include the boundary day rather than miss evidence.
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days + 1)).strftime("%Y/%m/%d")
+    return f"after:{cutoff}"
+
+
+def list_message_ids(token: str, query: str, max_pages: int = 60) -> tuple[list[str], bool]:
+    """List IDs newest first, deduplicated; never call a partial list complete."""
+    ids: dict[str, None] = {}
+    page = None
+    seen_pages: set[str] = set()
+    for _ in range(max_pages):
+        params = {"q": query, "maxResults": 500}
+        if page:
+            params["pageToken"] = page
+        batch = get_json("/messages", token, params)
+        for item in batch.get("messages", []):
+            if item.get("id"):
+                ids[str(item["id"])] = None
+        page = batch.get("nextPageToken")
+        if not page:
+            return list(ids), True
+        if page in seen_pages:
+            break
+        seen_pages.add(page)
+    return list(ids), False
 
 
 def revoke(refresh: str) -> None:

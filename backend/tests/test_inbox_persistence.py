@@ -45,6 +45,7 @@ def database(monkeypatch):
     monkeypatch.delenv("GMAIL_AUTO_REJECTIONS", raising=False)
     monkeypatch.setenv("GMAIL_AUTO_OUTCOMES_ALLOWED", "true")
     get_settings.cache_clear()
+    inbox._FULL_SCANS.clear(); inbox._COVERAGE.clear()
     engine = create_engine("sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     with Session(engine) as session:
@@ -71,6 +72,12 @@ def gmail_reads(monkeypatch):
 
 def owner_request():
     return SimpleNamespace(state=SimpleNamespace(principal=Principal(kind="session", user=SimpleNamespace(id=1))))
+
+
+def verified_scope(session, conn):
+    from backend.app.inbox.full_history import FullMailboxScan
+    ids = set(session.scalars(select(GmailMessageRecord.gmail_id).where(GmailMessageRecord.connection_id == conn.id)))
+    inbox._FULL_SCANS[inbox._coverage_key(conn, 0)] = FullMailboxScan("fictional", phase="complete", ids=ids)
 
 
 def row_for(session: Session, gmail_id: str) -> GmailMessageRecord:
@@ -104,11 +111,11 @@ def test_positive_outcomes_keep_the_stricter_path(database):
     assert _ingest(session, conn, assessment, identities, preview=False) == "automatic"
     interview = message("new-interview", "Req ID: SE-102. We invite you to interview.")
     assert _ingest(session, conn, interview, identities, preview=False) == "automatic"
-    assert statuses(session) == ["applied", "applied", "interviewing"]
+    assert statuses(session) == ["screening", "applied", "interviewing"]
     # A rejection older than the interview cannot undo the newer stage.
     older = message("old-rejection", "Req ID: SE-102. We have decided to move forward with other candidates.", NOW - timedelta(days=1))
     assert _ingest(session, conn, older, _identities(session), preview=False) == "review"
-    assert statuses(session) == ["applied", "applied", "interviewing"]
+    assert statuses(session) == ["screening", "applied", "interviewing"]
     assert {e.kind for e in job_events(session)} == {"online_assessment", "interview"}
     assert mark_counts(session)["applications_total"] == 3
 
@@ -149,7 +156,9 @@ def test_one_click_review_records_what_the_owner_says_and_undo_returns_the_email
 
 def test_owner_can_decide_an_email_ace_ignored_but_not_one_already_applied(database):
     session, conn = database
-    _ingest(session, conn, message("noise", "Weekly newsletter about our culture."), _identities(session), preview=True)
+    newsletter = message("noise", "Weekly newsletter about our culture.")
+    next(h for h in newsletter["payload"]["headers"] if h["name"] == "Subject")["value"] = "Fictional newsletter"
+    _ingest(session, conn, newsletter, _identities(session), preview=True)
     noise = row_for(session, "noise")
     assert noise.decision == "ignored"
     assert inbox.decide_message(noise.id, inbox.EmailDisposition(action="receipt"), owner_request(), session)["decision"] == "receipt"
@@ -171,8 +180,9 @@ def test_undone_automatic_change_is_not_repeated_by_a_recheck(database, gmail_re
     row.parser_version = "1"
     session.commit()
     monkeypatch.setattr(inbox.gmail, "get_json", lambda path, *a: exact)
+    verified_scope(session, conn)
     result = inbox.recheck(inbox.RecheckRequest(), owner_request(), session)
-    assert result["counts"] == {"review": 1} and result["remaining"] == 0
+    assert result["checked"] == 0 and result["remaining"] == 0
     assert row.decision_reason == "You undid ACE's change for this email"
     assert statuses(session) == ["applied"] * 3
 
@@ -196,16 +206,18 @@ def test_recheck_applies_current_rules_to_waiting_email(database, gmail_reads, m
         return message(name, bodies[name][0], NOW - timedelta(hours=1))
 
     monkeypatch.setattr(inbox.gmail, "get_json", get)
-    assert inbox.messages(owner_request(), session, None, 0, 50)["counts"]["stale"] == 3
+    verified_scope(session, conn)
+    assert inbox.messages(owner_request(), session, None, 0, 50)["counts"]["stale"] == 2
+    verified_scope(session, conn)
     result = inbox.recheck(inbox.RecheckRequest(limit=2), owner_request(), session)
-    assert result["checked"] == 2 and result["remaining"] == 1
+    assert result["checked"] == 2 and result["remaining"] == 0
     assert inbox.recheck(inbox.RecheckRequest(), owner_request(), session)["remaining"] == 0
     decisions = {r.gmail_id: r.decision for r in session.scalars(select(GmailMessageRecord))}
     # The generic rejection fits three applications, so it stays deferred.
     assert decisions == {"old-exact": "automatic", "old-deferred": "deferred", "old-receipt": "receipt", "current": "exact_preview"}
     assert "/messages/current" not in reads
     assert statuses(session) == ["applied", "applied", "rejected"]
-    assert session.scalar(select(func.count()).select_from(ApplicationEventRecord).where(ApplicationEventRecord.kind == "email_rechecked")) == 3
+    assert session.scalar(select(func.count()).select_from(ApplicationEventRecord).where(ApplicationEventRecord.kind == "email_rechecked")) == 2
 
 
 def test_full_email_is_read_live_and_never_stored(database, gmail_reads, monkeypatch):
@@ -280,7 +292,9 @@ def test_recheck_rereads_receipts_ace_filed_but_never_the_owners(database, gmail
     stored(session, conn, "owner-receipt", "receipt", "Application update", reason="You marked it an application receipt", version="2", minutes=61)
     session.commit()
     monkeypatch.setattr(inbox.gmail, "get_json", lambda path, *a: message(path.rsplit("/", 1)[1], bodies[path.rsplit("/", 1)[1]], NOW - timedelta(hours=1)))
+    verified_scope(session, conn)
     assert inbox.messages(owner_request(), session, None, 0, 50)["counts"]["stale"] == 1
+    verified_scope(session, conn)
     assert inbox.recheck(inbox.RecheckRequest(), owner_request(), session) == {"checked": 1, "counts": {"automatic": 1}, "remaining": 0}
     assert row_for(session, "owner-receipt").decision == "receipt"
     assert statuses(session) == ["applied", "rejected", "applied"]
@@ -346,3 +360,185 @@ def test_an_application_ace_never_knew_about_can_be_added_from_its_email(databas
     with pytest.raises(HTTPException) as error:
         inbox.add_application(inbox.AddedApplication(message_id=row.id, company=" ", title="Role", status="rejected"), owner_request(), session)
     assert error.value.status_code == 422
+
+
+def test_all_ignored_history_is_reread_but_owner_filings_stay(database, gmail_reads, monkeypatch):
+    session, conn = database
+    ignored = stored(session, conn, "forgotten-rejection", "ignored", subject="Application update", snippet="Your application", version="5")
+    old = stored(session, conn, "old-ignored", "ignored", subject="Application update", version="5")
+    old.received_at = NOW-timedelta(days=2500)
+    unrelated = stored(session, conn, "unrelated-ignored", "ignored", subject="Fictional news", snippet="Fictional", version="5")
+    owner = stored(session, conn, "owner-filed", "unrelated", subject="Application update", version="5")
+    manual = stored(session, conn, "owner-recorded", "manual", subject="Application update", version="5")
+    session.commit()
+    reads=[]
+    def get(path, *args):
+        key=path.rsplit("/",1)[-1]; reads.append(key)
+        if key=="forgotten-rejection":
+            return message(key,"Req ID: SE-101. Our immigration policy does not include sponsorship for this role.")
+        if key=="old-ignored":
+            return message(key,"Req ID: SE-102. We have decided to move forward with other candidates.", NOW-timedelta(days=2500))
+        return message(key,"Fictional newsletter with no application outcome.")
+    monkeypatch.setattr(inbox.gmail, "get_json", get)
+    verified_scope(session, conn)
+    result = inbox.recheck(inbox.RecheckRequest(), owner_request(), session)
+    assert result["checked"]==3 and result["remaining"]==0
+    assert set(reads)=={"forgotten-rejection","old-ignored","unrelated-ignored"}
+    assert result["counts"]["automatic"]==1
+    assert ignored.decision == "automatic" and ignored.parser_version == PARSER_VERSION
+    assert statuses(session) == ["applied", "rejected", "applied"]
+    assert [row.parser_version for row in [old, unrelated, owner, manual]] == [PARSER_VERSION,PARSER_VERSION,"5","5"]
+    assert old.decision=="review"  # Its outcome predates the application; no unsafe status update.
+    event = job_events(session)[0]
+    inbox.undo(event.id, owner_request(), session)
+    assert ignored.decision == "review" and statuses(session) == ["applied"]*3
+
+
+def test_unknown_recruiting_mail_recheck_exposes_ranked_candidates(database, gmail_reads, monkeypatch):
+    session, conn = database
+    ignored = stored(session, conn, "unclear-recruiting", "ignored", subject="Application message", version="5")
+    session.commit()
+    monkeypatch.setattr(inbox.gmail, "get_json", lambda *args: message("unclear-recruiting", "There is an update in your application portal for the Software Engineer role."))
+    verified_scope(session, conn)
+    result = inbox.recheck(inbox.RecheckRequest(), owner_request(), session)
+    assert result["counts"] == {"update": 1}
+    assert ignored.classification == "unclear" and len(ignored.candidate_keys) == 3
+    assert not job_events(session)
+
+
+@pytest.mark.parametrize("in_history", [True, False])
+def test_verifying_further_back_never_automates_historical_positive_outcomes(database, gmail_reads, monkeypatch, in_history):
+    session, conn = database
+    conn.history_id = "fictional-baseline"; conn.preview_complete = True; session.commit()
+    def get(path, *args):
+        if path == "/profile": return {"historyId": "before-listing"}
+        if path == "/messages": return {"messages": [{"id": "fictional-interview"}]}
+        if path == "/history": return {"historyId":"snapshot", "history": [{"messagesAdded": [{"message": {"id": "fictional-interview"}}]}]} if in_history else {"historyId":"snapshot"}
+        return message("fictional-interview", "Req ID: SE-101. We invite you to interview.")
+    monkeypatch.setattr(inbox.gmail, "get_json", get)
+    result = inbox.sync_once(session, conn, 90)
+    assert result["counts"] == {"exact_preview": 1}
+    assert statuses(session) == ["applied", "applied", "applied"]
+
+
+def test_old_email_change_remains_reachable_after_100_newer_audit_events(database):
+    session,conn=database
+    assert _ingest(session,conn,message("old-audit-rejection","Req ID: SE-101. You have not been selected."),_identities(session),preview=True)=="automatic"
+    row=row_for(session,"old-audit-rejection")
+    event=job_events(session)[0]
+    event.recorded_at=NOW-timedelta(days=10)
+    for index in range(110):
+        session.add(ApplicationEventRecord(application_key="email:fictional",kind="email_classified",actor="classifier",reason="Fictional newer noise",dedupe_key=f"newer-noise:{index}",recorded_at=NOW))
+    session.commit()
+    assert event.id not in {item["id"] for item in inbox.events(owner_request(),session)["items"]}
+    detail=inbox.events(owner_request(),session,row.id)
+    assert event.id in {item["id"] for item in detail["items"]}
+    result=inbox.undo(event.id,owner_request(),session)
+    detail=inbox.events(owner_request(),session,row.id)
+    assert any(item["id"]==result["event_id"] and item["undo_of_id"]==event.id for item in detail["items"])
+
+
+def test_message_specific_event_history_requires_an_owned_email(database):
+    session,conn=database
+    with pytest.raises(HTTPException) as error:inbox.events(owner_request(),session,999999)
+    assert error.value.status_code==404
+
+
+def test_full_initial_history_never_automates_historical_positive_outcomes(database, gmail_reads, monkeypatch):
+    session,conn=database
+    monkeypatch.setattr(inbox,"_FULL_SCANS",{});monkeypatch.setattr(inbox,"_COVERAGE",{})
+    conn.history_id="earlier-narrow-window";conn.preview_complete=True;session.commit()
+    def get(path,token,params=None):
+        if path=="/profile":return {"historyId":"all-history-start"}
+        if path=="/messages":return {"messages":[{"id":"historical-positive-fictional"}]}
+        if path=="/history":return {"historyId":"all-history-end"}
+        return message("historical-positive-fictional","Req ID: SE-101. We invite you to interview.")
+    monkeypatch.setattr(inbox.gmail,"get_json",get)
+    for _ in range(3):
+        result=inbox.sync_once(session,conn,0)
+        if not result["more"]:break
+    assert result["coverage"]["complete"]
+    assert row_for(session,"historical-positive-fictional").decision=="exact_preview"
+    assert statuses(session)==["applied"]*3 and not job_events(session)
+
+
+
+@pytest.mark.parametrize("label",["SPAM","TRASH"])
+def test_new_spam_and_trash_outcomes_are_excluded(database,label):
+    session,conn=database
+    data=message("label-fictional-"+label,"Req ID: SE-101. We have decided to move forward with other candidates.")
+    data["labelIds"]=[label]
+    assert _ingest(session,conn,data,_identities(session),preview=True)=="excluded"
+    assert row_for(session,data["id"]) is None
+    assert statuses(session)==["applied"]*3 and not job_events(session)
+
+
+
+@pytest.mark.parametrize("change",["receipt","manual","pause","reconnect"])
+def test_recheck_cannot_overwrite_owner_changes_made_during_a_gmail_read(database,gmail_reads,monkeypatch,change):
+    session,conn=database
+    row=stored(session,conn,"concurrent-owner-fictional","ignored",subject="Application update",version="5")
+    session.commit()
+    def get(*args):
+        if change in {"receipt","manual"}:
+            row.decision=change;row.decision_reason="You marked this email"
+        elif change=="pause":conn.state="paused"
+        else:conn.encrypted_refresh_token=b"new-fictional-grant"
+        session.commit()  # An owner action commits while the Gmail read waits.
+        return message("concurrent-owner-fictional","Req ID: SE-101. We have decided to move forward with other candidates.")
+    monkeypatch.setattr(inbox.gmail,"get_json",get)
+    verified_scope(session, conn)
+    result=inbox.recheck(inbox.RecheckRequest(),owner_request(),session)
+    assert statuses(session)==["applied"]*3 and not job_events(session)
+    assert row.parser_version=="5"
+    assert row.decision==(change if change in {"receipt","manual"} else "ignored")
+    if change in {"pause","reconnect"}:
+        assert result["state"]==("paused" if change=="pause" else "disconnected")
+
+
+@pytest.mark.parametrize("html_body", [False, True])
+def test_rejection_after_old_inner_body_limit_is_not_filed_as_a_receipt(database, html_body):
+    session, conn = database
+    body = "Req ID: SE-101. Thank you for applying.\n" + "Role details. " * 650 + "\nWe have decided not to proceed with your application."
+    assert 8000 < len(body) < 10000
+    data = message("long-rejection", body)
+    if html_body:
+        data["payload"]["mimeType"] = "text/html"
+        data["payload"]["body"]["data"] = base64.urlsafe_b64encode(("<p>" + body + "</p>").encode()).decode()
+    assert _ingest(session, conn, data, _identities(session), preview=True) == "automatic"
+    assert statuses(session) == ["applied", "rejected", "applied"]
+    assert row_for(session, "long-rejection").classification == "rejection"
+    assert job_events(session)[0].kind == "rejection"
+
+
+@pytest.mark.parametrize("prefix_outcome", ["Thank you for applying.", "We have decided not to proceed with your application.", "We invite you to interview."])
+def test_truncated_body_cannot_file_a_receipt_or_automate_an_outcome(database, prefix_outcome):
+    session, conn = database
+    body = "Req ID: SE-101. " + prefix_outcome + "\n" + "Role details. " * 900
+    data = message("truncated", body)
+    evidence = inbox._message_evidence(data)
+    assert len(evidence.body) == 10000 and not evidence.complete
+    assert _ingest(session, conn, data, _identities(session), preview=False) == "review"
+    assert row_for(session, "truncated").decision_reason == "Only part of this email could be read"
+    assert statuses(session) == ["applied", "applied", "applied"]
+    assert job_events(session) == []
+
+
+def test_body_exactly_at_limit_is_complete_but_one_extra_character_is_not():
+    body = "Thank you for applying. "
+    body = body + "x" * (10000 - len(body))
+    assert inbox._message_evidence(message("boundary", body)).complete
+    assert not inbox._message_evidence(message("overflow", body + "x")).complete
+
+
+def test_parser_seven_rechecks_receipts_and_ignored_from_the_live_parser_six(database, gmail_reads, monkeypatch):
+    session, conn = database
+    from backend.app.inbox.reconcile import RECEIPT_REASON
+    stored(session, conn, "six-receipt", "receipt", "Application update", version="6", reason=RECEIPT_REASON)
+    stored(session, conn, "six-ignored", "ignored", "Application update", version="6")
+    monkeypatch.setattr(inbox.gmail, "get_json", lambda path, *a, **k: message(path.rsplit("/", 1)[-1], "Req ID: SE-101. We have decided not to proceed with your application."))
+    verified_scope(session, conn)
+    result = inbox.recheck(inbox.RecheckRequest(limit=25), owner_request(), session)
+    assert result["checked"] == 2 and result["remaining"] == 0
+    assert all(row_for(session, key).parser_version == PARSER_VERSION for key in ("six-receipt", "six-ignored"))
+    assert all(row_for(session, key).decision == "automatic" for key in ("six-receipt", "six-ignored"))

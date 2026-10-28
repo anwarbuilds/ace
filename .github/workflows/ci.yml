@@ -1,7 +1,7 @@
 # Every pull request and every push to main runs the whole safety net:
 # the backend unit tests, the extension's matcher cases, the web app's
-# typecheck, lint and build, and both browser suites (the old UI's and
-# the new app's) against the fictional demo database. Nothing here
+# typecheck, lint and build, and both browser suites (fictional extension forms and
+# the new app) against the fictional demo database. Nothing here
 # touches real data, and no secrets are needed.
 name: ci
 
@@ -55,6 +55,8 @@ jobs:
         run: npm run test:extension-dom
       - name: Company identity and image failure contracts (fictional records, no browser)
         run: npm run test:company-logos
+      - name: Inbox reliability and review (fictional records, no browser)
+        run: npm run test:inbox
       - run: npx next typegen
       - run: npx tsc --noEmit
       - run: npx eslint src tests
@@ -82,18 +84,17 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Build the demo database
         run: python -m backend.scripts.seed_demo
-      # The old UI suite runs through the rollback switch (sign-in off,
-      # this machine only), which proves the switch still works; the
-      # old UI with sign-in on is covered by web/tests/e2e/old-ui.spec.ts.
+      # Extension mechanics use isolated fictional pages, not the removed
+      # legacy Queue. Keep API health available for the shared browser fixture.
       - name: Start the API on the demo database, sign-in off
         run: |
           ACE_AUTH=disabled nohup python -m uvicorn backend.app.api.main:app --port 8000 > uvicorn.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:8000/healthz && break; sleep 1; done
-      - name: Old UI browser tests
+      - name: Extension browser tests
         env:
           ACE_BROWSER_TEST_URL: http://127.0.0.1:8000
         run: python -m pytest backend/tests/browser -q -rs
-      - name: Reseed (the old UI suite writes marks), sign-in on
+      - name: Reseed the isolated demo database, sign-in on
         run: |
           pkill -f "uvicorn backend.app.api.main" || true
           python -m backend.scripts.seed_demo
@@ -106,11 +107,39 @@ jobs:
           npx next build
           nohup npx next start -p 3000 > next.log 2>&1 &
           for i in $(seq 1 30); do curl -sf -o /dev/null localhost:3000/login && break; sleep 1; done
-      - name: New app browser tests
+      - name: Install hosted browser
         working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Prepare the isolated Analytics fixture
         run: |
-          npx playwright install --with-deps chromium
-          npx playwright test
+          pkill -f "uvicorn backend.app.api.main" || true
+          python -m backend.scripts.seed_analytics_demo
+          DATABASE_URL=sqlite:////tmp/ace-analytics-fictional.db nohup python -m uvicorn backend.app.api.main:app --port 8000 > uvicorn.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8000/healthz && break; sleep 1; done
+      - name: Inbox and Analytics browser tests
+        working-directory: web
+        run: npx playwright test tests/e2e/inbox-review.spec.ts tests/e2e/analytics-redesign.spec.ts
+      - name: Restore the basic demo fixture for the remaining app tests
+        run: |
+          pkill -f "uvicorn backend.app.api.main" || true
+          python -m backend.scripts.seed_demo
+          nohup python -m uvicorn backend.app.api.main:app --port 8000 > uvicorn.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8000/healthz && break; sleep 1; done
+      - name: Remaining app browser tests
+        working-directory: web
+        # The two focused files ran above with their required fictional data.
+        # Every other file still runs; no assertion is skipped or quarantined.
+        run: npx playwright test 'tests/e2e/(?!analytics-redesign\.spec\.ts|inbox-review\.spec\.ts).*\.spec\.ts'
+      - name: Fictional browser failure context
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fictional-browser-failure-context
+          path: |
+            web/test-results/**/error-context.md
+            web/test-results/**/*.png
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Server logs on failure
         if: failure()
         run: tail -n 100 uvicorn.log web/next.log || true

@@ -1,5 +1,7 @@
 """Safety properties of the Gmail matcher, using fictional records only."""
 
+import base64
+
 from datetime import datetime, timedelta, timezone
 
 from backend.app.inbox.reconcile import ApplicationIdentity, EmailEvidence, reconcile
@@ -74,7 +76,10 @@ def test_gmail_authentication_result_must_align_with_visible_sender():
     base["payload"]["headers"][0]["value"] = "mx.google.com; dmarc=pass header.from=careers.silverpine.example"
     evidence = _message_evidence(base)
     assert evidence.sender_authenticated
-    assert reconcile(evidence, [app("job:1", "SE-102")]).target == "job:1"
+    partial = reconcile(evidence, [app("job:1", "SE-102")])
+    assert partial.disposition == "review" and partial.reason == "Only part of this email could be read"
+    base["payload"].update({"mimeType": "text/plain", "body": {"data": base64.urlsafe_b64encode(base["snippet"].encode()).decode()}})
+    assert reconcile(_message_evidence(base), [app("job:1", "SE-102")]).target == "job:1"
 
 
 def test_gmail_grant_uses_read_only_scope_pkce_and_encrypted_refresh_token():
@@ -298,3 +303,75 @@ def test_a_workday_tenant_made_of_initials_names_the_employer():
             "Engineer, we've made the decision to move forward with other candidates at this time.")
     result = reconcile(EmailEvidence("cir@myworkday.com", "Thank you for your interest!", body, NOW, True), apps)
     assert (result.classification, result.disposition, result.target) == ("rejection", "verified", "job:31")
+
+
+@pytest.mark.parametrize("sentence", [
+    "Our immigration policy does not include sponsorship for this role.",
+    "We are unable to sponsor for this position.",
+    "You are not eligible for this position.",
+    "Your application does not meet the requirements.",
+    "We have decided to move on with this role.",
+    "We will not be considering your application.",
+    "Your candidacy was not selected for this role.",
+    "We are not able to offer a position at this time.",
+])
+def test_parser_six_sponsorship_and_eligibility_rejections(sentence):
+    assert classify(ats_mail("Your application", sentence))[0] == "rejection"
+    assert reconcile(ats_mail("Northwind Robotics application", sentence), [northwind()]).disposition == "verified"
+
+
+def test_fictional_workday_sponsorship_rejection_retains_ambiguity_auth_and_final_guards():
+    application = ApplicationIdentity("job:88", "Fictional Mac", "Software Engineer Professional", None, NOW-timedelta(days=10), "applied")
+    evidence = EmailEvidence("Workday <fictionalmac@myworkday.com>", "Fictional Mac - Application Update",
+        "Thank you for your interest in the Software Engineer Professional position. We would like to inform you that Fictional Mac's immigration policy does not include sponsorship for this role and does not hire students or F-1 graduates.", NOW, True)
+    assert reconcile(evidence, [application]).target == "job:88"
+    assert reconcile(evidence, [application, dataclasses.replace(application, key="job:89")]).target is None
+    assert reconcile(dataclasses.replace(evidence, sender_authenticated=False), [application]).target is None
+    for status in ["accepted", "withdrawn", "offer"]:
+        assert reconcile(evidence, [dataclasses.replace(application, current_status=status)]).target is None
+
+
+@pytest.mark.parametrize("evidence", [
+    ats_mail("Your application update", "We are still reviewing your details."),
+    ats_mail("Application message", "Please check the candidate portal.", display="Talent", address="fictional@myworkday.com"),
+    ats_mail("Your application", "There is another update about your Software Engineer role.", display="Talent", address="talent@fictional.example"),
+    ats_mail("Northwind Robotics application", "An update is available.", display="Talent", address="talent@fictional.example"),
+])
+def test_unclear_application_email_is_saved_without_a_manual_task(evidence):
+    result = reconcile(evidence, [northwind()])
+    assert (result.classification, result.disposition, result.target) == ("unclear", "update", None)
+    assert "Saved application correspondence" in result.reason
+
+
+@pytest.mark.parametrize("domain", ["linkedin.com", "mail.indeed.com", "joinhandshake.com", "glassdoor.com", "ziprecruiter.com"])
+def test_job_board_unknown_mail_does_not_enter_safety_net(domain):
+    evidence = ats_mail("Application jobs you may like", "New Software Engineer positions match your interests.", address="news@"+domain)
+    assert reconcile(evidence, [northwind()]).disposition == "ignored"
+
+
+def test_non_application_and_self_sent_mail_do_not_change_applications():
+    assert reconcile(ats_mail("News", "A fictional newsletter."), [northwind()]).disposition == "ignored"
+    evidence = mail("Req ID: SE-102. You have not been selected.", "Owner <owner@example.test>")
+    assert reconcile(evidence, [app("job:1", "SE-102")], account="OWNER@example.test").disposition == "ignored"
+    assert classify(EmailEvidence("fictional@example.test", "Bank update", "You are not eligible for a loan.", NOW))[0] == "unknown"
+
+
+@pytest.mark.parametrize("sentence", [
+    "If you are not eligible for this role, please withdraw your application.",
+    "Please check whether your application does not meet the requirements.",
+    "A delay does not mean you are not eligible for this position.",
+])
+def test_conditional_eligibility_wording_never_automates_a_rejection(sentence):
+    result = reconcile(ats_mail("Northwind Robotics application", sentence), [northwind()])
+    assert result.disposition == "update" and result.target is None
+
+
+@pytest.mark.parametrize("status,classification,body", [
+    ("offer","interview","Req ID: SE-102. We invite you to interview."),
+    ("interviewing","online_assessment","Req ID: SE-102. Complete the online assessment."),
+    ("offer","online_assessment","Req ID: SE-102. Complete the online assessment."),
+])
+def test_automatic_positive_outcome_cannot_regress_a_later_stage(status,classification,body):
+    result=reconcile(mail(body),[app("job:1","SE-102",status)])
+    assert result.classification==classification and result.disposition=="review"
+    assert result.reason=="Existing later application stage is protected"

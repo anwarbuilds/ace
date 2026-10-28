@@ -1,5 +1,120 @@
 # ace handoff
 
+**LIVE, 2026-10-27 14:13 Pacific:** Owner-approved Analytics refresh fix
+268e1fc is healthy on web; API remains 3cd87a5/parser 8, schema 0050. PR #9 is
+merged. Only web was recreated. HTTPS exact SHA/auth, deployed Analytics/Inbox
+bundle hashes and all 85 logos pass. All rows in 11 audited tables, 7,948 stored
+mail rows, 334 protected decisions and 10,263 events match across activation;
+API/scheduler/PostgreSQL/Caddy/environment unchanged. A concurrent mark/event
+added during the build (909 to 910 applied) was preserved. Read-only Inbox/
+Analytics agree on 229 pending, 958 identities; no Gmail/body reads by the audit.
+Fresh 472,957,215-byte private backup passes gzip/catalog checks. Root new live
+section contains exact image/bundle hashes, rollback, records and lessons.
+Focused CI 32 browser/45 DOM passes; broader 166/20 retains known historical
+failures, including one extra focus failure versus latest 19-failure baseline.
+Overall CI is not green. No signed-in production browser test is claimed.
+Reload Analytics once for new client code. The stopped runner and saved 143/
+owner-stop hashes remain unchanged. Earlier pending-release notes are history.
+
+**2026-10-27 13:39 Pacific, final CI:** Analytics candidate 2bceb2b / draft PR
+#9 passes 32 focused browser and 45 DOM cases plus web build/checks. Completed
+broader suite: 166 pass / 20 fail; same 19 as the live-runtime run plus the exact
+search-shortcut focus failure seen before this correction in job 122393874866.
+All 20 titles occur in that earlier 21-failure history; there is one extra versus
+the latest 19-failure run, so overall CI is not green. Search handler/test source
+is unchanged. Root first section records the exact comparison and timing limits.
+No correction release ran: live stays 3cd87a5. Obtain approval for the concrete
+web-only candidate, then follow the prepared private release plan at
+`/tmp/ace-analytics-web-release-plan.md`. Earlier pending-browser notes are dated
+checkpoints and superseded by this completed result.
+
+**2026-10-27 13:27 Pacific:** Analytics refresh fix is verified and awaiting
+specific web-only activation approval in draft PR #9. Tested runtime 2bceb2b,
+hosted run 40577319214: 45 Inbox/Analytics DOM, all 32 focused browser cases,
+backend 1,586, matcher 258, extension browser 47, web checks/build pass. Broader
+app browser step is still running; do not claim overall CI green. Persistent
+layout coordination requests no redundant initial-load refresh and exactly
+one on return; Inbox navigation, evidence updates and responsive layouts pass.
+Earlier streaming/sandbox test failures and their remedies remain in the root
+record. Live API/web are still approved 3cd87a5, healthy over HTTPS at 20:23 UTC.
+No deployment, data, API, migration, scheduler or exhaustive recheck operation
+ran. Next: obtain approval, fresh private backup/rollback, build/recreate web
+only with no dependencies, then verify public source/auth/assets and retained
+services/data. The root first section has exact candidate, CI jobs and limits.
+
+**2026-10-27 13:04 Pacific:** Analytics refresh-loop correction is local and
+under verification, not live. Read the new root Analytics refresh-loop section.
+Production logs confirm 366 Analytics requests in four minute buckets. The
+refresh coordinator now lives once in the persistent app layout, guarded by
+route entry; response replacement cannot remount and restart it. Fictional DOM
+regression fails old code (5 requests vs 1) and passes the fix; existing DOM,
+TypeScript and full lint pass. Hosted quiet-page/evidence-refresh browser tests
+are pending. Live API/web remain approved 3cd87a5, parser 8. Obtain specific new
+web activation approval; never restart the stopped exhaustive operator.
+
+**LIVE, 2026-10-27 12:27 Pacific:** Owner-approved `3cd87a5` now runs API/web,
+parser 8, schema 0050. PR #8 is merged. Live read-only Inbox/Analytics both
+report 227 pending; 1,093 legacy correspondence messages remain searchable.
+All 10 protected tables, 259 protected Inbox decisions and existing events match
+full pre/post row hashes; scheduler/PostgreSQL/Caddy and environment unchanged.
+Fresh private backup and exact hashes are in the root live-release record.
+HTTPS health/auth, the Inbox bundle and all 85 logo hashes pass. Final hosted
+checks: backend 1,586; extension browser 47; focused Inbox/Analytics browser 30;
+web build/checks pass. Broader browser: 167 pass / 19 fail, zero new failure
+names versus parser-7 baseline; overall CI is not green. Exhaustive operator
+stays stopped (zero processes, saved 143). Refresh Inbox for normal scoped
+checks; no body replay or completed semantic coverage is claimed by deployment.
+
+**Final job-mail candidate: `2554569`, draft PR #8.** Hosted backend 1,586 tests
+and web checks/build pass; 44 DOM contracts and 30 focused Inbox/Analytics browser
+tests pass on identical UI source. Last completed broader browser run is
+165 passed / 21 failed, with two additional unchanged-code shortcut-focus
+failures versus the historical list; do not call overall CI green. A rerun on
+2554569 is still running. Final historical-thread guard has 138 focused parser/
+persistence tests passing. Production stays parser 7, no release approval yet.
+The root final-candidate section has the exact test, read-only measurement and
+release boundaries.
+
+**2026-10-27 11:31 Pacific:** The job-mail draft from `053ae41` is completed
+locally with 319 focused backend and 44 DOM tests passing. Production remains
+parser 7; release approval is still required. Read the new root "Job-mail triage
+completed locally" section before the older unfinished-draft notes below. The
+read-only preview is 1,320 raw pending to 227 projected pending; 1,093 searchable
+correspondence, all 226 recognized outcomes preserved. All-date search lists
+1,869 candidates, 1,860 stored, 9 missing. No body audit, import, recheck or
+activation ran; never restart the stopped exhaustive operator.
+
+**Latest continuation, 2026-10-27 11:06 Pacific:** Read the new root
+“START HERE: job-related Inbox triage continuation” section first. The owner
+rejected the 1,318-item manual burden and narrowed processing to job-related
+mail across all dates, excluding Spam/Trash and personal mail. The exhaustive
+operator was stopped at 16:36:09Z, exit 143 expected; do not restart it. Live
+API remains parser 7 (`3294139`), web `5ab6b1a`, schema `0050`. A new parser-8
+backend draft exists in `/home/ubuntu/Documents/ace-inbox`, including new
+`backend/app/inbox/queue.py`; compilation/whitespace only, no focused tests,
+frontend changes, new release or production queue reduction yet. Latest DB
+snapshot: 7,931 stored, 1,320 review. Build/test the scoped triage properly,
+retain evidence and owner decisions, then ask before a new API/web release.
+The root handoff has complete diagnosis, files, provisional-design risks,
+exact baseline checks, operator records and a ready-to-use next-chat prompt.
+The preceding 16:30 running-job checkpoint below is historical.
+
+**Current 2026-10-27T16:30Z:** All developed Inbox/Analytics changes are live.
+The owner explicitly requested the remaining parser-7 fix be included; PR #7 is
+merged, API runtime `3294139` (parser 7) is healthy, web remains the complete
+`5ab6b1a` release. Fresh private backup verified, schema `0050`; web, scheduler,
+PostgreSQL and Caddy unchanged. All 199 protected Inbox decisions unchanged.
+One extra dismissed, unapplied job mark appeared during live use; private row
+comparison proves no existing job mark changed or disappeared.
+Independent 16:29Z reports confirm 7,928/7,928 retained Gmail IDs, zero missing,
+and passing real Analytics arithmetic: 945 identities, 192 Rejected, 177 dated
+rejections, 1,318 pending. **The additional 7,729 eligible parser-7 rechecks are
+running, not complete.** Durable one-time VM runner logs/final checks are under
+`/opt/ace/private-backups/inbox-parser7-20261027/`. Check its process, log and
+`recheck-exit-status` before starting another runner; final reports are generated
+automatically. See the root Current live release and the full-history report.
+Older pending-approval notes are historical and superseded.
+
 For a fresh session, cloud or local, picking this project up cold. Read it
 top to bottom (about ten minutes), then start at section 9. Written on
 2026-10-10. This repo is PUBLIC, so this file holds no personal data; the
@@ -100,19 +215,44 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
+**2026-10-27 current Inbox scope: ALL history.** The owner explicitly rejected
+concentrating on 30 days. Full retained-mailbox sync/backfill and Analytics now
+default to all time, including archived mail and retained Spam/Trash. The latest
+read-only report lists 7,927 Gmail IDs, 524 stored, 7,403 missing. This is mail,
+not a count of missing job outcomes. All-time Analytics reconciles 945 persisted
+identities, but duplicates/date conflicts and wording recognition remain review
+limits. The implementation has 286 focused backend/42 DOM tests passing; check
+final hosted CI and obtain owner approval before API/web release. No production
+import, recheck, data repair, migration or release ran. Earlier window-based
+checkpoints below are historical. See `architecture/2026-10-27-full-history-inbox.md`
+and the root owner scope update before continuing.
+
 **2026-10-26 evening, OPEN WORK, start here for Inbox:** production preserves
 `6163f59` Inbox behavior (add-from-email, parser 5) in the newer logo release. The owner asked for a RELIABLE Inbox after a rejection
 email was never recorded. Measured read-only: Gmail lists 946 emails for 30 days and
 only 512 are in ACE (the sync never pages past 500 and never sets its cursor), 248
 stored emails sit as ignored "No outcome found" and are never re-read, and the
-sponsorship style rejection wording is not recognized. Nothing of the fix is built.
+sponsorship style rejection wording is not recognized. P1 to P5 are now implemented
+and tested locally in `/home/ubuntu/Documents/ace-inbox` (parser 6), awaiting
+owner release approval. Live parser 5 remains unchanged. The latest read-only
+baseline found 949 Gmail / 516 stored / 433 missing in the 30-day window.
 The plan P1 to P6, the numbers and the report script
 `backend/scripts/inbox_coverage_report.py` are in `ACE_NEXT_KNOWLEDGE.md`, section
 "OPEN WORK for the next chat: a reliable Inbox".
 
+**2026-10-26 subsequent Analytics scrutiny:** production is still parser 5;
+P1 to P5 and additional audit corrections remain on draft PR #6 awaiting
+approval. Read-only checks found 433 missing 30-day emails, 2 recoverable lost
+email dates, 2 older timestamp conflicts and 2 potential cross-history duplicate
+groups requiring owner review. Stored identities/status partitions reconcile;
+this does not certify complete Gmail observation. The local projection corrects
+latest dates/links, cohort order, deferred counts, refresh and old-email Undo.
+See `architecture/2026-10-26-inbox-analytics-scrutiny.md` and the root OPEN WORK
+checkpoint before release. No data repair or deployment was performed.
+
 **Current cross-session checkpoint:** See `ACE_NEXT_KNOWLEDGE.md` for live web
-`1fee671`, API `9d05673`, extension source 1.30.0 and the unimplemented
-reliable-Inbox plan. All 85 logo hashes and the five reported company/job/detail
+`1fee671`, API `9d05673`, extension source 1.30.0 and the locally implemented
+reliable-Inbox P1 to P5 awaiting release approval. All 85 logo hashes and the five reported company/job/detail
 references plus general dynamic routes passed signed-in HTTPS at 17:19 Pacific.
 The Memory API was subsequently deployed and verified at 17:59 Pacific;
 only API changed and data counts stayed intact. Schema 0050 and protected

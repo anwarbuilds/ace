@@ -112,3 +112,21 @@ for(const tab of ["overview","outcomes","role-resume","companies"]) {
     if(tab==="role-resume")assert.match(html,/Not recorded/);
   });
 }
+
+test("Analytics exposes incomplete Gmail coverage even on the Companies tab",()=>{
+  const connection={connected:true,state:"ready",available:true,last_synced_at:"2026-10-26T18:00:00Z",coverage:{days:30,gmail:949,in_ace:516,missing:433,complete:true,checked_at:"2026-10-26T18:00:00Z"}};
+  const html=renderToStaticMarkup(React.createElement(AnalyticsView,{d:base,connection,tab:"companies",query:{}}));
+  assert.match(html,/Gmail has 949 emails from the last 30 days. 433 are not in ACE yet/);
+  assert.doesNotMatch(html,/All are in ACE/);
+});
+
+test("Analytics shows selected-scope evidence exclusions and total pending mail including deferred",()=>{
+  const d={...base,review:{needs_review:2,exact_preview:1,ambiguous:1,deferred:4},inbox_audit:{stored_messages:30,pending_messages:7,stale_messages:5,excluded_events:{before_application_window:2}}};
+  const html=renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:{connected:true,state:"ready",last_synced_at:"2026-10-26T18:00:00Z"},tab:"outcomes",query:{}}));
+  assert.match(html,/7 messages await review/);
+  assert.match(html,/30 emails imported in total; 7 await your decision; 5 need a re-read/);
+  assert.match(html,/2 outcome events in this selection are.*excluded from verified email evidence/);
+  assert.match(html,/decision=deferred/);
+  assert.match(html,/Decide later/);
+  assert.match(html,/has not been verified/);
+});

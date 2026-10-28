@@ -12,6 +12,8 @@ export interface AnalyticsSupplement {
   submissionTrend: SubmissionTrend | null; weekTrend: SubmissionTrend | null;
 }
 const DAY = 86_400_000;
+const dateFormats = new Map<string, Intl.DateTimeFormat>();
+const clockFormats = new Map<string, Intl.DateTimeFormat>();
 const utcStamp = (stamp: string) => /(?:Z|[+-]\d{2}:\d{2})$/i.test(stamp) ? stamp : `${stamp}Z`;
 // Calendar dates use UTC arithmetic, then match dates formatted in the
 // report's IANA zone. A calendar day is not 24 elapsed hours across DST.
@@ -22,13 +24,23 @@ export function mondayOf(day: string): string {
   return shiftDate(day, -((new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7));
 }
 export function localDate(stamp: string, timezone: string): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(utcStamp(stamp)));
+  let formatter = dateFormats.get(timezone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" });
+    dateFormats.set(timezone, formatter);
+  }
+  return formatter.format(new Date(utcStamp(stamp)));
 }
 function civilTime(stamp: string, timezone: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
-  }).formatToParts(new Date(utcStamp(stamp)));
+  let formatter = clockFormats.get(timezone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    });
+    clockFormats.set(timezone, formatter);
+  }
+  const parts = formatter.formatToParts(new Date(utcStamp(stamp)));
   const p = Object.fromEntries(parts.map(part => [part.type, part.value]));
   return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
 }

@@ -3,19 +3,22 @@
 from __future__ import annotations
 
 import html
+from collections import deque
 import re
 import secrets
 import time
+from threading import Lock
 from datetime import date, datetime, time as day_time, timedelta, timezone
 from email.utils import parseaddr, parsedate_to_datetime
 from html.parser import HTMLParser
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from backend.app.api.deps import get_session
 from backend.app.api.marks import APPLICATION_STATUSES
@@ -28,8 +31,10 @@ from backend.app.db.models import (
     GmailMessageRecord, JobMarkRecord, JobRecord, UserRecord,
 )
 from backend.app.inbox import display, gmail
+from backend.app.inbox.full_history import FullMailboxScan
+from backend.app.inbox.queue import (decision_expression, projected_decision, projected_reason)
 from backend.app.inbox.reconcile import (
-    ApplicationIdentity, Decision, EmailEvidence, PARSER_VERSION, RECEIPT_REASON, conflict, reconcile,
+    ApplicationIdentity, Decision, EmailEvidence, MAX_CLASSIFIER_BODY, PARSER_VERSION, RECEIPT_REASON, _MARKING_GRACE, conflict, reconcile,
 )
 
 router = APIRouter()
@@ -42,10 +47,35 @@ DECIDABLE = PENDING + ("ignored", "receipt", "unrelated", "update")
 # Subject words that put an email ACE found no outcome in among the
 # recruiting email, so an outcome ACE could not read is still in view.
 _ABOUT_APPLICATIONS = ("application", "applying", "applied", "candidacy", "interview", "assessment")
-_OUTCOME_STATUS = {"rejection": "rejected", "interview": "interviewing", "offer": "offer"}
+_OUTCOME_STATUS = {"rejection": "rejected", "interview": "interviewing", "offer": "offer",
+                   "online_assessment": "screening", "recruiter_reply": "screening"}
 # What the owner can say an email was.
 _KINDS = {"rejection", "interview", "online_assessment", "offer", "recruiter_reply"}
 _TOKENS: dict[tuple[int, bytes], tuple[float, str]] = {}
+_LOCKS: dict[int, Lock] = {}
+_LOCKS_GUARD = Lock()
+# Ephemeral verification, keyed by connection, grant and selected window.
+# Never persist an "all imported" claim across an API restart or reconnection.
+_COVERAGE: dict[tuple[int, bytes, int], dict] = {}
+_FULL_SCANS: dict[tuple[int, bytes, int], FullMailboxScan] = {}
+
+
+def _sync_lock(connection_id: int):
+    with _LOCKS_GUARD:
+        return _LOCKS.setdefault(connection_id, Lock())
+
+
+def _coverage_key(conn: GmailConnectionRecord, days: int) -> tuple[int, bytes, int]:
+    return conn.id, bytes(conn.encrypted_refresh_token), days
+
+
+def _forget_coverage(connection_id: int) -> None:
+    for key in list(_FULL_SCANS):
+        if key[0] == connection_id:
+            _FULL_SCANS.pop(key, None)
+    for key in list(_COVERAGE):
+        if key[0] == connection_id:
+            _COVERAGE.pop(key, None)
 
 
 def _secure(request: Request) -> bool:
@@ -69,6 +99,8 @@ def _public(conn: GmailConnectionRecord | None) -> dict:
         # The last check for new email. Importing older email does not move it.
         "last_synced_at": conn.last_synced_at.isoformat() if conn and conn.last_synced_at else None,
         "following_changes": bool(conn and conn.history_id),
+        "coverage": next((value for key, value in reversed(list(_COVERAGE.items()))
+                          if conn and key[:2] == (conn.id, bytes(conn.encrypted_refresh_token))), None),
         "last_error": conn.last_error if conn else None,
         "auto_outcomes_enabled": bool(conn and conn.auto_outcomes_enabled),
         "automation_available": get_settings().gmail_auto_outcomes_allowed,
@@ -116,6 +148,8 @@ def callback(request: Request, code: str = "", state: str = "", error: str = "",
     if conn is None:
         conn = GmailConnectionRecord(owner_id=owner.id, email=email, encrypted_refresh_token=b"", scope=gmail.SCOPE)
         session.add(conn)
+    if conn.id is not None:
+        _forget_coverage(conn.id)
     conn.email = email
     conn.encrypted_refresh_token = gmail.encrypt_token(refresh, s.gmail_token_key)
     conn.state = "paused"  # A new grant never starts background sync.
@@ -153,6 +187,7 @@ def disconnect(request: Request, session: Session = Depends(get_session)) -> dic
             gmail.revoke(gmail.decrypt_token(conn.encrypted_refresh_token, get_settings().gmail_token_key))
         except gmail.GmailError:
             pass
+        _forget_coverage(conn.id)
         conn.encrypted_refresh_token = b""
         conn.state = "disconnected"
         conn.auto_outcomes_enabled = False
@@ -230,7 +265,7 @@ def _parts(payload: dict, mime: str) -> list[str]:
     return [display.decode(part) for part in display.parts(payload, mime)]
 
 
-def _body(payload: dict, limit: int = 10000) -> str:
+def _body(payload: dict, limit: int = MAX_CLASSIFIER_BODY) -> str:
     """Plain text when the email has it, else the text of its HTML.
 
     HTML is never executed or stored here; many employer systems send only
@@ -261,11 +296,15 @@ def _message_evidence(data: dict) -> EmailEvidence:
         stamp = parsedate_to_datetime(headers.get("date", ""))
     except (TypeError, ValueError):
         stamp = datetime.fromtimestamp(int(data["internalDate"]) / 1000, timezone.utc)
-    body = _body(data.get("payload", {}))
+    # Read one extra character to distinguish a complete boundary-sized body
+    # from text clipped before the classifier sees the outcome or role ID.
+    body = _body(data.get("payload", {}), MAX_CLASSIFIER_BODY + 1)
+    complete = bool(body) and len(body) <= MAX_CLASSIFIER_BODY
+    body = body[:MAX_CLASSIFIER_BODY]
     # Gmail's snippet is a couple of hundred characters; a rejection further
     # down an email that opens with thanks would be missed, so say so.
     return EmailEvidence(headers.get("from", "")[:320], headers.get("subject", "")[:500],
-                         body or html.unescape(str(data.get("snippet", "")))[:500], stamp, authenticated, bool(body))
+                         body or html.unescape(str(data.get("snippet", "")))[:500], stamp, authenticated, complete)
 
 
 def _access(conn: GmailConnectionRecord) -> str:
@@ -299,6 +338,43 @@ def _append_event(session: Session, key: str, kind: str, before: str | None, aft
     return event
 
 
+def _thread_keys(session, conn, data, evidence, identities):
+    if not data.get("threadId"):
+        return ()
+    # No body history or inferred applications: use retained exact matches only.
+    # Every linked target in the thread must agree, with the same actual sender.
+    rows = session.scalars(select(GmailMessageRecord).where(
+        GmailMessageRecord.connection_id == conn.id,
+        GmailMessageRecord.thread_id == str(data["threadId"]),
+        GmailMessageRecord.gmail_id != str(data.get("id")),
+        GmailMessageRecord.received_at <= evidence.received_at,
+        GmailMessageRecord.selected_application_key.is_not(None),
+        GmailMessageRecord.decision.in_(("receipt", "manual", "automatic"))))
+    sender = parseaddr(evidence.sender)[1].casefold()
+    apps = {app.key: app for app in identities}
+    def compatible(row):
+        app = apps.get(row.selected_application_key)
+        stamp = row.received_at.replace(tzinfo=timezone.utc) if row.received_at.tzinfo is None else row.received_at
+        submitted = app.submitted_at if app else None
+        if submitted is not None and submitted.tzinfo is None:
+            submitted = submitted.replace(tzinfo=timezone.utc)
+        return app is not None and (submitted is None or stamp >= submitted - _MARKING_GRACE)
+    return tuple(sorted({row.selected_application_key for row in rows
+                         if parseaddr(row.sender)[1].casefold() == sender and compatible(row)}))
+
+
+def _scoped_detail(message_id: str, token: str, active=lambda: True) -> dict:
+    metadata = gmail.get_json("/messages/" + message_id, token, {"format": "minimal"})
+    if str(metadata.get("id") or "") != message_id:
+        raise gmail.GmailTemporaryError("Gmail returned an incomplete email response. Saved progress is kept; check again.")
+    if not active() or {"SPAM", "TRASH"}.intersection(metadata.get("labelIds", [])):
+        return metadata
+    data = gmail.get_json("/messages/" + message_id, token, {"format": "full"})
+    if str(data.get("id") or "") != message_id:
+        raise gmail.GmailTemporaryError("Gmail returned an incomplete email response. Saved progress is kept; check again.")
+    return data
+
+
 def _ingest(session: Session, conn: GmailConnectionRecord, data: dict, identities: list[ApplicationIdentity], *, preview: bool) -> str:
     gmail_id = str(data.get("id", ""))
     if not gmail_id:
@@ -306,8 +382,10 @@ def _ingest(session: Session, conn: GmailConnectionRecord, data: dict, identitie
     existing = session.scalar(select(GmailMessageRecord).where(GmailMessageRecord.connection_id == conn.id, GmailMessageRecord.gmail_id == gmail_id))
     if existing:
         return "duplicate"
+    if {"SPAM", "TRASH"}.intersection(data.get("labelIds", [])):
+        return "excluded"
     evidence = _message_evidence(data)
-    decision = reconcile(evidence, identities)
+    decision = reconcile(evidence, identities, conn.email, thread_keys=_thread_keys(session, conn, data, evidence, identities))
     row = GmailMessageRecord(
         connection_id=conn.id, gmail_id=gmail_id, thread_id=data.get("threadId"),
         received_at=evidence.received_at, sender=evidence.sender, subject=evidence.subject,
@@ -318,7 +396,7 @@ def _ingest(session: Session, conn: GmailConnectionRecord, data: dict, identitie
     )
     session.add(row)
     session.flush()
-    _apply(session, conn, row, decision, evidence, preview=preview)
+    _apply(session, conn, row, decision, evidence, preview=preview, allow_automation=not {"SPAM", "TRASH"}.intersection(data.get("labelIds", [])))
     _append_event(session, f"email:{row.id}", "email_classified", None, row.decision,
                   actor="classifier", reason=row.decision_reason, message_id=row.id,
                   occurred_at=evidence.received_at,
@@ -326,7 +404,7 @@ def _ingest(session: Session, conn: GmailConnectionRecord, data: dict, identitie
     return row.decision
 
 
-def _apply(session: Session, conn: GmailConnectionRecord, row: GmailMessageRecord, decision: Decision, evidence: EmailEvidence, *, preview: bool) -> None:
+def _apply(session: Session, conn: GmailConnectionRecord, row: GmailMessageRecord, decision: Decision, evidence: EmailEvidence, *, preview: bool, allow_automation: bool = True) -> None:
     """Record what an email decided, changing a status only when allowed.
 
     A clear rejection matched to exactly one application is recorded at once,
@@ -337,6 +415,10 @@ def _apply(session: Session, conn: GmailConnectionRecord, row: GmailMessageRecor
     row.decision = decision.disposition
     row.selected_application_key = decision.target if decision.disposition == "receipt" else None
     if decision.disposition != "verified" or not decision.target:
+        return
+    if not allow_automation:
+        row.decision = "review"
+        row.decision_reason = "Email is in Spam or Trash; confirm its outcome before updating an application"
         return
     s = get_settings()
     rejection = decision.classification == "rejection"
@@ -413,73 +495,212 @@ def automation(body: AutomationUpdate, request: Request, session: Session = Depe
 def _new_message_ids(session: Session, conn: GmailConnectionRecord, message_ids: list[str]) -> tuple[list[str], int]:
     """Already imported evidence needs no second Gmail detail read."""
     unique = list(dict.fromkeys(message_ids))
-    existing = set(session.scalars(select(GmailMessageRecord.gmail_id).where(
-        GmailMessageRecord.connection_id == conn.id, GmailMessageRecord.gmail_id.in_(unique)))) if unique else set()
+    existing: set[str] = set()
+    for offset in range(0, len(unique), 500):
+        existing.update(session.scalars(select(GmailMessageRecord.gmail_id).where(
+            GmailMessageRecord.connection_id == conn.id, GmailMessageRecord.gmail_id.in_(unique[offset:offset + 500]))))
     return [key for key in unique if key not in existing], len(existing)
 
 
-def sync_once(session: Session, conn: GmailConnectionRecord) -> dict:
-    """Resumable catch-up. Advance the cursor only after evidence commits."""
+def sync_once(session: Session, conn: GmailConnectionRecord, days: int = 0) -> dict:
+    """Verify the entire selected window, saving at most 60 new emails per call."""
+    lock = _sync_lock(conn.id)
+    if not lock.acquire(blocking=False):
+        return {"state": "busy", "counts": {}}
+    try:
+        # A waiting HTTP request may have loaded the connection before a prior
+        # batch committed. Read its current cursor/settings after taking the lock.
+        session.refresh(conn)
+        return _sync_full_locked(session, conn) if days == 0 else _sync_locked(session, conn, max(30, min(days, 365)))
+    finally:
+        lock.release()
+
+
+def _sync_locked(session: Session, conn: GmailConnectionRecord, days: int) -> dict:
+    return _sync_full_locked(session, conn, days)
+
+
+def _sync_full_locked(session: Session, conn: GmailConnectionRecord, days: int = 0) -> dict:
+    """Job-related mail across the selected history, excluding Spam/Trash.
+
+    List at most five pages and read at most sixty details per call. A manifest
+    follows every page without a date/page ceiling, then catches changes from
+    the pre-list history baseline before certifying a complete snapshot.
+    """
     if conn.state != "ready" or not conn.encrypted_refresh_token:
         return {"state": conn.state, "counts": {}}
-    s = get_settings()
-    token = gmail.access_token(gmail.decrypt_token(conn.encrypted_refresh_token, s.gmail_token_key), client_id=s.gmail_client_id, client_secret=s.gmail_client_secret)
-    identities = _identities(session)
+    key = _coverage_key(conn, days)
+    _COVERAGE.pop(key, None)
+    token = _access(conn)
+    scan = _FULL_SCANS.get(key)
+    if scan is None:
+        profile = gmail.get_json("/profile", token)
+        baseline = str(profile.get("historyId") or "")
+        if not baseline:
+            raise gmail.GmailTemporaryError("Gmail did not return a history cursor. Try again later.")
+        scan = FullMailboxScan(baseline)
+        _FULL_SCANS[key] = scan
+    elif scan.phase == "complete":
+        scan.phase = "history"
+        scan.baseline = scan.snapshot
+        scan.history_page = None
+        scan.seen_history_pages.clear()
+        scan.live = True
+        scan.history_dirty = False
+        scan.history_added.clear()
+
     counts: dict[str, int] = {}
-    next_cursor: str | None = None
-    message_ids: list[str] = []
-    partial = False
-    if conn.history_id:
-        try:
-            page_token: str | None = None
-            while True:
-                params = {"startHistoryId": conn.history_id, "historyTypes": "messageAdded", "maxResults": 100}
-                if page_token:
-                    params["pageToken"] = page_token
-                batch = gmail.get_json("/history", token, params)
-                next_cursor = str(batch.get("historyId") or conn.history_id)
-                for history in batch.get("history", []):
-                    message_ids.extend(str(item["message"]["id"]) for item in history.get("messagesAdded", []) if item.get("message", {}).get("id"))
-                page_token = batch.get("nextPageToken")
-                if not page_token:
+
+    def remember(ids) -> None:
+        unseen = list(dict.fromkeys(str(item) for item in ids if item and str(item) not in scan.ids))
+        missing, duplicates = _new_message_ids(session, conn, unseen)
+        scan.ids.update(unseen)
+        scan.pending.extend(missing)
+        if duplicates:
+            counts["duplicate"] = counts.get("duplicate", 0) + duplicates
+
+    def reset() -> None:
+        _FULL_SCANS.pop(key, None)
+        conn.history_id = None
+        conn.preview_complete = False
+        session.commit()
+
+    try:
+        if scan.phase == "listing":
+            for _ in range(5):
+                if len(scan.pending) >= 60:
                     break
-        except gmail.GmailCursorExpired:
-            conn.history_id = None
-            next_cursor = None
-    if not conn.history_id:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y/%m/%d")
-        batch = gmail.get_json("/messages", token, {"q": f"after:{cutoff}", "maxResults": 500})
-        message_ids = [str(item["id"]) for item in batch.get("messages", [])]
-        partial = bool(batch.get("nextPageToken"))
-        if not partial:
-            profile = gmail.get_json("/profile", token)
-            next_cursor = str(profile.get("historyId")) if profile.get("historyId") else None
-    new_ids, duplicates = _new_message_ids(session, conn, message_ids)
-    if duplicates:
-        counts["duplicate"] = duplicates
-    for message_id in new_ids:
+                params = {"maxResults": 500, "q": gmail.job_query(days), "includeSpamTrash": "false"}
+                if scan.page:
+                    params["pageToken"] = scan.page
+                batch = gmail.get_json("/messages", token, params)
+                remember(item.get("id") for item in batch.get("messages", []))
+                page = batch.get("nextPageToken")
+                if not page:
+                    scan.phase = "importing_changes" if scan.rescoped else "history_wait"
+                    break
+                if page in scan.seen_pages:
+                    reset()
+                    raise gmail.GmailTemporaryError("Gmail repeated a listing page. Saved email is kept; check again to restart verification.")
+                scan.seen_pages.add(page)
+                scan.page = page
+        if scan.phase == "history_wait" and not scan.pending:
+            scan.phase = "history"
+        if scan.phase == "history":
+            for _ in range(5):
+                params = {"startHistoryId": scan.baseline, "maxResults": 500}
+                if scan.history_page:
+                    params["pageToken"] = scan.history_page
+                batch = gmail.get_json("/history", token, params)
+                for change in batch.get("history", []):
+                    added = {str(item["message"]["id"]) for item in change.get("messagesAdded", []) if item.get("message", {}).get("id")}
+                    scan.history_added.update(added)
+                    scan.history_dirty |= bool(added - scan.ids)
+                    # A message moved into/out of Spam or Trash must be selected
+                    # again by Gmail, without fetching the unrelated body.
+                    scan.history_dirty |= any({"SPAM", "TRASH"}.intersection(item.get("labelIds", []))
+                        for kind in ("labelsAdded", "labelsRemoved") for item in change.get(kind, []))
+                    deleted = {str(item.get("message", {}).get("id")) for item in change.get("messagesDeleted", [])}
+                    scan.ids.difference_update(deleted)
+                    scan.unavailable.difference_update(deleted)
+                    if deleted:
+                        scan.pending = deque(item for item in scan.pending if item not in deleted)
+                page = batch.get("nextPageToken")
+                if not page:
+                    scan.snapshot = str(batch.get("historyId") or "")
+                    if not scan.snapshot:
+                        raise gmail.GmailTemporaryError("Gmail did not return a completed history snapshot. Check again.")
+                    scan.snapshot_at = datetime.now(timezone.utc).isoformat()
+                    if scan.history_dirty:
+                        # History cannot apply a Gmail search query. Re-list the
+                        # job candidates from this snapshot before body reads.
+                        # Only changes since a completed scan can be live updates.
+                        scan = FullMailboxScan(scan.snapshot, live=scan.live,
+                            live_ids=(scan.live_ids | scan.history_added) if scan.live else set(),
+                            rescoped=True, snapshot=scan.snapshot, snapshot_at=scan.snapshot_at)
+                        _FULL_SCANS[key] = scan
+                    else:
+                        scan.phase = "importing_changes"
+                    break
+                if page in scan.seen_history_pages:
+                    reset()
+                    raise gmail.GmailTemporaryError("Gmail repeated a history page. Saved email is kept; check again to restart verification.")
+                scan.seen_history_pages.add(page)
+                scan.history_page = page
+    except (gmail.GmailCursorExpired, gmail.GmailPageExpired) as exc:
+        reset()
+        raise gmail.GmailTemporaryError("Gmail history or listing expired. Saved email is kept; check again to verify all history.") from exc
+
+    identities = _identities(session)
+    for _ in range(min(60, len(scan.pending))):
+        session.refresh(conn)
+        if conn.state != "ready" or bytes(conn.encrypted_refresh_token) != key[1]:
+            return {"state": conn.state if conn.state != "ready" else "disconnected", "counts": counts, "partial": True, "more": True}
+        message_id = scan.pending[0]
         try:
-            data = gmail.get_json("/messages/" + message_id, token, {"format": "full"})
+            data = _scoped_detail(message_id, token, lambda: _grant_ready(session, conn, key[1]))
         except gmail.GmailCursorExpired:
-            continue  # Message was deleted after it appeared in history.
-        result = _ingest(session, conn, data, identities, preview=not bool(conn.preview_complete and conn.history_id))
+            # A failed detail read alone cannot prove the listed ID is gone.
+            # Only a deletion event, or a fresh full listing, can resolve it.
+            scan.unavailable.add(message_id)
+            scan.pending.popleft()
+            continue
+        session.refresh(conn)
+        if conn.state != "ready" or bytes(conn.encrypted_refresh_token) != key[1]:
+            return {"state": conn.state if conn.state != "ready" else "disconnected", "counts": counts, "partial": True, "more": True}
+        if str(data.get("id") or "") != message_id:
+            raise gmail.GmailTemporaryError("Gmail returned an incomplete email response. Saved progress is kept; check again.")
+        try:
+            result = _ingest(session, conn, data, identities, preview=message_id not in scan.live_ids)
+            if result == "excluded":
+                scan.ids.discard(message_id)
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            if _new_message_ids(session, conn, [message_id])[0]:
+                raise
+            result = "duplicate"
+        scan.pending.popleft()
         counts[result] = counts.get(result, 0) + 1
-    if not partial and next_cursor:
-        conn.history_id = next_cursor
+        if result == "automatic":
+            identities = _identities(session)
+
+    session.refresh(conn)
+    if conn.state != "ready" or bytes(conn.encrypted_refresh_token) != key[1]:
+        return {"state": conn.state if conn.state != "ready" else "disconnected", "counts": counts, "partial": True, "more": True}
+    if scan.phase == "importing_changes" and not scan.pending:
+        if scan.unavailable:
+            reset()
+            raise gmail.GmailTemporaryError("Some listed emails are unavailable and deletion is unconfirmed. Saved progress is kept; verify all history again.")
+        scan.phase = "complete"
+        conn.history_id = scan.snapshot
         conn.preview_complete = True
     conn.last_synced_at = datetime.now(timezone.utc)
     conn.last_error = None
     session.commit()
-    return {"state": conn.state, "counts": counts, "partial": partial, "as_of": conn.last_synced_at.isoformat()}
+    finished = scan.phase == "complete"
+    missing = len(scan.pending) + len(scan.unavailable)
+    coverage = {"days": days, "scope": "job_mail", "includes_spam_trash": False,
+                "gmail": len(scan.ids), "in_ace": len(scan.ids) - missing,
+                "missing": missing, "complete": finished, "phase": scan.phase,
+                "checked_at": scan.snapshot_at if finished else conn.last_synced_at.isoformat()}
+    _COVERAGE[key] = coverage
+    return {"state": conn.state, "counts": counts, "remaining": len(scan.pending),
+            "partial": not finished, "more": not finished, "coverage": coverage,
+            "as_of": coverage["checked_at"]}
+
+
+class VerifyRequest(BaseModel):
+    days: Literal[0] | Annotated[int, Field(ge=30, le=365)] = 0  # Zero means job-related mail across all dates.
 
 
 @router.post("/api/inbox/sync")
-def sync(request: Request, session: Session = Depends(get_session)) -> dict:
+def sync(request: Request, session: Session = Depends(get_session), body: VerifyRequest | None = None) -> dict:
     conn = _connection(session, current_owner(request))
     if not conn:
         raise HTTPException(409, "Connect Gmail before syncing.")
     try:
-        return sync_once(session, conn)
+        return sync_once(session, conn, body.days if body else 0)
     except gmail.GmailError as exc:
         conn.last_error = str(exc)[:120]
         if not isinstance(exc, gmail.GmailTemporaryError):
@@ -489,7 +710,7 @@ def sync(request: Request, session: Session = Depends(get_session)) -> dict:
 
 
 class SyncRequest(BaseModel):
-    days: int = Field(30, ge=1, le=365)
+    days: int = Field(0, ge=0, le=365)
     page_token: str | None = None
 
 
@@ -499,25 +720,46 @@ def backfill(body: SyncRequest, request: Request, session: Session = Depends(get
     conn = _connection(session, current_owner(request))
     if not conn or not conn.encrypted_refresh_token or conn.state == "disconnected":
         raise HTTPException(409, "Connect Gmail before previewing a backfill.")
+    if body.days == 0:
+        # Share sync's bounded work, lock and Gmail error response handling.
+        return sync(request, session, VerifyRequest())
+    lock = _sync_lock(conn.id)
+    if not lock.acquire(blocking=False):
+        return {"state": "busy", "counts": {}}
+    try:
+        session.refresh(conn)
+        return _backfill_locked(body, request, session, conn)
+    finally:
+        lock.release()
+
+
+def _backfill_locked(body: SyncRequest, request: Request, session: Session, conn: GmailConnectionRecord) -> dict:
+    if conn.state != "ready":
+        return {"state": conn.state, "counts": {}, "partial": True}
+    grant = bytes(conn.encrypted_refresh_token)
     s = get_settings()
     try:
         token = gmail.access_token(gmail.decrypt_token(conn.encrypted_refresh_token, s.gmail_token_key), client_id=s.gmail_client_id, client_secret=s.gmail_client_secret)
         if not body.page_token and not conn.history_id:
             profile = gmail.get_json("/profile", token)
             conn.preview_baseline_history_id = str(profile.get("historyId")) if profile.get("historyId") else None
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=body.days)).strftime("%Y/%m/%d")
-        batch = gmail.get_json("/messages", token, {"q": f"after:{cutoff}", "maxResults": 100, **({"pageToken": body.page_token} if body.page_token else {})})
+        batch = gmail.get_json("/messages", token, {"q": gmail.job_query(body.days), "includeSpamTrash": "false", "maxResults": 100, **({"pageToken": body.page_token} if body.page_token else {})})
         identities = _identities(session)
         counts: dict[str, int] = {}
         new_ids, duplicates = _new_message_ids(session, conn, [str(item["id"]) for item in batch.get("messages", [])])
         if duplicates:
             counts["duplicate"] = duplicates
         for message_id in new_ids:
+            if not _grant_ready(session, conn, grant):
+                return {"state": conn.state if conn.state != "ready" else "disconnected", "counts": counts, "partial": True}
             try:
-                data = gmail.get_json("/messages/" + message_id, token, {"format": "full"})
+                data = _scoped_detail(message_id, token, lambda: _grant_ready(session, conn, grant))
             except gmail.GmailCursorExpired:
                 continue  # Deleted after listing; no evidence or outcome exists.
+            if not _grant_ready(session, conn, grant):
+                return {"state": conn.state if conn.state != "ready" else "disconnected", "counts": counts, "partial": True}
             outcome = _ingest(session, conn, data, identities, preview=True)
+            session.commit()
             counts[outcome] = counts.get(outcome, 0) + 1
         # Older pages say nothing about new email, so the time of the last
         # check for new email (last_synced_at) stays where sync left it.
@@ -538,17 +780,18 @@ def backfill(body: SyncRequest, request: Request, session: Session = Depends(get
 
 def _message_query(connection_id: int, decision: str | None = None, q: str | None = None):
     query = select(GmailMessageRecord).where(GmailMessageRecord.connection_id == connection_id)
+    projected = decision_expression()
     if decision == "pending":
-        query = query.where(GmailMessageRecord.decision.in_(PENDING))
+        query = query.where(projected.in_(PENDING))
     elif decision == "recruiting":
         # Everything about applications, newest first, whatever ACE did with it.
         named = or_(*(GmailMessageRecord.subject.ilike(f"%{word}%") for word in _ABOUT_APPLICATIONS))
         query = query.where(or_(GmailMessageRecord.decision.not_in(("ignored", "unrelated")),
                                 and_(GmailMessageRecord.decision == "ignored", named)))
     elif decision in {"review", "exact_preview", "deferred", "ignored", "manual", "automatic", "unrelated", "receipt", "update"}:
-        query = query.where(GmailMessageRecord.decision == decision)
+        query = query.where(projected == decision)
     elif decision == "ambiguous":
-        query = query.where(GmailMessageRecord.decision == "review", GmailMessageRecord.candidate_keys[1].as_string().is_not(None))
+        query = query.where(projected == "review", GmailMessageRecord.candidate_keys[1].as_string().is_not(None))
     elif decision is not None:
         raise HTTPException(422, "Choose a supported evidence review filter.")
     for word in (q or "").split()[:6]:
@@ -567,18 +810,37 @@ def _message_rows(session: Session, connection_id: int, decision: str | None = N
 
 
 def _stale_query(connection_id: int):
-    """Email read under older rules that the current rules may decide differently:
-    everything waiting, and receipts ACE filed itself (never the owner's)."""
+    """Old-parser candidates before intersection with verified job-mail scope.
+
+    Owner filings, deferred choices, Undo and recorded outcomes stay protected.
+    """
     return select(GmailMessageRecord).where(
         GmailMessageRecord.connection_id == connection_id, GmailMessageRecord.parser_version != PARSER_VERSION,
-        or_(GmailMessageRecord.decision.in_(PENDING),
-            and_(GmailMessageRecord.decision == "receipt", GmailMessageRecord.decision_reason == RECEIPT_REASON)))
+        GmailMessageRecord.decision_reason.not_in(("You undid ACE's change for this email", "You undid the change this email made")),
+        or_(GmailMessageRecord.decision.in_(("review", "exact_preview")),
+            and_(GmailMessageRecord.decision == "receipt", GmailMessageRecord.decision_reason == RECEIPT_REASON),
+            GmailMessageRecord.decision == "ignored"))
+
+
+def _grant_ready(session, conn, grant):
+    session.refresh(conn)
+    return conn.state == "ready" and bytes(conn.encrypted_refresh_token) == grant
+
+
+def _scoped_scan(conn):
+    return _FULL_SCANS.get(_coverage_key(conn, 0)) if conn.encrypted_refresh_token else None
+
+
+def _eligible_stale_query(conn):
+    scan = _scoped_scan(conn)
+    return _stale_query(conn.id).where(GmailMessageRecord.gmail_id.in_(
+        sorted(scan.ids) if scan and scan.phase == "complete" else []))
 
 
 def _item(r: GmailMessageRecord) -> dict:
     return {"id": r.id, "received_at": r.received_at.isoformat(), "sender": r.sender, "subject": r.subject,
             "snippet": html.unescape(r.snippet), "classification": r.classification, "requisition_id": r.requisition_id,
-            "decision": r.decision, "candidate_keys": r.candidate_keys or [], "reason": r.decision_reason,
+            "decision": projected_decision(r), "candidate_keys": r.candidate_keys or [], "reason": projected_reason(r),
             "selected_application_key": r.selected_application_key}
 
 
@@ -593,18 +855,19 @@ def messages(request: Request, session: Session = Depends(get_session), decision
     if not conn:
         return {"items": [], "review_count": 0, "total": 0, "offset": offset, "has_more": False,
                 "view": ("pending" if decision == "auto" else decision) or "all", "latest_received_at": None, "counts": counts}
-    by_decision = dict(session.execute(select(GmailMessageRecord.decision, func.count()).where(
-        GmailMessageRecord.connection_id == conn.id).group_by(GmailMessageRecord.decision)).all())
+    projected = decision_expression()
+    by_decision = dict(session.execute(select(projected, func.count()).where(
+        GmailMessageRecord.connection_id == conn.id).group_by(projected)).all())
     review_count = sum(by_decision.get(key, 0) for key in PENDING)
     if decision == "auto":
         decision = "pending" if review_count else "recruiting"
-    stale = session.scalar(select(func.count()).select_from(_stale_query(conn.id).subquery())) or 0
+    stale = session.scalar(select(func.count()).select_from(_eligible_stale_query(conn).subquery())) or 0
     latest = session.scalar(select(func.max(GmailMessageRecord.received_at)).where(GmailMessageRecord.connection_id == conn.id))
     total = session.scalar(select(func.count()).select_from(_message_query(conn.id, decision, q).subquery())) or 0
     rows = _message_rows(session, conn.id, decision, offset, limit, q)
     counts.update({"stored": sum(by_decision.values()), "needs_review": review_count,
                    "automatic": by_decision.get("automatic", 0), "manual": by_decision.get("manual", 0),
-                   "reviewed": sum(by_decision.get(key, 0) for key in ("manual", "automatic", "unrelated", "update")),
+                   "reviewed": sum(by_decision.get(key, 0) for key in ("manual", "automatic", "unrelated")),
                    "receipts": by_decision.get("receipt", 0), "updates": by_decision.get("update", 0), "stale": stale})
     return {"items": [_item(r) for r in rows], "review_count": review_count, "total": total, "offset": offset,
             "has_more": offset + len(rows) < total, "view": decision or "all",
@@ -671,22 +934,44 @@ class RecheckRequest(BaseModel):
 def recheck(body: RecheckRequest, request: Request, session: Session = Depends(get_session)) -> dict:
     """Decide email read under older rules again, under the current ones.
 
-    That is every waiting email and every receipt ACE filed itself. Each is
-    read from Gmail again (the full text is not stored) and decided as a
-    historical import would be: a clear rejection is recorded, a receipt
-    stays a receipt, anything unclear waits. Run it again until none remain.
+    Only the completed all-date job-mail manifest can authorize automatic
+    body reads. Clear rejections can record with Undo, routine correspondence
+    saves without an owner task, and specific outcome ambiguities remain for
+    review. Owner filings and recorded outcomes are never re-decided.
     """
     conn = _connection(session, current_owner(request))
     if not conn or not conn.encrypted_refresh_token or conn.state == "disconnected":
         raise HTTPException(409, "Connect Gmail before rechecking email.")
-    stale = _stale_query(conn.id)
+    lock = _sync_lock(conn.id)
+    if not lock.acquire(blocking=False):
+        return {"state": "busy", "checked": 0, "counts": {}, "remaining": 0}
+    try:
+        session.refresh(conn)
+        return _recheck_locked(body, session, conn)
+    finally:
+        lock.release()
+
+
+def _recheck_locked(body: RecheckRequest, session: Session, conn: GmailConnectionRecord) -> dict:
+    scan = _scoped_scan(conn)
+    if scan is None or scan.phase != "complete":
+        return {"checked": 0, "counts": {}, "remaining": 0, "scope_pending": True}
+    stale = _eligible_stale_query(conn)
     rows = list(session.scalars(stale.order_by(GmailMessageRecord.received_at.desc(), GmailMessageRecord.id.desc()).limit(body.limit)))
     counts: dict[str, int] = {}
+    grant = bytes(conn.encrypted_refresh_token)
+    checked = 0
+    stopped = None
     identities = _identities(session) if rows else []
     for row in rows:
+        session.refresh(conn)
+        if conn.state != "ready" or bytes(conn.encrypted_refresh_token) != grant:
+            stopped = conn.state if conn.state != "ready" else "disconnected"
+            break
+        data = {}
+        evidence = None
         try:
-            data = gmail.get_json("/messages/" + row.gmail_id, _access(conn), {"format": "full"})
-            evidence = _message_evidence(data)
+            data = _scoped_detail(row.gmail_id, _access(conn), lambda: _grant_ready(session, conn, grant))
         except gmail.GmailCursorExpired:
             # Deleted from Gmail: decide from what was kept, which cannot
             # prove the sender, so nothing changes automatically.
@@ -695,14 +980,34 @@ def recheck(body: RecheckRequest, request: Request, session: Session = Depends(g
             if not isinstance(exc, gmail.GmailTemporaryError):
                 _TOKENS.clear()
             raise HTTPException(429 if isinstance(exc, gmail.GmailRateLimited) else 502, str(exc)) from exc
-        decision = reconcile(evidence, identities)
+        checked += 1
+        if {"SPAM", "TRASH"}.intersection(data.get("labelIds", [])):
+            # It moved after verification. Retain its original evidence and
+            # invalidate scope so another automatic call cannot re-read it.
+            _FULL_SCANS.pop(next(key for key, value in _FULL_SCANS.items() if value is scan), None)
+            return {"checked": checked, "counts": counts, "remaining": 0, "scope_pending": True}
+        session.refresh(conn)
+        if conn.state != "ready" or bytes(conn.encrypted_refresh_token) != grant:
+            stopped = conn.state if conn.state != "ready" else "disconnected"
+            break
+        if evidence is None:
+            evidence = _message_evidence(data)
+        # Network reads hold no row lock. The owner may file/confirm/undo this
+        # email while Gmail responds. Re-select eligibility from the database,
+        # refreshing the identity map and locking only for the short write.
+        current = session.scalar(stale.where(GmailMessageRecord.id == row.id)
+                                 .with_for_update().execution_options(populate_existing=True))
+        if current is None:
+            continue
+        row = current
+        decision = reconcile(evidence, identities, conn.email, thread_keys=_thread_keys(session, conn, data, evidence, identities))
         before = row.decision
         row.classification = decision.classification
         row.requisition_id = decision.requisition_id
         row.candidate_keys = list(decision.candidates)
         row.decision_reason = decision.reason
         row.parser_version = PARSER_VERSION
-        _apply(session, conn, row, decision, evidence, preview=True)
+        _apply(session, conn, row, decision, evidence, preview=True, allow_automation=not {"SPAM", "TRASH"}.intersection(data.get("labelIds", [])))
         if before == "deferred" and row.decision in PENDING:
             row.decision = "deferred"
         _append_event(session, f"email:{row.id}", "email_rechecked", before, row.decision, actor="classifier",
@@ -712,7 +1017,8 @@ def recheck(body: RecheckRequest, request: Request, session: Session = Depends(g
         identities = _identities(session) if row.decision == "automatic" else identities
         counts[row.decision] = counts.get(row.decision, 0) + 1
     remaining = session.scalar(select(func.count()).select_from(stale.subquery())) or 0
-    return {"checked": len(rows), "counts": counts, "remaining": remaining}
+    return {"checked": checked, "counts": counts, "remaining": remaining,
+            **({"state": stopped} if stopped else {})}
 
 
 @router.get("/api/inbox/applications")
@@ -722,9 +1028,16 @@ def applications(request: Request, session: Session = Depends(get_session)) -> d
 
 
 @router.get("/api/inbox/events")
-def events(request: Request, session: Session = Depends(get_session)) -> dict:
+def events(request: Request, session: Session = Depends(get_session),
+           message_id: Annotated[int | None, Query(ge=1)] = None) -> dict:
     current_owner(request)
-    rows = session.scalars(select(ApplicationEventRecord).where(~ApplicationEventRecord.application_key.like("action:%")).order_by(ApplicationEventRecord.recorded_at.desc()).limit(100)).all()
+    query = select(ApplicationEventRecord).where(~ApplicationEventRecord.application_key.like("action:%"))
+    if message_id is not None:
+        _owned(session, request, message_id)
+        linked = ApplicationEventRecord.__table__.alias("linked_email_events")
+        query = query.where(or_(ApplicationEventRecord.gmail_message_id == message_id,
+                               ApplicationEventRecord.undo_of_id.in_(select(linked.c.id).where(linked.c.gmail_message_id == message_id))))
+    rows = session.scalars(query.order_by(ApplicationEventRecord.recorded_at.desc()).limit(100)).all()
     return {"items": [{"id": e.id, "application_key": e.application_key, "kind": e.kind, "before": e.previous_status, "after": e.new_status, "actor": e.actor, "reason": e.reason, "occurred_at": e.occurred_at.isoformat() if e.occurred_at else None, "recorded_at": e.recorded_at.isoformat(), "undo_of_id": e.undo_of_id, "gmail_message_id": e.gmail_message_id} for e in rows]}
 
 
@@ -834,6 +1147,6 @@ def undo(event_id: int, request: Request, session: Session = Depends(get_session
     if message and message.decision in {"automatic", "manual"} and message.selected_application_key == event.application_key:
         message.decision = "review"
         message.selected_application_key = None
-        message.decision_reason = "You undid the change this email made"
+        message.decision_reason = "You undid ACE's change for this email"
     session.commit()
     return {"event_id": correction.id, "application_key": event.application_key, "status": event.previous_status}

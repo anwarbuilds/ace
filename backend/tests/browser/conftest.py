@@ -479,10 +479,14 @@ def browser():
 
 @pytest.fixture
 def page(browser):
-    """Give each test a freshly loaded Queue."""
+    """Isolate fictional extension forms from the removed legacy Queue UI."""
 
-    browser.open(
-        "/"
+    # A fragment-only marker keeps the old document (and extension state).
+    # Change the actual data payload to guarantee a fresh JS realm each time.
+    url = "data:text/html,<html><body></body></html><!--fixture-" + str(time.time_ns()) + "-->"
+    browser._send("Page.navigate", {"url": url})
+    browser.wait_for(
+        "location.href === " + json.dumps(url)
+        + " && document.readyState === 'complete' && !!document.body"
     )
-
     return browser

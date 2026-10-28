@@ -285,3 +285,52 @@ test("reference desktop keeps five aligned KPIs and the six company modules in o
   const panels=await page.locator(".an-grid .an-panel h2").allTextContents();
   expect(panels).toEqual(["Top companies in your pipeline","Companies with verified sponsorship evidence","Historical H-1B petition outcomes","Employer outcome history","Historical petition activity","Sponsorship evidence"]);
 });
+
+for (const route of ["/app/analytics?days=all", "/app/applications/analytics?days=all"]) {
+  test(`Analytics settles after opening and after an evidence refresh: ${route}`,async({page})=>{
+    const requests:string[]=[];
+    const errors=watchErrors(page);
+    // This regression needs Inbox navigation, not a Gmail body or email frame.
+    // Use an empty fictional Inbox; Analytics still reads the real demo API.
+    await page.route(/\/api\/inbox\/messages(?:\?|$)/,request=>request.fulfill({
+      status:200,contentType:"application/json",body:JSON.stringify({items:[],total:0,has_more:false,view:"pending",latest_received_at:null,counts:{stored:0,needs_review:0,automatic:0,manual:0,reviewed:0,receipts:0,updates:0,stale:0}}),
+    }));
+    page.on("request",request=>{
+      const url=new URL(request.url());
+      const headers=request.headers();
+      if(url.pathname===new URL(route,"http://fixture.test").pathname && headers.rsc==="1" && !headers["next-router-prefetch"])requests.push(request.url());
+    });
+    if(route.startsWith("/app/analytics?")){
+      await page.goto("/app/applications/inbox");
+      await page.getByRole("link",{name:"Analytics",exact:true}).click();
+    }else await page.goto(route);
+    await expect(page.getByRole("heading",{name:route.startsWith("/app/analytics?")?"Analytics":"Application records",exact:true})).toBeVisible();
+    // Catch the continuous half-second response cycle, allowing initial loading
+    // to finish. The shell's intentional two-minute poll is outside this window.
+    await page.waitForTimeout(1500);
+    const opened=requests.length;
+    await page.waitForTimeout(3000);
+    expect(requests.length,"opening Analytics must settle").toBe(opened);
+    await page.evaluate(()=>{
+      const channel=new BroadcastChannel("ace-marks");
+      channel.postMessage("changed");
+      channel.close();
+    });
+    await expect.poll(()=>requests.length).toBeGreaterThan(opened);
+    await page.waitForTimeout(1500);
+    const updated=requests.length;
+    await page.waitForTimeout(3000);
+    expect(requests.length,"an evidence refresh must also settle").toBe(updated);
+    if(route.startsWith("/app/analytics?")){
+      await page.getByRole("link",{name:"Inbox Intelligence",exact:true}).click();
+      await expect(page.getByRole("heading",{name:"Inbox Intelligence",exact:true})).toBeVisible();
+      await page.goBack();
+      await expect(page.getByRole("heading",{name:"Analytics",exact:true})).toBeVisible();
+      await page.waitForTimeout(1500);
+      const returned=requests.length;
+      await page.waitForTimeout(3000);
+      expect(requests.length,"returning from Inbox must settle").toBe(returned);
+    }
+    expect(errors).toEqual([]);
+  });
+}
