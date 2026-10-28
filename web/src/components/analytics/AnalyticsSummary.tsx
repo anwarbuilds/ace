@@ -19,11 +19,11 @@ export function ApplicationMetrics({ d, supplement }: { d: AnalyticsData; supple
   const outcomeCount = (value: number) => value || d.has_outcome_evidence ? value : null;
   const comparisonMissing = "Comparison unavailable: complete, comparable outcome observation is not recorded.";
   const rows = [
-    { icon: "send", label: "Applications sent", value: d.submitted, foot: "Unique submitted applications", href: applicationRecordsHref(d), trend: supplement?.submissionTrend, reason: d.days === "all" ? "All time has no preceding equivalent interval." : "Submission comparison could not be verified." },
-    { icon: "calendar", label: "This week", value: d.week_total, foot: "Current week, Monday to Sunday", href: currentWeekHref(d), trend: supplement?.weekTrend, reason: "Week comparison could not be verified." },
+    { icon: "send", label: "Applications sent", value: d.submitted, foot: "Unique submissions", href: applicationRecordsHref(d), trend: supplement?.submissionTrend, reason: d.days === "all" ? "All time has no preceding equivalent interval." : "Submission comparison could not be verified." },
+    { icon: "calendar", label: "This week", value: d.week_total, foot: "Current calendar week", href: currentWeekHref(d), trend: supplement?.weekTrend, reason: "Week comparison could not be verified." },
     { icon: "reply", label: "Meaningful replies", value: outcomeCount(d.positive), foot: "Recorded positive employer responses", href: applicationRecordsHref(d, { evidence: "positive" }), reason: comparisonMissing },
-    { icon: "file", label: "Online assessments", value: outcomeCount(d.assessments), foot: "Recorded assessment invitations", href: applicationRecordsHref(d, { evidence: "online_assessment" }), reason: comparisonMissing },
-    { icon: "people", label: "Interview invitations", value: outcomeCount(d.interviews), foot: "Recorded interview invitations", href: applicationRecordsHref(d, { evidence: "interview" }), reason: comparisonMissing },
+    { icon: "file", label: "Online assessments", value: outcomeCount(d.assessments), foot: "Recorded invitations", href: applicationRecordsHref(d, { evidence: "online_assessment" }), reason: comparisonMissing },
+    { icon: "people", label: "Interview invitations", value: outcomeCount(d.interviews), foot: "Recorded invitations", href: applicationRecordsHref(d, { evidence: "interview" }), reason: comparisonMissing },
   ];
   return <section className="an-metrics" aria-label="Application metrics">{rows.map(row => <Link href={row.href} key={row.label} className="an-metric"><span className="an-icon-tile"><SummaryIcon kind={row.icon} /></span><div><span className="an-metric-label">{row.label}</span><div className="an-metric-number"><strong className={row.value == null ? "an-metric-na" : "an-metric-value"}>{row.value == null ? "Unavailable" : number(row.value)}</strong><Trend value={row.trend} reason={row.reason} /></div><p>{row.foot}</p></div></Link>)}</section>;
 }

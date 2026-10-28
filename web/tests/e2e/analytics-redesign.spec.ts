@@ -15,10 +15,10 @@ for (const theme of ["light","dark"] as const) {
     await setThemeCookies(context,baseURL!,theme);
     await page.setViewportSize({width:1672,height:941});
     const errors=watchErrors(page);
-    const report=await(await page.request.get("/api/analytics?days=90&tz=America%2FLos_Angeles")).json();
+    const report=await(await page.request.get("/api/analytics?days=30&tz=America%2FLos_Angeles")).json();
     const before=await(await page.request.get("/api/marks")).json();
     for (const [tab,title] of tabs) {
-      await page.goto(`/app/analytics?days=90&tab=${tab}`);
+      await page.goto(`/app/analytics?days=30&tab=${tab}`);
       await expect(page.getByRole("heading",{name:title,exact:true})).toBeVisible();
       await expect(page.locator(".an-metric").first().locator(".an-metric-value")).toHaveText(String(report.submitted));
       await expect(page.locator(".an-metric").nth(1).locator(".an-metric-value")).toHaveText(String(report.week_total));
@@ -161,12 +161,13 @@ test("official logo renders locally and failed image falls back cleanly",async({
   const day=stamp.toISOString().slice(0,10);
   const url=`/app/analytics?tab=companies&days=custom&start=${day}&end=${day}`;
   await page.goto(url);
-  const logo=page.getByRole("img",{name:"Google logo",exact:true});
+  const companies=page.locator(".an-company-table");
+  const logo=companies.getByRole("img",{name:"Google logo",exact:true});
   await expect(logo).toBeVisible();
   expect(await logo.evaluate((el:HTMLImageElement)=>el.complete&&el.naturalWidth>0)).toBe(true);
   await page.route("**/company-logos/google.ico",route=>route.abort());
   await page.reload();
-  await expect(page.getByLabel("Google monogram",{exact:true})).toBeVisible();
+  await expect(companies.getByLabel("Google monogram",{exact:true})).toBeVisible();
   await expect(logo).toHaveCount(0);
 });
 

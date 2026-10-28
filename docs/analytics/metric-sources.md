@@ -36,7 +36,7 @@ never discovery date, email receipt date or current-status date.
 | Employer response rate | `cohort.rate` / per-group `rate` | Coverage attestation missing | Unavailable with explanation; connected Gmail does not unlock a rate |
 | Response timing | `timing`, `timing_sample`, `median_days` from first reliable dated outcome after submission | Bucket shares divide by timing sample, not submissions | Dated evidence records; missing timestamps excluded, no-sample state distinct from zero |
 | Inbox review | `review.needs_review/exact_preview/ambiguous` | Message counts, not application counts. Ambiguity overlaps review | Existing Inbox decision filters; no matching/triage changes |
-| Role table | `roles[].family/submitted/eligible/responses` | Exact recorded evaluation family; no title-based family inference | Family-filtered records; Unknown retained |
+| Role table | `roles[].family/submitted/eligible/responses` | Exact recorded evaluation family; five-row summary and expandable full list, with no title-based family inference | Family-filtered records; Unknown retained |
 | Sources/channels | `attribution.channel`; no application-time source field exists | No provider/sender inference | Not recorded row; all selected records remain inspectable |
 | Submitted resume versions | `attribution.resume`; no application-to-submitted-file relationship exists | Current primary resume is not historical attribution | Not recorded row; Resume Studio versions alone do not prove submission |
 | Best combinations | `attribution.combinations` | Requires actual role/resume/channel, at least five age-qualified applications and comparable observation | Not enough comparable applications. No winner or causal claim |
