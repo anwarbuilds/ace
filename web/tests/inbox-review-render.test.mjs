@@ -97,6 +97,37 @@ test("a filed acknowledgement says so and can be changed", () => {
   assert.doesNotMatch(choice(html, "Status update"), /disabled/);
 });
 
+test("a recognized unlinked outcome explains its evidence without asking for a decision", () => {
+  const html = render({
+    ...message,
+    classification: "rejection",
+    decision: "unlinked",
+    candidate_keys: [],
+    reason: "This authenticated rejection predates every recorded application at this employer.",
+    understanding: {
+      decision_type: "Automatic classification",
+      classification_reason: "The employer communicates a rejection.",
+      classification_state: "recognized",
+      matching_state: "unlinked",
+      workflow_state: "unlinked_outcome",
+      update_policy: "no_status_change",
+      review_reason: null,
+      evidence_source: "retained_excerpt",
+      evidence_excerpt: "We will not move forward with your application.",
+    },
+  });
+  assert.match(html, /Recognized, unlinked/);
+  assert.match(html, /ACE.s classification: Rejection/);
+  assert.match(html, /Application linkage: unlinked\. No application status changed\./);
+  assert.match(html, /No eligible application existed in ACE when this email arrived/);
+  assert.match(html, /No application outcome was recorded\. Linking is optional; the email remains searchable/);
+  assert.match(html, /predates every recorded application at this employer/);
+  assert.match(choice(html, "Rejection"), /disabled/);
+  assert.match(choice(html, "Rejection"), /suggested/);
+  assert.doesNotMatch(html, /Needs you|Why it waits:|Decision needed:|Undo this change|ACE recorded this email/);
+  assert.ok(!choice(html, "Decide later"));
+});
+
 test("a recorded email offers Undo instead of outcome buttons", () => {
   const recorded = { ...message, decision: "automatic", classification: "rejection", selected_application_key: "job:1", reason: "Clear rejection matched by its job ID" };
   const events = [{ id: 7, application_key: "job:1", kind: "rejection", before: "applied", after: "rejected", actor: "verified_automation", reason: "fixture", recorded_at: "2026-01-02T00:00:00Z", undo_of_id: null, gmail_message_id: 1 }];

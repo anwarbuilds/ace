@@ -81,12 +81,12 @@ async function mounted(element,run){
   }
 }
 const complete={days:0,scope:"job_mail",includes_spam_trash:false,gmail:125,in_ace:125,missing:0,complete:true,checked_at:new Date().toISOString()};
-function fixture({coverage=complete,stale=0,state="ready",fail=false,pending=0}={}){
+function fixture({coverage=complete,stale=0,state="ready",fail=false,pending=0,unlinked=0,backgroundSyncEnabled}={}){
   const calls=[];
-  const connection={coverage,state,connected:true,available:true,email:"owner-fixture@example.test",last_synced_at:new Date().toISOString(),following_changes:true,auto_rejections:true};
+  const connection={coverage,state,connected:true,available:true,email:"owner-fixture@example.test",last_synced_at:new Date().toISOString(),following_changes:true,auto_rejections:true,background_sync_enabled:backgroundSyncEnabled};
   read=async route=>{
     if(route==="/api/inbox/connection")return {...connection};
-    if(route==="/api/inbox/messages")return {items:[],total:0,has_more:false,view:"recruiting",latest_received_at:null,counts:{stored:125,needs_review:pending,automatic:0,manual:0,reviewed:0,receipts:0,updates:0,stale}};
+    if(route==="/api/inbox/messages")return {items:[],total:0,has_more:false,view:"recruiting",latest_received_at:null,counts:{stored:125,needs_review:pending,automatic:0,manual:0,reviewed:0,receipts:0,updates:0,unlinked,stale}};
     if(route==="/api/inbox/applications"||route==="/api/inbox/events")return {items:[]};
     throw Error(`Unexpected fictional read ${route}`);
   };
@@ -139,6 +139,70 @@ test("paused Inbox never starts automatic reads",async()=>{
   await mounted(React.createElement(InboxIntelligence),async container=>{
     assert.equal(calls.length,0);
     assert.match(container.textContent,/Gmail sync is paused/);
+  });
+});
+
+for(const backgroundSyncEnabled of [true,false,undefined]){
+  test(`Inbox rules describe background checks only when the server enables them (${backgroundSyncEnabled})`,async()=>{
+    const {calls}=fixture({backgroundSyncEnabled});
+    await mounted(React.createElement(InboxIntelligence),async(container,window)=>{
+      const rules=[...container.querySelectorAll(".intelligence-tabs button")].find(button=>button.textContent==="How ACE decides");
+      await act(async()=>{rules.dispatchEvent(new window.Event("click",{bubbles:true}));});
+      if(backgroundSyncEnabled){
+        assert.match(container.textContent,/While sync is on, ACE checks Gmail about every three minutes even when this page is closed/);
+        assert.match(container.textContent,/Google limits or a large import can delay a check/);
+      }else{
+        assert.match(container.textContent,/ACE checks Gmail when you open this page and every few minutes while it stays open/);
+        assert.doesNotMatch(container.textContent,/even when this page is closed/);
+      }
+      assert.match(container.textContent,/Sync now also checks for new mail/);
+      assert.match(container.textContent,/Nothing is sent, changed or deleted in Gmail/);
+      assert.deepEqual(calls,[],"reading the rules never starts a sync or changes automation");
+    });
+  });
+}
+
+test("recognized historical evidence opens its own filter without adding to the waiting count",async()=>{
+  const {calls}=fixture({pending:2,unlinked:6});
+  const replace=router.replace;
+  const destinations=[];
+  router.replace=(url)=>destinations.push(url);
+  try{
+    await mounted(React.createElement(InboxIntelligence),async(container,window)=>{
+      assert.match(container.querySelector(".inbox-status h2").textContent,/2 emails need you/);
+      const note=[...container.querySelectorAll(".inbox-status-note")].find(item=>item.textContent.includes("recognized historical outcomes"));
+      assert.ok(note);
+      assert.match(note.textContent,/6 recognized historical outcomes without an eligible application/);
+      assert.match(note.textContent,/excluded from application outcomes in Analytics\. Linking is optional/);
+      assert.ok(container.querySelector('.inbox-queue-tools option[value="unlinked_outcome"]'));
+      await act(async()=>{note.querySelector("button").dispatchEvent(new window.Event("click",{bubbles:true}));});
+      assert.equal(destinations.length,1);
+      assert.equal(new URL(destinations[0],"https://fixture.example").searchParams.get("decision"),"unlinked_outcome");
+      assert.deepEqual(calls,[],"opening retained evidence must not record an application outcome");
+    });
+  }finally{router.replace=replace;}
+});
+
+test("an unlinked historical rejection changes an application only after an explicit owner choice",async()=>{
+  const message={id:98721,sender:"Fictional Labs <talent@fictional.example>",subject:"Fictional Labs application update",snippet:"We will not move forward with your application.",received_at:"2026-01-10T12:00:00Z",classification:"rejection",decision:"unlinked",candidate_keys:[],reason:"The rejection predates every recorded application at this employer.",selected_application_key:null};
+  const application={key:"job:98721",company:"Fictional Labs",title:"Engineer",status:"applied",applied_at:"2026-09-01T12:00:00Z"};
+  const reads=[],writes=[];
+  read=async route=>{reads.push(route);return {...message,text:"Fictional Labs application update. We will not move forward with your application.",document:"<p>Fictional rejection</p>",blocked_images:0};};
+  send=async(method,route,body)=>{writes.push({method,route,body});};
+  await mounted(React.createElement(InboxReviewPanel,{message,applications:[application],events:[],busy:false,action:async run=>run()}),async(container,window)=>{
+    const rejection=[...container.querySelectorAll("button")].find(button=>button.querySelector("strong")?.textContent==="Rejection");
+    assert.equal(rejection.disabled,true);
+    assert.match(container.textContent,/Linking is optional; the email remains searchable/);
+    assert.doesNotMatch(container.textContent,/Why it waits:|Undo this change|Decide later/);
+    assert.deepEqual(writes,[]);
+    assert.deepEqual(reads,["/api/inbox/messages/98721/full"],"viewing unlinked evidence must not request recorded-outcome history");
+    const option=container.querySelector(".inbox-options button");
+    assert.ok(option,"optional manual linkage remains available");
+    await act(async()=>{option.dispatchEvent(new window.Event("click",{bubbles:true}));});
+    assert.equal(rejection.disabled,false);
+    assert.deepEqual(writes,[],"selecting an application alone must not change its status");
+    await act(async()=>{rejection.dispatchEvent(new window.Event("click",{bubbles:true}));});
+    assert.deepEqual(writes,[{method:"POST",route:"/api/inbox/review",body:{message_id:98721,application_key:"job:98721",status:"rejected",expected_status:"applied",confirmed:true,kind:"rejection"}}]);
   });
 });
 

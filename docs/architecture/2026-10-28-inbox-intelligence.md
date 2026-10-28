@@ -1,5 +1,56 @@
 # Inbox intelligence upgrade
 
+## Parser 11 candidate: continuous checks and contextual identity
+
+Status: source implementation under validation, **not deployed**. The live
+parser-10 release below remains authoritative until a verified activation.
+
+The API lifespan owns a bounded Gmail monitor for existing ready grants. It
+checks about every three minutes, uses a dedicated PostgreSQL advisory lease
+across ticks, and never calls historical reclassification or the job discovery
+scheduler. A new grant still starts paused. Pause, disconnect and changed grants
+remain authoritative; error writes use an atomic conditional update. Shutdown
+checks between listing pages, metadata/body reads and ingestion commits retain
+unfinished IDs for retry. Quota failures wait at least thirty minutes and honor
+longer provider retry instructions. No new service, scope or schema is added.
+`GMAIL_BACKGROUND_SYNC_ENABLED=false` disables the monitor.
+
+Matching analyzes explicit title evidence before eliminating future applications.
+It never substitutes a past generic title for a named future specific role and
+never chooses the nearest submission date. Explicit current-application links
+can identify postings on supported Greenhouse, Lever, Ashby, Workday and
+SmartRecruiters public URLs. Identities include provider, employer tenant and
+posting ID. Redirects, account/session tokens, quoted links, recommendation
+sections and arbitrary website query numbers do not qualify. Conflicting
+requisitions, role names, employers, links or duplicate application records stay
+unresolved. Link extraction is ephemeral; raw link tokens are not retained.
+
+A complete, authenticated, employer-identified rejection that predates **every**
+recorded application at that employer can be retained as `unlinked`, with its
+classification and decisive evidence intact. Explicit IDs/links pointing to a
+future application still require review. Unlinked outcomes are searchable and
+shown with their own Inbox filter/count and Analytics evidence-review entry;
+they never create applications or confirmed application outcomes. Linking is
+optional. This is an evidence state, not an age cutoff or an inference that the
+owner's newer application was rejected. Partial evidence, authentication or
+employer conflicts, contradictory meaning and real candidate actions remain
+review tasks. Existing records are not projected into this state automatically:
+historical changes require a separately reviewed, source-sealed cohort plan.
+
+The intent reader also handles short role-qualified application decisions such
+as the fictional “Your application for Data Scientist was rejected,” with
+conditional, negation, quoted-example and question safeguards. Public learning
+events need substantive event/registration purpose, rather than one adjective.
+Automatic versus owner provenance no longer treats a machine explanation
+starting “You applied...” as an owner decision. Positive automation keeps the
+existing strict opt-in/live/exact-ID/employer-origin policy.
+
+Fictional regressions cover these paths, wrong-target counterexamples, shared
+SQL/Python states, Analytics exclusion, provider errors, concurrent owner Pause,
+shutdown and actual frontend render/interaction behavior. Population precision,
+recall and complete mailbox observation remain unmeasured without independent
+labels and provider coverage; passing examples are not a perfect-accuracy claim.
+
 Parser 10 follow-up LIVE at API source `6ee2eb2`, schema 0050, PR #12 merged: distinguish optional coding lessons,
 account access, public digests and financial/administrative notices from hiring
 outcomes using substantive content. Recognize branded assessment invitations,

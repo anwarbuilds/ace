@@ -61,7 +61,9 @@ class GmailPageExpired(GmailTemporaryError):
 
 
 class GmailRateLimited(GmailTemporaryError):
-    pass
+    def __init__(self, message: str, *, retry_after: float = 0):
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 def configured(client_id: str, client_secret: str, redirect_uri: str, key: str) -> bool:
@@ -207,7 +209,7 @@ def get_json(path: str, token: str, params: dict | None = None) -> dict:
         delay = _retry_wait(response, attempt)
         if attempt == 3 or delay > 8:
             if limited:
-                raise GmailRateLimited("Google limited Gmail reads. Wait, then retry. Your connection is still authorized.")
+                raise GmailRateLimited("Google limited Gmail reads. Wait, then retry. Your connection is still authorized.", retry_after=delay)
             raise GmailTemporaryError("Gmail is temporarily unavailable. Try again later; your saved connection is unchanged.") from error
         time.sleep(delay + secrets.randbelow(250) / 1000)
 

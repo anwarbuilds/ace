@@ -55,8 +55,9 @@ def test_retry_after_is_respected_without_blocking_for_long_windows(monkeypatch,
     replies = iter([response(429, headers={"Retry-After": header}), response()])
     monkeypatch.setattr(gmail.httpx, "get", lambda *a, **k: next(replies))
     if header == "120":
-        with pytest.raises(gmail.GmailRateLimited):
+        with pytest.raises(gmail.GmailRateLimited) as error:
             gmail.get_json("/messages", "fictional-token")
+        assert error.value.retry_after == 120
     else:
         assert gmail.get_json("/messages", "fictional-token") == {"messages": []}
     assert sleeps == expected_waits
@@ -218,7 +219,7 @@ def test_review_counts_and_pagination_include_older_pending_messages(database):
     assert [len(page["items"]) for page in pages] == [50,50,27]
     assert all(page["total"] == page["review_count"] == 127 for page in pages)
     assert [page["has_more"] for page in pages] == [True,True,False]
-    assert pages[0]["counts"] == {"stored":284,"needs_review":127,"automatic":3,"manual":4,"reviewed":7,"receipts":0,"updates":0,"stale":0}
+    assert pages[0]["counts"] == {"stored":284,"needs_review":127,"automatic":3,"manual":4,"reviewed":7,"receipts":0,"updates":0,"unlinked":0,"stale":0}
     ids=[row["id"] for page in pages for row in page["items"]]
     assert len(ids)==len(set(ids))==127
     assert all(row["decision"] != "ignored" for page in pages for row in page["items"])

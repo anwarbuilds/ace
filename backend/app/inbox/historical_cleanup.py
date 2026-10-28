@@ -50,7 +50,7 @@ def projection(session, conn, row, data) -> dict:
                  candidate_keys=list(decision.candidates),
                  selected_application_key=decision.matched_target,
                  snippet=reading.excerpt or row.snippet, parser_version=PARSER_VERSION)
-    assert disposition in {'review', 'exact_preview', 'receipt', 'update', 'ignored'}
+    assert disposition in {'review', 'exact_preview', 'receipt', 'update', 'ignored', 'unlinked'}
     return {'message_id': row.id, 'before_hash': digest(row_state(row)),
             'before': {name: getattr(row, name) for name in FIELDS}, 'patch': patch,
             'evidence_hash': digest(asdict(evidence)), 'complete': evidence.complete,

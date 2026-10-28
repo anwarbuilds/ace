@@ -14,6 +14,7 @@ changes source polling, eligibility, job identity or application records.
 """
 
 import csv
+from contextlib import asynccontextmanager
 import io
 import re
 from datetime import (
@@ -564,6 +565,21 @@ def create_app() -> FastAPI:
 
     docs = get_settings().api_docs
 
+    @asynccontextmanager
+    async def lifespan(application):
+        from backend.app.db.session import SessionLocal, engine
+        from backend.app.inbox.monitor import GmailMonitor
+        from backend.app.api.routers.inbox import _settings_ready
+        monitor = GmailMonitor(SessionLocal, engine) if get_settings().gmail_background_sync_enabled and _settings_ready() else None
+        application.state.gmail_monitor = monitor
+        if monitor:
+            monitor.start()
+        try:
+            yield
+        finally:
+            if monitor:
+                monitor.stop()
+
     # require_auth runs before every route, so a route added later is
     # private unless it is listed in guard.PUBLIC.
     app = FastAPI(
@@ -573,6 +589,7 @@ def create_app() -> FastAPI:
             "read model."
         ),
         version="1.0.0",
+        lifespan=lifespan,
         dependencies=[
             Depends(
                 require_auth

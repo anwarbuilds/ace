@@ -36,7 +36,7 @@ const FILINGS = [
 ] as const;
 // ACE's reading, as the choice to suggest.
 const SUGGEST: Record<string,string> = {rejection:"rejection",possible_rejection:"rejection",interview:"interview",online_assessment:"online_assessment",offer:"offer",recruiter_reply:"recruiter_reply",application_confirmation:"receipt"};
-const FILED: Record<string,string> = {receipt:"Filed as an acknowledgement.",update:"Filed as a status update.",unrelated:"Marked not about your applications.",ignored:"ACE found no application outcome in it."};
+const FILED: Record<string,string> = {unlinked:"Recognized historical outcome. No eligible application existed in ACE when this email arrived.",receipt:"Filed as an acknowledgement.",update:"Filed as a status update.",unrelated:"Marked not about your applications.",ignored:"ACE found no application outcome in it."};
 
 const dates = (value:string|null)=>value ? new Date(value).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "Date not recorded";
 const status = (value:string)=>STATUS_LABEL[value as ApplicationStatus]??clean(value);
@@ -238,7 +238,7 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
       {linked&&<AppCard app={linked}/>}
       {change?<button className="btn" disabled={busy} onClick={()=>void action(()=>sendJson("POST",`/api/inbox/events/${change.id}/undo`,{}),"Undone. The email is back in your queue.")}>Undo this change</button>:<p className="inbox-muted">Undo it from Audit trail.</p>}
     </div> : <div className="inbox-decide">
-      {!pending&&FILED[message.decision]&&<p className="inbox-filed"><strong>{FILED[message.decision]}</strong> Nothing changed. If that is wrong, choose what it is below.</p>}
+      {!pending&&FILED[message.decision]&&<p className="inbox-filed"><strong>{FILED[message.decision]}</strong> {message.decision==="unlinked" ? "No application outcome was recorded. Linking is optional; the email remains searchable. " + clean(message.reason) : "Nothing changed. If that is wrong, choose what it is below."}</p>}
       <div className="inbox-target">
         <div className="inbox-target-head"><h3>{draft?"Add it to your applications":target?guessed?"ACE thinks this is about":"Application":"Which application?"}</h3>{target&&!choosing&&!draft&&<button className="btn btn-sm" onClick={()=>setChoosing(true)}>Change</button>}</div>
         {draft?<div className="inbox-add">

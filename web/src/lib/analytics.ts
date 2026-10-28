@@ -12,7 +12,7 @@ export interface AnalyticsData {
   cohort: { eligible: number; positive: number; rejected: number; pending: number; unknown: number; rate: number | null; coverage: string };
   timing: { label: string; count: number }[]; median_days: number | null; timing_sample: number;
   evidence: { positive: number; rejected: number; manual: number; automatic: number; recorded_status?:number };
-  review: { needs_review: number; exact_preview: number; ambiguous: number; deferred?:number };
+  review: { needs_review: number; exact_preview: number; ambiguous: number; deferred?:number; unlinked?:number };
   inbox_audit?: {stored_messages:number;recorded_messages:number;pending_messages:number;ignored_messages:number;stale_messages:number;pre_mark_email_outcomes:number;excluded_events:Record<string,number>;event_scope:string};
   roles: (AnalyticsGroup & { family: string })[];
   attribution: { resume: string; channel: string; combinations: unknown[] };

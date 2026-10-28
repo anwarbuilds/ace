@@ -145,6 +145,9 @@ class Settings(BaseSettings):
     # A parser release must not implicitly authorize rewriting saved mail.
     # Enable only for an owner-approved historical reclassification operation.
     gmail_historical_rechecks_enabled: bool = False
+    # Existing ready grants may check new mail while the website is closed.
+    # New grants remain paused; the owner can pause/disconnect at any time.
+    gmail_background_sync_enabled: bool = True
 
     # The interactive API docs list every route. Off unless asked for.
     api_docs: bool = False

@@ -31,7 +31,9 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from urllib.parse import urlparse
 
-PARSER_VERSION = "10"
+from backend.app.inbox.postings import contextual_links, posting_identity, primary_link_text
+
+PARSER_VERSION = "11"
 MAX_CLASSIFIER_BODY = 60000
 
 _OTHERS = r"(?:other|another|a\s+different|different|more\s+qualified|alternative)\s+(?:candidates?|applicants?|individuals?|profiles?)"
@@ -176,6 +178,8 @@ _MARKING_GRACE = timedelta(hours=24)
 # owner filed carry their own reason and are never re-decided.
 RECEIPT_REASON = "Application receipt; no status change"
 PARTIAL_REASON = "Only part of this email could be read"
+NO_PRIOR_APPLICATION = "No recorded application at this employer existed when the email arrived"
+UNLINKED_REASON = "Recognized rejection; all recorded applications at this employer were submitted after this email. Retained as unlinked evidence, excluded from application outcomes"
 
 
 @dataclass(frozen=True)
@@ -199,6 +203,8 @@ class EmailEvidence:
     sender_authenticated: bool = False
     # False when only Gmail's short snippet could be read, not the body.
     complete: bool = True
+    # Ephemeral primary application links, never persisted as raw URLs.
+    posting_links: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -279,7 +285,7 @@ def _routine_reading(evidence: EmailEvidence) -> tuple[str, str] | None:
         return ("The message confirms an account sign-in authorization, not a hiring assessment.", primary[:500])
     if re.search(r"\b(?:weekly writing update|weekly insights)\b", primary, re.I) and re.search(r"\b(?:words analyzed|writing stats|writing streak)\b", primary, re.I):
         return ("The message reports product usage and writing statistics, not a hiring outcome.", primary[:500])
-    if re.search(r"\b(?:upcoming livestream|upcoming webinar)\b", primary, re.I) and re.search(r"\b(?:grab a seat|join us|register|questions we will be discussing)\b", primary, re.I):
+    if re.search(r"\b(?:livestream|webinar)\b", primary, re.I) and re.search(r"\b(?:grab a seat|join us|register|questions we will be discussing)\b", primary, re.I):
         return ("The message promotes a public learning event, not an individual hiring assessment.", primary[:500])
     if re.search(r"\bwe hired \d+\b", primary, re.I) and re.search(r"\blist of selected candidates\b", primary, re.I):
         return ("The message reports a public hiring competition's results, not this candidate's outcome.", primary[:500])
@@ -342,6 +348,17 @@ def _asserted(pattern, text: str):
         end = min((pos for c in ".!?\n" if (pos := text.find(c, match.end())) >= 0), default=len(text))
         sentence = text[start:end]
         prefix = text[start:match.start()]
+        qualified = _QUALIFIED_APPLICATION_ENDING.search(sentence)
+        if qualified:
+            candidate_prefix = sentence[:qualified.start()]
+            # This also guards a shorter legacy pattern found inside the
+            # qualified statement, such as "was not selected" in a sample.
+            if (text[end:end+1] == "?" or re.search(r"[\"“'‘]\s*$", candidate_prefix)
+                    or re.search(r"\b(?:why|how|reasons?(?:\s+(?:why|that))?)\s*$", candidate_prefix, re.I)
+                    or re.search(r"\b(?:example|sample|template|quoted)\b[^.!?\n]{0,100}$", candidate_prefix, re.I)
+                    or re.search(r"\b(?:not (?:true|correct|the case) that|not believe|cannot confirm|not sure)\s*$", candidate_prefix, re.I)
+                    or re.search(r"\bnot (?:successful|selected)\b[^.!?\n]{0,40}\byet\b", sentence, re.I)):
+                continue
         if re.search(r"\b(?:if|unless|whether|until|in case|does not mean|doesn't mean|for example|such as)\b", sentence, re.I):
             continue
         if re.search(r"\b(?:not|never|no longer)\s+(?:(?:been|being|actually|an?|the)\s+)?$", prefix, re.I):
@@ -372,6 +389,13 @@ _ENDING = re.compile(
     r"|(?:you are|your application is) not eligible for (?:this|the) (?:position|role|job)"
     r"|your application does not meet (?:the|our) requirements"
     r"|will not be considering (?:you|your application))\b", re.I)
+_QUALIFIED_APPLICATION_ENDING = re.compile(
+    r"\byour\s+(?:application|candidacy)\s+(?:for|to)\s+"
+    # A role or employer qualifier may sit between the application and its
+    # outcome. Keep it in one short clause; never bridge negation or a modal.
+    r"(?:(?!\b(?:was|were|is|are|has|have|had|will|would|could|might|may|can|must|should|if|unless|whether|until|not|never)\b)[^.!?;\n]){1,160}?"
+    r"\s+(?:was|is|has\s+been)\s+(?:(?:ultimately|unfortunately)\s+)?"
+    r"(?:unsuccessful|declined|rejected|not\s+(?:successful|selected))\b", re.I)
 _OTHER_DECISION = re.compile(
     r"\b(?:(?:have |has |we['’]ve )?(?:decided|chosen|elected) to "
     r"(?:move (?:forward|ahead)|pursue|proceed|progress|go)(?:\s+\w+){0,3}\s+" + _OTHERS +
@@ -395,7 +419,8 @@ def read_intent(evidence: EmailEvidence) -> Reading:
     if re.search(r"\b(?:loan|mortgage|credit card|passport|bank account|chargeback|disputed transactions?|provisional credit)\b", body, re.I) and not _ROLE.search(body):
         routine = _routine_reading(evidence)
         return replace(_reading("unknown", req, routine[1], "routine"), explanation=routine[0]) if routine else _reading("unknown", req, "")
-    negative = list(_asserted(_ENDING, body)) + list(_asserted(_OTHER_DECISION, body))
+    negative = (list(_asserted(_ENDING, body)) + list(_asserted(_OTHER_DECISION, body))
+                + list(_asserted(_QUALIFIED_APPLICATION_ENDING, body)))
     for span in _asserted(_REJECTION, body):
         wording = span[0].group().casefold()
         if (re.match(r"we\s+regret", wording) or re.search(r"sponsor|not eligible for|requirements|decided to move on", wording)
@@ -632,12 +657,25 @@ class _Match:
     requisition: str | None
 
 
+def _mentioned_titles(applications: list[ApplicationIdentity], text: str) -> list[ApplicationIdentity]:
+    spans = {app.key: [(m.start(), m.end()) for m in re.finditer(r"(?<!\w)" + re.escape(_words(app.title)) + r"(?!\w)", text)]
+             for app in applications if _words(app.title)}
+    # Equal titles remain ambiguous. A shorter title mentioned separately from
+    # a longer title also remains evidence, rather than being erased wholesale.
+    return [app for app in applications if spans.get(app.key) and not all(
+        any(start >= outer_start and end <= outer_end and (start, end) != (outer_start, outer_end)
+            for other in applications if other.key != app.key
+            for outer_start, outer_end in spans.get(other.key, []))
+        for start, end in spans[app.key])]
+
+
 def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], labelled: str | None) -> _Match:
     subject = "" if _forwarded(evidence.subject) else evidence.subject
     body = _new_text(evidence.body)
     display, labels = _sender_parts(evidence.sender)
     strong_text = _words(f"{display} {subject}")
-    all_text = _words(f"{display} {subject} {body}")
+    identity_body = re.sub(r"https?://\S+", " ", primary_link_text(body))
+    all_text = _words(f"{display} {subject} {identity_body}")
     by_company: dict[str, list[ApplicationIdentity]] = {}
     for app in applications:
         by_company.setdefault(_company_words(app.company), []).append(app)
@@ -660,11 +698,23 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
     by_id = [app for app in applications if app.requisition_id and len(_id_key(app.requisition_id)) >= 4
              and _id_key(app.requisition_id) in ids
              and (_id_key(app.requisition_id) == labelled_key or _company_words(app.company) in strong | weak)]
+    posting_keys = {key for url in (*evidence.posting_links, *contextual_links(body))
+                    if (key := posting_identity(url))}
+    by_posting = [app for app in applications if posting_identity(app.official_url) in posting_keys]
+    # Exclude applications that did not yet exist, rather than asking the
+    # owner to choose between past and future roles. Explicit identity pointing
+    # only to the future is still a conflict, never permission to choose another.
+    def existed(app):
+        return app.submitted_at is None or _aware(app.submitted_at) - _MARKING_GRACE <= _aware(evidence.received_at)
+    id_future = bool(by_id) and not any(existed(app) for app in by_id)
+    posting_future = bool(by_posting) and not any(existed(app) for app in by_posting)
+    by_id = [app for app in by_id if existed(app)] if not id_future else by_id
+    by_posting = [app for app in by_posting if existed(app)] if not posting_future else by_posting
 
     def score(app: ApplicationIdentity) -> int:
         name = _company_words(app.company)
         title = _words(app.title)
-        value = 100 if app in by_id else 0
+        value = 100 if app in by_id or app in by_posting else 0
         value += 40 if name in strong else 20 if name in weak else 0
         if _named(title, all_text):
             value += 30
@@ -672,16 +722,36 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
             value += round(20 * _title_overlap(app.title, words))
         return value
 
-    considered = [app for app in applications if app in by_id or _company_words(app.company) in strong | weak]
+    considered = [app for app in applications if app in by_id or app in by_posting or (_company_words(app.company) in strong | weak and existed(app))]
     ranked = sorted(considered, key=lambda app: (-score(app), -_aware(app.submitted_at).timestamp() if app.submitted_at else 0, app.key))
     keys = tuple(app.key for app in ranked[:10])
+    title_mentions = _mentioned_titles(applications, all_text)
+    def role_conflict(app):
+        return any(_company_words(other.company) == _company_words(app.company)
+                   and _words(other.title) != _words(app.title) for other in title_mentions)
     if len(_labelled_ids(f"{subject} {body}")) > 1:
         return _Match(None, "The email names multiple requisitions; choose the application it concerns", keys, labelled)
+    if by_posting:
+        if (len(posting_keys) > 1 or len(by_posting) > 1
+                or (by_id and {a.key for a in by_id} != {a.key for a in by_posting})):
+            return _Match(None, "The posting links and application evidence do not identify one application", keys, labelled)
+        app = by_posting[0]
+        if strong and strong != {_company_words(app.company)}:
+            return _Match(None, "The requisition and named employer point to different applications", keys, labelled)
+        if labelled_key and app.requisition_id and len(_id_key(app.requisition_id)) >= 4 and _id_key(app.requisition_id) != labelled_key:
+            return _Match(None, "The posting link and named requisition disagree", keys, labelled)
+        if role_conflict(app) or (_ROLE.search(f"{subject} {identity_body}") and _title_overlap(app.title, words) < 0.5):
+            return _Match(None, "The posting link and named role disagree", keys, labelled)
+        return _Match(app.key, "its posting link", keys, labelled)
     if len(by_id) == 1 and len(strong) > 1:
         return _Match(None, "The email names more than one company you applied to", keys, labelled)
     if len(by_id) == 1 and strong and _company_words(by_id[0].company) not in strong:
         return _Match(None, "The requisition and named employer point to different applications", keys, labelled)
     if len(by_id) == 1:
+        if role_conflict(by_id[0]):
+            return _Match(None, "The requisition and named role point to different applications", keys, labelled)
+        if posting_keys and posting_identity(by_id[0].official_url) not in posting_keys:
+            return _Match(None, "The posting link and named requisition disagree", keys, labelled)
         return _Match(by_id[0].key, "its job ID", keys, by_id[0].requisition_id)
     if len(by_id) > 1:
         return _Match(None, "More than one application has this job ID", tuple(app.key for app in by_id), labelled)
@@ -690,23 +760,20 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
         return _Match(None, "No application could be matched with confidence", keys, labelled)
     if len(named) > 1:
         return _Match(None, "The email names more than one company you applied to", keys, labelled)
-    company_apps = by_company[next(iter(named))]
+    all_company_apps = by_company[next(iter(named))]
+    company_apps = [app for app in all_company_apps if existed(app)]
+    mentioned = [app for app in title_mentions if app in all_company_apps]
+    if not company_apps:
+        return _Match(None, NO_PRIOR_APPLICATION, keys, labelled)
+    if mentioned and not any(existed(app) for app in mentioned):
+        return _Match(None, "Email predates application", tuple(app.key for app in mentioned), labelled)
 
     def other_job(app: ApplicationIdentity) -> bool:
         # The email names a job ID, and it is not this application's.
-        return bool(labelled_key and app.requisition_id and _id_key(app.requisition_id) != labelled_key)
+        return bool((labelled_key and app.requisition_id and _id_key(app.requisition_id) != labelled_key)
+                    or (posting_keys and posting_identity(app.official_url) not in posting_keys))
 
-    title_spans = {app.key: [(m.start(), m.end()) for m in re.finditer(r"(?<!\w)" + re.escape(_words(app.title)) + r"(?!\w)", all_text)]
-                   for app in company_apps if _words(app.title)}
-    titled = [app for app in company_apps if title_spans.get(app.key)]
-    # "Software Engineer" inside "Software Engineer, Storage" is one title
-    # mention, not evidence naming two applications. Equal titles stay ambiguous.
-    # A separately mentioned shorter title also stays ambiguous.
-    titled = [app for app in titled if not all(
-        any(start >= outer_start and end <= outer_end and (start, end) != (outer_start, outer_end)
-            for other in company_apps if other.key != app.key
-            for outer_start, outer_end in title_spans.get(other.key, []))
-        for start, end in title_spans[app.key])]
+    titled = [app for app in mentioned if existed(app)]
     if len(titled) == 1 and not other_job(titled[0]):
         return _Match(titled[0].key, "its exact title", keys, labelled)
     # The only application at the company, unless the email is about a
@@ -766,6 +833,16 @@ def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], 
     if classification == "possible_rejection":
         return decided(classification, found.requisition, found.ranked, None, "review",
                         "It may be a rejection, but the wording is not clear enough to record on its own", False)
+    if classification == "rejection" and found.basis == NO_PRIOR_APPLICATION and _sender_trusted(evidence):
+        # A definite historical outcome has no eligible application to mutate.
+        # Retain it explicitly, rather than manufacturing an application/date or
+        # turning semantic recognition into a task to reject a newer role.
+        origins = [app for app in applications if _origin_supports_identity(evidence, app)]
+        companies = {_company_words(app.company) for app in origins}
+        if len(companies) == 1 and origins and all(
+                app.submitted_at is not None and _aware(app.submitted_at) - _MARKING_GRACE > _aware(evidence.received_at)
+                for app in applications if _company_words(app.company) in companies):
+            return decided(classification, found.requisition, (), None, "unlinked", UNLINKED_REASON, True)
     if found.target is None:
         return decided(classification, found.requisition, found.ranked, None, "review", found.basis, False)
     app = next(a for a in applications if a.key == found.target)

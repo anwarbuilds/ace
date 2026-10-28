@@ -9,6 +9,7 @@ import { test } from "node:test";
 import ts from "typescript";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { parseHTML } from "linkedom";
 const nodeRequire = createRequire(import.meta.url);
 const sourceRoot = fileURLToPath(new URL("../src", import.meta.url));
 const cache = new Map();
@@ -129,6 +130,34 @@ test("Analytics shows selected-scope evidence exclusions and total pending mail 
   assert.match(html,/decision=deferred/);
   assert.match(html,/Decide later/);
   assert.match(html,/has not been verified/);
+});
+
+test("recognized unlinked outcomes have an evidence link without inflating review or confirmed outcomes",()=>{
+  const d={...base,
+    cohort:{...base.cohort,eligible:9,positive:2,rejected:3,pending:4},
+    review:{needs_review:2,exact_preview:1,ambiguous:1,deferred:4,unlinked:6},
+    inbox_audit:{stored_messages:30,pending_messages:7,stale_messages:0,excluded_events:{}},
+  };
+  const html=renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:{connected:true,state:"ready",last_synced_at:"2026-10-26T18:00:00Z"},tab:"outcomes",query:{}}));
+  const {document}=parseHTML(html);
+  const evidence=document.querySelector('.an-review-list a[href="/app/applications/inbox?decision=unlinked_outcome"]');
+  assert.ok(evidence,"recognized historical evidence remains reachable from Analytics");
+  assert.equal(evidence.querySelector("strong").textContent,"Unlinked historical outcomes");
+  assert.equal(evidence.querySelector("b").textContent,"6");
+  assert.match(evidence.textContent,/Recognized evidence without an eligible application; excluded from outcome totals/);
+  assert.match(document.querySelector(".an-inbox-copy").textContent,/7 messages await review/);
+  assert.match(document.querySelector(".an-audit-note").textContent,/30 emails imported in total; 7 await your decision/);
+  assert.equal(document.querySelector(".an-cohort-strip").getAttribute("aria-label"),"Confirmed positive replies: 2; Confirmed rejections: 3; Still pending: 4; Other or unknown evidence: 0");
+  const review=document.querySelector('.an-review-list a[href="/app/applications/inbox?decision=review"]');
+  assert.equal(review.querySelector("b").textContent,"2");
+});
+
+test("Analytics omits an empty unlinked evidence card for both older and current API replies",()=>{
+  for(const unlinked of [undefined,0]){
+    const html=renderToStaticMarkup(React.createElement(AnalyticsView,{d:{...base,review:{...base.review,unlinked}},connection:null,tab:"outcomes",query:{}}));
+    assert.doesNotMatch(html,/Unlinked historical outcomes|decision=unlinked_outcome/);
+    assert.match(html,/Inbox evidence review/);
+  }
 });
 
 

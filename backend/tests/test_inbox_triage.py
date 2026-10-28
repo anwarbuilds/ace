@@ -175,7 +175,7 @@ def test_thread_hint_never_overrides_conflicts_or_positive_and_date_guards(datab
     if variant=="positive":body="We invite you to interview."
     data=message("guarded-thread",body,NOW-timedelta(days=2500) if variant=="historical" else NOW)
     if variant=="different_sender":data["payload"]["headers"][1]["value"]="other@careers.silverpine.example"
-    assert inbox._ingest(session,conn,data,inbox._identities(session),preview=True)=="review"
+    assert inbox._ingest(session,conn,data,inbox._identities(session),preview=True)==("unlinked" if variant=="historical" else "review")
     assert statuses(session)==["applied"]*3 and not job_events(session)
 
 

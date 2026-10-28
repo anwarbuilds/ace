@@ -45,6 +45,11 @@ LINK_REASONS = (
     "The email may be about a different role there",
     "The email names multiple requisitions; choose the application it concerns",
     "The requisition and named employer point to different applications",
+    "The posting links and application evidence do not identify one application",
+    "The posting link and named requisition disagree",
+    "The posting link and named role disagree",
+    "The requisition and named role point to different applications",
+    "No recorded application at this employer existed when the email arrived",
 )
 
 
@@ -55,6 +60,7 @@ def workflow_expression():
         (projected == "deferred", "deferred"),
         (projected.in_(("ignored", "unrelated")), "routine"),
         (projected.in_(("receipt", "update")), "filed"),
+        (projected == "unlinked", "unlinked_outcome"),
         (and_(Mail.selected_application_key.is_(None), Mail.decision_reason.in_(LINK_REASONS)), "awaiting_link"),
         else_="owner_review",
     )
@@ -70,6 +76,8 @@ def workflow_state(row):
         return "routine"
     if decision in ("receipt", "update"):
         return "filed"
+    if decision == "unlinked":
+        return "unlinked_outcome"
     if not row.selected_application_key and row.decision_reason in LINK_REASONS:
         return "awaiting_link"
     return "owner_review"
