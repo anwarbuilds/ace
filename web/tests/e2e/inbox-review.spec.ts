@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 // All Inbox requests and mutations below are fictional and intercepted.
-async function inboxFixture(page: import("@playwright/test").Page, options: {lastSync?: string | null} = {}) {
+async function inboxFixture(page: import("@playwright/test").Page, options: {lastSync?: string | null; ambiguous?:boolean} = {}) {
   const reviewed: number[]=[];
   const submitted: Record<string,unknown>[]=[];
   const filed: Record<string,unknown>[]=[];
@@ -15,7 +15,8 @@ async function inboxFixture(page: import("@playwright/test").Page, options: {las
   const added: Record<string,unknown>[]=[];
   const applications=[{key:"job:1",company:"Fictional Labs",title:"Fictional engineer",requisition_id:"FIX-1",applied_at:"2026-01-01T12:00:00Z",status:"applied"},
                       {key:"job:2",company:"Imaginary Systems",title:"Fictional developer",requisition_id:"IMG-2",applied_at:"2026-01-03T12:00:00Z",status:"applied"}];
-  const rows=Array.from({length:107},(_,i)=>({id:i+1,received_at:"2026-01-10T12:00:00Z",sender:"Fictional Talent <fixture@example.test>",subject:`Fictional interview ${i+1} at Fictional Labs`,snippet:"Please schedule an interview for requisition FIX-1.",classification:"interview",requisition_id:"FIX-1",decision:"review",candidate_keys:["job:1"],reason:"Matched by its job ID; positive outcomes need your confirmation",selected_application_key:null,understanding:{classification_reason:"The employer invites the candidate to an interview.",classification_state:"recognized",matching_state:"ambiguous",workflow_state:"awaiting_link",update_policy:"confirmation_required",review_reason:"Two applications share this requisition. Choose the correct application.",evidence_source:"retained_excerpt",evidence_excerpt:"Please schedule an interview for requisition FIX-1."}}));
+  if(options.ambiguous)applications.push({...applications[0],key:"job:3",title:"Fictional developer"});
+  const rows=Array.from({length:107},(_,i)=>({id:i+1,received_at:"2026-01-10T12:00:00Z",sender:"Fictional Talent <fixture@example.test>",subject:`Fictional interview ${i+1} at Fictional Labs`,snippet:"Please schedule an interview for requisition FIX-1.",classification:"interview",requisition_id:"FIX-1",decision:"review",candidate_keys:options.ambiguous?["job:1","job:3"]:["job:1"],reason:"Matched by its job ID; positive outcomes need your confirmation",selected_application_key:null,understanding:{classification_reason:"The employer invites the candidate to an interview.",classification_state:"recognized",matching_state:options.ambiguous?"ambiguous":"unlinked",workflow_state:"awaiting_link",update_policy:"confirmation_required",review_reason:"Two applications share this requisition. Choose the correct application.",evidence_source:"retained_excerpt",evidence_excerpt:"Please schedule an interview for requisition FIX-1."}}));
   const recorded={id:500,received_at:"2026-01-11T12:00:00Z",sender:"Wayfern Talent <no-reply@ashbyhq.example>",subject:"Update on your application at Wayfern",snippet:"Thank you for applying",classification:"rejection",requisition_id:null,decision:"automatic",candidate_keys:["job:2"],reason:"Clear rejection matched by its exact title",selected_application_key:"job:2"};
   const lastSync=options.lastSync===undefined?new Date().toISOString():options.lastSync;
   await page.route("**/api/inbox/**",async route=>{
@@ -196,13 +197,14 @@ test("an application missing from ACE is added from the email with its outcome",
 for(const theme of ["light","dark"] as const){
   test(`${theme}: intent, linkage and authorization remain separate in the existing Inbox`,async({page,context,baseURL})=>{
     await setThemeCookies(context,baseURL!,theme);
-    const fixture=await inboxFixture(page);
+    const fixture=await inboxFixture(page,{ambiguous:true});
     await page.setViewportSize({width:1672,height:941});
     await page.goto("/app/applications/inbox");
     const explanation=page.getByLabel("ACE understanding");
     await expect(explanation).toContainText("Application linkage: ambiguous");
     await expect(explanation).toContainText("Decision needed: Two applications share this requisition");
     await expect(explanation.locator("blockquote")).toContainText("Please schedule an interview");
+    await expect(page.getByRole("button",{name:/^Rejection/})).toBeDisabled();
     expect(fixture.submitted).toEqual([]);
     expect(fixture.filed).toEqual([]);
     const root=path.resolve("../artifacts/inbox-intelligence-validation");

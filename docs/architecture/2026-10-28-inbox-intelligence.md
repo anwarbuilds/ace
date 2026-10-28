@@ -43,7 +43,12 @@ continues separately and now retains a matched identity independently of whether
 a mutation is authorized. Conditions, negation, quoted/forwarded history,
 explicit contradictions, actual requested actions and applicant-specific
 negative decisions control interpretation. Strict positive opt-ins, exact IDs,
-authentication, live-only positives, protected stages and Undo remain.
+authentication, live-only positives, protected stages and Undo remain. Sender
+authentication is distinct from employer identity: a subsidiary/agency sender
+cannot inherit the only parent application. Workday tenant conflicts stay
+unresolved, shared ATS hosts cannot establish employer-owned origin for positive
+automation, and other ATS rejection evidence needs exact employer branding or
+an explicitly delimited employer identity. No parent aliases are introduced.
 
 A previously recognized outcome cannot silently become passive correspondence
 merely because a new parser does not establish it. Shared recheck/dry-run logic

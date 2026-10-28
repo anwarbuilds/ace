@@ -132,6 +132,15 @@ _PLATFORM = ("greenhouse", "lever.co", "myworkday", "workday", "smartrecruiters"
              "successfactors", "workable", "bamboohr", "jazzhr", "eightfold", "avature", "phenompeople", "oraclecloud",
              "brassring", "gem.com", "rippling", "teamtailor", "recruitee", "paylocity", "ultipro", "ukg", "adp.com",
              "applytojob", "breezy", "csod", "hirevue", "hackerrank", "codesignal", "linkedin")
+# Exact shared hosts cannot establish employer-owned origin for positive
+# automation, even when the stored posting uses that same ATS host.
+_ATS_HOSTS = ("greenhouse-mail.io", "greenhouse.io", "lever.co", "ashbyhq.com", "smartrecruiters.com",
+              "icims.com", "jobvite.com", "taleo.net", "successfactors.com", "oraclecloud.com",
+              "workablemail.com", "workable.com", "bamboohr.com", "applytojob.com", "teamtailor.com",
+              "recruitee.com", "avature.net", "brassring.com", "rippling.com", "myworkday.com",
+              "myworkdayjobs.com", "myworkdaysite.com", "workday.com", "hirevue.com", "hackerrank.com", "codesignal.com")
+
+
 # Shared by the conservative safety net and the SQL stale-mail selector.
 RECRUITING_SENDERS = _PLATFORM
 APPLICATION_WORDS = ("application", "applying", "applied", "candidacy", "candidate", "interest", "interview", "assessment")
@@ -463,7 +472,7 @@ def _sender_matches(sender: str, app: ApplicationIdentity) -> bool:
     domain = parseaddr(sender)[1].rpartition("@")[2].lower()
     if not host or not domain or domain in _UNTRUSTED_DOMAIN:
         return False
-    if any(x in host for x in ("greenhouse.io", "lever.co", "myworkdayjobs.com", "ashbyhq.com")):
+    if any(host == platform or host.endswith("." + platform) for platform in _ATS_HOSTS):
         return False
     return domain == host or domain.endswith("." + host)
 
@@ -472,6 +481,41 @@ def _sender_trusted(evidence: EmailEvidence) -> bool:
     """Gmail authenticated the visible sender, and it is not a personal mailbox."""
     domain = parseaddr(evidence.sender)[1].rpartition("@")[2].lower()
     return evidence.sender_authenticated and bool(domain) and domain not in _UNTRUSTED_DOMAIN
+
+
+
+def _origin_supports_identity(evidence: EmailEvidence, app: ApplicationIdentity) -> bool:
+    """Authentication proves a sender, not the employer named in its text.
+
+    Employer-owned hosts and exact tenant/domain labels can establish identity.
+    Shared ATS mail needs exact employer branding; a Workday tenant mismatch
+    cannot be overridden by a parent brand in the display name.
+    """
+    domain = parseaddr(evidence.sender)[1].rpartition("@")[2].casefold()
+    name = _company_words(app.company)
+    display, labels = _sender_parts(evidence.sender)
+    display_name = _company_words(display)
+    employer = re.escape(app.company).replace(r"\ ", r"\s+")
+    exact_subject = bool(re.search(r"\b(?:at|with|from)\s+" + employer + r"(?=\s*(?:[-|:,]|$))", evidence.subject, re.I))
+    # Sharing the parent's host does not erase an explicitly longer employer
+    # identity in the sender. Ordinary recruiting department suffixes are safe.
+    if display_name.startswith(name + " ") and not exact_subject:
+        suffix = set(display_name[len(name):].split())
+        if not suffix <= {"talent", "team", "careers", "recruiting", "recruitment", "human", "resources", "notifications", "hr", "no", "reply"}:
+            return False
+    if _sender_matches(evidence.sender, app):
+        return True
+    compact = name.replace(" ", "")
+    initials = "".join(word[0] for word in name.split())
+    if compact in labels or (len(initials) >= 3 and initials in labels):
+        return True
+    if _in_domain(name, labels) and display_name == name:
+        return True
+    if domain == "myworkday.com" or domain.endswith(".myworkday.com"):
+        return False
+    if not any(domain == host or domain.endswith("." + host) for host in _ATS_HOSTS):
+        return False
+    return display_name == name or exact_subject
 
 
 def _sender_parts(sender: str) -> tuple[str, list[str]]:
@@ -634,6 +678,9 @@ def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], 
     if classification == "rejection":
         if not _sender_trusted(evidence):
             return decided(classification, found.requisition, candidates, None, "review", "Sender could not be authenticated", False)
+        if not _origin_supports_identity(evidence, app):
+            return Decision(classification, found.requisition, candidates, None, "review",
+                            "The authenticated sender does not establish this employer identity", False)
     elif not (evidence.sender_authenticated and found.basis == "its job ID" and _sender_matches(evidence.sender, app)):
         return decided(classification, found.requisition, candidates, None, "review",
                         "Matched by " + found.basis + "; positive outcomes need your confirmation", False)

@@ -273,3 +273,50 @@ def test_workflow_filters_and_item_states_agree_without_hiding_any_evidence(data
         assert all(item['understanding']['workflow_state']==state for item in data['items'])
     assert inbox.messages(owner_request(),session,None,0,100)['total']==len(cases)
     assert inbox.messages(owner_request(),session,'pending',0,100)['review_count']==5
+
+
+
+@pytest.mark.parametrize('sender',[
+    'Silverpine Health <careers@silverpinehealth.example>',
+    'Silverpine Health <no-reply@us.greenhouse-mail.io>',
+    'Silverpine <silverpinehealth@myworkday.com>',
+])
+def test_a_subsidiary_cannot_update_the_only_parent_application(sender):
+    parent=replace(APP,company='Silverpine',official_url='https://careers.silverpine.example/jobs')
+    mail=replace(evidence('Your application was rejected.','Your Silverpine Health application'),sender=sender)
+    result=reconcile(mail,[parent])
+    assert result.classification=='rejection' and result.disposition=='review' and result.target is None
+    assert 'employer identity' in result.reason and result.matched_target is None
+
+
+def test_authenticated_third_party_recruiter_does_not_establish_employer_origin():
+    mail=replace(evidence('Req ID: SE-102. Your application was rejected.'),sender='Silverpine Labs <recruiter@independent-agency.example>')
+    assert reconcile(mail,[APP]).target is None
+
+
+
+@pytest.mark.parametrize('host',['jobs.smartrecruiters.com','tenant.oraclecloud.com','apply.workable.com'])
+def test_shared_ats_host_is_never_employer_origin_for_positive_automation(host):
+    app=replace(APP,official_url=f'https://{host}/employer/SE-102')
+    mail=replace(evidence('Req ID: SE-102. We invite you to interview.'),sender=f'Silverpine Labs <no-reply@{host}>')
+    result=reconcile(mail,[app])
+    assert result.classification=='interview' and result.disposition=='review' and result.target is None
+
+
+def test_shared_ats_host_and_parent_name_cannot_establish_a_subsidiary_application():
+    parent=replace(APP,company='Silverpine',official_url='https://jobs.smartrecruiters.com/silverpine/SE-102')
+    mail=replace(evidence('Your application was rejected.','Your Silverpine Health application'),sender='Silverpine Health <no-reply@jobs.smartrecruiters.com>')
+    assert reconcile(mail,[parent]).target is None
+
+
+
+def test_a_subsidiary_display_cannot_inherit_the_parents_shared_corporate_host():
+    parent=replace(APP,company='Silverpine',official_url='https://careers.silverpine.example/jobs')
+    mail=replace(evidence('Your application was rejected.','Your Silverpine Health application'),sender='Silverpine Health <talent@careers.silverpine.example>')
+    assert reconcile(mail,[parent]).target is None
+
+
+def test_a_domain_first_word_does_not_establish_a_different_longer_employer():
+    parent=replace(APP,company='Silverpine Finance',official_url=None)
+    mail=replace(evidence('Your application was rejected.','Your application'),sender='Silverpine Health <talent@silverpine.example>')
+    assert reconcile(mail,[parent]).target is None

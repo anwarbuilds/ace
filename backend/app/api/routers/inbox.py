@@ -862,7 +862,7 @@ def understanding(row: GmailMessageRecord) -> dict:
     return {"decision_type": "Owner decision" if row.decision == "manual" or reason.startswith("You ") else "Automatic classification",
             "classification_reason": CLASSIFICATION_REASONS.get(row.classification, "Saved recruiting correspondence."),
             "classification_state": "uncertain" if row.classification in {"unknown", "unclear", "possible_rejection"} or "part of this email" in reason else "recognized",
-            "matching_state": "linked" if row.selected_application_key else "ambiguous" if len(row.candidate_keys or []) > 1 else "unlinked",
+            "matching_state": "identity_uncertain" if reason == "The authenticated sender does not establish this employer identity" else "linked" if row.selected_application_key else "ambiguous" if len(row.candidate_keys or []) > 1 else "unlinked",
             "workflow_state": state,
             "update_policy": "recorded" if state == "recorded" else "no_status_change" if state in {"filed", "routine"} else "confirmation_required",
             "review_reason": reason if decision in PENDING else None,

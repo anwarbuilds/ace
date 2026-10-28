@@ -289,3 +289,13 @@ test("classification, linkage and permission are explained separately", () => {
   assert.match(html,/Decision needed: Two applications share this requisition/);
   assert.match(html,/No status change is authorized/);
 });
+
+
+test("ambiguous and unverified employer identities require an explicit application choice",()=>{
+  for(const matching_state of ["ambiguous","identity_uncertain"]){
+    const html=render({...message,understanding:{classification_reason:"The email communicates a rejection.",classification_state:"recognized",matching_state,workflow_state:"owner_review",update_policy:"confirmation_required",review_reason:"Choose the actual employer application.",evidence_source:"retained_excerpt",evidence_excerpt:"Fictional evidence"}});
+    assert.match(choice(html,"Rejection"),/disabled/);
+    assert.match(html,/Which application/);
+    assert.doesNotMatch(html,/ACE thinks this is about/);
+  }
+});

@@ -156,7 +156,7 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
       .then(result=>{if(live)setMessageEvents(result.items);}).catch(()=>{});
     return ()=>{live=false;};
   },[id,decision]);
-  const [targetKey,setTargetKey]=useState(()=>message?.selected_application_key??message?.candidate_keys[0]??"");
+  const [targetKey,setTargetKey]=useState(()=>["ambiguous","identity_uncertain"].includes(message?.understanding?.matching_state??"")?"":message?.selected_application_key??message?.candidate_keys[0]??"");
   const [choosing,setChoosing]=useState(false);
   const [search,setSearch]=useState("");
   // An application ACE never had: added from this email, then recorded.
