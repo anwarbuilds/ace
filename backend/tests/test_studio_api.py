@@ -222,7 +222,15 @@ def test_the_dashboard_groups_open_roles_by_tier_and_score(client, factory):
     assert filtered["available_families"] == ["SOFTWARE_ENGINEERING"]
 
 
-def test_application_analytics_count_every_application_by_current_status(client, factory):
+def test_application_analytics_count_every_application_by_current_status(client, factory, monkeypatch):
+    # The fixture's October 14 submissions must stay inside the tested 14-day
+    # calendar regardless of the date CI runs. Runtime behavior is unchanged.
+    from backend.app.api.routers import dashboard
+    class FixtureClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return NOW.astimezone(tz) if tz else NOW.replace(tzinfo=None)
+    monkeypatch.setattr(dashboard, "datetime", FixtureClock)
     from backend.app.db.models import ExternalApplicationRecord, JobMarkRecord
 
     with factory.begin() as session:
