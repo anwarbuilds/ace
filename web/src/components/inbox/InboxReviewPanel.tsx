@@ -7,11 +7,12 @@ import { clean, parseDate, STATUS_LABEL } from "@/lib/format";
 import { getJson, RequestError, sendJson } from "@/lib/client";
 import type { ApplicationStatus } from "@/lib/types";
 
-export interface InboxMessage {id:number; received_at:string; sender:string; subject:string; snippet:string; classification:string; requisition_id:string|null; decision:string; candidate_keys:string[]; reason:string; selected_application_key:string|null}
+export interface Understanding {classification_reason:string; classification_state:string; matching_state:string; workflow_state:string; update_policy:string; review_reason:string|null; evidence_source:string; evidence_excerpt:string}
+export interface InboxMessage {understanding?:Understanding; id:number; received_at:string; sender:string; subject:string; snippet:string; classification:string; requisition_id:string|null; decision:string; candidate_keys:string[]; reason:string; selected_application_key:string|null}
 export interface InboxApplication {key:string; company:string; title:string; requisition_id:string|null; applied_at:string|null; status:string}
 export interface InboxEvent {id:number; application_key:string; kind:string; before:string|null; after:string|null; actor:string; reason:string; recorded_at:string; undo_of_id:number|null; gmail_message_id:number|null}
 /** The email as Gmail has it now, read live and never stored. */
-export interface FullEmail {sender:string; to:string; subject:string; received_at:string; text:string; document:string; format:string; blocked_images:number; message_id_header:string|null; thread_id:string|null}
+export interface FullEmail {current_reading?:{classification:string; reason:string; variant:string; excerpt:string; complete:boolean}; sender:string; to:string; subject:string; received_at:string; text:string; document:string; format:string; blocked_images:number; message_id_header:string|null; thread_id:string|null}
 type Action = (run:()=>Promise<unknown>, success:string)=>Promise<void>;
 
 export const PENDING = ["review","exact_preview","deferred"];
@@ -215,6 +216,20 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
         {gmail&&<a className="btn btn-sm" href={gmail} target="_blank" rel="noopener noreferrer">Open in Gmail</a>}
         {full&&!plain&&full.blocked_images>0&&<small>{full.blocked_images} {full.blocked_images===1?"picture":"pictures"} from the sender&rsquo;s server not loaded, so the sender cannot tell you opened it.</small>}
       </div>}
+    </div>
+    <div className="inbox-filed" aria-label="ACE understanding">
+      <strong>ACE&rsquo;s classification: {KIND[message.classification]??clean(message.classification)}</strong>
+      {message.understanding&&<>
+        <p>{clean(message.understanding.classification_reason)}</p>
+        <p>Application linkage: {clean(message.understanding.matching_state)}. {message.understanding.update_policy==="recorded"?"The outcome was recorded with an audit event.":message.understanding.update_policy==="no_status_change"?"No application status changed.":"No status change is authorized until the specific review is resolved."}</p>
+        {pending&&message.understanding.review_reason&&<p>Decision needed: {clean(message.understanding.review_reason)}</p>}
+      </>}
+      {full?.current_reading&&<>
+        <p>Current email reading: {KIND[full.current_reading.classification]??clean(full.current_reading.classification)}{full.current_reading.variant?` (${clean(full.current_reading.variant.replaceAll("_"," "))})`:""}. {clean(full.current_reading.reason)}</p>
+        {full.current_reading.excerpt&&<blockquote>{readable(full.current_reading.excerpt)}</blockquote>}
+        {!full.current_reading.complete&&<p>Only part of the body is available. Its missing content may change this interpretation.</p>}
+        {full.current_reading.classification!==message.classification&&<p>This current reading has not changed the saved decision or application history.</p>}
+      </>}
     </div>
     {applied ? <div className="inbox-decided">
       <h3>{message.decision==="automatic"?"ACE recorded this email.":"You recorded this email."}</h3>

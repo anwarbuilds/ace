@@ -34,7 +34,7 @@ from backend.app.inbox import display, gmail
 from backend.app.inbox.full_history import FullMailboxScan
 from backend.app.inbox.queue import (decision_expression, projected_decision, projected_reason)
 from backend.app.inbox.reconcile import (
-    ApplicationIdentity, Decision, EmailEvidence, MAX_CLASSIFIER_BODY, PARSER_VERSION, RECEIPT_REASON, _MARKING_GRACE, conflict, reconcile,
+    ApplicationIdentity, Decision, EmailEvidence, MAX_CLASSIFIER_BODY, PARSER_VERSION, RECEIPT_REASON, _MARKING_GRACE, conflict, reconcile, read_intent, CLASSIFICATION_REASONS,
 )
 
 router = APIRouter()
@@ -233,8 +233,17 @@ class _Text(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
         self.skip = 0
+        self.quote_depth = 0
 
     def handle_starttag(self, tag: str, attrs) -> None:
+        values = dict(attrs)
+        if self.quote_depth:
+            if tag not in {"br", "hr", "img", "meta", "link", "input", "wbr"}:
+                self.quote_depth += 1
+            return
+        if tag == "blockquote" or "gmail_quote" in (values.get("class") or "") or (values.get("id") or "").lower() == "divrplyfwdmsg":
+            self.quote_depth = 1
+            return
         if tag == "body":
             self.skip = 0  # A head left unclosed ends where the body starts.
         if tag in self._SKIP:
@@ -243,13 +252,17 @@ class _Text(HTMLParser):
             self.parts.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
+        if self.quote_depth:
+            if tag not in {"br", "hr", "img", "meta", "link", "input", "wbr"}:
+                self.quote_depth -= 1
+            return
         if tag in self._SKIP:
             self.skip = max(0, self.skip - 1)
         elif tag in self._BREAK:
             self.parts.append("\n")
 
     def handle_data(self, data: str) -> None:
-        if not self.skip:
+        if not self.skip and not self.quote_depth:
             self.parts.append(data)
 
 
@@ -389,7 +402,7 @@ def _ingest(session: Session, conn: GmailConnectionRecord, data: dict, identitie
     row = GmailMessageRecord(
         connection_id=conn.id, gmail_id=gmail_id, thread_id=data.get("threadId"),
         received_at=evidence.received_at, sender=evidence.sender, subject=evidence.subject,
-        snippet=html.unescape(str(data.get("snippet", "")))[:500], classification=decision.classification,
+        snippet=read_intent(evidence).excerpt or html.unescape(str(data.get("snippet", "")))[:500], classification=decision.classification,
         requisition_id=decision.requisition_id, decision=decision.disposition,
         candidate_keys=list(decision.candidates), decision_reason=decision.reason,
         parser_version=PARSER_VERSION,
@@ -413,7 +426,7 @@ def _apply(session: Session, conn: GmailConnectionRecord, row: GmailMessageRecor
     import. Every change is in the audit trail with Undo.
     """
     row.decision = decision.disposition
-    row.selected_application_key = decision.target if decision.disposition == "receipt" else None
+    row.selected_application_key = decision.matched_target or (decision.target if decision.disposition in {"receipt", "update"} else None)
     if decision.disposition != "verified" or not decision.target:
         return
     if not allow_automation:
@@ -819,7 +832,9 @@ def _stale_query(connection_id: int):
         GmailMessageRecord.decision_reason.not_in(("You undid ACE's change for this email", "You undid the change this email made")),
         or_(GmailMessageRecord.decision.in_(("review", "exact_preview")),
             and_(GmailMessageRecord.decision == "receipt", GmailMessageRecord.decision_reason == RECEIPT_REASON),
-            GmailMessageRecord.decision == "ignored"))
+            GmailMessageRecord.decision == "ignored",
+            and_(GmailMessageRecord.decision == "update", GmailMessageRecord.decision_reason.in_(
+                ["Saved application correspondence; no confirmed outcome to record", *[CLASSIFICATION_REASONS[k] for k in ("assessment_completed", "assessment_cancelled", "interview_cancelled", "status_update")]]))))
 
 
 def _grant_ready(session, conn, grant):
@@ -837,11 +852,30 @@ def _eligible_stale_query(conn):
         sorted(scan.ids) if scan and scan.phase == "complete" else []))
 
 
+def understanding(row: GmailMessageRecord) -> dict:
+    """Keep intent, linkage and mutation authorization distinct, including legacy rows."""
+    reason = projected_reason(row) or ""
+    decision = projected_decision(row)
+    state = ("recorded" if decision in {"automatic", "manual"} else "deferred" if decision == "deferred"
+             else "routine" if decision in {"ignored", "unrelated"} else "filed" if decision in {"receipt", "update"}
+             else "awaiting_link" if not row.selected_application_key and ("application" in reason.lower() or "company" in reason.lower() or "role" in reason.lower() or "requisition" in reason.lower())
+             and not any(word in reason.lower() for word in ("protected", "predates", "confirmation", "automatic"))
+             else "owner_review")
+    return {"classification_reason": CLASSIFICATION_REASONS.get(row.classification, "Saved recruiting correspondence."),
+            "classification_state": "uncertain" if row.classification in {"unknown", "unclear", "possible_rejection"} or "part of this email" in reason else "recognized",
+            "matching_state": "linked" if row.selected_application_key else "ambiguous" if len(row.candidate_keys or []) > 1 else "unlinked",
+            "workflow_state": state,
+            "update_policy": "recorded" if state == "recorded" else "no_status_change" if state in {"filed", "routine"} else "confirmation_required",
+            "review_reason": reason if decision in PENDING else None,
+            "evidence_source": "retained_excerpt", "evidence_excerpt": html.unescape(row.snippet or "")}
+
+
 def _item(r: GmailMessageRecord) -> dict:
     return {"id": r.id, "received_at": r.received_at.isoformat(), "sender": r.sender, "subject": r.subject,
             "snippet": html.unescape(r.snippet), "classification": r.classification, "requisition_id": r.requisition_id,
             "decision": projected_decision(r), "candidate_keys": r.candidate_keys or [], "reason": projected_reason(r),
-            "selected_application_key": r.selected_application_key}
+            "selected_application_key": r.selected_application_key,
+            "understanding": understanding(r)}
 
 
 @router.get("/api/inbox/messages")
@@ -919,10 +953,18 @@ def full_message(message_id: int, request: Request, session: Session = Depends(g
             _TOKENS.clear()
         raise HTTPException(429 if isinstance(exc, gmail.GmailRateLimited) else 502, str(exc)) from exc
     headers = _headers(payload)
+    analysis_body = _body(payload, MAX_CLASSIFIER_BODY + 1)
+    analysis_complete = bool(analysis_body) and len(analysis_body) <= MAX_CLASSIFIER_BODY
+    current_reading = read_intent(EmailEvidence(headers.get("from") or row.sender, headers.get("subject") or row.subject,
+                                               analysis_body[:MAX_CLASSIFIER_BODY] or snippet, row.received_at,
+                                               complete=analysis_complete))
     message_key = headers.get("message-id", "").strip()
     return {"id": row.id, "sender": headers.get("from") or row.sender, "to": headers.get("to", ""), "cc": headers.get("cc", ""),
             "subject": headers.get("subject") or row.subject, "received_at": row.received_at.isoformat(), "text": text,
             "document": shown.document, "format": shown.kind, "blocked_images": shown.blocked_images,
+            "current_reading": {"classification": current_reading.classification, "reason": current_reading.explanation,
+                                "variant": current_reading.variant, "excerpt": current_reading.excerpt,
+                                "complete": analysis_complete},
             "message_id_header": message_key[:300] or None, "thread_id": row.thread_id}
 
 
@@ -1002,6 +1044,7 @@ def _recheck_locked(body: RecheckRequest, session: Session, conn: GmailConnectio
         row = current
         decision = reconcile(evidence, identities, conn.email, thread_keys=_thread_keys(session, conn, data, evidence, identities))
         before = row.decision
+        row.snippet = read_intent(evidence).excerpt or row.snippet
         row.classification = decision.classification
         row.requisition_id = decision.requisition_id
         row.candidate_keys = list(decision.candidates)

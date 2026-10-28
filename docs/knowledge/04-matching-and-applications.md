@@ -6,6 +6,18 @@
 
 > **Status of the sheet entries:** The spreadsheet upload and import UI was removed on 2026-10-10 at the user's request, because applications are made through ace. Export CSV remains, and the API endpoints `/api/applications/preview` and `/api/applications/import` still exist, unused. The entries about the sheet are history; their lessons (never guess identity, wait for the write, show the user what was skipped) still apply.
 
+## Contextual Inbox intent and policy separation (2026-10-28)
+
+Status: parser 9 candidate, not deployed; later release records control.
+The released parser 8 remains the starting point. The candidate separates
+asserted intent, safe identity and mutation permission, distinguishes passive
+completion/cancellation from invitations, and rechecks eligible classifier-filed
+correspondence while protecting owner decisions and Undo. The existing bounded
+excerpt can retain a decisive sentence rather than only the opening receipt.
+See `../architecture/2026-10-28-inbox-intelligence.md` for the catalog, read-only
+real-data diagnostic boundary, evaluation limitations and release requirements.
+No independent population accuracy or historical mutation is claimed.
+
 ## Matching is lexical, not semantic
 
 Keyword overlap over a 96-skill vocabulary with an alias table. Chosen

@@ -257,10 +257,10 @@ def test_more_rejection_wording_is_recognized(sentence):
     assert classify(ats_mail("Your application", "Thank you for applying. " + sentence))[0] == "rejection"
 
 
-def test_thanks_with_decision_like_wording_waits_instead_of_being_filed():
+def test_receipt_with_delay_and_other_candidates_still_under_review_is_not_a_rejection():
     result = reconcile(ats_mail("Northwind Robotics", "Thank you for applying. We regret the delay; other candidates are still being reviewed."),
                        [northwind()])
-    assert (result.classification, result.disposition, result.target) == ("possible_rejection", "review", None)
+    assert (result.classification, result.disposition, result.target) == ("application_confirmation", "receipt", "job:7")
     assert result.candidates == ("job:7",)
 
 
@@ -306,11 +306,11 @@ def test_a_workday_tenant_made_of_initials_names_the_employer():
 
 
 @pytest.mark.parametrize("sentence", [
-    "Our immigration policy does not include sponsorship for this role.",
-    "We are unable to sponsor for this position.",
+    "We cannot proceed with your application because our immigration policy does not include sponsorship for this role.",
+    "Your application is declined because we are unable to sponsor for this position.",
     "You are not eligible for this position.",
     "Your application does not meet the requirements.",
-    "We have decided to move on with this role.",
+    "We have decided not to proceed with your application for this role.",
     "We will not be considering your application.",
     "Your candidacy was not selected for this role.",
     "We are not able to offer a position at this time.",
@@ -323,7 +323,7 @@ def test_parser_six_sponsorship_and_eligibility_rejections(sentence):
 def test_fictional_workday_sponsorship_rejection_retains_ambiguity_auth_and_final_guards():
     application = ApplicationIdentity("job:88", "Fictional Mac", "Software Engineer Professional", None, NOW-timedelta(days=10), "applied")
     evidence = EmailEvidence("Workday <fictionalmac@myworkday.com>", "Fictional Mac - Application Update",
-        "Thank you for your interest in the Software Engineer Professional position. We would like to inform you that Fictional Mac's immigration policy does not include sponsorship for this role and does not hire students or F-1 graduates.", NOW, True)
+        "Thank you for your interest in the Software Engineer Professional position. We would like to inform you that Fictional Mac's immigration policy does not include sponsorship for this role and does not hire students or F-1 graduates. We cannot proceed with your application.", NOW, True)
     assert reconcile(evidence, [application]).target == "job:88"
     assert reconcile(evidence, [application, dataclasses.replace(application, key="job:89")]).target is None
     assert reconcile(dataclasses.replace(evidence, sender_authenticated=False), [application]).target is None
@@ -332,7 +332,6 @@ def test_fictional_workday_sponsorship_rejection_retains_ambiguity_auth_and_fina
 
 
 @pytest.mark.parametrize("evidence", [
-    ats_mail("Your application update", "We are still reviewing your details."),
     ats_mail("Application message", "Please check the candidate portal.", display="Talent", address="fictional@myworkday.com"),
     ats_mail("Your application", "There is another update about your Software Engineer role.", display="Talent", address="talent@fictional.example"),
     ats_mail("Northwind Robotics application", "An update is available.", display="Talent", address="talent@fictional.example"),

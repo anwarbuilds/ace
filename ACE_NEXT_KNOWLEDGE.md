@@ -13,6 +13,28 @@ not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
+
+## Inbox intelligence upgrade in progress, 2026-10-28 Pacific
+
+Parser 8 and the Analytics dashboard were already released. A new parser 9
+candidate is being built from canonical `d5c38dc` in
+`artifacts/inbox-intelligence-worktree`, branch `inbox-intelligence-20261028`.
+The restored root and concurrent `ace-inbox` worktree are preserved. Read
+`docs/architecture/2026-10-28-inbox-intelligence.md` for the focused implementation,
+intent catalog, evaluation limits and exact production boundary.
+
+Fresh production read-only stored-evidence and bounded body-pattern diagnostics
+ran through the existing grant. Full bodies were discarded in memory; private
+measurements and proposed historical changes stay outside Git. A separate
+read-only candidate dry-run is being validated. No production application/mail
+mutation or release ran. No claim of independent multi-category accuracy,
+complete historical recall or signed-in production visuals is supported yet.
+The exhaustive parser-7 operator remains stopped and must never be restarted.
+Existing strict positive safeguards, protected decisions, Undo, schema and all
+unrelated product surfaces remain. A later release/historical reprocess needs
+specific owner approval after the complete review evidence is ready.
+
+
 ## Analytics dashboard LIVE, owner-approved and verified 2026-10-27 Pacific
 
 The owner explicitly requested production deployment and an exhaustive shared

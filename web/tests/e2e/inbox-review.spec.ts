@@ -1,5 +1,7 @@
 import { expect } from "@playwright/test";
-import { test } from "./helpers";
+import { test, setThemeCookies } from "./helpers";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 // All Inbox requests and mutations below are fictional and intercepted.
 async function inboxFixture(page: import("@playwright/test").Page, options: {lastSync?: string | null} = {}) {
@@ -13,7 +15,7 @@ async function inboxFixture(page: import("@playwright/test").Page, options: {las
   const added: Record<string,unknown>[]=[];
   const applications=[{key:"job:1",company:"Fictional Labs",title:"Fictional engineer",requisition_id:"FIX-1",applied_at:"2026-01-01T12:00:00Z",status:"applied"},
                       {key:"job:2",company:"Imaginary Systems",title:"Fictional developer",requisition_id:"IMG-2",applied_at:"2026-01-03T12:00:00Z",status:"applied"}];
-  const rows=Array.from({length:107},(_,i)=>({id:i+1,received_at:"2026-01-10T12:00:00Z",sender:"Fictional Talent <fixture@example.test>",subject:`Fictional interview ${i+1} at Fictional Labs`,snippet:"Please schedule an interview for requisition FIX-1.",classification:"interview",requisition_id:"FIX-1",decision:"review",candidate_keys:["job:1"],reason:"Matched by its job ID; positive outcomes need your confirmation",selected_application_key:null}));
+  const rows=Array.from({length:107},(_,i)=>({id:i+1,received_at:"2026-01-10T12:00:00Z",sender:"Fictional Talent <fixture@example.test>",subject:`Fictional interview ${i+1} at Fictional Labs`,snippet:"Please schedule an interview for requisition FIX-1.",classification:"interview",requisition_id:"FIX-1",decision:"review",candidate_keys:["job:1"],reason:"Matched by its job ID; positive outcomes need your confirmation",selected_application_key:null,understanding:{classification_reason:"The employer invites the candidate to an interview.",classification_state:"recognized",matching_state:"ambiguous",workflow_state:"awaiting_link",update_policy:"confirmation_required",review_reason:"Two applications share this requisition. Choose the correct application.",evidence_source:"retained_excerpt",evidence_excerpt:"Please schedule an interview for requisition FIX-1."}}));
   const recorded={id:500,received_at:"2026-01-11T12:00:00Z",sender:"Wayfern Talent <no-reply@ashbyhq.example>",subject:"Update on your application at Wayfern",snippet:"Thank you for applying",classification:"rejection",requisition_id:null,decision:"automatic",candidate_keys:["job:2"],reason:"Clear rejection matched by its exact title",selected_application_key:"job:2"};
   const lastSync=options.lastSync===undefined?new Date().toISOString():options.lastSync;
   await page.route("**/api/inbox/**",async route=>{
@@ -26,7 +28,7 @@ async function inboxFixture(page: import("@playwright/test").Page, options: {las
     else if(path==="/api/inbox/events")body={items:[]};
     else if(/^\/api\/inbox\/messages\/\d+\/full$/.test(path)){
       const selected=Number(path.split("/")[4])===recorded.id?recorded:rows.find(row=>row.id===Number(path.split("/")[4]))??rows[0];
-      body={sender:selected.sender,to:"fixture@example.test",subject:selected.subject,received_at:"2026-01-10T12:00:00Z",text:"Hello Fictional Labs,\n\nPlease schedule an interview for requisition FIX-1.\n\nThe fictional recruiting team",document:"<!doctype html><html><head><meta charset=\"utf-8\"></head><body><p>Hello Fictional Labs,</p><p>Please schedule an interview for requisition FIX-1.</p><p>The fictional recruiting team</p></body></html>",format:"html",blocked_images:0,message_id_header:"<fixture-1@example.test>",thread_id:"thread-1"};
+      body={sender:selected.sender,to:"fixture@example.test",subject:selected.subject,received_at:"2026-01-10T12:00:00Z",text:"Hello Fictional Labs,\n\nPlease schedule an interview for requisition FIX-1.\n\nThe fictional recruiting team",document:"<!doctype html><html><head><meta charset=\"utf-8\"></head><body><p>Hello Fictional Labs,</p><p>Please schedule an interview for requisition FIX-1.</p><p>The fictional recruiting team</p></body></html>",current_reading:{classification:"interview",reason:"The employer requests an interview time.",variant:"invitation",excerpt:"Please schedule an interview for requisition FIX-1.",complete:true},format:"html",blocked_images:0,message_id_header:"<fixture-1@example.test>",thread_id:"thread-1"};
     }
     else if(/^\/api\/inbox\/messages\/\d+$/.test(path))body=Number(path.split("/").pop())===recorded.id?recorded:rows[0];
     else if(path==="/api/inbox/messages"){
@@ -189,3 +191,26 @@ test("an application missing from ACE is added from the email with its outcome",
   expect(fixture.added[0]).toMatchObject({message_id:1,company:"Wayfern Fiction",title:"Fictional engineer",status:"rejected",kind:"rejection",applied_on:null});
   expect(fixture.submitted).toEqual([]);
 });
+
+
+for(const theme of ["light","dark"] as const){
+  test(`${theme}: intent, linkage and authorization remain separate in the existing Inbox`,async({page,context,baseURL})=>{
+    await setThemeCookies(context,baseURL!,theme);
+    const fixture=await inboxFixture(page);
+    await page.setViewportSize({width:1672,height:941});
+    await page.goto("/app/applications/inbox");
+    const explanation=page.getByLabel("ACE understanding");
+    await expect(explanation).toContainText("Application linkage: ambiguous");
+    await expect(explanation).toContainText("Decision needed: Two applications share this requisition");
+    await expect(explanation.locator("blockquote")).toContainText("Please schedule an interview");
+    expect(fixture.submitted).toEqual([]);
+    expect(fixture.filed).toEqual([]);
+    const root=path.resolve("../artifacts/inbox-intelligence-validation");
+    await fs.mkdir(root,{recursive:true});
+    await page.screenshot({path:path.join(root,`${theme}-inbox.png`),fullPage:true});
+    await page.setViewportSize({width:390,height:844});
+    await expect(explanation).toBeVisible();
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
+    await page.screenshot({path:path.join(root,`${theme}-inbox-mobile.png`),fullPage:true});
+  });
+}

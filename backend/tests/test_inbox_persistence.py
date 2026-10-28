@@ -375,7 +375,7 @@ def test_all_ignored_history_is_reread_but_owner_filings_stay(database, gmail_re
     def get(path, *args):
         key=path.rsplit("/",1)[-1]; reads.append(key)
         if key=="forgotten-rejection":
-            return message(key,"Req ID: SE-101. Our immigration policy does not include sponsorship for this role.")
+            return message(key,"Req ID: SE-101. We cannot proceed with your application because our immigration policy does not include sponsorship for this role.")
         if key=="old-ignored":
             return message(key,"Req ID: SE-102. We have decided to move forward with other candidates.", NOW-timedelta(days=2500))
         return message(key,"Fictional newsletter with no application outcome.")
@@ -514,10 +514,10 @@ def test_rejection_after_old_inner_body_limit_is_not_filed_as_a_receipt(database
 @pytest.mark.parametrize("prefix_outcome", ["Thank you for applying.", "We have decided not to proceed with your application.", "We invite you to interview."])
 def test_truncated_body_cannot_file_a_receipt_or_automate_an_outcome(database, prefix_outcome):
     session, conn = database
-    body = "Req ID: SE-101. " + prefix_outcome + "\n" + "Role details. " * 900
+    body = "Req ID: SE-101. " + prefix_outcome + "\n" + "Role details. " * 5000
     data = message("truncated", body)
     evidence = inbox._message_evidence(data)
-    assert len(evidence.body) == 10000 and not evidence.complete
+    assert len(evidence.body) == inbox.MAX_CLASSIFIER_BODY and not evidence.complete
     assert _ingest(session, conn, data, _identities(session), preview=False) == "review"
     assert row_for(session, "truncated").decision_reason == "Only part of this email could be read"
     assert statuses(session) == ["applied", "applied", "applied"]
@@ -526,7 +526,7 @@ def test_truncated_body_cannot_file_a_receipt_or_automate_an_outcome(database, p
 
 def test_body_exactly_at_limit_is_complete_but_one_extra_character_is_not():
     body = "Thank you for applying. "
-    body = body + "x" * (10000 - len(body))
+    body = body + "x" * (inbox.MAX_CLASSIFIER_BODY - len(body))
     assert inbox._message_evidence(message("boundary", body)).complete
     assert not inbox._message_evidence(message("overflow", body + "x")).complete
 

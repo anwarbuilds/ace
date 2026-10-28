@@ -31,8 +31,8 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from urllib.parse import urlparse
 
-PARSER_VERSION = "8"
-MAX_CLASSIFIER_BODY = 10000
+PARSER_VERSION = "9"
+MAX_CLASSIFIER_BODY = 60000
 
 _OTHERS = r"(?:other|another|a\s+different|different|more\s+qualified|alternative)\s+(?:candidates?|applicants?|individuals?|profiles?)"
 _ONWARD = r"(?:moving\s+(?:forward|ahead)|proceeding|progressing|advancing|continuing)"
@@ -107,7 +107,7 @@ _INTERVIEW = re.compile(
 _OFFER = re.compile(r"\b(?:offer\s+of\s+employment|pleased\s+to\s+offer\s+you|excited\s+to\s+offer\s+you|offer\s+letter)\b", re.I)
 _CONFIRMATION = re.compile(
     r"\b(?:thank\s+you\s+for\s+(?:applying|your\s+application|submitting\s+your\s+application)|thanks\s+for\s+applying"
-    r"|we(?:'ve|\s+have)\s+received\s+your\s+application|application\s+(?:has\s+been\s+)?(?:received|submitted)"
+    r"|we(?:'ve|\s+have)?\s+received\s+your\s+application|application\s+(?:has\s+been\s+)?(?:received|submitted)"
     r"|your\s+application\s+(?:has\s+been|was)\s+(?:received|submitted)|successfully\s+(?:applied|submitted))\b",
     re.I,
 )
@@ -201,11 +201,12 @@ class Decision:
     disposition: str
     reason: str
     sender_verified: bool
+    matched_target: str | None = None
 
 
 def _new_text(body: str) -> str:
     """Drop common quoted/forwarded material before looking for intent."""
-    return re.split(r"(?im)^\s*(?:on .{5,160} wrote:|[- ]*forwarded message[- ]*|from:\s.+$|>.*$)", body, maxsplit=1)[0][:MAX_CLASSIFIER_BODY]
+    return re.split(r"(?im)^\s*(?:on .{5,160} wrote:|[- ]*(?:forwarded|original) message[- ]*|from:\s.+$|>.*$|--\s*$|unsubscribe\b|manage (?:your )?(?:email preferences|job alerts)\b)", body, maxsplit=1)[0][:MAX_CLASSIFIER_BODY]
 
 
 def _forwarded(subject: str) -> bool:
@@ -239,38 +240,193 @@ def routine_notification(evidence: EmailEvidence) -> bool:
         r"|job digest|jobs? you might|weekly (?:jobs?|career) digest)\b", subject))
 
 
-def classify(evidence: EmailEvidence) -> tuple[str, str | None]:
+# The public catalog documents contextual requirements for these patterns.
+# A Reading describes communication intent. Matching and policy run afterwards.
+@dataclass(frozen=True)
+class Reading:
+    classification: str
+    requisition_id: str | None
+    explanation: str
+    excerpt: str
+    variant: str = ""
+
+
+CLASSIFICATION_REASONS = {
+    "rejection": "The employer communicates a definite decision to end this candidacy.",
+    "application_confirmation": "The employer confirms receipt or continued review, without a hiring outcome.",
+    "online_assessment": "The employer requests a hiring assessment or reminds the candidate to complete it.",
+    "assessment_completed": "The message confirms an assessment was completed; it does not invite another test.",
+    "assessment_cancelled": "The assessment was cancelled; this alone does not reject the application.",
+    "interview": "The employer invites, schedules or reschedules an interview or recruiter screen.",
+    "interview_cancelled": "An interview was cancelled; this alone does not end the candidacy.",
+    "recruiter_reply": "The recruiter discusses the application beyond a submission receipt.",
+    "offer": "The employer explicitly offers employment or sends an actual employment offer letter.",
+    "action_required": "The employer requests candidate information, documents or another application action.",
+    "status_update": "The message describes application progress without a confirmed hiring outcome.",
+    "possible_rejection": "Decision statements conflict or leave the actual outcome unresolved.",
+    "unclear": "Application correspondence is retained; no confirmed outcome has been established.",
+    "unknown": "No applicant-specific hiring outcome has been established.",
+}
+PASSIVE_KINDS = {"assessment_completed", "assessment_cancelled", "interview_cancelled", "status_update"}
+
+
+def _asserted(pattern, text: str):
+    """Return asserted spans, excluding conditions, reported examples and negation.
+
+    Sentence context is deliberately kept: moving past a semicolon must not
+    turn an eligibility condition or process description into an actual decision.
+    """
+    for match in pattern.finditer(text):
+        start = max(text.rfind(c, 0, match.start()) for c in ".!?\n") + 1
+        end = min((pos for c in ".!?\n" if (pos := text.find(c, match.end())) >= 0), default=len(text))
+        sentence = text[start:end]
+        prefix = text[start:match.start()]
+        if re.search(r"\b(?:if|unless|whether|until|in case|does not mean|doesn't mean|for example|such as)\b", sentence, re.I):
+            continue
+        if re.search(r"\b(?:not|never|no longer)\s+(?:(?:been|being|actually|an?|the)\s+)?$", prefix, re.I):
+            continue
+        if re.search(r"\b(?:not selected|not been selected)\b[^.!?\n]{0,40}\byet\b", sentence, re.I):
+            continue
+        if re.search(r"[\"“]\s*$", prefix) or re.search(r"\b(?:might|may|could|would)\s+(?:be\s+)?$", prefix, re.I):
+            continue
+        yield match, text[start:end].strip()
+
+
+def _reading(kind: str, req: str | None, excerpt: str, variant: str = "") -> Reading:
+    return Reading(kind, req, CLASSIFICATION_REASONS[kind], re.sub(r"\s+", " ", excerpt).strip()[:500], variant)
+
+
+# Specific candidate-ending statements, rather than regret or policy by itself.
+_ENDING = re.compile(
+    r"\b(?:your (?:application|candidacy) (?:was|is|has been) (?:not selected|unsuccessful|declined|rejected|not successful)"
+    r"|you (?:were|have) not (?:been )?selected"
+    r"|(?:will not|won['’]t|cannot|can['’]t|unable to|not able to|decided not to|decided to not) "
+    r"(?:be )?(?:mov(?:e|ing) (?:forward|ahead)|proceed(?:ing)?|advanc(?:e|ing)|continu(?:e|ing)|progress(?:ing)?)"
+    r"|(?:are|is) not (?:be )?(?:moving (?:forward|ahead)|proceeding|advancing|continuing)"
+    r"|(?:chosen|decided|elected) (?:not to|to not) (?:pursue|continue|advance|proceed)"
+    r"|(?:chosen|decided) to go (?:in )?(?:a )?different direction"
+    r"|(?:chose|chosen) another path"
+    r"|(?:will not|not be|won['’]t be|not|unable to|cannot|not able to) (?:able to )?(?:extend(?:ing)? (?:you )?an offer|offer(?:ing)? you|offer a position)"
+    r"|no longer (?:considering you|being considered|under consideration)"
+    r"|(?:you are|your application is) not eligible for (?:this|the) (?:position|role|job)"
+    r"|your application does not meet (?:the|our) requirements"
+    r"|will not be considering (?:you|your application))\b", re.I)
+_OTHER_DECISION = re.compile(
+    r"\b(?:(?:have |has |we['’]ve )?(?:decided|chosen|elected) to "
+    r"(?:move (?:forward|ahead)|pursue|proceed|progress|go)(?:\s+\w+){0,3}\s+" + _OTHERS +
+    r"|(?:have |has |we['’]ve )(?:selected|chosen) " + _OTHERS +
+    r"|(?:moving (?:forward|ahead)|pursuing|proceeding)(?:\s+\w+){0,3}\s+" + _OTHERS + r")\b", re.I)
+_ASSESSMENT_NOUN = r"(?:(?:(?:online|technical|pre-employment|hiring|coding) )?assessment|coding (?:challenge|test)|technical (?:evaluation|test)|screening test|work simulation|take[ -]home (?:assignment|challenge)|(?:HackerRank|CodeSignal|Codility|HireVue) (?:test|challenge))"
+_INTERVIEW_NOUN = r"(?:(?:technical |phone |video |onsite |hiring.manager |recruiter )?interview|(?:phone|recruiter) screen(?:ing)?|screening (?:call|conversation))"
+
+
+def read_intent(evidence: EmailEvidence) -> Reading:
+    body = _new_text(evidence.body)
     subject = "" if _forwarded(evidence.subject) else evidence.subject
-    text = f"{subject}\n{_new_text(evidence.body)}"
-    reqs = _labelled_ids(text)
-    requisition = next(iter(reqs)) if len(reqs) == 1 else None
-    # A conditional instruction ("if you are not eligible ...") does not
-    # establish that the employer has rejected this particular application.
-    asserted = any(not re.search(r"\b(?:if|unless|whether|in\s+case|does\s+not\s+mean)\b[^.!?\n]{0,160}$",
-                                 text[max(0, match.start()-180):match.start()], re.I)
-                   for match in _REJECTION.finditer(text))
-    if asserted and _RECRUITING.search(text) and not _WITHDRAWN.search(text):
-        return "rejection", requisition
-    if _OFFER.search(text):
-        return "offer", requisition
-    if _INTERVIEW.search(text):
-        return "interview", requisition
-    if _ASSESSMENT.search(text):
-        return "online_assessment", requisition
-    if _RECRUITER.search(text):
-        return "recruiter_reply", requisition
-    if _CONFIRMATION.search(text):
-        return ("possible_rejection" if _DECLINE.search(text) else "application_confirmation"), requisition
-    # Decision-like wording can be real evidence even without a receipt
-    # opening. Preserve that specific uncertainty instead of filing it as
-    # routine unclassified correspondence.
-    uncertain_decision = any(not re.search(r"\b(?:if|unless|whether|in\s+case|does\s+not\s+mean)\b[^.!?\n]{0,160}$",
-                                           text[max(0, match.start()-180):match.start()], re.I)
-                             for match in _DECLINE.finditer(text))
-    if (uncertain_decision and _RECRUITING.search(text) and not _WITHDRAWN.search(text)
-            and re.search(r"\b(?:decision|outcome|results?)\b", text, re.I)):
-        return "possible_rejection", requisition
-    return "unknown", requisition
+    reqs = _labelled_ids(subject + "\n" + body)
+    req = next(iter(reqs)) if len(reqs) == 1 else None
+    # Only current substantive content establishes intent. Subjects can supply
+    # identity, but an outcome in a subject cannot defeat an unrelated body.
+    recruiting = bool(_RECRUITING.search(subject + "\n" + body))
+    if re.search(r"\b(?:loan|mortgage|credit card|passport|bank account)\b", body, re.I) and not _ROLE.search(body):
+        return _reading("unknown", req, "")
+    negative = list(_asserted(_ENDING, body)) + list(_asserted(_OTHER_DECISION, body))
+    for span in _asserted(_REJECTION, body):
+        wording = span[0].group().casefold()
+        if (re.match(r"we\s+regret", wording) or re.search(r"sponsor|not eligible for|requirements|decided to move on", wording)
+                or re.search(r"(?:position|role|opening|requisition|job|posting).*(?:filled|closed|cancel|available|open)", wording)):
+            continue
+        negative.append(span)
+    negative = [span for span in negative if not (
+        re.search(r"interview|assessment", span[1], re.I) and re.search(r"scheduled time|technical difficulties|reschedul|scheduling", span[1], re.I)
+        and not re.search(r"your application|your candidacy", span[1], re.I))]
+    # Closure is applicant-ending only when specifically tied to this application.
+    closure = re.compile(r"\b(?:position|role|opening)(?: that)? you applied (?:for|to) (?:has been|was|is now) (?:filled|closed|cancelled)\b", re.I)
+    negative += list(_asserted(closure, body))
+    # A receipt about a particular application can explain closure of that role.
+    if _CONFIRMATION.search(body):
+        negative += list(_asserted(re.compile(r"\bthe (?:position|role) is no longer (?:available|open)\b", re.I), body))
+    if _CONFIRMATION.search(body):
+        negative += list(_asserted(re.compile(r"\bit has been (?:filled|closed|cancelled)\b", re.I), body))
+    # Sponsorship policy alone is information. An explicit personal eligibility
+    # decision or refusal to continue is captured by _ENDING instead.
+    offer = list(_asserted(re.compile(
+        r"\b(?:(?:pleased|excited|delighted) to offer you (?:the |a |an )?(?:(?-i:[A-Z][\w-]+(?: [A-Z][\w-]+){0,7}) )?(?:position|role|job|employment)"
+        r"|(?:attached|enclosed|please (?:review|sign|accept)) (?:employment )?offer letter"
+        r"|(?:extend|extending) (?:you )?an offer of employment)\b", re.I), body))
+    # A completed test can be followed by a new interview request. That new
+    # requested action is the primary intent, rather than the earlier completion.
+    interview_request = list(_asserted(re.compile(
+        r"\b(?:invite you to|invited to|please schedule|please reschedule) (?:a |an |your |the )?(?:technical |phone |video |recruiter )?(?:interview|screen)\b", re.I), body))
+    if interview_request and not negative and re.search(_ASSESSMENT_NOUN, body, re.I) and re.search(r"\b(?:completed|submitted|finished)\b", body, re.I):
+        return _reading("interview", req, interview_request[0][1], "invitation")
+    still_review = re.search(r"\byour application (?:is|remains) (?:still )?under (?:review|consideration)\b", body, re.I)
+    if negative and still_review and still_review.start() > min(span[0].start() for span in negative):
+        return _reading("possible_rejection", req, negative[0][1] + " " + still_review.group(), "conflicting_progress")
+    if negative and interview_request:
+        return _reading("possible_rejection", req, negative[0][1] + " " + interview_request[0][1], "conflicting_outcomes")
+    if negative and offer:
+        return _reading("possible_rejection", req, negative[0][1] + " " + offer[0][1], "conflicting_outcomes")
+    if negative and recruiting and not _WITHDRAWN.search(body):
+        # A correction explicitly rescinding a rejection needs owner attention.
+        if re.search(r"\b(?:in error|incorrect|mistaken|disregard|not (?:been )?rejected)\b", body, re.I):
+            return _reading("possible_rejection", req, negative[0][1], "corrected_decision")
+        return _reading("rejection", req, negative[0][1])
+    if offer:
+        return _reading("offer", req, offer[0][1], "employment_offer")
+
+    for noun, kind in ((_ASSESSMENT_NOUN, "assessment"), (_INTERVIEW_NOUN, "interview")):
+        # Completion/cancellation takes precedence over the original invitation
+        # often repeated in the same message. Neither creates a new outcome.
+        for state, words in (("cancelled", r"cancelled|canceled|cancellation"), ("completed", r"completed|submitted|finished|completion")):
+            if kind == "interview" and state == "completed":
+                continue
+            pattern = re.compile(r"\b(?:" + noun + r")[^.!?\n]{0,65}\b(?:" + words + r")\b|\b(?:" + words + r")[^.!?\n]{0,65}\b(?:" + noun + r")\b", re.I)
+            spans = list(_asserted(pattern, body))
+            if spans and not re.search(r"\b(?:not|not yet|once|when|after you have)\b[^.!?\n]{0,50}(?:" + words + r")\b", spans[0][1], re.I):
+                return _reading(kind + "_" + state, req, spans[0][1], state)
+        action = re.compile(
+            r"\b(?:invite you to|invited to|invitation to|please (?:complete|take|schedule|book)|complete (?:the|an|your)|take (?:the|an|your)|schedule (?:an?|your|a time for an?)|availability for|selected for|reminder[^.!?\n]{0,35}(?:complete|take)|reschedule (?:your|the))\s+(?:a |an |the |your )?(?:" + noun + r")\b"
+            r"|\b(?:" + noun + r")[^.!?\n]{0,60}\b(?:invitation|invite|scheduled|confirmed|rescheduled|deadline|due by|due on|reminder|please complete)\b", re.I)
+        spans = list(_asserted(action, body))
+        if spans:
+            sentence = spans[0][1]
+            if re.search(r"\b(?:practice|webinar|demo|sample|course)\b", sentence, re.I):
+                continue
+            variant = "rescheduled" if re.search(r"reschedul", sentence, re.I) else "reminder" if re.search(r"reminder|deadline|due (?:by|on)", sentence, re.I) else "scheduled" if re.search(r"scheduled|confirmed", sentence, re.I) else "invitation"
+            return _reading("online_assessment" if kind == "assessment" else "interview", req, sentence, variant)
+
+    response = list(_asserted(_RECRUITER, body))
+    if response:
+        return _reading("recruiter_reply", req, response[0][1])
+    action = list(_asserted(re.compile(
+        r"\b(?:please|could you|we (?:need|request)|you (?:must|need to)) (?:provide|send|upload|submit|confirm|update|complete) "
+        r"(?:us with |a |an |the |your |additional |following )*(?:documents?|transcripts?|resume|information|availability|candidate profile|application form|work authorization|portfolio)\b", re.I), body))
+    if action and recruiting:
+        return _reading("action_required", req, action[0][1])
+    receipt = list(_asserted(_CONFIRMATION, body))
+    progress = list(_asserted(re.compile(
+        r"\b(?:your application (?:is|remains|has been selected for) (?:still )?(?:under|in|further) (?:review|consideration)"
+        r"|we (?:are |will be )?(?:still )?reviewing your (?:application|qualifications|details)"
+        r"|application (?:is|remains) under consideration)\b", re.I), body))
+    if receipt or progress:
+        # Other candidates being reviewed, regret about delays and policy
+        # disclaimers describe process, not a negative decision.
+        unresolved = list(_asserted(re.compile(r"\b(?:decision|outcome|results?)\b[^.!?\n]{0,80}\b(?:regret|other candidates)\b", re.I), body))
+        if unresolved:
+            return _reading("possible_rejection", req, unresolved[0][1])
+        return _reading("application_confirmation", req, (receipt or progress)[0][1], "under_review" if progress else "receipt")
+    if recruiting and re.search(r"\b(?:position|role|posting|requisition) (?:has been|is|was) (?:filled|closed|cancelled)|still (?:reviewing|considering)|next (?:step|stage|round)|sponsorship|immigration policy\b", body, re.I):
+        return _reading("status_update", req, body[:500])
+    uncertain = list(_asserted(_DECLINE, body))
+    if uncertain and recruiting and re.search(r"\b(?:decision|outcome|results?)\b", body, re.I) and not _WITHDRAWN.search(body):
+        return _reading("possible_rejection", req, uncertain[0][1])
+    return _reading("unknown", req, "")
+
+
+def classify(evidence: EmailEvidence) -> tuple[str, str | None]:
+    reading = read_intent(evidence)
+    return reading.classification, reading.requisition_id
 
 
 def _words(value: str) -> str:
@@ -384,6 +540,12 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
     considered = [app for app in applications if app in by_id or _company_words(app.company) in strong | weak]
     ranked = sorted(considered, key=lambda app: (-score(app), -_aware(app.submitted_at).timestamp() if app.submitted_at else 0, app.key))
     keys = tuple(app.key for app in ranked[:10])
+    if len(_labelled_ids(f"{subject} {body}")) > 1:
+        return _Match(None, "The email names multiple requisitions; choose the application it concerns", keys, labelled)
+    if len(by_id) == 1 and len(strong) > 1:
+        return _Match(None, "The email names more than one company you applied to", keys, labelled)
+    if len(by_id) == 1 and strong and _company_words(by_id[0].company) not in strong:
+        return _Match(None, "The requisition and named employer point to different applications", keys, labelled)
     if len(by_id) == 1:
         return _Match(by_id[0].key, "its job ID", keys, by_id[0].requisition_id)
     if len(by_id) > 1:
@@ -416,19 +578,22 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
 
 
 def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], account: str | None = None, *, thread_keys: tuple[str, ...] = ()) -> Decision:
+    found = None
+    def decided(*args):
+        return Decision(*args, matched_target=found.target if found and evidence.complete else None)
     if account and parseaddr(evidence.sender)[1].casefold() == account.casefold():
-        return Decision("unknown", None, (), None, "ignored", "Sent by the connected account", False)
+        return decided("unknown", None, (), None, "ignored", "Sent by the connected account", False)
     classification, req = classify(evidence)
     # A generic account subject cannot suppress an explicit outcome in the body.
     if classification in {"unknown", "application_confirmation"} and evidence.complete and routine_notification(evidence):
-        return Decision("unknown", None, (), None, "ignored", "Routine account notification or job alert", False)
+        return decided("unknown", None, (), None, "ignored", "Routine account notification or job alert", False)
     if classification == "unknown" and not application_related(evidence, applications):
-        return Decision(classification, req, (), None, "ignored", "No explicit recruiting outcome", False)
+        return decided(classification, req, (), None, "ignored", "No explicit recruiting outcome", False)
     found = _match(evidence, applications, req)
     if classification == "unknown" and not evidence.complete:
-        return Decision("unclear", found.requisition, found.ranked, None, "review", PARTIAL_REASON, False)
+        return decided("unclear", found.requisition, found.ranked, None, "review", PARTIAL_REASON, False)
     if classification == "unknown":
-        return Decision("unclear", found.requisition, found.ranked, None, "update", "Saved application correspondence; no confirmed outcome to record", False)
+        return decided("unclear", found.requisition, found.ranked, None, "update", "Saved application correspondence; no confirmed outcome to record", False)
     # A single retained, previously matched message in this Gmail thread can
     # disambiguate roles at the same company. It cannot override a named ID,
     # company conflict, different role, positive policy or timing/status guards.
@@ -442,26 +607,32 @@ def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], 
     # A clipped body or snippet cannot establish that a later sentence names
     # another role or changes the apparent outcome. Preserve it for review.
     if not evidence.complete:
-        return Decision(classification, found.requisition, found.ranked, None, "review", PARTIAL_REASON, False)
+        return decided(classification, found.requisition, found.ranked, None, "review", PARTIAL_REASON, False)
+    if classification in PASSIVE_KINDS:
+        return decided(classification, found.requisition, found.ranked, found.target, "update",
+                        CLASSIFICATION_REASONS[classification], False)
+    if classification == "action_required":
+        return decided(classification, found.requisition, found.ranked, found.target, "review",
+                        "The employer requests documents or candidate information; complete that action on the employer site", False)
     if classification == "application_confirmation":
-        return Decision(classification, found.requisition, found.ranked, found.target, "receipt", RECEIPT_REASON, False)
+        return decided(classification, found.requisition, found.ranked, found.target, "receipt", RECEIPT_REASON, False)
     if classification == "possible_rejection":
-        return Decision(classification, found.requisition, found.ranked, None, "review",
+        return decided(classification, found.requisition, found.ranked, None, "review",
                         "It may be a rejection, but the wording is not clear enough to record on its own", False)
     if found.target is None:
-        return Decision(classification, found.requisition, found.ranked, None, "review", found.basis, False)
+        return decided(classification, found.requisition, found.ranked, None, "review", found.basis, False)
     app = next(a for a in applications if a.key == found.target)
     candidates = (app.key,) + tuple(key for key in found.ranked if key != app.key)
     if classification == "rejection":
         if not _sender_trusted(evidence):
-            return Decision(classification, found.requisition, candidates, None, "review", "Sender could not be authenticated", False)
+            return decided(classification, found.requisition, candidates, None, "review", "Sender could not be authenticated", False)
     elif not (evidence.sender_authenticated and found.basis == "its job ID" and _sender_matches(evidence.sender, app)):
-        return Decision(classification, found.requisition, candidates, None, "review",
+        return decided(classification, found.requisition, candidates, None, "review",
                         "Matched by " + found.basis + "; positive outcomes need your confirmation", False)
     reason = conflict(app, classification, evidence.received_at)
     if reason:
-        return Decision(classification, found.requisition, candidates, None, "review", reason, True)
-    return Decision(classification, found.requisition, candidates, app.key, "verified",
+        return decided(classification, found.requisition, candidates, None, "review", reason, True)
+    return decided(classification, found.requisition, candidates, app.key, "verified",
                     "Clear " + classification.replace("_", " ") + " matched by " + found.basis, True)
 
 

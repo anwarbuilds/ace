@@ -280,3 +280,12 @@ test("a pending scope cannot masquerade as a completed zero-remaining recheck",a
     {checked:0,remaining:0,scope_pending:true,counts:{}},progress:()=>{}}),/scope needs verification/);
   assert.match(coverageText(full),/Search terms may miss some job mail/);
 });
+
+test("classification, linkage and permission are explained separately", () => {
+  const html = render({...message,understanding:{classification_reason:"The employer requests a hiring assessment.",classification_state:"recognized",matching_state:"ambiguous",workflow_state:"awaiting_link",update_policy:"confirmation_required",review_reason:"Two applications share this requisition.",evidence_source:"retained_excerpt",evidence_excerpt:"Please complete the coding challenge."}});
+  assert.match(html,/ACE understanding/);
+  assert.match(html,/The employer requests a hiring assessment/);
+  assert.match(html,/Application linkage: ambiguous/);
+  assert.match(html,/Decision needed: Two applications share this requisition/);
+  assert.match(html,/No status change is authorized/);
+});
