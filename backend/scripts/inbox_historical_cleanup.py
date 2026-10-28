@@ -13,6 +13,7 @@ import hashlib
 import json
 from pathlib import Path
 import time
+import traceback
 
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
@@ -138,7 +139,9 @@ def main():
         return 0
     except Exception as exc:
         # Never print SQL parameters, credentials or real mail contents.
-        print(json.dumps({'error': type(exc).__name__, 'mode': args.mode, 'complete': False}))
+        frame = traceback.extract_tb(exc.__traceback__)[-1]
+        print(json.dumps({'error': type(exc).__name__, 'mode': args.mode, 'complete': False,
+                          'location': f'{Path(frame.filename).name}:{frame.lineno}:{frame.name}'}))
         return 2
     finally:
         engine.dispose()

@@ -72,6 +72,14 @@ def test_any_owner_event_blocks_cleanup_even_when_the_saved_reason_is_old(databa
         cleanup.apply_prepared(session, conn, plan, plan, 'fixture04')
 
 
+def test_machine_matching_explanation_is_not_mistaken_for_an_owner_decision(database):
+    session, conn = database
+    row, plan, data = prepare(session, conn)
+    row.decision_reason = 'You applied to several roles there and the email does not say which'
+    session.commit()
+    assert cleanup.eligible(session, row)
+
+
 def test_changed_source_evidence_or_reconciliation_cannot_apply_an_old_plan(database):
     session, conn = database
     row, plan, data = prepare(session, conn)

@@ -29,7 +29,7 @@ def row_state(row) -> dict:
 
 def eligible(session, row) -> bool:
     return bool(row and row.decision in {'review', 'exact_preview'}
-                and not row.decision_reason.startswith('You ')
+                and not row.decision_reason.startswith(('You undid', 'You marked', 'You chose', 'You recorded'))
                 and not session.scalar(select(Event.id).where(Event.gmail_message_id == row.id,
                       Event.actor.in_(('owner', 'verified_automation'))).limit(1)))
 
