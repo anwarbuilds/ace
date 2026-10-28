@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-27, approved Analytics refresh fix 268e1fc live on web; API remains 3cd87a5/parser 8; production preservation and HTTPS verified; exhaustive operator remains stopped
+Last updated: 2026-10-27, Analytics layout/data rebuild ready in draft PR #10; tested runtime 1376b68; no deployment in this task; prior release observations remain dated history
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -12,6 +12,78 @@ repository instructions. Dated observations below are evidence from that date,
 not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
+
+## Analytics screenshot/data rebuild ready for review, 2026-10-27 Pacific
+
+Status: source and verification complete in [draft PR #10](https://github.com/anwarbuilds/ace/pull/10),
+remote branch `analytics-rebuild-20261027`, tested runtime
+`1376b68333311df006adacccc999c5d68850ed0d`. Nothing was deployed. This is the
+current development handoff; prior LIVE sections retain their dated observations
+and do not imply that this candidate is running.
+
+The owner rejected the reverted Analytics implementation as a design baseline.
+The four attached reference PNGs match the retained approved pixel-lock kit.
+The interface was rebuilt from the restored checkout in isolation, then integrated
+with canonical `34f4663` so the final diff preserves all current backend, Inbox,
+extension, deployment and persistent app-layout refresh source byte-for-byte.
+Root `ace-next` remains `extension-context-reuse-20261026` at `b5531ab`;
+`ace-inbox` was not edited or reset. The review worktree is
+`/home/ubuntu/Documents/ace-next/artifacts/analytics-worktree`, local branch
+`analytics-fidelity-review-20261027`. Do not stage its `.venv` symlink or ignored
+artifacts, and do not reset the owner's root to this branch implicitly.
+
+The four layouts retain Inter and existing Wine and Rose shell/tokens. Five
+desktop KPIs align; Role has the four approved modules and access to all recorded
+families; Companies retains six reference modules before the existing rejection
+grid. Actual identities/timestamps drive daily, Monday-week and calendar-month
+series, exact date drilldowns, historical-week navigation and equivalent elapsed
+submission comparisons, including DST and zero-prior states. Supplemental reads
+reuse authenticated existing APIs, keep identity rows server-side and refuse
+inconsistent/incomplete reads. Outcome coverage, submitted resume and channel
+attribution are never inferred. Missing official records leave sponsorship
+analysis unavailable. LCA records are never renamed approvals or employee hires.
+
+Green dedicated hosted run
+[40615555332](https://github.com/anwarbuilds/ace/actions/runs/40615555332):
+22 calculation/render tests, 53 Inbox/Analytics DOM contracts, 237 focused backend
+regressions, TypeScript, full lint/build and all 23 Analytics browser cases.
+All four tabs have inspected 1672 x 941 Day/Night captures plus reference comparisons;
+responsive, keyboard, filters, drilldowns, logo fallback, refresh bounds and
+cross-tab counts pass. Full CI
+[40615561429](https://github.com/anwarbuilds/ace/actions/runs/40615561429)
+passes web and 1,586 backend tests plus 258 matcher cases, 47 extension browser
+and all 34 combined Inbox/Analytics browser cases. Remaining app browser suite:
+165 pass / 21 fail, so overall CI is not green. Exact title comparison finds
+the same 20 failures as prior run 40577319214 plus the opened-Pull navigation
+test (`browse.spec.ts:78`), which timed out waiting for a company button after
+scrolling. Its snapshot shows the window collapsed after an earlier expanded
+assertion. Pulls source/test and global styles are unchanged. Cause is unproven;
+do not call the extra failure proven pre-existing or claim no broad regression.
+`docs/analytics/review.md` and private `ci-failure-comparison.txt` retain details.
+Browser work ran on hosted infrastructure, honoring local cooling restrictions.
+
+The enforced repeatable read-only audit, existing independent Analytics audit
+and separate frontend calendar reconciliations pass. Actual production numbers
+and anonymous timestamp input remain private and ignored under
+`/home/ubuntu/Documents/ace-next/artifacts/analytics-production-review-20261027/private-audit/`.
+No new real measurements are published here. No Gmail calls, body reads, new
+authentication session, writes or completeness certification were made by the
+audit. An automatic public-push review rejected an earlier document containing
+fresh production aggregates; those were removed from Git and retained privately,
+and the corrected source-only push was approved. Keep this boundary in future
+handoffs.
+
+`docs/analytics/review.md` contains the changed-file inventory, verification and
+intentional visual differences. `docs/analytics/metric-sources.md` maps every
+measure to definitions, fields, dates, denominators, drilldowns and missing states.
+The owner-local package's `REVIEW.md` links all eight screenshots, comparisons and
+the actual metric verification table. It is review evidence, not production
+browser verification or a pixel-perfect claim. Submitted-file/source capture,
+observation coverage and official employer/year ingestion are separate documented
+dependencies requiring approval before implementation. No backend, auth, OAuth,
+reconciliation, owner decision/Undo, Pulls, Resume Studio, Answer Memory, scheduler,
+migration, production data, Gmail historical recheck, extension publication or
+release operation was changed. The exhaustive operator stays stopped.
 
 ## Analytics refresh fix LIVE, owner-approved and verified 2026-10-27T21:13Z
 

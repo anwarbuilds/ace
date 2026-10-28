@@ -4,6 +4,41 @@
 >
 > Read this when: you change the old single-file UI or build its Next.js replacement; it records what each screen is for and what went wrong.
 
+## Analytics reference rebuild and truthful unavailable states (2026-10-27)
+
+Status: ready in draft PR #10, tested runtime `1376b68`; not deployed. This
+supersedes older Analytics design-completion claims for the new four-reference
+request. Earlier release records remain historical.
+
+Reference images define layout, never database values. Keep the existing shell
+and Inter/Wine and Rose tokens while reproducing the five-card desktop row,
+four Role modules and six Companies modules. Compact the Inbox band; connection,
+sync, evidence and identity are separate facts, and recorded evidence does not
+prove complete coverage. Retain every family in a full-list disclosure. Keep
+the existing rejection grid after the reference modules. Compare all four
+rendered tabs at 1672 x 941 and inspect both themes, mobile and keyboard reflow;
+do not use raw image error as a claimed pixel-accuracy percentage.
+
+Submission supplements reuse existing server-side identity reads and must
+reconcile with the primary Analytics projection. Calendar Monday weeks/months
+use the report's IANA timezone; incomplete periods compare equal elapsed local
+times; zero prior activity has no fabricated percentage. Historical chart weeks
+do not change the current-week KPI. Outcome pairs can overlap, so label the
+donut's counting model. Missing submitted-file/source attribution and observation
+coverage remain unavailable. Keep official LCA, petition decisions and hiring
+claims distinct. Backend changes and ingestion need separate approval.
+
+Final runtime checks: 22 calculation/render, 53 DOM, 237 focused backend and
+23 hosted Analytics browser cases pass, plus TypeScript/lint/build. Wider CI's
+final status and the full file inventory are in `../analytics/review.md`.
+Source definitions are in `../analytics/metric-sources.md`; real measurements
+stay private in the owner-local ignored review package. No production browser,
+deployment or data-write claim. The final diff preserves canonical backend,
+Inbox, extension, shared app layout and persistent refresh source unchanged.
+Wait for committed streaming content before measuring bounds; retain the exact
+geometry/overflow assertions. Mock the server-only import boundary in VM tests
+so API modules never accidentally make real requests during component tests.
+
 ## The interface is a triage instrument (2026-09-06)
 
 Full design direction in the session record. The decisions that constrain

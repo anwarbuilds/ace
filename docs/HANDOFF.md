@@ -1,5 +1,26 @@
 # ace handoff
 
+**2026-10-27 Pacific, Analytics rebuild ready for review, not deployed:**
+[Draft PR #10](https://github.com/anwarbuilds/ace/pull/10), remote branch
+`analytics-rebuild-20261027`, tested runtime `1376b68`. All four approved layouts
+use existing authenticated records; calendar grouping, fair submission trends,
+historical weeks and exact drilldowns pass. Missing attribution, observation
+coverage and official sponsorship remain explicit. Dedicated hosted review:
+23 browser, 22 calculation/render, 53 DOM and 237 focused backend checks pass,
+along with TypeScript/lint/build. Wider CI passes web, 1,586 backend and 258
+matcher cases, 47 extension and all 34 combined Inbox/Analytics browser cases.
+Remaining app browser: 165 pass / 21 fail; all prior 20 failure titles plus one
+opened-Pull navigation timeout. Pulls source/test are unchanged, but cause is
+unproven. See `docs/analytics/review.md`; overall CI is not green. No production
+visual claim. Eight Day/Night captures, reference
+comparisons and private real-data audit are in the owner-local
+`artifacts/analytics-production-review-20261027/` package. Actual audit values
+stay private. Root remains restored `b5531ab`, concurrent Inbox is untouched;
+the isolated review worktree is `artifacts/analytics-worktree`. Protected backend,
+Inbox, extension, deployment and persistent refresh source match canonical
+`34f4663`. No production operation ran. Read the new root knowledge section and
+`docs/analytics/review.md` before resuming or proposing any release.
+
 **LIVE, 2026-10-27 14:13 Pacific:** Owner-approved Analytics refresh fix
 268e1fc is healthy on web; API remains 3cd87a5/parser 8, schema 0050. PR #9 is
 merged. Only web was recreated. HTTPS exact SHA/auth, deployed Analytics/Inbox
