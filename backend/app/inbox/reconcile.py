@@ -32,8 +32,9 @@ from email.utils import parseaddr
 from urllib.parse import urlparse
 
 from backend.app.inbox.postings import compatible_role, contextual_links, posting_identity, primary_link_text, role_claims, subject_role_claim
+from backend.app.inbox.company_outcomes import COMPANY_REASON
 
-PARSER_VERSION = "11"
+PARSER_VERSION = "12"
 MAX_CLASSIFIER_BODY = 60000
 
 _OTHERS = r"(?:other|another|a\s+different|different|more\s+qualified|alternative)\s+(?:candidates?|applicants?|individuals?|profiles?)"
@@ -217,6 +218,7 @@ class Decision:
     reason: str
     sender_verified: bool
     matched_target: str | None = None
+    company: str | None = None
 
 
 def _new_text(body: str) -> str:
@@ -417,8 +419,54 @@ _CANDIDATE_INTEREST = re.compile(
 _SPECIFIC_DECISION = re.compile(
     r"\bthis\s+decision\s+(?:pertains|applies|relates)\s+(?:only\s+)?to\s+(?:only\s+)?"
     r"(?:this|the)\s+(?:specific\s+)?(?:[\w&+/#(),’-]+\s+){0,12}(?:role|position|opening|application)\b", re.I)
-_ASSESSMENT_NOUN = r"(?:(?:(?:online|technical|pre-employment|hiring|coding) )?assessment|coding (?:challenge|test)|technical (?:evaluation|test)|screening test|work simulation|take[ -]home (?:assignment|challenge)|(?:HackerRank|CodeSignal|Codility|HireVue) (?:test|challenge))"
+_ASSESSMENT_NOUN = r"(?:(?:(?:online|technical|pre-employment|hiring|coding) )?assessment|coding (?:challenge|test)|technical (?:evaluation|test)|screening test|work simulation|take[ -]home (?:assessment|assignment|challenge)|(?:HackerRank|CodeSignal|Codility|HireVue|Karat) (?:[\w-]+ ){0,5}(?:assessment|test|challenge))"
 _INTERVIEW_NOUN = r"(?:(?:technical |phone |video |virtual |onsite |hiring.manager |recruiter )?interview|(?:phone|recruiter) screen(?:ing)?|screening (?:call|conversation))"
+
+
+def _action_pattern(noun: str):
+    return re.compile(
+        r"\b(?:invite you (?:to|for)(?: (?:take|complete|attempt|start))?|invited (?:to|for)(?: (?:take|complete|attempt|start))?"
+        r"|invitation (?:to|for)|please (?:complete|take|attempt|finish|start|schedule|book)"
+        r"|(?:complete|take|attempt|finish|start) (?:the|an?|your|our)"
+        r"|(?:schedule|book) (?:an?|the|your|our|a time for an?)"
+        r"|(?:choose|select|pick) (?:a |the |your )?(?:time|slot) (?:for|to attend)"
+        r"|availability for|(?:selected|shortlisted) (?:for|to (?:take|complete|attempt))"
+        r"|reminder[^.!?\n]{0,35}(?:complete|take)|reschedule (?:your|the))"
+        r"\s+(?:a |an |the |your |our )?(?:" + noun + r")\b"
+        r"|\b(?:" + noun + r")[^.!?\n]{0,60}\b(?:invitation|invite|scheduled|confirmed|rescheduled|deadline"
+        r"|due (?!to\b)|expires?|expiring|reminder|please complete)\b"
+        r"|\b(?:you['’]re|you are|you['’]ve (?:just )?been|you have (?:just )?been) (?:just )?invited "
+        r"(?:by [^.!?\n]{1,80} )?to (?:take|complete) (?:our |your |the |a |an )?(?:[\w-]+ ){0,5}(?:" + noun + r")\b",
+        re.I,
+    )
+
+
+def _action_asserted(pattern, body: str):
+    """Keep current candidate requests apart from examples and future process."""
+    for match, sentence in _asserted(pattern, body):
+        start = max(body.rfind(c, 0, match.start()) for c in ".!?\n") + 1
+        prefix = body[start:match.start()]
+        clause_prefix = re.split(r"[;,:]|\b(?:but|however)\b", prefix, flags=re.I)[-1]
+        if re.search(
+                r"\b(?:no need (?:for you )?to|(?:do not|does not|don['’]t|doesn['’]t) need to|not required to"
+                r"|(?:haven['’]t|hasn['’]t|hadn['’]t) (?:yet )?(?:been )?|won['’]t)\s*$",
+                clause_prefix, re.I):
+            continue
+        if re.search(r"\b(?:example|sample|template|quoted|hypothetical|original|previous|earlier)\b|\bfor instance\b", prefix, re.I):
+            continue
+        if (re.search(r"\b(?:once|when|after|upon|following|before)\b", sentence, re.I)
+                and re.search(r"\b(?:will|would|may|might|could)\b", body[start:match.end()], re.I)):
+            continue
+        if re.search(r"\b(?:not (?:yet )?(?:(?:been|be) )?(?:due|scheduled|confirmed|rescheduled|invited|selected|shortlisted)"
+                     r"|(?:isn['’]t|wasn['’]t|hasn['’]t been) (?:yet )?(?:due|scheduled|confirmed|rescheduled)"
+                     r"|no (?:new )?(?:assessment|interview|invitation)|do not (?:complete|take|schedule|book))\b", sentence, re.I):
+            continue
+        if re.search(r"\b(?:practice|webinar|demo|sample|course|workshop|masterclass|mock interview)\b", sentence, re.I):
+            continue
+        if (re.search(r"\bcancell?(?:ed|ation)\b", sentence, re.I)
+                and not re.search(r"\b(?:please|book|select|choose|reschedule|invite you|invited to)\b", match.group(), re.I)):
+            continue
+        yield match, sentence
 
 
 def read_intent(evidence: EmailEvidence) -> Reading:
@@ -492,8 +540,7 @@ def read_intent(evidence: EmailEvidence) -> Reading:
         r"|congratulations on your (?:new )?(?:job |employment )?offer with)\b", re.I), body))
     # A completed test can be followed by a new interview request. That new
     # requested action is the primary intent, rather than the earlier completion.
-    interview_request = list(_asserted(re.compile(
-        r"\b(?:invite you to|invited to|please schedule|please reschedule) (?:a |an |your |the )?(?:technical |phone |video |recruiter )?(?:interview|screen)\b", re.I), body))
+    interview_request = list(_action_asserted(_action_pattern(_INTERVIEW_NOUN), body))
     if interview_request and not negative and re.search(_ASSESSMENT_NOUN, body, re.I) and re.search(r"\b(?:completed|submitted|finished)\b", body, re.I):
         return _reading("interview", req, interview_request[0][1], "invitation")
     still_review = re.search(r"\byour application (?:is|remains) (?:still )?under (?:review|consideration)\b", body, re.I)
@@ -529,16 +576,12 @@ def read_intent(evidence: EmailEvidence) -> Reading:
                     span[1], re.I)]
             if spans and not re.search(r"\b(?:not|not yet|once|when|after you have)\b[^.!?\n]{0,50}(?:" + words + r")\b", spans[0][1], re.I):
                 return _reading(kind + "_" + state, req, spans[0][1], state)
-        action = re.compile(
-            r"\b(?:invite you to|invited to|invitation to|please (?:complete|take|schedule|book)|complete (?:the|an|your)|take (?:the|an|your)|schedule (?:an?|your|a time for an?)|availability for|selected for|reminder[^.!?\n]{0,35}(?:complete|take)|reschedule (?:your|the))\s+(?:a |an |the |your )?(?:" + noun + r")\b"
-            r"|\b(?:" + noun + r")[^.!?\n]{0,60}\b(?:invitation|invite|scheduled|confirmed|rescheduled|deadline|due by|due on|due in|reminder|please complete)\b"
-            r"|\b(?:you['’]re|you are|you['’]ve (?:just )?been|you have (?:just )?been) (?:just )?invited (?:by [^.!?\n]{1,80} )?to (?:take|complete) (?:our |your |the |a |an )?(?:[\w-]+ ){0,5}(?:" + noun + r")\b", re.I)
-        spans = list(_asserted(action, body))
+        spans = list(_action_asserted(_action_pattern(noun), body))
         if spans:
             sentence = spans[0][1]
             if re.search(r"\b(?:practice|webinar|demo|sample|course)\b", sentence, re.I):
                 continue
-            variant = "rescheduled" if re.search(r"reschedul", sentence, re.I) else "reminder" if re.search(r"reminder|deadline|due (?:by|on|in)", sentence, re.I) else "scheduled" if re.search(r"scheduled|confirmed", sentence, re.I) else "invitation"
+            variant = "rescheduled" if re.search(r"reschedul", sentence, re.I) else "reminder" if re.search(r"reminder|deadline|\bdue (?!to\b)|\bexpir", sentence, re.I) else "scheduled" if re.search(r"scheduled|confirmed", sentence, re.I) else "invitation"
             return _reading("online_assessment" if kind == "assessment" else "interview", req, sentence, variant)
 
     # Hiring platforms sometimes name a test without the word assessment.
@@ -842,10 +885,115 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
     return _Match(None, "The email may be about a different role there", keys, labelled)
 
 
+def _rejection_company(evidence: EmailEvidence, applications: list[ApplicationIdentity]) -> tuple[str, tuple[str, ...]] | None:
+    """Identify an employer for evidence, without identifying an application.
+
+    A primary application-specific employer claim can establish company scope
+    without establishing authority to update any individual application. Shared
+    hosts, generic brand mentions and parent names never become alias guesses.
+    """
+    if not evidence.complete or not _sender_trusted(evidence):
+        return None
+    by_company: dict[str, list[ApplicationIdentity]] = {}
+    for app in applications:
+        if name := _company_words(app.company):
+            by_company.setdefault(name, []).append(app)
+    if not by_company:
+        return None
+
+    def named_companies(text):
+        text = _words(text)
+        spans = {name: [(m.start(), m.end()) for m in re.finditer(r"(?<!\w)" + re.escape(name) + r"(?!\w)", text)]
+                 for name in by_company}
+        # A full subsidiary name does not also name its parent. A separately
+        # mentioned parent remains a competing name.
+        return {name for name, hits in spans.items() if hits and not all(
+            any(start >= outer_start and end <= outer_end and (start, end) != (outer_start, outer_end)
+                for other, outer in spans.items() if other != name for outer_start, outer_end in outer)
+            for start, end in hits)}
+
+    def explicit_employers(text):
+        names = named_companies(text)
+        patterns = {}
+        claims = {}
+        uncertain = False
+        def asserted_claims(pattern):
+            for match, _ in _asserted(re.compile(pattern, re.I), text):
+                start = max(text.rfind(c, 0, match.start()) for c in ".!?\n") + 1
+                prefix = text[start:match.start()]
+                if (prefix.count('"') % 2 or prefix.count('“') > prefix.count('”')
+                        or len(re.findall(r"(?<!\w)'", prefix)) > len(re.findall(r"'(?!\w)", prefix))
+                        or prefix.count('‘') > prefix.count('’')
+                        or re.search(r"\b(?:example|sample|template|quoted|suppose)\b", prefix, re.I)):
+                    continue
+                yield match
+        for name in names:
+            employer = r"[\W_]+".join(re.escape(word) for word in name.split())
+            # Full normalized canonical name, optional legal suffix, then a
+            # boundary. An untracked subsidiary suffix cannot match its parent.
+            employer += r"(?:\s*,?\s+(?:inc(?:orporated)?|llc|ltd|limited|corp(?:oration)?|plc|gmbh|llp|lp)\.?)?"
+            employer += r"(?=\s*(?:[.,!?;:\n]|$)|\s+(?:and|or|for|regarding|where|we|you|your|is|has|have|remains|was|with)\b)"
+            patterns[name] = employer
+            context = (r"\b(?:your\s+(?:application|candidacy|interest)|(?:thank\s+you|thanks)\s+for\s+applying"
+                       r"|you\s+(?:applied|are\s+applying)|(?:the|this|your)\s+[^.!?;\n]{0,100}?(?:position|role|opening))\b"
+                       r"[^.!?;\n]{0,140}?\b(?:at|to|with)\s+(?:the\s+)?")
+            pattern = context + "(" + employer + ")"
+            if match := next(asserted_claims(pattern), None):
+                claims[name] = match.span(1)
+            elif next(asserted_claims(context + r"[\W_]+".join(re.escape(word) for word in name.split()) + r"\b"), None):
+                # The body names an untracked longer employer, not permission
+                # to silently substitute its tracked parent or shorter brand.
+                uncertain = True
+        # "Your application at A and B" declares two employers, even though
+        # only the first name immediately follows the application preposition.
+        for name in names - claims.keys():
+            for match in re.finditer(patterns[name], text, re.I):
+                if any(end <= match.start() and re.fullmatch(r"\s*(?:and|or|/|&)\s*", text[end:match.start()], re.I)
+                       for _, end in claims.values()):
+                    claims[name] = match.span()
+                    break
+        return set(claims), uncertain
+
+    subject = "" if _forwarded(evidence.subject) else evidence.subject
+    primary = primary_link_text(_new_text(evidence.body))
+    primary_claims, primary_uncertain = explicit_employers(primary)
+    subject_claims, subject_uncertain = explicit_employers(subject)
+    if primary_uncertain or (subject_uncertain and not primary_claims):
+        return None
+    declared = primary_claims | subject_claims
+    if declared:
+        if len(declared) != 1:
+            return None
+        name = next(iter(declared))
+    else:
+        origins = {name for name, apps in by_company.items() if any(_origin_supports_identity(evidence, app) for app in apps)}
+        if len(origins) != 1:
+            return None
+        name = next(iter(origins))
+        display, _ = _sender_parts(evidence.sender)
+        metadata = named_companies(display + " " + subject)
+        # Workday's display names its delivery system, not a second employer.
+        domain = parseaddr(evidence.sender)[1].rpartition("@")[2].casefold()
+        if domain == "myworkday.com" or domain.endswith(".myworkday.com"):
+            metadata.discard("workday")
+        if (metadata | named_companies(primary)) - {name}:
+            return None
+    apps = by_company[name]
+    return apps[0].company, tuple(sorted(app.key for app in apps))
+
+
 def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], account: str | None = None, *, thread_keys: tuple[str, ...] = ()) -> Decision:
     found = None
+    def company_fallback(decision):
+        if decision.classification == "rejection" and decision.disposition == "review":
+            company = _rejection_company(evidence, applications)
+            if company:
+                name, keys = company
+                return Decision("rejection", decision.requisition_id, keys, None, "company_rejection", COMPANY_REASON,
+                                True, matched_target=None, company=name)
+        return decision
     def decided(*args):
-        return Decision(*args, matched_target=found.target if found and evidence.complete else None)
+        return company_fallback(Decision(*args, matched_target=found.target if found and evidence.complete else None))
     if account and parseaddr(evidence.sender)[1].casefold() == account.casefold():
         return decided("unknown", None, (), None, "ignored", "Sent by the connected account", False)
     reading = read_intent(evidence)
@@ -886,16 +1034,6 @@ def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], 
     if classification == "possible_rejection":
         return decided(classification, found.requisition, found.ranked, None, "review",
                         "It may be a rejection, but the wording is not clear enough to record on its own", False)
-    if classification == "rejection" and found.basis == NO_PRIOR_APPLICATION and _sender_trusted(evidence):
-        # A definite historical outcome has no eligible application to mutate.
-        # Retain it explicitly, rather than manufacturing an application/date or
-        # turning semantic recognition into a task to reject a newer role.
-        origins = [app for app in applications if _origin_supports_identity(evidence, app)]
-        companies = {_company_words(app.company) for app in origins}
-        if len(companies) == 1 and origins and all(
-                app.submitted_at is not None and _aware(app.submitted_at) - _MARKING_GRACE > _aware(evidence.received_at)
-                for app in applications if _company_words(app.company) in companies):
-            return decided(classification, found.requisition, (), None, "unlinked", UNLINKED_REASON, True)
     if found.target is None:
         return decided(classification, found.requisition, found.ranked, None, "review", found.basis, False)
     app = next(a for a in applications if a.key == found.target)
@@ -904,8 +1042,8 @@ def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], 
         if not _sender_trusted(evidence):
             return decided(classification, found.requisition, candidates, None, "review", "Sender could not be authenticated", False)
         if not _origin_supports_identity(evidence, app):
-            return Decision(classification, found.requisition, candidates, None, "review",
-                            "The authenticated sender does not establish this employer identity", False)
+            return company_fallback(Decision(classification, found.requisition, candidates, None, "review",
+                            "The authenticated sender does not establish this employer identity", False))
     elif not (evidence.sender_authenticated and found.basis == "its job ID" and _sender_matches(evidence.sender, app)):
         return decided(classification, found.requisition, candidates, None, "review",
                         "Matched by " + found.basis + "; positive outcomes need your confirmation", False)

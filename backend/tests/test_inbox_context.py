@@ -8,6 +8,7 @@ import pytest
 from backend.app.api.routers import inbox
 from backend.app.inbox.postings import contextual_links, posting_identity
 from backend.app.inbox.reconcile import reconcile
+from backend.app.inbox.company_outcomes import COMPANY_REASON, KIND, event_company
 from backend.tests.test_inbox_backlog import APP, evidence
 from backend.tests.test_inbox_persistence import message
 from backend.tests.test_inbox_persistence import database, row_for
@@ -141,7 +142,8 @@ def test_explicit_future_identity_is_a_conflict_not_permission_to_choose_another
     future = replace(APP, key='job:2', requisition_id='SE-123456', submitted_at=evidence('').received_at+timedelta(days=20))
     ev = evidence('Job ID: SE-123456. Your application was rejected.')
     result = reconcile(ev, [APP, future])
-    assert result.target is None and result.reason == 'Email predates application'
+    assert result.target is result.matched_target is None
+    assert result.disposition == KIND and result.company == APP.company and result.reason == COMPANY_REASON
 
 
 def test_future_specific_title_is_not_reinterpreted_as_a_past_generic_role():
@@ -149,8 +151,8 @@ def test_future_specific_title_is_not_reinterpreted_as_a_past_generic_role():
     future=replace(past,key='job:2',title='Software Engineer Storage',submitted_at=evidence('').received_at+timedelta(days=20))
     ev=evidence('Your application was rejected for the Software Engineer Storage role.')
     result=reconcile(ev,[past,future])
-    assert result.target is result.matched_target is None and result.disposition=='review'
-    assert result.reason=='Email predates application'
+    assert result.target is result.matched_target is None and result.disposition==KIND
+    assert result.company==APP.company and result.reason==COMPANY_REASON
 
 
 def test_marking_grace_and_unknown_date_remain_eligible():
@@ -189,17 +191,18 @@ def test_machine_matching_reason_is_not_attributed_to_owner():
     assert inbox.understanding(row)['decision_type'] == 'Automatic classification'
 
 
-def test_authenticated_rejection_without_a_historical_application_is_recognized_unlinked():
+def test_authenticated_rejection_without_a_historical_application_is_company_evidence():
     ev = evidence('Your application was rejected for the Software Engineer role.')
     future = replace(APP, submitted_at=ev.received_at+timedelta(days=20))
     result = reconcile(ev, [future])
-    assert result.classification == 'rejection' and result.disposition == 'unlinked'
-    assert result.target is result.matched_target is None and not result.candidates
-    # Missing chronology, failed authentication and identity disagreement remain
-    # unresolved. This is not an age threshold or a blanket "archive old mail".
+    assert result.classification == 'rejection' and result.disposition == KIND
+    assert result.target is result.matched_target is None and result.candidates == (future.key,)
+    assert result.company == APP.company
+    # Company evidence requires actual meaning and employer identity. Missing
+    # chronology does not prevent a separately safe exact application match.
     assert reconcile(replace(ev,sender_authenticated=False), [future]).disposition == 'review'
     assert reconcile(replace(ev,sender='Other Subsidiary <notice@greenhouse-mail.io>'), [future]).disposition == 'review'
-    assert reconcile(ev, [replace(future,submitted_at=None)]).disposition != 'unlinked'
+    assert reconcile(ev, [replace(future,submitted_at=None)]).disposition == 'verified'
     assert reconcile(replace(ev,complete=False), [future]).disposition == 'review'
 
 
@@ -209,20 +212,23 @@ def test_historical_assessment_invitation_and_ambiguous_wording_are_not_silently
         assert reconcile(evidence(body), [future]).disposition != 'unlinked'
 
 
-def test_unlinked_ingestion_uses_a_rollback_compatible_persisted_decision(database):
+def test_historical_company_ingestion_uses_a_rollback_compatible_persisted_decision(database):
     from backend.app.inbox.queue import projected_decision
     from backend.app.inbox.historical_cleanup import projection
     from backend.tests.test_inbox_persistence import NOW, statuses, job_events
     session,conn=database
     data=message('old-unlinked','Your application was rejected.',NOW-timedelta(days=100))
-    assert inbox._ingest(session,conn,data,inbox._identities(session),preview=True)=='unlinked'
+    assert inbox._ingest(session,conn,data,inbox._identities(session),preview=True)==KIND
     session.flush()
     row=row_for(session,'old-unlinked')
-    assert row.decision=='update' and projected_decision(row)=='unlinked'
-    assert inbox._message_rows(session,conn.id,'unlinked_outcome')==[row]
+    assert row.decision=='update' and projected_decision(row)==KIND
+    assert row.decision_reason==COMPANY_REASON
+    assert inbox._message_rows(session,conn.id,KIND)==[row]
     assert inbox._message_rows(session,conn.id,'pending')==[]
     assert projection(session,conn,row,data)['patch']['decision']=='update'
     assert row.selected_application_key is None and statuses(session)==['applied']*3 and not job_events(session)
+    from backend.tests.test_inbox_persistence import company_events
+    assert [event_company(event) for event in company_events(session)]==['Silverpine Labs']
 
 
 def test_unlinked_evidence_sql_python_and_analytics_agree_without_outcome_inflation():

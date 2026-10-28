@@ -12,8 +12,9 @@ from backend.app.db.models import GmailMessageRecord
 from backend.app.inbox import gmail
 from backend.app.inbox.queue import decision_expression, projected_decision
 from backend.app.inbox.reconcile import EmailEvidence, reconcile, UNCLEAR_REASON, PARTIAL_REASON, PARSER_VERSION
+from backend.app.inbox.company_outcomes import KIND, event_company
 from backend.tests.test_inbox_persistence import (database, gmail_reads, message, stored, row_for,
-    statuses, job_events, owner_request, verified_scope, NOW)
+    statuses, job_events, company_events, owner_request, verified_scope, NOW)
 
 
 def finish(session, conn):
@@ -175,8 +176,13 @@ def test_thread_hint_never_overrides_conflicts_or_positive_and_date_guards(datab
     if variant=="positive":body="We invite you to interview."
     data=message("guarded-thread",body,NOW-timedelta(days=2500) if variant=="historical" else NOW)
     if variant=="different_sender":data["payload"]["headers"][1]["value"]="other@careers.silverpine.example"
-    assert inbox._ingest(session,conn,data,inbox._identities(session),preview=True)==("unlinked" if variant=="historical" else "review")
+    assert inbox._ingest(session,conn,data,inbox._identities(session),preview=True)==("review" if variant=="positive" else KIND)
     assert statuses(session)==["applied"]*3 and not job_events(session)
+    if variant!='positive':
+        assert row_for(session,'guarded-thread').selected_application_key is None
+        assert [event_company(event) for event in company_events(session)]==['Silverpine Labs']
+    else:
+        assert not company_events(session)
 
 
 @pytest.mark.parametrize("exact",[True,False])
@@ -221,5 +227,7 @@ def test_receipt_from_before_the_recorded_application_cannot_supply_thread_ident
     receipt=message("old-thread-anchor","Req ID: SE-101. Thank you for applying.",NOW-timedelta(days=2500))
     assert inbox._ingest(session,conn,receipt,inbox._identities(session),preview=True)=="receipt"
     outcome=message("new-thread-rejection","We have decided to move forward with other candidates.")
-    assert inbox._ingest(session,conn,outcome,inbox._identities(session),preview=True)=="review"
+    assert inbox._ingest(session,conn,outcome,inbox._identities(session),preview=True)==KIND
     assert statuses(session)==["applied"]*3 and not job_events(session)
+    assert row_for(session,'new-thread-rejection').selected_application_key is None
+    assert [event_company(event) for event in company_events(session)]==['Silverpine Labs']

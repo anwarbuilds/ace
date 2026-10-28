@@ -23,12 +23,12 @@ from backend.app.config import get_settings
 from backend.app.db.models import GmailConnectionRecord as Connection, GmailMessageRecord as Mail, ApplicationEventRecord as Event
 from backend.app.inbox import reconcile as reader
 from backend.app.inbox import historical_cleanup as cleanup
-from backend.app.inbox import postings, queue
+from backend.app.inbox import postings, queue, company_outcomes
 from backend.scripts.inbox_classification_audit import private_write
 
 
 def source_hash():
-    files = {name: module.__file__ for name, module in [('reader', reader), ('inbox', inbox), ('cleanup', cleanup), ('postings', postings), ('queue', queue)]}
+    files = {name: module.__file__ for name, module in [('reader', reader), ('inbox', inbox), ('cleanup', cleanup), ('postings', postings), ('queue', queue), ('company_outcomes', company_outcomes)]}
     files['operator'] = __file__
     return cleanup.digest({name: hashlib.sha256(Path(path).read_bytes()).hexdigest() for name, path in files.items()})
 

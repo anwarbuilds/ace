@@ -19,6 +19,8 @@ export interface AnalyticsData {
   companies: AnalyticsCompany[]; selected_company: string;
   rejected_companies: RejectedCompany[];
   rejection_summary: { applications: number; companies: number; dated: number; latest_at: string | null };
+  company_rejections?: {company:string;messages:number;latest_at:string;message_ids:number[]}[];
+  company_rejection_summary?: {companies:number;messages:number;latest_at:string|null;date_basis:"email_received";start:string|null;end:string;family_excluded_messages:number};
   verified_companies: (AnalyticsGroup & { name: string; reports: number })[];
   reports: PetitionReport[]; annual: { period: string; approvals: number; denials: number; rate: number | null }[];
 }

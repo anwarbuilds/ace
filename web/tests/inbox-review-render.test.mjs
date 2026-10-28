@@ -140,6 +140,24 @@ test("a recorded email offers Undo instead of outcome buttons", () => {
   assert.match(undone, /Undo it from Audit trail/);
 });
 
+test("company rejection evidence uses its scoped event and needs no application choice",()=>{
+  const recorded={...message,classification:"rejection",decision:"company_rejection",selected_application_key:null,
+    candidate_keys:["job:1","job:2"],reason:"Company rejection recorded; the email does not need a role-level application match",
+    understanding:{decision_type:"Automatic classification",classification_reason:"The employer communicates a rejection.",classification_state:"recognized",matching_state:"company",workflow_state:"company_recorded",update_policy:"company_recorded",review_reason:null,evidence_source:"retained_excerpt",evidence_excerpt:"We will not move forward."}};
+  const event={id:77,application_key:"email:1",gmail_message_id:1,kind:"company_rejection",before:null,after:null,actor:"verified_automation",reason:"Rejection received from Fictional Labs; no individual application changed",recorded_at:"2026-01-02T00:00:00Z",undo_of_id:null,scope:"company",company:"Fictional Labs"};
+  const html=render(recorded,applications,[event]);
+  assert.match(html,/Company rejection recorded/);
+  assert.match(html,/ACE recorded the company rejection/);
+  assert.match(html,/Fictional Labs: rejection received\. No role choice is needed/);
+  assert.match(html,/Application linkage: company\. A company rejection was recorded\. No role choice is needed/);
+  assert.match(html,/Undo this change/);
+  assert.doesNotMatch(html,/Which application\?|Search your applications|Changes the application|Why it waits:|Needs you/);
+  assert.ok(!choice(html,"Rejection"));
+  assert.ok(!choice(html,"Decide later"));
+  const undone=render(recorded,applications,[event,{...event,id:78,kind:"undo",actor:"owner",undo_of_id:77}]);
+  assert.doesNotMatch(undone,/Undo this change/);
+});
+
 test("drawn rules and dashes in the email excerpt are not shown", () => {
   const html = render({ ...message, snippet: "Hello\n-----\nTeam \u2014 Fictional Labs" });
   assert.doesNotMatch(html, /-----|\u2014/);

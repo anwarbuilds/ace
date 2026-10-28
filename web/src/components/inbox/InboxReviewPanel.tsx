@@ -10,7 +10,7 @@ import type { ApplicationStatus } from "@/lib/types";
 export interface Understanding {decision_type?:string; classification_reason:string; classification_state:string; matching_state:string; workflow_state:string; update_policy:string; review_reason:string|null; evidence_source:string; evidence_excerpt:string}
 export interface InboxMessage {understanding?:Understanding; id:number; received_at:string; sender:string; subject:string; snippet:string; classification:string; requisition_id:string|null; decision:string; candidate_keys:string[]; reason:string; selected_application_key:string|null}
 export interface InboxApplication {key:string; company:string; title:string; requisition_id:string|null; applied_at:string|null; status:string}
-export interface InboxEvent {id:number; application_key:string; kind:string; before:string|null; after:string|null; actor:string; reason:string; recorded_at:string; undo_of_id:number|null; gmail_message_id:number|null}
+export interface InboxEvent {company?:string|null; scope?:string; id:number; application_key:string; kind:string; before:string|null; after:string|null; actor:string; reason:string; recorded_at:string; undo_of_id:number|null; gmail_message_id:number|null}
 /** The email as Gmail has it now, read live and never stored. */
 export interface FullEmail {current_reading?:{classification:string; reason:string; variant:string; excerpt:string; complete:boolean}; sender:string; to:string; subject:string; received_at:string; text:string; document:string; format:string; blocked_images:number; message_id_header:string|null; thread_id:string|null}
 type Action = (run:()=>Promise<unknown>, success:string)=>Promise<void>;
@@ -150,7 +150,7 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
   const [plain,setPlain]=useState(false);
   const [messageEvents,setMessageEvents]=useState<InboxEvent[]>([]);
   useEffect(()=>{
-    if(id==null||!["automatic","manual"].includes(decision??""))return;
+    if(id==null||!["automatic","manual","company_rejection"].includes(decision??""))return;
     let live=true;
     getJson<{items:InboxEvent[]}>("/api/inbox/events",new URLSearchParams({message_id:String(id)}))
       .then(result=>{if(live)setMessageEvents(result.items);}).catch(()=>{});
@@ -172,7 +172,8 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
   if(!message)return <section className="panel inbox-inspector"><h2>Nothing selected</h2><p>Choose an email on the left to see it exactly as it arrived.</p></section>;
 
   const pending=PENDING.includes(message.decision);
-  const applied=message.decision==="automatic"||message.decision==="manual";
+  const companyRecorded=message.decision==="company_rejection";
+  const applied=message.decision==="automatic"||message.decision==="manual"||companyRecorded;
   const target=byKey.get(targetKey);
   const candidates=message.candidate_keys.map(key=>byKey.get(key)).filter((a):a is InboxApplication=>Boolean(a));
   const query=search.trim().toLocaleLowerCase();
@@ -181,7 +182,7 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
   const options=query?applications.filter(a=>`${a.company} ${a.title} ${a.requisition_id??""} ${squash(a.company)} ${initials(a.company)}`.toLocaleLowerCase().includes(query)).slice(0,30):candidates.length?candidates:guesses;
   const linked=message.selected_application_key?byKey.get(message.selected_application_key):undefined;
   const history=[...new Map([...events,...messageEvents].map(event=>[event.id,event])).values()];
-  const change=history.find(e=>e.gmail_message_id===message.id&&e.kind!=="undo"&&e.application_key===message.selected_application_key&&["owner","verified_automation"].includes(e.actor)&&!history.some(other=>other.undo_of_id===e.id));
+  const change=history.find(e=>e.gmail_message_id===message.id&&e.kind!=="undo"&&(e.application_key===message.selected_application_key||(companyRecorded&&e.kind==="company_rejection"&&e.scope==="company"))&&["owner","verified_automation"].includes(e.actor)&&!history.some(other=>other.undo_of_id===e.id));
   const ready=draft?Boolean(draft.company.trim()&&draft.title.trim()):Boolean(target);
   const chosenCompany=draft?.company.trim()||target?.company||"";
   const mismatch=Boolean(chosenCompany)&&!companyNamed(message,chosenCompany,full?.text??"");
@@ -222,7 +223,7 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
       {message.understanding&&<>
         <p>{clean(message.understanding.classification_reason)}</p>
         {message.understanding.decision_type&&<p>{clean(message.understanding.decision_type)}</p>}
-        <p>Application linkage: {clean(message.understanding.matching_state)}. {message.understanding.update_policy==="recorded"?"The outcome was recorded with an audit event.":message.understanding.update_policy==="no_status_change"?"No application status changed.":"No status change is authorized until the specific review is resolved."}</p>
+        <p>Application linkage: {clean(message.understanding.matching_state)}. {message.understanding.update_policy==="company_recorded"?"A company rejection was recorded. No role choice is needed.":message.understanding.update_policy==="recorded"?"The outcome was recorded with an audit event.":message.understanding.update_policy==="no_status_change"?"No application status changed.":"No status change is authorized until the specific review is resolved."}</p>
         {pending&&message.understanding.review_reason&&<p>Decision needed: {clean(message.understanding.review_reason)}</p>}
       </>}
       {full?.current_reading&&<>
@@ -233,8 +234,8 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
       </>}
     </div>
     {applied ? <div className="inbox-decided">
-      <h3>{message.decision==="automatic"?"ACE recorded this email.":"You recorded this email."}</h3>
-      <p className="inbox-muted">{clean(message.reason)}.</p>
+      <h3>{companyRecorded?"ACE recorded the company rejection.":message.decision==="automatic"?"ACE recorded this email.":"You recorded this email."}</h3>
+      <p className="inbox-muted">{companyRecorded?`${clean(change?.company??candidates[0]?.company??"The employer")}: rejection received. No role choice is needed.`:clean(message.reason)+"."}</p>
       {linked&&<AppCard app={linked}/>}
       {change?<button className="btn" disabled={busy} onClick={()=>void action(()=>sendJson("POST",`/api/inbox/events/${change.id}/undo`,{}),"Undone. The email is back in your queue.")}>Undo this change</button>:<p className="inbox-muted">Undo it from Audit trail.</p>}
     </div> : <div className="inbox-decide">

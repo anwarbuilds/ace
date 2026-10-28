@@ -18,6 +18,8 @@ from backend.app.config import get_settings
 from backend.app.db.base import Base
 from backend.app.db.models import ApplicationEventRecord, GmailConnectionRecord, GmailMessageRecord, JobMarkRecord, JobRecord, UserRecord
 from backend.app.inbox.reconcile import PARSER_VERSION
+from backend.app.inbox.company_outcomes import KIND, COMPANY_REASON, event_company
+from backend.app.inbox.queue import projected_decision
 
 
 NOW = datetime.now(timezone.utc)
@@ -34,6 +36,10 @@ def message(message_id: str, body: str, received_at: datetime = NOW) -> dict:
 
 def job_events(session: Session) -> list[ApplicationEventRecord]:
     return list(session.scalars(select(ApplicationEventRecord).where(ApplicationEventRecord.application_key.like("job:%")).order_by(ApplicationEventRecord.id)))
+
+
+def company_events(session: Session) -> list[ApplicationEventRecord]:
+    return list(session.scalars(select(ApplicationEventRecord).where(ApplicationEventRecord.kind == KIND).order_by(ApplicationEventRecord.id)))
 
 
 def statuses(session: Session) -> list[str]:
@@ -90,8 +96,11 @@ def test_clear_rejection_is_recorded_even_from_a_historical_import(database):
     session, conn = database
     identities = _identities(session)
     ambiguous = message("ambiguous", "We have decided to move forward with other candidates.")
-    assert _ingest(session, conn, ambiguous, identities, preview=True) == "review"
+    assert _ingest(session, conn, ambiguous, identities, preview=True) == KIND
     assert job_events(session) == []
+    assert statuses(session) == ["applied"]*3
+    assert row_for(session, "ambiguous").selected_application_key is None
+    assert [event_company(event) for event in company_events(session)] == ["Silverpine Labs"]
 
     exact = message("exact", "Req ID: SE-101. We have decided to move forward with other candidates.")
     assert _ingest(session, conn, exact, identities, preview=True) == "automatic"
@@ -116,7 +125,9 @@ def test_positive_outcomes_keep_the_stricter_path(database):
     assert statuses(session) == ["screening", "applied", "interviewing"]
     # A rejection older than the interview cannot undo the newer stage.
     older = message("old-rejection", "Req ID: SE-102. We have decided to move forward with other candidates.", NOW - timedelta(days=1))
-    assert _ingest(session, conn, older, _identities(session), preview=False) == "review"
+    assert _ingest(session, conn, older, _identities(session), preview=False) == KIND
+    assert row_for(session, "old-rejection").selected_application_key is None
+    assert [event_company(event) for event in company_events(session)] == ["Silverpine Labs"]
     assert statuses(session) == ["screening", "applied", "interviewing"]
     assert {e.kind for e in job_events(session)} == {"online_assessment", "interview"}
     assert mark_counts(session)["applications_total"] == 3
@@ -390,7 +401,9 @@ def test_all_ignored_history_is_reread_but_owner_filings_stay(database, gmail_re
     assert ignored.decision == "automatic" and ignored.parser_version == PARSER_VERSION
     assert statuses(session) == ["applied", "rejected", "applied"]
     assert [row.parser_version for row in [old, unrelated, owner, manual]] == [PARSER_VERSION,PARSER_VERSION,"5","5"]
-    assert old.decision=="review"  # Its outcome predates the application; no unsafe status update.
+    assert old.decision=="update" and projected_decision(old)==KIND
+    assert old.decision_reason==COMPANY_REASON and old.selected_application_key is None
+    assert [event_company(event) for event in company_events(session)]==["Silverpine Labs"]
     event = job_events(session)[0]
     inbox.undo(event.id, owner_request(), session)
     assert ignored.decision == "review" and statuses(session) == ["applied"]*3

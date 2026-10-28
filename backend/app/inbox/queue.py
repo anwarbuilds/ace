@@ -6,6 +6,7 @@ No age cutoff: historical evidence is as important as recent evidence.
 from sqlalchemy import and_, case, func
 from backend.app.db.models import GmailMessageRecord as Mail
 from backend.app.inbox.reconcile import UNCLEAR_REASON, UNLINKED_REASON
+from backend.app.inbox.company_outcomes import COMPANY_REASON
 
 PENDING = ("review", "exact_preview", "deferred")
 OWNER_UNDO = "You undid ACE's change for this email"
@@ -20,11 +21,15 @@ def passive_clause():
 
 def decision_expression():
     return case((and_(Mail.decision == "update", Mail.classification == "rejection",
+                      Mail.decision_reason == COMPANY_REASON), "company_rejection"),
+                (and_(Mail.decision == "update", Mail.classification == "rejection",
                       Mail.decision_reason == UNLINKED_REASON), "unlinked"),
                 (passive_clause(), "update"), else_=Mail.decision)
 
 
 def projected_decision(row):
+    if row.decision == "update" and row.classification == "rejection" and row.decision_reason == COMPANY_REASON:
+        return "company_rejection"
     if row.decision == "update" and row.classification == "rejection" and row.decision_reason == UNLINKED_REASON:
         return "unlinked"
     if (row.decision in ("review", "exact_preview") and row.classification == "unclear"
@@ -34,7 +39,7 @@ def projected_decision(row):
 
 
 def projected_reason(row):
-    return SAVED_REASON if projected_decision(row) != row.decision else row.decision_reason
+    return SAVED_REASON if row.decision in ("review", "exact_preview") and projected_decision(row) == "update" else row.decision_reason
 
 
 # Identity work is a distinct owner task from interpreting wording, approving a
@@ -60,6 +65,7 @@ LINK_REASONS = (
 def workflow_expression():
     projected = decision_expression()
     return case(
+        (projected == "company_rejection", "company_recorded"),
         (projected.in_(("automatic", "manual")), "recorded"),
         (projected == "deferred", "deferred"),
         (projected.in_(("ignored", "unrelated")), "routine"),
@@ -72,6 +78,8 @@ def workflow_expression():
 
 def workflow_state(row):
     decision = projected_decision(row)
+    if decision == "company_rejection":
+        return "company_recorded"
     if decision in ("automatic", "manual"):
         return "recorded"
     if decision == "deferred":

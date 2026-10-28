@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from backend.app.inbox.reconcile import ApplicationIdentity, EmailEvidence, reconcile
 from backend.app.inbox import gmail
 from backend.app.api.routers.inbox import _message_evidence
+from backend.app.inbox.company_outcomes import KIND, COMPANY_REASON
 
 
 NOW = datetime(2026, 10, 22, tzinfo=timezone.utc)
@@ -23,8 +24,8 @@ def mail(body: str, sender: str = "talent@careers.silverpine.example") -> EmailE
 def test_ambiguous_rejection_protects_every_pending_application():
     apps = [app("job:1", "SE-101"), app("job:2", "SE-102"), app("job:3", "SE-103")]
     result = reconcile(mail("We have decided to move forward with other candidates."), apps)
-    assert result.disposition == "review"
-    assert result.target is None
+    assert result.disposition == KIND and result.company == "Silverpine Labs"
+    assert result.target is result.matched_target is None
     assert result.candidates == ("job:1", "job:2", "job:3")
     assert all(a.current_status == "applied" for a in apps)
 
@@ -154,11 +155,12 @@ def test_only_application_at_the_named_company_is_matched():
     assert result.reason == "Clear rejection matched by your only application there"
 
 
-def test_a_different_role_at_the_same_company_waits_with_the_likely_application_first():
+def test_a_different_role_records_company_evidence_without_selecting_the_likely_application():
     result = reconcile(ats_mail("Northwind Robotics application update",
                                 "Thank you for applying for the Data Analyst position. We regret to inform you that it has been filled."),
                        [northwind()])
-    assert result.disposition == "review" and result.target is None
+    assert result.disposition == KIND and result.target is result.matched_target is None
+    assert result.company == "Northwind Robotics, Inc."
     assert result.candidates == ("job:7",)
 
 
@@ -167,7 +169,8 @@ def test_exact_title_picks_one_of_several_applications():
     result = reconcile(ats_mail("Northwind Robotics", "About your Machine Learning Engineer application: you have not been selected."), apps)
     assert (result.disposition, result.target) == ("verified", "job:8")
     generic = reconcile(ats_mail("Northwind Robotics", "We regret to inform you that we will not be moving forward with your application."), apps)
-    assert generic.disposition == "review" and set(generic.candidates) == {"job:7", "job:8"}
+    assert generic.disposition == KIND and set(generic.candidates) == {"job:7", "job:8"}
+    assert generic.company == "Northwind Robotics, Inc." and generic.target is generic.matched_target is None
 
 
 def test_rejection_rules_keep_their_protections():
@@ -176,8 +179,11 @@ def test_rejection_rules_keep_their_protections():
     assert personal.disposition == "review" and personal.reason == "Sender could not be authenticated"
     unauthenticated = reconcile(ats_mail("Northwind Robotics", body, authenticated=False), [northwind()])
     assert unauthenticated.target is None
-    accepted = reconcile(ats_mail("Northwind Robotics", body), [northwind(status="accepted")])
-    assert accepted.reason == "Existing final status is protected"
+    accepted_app = northwind(status="accepted")
+    accepted = reconcile(ats_mail("Northwind Robotics", body), [accepted_app])
+    assert accepted.reason == COMPANY_REASON and accepted.company == accepted_app.company
+    assert accepted.disposition == KIND and accepted.target is accepted.matched_target is None
+    assert accepted_app.current_status == 'accepted'
 
 
 def test_marking_applied_after_a_quick_rejection_still_matches():
@@ -238,9 +244,12 @@ def test_rejection_that_opens_with_thanks_from_a_shared_platform_is_recorded():
     result = reconcile(evidence, wayfern)
     assert (result.classification, result.disposition, result.target) == ("rejection", "verified", "job:1")
     assert result.reason == "Clear rejection matched by its exact title"
-    # The same role applied to twice waits, with both candidates offered first.
+    # The same role applied to twice produces company evidence, without an
+    # application choice or an instruction to change both applications.
     twice = reconcile(evidence, wayfern + [ApplicationIdentity("job:4", "wayfern", "Full-Stack Software Engineer", None, NOW - timedelta(days=2), "applied")])
-    assert twice.disposition == "review" and set(twice.candidates[:2]) == {"job:1", "job:4"}
+    assert twice.disposition == KIND and twice.company == 'wayfern'
+    assert twice.target is twice.matched_target is None
+    assert set(twice.candidates) == {"job:1", "job:2", "job:3", "job:4"}
 
 
 @pytest.mark.parametrize("sentence", [

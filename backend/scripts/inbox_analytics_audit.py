@@ -111,7 +111,12 @@ def audit(db: Session, *, now: datetime | None = None) -> dict:
     output["orphan_active_outcome_events"] = sum(
         e.application_key.startswith(("job:", "external:")) and e.application_key not in identities
         and e.kind in POSITIVE | {"rejection", "manual_correction"} for e in active)
-    output["projection_checks_pass"] = all(all(r["checks"].values()) for r in ranges.values())
+    output["company_evidence"] = {
+        "inbox_messages": sum(projected_decision(m) == "company_rejection" for m in messages),
+        "analytics_messages": d.get("company_rejection_summary", {}).get("messages", 0),
+    }
+    output["company_evidence"]["agrees"] = output["company_evidence"]["inbox_messages"] == output["company_evidence"]["analytics_messages"]
+    output["projection_checks_pass"] = all(all(r["checks"].values()) for r in ranges.values()) and output["company_evidence"]["agrees"]
     issue_keys = {"missing_selected_application", "conflicting_application_targets", "no_active_confirmed_application_event",
                   "future_outcome_timestamp", "missing_outcome_type_in_analytics", "only_undated_status_fallback_no_email_link"}
     output["recorded_events_need_review"] = sum(reconciliation[key] for key in issue_keys)

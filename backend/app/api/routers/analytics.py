@@ -25,6 +25,7 @@ from backend.app.api.routers.inbox import _identities, _eligible_stale_query, PE
 from backend.app.inbox.queue import decision_expression
 from backend.app.db.models import ApplicationEventRecord, CompanyPetitionReportRecord, GmailMessageRecord, JobEvaluationRecord, GmailConnectionRecord
 from backend.app.inbox.reconcile import _MARKING_GRACE
+from backend.app.inbox.company_outcomes import COMPANY_REASON, KIND as COMPANY_REJECTION, event_company
 
 router = APIRouter()
 POSITIVE = {"recruiter_reply", "online_assessment", "screening", "interview", "interviewing", "offer", "accepted"}
@@ -39,6 +40,69 @@ def _latest_first(stamp: datetime | None) -> tuple[bool, float]:
 
 def aware(stamp: datetime) -> datetime:
     return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
+
+
+def _company_rejection_evidence(session: Session, *, start: date, end: date, zone: ZoneInfo,
+                                now: datetime, all_dates: bool, company: str | None,
+                                family: str | None) -> tuple[list[dict], dict]:
+    """Project employer-only evidence without assigning it to an application.
+
+    Its calendar is the email receipt date. Application submission cohorts and
+    role families cannot supply a missing role, including for historical mail.
+    """
+    ledger = session.scalars(select(ApplicationEventRecord).where(
+        ApplicationEventRecord.kind == COMPANY_REJECTION)).all()
+    ids = {event.id for event in ledger}
+    undone = set(session.scalars(select(ApplicationEventRecord.undo_of_id).where(
+        ApplicationEventRecord.undo_of_id.in_(ids)))) if ids else set()
+    message_ids = {event.gmail_message_id for event in ledger if event.gmail_message_id}
+    messages = {message.id: message for message in session.scalars(select(GmailMessageRecord).where(
+        GmailMessageRecord.id.in_(message_ids)))} if message_ids else {}
+    by_message: dict[int, dict[str, str]] = defaultdict(dict)
+    for event in ledger:
+        employer = event_company(event)
+        message = messages.get(event.gmail_message_id)
+        if not employer or event.id in undone or not message:
+            continue
+        if (message.classification != "rejection" or message.decision != "update"
+                or message.decision_reason != COMPANY_REASON or message.selected_application_key is not None):
+            continue
+        if event.previous_status is not None or event.new_status is not None:
+            continue
+        stamp = aware(message.received_at)
+        if stamp > now or (event.occurred_at and aware(event.occurred_at) > now):
+            continue
+        day = stamp.astimezone(zone).date()
+        if day > end or (not all_dates and day < start):
+            continue
+        # Duplicate ledger entries are one message. Contradictory employer
+        # claims for the same active email are excluded instead of guessed.
+        by_message[message.id][employer.strip().casefold()] = employer.strip()
+    grouped: dict[str, list] = defaultdict(list)
+    names: dict[str, str] = {}
+    for message_id, employers in by_message.items():
+        if len(employers) != 1:
+            continue
+        key, employer = next(iter(employers.items()))
+        if company and key != company.strip().casefold():
+            continue
+        names.setdefault(key, employer)
+        grouped[key].append(messages[message_id])
+    rows = []
+    for key, mail in grouped.items():
+        mail.sort(key=lambda message: (aware(message.received_at), message.id), reverse=True)
+        rows.append({"company": names[key], "messages": len(mail),
+                     "latest_at": aware(mail[0].received_at).isoformat(),
+                     "message_ids": [message.id for message in mail]})
+    rows.sort(key=lambda row: (-datetime.fromisoformat(row["latest_at"]).timestamp(), row["company"].casefold()))
+    excluded_family = sum(row["messages"] for row in rows) if family else 0
+    if family:
+        rows = []
+    summary = {"companies": len(rows), "messages": sum(row["messages"] for row in rows),
+               "latest_at": rows[0]["latest_at"] if rows else None, "date_basis": "email_received",
+               "start": None if all_dates else start.isoformat(), "end": end.isoformat(),
+               "family_excluded_messages": excluded_family}
+    return rows, summary
 
 
 def analytics_read(session: Session, *, days: str = "all", family: str | None = None,
@@ -64,6 +128,9 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
     end = end or today
     if start > end or end > today or (end - start).days > 36600:
         raise HTTPException(422, "Choose a valid date range ending today or earlier, up to 100 years.")
+    company_rejections, company_rejection_summary = _company_rejection_evidence(
+        session, start=start, end=end, zone=zone, now=now, all_dates=include_undated,
+        company=company, family=family)
     eligible_family = [a for a in identities if not family or role[a.key] == family]
     selected = [a for a in eligible_family if a.key in dated and start <= dated[a.key] <= end]
     # All-time keeps undated external history visible; it never invents a chart date.
@@ -317,6 +384,8 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
                                   "companies": len(rejected_companies),
                                   "dated": sum(row["dated"] for row in rejected_companies),
                                   "latest_at": newest_rejection.isoformat() if newest_rejection else None},
+            "company_rejections": company_rejections,
+            "company_rejection_summary": company_rejection_summary,
             "verified_companies": [{"name": name, **group(employers[name]), "reports": sum(r.ace_company == name for r in reports)} for name in employers if any(r.ace_company == name for r in reports)],
             "reports": sorted(report_items, key=lambda r: r["period"], reverse=True),
             "annual": [{"period": period, **counts, "rate": counts["approvals"] / sum(counts.values()) if sum(counts.values()) else None} for period, counts in sorted(annual.items())]}

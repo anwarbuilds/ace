@@ -31,6 +31,7 @@ from backend.app.db.models import (
     GmailMessageRecord, JobMarkRecord, JobRecord, UserRecord,
 )
 from backend.app.inbox import display, gmail
+from backend.app.inbox.company_outcomes import COMPANY_REASON, KIND as COMPANY_KIND, display_reason, encode_reason, event_company
 from backend.app.inbox.full_history import FullMailboxScan
 from backend.app.inbox.postings import contextual_links, primary_link_text
 from backend.app.inbox.queue import (decision_expression, projected_decision, projected_reason, workflow_expression, workflow_state)
@@ -44,7 +45,7 @@ NONCE_COOKIE = "ace_gmail_nonce"
 VERIFIER_COOKIE = "ace_gmail_verifier"
 PENDING = ("review", "exact_preview", "deferred")
 # Emails ACE has not applied to an application can still be decided by hand.
-DECIDABLE = PENDING + ("ignored", "receipt", "unrelated", "update", "unlinked")
+DECIDABLE = PENDING + ("ignored", "receipt", "unrelated", "update", "unlinked", "company_rejection")
 # Subject words that put an email ACE found no outcome in among the
 # recruiting email, so an outcome ACE could not read is still in view.
 _ABOUT_APPLICATIONS = ("application", "applying", "applied", "candidacy", "interview", "assessment")
@@ -474,6 +475,31 @@ def _ingest(session: Session, conn: GmailConnectionRecord, data: dict, identitie
     return projected_decision(row)
 
 
+def _record_company_rejection(session: Session, conn: GmailConnectionRecord, row: GmailMessageRecord,
+                              company: str, explanation: str) -> ApplicationEventRecord:
+    """Append company-scoped evidence without selecting or mutating an application."""
+    if not company or len(company) > 300 or row.classification != "rejection":
+        raise ValueError("Invalid company rejection evidence")
+    key = f"gmail:{conn.id}:{row.gmail_id}:{COMPANY_KIND}"
+    previous = session.scalar(select(ApplicationEventRecord).where(ApplicationEventRecord.dedupe_key == key))
+    if previous:
+        undone = session.scalar(select(ApplicationEventRecord.id).where(ApplicationEventRecord.undo_of_id == previous.id))
+        if (undone or event_company(previous) != company or projected_decision(row) != COMPANY_KIND
+                or row.selected_application_key is not None):
+            raise ValueError("Later owner work protects this company evidence")
+        return previous
+    if session.scalar(select(ApplicationEventRecord.id).where(
+            ApplicationEventRecord.gmail_message_id == row.id,
+            ApplicationEventRecord.actor.in_(("owner", "verified_automation"))).limit(1)):
+        raise ValueError("Existing owner or recorded evidence is protected")
+    row.decision = "update"
+    row.decision_reason = COMPANY_REASON
+    row.selected_application_key = None
+    return _append_event(session, f"email:{row.id}", COMPANY_KIND, None, None,
+                         actor="verified_automation", reason=encode_reason(company, explanation),
+                         message_id=row.id, occurred_at=row.received_at, dedupe_key=key)
+
+
 def _apply(session: Session, conn: GmailConnectionRecord, row: GmailMessageRecord, decision: Decision, evidence: EmailEvidence, *, preview: bool, allow_automation: bool = True) -> None:
     """Record what an email decided, changing a status only when allowed.
 
@@ -482,6 +508,15 @@ def _apply(session: Session, conn: GmailConnectionRecord, row: GmailMessageRecor
     Other outcomes still need the separately approved automation and a live
     import. Every change is in the audit trail with Undo.
     """
+    if decision.disposition == COMPANY_KIND:
+        if (not allow_automation or not get_settings().gmail_auto_rejections
+                or not evidence.complete or not evidence.sender_authenticated):
+            row.decision = "review"
+            row.selected_application_key = None
+            row.decision_reason = "Company rejection recognized; automatic recording is unavailable"
+            return
+        _record_company_rejection(session, conn, row, decision.company, decision.reason)
+        return
     row.decision = decision.disposition
     # Keep stored decisions compatible with the prior API for image rollback.
     # The shared SQL/Python projection exposes the explicit unlinked state.
@@ -877,14 +912,20 @@ def _message_query(connection_id: int, decision: str | None = None, q: str | Non
     projected = decision_expression()
     if decision == "pending":
         query = query.where(projected.in_(PENDING))
-    elif decision in {"awaiting_link", "owner_review", "filed", "routine", "unlinked_outcome"}:
+    elif decision == "assessments":
+        query = query.where(GmailMessageRecord.classification.in_(("online_assessment", "assessment_completed", "assessment_cancelled")))
+    elif decision == "interviews":
+        query = query.where(GmailMessageRecord.classification.in_(("interview", "interview_cancelled")))
+    elif decision in {"awaiting_link", "owner_review", "filed", "routine", "unlinked_outcome", "company_recorded"}:
         query = query.where(workflow_expression() == decision)
+    elif decision == "automatic":
+        query = query.where(projected.in_(("automatic", COMPANY_KIND)))
     elif decision == "recruiting":
         # Everything about applications, newest first, whatever ACE did with it.
         named = or_(*(GmailMessageRecord.subject.ilike(f"%{word}%") for word in _ABOUT_APPLICATIONS))
         query = query.where(or_(GmailMessageRecord.decision.not_in(("ignored", "unrelated")),
                                 and_(GmailMessageRecord.decision == "ignored", named)))
-    elif decision in {"review", "exact_preview", "deferred", "ignored", "manual", "automatic", "unrelated", "receipt", "update", "unlinked"}:
+    elif decision in {"review", "exact_preview", "deferred", "ignored", "manual", "automatic", "unrelated", "receipt", "update", "unlinked", "company_rejection"}:
         query = query.where(projected == decision)
     elif decision == "ambiguous":
         query = query.where(projected == "review", GmailMessageRecord.candidate_keys[1].as_string().is_not(None))
@@ -943,9 +984,9 @@ def understanding(row: GmailMessageRecord) -> dict:
     return {"decision_type": "Owner decision" if row.decision in {"manual", "unrelated", "deferred"} or reason.startswith(("You undid", "You marked", "You chose", "You recorded")) else "Automatic classification",
             "classification_reason": CLASSIFICATION_REASONS.get(row.classification, "Saved recruiting correspondence."),
             "classification_state": "uncertain" if row.classification in {"unknown", "unclear", "possible_rejection"} or "part of this email" in reason else "recognized",
-            "matching_state": "identity_uncertain" if reason == "The authenticated sender does not establish this employer identity" else "linked" if row.selected_application_key else "ambiguous" if len(row.candidate_keys or []) > 1 else "unlinked",
+            "matching_state": "company" if decision == COMPANY_KIND else "identity_uncertain" if reason == "The authenticated sender does not establish this employer identity" else "linked" if row.selected_application_key else "ambiguous" if len(row.candidate_keys or []) > 1 else "unlinked",
             "workflow_state": state,
-            "update_policy": "recorded" if state == "recorded" else "no_status_change" if state in {"filed", "routine", "unlinked_outcome"} else "confirmation_required",
+            "update_policy": "company_recorded" if state == "company_recorded" else "recorded" if state == "recorded" else "no_status_change" if state in {"filed", "routine", "unlinked_outcome"} else "confirmation_required",
             "review_reason": reason if decision in PENDING else None,
             "evidence_source": "retained_excerpt", "evidence_excerpt": html.unescape(row.snippet or "")}
 
@@ -965,7 +1006,7 @@ def messages(request: Request, session: Session = Depends(get_session), decision
     """One page of imported email. ``decision=auto`` shows what waits for the
     owner when anything does, else the recent recruiting email."""
     conn = _connection(session, current_owner(request))
-    counts = {"stored": 0, "needs_review": 0, "automatic": 0, "manual": 0, "reviewed": 0, "receipts": 0, "updates": 0, "unlinked": 0, "stale": 0}
+    counts = {"stored": 0, "needs_review": 0, "automatic": 0, "manual": 0, "reviewed": 0, "receipts": 0, "updates": 0, "unlinked": 0, "company_rejections": 0, "stale": 0}
     if not conn:
         return {"items": [], "review_count": 0, "total": 0, "offset": offset, "has_more": False,
                 "view": ("pending" if decision == "auto" else decision) or "all", "latest_received_at": None, "counts": counts}
@@ -980,10 +1021,10 @@ def messages(request: Request, session: Session = Depends(get_session), decision
     total = session.scalar(select(func.count()).select_from(_message_query(conn.id, decision, q).subquery())) or 0
     rows = _message_rows(session, conn.id, decision, offset, limit, q)
     counts.update({"stored": sum(by_decision.values()), "needs_review": review_count,
-                   "automatic": by_decision.get("automatic", 0), "manual": by_decision.get("manual", 0),
-                   "reviewed": sum(by_decision.get(key, 0) for key in ("manual", "automatic", "unrelated")),
+                   "automatic": by_decision.get("automatic", 0) + by_decision.get(COMPANY_KIND, 0), "manual": by_decision.get("manual", 0),
+                   "reviewed": sum(by_decision.get(key, 0) for key in ("manual", "automatic", "unrelated", COMPANY_KIND)),
                    "receipts": by_decision.get("receipt", 0), "updates": by_decision.get("update", 0),
-                   "unlinked": by_decision.get("unlinked", 0), "stale": stale})
+                   "unlinked": by_decision.get("unlinked", 0), "company_rejections": by_decision.get(COMPANY_KIND, 0), "stale": stale})
     return {"items": [_item(r) for r in rows], "review_count": review_count, "total": total, "offset": offset,
             "has_more": offset + len(rows) < total, "view": decision or "all",
             "latest_received_at": latest.isoformat() if latest else None, "counts": counts}
@@ -1164,7 +1205,7 @@ def events(request: Request, session: Session = Depends(get_session),
         query = query.where(or_(ApplicationEventRecord.gmail_message_id == message_id,
                                ApplicationEventRecord.undo_of_id.in_(select(linked.c.id).where(linked.c.gmail_message_id == message_id))))
     rows = session.scalars(query.order_by(ApplicationEventRecord.recorded_at.desc()).limit(100)).all()
-    return {"items": [{"id": e.id, "application_key": e.application_key, "kind": e.kind, "before": e.previous_status, "after": e.new_status, "actor": e.actor, "reason": e.reason, "occurred_at": e.occurred_at.isoformat() if e.occurred_at else None, "recorded_at": e.recorded_at.isoformat(), "undo_of_id": e.undo_of_id, "gmail_message_id": e.gmail_message_id} for e in rows]}
+    return {"items": [{"id": e.id, "application_key": e.application_key, "kind": e.kind, "before": e.previous_status, "after": e.new_status, "actor": e.actor, "reason": display_reason(e), "company": event_company(e), "scope": "company" if event_company(e) else "application" if e.application_key.startswith(("job:", "external:")) else "email", "occurred_at": e.occurred_at.isoformat() if e.occurred_at else None, "recorded_at": e.recorded_at.isoformat(), "undo_of_id": e.undo_of_id, "gmail_message_id": e.gmail_message_id} for e in rows]}
 
 
 class ManualDecision(BaseModel):
@@ -1256,8 +1297,25 @@ def add_application(body: AddedApplication, request: Request, session: Session =
 
 @router.post("/api/inbox/events/{event_id}/undo")
 def undo(event_id: int, request: Request, session: Session = Depends(get_session)) -> dict:
-    current_owner(request)
+    owner = current_owner(request)
     event = session.get(ApplicationEventRecord, event_id)
+    if event and event_company(event):
+        conn = _connection(session, owner)
+        message = session.scalar(select(GmailMessageRecord).where(
+            GmailMessageRecord.id == event.gmail_message_id,
+            GmailMessageRecord.connection_id == (conn.id if conn else -1))
+            .with_for_update().execution_options(populate_existing=True))
+        if not message:
+            raise HTTPException(404, "Company evidence not found.")
+        if (projected_decision(message) != COMPANY_KIND or message.selected_application_key is not None
+                or session.scalar(select(ApplicationEventRecord.id).where(ApplicationEventRecord.undo_of_id == event_id))):
+            raise HTTPException(409, "A newer decision exists for this email.")
+        correction = _append_event(session, event.application_key, "undo", event.new_status, event.previous_status,
+                                   actor="owner", reason="Owner undid a company-level rejection", undo_of=event.id)
+        message.decision = "review"
+        message.decision_reason = "You undid ACE's change for this email"
+        session.commit()
+        return {"event_id": correction.id, "application_key": event.application_key, "status": None, "scope": "company"}
     if not event or event.actor not in {"owner", "verified_automation"} or event.kind == "undo" or not event.application_key.startswith(("job:", "external:")):
         raise HTTPException(404, "Change cannot be undone.")
     if session.scalar(select(ApplicationEventRecord.id).where(ApplicationEventRecord.undo_of_id == event_id)):

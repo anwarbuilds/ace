@@ -103,6 +103,66 @@ test("the six approved Companies modules precede the retained rejection grid", (
   const html=render(base);
   assert.ok(html.indexOf("Sponsorship evidence</h2>") < html.indexOf("Rejected companies</h2>"));
 });
+
+test("company rejection emails have their own date scope and links without changing rejected applications",()=>{
+  const d={...base,
+    company_rejections:[{company:"Silverpine Labs",messages:2,latest_at:"2026-10-25T01:00:00Z",message_ids:[902,901]},
+      {company:"Northwind Robotics",messages:1,latest_at:"2026-10-23T12:00:00Z",message_ids:[903]}],
+    company_rejection_summary:{companies:2,messages:3,latest_at:"2026-10-25T01:00:00Z",date_basis:"email_received",start:"2026-10-01",end:"2026-10-25",family_excluded_messages:0},
+  };
+  const {document}=parseHTML(render(d));
+  const panel=document.querySelector(".an-company-rejection-evidence");
+  assert.ok(panel);
+  assert.match(panel.textContent,/Employer identified; the individual application or role is not assigned/);
+  assert.match(panel.textContent,/Email outcome dates: 2026-10-01 through 2026-10-25/);
+  assert.match(panel.textContent,/Filtered by when the email arrived, separately from application submission dates/);
+  assert.match(panel.textContent,/3 rejection emails from 2 companies/);
+  assert.match(panel.textContent,/separate from rejected application totals/);
+  assert.match(panel.textContent,/Latest Oct 24, 2026/);
+  assert.match(panel.textContent,/No individual application status changes/);
+  assert.match(panel.textContent,/does not enter role stages, response timing or application cohort rates/);
+  for(const id of [901,902,903]){
+    assert.ok(panel.querySelector(`a[href="/app/applications/inbox?decision=company_rejection&message=${id}"]`),`email ${id} remains inspectable`);
+  }
+  assert.ok(panel.querySelector('a[href="/app/applications/inbox?decision=company_rejection"]'));
+  assert.equal(panel.querySelectorAll(".an-rejected-list li").length,2);
+  assert.equal(panel.querySelector(".an-rejected-list b").textContent,"2 emails");
+  assert.doesNotMatch(panel.innerHTML,/evidence=rejection|2 of 6/);
+  const exact=document.querySelector(".an-rejections:not(.an-company-rejection-evidence)");
+  assert.match(exact.textContent,/2 companies, 3 rejections, for applications in this selection/);
+  assert.match(exact.textContent,/2 of 6/);
+});
+
+test("company-only evidence cannot appear as role family outcomes and offers a scoped all-role view",()=>{
+  const d={...base,family:"ML_ENGINEERING",company_rejections:[],
+    company_rejection_summary:{companies:0,messages:0,latest_at:null,date_basis:"email_received",start:"2026-10-01",end:"2026-10-25",family_excluded_messages:3},
+  };
+  const query={tab:"companies",family:"ML_ENGINEERING",company:"Silverpine Labs",days:"90"};
+  const html=renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"companies",query}));
+  const {document}=parseHTML(html);
+  const panel=document.querySelector(".an-company-rejection-evidence");
+  assert.match(panel.textContent,/3 company rejection emails are excluded from this role family selection because the role is not verified/);
+  assert.equal(panel.querySelectorAll(".an-rejected-list li").length,0);
+  const link=[...panel.querySelectorAll("a")].find(a=>a.textContent==="View all role families");
+  const destination=new URL(link.getAttribute("href"),"https://fixture.example");
+  assert.equal(destination.searchParams.has("family"),false);
+  assert.equal(destination.searchParams.get("company"),"Silverpine Labs");
+  assert.equal(destination.searchParams.get("days"),"90");
+  assert.equal(destination.searchParams.get("tab"),"companies");
+});
+
+test("all-time company evidence retains historical dates without borrowing the first submission date",()=>{
+  const html=render({...base,days:"all",company_rejections:[{company:"Silverpine Labs",messages:1,latest_at:"2025-02-10T12:00:00Z",message_ids:[904]}],
+    company_rejection_summary:{companies:1,messages:1,latest_at:"2025-02-10T12:00:00Z",date_basis:"email_received",start:null,end:"2026-10-25",family_excluded_messages:0},
+  });
+  const {document}=parseHTML(html);
+  const panel=document.querySelector(".an-company-rejection-evidence");
+  assert.match(panel.textContent,/Email outcome dates: All dates through 2026-10-25/);
+  assert.match(panel.textContent,/1 rejection email from 1 company/);
+  assert.match(panel.textContent,/Latest Feb 10, 2025/);
+  assert.ok(panel.querySelector('a[href="/app/applications/inbox?decision=company_rejection&message=904"]'));
+  assert.doesNotMatch(panel.textContent,/Submission dates|2026-09-27/);
+});
 for(const tab of ["overview","outcomes","role-resume","companies"]) {
   test(`${tab}: real fixture values and missing evidence keep their distinct meanings`,()=>{
     const html=renderToStaticMarkup(React.createElement(AnalyticsView,{d:base,connection:{connected:true,state:"paused",available:true,last_synced_at:null},tab,query:{tab}}));
