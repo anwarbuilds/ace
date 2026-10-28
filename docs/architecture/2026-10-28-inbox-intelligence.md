@@ -1,7 +1,8 @@
 # Inbox intelligence upgrade
 
 Status: parser 9 candidate, isolated `inbox-intelligence-20261028` branch based
-on released canonical `d5c38dc`. Not deployed. The restored root checkout and
+on released canonical `d5c38dc`, application source `7657b62`, draft PR #11.
+Implemented and tested for review, not deployed. The restored root checkout and
 existing `ace-inbox` worktree are preserved. Parser 8 was already released;
 the pasted brief's unfinished-parser-8 description is historical.
 
@@ -128,6 +129,29 @@ metrics and audit purity. Existing Gmail, persistence, full-history, Analytics,
 marks, external-application and auth contracts remain. Hosted CI supplies
 fictional browser execution and captures because local Chrome is prohibited.
 The new review workflow changes no production scheduler.
+
+Final application source `7657b62a7dab37cd77d345fcff280fb45737c15f` passes hosted
+review run 40705070766: 421 focused backend, 22 calculation/render, 55 DOM and
+36 Inbox/Analytics browser tests, TypeScript, lint and production build. Full
+backend passes 1,675 plus 258 matcher cases. The preceding full run 40702467830
+has 167 broader browser passes and 19 failures, all sharing names with canonical
+run 40615561429 (165/21). Full CI is not green; identical failed names do not
+prove identical causes. The private source manifest retains final-run results.
+
+The owner-local review package is
+`artifacts/inbox-intelligence-review-20261028/REVIEW.md`. Its 14 deliverables
+contain the complete observed-backlog proposal, actual counts, narrow existing
+owner-reference metrics, matching abstentions, protected disagreements and final
+fictional Day/Night desktop/mobile captures. Public docs contain no private
+measurements. All observed unresolved records were inspected, including bounded
+supplemental reads of known pending records absent from current search, with
+metadata preflight. This is not a full-body census or semantic mailbox-recall
+certification. Unestablished earlier outcomes remain visible review work.
+
+Live verification remains parser 8/schema 0050 with retained service identities.
+Audit transactions enforced read-only; no production mutation or deployment ran.
+The stopped exhaustive parser-7 operator and owner-stop/143 remain unchanged.
+No new all-row cryptographic before/after proof is claimed for this audit.
 
 No deployment, historical mutation, migration, OAuth scope, external AI provider,
 scheduler, discovery, extension, auth model, application creation policy,

@@ -8,7 +8,9 @@
 
 ## Contextual Inbox intent and policy separation (2026-10-28)
 
-Status: parser 9 candidate, not deployed; later release records control.
+Status: parser 9 source `7657b62` complete for draft PR #11 review, not deployed;
+later release records control. Hosted focused checks/build and 36 browser tests
+pass; full backend passes 1,675. Broader browser failures remain disclosed.
 The released parser 8 remains the starting point. The candidate separates
 asserted intent, safe identity and mutation permission, distinguishes passive
 completion/cancellation from invitations, and rechecks eligible classifier-filed
@@ -16,7 +18,12 @@ correspondence while protecting owner decisions and Undo. The existing bounded
 excerpt can retain a decisive sentence rather than only the opening receipt.
 See `../architecture/2026-10-28-inbox-intelligence.md` for the catalog, read-only
 real-data diagnostic boundary, evaluation limitations and release requirements.
-No independent population accuracy or historical mutation is claimed.
+The entire observed unresolved cohort has private read-only proposals. Existing
+owner links/outcomes supply narrow reference measurements; the owner chose those
+decisions and reporting remaining accuracy gaps. No representative population
+accuracy or historical mutation is claimed. Prior outcomes that the current
+reader does not establish remain visible. Authentication is separate from
+employer identity, and ambiguous inspector targets require explicit selection.
 
 ## Matching is lexical, not semantic
 

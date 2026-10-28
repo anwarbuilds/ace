@@ -1,12 +1,19 @@
 # ace handoff
 
-**2026-10-28: Inbox intelligence candidate in progress, not deployed.** Read the
+**2026-10-28: Inbox intelligence candidate ready for review, not deployed.** Read the
 new first Inbox section in `ACE_NEXT_KNOWLEDGE.md` and
 `architecture/2026-10-28-inbox-intelligence.md`. Work is isolated from canonical
 `d5c38dc` in `artifacts/inbox-intelligence-worktree`. Parser 8 was already live.
-Fresh diagnostics are read-only; private mail evidence stays outside Git. No
-historical mutation or release is authorized by this candidate. The independent
-multi-category evaluation remains an explicit release dependency.
+Runtime source is `7657b62`; draft PR #11. Hosted focused validation passes 421
+backend, 77 DOM/calculation/render and 36 browser tests plus web checks/build.
+Full backend passes 1,675. Broader browser CI retains inherited failures. Exact
+results and limits are in knowledge and the ignored private owner package
+`artifacts/inbox-intelligence-review-20261028/REVIEW.md`. The entire observed
+unresolved cohort has read-only proposals; protected owner choices remain.
+The owner chose existing decisions with accuracy gaps reported. Do not claim
+representative multi-category accuracy or require new labeling. Parser 8/schema
+0050, live service identities and stopped operator/143 remain unchanged. No
+historical mutation or release is authorized by this candidate.
 
 **LIVE, 2026-10-27 19:00 Pacific, owner-approved Analytics dashboard:**
 Exact web **70d95a9b17a81cf475f58a7c67b19ac3ad74e31e** is healthy at

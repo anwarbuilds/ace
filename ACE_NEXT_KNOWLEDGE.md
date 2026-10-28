@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-27 19:02 Pacific, owner-approved Analytics dashboard 70d95a9 LIVE and verified; web only; protected data and retained services unchanged; complete release and continuity record below
+Last updated: 2026-10-28 Pacific, parser 9 Inbox candidate complete for draft review, not deployed; parser 8 and Analytics web 70d95a9 remain live; exact source, private review and validation below
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -14,25 +14,87 @@ It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
 
-## Inbox intelligence upgrade in progress, 2026-10-28 Pacific
+## Inbox intelligence candidate complete for review, not deployed, 2026-10-28 Pacific
 
-Parser 8 and the Analytics dashboard were already released. A new parser 9
-candidate is being built from canonical `d5c38dc` in
+Parser 8 and the Analytics dashboard were already released. Parser 9 application
+source is **`7657b62a7dab37cd77d345fcff280fb45737c15f`**, based on canonical `d5c38dc`, in
 `artifacts/inbox-intelligence-worktree`, branch `inbox-intelligence-20261028`.
-The restored root and concurrent `ace-inbox` worktree are preserved. Read
+The restored root and concurrent `ace-inbox` worktree keep their application code.
+[Draft PR #11](https://github.com/anwarbuilds/ace/pull/11) targets canonical;
+later documentation commits do not change that tested runtime. Root continuity
+is synchronized separately without merging or deploying this candidate. Read
 `docs/architecture/2026-10-28-inbox-intelligence.md` for the focused implementation,
 intent catalog, evaluation limits and exact production boundary.
 
-Fresh production read-only stored-evidence and bounded body-pattern diagnostics
-ran through the existing grant. Full bodies were discarded in memory; private
-measurements and proposed historical changes stay outside Git. A separate
-read-only candidate dry-run is being validated. No production application/mail
-mutation or release ran. No claim of independent multi-category accuracy,
-complete historical recall or signed-in production visuals is supported yet.
-The exhaustive parser-7 operator remains stopped and must never be restarted.
-Existing strict positive safeguards, protected decisions, Undo, schema and all
-unrelated product surfaces remain. A later release/historical reprocess needs
-specific owner approval after the complete review evidence is ready.
+The existing classifier separates substantive intent, safe application linkage
+and mutation permission. It distinguishes actual requests from completion or
+cancellation, conditions, negation, generic policy, progression, quoted history
+and conflicting assertions. Wrapped sentences retain context. The shared body
+limit is 60,000 characters with explicit incomplete evidence; the existing bounded
+snippet retains decisive evidence without full-body storage or a migration.
+Eligible classifier-filed correspondence can be rechecked; owner decisions,
+recorded/deferred evidence and Undo remain protected. A previously recognized
+outcome cannot silently become passive because the current reader does not
+establish it. Actual routine account/practice/alert evidence can resolve an old
+false reading. Future completion instructions do not establish a finished test.
+
+Safe identity persists independently of status permission. Authentication is not
+employer identity: parent/subsidiary and agency conflicts, Workday tenants and
+shared ATS origin remain conservative. An ambiguous or uncertain inspector target
+requires explicit selection. Shared SQL/Python workflow states separate linkage,
+owner action, filed correspondence, routine, recorded and deferred evidence in
+the existing list. The inspector explains saved/current reading, decisive
+excerpt, linkage, review reason and policy. Existing strict positive opt-ins,
+live/exact-ID rules, protected stages and no employer submission remain. No
+Analytics design/projection or unrelated platform implementation changed.
+
+Read-only stored-evidence inventory, stratified historical body-pattern discovery
+and a completed proposal audit of the entire observed unresolved cohort ran
+through the existing grant. Supplemental reads selected only known unresolved
+records absent from current search, with metadata preflight. Bodies were
+discarded in memory. Actual counts, proposals, reference disagreements, matching
+abstentions and all 14 deliverables are private in
+`artifacts/inbox-intelligence-review-20261028/REVIEW.md`, with evidence, metrics,
+logs, source manifest and fictional Day/Night desktop/mobile captures. That
+ignored mode-700 folder must never be staged. Short private decisive excerpts
+remain only in the owner-local report. No production mutation ran.
+
+The owner explicitly chose **existing owner decisions and reporting remaining
+accuracy gaps**, rather than acquiring new labels. Existing outcome/link choices
+supply narrow references; filing choices are not semantic gold labels. There is
+no representative non-rejection/multi-category corpus, population accuracy,
+false-rejection-rate or complete mailbox-recall certification. Unestablished
+prior outcomes remain visible review work; protected disagreements were not
+rewritten. Do not require new owner labels as an unrequested completion step.
+
+Final-source hosted [review run 40705070766](https://github.com/anwarbuilds/ace/actions/runs/40705070766)
+passes **421 focused backend**, **22 calculation/render**, **55 Inbox/Analytics
+DOM** and **36 browser tests**, TypeScript, full lint and production build.
+Full CI backend passes **1,675 tests** plus **258 matcher cases**; web checks/build
+pass. Local final-change verification passes **193 parser/persistence tests**.
+The completed preceding-source full run 40702467830 passes extension browser
+tests (47), focused browsers (36), and broader browsers **167/19**. All 19 failed
+names also occur in canonical run 40615561429 (**165/21**); no new names, while
+two former timeout names pass. Identical names do not prove identical causes.
+Full CI is not green. Final-source full-run status is retained in the private
+source manifest. A clock-dependent Studio fixture failure was reproduced on
+unchanged canonical source and fixed by freezing only the fictional test clock;
+assertions and runtime remain unchanged. No local Chrome ran. No signed-in
+production browser verification is claimed.
+
+Fresh live read-only verification confirms parser **8**, schema **0050**, the
+same five service identities and retained protected source. The exhaustive
+parser-7 operator remains absent; saved exit **143** and owner-stop hashes are
+unchanged. Never restart it. Audit database transactions enforced read-only;
+no ingest/apply/sync/recheck, service recreation, migration, scheduler change,
+extension publication, external AI or OAuth scope change ran. A full row-hash
+snapshot was not captured immediately before this audit; do not describe these
+checks as a new all-row cryptographic preservation proof.
+
+A later API/web release and any normal guarded historical recheck each need
+specific owner approval of the exact reviewed source and operation. The owner's
+general instruction to continue finishing the review was not treated as
+production-release approval.
 
 
 ## Analytics dashboard LIVE, owner-approved and verified 2026-10-27 Pacific
