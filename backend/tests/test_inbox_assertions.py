@@ -157,6 +157,30 @@ def test_named_candidate_interest_provides_context_without_a_receipt(context):
     assert reconcile(ev, [APP]).target == APP.key
 
 
+@pytest.mark.parametrize('variant', ['asserted', 'conditional', 'quoted', 'under_review'])
+def test_specific_decision_supports_comma_in_named_role_without_losing_guards(variant):
+    title = 'Software Engineer III, Data Infrastructure'
+    context = f'We appreciate your interest in the {title} position at Silverpine Labs.'
+    decision = f'This decision pertains only to this specific {title} role.'
+    if variant == 'conditional':
+        decision = 'If ' + decision[0].lower() + decision[1:-1] + ', please contact us.'
+    body = ' '.join([context, COMPARISON, decision])
+    if variant == 'quoted':
+        body = '"' + body + '"'
+    elif variant == 'under_review':
+        body += ' Your application remains under review.'
+    ev = evidence(body)
+    app = replace(APP, title=title)
+    reading = read_intent(ev)
+    if variant == 'asserted':
+        assert reading.classification == 'rejection'
+        assert decision.rstrip('.') in reading.excerpt
+        assert reconcile(ev, [app]).target == app.key
+    else:
+        assert reading.classification != 'rejection'
+        assert reconcile(ev, [app]).disposition != 'verified'
+
+
 @pytest.mark.parametrize('body', [
     RECEIPT + ' ' + COMPARISON,
     COMPARISON + ' ' + DECISION,

@@ -416,7 +416,7 @@ _CANDIDATE_INTEREST = re.compile(
     r"([^.!?;\n]{2,140}?)\s+(?:role|position|opening)\s+(?:at|with)\s+[^.!?;\n]{2,100}", re.I)
 _SPECIFIC_DECISION = re.compile(
     r"\bthis\s+decision\s+(?:pertains|applies|relates)\s+(?:only\s+)?to\s+(?:only\s+)?"
-    r"(?:this|the)\s+(?:specific\s+)?(?:[\w&+/#()’-]+\s+){0,12}(?:role|position|opening|application)\b", re.I)
+    r"(?:this|the)\s+(?:specific\s+)?(?:[\w&+/#(),’-]+\s+){0,12}(?:role|position|opening|application)\b", re.I)
 _ASSESSMENT_NOUN = r"(?:(?:(?:online|technical|pre-employment|hiring|coding) )?assessment|coding (?:challenge|test)|technical (?:evaluation|test)|screening test|work simulation|take[ -]home (?:assignment|challenge)|(?:HackerRank|CodeSignal|Codility|HireVue) (?:test|challenge))"
 _INTERVIEW_NOUN = r"(?:(?:technical |phone |video |virtual |onsite |hiring.manager |recruiter )?interview|(?:phone|recruiter) screen(?:ing)?|screening (?:call|conversation))"
 
