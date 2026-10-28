@@ -1,5 +1,26 @@
 # Inbox intelligence upgrade
 
+Parser 10 follow-up under validation: distinguish optional coding lessons,
+account access, public digests and financial/administrative notices from hiring
+outcomes using substantive content. Recognize branded assessment invitations,
+due-in reminders, actual offers and named test completion; extract visible text
+from mislabelled HTML. Workday display text does not create a second employer;
+nested generic titles do not defeat a unique longer exact title. Duplicate roles,
+subsidiaries, authentication, chronology and positive-update policies remain guarded.
+
+The owner separately approved cleanup of an explicit historical pending cohort,
+with application statuses, owner decisions and Undo preserved. The new
+`backend.scripts.inbox_historical_cleanup` defaults to read-only preview, reads
+at most 50 known messages per invocation through label preflight, and seals the
+reviewed source/cohort/grant/plan. Apply rereads each body and reconciles current
+application records, compares the prepared result and locked email fingerprint,
+then changes only email classification/filing fields and appends an email audit
+event. It never invokes status automation. Pause, grant changes, protected owner
+work, changed evidence or reconciliation stop the operation. A guarded row
+rollback appends corrections and refuses later owner work. The global historical
+recheck switch remains disabled. Private plans, backups and measurements must
+stay outside public source. No parser-10 release or cleanup is claimed here yet.
+
 Status: **LIVE**, owner-approved API/frontend source `95f4a97318d10935c9183341627ff78f08f0a85b` at
 https://ace.opik.net, parser 9/schema 0050; PR #11 merged. The earlier reviewed
 classifier source was 7657b62. The released source adds a server default-off

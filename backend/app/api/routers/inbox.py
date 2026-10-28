@@ -286,6 +286,10 @@ def _body(payload: dict, limit: int = MAX_CLASSIFIER_BODY) -> str:
     """
     plain = "\n".join(text for text in _parts(payload, "text/plain") if text.strip())
     if plain:
+        # Some ATS messages label a complete HTML document as text/plain.
+        # Read its visible text rather than CSS, markup and tracking attributes.
+        if re.match(r"\s*(?:<!doctype\s+html\b|<html\b|<head\b|<body\b)", plain, re.I):
+            plain = _html_text(plain)
         return plain[:limit]
     return "\n".join(_html_text(text) for text in _parts(payload, "text/html"))[:limit]
 

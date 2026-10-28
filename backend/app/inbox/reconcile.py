@@ -31,7 +31,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from urllib.parse import urlparse
 
-PARSER_VERSION = "9"
+PARSER_VERSION = "10"
 MAX_CLASSIFIER_BODY = 60000
 
 _OTHERS = r"(?:other|another|a\s+different|different|more\s+qualified|alternative)\s+(?:candidates?|applicants?|individuals?|profiles?)"
@@ -239,21 +239,65 @@ def routine_notification(evidence: EmailEvidence) -> bool:
     Do not search footers for these words: a real interview can contain links
     to account settings or job alerts without becoming a notification.
     """
+    return bool(_routine_reading(evidence))
+
+
+def _routine_reading(evidence: EmailEvidence) -> tuple[str, str] | None:
+    """Require substantive purpose, never a platform sender or an old label.
+
+    Optional exercises and learning campaigns are distinct from employer tests.
+    Keep an explicit hiring decision/request ahead of routine template clues.
+    """
     subject = evidence.subject.casefold()
     if _REJECTION.search(subject) or _INTERVIEW.search(subject) or _OFFER.search(subject):
-        return False
-    primary = _new_text(evidence.body)[:1200]
+        return None
+    primary = re.sub(r"\s+", " ", re.sub(r"https?://\S+", " ", _new_text(evidence.body)))[:6000]
     subject_notice = bool(re.search(
-        r"\b(?:verify your (?:email|account)|(?:email|account) verification|verification code"
+        r"\b(?:verify (?:your )?(?:[\w-]+ ){0,3}(?:email|account)|(?:email|account) verification|verification code|please confirm your e[ -]?mail"
         r"|reset (?:your )?password|password reset|sign[ -]?in code|one[ -]time (?:code|password)"
         r"|job alerts?|job recommendations?|recommended jobs?|jobs? for you|new jobs? (?:for|matching)"
         r"|job digest|jobs? you might|weekly (?:jobs?|career) digest)\b", subject))
     account_action = re.search(
-        r"\b(?:(?:verify|verification|confirm) (?:your )?(?:email|account)|(?:reset|change) (?:your )?password"
+        r"\b(?:(?:verify|verification|confirm) (?:your )?(?:e[ -]?mail|account)|(?:reset|change) (?:your )?password"
         r"|(?:verification|sign[ -]?in|one[ -]?time) code|(?:your )?account (?:is (?:ready|active)|has been (?:created|activated)))\b", primary, re.I)
     recommendations = re.search(r"\b(?:recommended jobs|new jobs for you|job recommendations|jobs matching your)\b", primary, re.I)
     practice = re.search(r"\b(?:your practice (?:score|results?)|practice (?:assessment|test) (?:results?|score))\b", primary, re.I)
-    return bool((subject_notice and (account_action or recommendations)) or practice)
+    if (subject_notice and (account_action or recommendations)) or practice:
+        return ("The message concerns account access, job recommendations or practice results, without a hiring decision.", primary[:500])
+    exercises = re.search(r"\bimprove your (?:coding )?skills with (?:this|a) challenge recommended for you\b", primary, re.I)
+    lessons = re.search(r"\bday \d{1,3} of \d{1,3} days of code\b", primary, re.I)
+    lesson_action = re.search(r"\b(?:start day \d+|tutorial|learn|welcome to day|happy coding)\b", primary, re.I)
+    if exercises or (lessons and lesson_action):
+        return ("The message recommends optional coding practice or a learning lesson, not an employer-requested assessment.", primary[:500])
+    if re.search(r"\b(?:chargeback|disputed transactions?|provisional credit)\b", primary, re.I) and not _ROLE.search(primary):
+        return ("The message concerns a financial transaction, not a hiring decision.", primary[:500])
+    if re.search(r"\brefer friends and earn\b", primary, re.I) and re.search(r"\bper calendar year\b", primary, re.I):
+        return ("The message advertises a customer referral reward, not an employment offer.", primary[:500])
+    if re.search(r"\bsocial security letter has been generated\b", primary, re.I) and re.search(r"\bavailable for pickup\b", primary, re.I):
+        return ("The message concerns collection of an administrative document, not a new employment offer.", primary[:500])
+    if re.search(r"\baccount data\b", subject) and re.search(r"\byou used sign in with\b", primary, re.I):
+        return ("The message confirms an account sign-in authorization, not a hiring assessment.", primary[:500])
+    if re.search(r"\b(?:weekly writing update|weekly insights)\b", primary, re.I) and re.search(r"\b(?:words analyzed|writing stats|writing streak)\b", primary, re.I):
+        return ("The message reports product usage and writing statistics, not a hiring outcome.", primary[:500])
+    if re.search(r"\b(?:upcoming livestream|upcoming webinar)\b", primary, re.I) and re.search(r"\b(?:grab a seat|join us|register|questions we will be discussing)\b", primary, re.I):
+        return ("The message promotes a public learning event, not an individual hiring assessment.", primary[:500])
+    if re.search(r"\bwe hired \d+\b", primary, re.I) and re.search(r"\blist of selected candidates\b", primary, re.I):
+        return ("The message reports a public hiring competition's results, not this candidate's outcome.", primary[:500])
+    if re.search(r"\b(?:we bring to you|we bring you) a challenge\b", primary, re.I) and re.search(r"\bcash prize\b", primary, re.I):
+        return ("The message advertises an optional public competition, not an assessment for a submitted application.", primary[:500])
+    return _digest_reading(evidence, primary)
+
+
+def _digest_reading(evidence: EmailEvidence, primary: str) -> tuple[str, str] | None:
+    if not re.search(r"\b(?:weekly|daily) digest\b", evidence.subject + " " + evidence.sender, re.I):
+        return None
+    index = re.search(r"\b(?:top picks for you|today['’]s highlights|stories for)\b", primary, re.I)
+    if not index:
+        return None
+    intro = primary[:index.start()]
+    if re.search(r"\b(?:your (?:application|candidacy)|we (?:invite|offer)|please (?:schedule|complete))\b", intro, re.I):
+        return None
+    return ("The message is a curated digest of articles or practice recommendations; reported experiences are not this candidate's hiring outcome.", primary[:500])
 
 
 
@@ -334,7 +378,7 @@ _OTHER_DECISION = re.compile(
     r"|(?:have |has |we['’]ve )(?:selected|chosen) " + _OTHERS +
     r"|(?:moving (?:forward|ahead)|pursuing|proceeding)(?:\s+\w+){0,3}\s+" + _OTHERS + r")\b", re.I)
 _ASSESSMENT_NOUN = r"(?:(?:(?:online|technical|pre-employment|hiring|coding) )?assessment|coding (?:challenge|test)|technical (?:evaluation|test)|screening test|work simulation|take[ -]home (?:assignment|challenge)|(?:HackerRank|CodeSignal|Codility|HireVue) (?:test|challenge))"
-_INTERVIEW_NOUN = r"(?:(?:technical |phone |video |onsite |hiring.manager |recruiter )?interview|(?:phone|recruiter) screen(?:ing)?|screening (?:call|conversation))"
+_INTERVIEW_NOUN = r"(?:(?:technical |phone |video |virtual |onsite |hiring.manager |recruiter )?interview|(?:phone|recruiter) screen(?:ing)?|screening (?:call|conversation))"
 
 
 def read_intent(evidence: EmailEvidence) -> Reading:
@@ -342,11 +386,15 @@ def read_intent(evidence: EmailEvidence) -> Reading:
     subject = "" if _forwarded(evidence.subject) else evidence.subject
     reqs = _labelled_ids(subject + "\n" + body)
     req = next(iter(reqs)) if len(reqs) == 1 else None
+    digest = _digest_reading(evidence, re.sub(r"\s+", " ", re.sub(r"https?://\S+", " ", body)))
+    if digest:
+        return replace(_reading("unknown", req, digest[1], "routine"), explanation=digest[0])
     # Only current substantive content establishes intent. Subjects can supply
     # identity, but an outcome in a subject cannot defeat an unrelated body.
     recruiting = bool(_RECRUITING.search(subject + "\n" + body))
-    if re.search(r"\b(?:loan|mortgage|credit card|passport|bank account)\b", body, re.I) and not _ROLE.search(body):
-        return _reading("unknown", req, "")
+    if re.search(r"\b(?:loan|mortgage|credit card|passport|bank account|chargeback|disputed transactions?|provisional credit)\b", body, re.I) and not _ROLE.search(body):
+        routine = _routine_reading(evidence)
+        return replace(_reading("unknown", req, routine[1], "routine"), explanation=routine[0]) if routine else _reading("unknown", req, "")
     negative = list(_asserted(_ENDING, body)) + list(_asserted(_OTHER_DECISION, body))
     for span in _asserted(_REJECTION, body):
         wording = span[0].group().casefold()
@@ -370,7 +418,8 @@ def read_intent(evidence: EmailEvidence) -> Reading:
     offer = list(_asserted(re.compile(
         r"\b(?:(?:pleased|excited|delighted) to offer you (?:the |a |an )?(?:(?-i:[A-Z][\w-]+(?: [A-Z][\w-]+){0,7}) )?(?:position|role|job|employment)"
         r"|(?:attached|enclosed|please (?:review|sign|accept)) (?:employment )?offer letter"
-        r"|(?:extend|extending) (?:you )?an offer of employment)\b", re.I), body))
+        r"|(?:extend|extending) (?:you )?an offer (?:of employment|for the (?:position|role|job))"
+        r"|congratulations on your (?:new )?(?:job |employment )?offer with)\b", re.I), body))
     # A completed test can be followed by a new interview request. That new
     # requested action is the primary intent, rather than the earlier completion.
     interview_request = list(_asserted(re.compile(
@@ -408,14 +457,26 @@ def read_intent(evidence: EmailEvidence) -> Reading:
                 return _reading(kind + "_" + state, req, spans[0][1], state)
         action = re.compile(
             r"\b(?:invite you to|invited to|invitation to|please (?:complete|take|schedule|book)|complete (?:the|an|your)|take (?:the|an|your)|schedule (?:an?|your|a time for an?)|availability for|selected for|reminder[^.!?\n]{0,35}(?:complete|take)|reschedule (?:your|the))\s+(?:a |an |the |your )?(?:" + noun + r")\b"
-            r"|\b(?:" + noun + r")[^.!?\n]{0,60}\b(?:invitation|invite|scheduled|confirmed|rescheduled|deadline|due by|due on|reminder|please complete)\b", re.I)
+            r"|\b(?:" + noun + r")[^.!?\n]{0,60}\b(?:invitation|invite|scheduled|confirmed|rescheduled|deadline|due by|due on|due in|reminder|please complete)\b"
+            r"|\b(?:you['’]re|you are|you['’]ve (?:just )?been|you have (?:just )?been) (?:just )?invited (?:by [^.!?\n]{1,80} )?to (?:take|complete) (?:our |your |the |a |an )?(?:[A-Z][\w-]* ){0,5}(?:" + noun + r")\b", re.I)
         spans = list(_asserted(action, body))
         if spans:
             sentence = spans[0][1]
             if re.search(r"\b(?:practice|webinar|demo|sample|course)\b", sentence, re.I):
                 continue
-            variant = "rescheduled" if re.search(r"reschedul", sentence, re.I) else "reminder" if re.search(r"reminder|deadline|due (?:by|on)", sentence, re.I) else "scheduled" if re.search(r"scheduled|confirmed", sentence, re.I) else "invitation"
+            variant = "rescheduled" if re.search(r"reschedul", sentence, re.I) else "reminder" if re.search(r"reminder|deadline|due (?:by|on|in)", sentence, re.I) else "scheduled" if re.search(r"scheduled|confirmed", sentence, re.I) else "invitation"
             return _reading("online_assessment" if kind == "assessment" else "interview", req, sentence, variant)
+
+    # Hiring platforms sometimes name a test without the word assessment.
+    # Require both an explicit completed submission and delivery to the employer.
+    if (re.search(r"\b(?:thanks|thank you) for completing\b", body, re.I)
+            and re.search(r"\b(?:we['’]ve|we have) sent your submission to\b", body, re.I)):
+        excerpt = next(iter(_asserted(re.compile(r"\b(?:thanks|thank you) for completing\b", re.I), body)), None)
+        if excerpt:
+            return _reading("assessment_completed", req, excerpt[1], "completed")
+    if (re.search(r"\bcoordinate the details for your (?:virtual |video |phone )?interview\b", body, re.I)
+            and re.search(r"\bonce confirmed[^.!?]{0,80}(?:send|share)\b", body, re.I)):
+        return _reading("status_update", req, body[:500], "interview_coordination")
 
     response = list(_asserted(_RECRUITER, body))
     if response:
@@ -442,6 +503,9 @@ def read_intent(evidence: EmailEvidence) -> Reading:
     uncertain = list(_asserted(_DECLINE, body))
     if uncertain and recruiting and re.search(r"\b(?:decision|outcome|results?)\b", body, re.I) and not _WITHDRAWN.search(body):
         return _reading("possible_rejection", req, uncertain[0][1])
+    routine = _routine_reading(evidence)
+    if routine:
+        return replace(_reading("unknown", req, routine[1], "routine"), explanation=routine[0])
     return _reading("unknown", req, "")
 
 
@@ -498,7 +562,7 @@ def _origin_supports_identity(evidence: EmailEvidence, app: ApplicationIdentity)
     domain = parseaddr(evidence.sender)[1].rpartition("@")[2].casefold()
     name = _company_words(app.company)
     display, labels = _sender_parts(evidence.sender)
-    display_name = _company_words(display)
+    display_name = _sender_employer_name(display)
     employer = re.escape(app.company).replace(r"\ ", r"\s+")
     exact_subject = bool(re.search(r"\b(?:at|with|from)\s+" + employer + r"(?=\s*(?:[-|:,]|$))", evidence.subject, re.I))
     # Sharing the parent's host does not erase an explicitly longer employer
@@ -520,6 +584,13 @@ def _origin_supports_identity(evidence: EmailEvidence, app: ApplicationIdentity)
     if not any(domain == host or domain.endswith("." + host) for host in _ATS_HOSTS):
         return False
     return display_name == name or exact_subject
+
+
+def _sender_employer_name(display: str) -> str:
+    # Strip department descriptions, not subsidiary or agency brand words.
+    value = _words(display)
+    value = re.sub(r"(?:\s+(?:talent|acquisition|team|careers|recruiting|recruitment|human|resources|notifications|hr|no|reply|workday))+$", "", value)
+    return _company_words(value)
 
 
 def _sender_parts(sender: str) -> tuple[str, list[str]]:
@@ -572,7 +643,15 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
         by_company.setdefault(_company_words(app.company), []).append(app)
     # Named in the sender or subject is strong; only in the body is weak.
     strong = {name for name in by_company if _named(name, strong_text) or _in_domain(name, labels)}
+    # Workday in an ATS notification's display identifies the mail system.
+    # It does not create a second employer alongside its actual tenant.
+    domain = parseaddr(evidence.sender)[1].rpartition("@")[2].casefold()
+    workday_employer = domain == "workday.com" or domain.endswith(".workday.com") or labels == ["workday"]
+    if not workday_employer and "workday" in strong and _named("workday", _words(display)):
+        strong.remove("workday")
     weak = {name for name in by_company if name not in strong and _named(name, all_text)}
+    if not workday_employer and _named("workday", _words(display)):
+        weak.discard("workday")
 
     labelled_key = _id_key(labelled) if labelled else None
     ids = {_id_key(token) for token in _ID_TOKEN.findall(f"{subject} {body}") if not re.fullmatch(r"(?:19|20)\d{2}", token)}
@@ -617,7 +696,17 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
         # The email names a job ID, and it is not this application's.
         return bool(labelled_key and app.requisition_id and _id_key(app.requisition_id) != labelled_key)
 
-    titled = [app for app in company_apps if _named(_words(app.title), all_text)]
+    title_spans = {app.key: [(m.start(), m.end()) for m in re.finditer(r"(?<!\w)" + re.escape(_words(app.title)) + r"(?!\w)", all_text)]
+                   for app in company_apps if _words(app.title)}
+    titled = [app for app in company_apps if title_spans.get(app.key)]
+    # "Software Engineer" inside "Software Engineer, Storage" is one title
+    # mention, not evidence naming two applications. Equal titles stay ambiguous.
+    # A separately mentioned shorter title also stays ambiguous.
+    titled = [app for app in titled if not all(
+        any(start >= outer_start and end <= outer_end and (start, end) != (outer_start, outer_end)
+            for other in company_apps if other.key != app.key
+            for outer_start, outer_end in title_spans.get(other.key, []))
+        for start, end in title_spans[app.key])]
     if len(titled) == 1 and not other_job(titled[0]):
         return _Match(titled[0].key, "its exact title", keys, labelled)
     # The only application at the company, unless the email is about a
@@ -639,10 +728,12 @@ def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], 
         return Decision(*args, matched_target=found.target if found and evidence.complete else None)
     if account and parseaddr(evidence.sender)[1].casefold() == account.casefold():
         return decided("unknown", None, (), None, "ignored", "Sent by the connected account", False)
-    classification, req = classify(evidence)
+    reading = read_intent(evidence)
+    classification, req = reading.classification, reading.requisition_id
     # A generic account subject cannot suppress an explicit outcome in the body.
-    if classification in {"unknown", "application_confirmation"} and evidence.complete and routine_notification(evidence):
-        return decided("unknown", None, (), None, "ignored", "Routine account notification or job alert", False)
+    if classification == "unknown" and evidence.complete and routine_notification(evidence):
+        return decided("unknown", None, (), None, "ignored",
+                       reading.explanation if reading.variant == "routine" else "Routine account notification or job alert", False)
     if classification == "unknown" and not application_related(evidence, applications):
         return decided(classification, req, (), None, "ignored", "No explicit recruiting outcome", False)
     found = _match(evidence, applications, req)
