@@ -1,0 +1,68 @@
+name: analytics-review
+on:
+  push:
+    branches: ['analytics-rebuild-*']
+permissions:
+  contents: read
+concurrency:
+  group: analytics-review-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: sqlite:////tmp/ace-analytics-fictional.db
+      ACE_DEMO_COMPANIES: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: pip install -r backend/requirements.txt
+      - run: npm ci
+        working-directory: web
+      - name: Analytics calculations and actual component rendering
+        working-directory: web
+        run: node --max-old-space-size=256 --test tests/analytics-calculations.test.mjs tests/analytics-rejections-render.test.mjs
+      - name: Existing backend application and evidence regressions
+        run: python -m pytest -q backend/tests/test_analytics_read.py backend/tests/test_inbox_reconciliation.py backend/tests/test_inbox_persistence.py backend/tests/test_petition_reports.py backend/tests/test_job_marks.py backend/tests/test_auth.py
+      - name: TypeScript, full lint and production build
+        working-directory: web
+        run: |
+          npx next typegen
+          npx tsc --noEmit
+          npx eslint src tests
+          npm run build
+      - name: Isolated fictional data and local services on the hosted runner
+        run: |
+          python -m backend.scripts.seed_analytics_demo
+          nohup python -m uvicorn backend.app.api.main:app --port 8000 > /tmp/analytics-api.log 2>&1 &
+          cd web
+          nohup npm run start -- -p 3000 > /tmp/analytics-web.log 2>&1 &
+          for i in $(seq 1 60); do if curl -sf http://localhost:3000/login >/dev/null && curl -sf http://localhost:8000/healthz >/dev/null; then exit 0; fi; sleep 1; done
+          exit 1
+      - name: Hosted browser installation and four-tab visual/interaction verification
+        working-directory: web
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test tests/e2e/analytics-redesign.spec.ts
+      - name: Retain fictional screenshots and test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: analytics-review
+          path: |
+            artifacts/analytics-validation/*.png
+            web/test-results/
+          retention-days: 14
+      - name: Fictional service errors
+        if: failure()
+        run: tail -n 60 /tmp/analytics-api.log /tmp/analytics-web.log || true

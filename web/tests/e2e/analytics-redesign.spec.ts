@@ -95,7 +95,7 @@ test("company selector, verified petitions, logo asset and monogram fallback wor
 test("chart controls, data table and keyboard navigation work",async({page})=>{
   await page.goto("/app/analytics?days=30");
   await page.getByLabel("Chart interval").selectOption("weekly");
-  await expect(page.getByRole("img",{name:/Unique submissions by 7-day interval/})).toBeVisible();
+  await expect(page.getByRole("img",{name:/Unique submissions by calendar week/})).toBeVisible();
   await page.getByText("View chart data",{exact:true}).click();
   await expect(page.locator(".an-chart-details[open]")).toBeVisible();
   await page.locator(".an-tabs a").nth(1).focus();
@@ -247,4 +247,40 @@ test("Rejected companies opens rejected applications that can be searched and pa
   await page.getByRole("link",{name:"Clear search"}).click();
   await expect(page).not.toHaveURL(/q=/);
   expect(errors).toEqual([]);
+});
+
+
+test("calendar aggregation and historical weeks preserve headline scope",async({page})=>{
+  await page.goto("/app/analytics?days=30");
+  const headline=await page.locator(".an-metric-value").nth(1).innerText();
+  const current=await page.getByLabel("Week containing date").inputValue();
+  await page.getByRole("button",{name:"Previous week",exact:true}).click();
+  await expect(page).toHaveURL(/week=/);
+  await expect(page.getByLabel("Week containing date")).not.toHaveValue(current);
+  await expect(page.locator(".an-metric-value").nth(1)).toHaveText(headline);
+  await page.getByLabel("Chart interval").selectOption("monthly");
+  await expect(page.getByRole("img",{name:/Unique submissions by calendar month/})).toBeVisible();
+  await page.getByLabel("Chart interval").selectOption("daily");
+  await page.getByText("View chart data",{exact:true}).click();
+  const href=await page.locator(".an-chart-details tbody a").first().getAttribute("href");
+  const start=new URL(href!,"http://fixture.test").searchParams.get("start")!;
+  await page.locator(".an-chart-details tbody a").first().click();
+  await expect(page).toHaveURL(/days=custom/);
+  await expect(page.locator(".an-hero p")).toContainText(start);
+});
+
+test("reference desktop keeps five aligned KPIs and the six company modules in order",async({page})=>{
+  await page.setViewportSize({width:1672,height:941});
+  await page.goto("/app/analytics?days=30");
+  const cards=await page.locator(".an-metric").evaluateAll(nodes=>nodes.map(node=>{const b=node.getBoundingClientRect();return {y:b.y,height:b.height};}));
+  expect(cards).toHaveLength(5);
+  expect(new Set(cards.map(b=>b.y)).size).toBe(1);
+  expect(Math.max(...cards.map(b=>b.height))-Math.min(...cards.map(b=>b.height))).toBeLessThan(1);
+  const left=(await page.locator(".an-overview-top .an-panel").first().boundingBox())!;
+  expect(Math.abs(left.x-299)).toBeLessThan(8);
+  expect(Math.abs(left.y-471)).toBeLessThan(25);
+  expect(Math.abs(left.width-800)).toBeLessThan(20);
+  await page.goto("/app/analytics?tab=companies&days=30");
+  const panels=await page.locator(".an-grid .an-panel h2").allTextContents();
+  expect(panels).toEqual(["Top companies in your pipeline","Companies with verified sponsorship evidence","Historical H-1B petition outcomes","Employer outcome history","Historical petition activity","Sponsorship evidence"]);
 });

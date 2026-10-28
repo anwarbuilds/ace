@@ -23,7 +23,7 @@ function loadSource(filename) {
   }).outputText;
   const sourceRequire = (name) => {
     // The filters need Next's app router; this test is about the panels.
-    if (name === "./AnalyticsFilters") return { AnalyticsFilters: () => null, AnalyticsCompanySelect: () => null };
+    if (name === "./AnalyticsFilters") return { AnalyticsFilters: () => null, AnalyticsCompanySelect: () => null, AnalyticsChartInterval: () => null, AnalyticsWeekPicker: () => null };
     if (name.startsWith(".")) {
       // A sibling component, or data such as the logo provenance JSON.
       const near = path.resolve(path.dirname(filename), name);
@@ -96,3 +96,19 @@ test("with no rejection the panel says so instead of showing an empty table", ()
   assert.match(html, /No rejection is recorded for applications in this selection/);
   assert.doesNotMatch(html, /an-rejected-table/);
 });
+
+
+test("the six approved Companies modules precede the retained rejection grid", () => {
+  const html=render(base);
+  assert.ok(html.indexOf("Sponsorship evidence</h2>") < html.indexOf("Rejected companies</h2>"));
+});
+for(const tab of ["overview","outcomes","role-resume","companies"]) {
+  test(`${tab}: real fixture values and missing evidence keep their distinct meanings`,()=>{
+    const html=renderToStaticMarkup(React.createElement(AnalyticsView,{d:base,connection:{connected:true,state:"paused",available:true,last_synced_at:null},tab,query:{tab}}));
+    assert.match(html,/an-metric-value">9</);
+    assert.doesNotMatch(html,/>74<|>919<|Aster Systems|Arcadia Cloud|96%/);
+    if(tab!=="companies") { assert.match(html,/>Paused</);assert.doesNotMatch(html,/an-connected">Paused/); }
+    if(tab==="overview")assert.match(html,/outcome pairs/);
+    if(tab==="role-resume")assert.match(html,/Not recorded/);
+  });
+}

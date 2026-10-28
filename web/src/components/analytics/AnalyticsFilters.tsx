@@ -9,6 +9,7 @@ const serverReady = () => false;
 function useReady() { return useSyncExternalStore(subscribe, clientReady, serverReady); }
 import { familyLabel } from "@/lib/format";
 import { CompanyLogo } from "@/components/CompanyLogo";
+import { mondayOf, shiftDate } from "@/lib/analyticsCalculations";
 
 export function AnalyticsFilters({ families, today }: { families: string[]; today: string }) {
   const ready = useReady();
@@ -32,10 +33,12 @@ export function AnalyticsFilters({ families, today }: { families: string[]; toda
     {dates && <form className="an-date-popover" onSubmit={e => {
       e.preventDefault();
       const form = new FormData(e.currentTarget);
+      const start = String(form.get("start")), end = String(form.get("end"));
+      if (start > end) { e.currentTarget.querySelector<HTMLInputElement>('[name="end"]')?.setCustomValidity("Choose an end date on or after the start date."); e.currentTarget.reportValidity(); return; }
       const next = new URLSearchParams(params);
       next.set("days", "custom"); next.set("start", String(form.get("start"))); next.set("end", String(form.get("end")));
       router.push(`${path}?${next}`, { scroll: false });
-    }}><label>From<input type="date" name="start" required max={today} defaultValue={params.get("start") ?? today} autoComplete="off" /></label><label>Through<input type="date" name="end" required max={today} defaultValue={params.get("end") ?? today} autoComplete="off" /></label><button type="submit">Apply dates</button></form>}
+    }}><label>From<input type="date" name="start" required max={today} defaultValue={params.get("start") ?? today} autoComplete="off" onInput={e=>e.currentTarget.form?.querySelector<HTMLInputElement>('[name="end"]')?.setCustomValidity("")} /></label><label>Through<input type="date" name="end" required max={today} defaultValue={params.get("end") ?? today} autoComplete="off" onInput={e=>e.currentTarget.setCustomValidity("")} /></label><button type="submit">Apply dates</button></form>}
   </div>;
 }
 
@@ -47,9 +50,15 @@ export function AnalyticsCompanySelect({ companies, value }: { companies: string
 }
 
 
-export function AnalyticsChartInterval({monthly}: {monthly: boolean}) {
+export function AnalyticsChartInterval({monthly, interval, detailed = true}: {monthly?: boolean; interval?: string; detailed?: boolean}) {
   const ready=useReady();
   const router=useRouter();
   const params=useSearchParams();
-  return <label className="an-chart-mode"><span className="sr">Chart interval</span><select disabled={!ready} value={monthly ? "monthly" : params.get("interval") === "weekly" ? "weekly" : "daily"} onChange={event=>{const next=new URLSearchParams(params);next.set("interval",event.target.value);router.push(`/app/analytics?${next}`,{scroll:false});}}>{monthly ? <option value="monthly">Monthly</option> : <><option value="daily">Daily</option><option value="weekly">7-day totals</option></>}</select></label>;
+  return <label className="an-chart-mode"><span className="sr">Chart interval</span><select disabled={!ready} value={interval ?? (monthly ? "monthly" : params.get("interval") ?? "daily")} onChange={event=>{const next=new URLSearchParams(params);next.set("interval",event.target.value);router.push(`/app/analytics?${next}`,{scroll:false});}}><option value="daily" disabled={!detailed && monthly}>Daily</option><option value="weekly" disabled={!detailed && monthly}>Weekly</option><option value="monthly">Monthly</option></select></label>;
+}
+
+export function AnalyticsWeekPicker({ start, today }: { start: string; today: string }) {
+  const ready = useReady(), router = useRouter(), params = useSearchParams();
+  const change = (day: string) => { const next = new URLSearchParams(params); const monday = mondayOf(day); if (monday === mondayOf(today)) next.delete("week"); else next.set("week", monday); router.push(`/app/analytics?${next}`, { scroll: false }); };
+  return <div className="an-week-picker" role="group" aria-label="Displayed calendar week"><button disabled={!ready} aria-label="Previous week" onClick={()=>change(shiftDate(start,-7))}>‹</button><label><span className="sr">Week containing date</span><input type="date" max={today} value={start} autoComplete="off" disabled={!ready} onChange={e=>{if(e.target.value)change(e.target.value);}} /></label><button disabled={!ready || start >= mondayOf(today)} aria-label="Next week" onClick={()=>change(shiftDate(start,7))}>›</button></div>;
 }
