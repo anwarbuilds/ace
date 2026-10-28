@@ -177,6 +177,13 @@ def test_completed_assessment_cannot_hide_a_new_interview_invitation():
     assert read_intent(mail).classification=='interview'
 
 
+def test_future_completion_instructions_are_not_a_completion_receipt():
+    process = 'Upon completion of the assessment, our team will review your results.'
+    assert read_intent(evidence(process)).classification != 'assessment_completed'
+    invitation = 'Please complete your technical assessment. ' + process
+    assert read_intent(evidence(invitation)).classification == 'online_assessment'
+
+
 def test_conflicting_interview_and_rejection_cannot_automatically_end_candidacy():
     mail=evidence('Your application was rejected. We invite you to a technical interview.')
     assert read_intent(mail).classification=='possible_rejection'

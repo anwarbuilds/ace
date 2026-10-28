@@ -400,6 +400,10 @@ def read_intent(evidence: EmailEvidence) -> Reading:
                 continue
             pattern = re.compile(r"\b(?:" + noun + r")[^.!?\n]{0,65}\b(?:" + words + r")\b|\b(?:" + words + r")[^.!?\n]{0,65}\b(?:" + noun + r")\b", re.I)
             spans = list(_asserted(pattern, body))
+            if state == "completed":
+                spans = [span for span in spans if not re.search(
+                    r"\b(?:upon|on|after|following|before|when)\s+(?:your |the |successful )*completion\b",
+                    span[1], re.I)]
             if spans and not re.search(r"\b(?:not|not yet|once|when|after you have)\b[^.!?\n]{0,50}(?:" + words + r")\b", spans[0][1], re.I):
                 return _reading(kind + "_" + state, req, spans[0][1], state)
         action = re.compile(
