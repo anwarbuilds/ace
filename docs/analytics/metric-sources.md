@@ -76,6 +76,14 @@ never be staged or pushed to this public repository. The new script makes no
 Gmail calls, reads no bodies and creates no authentication session. It prints no
 real application key, company list, job title, resume, answer or credential.
 
+Following owner-approved web deployment of `70d95a9`, a fresh post-release primary
+and independent audit plus all 12 frontend calendar reconciliations also pass.
+Actual results are private in the owner package's `release/post-audit.json` and
+`release/frontend-production-audit.json`, with the authoritative VM copy under
+`/opt/ace/private-backups/analytics-dashboard-20261028T0153Z/`. Source/runtime,
+preservation and HTTP verification are recorded in the first root knowledge
+section; no production browser or mailbox-completeness claim is implied.
+
 ## Separate backend dependencies, not implemented
 
 Future application-time submitted-resume and source capture would need nullable,

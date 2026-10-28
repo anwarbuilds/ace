@@ -1,8 +1,11 @@
 # Analytics implementation review, 2026-10-27
 
-Status: ready for owner review in [draft PR #10](https://github.com/anwarbuilds/ace/pull/10).
+Status: owner-approved and deployed; [PR #10](https://github.com/anwarbuilds/ace/pull/10) is merged.
 Tested runtime source: `1376b68333311df006adacccc999c5d68850ed0d`.
-No deployment or production data change was performed.
+Exact deployed web source: `70d95a9b17a81cf475f58a7c67b19ac3ad74e31e`, with only
+documentation changes after the tested runtime. Web activated at 18:58 Pacific,
+2026-10-27. Production data and retained services are unchanged. The first LIVE
+section of `../../ACE_NEXT_KNOWLEDGE.md` records exact verification and rollback.
 
 ## Result
 
@@ -19,7 +22,8 @@ The owner requested a fresh implementation after reverting the previous design.
 The UI was rebuilt from the restored checkout in an isolated worktree. The final
 review branch includes the current canonical source so that reviewing this patch
 does not roll back protected backend or Inbox changes. Neither the owner's root
-checkout nor the concurrent `ace-inbox` worktree was changed. The canonical base
+checkout's application code nor the concurrent `ace-inbox` worktree was changed.
+The root receives the final full knowledge/supporting documentation only. The canonical base
 for the final comparison is `34f4663ff4c295d192b071247c28c5b8a5ffb379`.
 
 ## Screenshots and comparison
@@ -119,7 +123,12 @@ is not described as a proven pre-existing failure. No unrelated assertion was
 removed, skipped or quarantined. The owner-local package retains the exact
 failure-title comparison in `ci-failure-comparison.txt`.
 
-No signed-in production browser validation, deployment, migration, Gmail history
+After owner approval, a web-only production deployment passed exact public SHA/
+header, auth boundaries, four application asset hashes, 85 logo hashes, protected
+data/service/environment preservation, primary/independent live audits and all
+12 frontend calendar reconciliations. The fresh private backup passes gzip and
+catalog checks. Actual post-release measurements stay private in the release
+package. No signed-in production browser validation, migration, Gmail history
 recheck, scheduler change or extension publication ran. Early local backend
 attempts were interrupted by environment/workspace problems; hosted regression
 results above supply the completed verification.
@@ -145,7 +154,8 @@ Relative to the canonical base, the implementation and verification files are:
 - `docs/analytics/metric-sources.md`
 
 Review and continuity documentation adds this file plus updates to
-`ACE_NEXT_KNOWLEDGE.md`, `docs/HANDOFF.md` and `docs/knowledge/05-web-ui.md`.
+`ACE_NEXT_KNOWLEDGE.md`, `docs/HANDOFF.md`, `docs/knowledge/05-web-ui.md` and
+`docs/knowledge/08-operations-and-testing.md`.
 
 ## Preserved behavior
 

@@ -1,5 +1,30 @@
 # ace handoff
 
+**LIVE, 2026-10-27 19:00 Pacific, owner-approved Analytics dashboard:**
+Exact web **70d95a9b17a81cf475f58a7c67b19ac3ad74e31e** is healthy at
+https://ace.opik.net; PR #10 is merged and canonical contains the release.
+Only web was built/recreated. API image `6192c32`, parser 8/schema 0050,
+API/scheduler/PostgreSQL/Caddy IDs, environment and protected source are unchanged.
+All eleven protected row inventories and the full event set match before
+preparation and across activation. Fresh private backup passes full gzip/catalog
+checks; rollback image and exact evidence are under
+`/opt/ace/private-backups/analytics-dashboard-20261028T0153Z/`.
+Public exact SHA/header, API health, auth refusals/redirects, four application
+assets and 85 logo hashes pass. Primary/independent live metric audits and all
+12 frontend calendar reconciliations pass; actual data stays private. No Gmail
+recheck, data write, migration, API release, scheduler change or extension
+publication ran. Owner-stop markers/143 remain unchanged.
+
+Full implementation, exact image/bundle hashes, private paths, design decisions,
+remaining data dependencies, verification corrections and rollback boundaries are
+in the new first LIVE section of `ACE_NEXT_KNOWLEDGE.md`. Hosted relevant checks
+pass; broader CI remains 165/21, with one extra unresolved Pulls timeout versus
+the prior 20 failures. No production signed-in browser claim. Reload Analytics
+once. Root application code stays restored b5531ab; complete knowledge/supporting
+docs are synchronized there without changing code. The isolated review worktree
+and canonical have released code; concurrent Inbox remains untouched. Earlier
+candidate/not-deployed notes are historical and superseded by this release.
+
 **2026-10-27 Pacific, Analytics rebuild ready for review, not deployed:**
 [Draft PR #10](https://github.com/anwarbuilds/ace/pull/10), remote branch
 `analytics-rebuild-20261027`, tested runtime `1376b68`. All four approved layouts

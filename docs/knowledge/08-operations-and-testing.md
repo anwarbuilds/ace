@@ -4,6 +4,32 @@
 >
 > Read this when: you deploy, restart, debug the scheduler, or write browser tests.
 
+## Analytics web-only activation and continuity (2026-10-27)
+
+Owner-approved web `70d95a9` is live, PR #10 merged. The first root knowledge
+section is the complete release record. Build the exact reviewed SHA, verify
+fresh private backup integrity/catalog and a retained web rollback tag, then
+activate web with `--no-build --no-deps --wait`. Earlier broad instructions to
+rebuild every image apply to coordinated backend/schema releases, not this
+deliberately web-only operation. API/scheduler/PostgreSQL/Caddy and schema must
+remain unchanged for this scope. Do not run migrate or restore data implicitly.
+
+Use fresh read-only row-hash snapshots immediately before/after activation and
+keep a separate preparation snapshot so concurrent owner activity is not
+misattributed to deployment. All protected rows/events matched in this release.
+Verify the exact public frontend SHA/header, API health, auth boundaries and
+served JS/CSS/logo hashes. Production HTTP/source verification is separate from
+hosted fictional browser QA; no signed-in production browser claim here.
+
+Avoid standard-library names for private Python helpers: `operator.py` shadowed
+Python's `operator` import; rename it `operator_state.py` before verification.
+Analytics `undated` metadata is family-wide, so subtract it only for all-time
+dated timeline reconciliation. Finite selections already exclude those records.
+The corrected independent harness passes all 12 calendar aggregations; no runtime
+patch was necessary. Keep private output outside Git and synchronize the full
+root knowledge plus supporting docs to the restored checkout without replacing
+its older application code or touching the concurrent Inbox worktree.
+
 ## Operational gotchas
 
 - **`docker compose build` before `up`.** Containers bake the source at

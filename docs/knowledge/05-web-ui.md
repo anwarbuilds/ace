@@ -6,7 +6,10 @@
 
 ## Analytics reference rebuild and truthful unavailable states (2026-10-27)
 
-Status: ready in draft PR #10, tested runtime `1376b68`; not deployed. This
+Status: deployed with owner approval as web `70d95a9` at 18:58 Pacific,
+2026-10-27; tested runtime `1376b68`, PR #10 merged. Exact live HTTP/assets,
+preservation, private read-only audit and limits are in the first root knowledge
+section. No signed-in production browser test. This
 supersedes older Analytics design-completion claims for the new four-reference
 request. Earlier release records remain historical.
 

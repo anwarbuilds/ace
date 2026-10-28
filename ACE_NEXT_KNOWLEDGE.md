@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-27, Analytics layout/data rebuild ready in draft PR #10; tested runtime 1376b68; no deployment in this task; prior release observations remain dated history
+Last updated: 2026-10-27 19:02 Pacific, owner-approved Analytics dashboard 70d95a9 LIVE and verified; web only; protected data and retained services unchanged; complete release and continuity record below
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -13,7 +13,165 @@ not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
+## Analytics dashboard LIVE, owner-approved and verified 2026-10-27 Pacific
+
+The owner explicitly requested production deployment and an exhaustive shared
+knowledge update after reviewing the implementation and its CI limitations.
+The exact reviewed head **`70d95a9b17a81cf475f58a7c67b19ac3ad74e31e`** is now
+running on **web** at **https://ace.opik.net**. Web started at
+**2026-10-28T01:58:09Z, October 27 at 18:58 Pacific**. Public verification
+completed at **02:00:35Z, October 27 at 19:00 Pacific**. Canonical
+`wine-rose-platform` was fast-forwarded without force to that exact head;
+[PR #10](https://github.com/anwarbuilds/ace/pull/10) is merged. No approval is
+pending for this completed operation. Later documentation commits do not rebuild
+the running image. This section supersedes the candidate/not-deployed statements
+below and older specific runtime image/SHA observations.
+
+### Exact source, scope and preserved services
+
+Tested runtime source is **`1376b68333311df006adacccc999c5d68850ed0d`**; the
+deployed head changes only documentation after that tested source. The final
+implementation diff preserves canonical backend, extension, deployment files,
+Inbox components, the shared app layout and persistent `AnalyticsRefresh`
+byte-for-byte. The restored root checkout supplied the starting UI; canonical
+integration preserved current backend/Inbox safeguards rather than reverting
+them. The code and data do not take sample numbers or employers from the images.
+
+Preflight found production checkout **34f4663**, with its web already labeled
+34f4663 and an API image different from the older 14:12 release record. Those
+were the actual retained baseline for this operation; do not infer the old image
+IDs still ran. The six protected running API source hashes match the approved
+source, **parser 8**, schema **0050**. This operation built and recreated **web
+only**, using `up -d --no-build --no-deps --wait --wait-timeout 180 web`.
+API, scheduler, PostgreSQL and Caddy retained identical container/image IDs.
+Environment bytes and schema are unchanged.
+
+- Running web image: `sha256:7862199301108ecde0d59bcdfc4a70b75b922834a55ce5c73c68e8759a990038`.
+- Running web container: `b2d009c19f59b75314a8d5c3f7dc40608f64564cdd8ac0b385b4b251a88d49a8`.
+- Retained API image: `sha256:6192c32c4f0c37a979869c43e8ea38985a4b8a7bca2abf58f0d6b3ae780ee244`.
+- Retained API container: `92dd1cc7b7ebc2aa9643c51c1d6ae77ca9a77b1cda16b37c9ff026e39e9dfbd2`.
+
+No API rebuild/recreation, migration, scheduler change, OAuth change, discovery
+change, historical Gmail recheck, extension publication, cleanup, data restore
+or destructive operation ran. Auth, owner decisions/Undo, identity and submission
+rules, Pulls, Resume Studio, Answer Memory and company-logo security retain their
+existing implementation. ACE still never submits employer applications or marks
+them Applied after filling.
+
+### Preservation, backup and rollback evidence
+
+Enforced repeatable read-only snapshots at **01:54:16.868962Z** before preparation,
+**01:58:08.886948Z** immediately before activation and **01:58:17.182372Z** after
+activation match every row in all eleven protected tables and the complete
+application-event set. This includes job marks, external applications, answers,
+private Memory, career facts, history entries, resumes, resume documents/versions,
+users and stored Gmail records, plus protected owner mail decisions. No additions,
+changes or removals occurred in these compared snapshots, either during
+preparation or across activation. Audited rows were not frozen or restored.
+Fresh production counts and anonymous timestamps remain private, not in Git.
+
+Private VM release directory:
+`/opt/ace/private-backups/analytics-dashboard-20261028T0153Z/`, mode **700**.
+`database.dump.gz` is mode **600**; full gzip integrity and PostgreSQL archive
+catalog checks passed. This is not a restore drill. The exact former web image
+is retained as **`oracle-web:before-analytics-dashboard-20261028T0153Z`**,
+image `sha256:1e819382130f1f2c4cf1d11c83a0e6ec3b55ddd3322867dbb98b65f95c52d5b1`.
+A future approved web rollback replaces web only; it never implies restoring
+older production data.
+
+That directory retains `prepare.log`, `activate.log`, exit statuses, source/image/
+container/environment records, the three private row-hash inventories,
+`verification.json`, `release-summary.json`, `live-services.json`, `post-audit.json`
+and owner-stop record hashes. Local private working evidence is in
+`/tmp/ace-analytics-dashboard-release/`; a retained owner copy is under
+`/home/ubuntu/Documents/ace-next/artifacts/analytics-production-review-20261027/release/`.
+Do not stage these private files. The stopped exhaustive operator remains absent;
+saved exit **143** and both owner-stop marker hashes match before/after.
+
+### Live verification and calculation evidence
+
+Public `/healthz` reports healthy API and exact frontend **70d95a9** with matching
+`X-Ace-Frontend-Commit`. Anonymous Inbox messages/connection and Analytics API
+requests return **401**; Inbox, Analytics and application-record pages return
+**307** to sign-in. All **85** public company-logo hashes and all four deployed
+application asset hashes match the running image. Exact served assets:
+
+| Asset | Public path | SHA-256 |
+| --- | --- | --- |
+| Analytics CSS | `/_next/static/css/5b4bf304e399c6e7.css` | `4b5ca10d86cb6d78f8f26c63988254d7732f3d8f97e4ed9628efb5592dafc7e6` |
+| Persistent refresh layout | `/_next/static/chunks/app/app/layout-450f09c9a7722679.js` | `d10a75a45dd5449d022f5c9ce0339d2880f0897904606787fda805da509234aa` |
+| Analytics controls | `/_next/static/chunks/app/app/analytics/page-c6e54494552475ed.js` | `b6a94051a60ffb8b21729e1247ac3bfbca4e559ceff4e95b843369d5cdb91855` |
+| Preserved Inbox client | `/_next/static/chunks/app/app/applications/inbox/page-f6624b592739e9b7.js` | `80e1e8a4d47af5a6344f49e18cd94024ccb77c51ff967ad12ef48cbc22db9536` |
+
+The post-deployment primary audit passes all identity, status, cohort, role,
+company, outcome and timing invariants for **14/30/90/all** selections. The
+existing independent Analytics audit also passes. The exact frontend calculation
+module independently reconciles all **12** daily, calendar-week and calendar-month
+aggregations against that live snapshot. The audit made no Gmail calls, body
+reprocessing, authentication-session creation or writes. This verifies recorded
+arithmetic, not complete mailbox recall or perfect real-world identity deduplication.
+Private actual metrics, full series and anonymous input remain in `post-audit.json`
+and `frontend-production-audit.json` with their observation timestamps.
+
+Hosted fictional visual and interaction evidence remains green on the unchanged
+runtime: **23 Analytics browser**, **34 combined Inbox/Analytics browser**,
+**47 extension browser**, **22 calculation/render**, **53 DOM**, **237 focused
+backend**, **1,586 full backend**, **258 matcher** checks, TypeScript, full lint
+and production build. Production image compilation and TypeScript also pass.
+Eight inspected 1672 x 941 Day/Night screenshots, reference comparisons, responsive
+and keyboard checks remain in the owner-local review package and hosted run
+**40615555332**. Wider run **40615561429** remains **not green**: **165 pass /
+21 fail** in the remaining app browser suite, the same prior 20 titles plus the
+opened-Pull navigation timeout in unchanged source/test. Its cause remains
+unproven. No unrelated assertion was weakened or skipped. No signed-in production
+browser interaction was performed, and no local Chrome ran under cooling rules.
+Reload Analytics once to obtain the new client assets.
+
+### Product behavior, remaining dependencies and continuity
+
+All four reference layouts retain current Inter, Wine and Rose themes and shell
+dimensions. Existing APIs drive five KPIs, calendar timeline, historical-week
+controls, exact date/status/evidence drilldowns, status partitions, explicit
+overlapping outcome pairs, age-qualified cohorts, reliable first-response timing,
+real Inbox review counts and recorded role/company breakdowns. Submission trends
+compare equivalent elapsed local periods and use honest zero-prior states.
+Historical chart weeks do not change the current-week headline. Full role
+inspection and the existing rejected-company grid are retained.
+
+Submitted resume/source attribution, comparable role/resume/source combinations,
+complete-observation response-effectiveness rates and absent official employer/
+year sponsorship records remain explicitly unavailable. A connected mailbox
+does not establish complete coverage; the primary resume is not a submitted
+resume; petitions/LCA certifications are not hires or new-graduate sponsorship
+eligibility. Separate capture/coverage/official-ingestion dependencies are
+documented in `docs/analytics/metric-sources.md`; none was implemented or approved
+by this web deployment. `docs/analytics/review.md` holds the complete file
+inventory, validation limits and visual differences.
+
+The released code is in canonical `wine-rose-platform` and the isolated
+`artifacts/analytics-worktree` checkout. The owner's root
+`extension-context-reuse-20261026` checkout keeps application code at restored
+**b5531ab**, with this complete knowledge and supporting docs synchronized by a
+documentation-only commit. Do not mistake its older code for the live release.
+The concurrent `ace-inbox` worktree is untouched. Future chats must read this
+complete file, inspect Git/remote state and use the released source before new
+implementation/deployment. Public continuity is pushed to canonical and the
+root's tracked branch; raw data, audit measurements and screenshots stay private.
+
+Operational corrections from this release: name the stop-state helper
+`operator_state.py`; `operator.py` shadowed Python's standard module during a
+local HTTP verification attempt, then was renamed and the check passed. In the
+independent calendar harness, `undated` is family-wide metadata; subtract it
+from the all-time timeline only. Finite selections already exclude undated
+records. That corrected audit assertion reconciles against the API's dated
+series; no dashboard/runtime change was needed. Keep both findings in future
+verification rather than hiding the initially failed engineering checks.
+
 ## Analytics screenshot/data rebuild ready for review, 2026-10-27 Pacific
+
+Status: historical pre-deployment checkpoint, superseded by the verified LIVE
+release above. Its source, design decisions and earlier verification remain
+useful; its pending/not-deployed statements are no longer current.
 
 Status: source and verification complete in [draft PR #10](https://github.com/anwarbuilds/ace/pull/10),
 remote branch `analytics-rebuild-20261027`, tested runtime
