@@ -242,3 +242,34 @@ def test_unresolved_previous_outcome_survives_another_parser_revision():
     assert again.disposition=='review' and again.reason==first.reason
     routine=reassess(evidence('Your practice score is ready.','Your CodeSignal report'),[APP],first.classification,previous_reason=first.reason)
     assert routine.disposition=='ignored'
+
+
+
+def test_workflow_filters_and_item_states_agree_without_hiding_any_evidence(database):
+    from backend.app.inbox.queue import workflow_state,workflow_expression
+    from sqlalchemy.dialects import postgresql
+    session,conn=database
+    cases=[('review','rejection','No application could be matched with confidence','awaiting_link'),
+           ('review','rejection','Sender could not be authenticated','owner_review'),
+           ('review','unclear','An earlier reading found offer; confirm the actual decision','owner_review'),
+           ('review','online_assessment','Only part of this email could be read','owner_review'),
+           ('update','assessment_completed','The assessment was completed','filed'),
+           ('receipt','application_confirmation','Application receipt; no status change','filed'),
+           ('automatic','rejection','Clear rejection matched by its job ID','recorded'),
+           ('deferred','interview','You deferred this email','deferred'),
+           ('ignored','unknown','Routine account notification or job alert','routine')]
+    expected={}
+    for index,(decision,kind,reason,state) in enumerate(cases):
+        row=stored(session,conn,f'workflow-{index}',decision,'Application message',reason=reason)
+        row.classification=kind
+        expected[row.id]=state
+    session.commit()
+    sql=dict(session.execute(select(GmailMessageRecord.id,workflow_expression())).all())
+    assert sql==expected=={row.id:workflow_state(row) for row in session.scalars(select(GmailMessageRecord))}
+    assert 'CASE WHEN' in str(workflow_expression().compile(dialect=postgresql.dialect()))
+    for state in ('awaiting_link','owner_review','filed','routine'):
+        data=inbox.messages(owner_request(),session,state,0,100)
+        assert data['total']==sum(value==state for value in expected.values())
+        assert all(item['understanding']['workflow_state']==state for item in data['items'])
+    assert inbox.messages(owner_request(),session,None,0,100)['total']==len(cases)
+    assert inbox.messages(owner_request(),session,'pending',0,100)['review_count']==5

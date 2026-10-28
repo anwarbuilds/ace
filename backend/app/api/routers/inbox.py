@@ -32,7 +32,7 @@ from backend.app.db.models import (
 )
 from backend.app.inbox import display, gmail
 from backend.app.inbox.full_history import FullMailboxScan
-from backend.app.inbox.queue import (decision_expression, projected_decision, projected_reason)
+from backend.app.inbox.queue import (decision_expression, projected_decision, projected_reason, workflow_expression, workflow_state)
 from backend.app.inbox.reconcile import (
     ApplicationIdentity, Decision, EmailEvidence, MAX_CLASSIFIER_BODY, PARSER_VERSION, RECEIPT_REASON, _MARKING_GRACE, conflict, reconcile, reassess, read_intent, CLASSIFICATION_REASONS,
 )
@@ -796,6 +796,8 @@ def _message_query(connection_id: int, decision: str | None = None, q: str | Non
     projected = decision_expression()
     if decision == "pending":
         query = query.where(projected.in_(PENDING))
+    elif decision in {"awaiting_link", "owner_review", "filed", "routine"}:
+        query = query.where(workflow_expression() == decision)
     elif decision == "recruiting":
         # Everything about applications, newest first, whatever ACE did with it.
         named = or_(*(GmailMessageRecord.subject.ilike(f"%{word}%") for word in _ABOUT_APPLICATIONS))
@@ -856,12 +858,9 @@ def understanding(row: GmailMessageRecord) -> dict:
     """Keep intent, linkage and mutation authorization distinct, including legacy rows."""
     reason = projected_reason(row) or ""
     decision = projected_decision(row)
-    state = ("recorded" if decision in {"automatic", "manual"} else "deferred" if decision == "deferred"
-             else "routine" if decision in {"ignored", "unrelated"} else "filed" if decision in {"receipt", "update"}
-             else "awaiting_link" if not row.selected_application_key and ("application" in reason.lower() or "company" in reason.lower() or "role" in reason.lower() or "requisition" in reason.lower())
-             and not any(word in reason.lower() for word in ("protected", "predates", "confirmation", "automatic"))
-             else "owner_review")
-    return {"classification_reason": CLASSIFICATION_REASONS.get(row.classification, "Saved recruiting correspondence."),
+    state = workflow_state(row)
+    return {"decision_type": "Owner decision" if row.decision == "manual" or reason.startswith("You ") else "Automatic classification",
+            "classification_reason": CLASSIFICATION_REASONS.get(row.classification, "Saved recruiting correspondence."),
             "classification_state": "uncertain" if row.classification in {"unknown", "unclear", "possible_rejection"} or "part of this email" in reason else "recognized",
             "matching_state": "linked" if row.selected_application_key else "ambiguous" if len(row.candidate_keys or []) > 1 else "unlinked",
             "workflow_state": state,

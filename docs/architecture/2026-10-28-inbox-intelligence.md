@@ -66,6 +66,11 @@ correspondence can be rechecked under a later parser; owner filings, deferred
 choices, recorded decisions and both Undo reasons remain protected. Historical
 reprocessing is a proposed production operation requiring owner approval.
 
+Shared SQL/Python workflow states provide separate existing-list filters for
+filed evidence, safe-linkage work, owner decisions/actions and routine mail.
+Deferred, recorded and synchronization errors retain their existing distinct
+surfaces. Owner versus automatic decision provenance remains explicit.
+
 The existing Inbox inspector presents saved classification, linkage, review
 reason, policy and the fresh body interpretation/excerpt separately. A new
 reading never silently overwrites a protected saved decision. Existing themes,

@@ -7,7 +7,7 @@ import { clean, parseDate, STATUS_LABEL } from "@/lib/format";
 import { getJson, RequestError, sendJson } from "@/lib/client";
 import type { ApplicationStatus } from "@/lib/types";
 
-export interface Understanding {classification_reason:string; classification_state:string; matching_state:string; workflow_state:string; update_policy:string; review_reason:string|null; evidence_source:string; evidence_excerpt:string}
+export interface Understanding {decision_type?:string; classification_reason:string; classification_state:string; matching_state:string; workflow_state:string; update_policy:string; review_reason:string|null; evidence_source:string; evidence_excerpt:string}
 export interface InboxMessage {understanding?:Understanding; id:number; received_at:string; sender:string; subject:string; snippet:string; classification:string; requisition_id:string|null; decision:string; candidate_keys:string[]; reason:string; selected_application_key:string|null}
 export interface InboxApplication {key:string; company:string; title:string; requisition_id:string|null; applied_at:string|null; status:string}
 export interface InboxEvent {id:number; application_key:string; kind:string; before:string|null; after:string|null; actor:string; reason:string; recorded_at:string; undo_of_id:number|null; gmail_message_id:number|null}
@@ -221,6 +221,7 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
       <strong>ACE&rsquo;s classification: {KIND[message.classification]??clean(message.classification)}</strong>
       {message.understanding&&<>
         <p>{clean(message.understanding.classification_reason)}</p>
+        {message.understanding.decision_type&&<p>{clean(message.understanding.decision_type)}</p>}
         <p>Application linkage: {clean(message.understanding.matching_state)}. {message.understanding.update_policy==="recorded"?"The outcome was recorded with an audit event.":message.understanding.update_policy==="no_status_change"?"No application status changed.":"No status change is authorized until the specific review is resolved."}</p>
         {pending&&message.understanding.review_reason&&<p>Decision needed: {clean(message.understanding.review_reason)}</p>}
       </>}

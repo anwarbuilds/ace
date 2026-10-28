@@ -23,7 +23,7 @@ interface Sync {running: boolean; note: string; error: string; progress: string}
 const PAGE = 50;
 // Gmail is checked when the page opens and while it stays open, at most this often.
 const FRESH_MS = 3 * 60_000;
-const VIEWS: [string, string][] = [["pending","Waiting for you"],["recruiting","Recruiting email"],["automatic","Recorded by ACE"],["manual","Recorded by you"],["receipt","Acknowledgements"],["update","Saved correspondence"],["deferred","Decide later"],["unrelated","Not about applications"],["ignored","No outcome found"],["all","All imported email"],["review","Needs an application match"],["exact_preview","Matched, waiting for confirmation"],["ambiguous","Several possible applications"]];
+const VIEWS: [string, string][] = [["pending","Waiting for you"],["awaiting_link","Classified, needs application linkage"],["owner_review","Decision or action needed"],["filed","Classified and filed"],["routine","Routine and unrelated mail"],["recruiting","Recruiting email"],["automatic","Recorded by ACE"],["manual","Recorded by you"],["receipt","Acknowledgements"],["update","Saved correspondence"],["deferred","Decide later"],["unrelated","Not about applications"],["ignored","No outcome found"],["all","All imported email"],["review","All unresolved review evidence"],["exact_preview","Matched, waiting for confirmation"],["ambiguous","Several possible applications"]];
 const EMPTY: Counts = {stored:0,needs_review:0,automatic:0,manual:0,reviewed:0,receipts:0,updates:0,stale:0};
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
