@@ -20,7 +20,7 @@ Follow-up 1.31.2 (extension only, no server change), after two owner reports. (1
 Greenhouse form, a content.googleapis.com picker frame woken by the toolbar Fill started an empty card
 and took the full-viewport relay slot first, leaving the real card confined to its iframe. Frames with
 no questions (and a top page that has frames) now never render or publish a card, and the top page
-accepts a relayed card whenever its own card is not shown. (2) On a Rubrik application, Fill appeared
+accepts a relayed card whenever its own card is not shown. (2) On a busy employer application page, Fill appeared
 dead. Not reproduced in the DOM harness (a Greenhouse-shaped fill works in 210 ms); likely causes fixed:
 `render()` rebuilt the card every few hundred milliseconds on busy pages, replacing the button under a
 click in progress (now redrawn only when the HTML changes; the relayed card does the same and keeps
