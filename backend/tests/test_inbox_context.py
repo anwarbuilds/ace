@@ -90,6 +90,24 @@ def test_unrecorded_explicit_role_cannot_be_overridden_by_posting_or_requisition
         assert reconcile(ev,[app]).target is None
 
 
+@pytest.mark.parametrize('subject,body', [
+    ('Senior Software Engineer application update at Silverpine Labs','Your application was rejected.'),
+    ('Software Engineer Storage | Silverpine Labs','Your application was rejected.'),
+    ('Application update','Regarding Senior Software Engineer: your application was rejected.'),
+    ('Application update','Role: Data Engineer. Your application was rejected.'),
+])
+def test_plain_subject_and_colon_role_claims_preserve_unknown_modifiers(subject,body):
+    app=replace(APP,official_url=FIRST,requisition_id=None)
+    ev=evidence(body+' View job details: '+FIRST,subject)
+    assert reconcile(ev,[app]).target is None
+
+
+def test_generic_subject_does_not_contradict_an_explicit_specific_posting():
+    app=replace(APP,title='Software Engineer Storage',official_url=FIRST,requisition_id=None)
+    ev=evidence('Your application was rejected. View job details: '+FIRST,'Software Engineer application update at Silverpine Labs')
+    assert reconcile(ev,[app]).target==app.key
+
+
 @pytest.mark.parametrize('footer', ['Data Scientist (SE-10202)', 'Job ID: SE-10202.', 'https://careers.silverpine.example/job/SE-10202'])
 def test_recommended_job_ids_cannot_supply_identity(footer):
     from backend.app.inbox.reconcile import read_intent

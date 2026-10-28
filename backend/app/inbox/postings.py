@@ -14,6 +14,7 @@ _ROLE_CLAIMS = (
     re.compile(r"\b(?:for|regarding)\s+(?!(?:your\s+(?:interest|time|application)|applying|taking)\b)(?:(?:the|our|your|a|an)\s+)?([^.!?;\n]{2,160}?)\s+(?:role|position|opening)\b", re.I),
     re.compile(r"\b(?:application|candidacy|applied|applying)\s+(?:for|to)\s+(?:(?:the|our|your|a|an)\s+)?([^.!?;\n]{2,160}?)(?=\s+(?:was|is|has been|at|with|position|role)\b|,\s*(?:we|you|your|and|but|unfortunately|however)\b|[.!?;\n]|$)", re.I),
     re.compile(r"\b(?:job title|position title)\s*:\s*([^.!?;\n]{2,160})", re.I),
+    re.compile(r"\b(?:regarding|re|role|position)\s*(?::\s*|\s+)([^.!?;:\n]{2,160})(?=[:.!?;\n]|$)", re.I),
 )
 _ROLE_WORDS = re.compile(r"\b(?:engineers?|developers?|scientists?|analysts?|interns?|internship|designers?|architects?|researchers?|programmers?|consultants?|specialists?|managers?|engineering)\b", re.I)
 
@@ -36,6 +37,25 @@ def compatible_role(title: str, claim: str) -> bool:
         return set(re.findall(r"[a-z0-9]+", value.casefold())) - {"the", "a", "an", "our", "your", "position", "role", "opening"}
     claimed = tokens(claim)
     return bool(claimed) and claimed <= tokens(title)
+
+
+def subject_role_claim(subject: str, company_words: str) -> str | None:
+    """Keep role modifiers in plain subjects, including untracked specialties.
+
+    Subject wording cannot establish an outcome, but an explicit different role
+    can veto an identity. Strip ordinary correspondence labels and the known
+    employer, never seniority, specialties, locations or role numerals.
+    """
+    text = re.sub(r"\b(?:job|req|requisition|reference)\s*(?:id|number|no)?\s*[:#-]?\s*[a-z]{0,4}[-_]?\d[\w-]*", " ", subject, flags=re.I)
+    text = " ".join(re.findall(r"[a-z0-9]+", text.casefold()))
+    if company_words:
+        text = re.sub(r"(?<!\w)"+re.escape(company_words)+r"(?!\w)", " ", text)
+        initials = "".join(word[0] for word in company_words.split())
+        if len(initials) >= 2:
+            text = re.sub(r"\b"+re.escape(initials)+r"\b", " ", text)
+    text = re.sub(r"\b(?:re|your|you|we|our|my|the|a|an|for|to|at|with|from|in|on|of|and|regarding|application|candidacy|applications|update|status|notification|thank|thanks|interest|applying|applied|received|submitted|decision|rejected|rejection|interview|invitation|invite|assessment|offer|no|not|position|role|opening)\b", " ", text)
+    text = " ".join(text.split())
+    return text if _ROLE_WORDS.search(text) else None
 
 
 def primary_link_text(body: str) -> str:

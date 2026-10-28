@@ -31,7 +31,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from urllib.parse import urlparse
 
-from backend.app.inbox.postings import compatible_role, contextual_links, posting_identity, primary_link_text, role_claims
+from backend.app.inbox.postings import compatible_role, contextual_links, posting_identity, primary_link_text, role_claims, subject_role_claim
 
 PARSER_VERSION = "11"
 MAX_CLASSIFIER_BODY = 60000
@@ -728,7 +728,9 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
     title_mentions = _mentioned_titles(applications, all_text)
     declared_roles = role_claims(subject + "\n" + identity_body)
     def role_conflict(app):
-        return (any(not compatible_role(app.title, claim) for claim in declared_roles)
+        subject_claim = subject_role_claim(subject, _company_words(app.company))
+        return ((bool(subject_claim) and not compatible_role(app.title, subject_claim))
+                or any(not compatible_role(app.title, claim) for claim in declared_roles)
                 or any(_company_words(other.company) == _company_words(app.company)
                        and not compatible_role(app.title, other.title) for other in title_mentions))
     if len(_labelled_ids(f"{subject} {identity_body}")) > 1:
