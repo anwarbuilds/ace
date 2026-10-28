@@ -27,6 +27,7 @@ def test_explicit_learning_purpose_resolves_old_machine_outcomes(body, old_kind)
 @pytest.mark.parametrize('body,kind', [
     ("You're invited to take our online assessment for the Backend Engineer role.", 'online_assessment'),
     ("You've just been invited by someone from Silverpine to take Silverpine Coding Assessment.", 'online_assessment'),
+    ("You've just been invited by someone from Silverpine to take Silverpine 2030 Coding Assessment.", 'online_assessment'),
     ('A quick reminder: your coding assessment from Silverpine is due in 12 hours.', 'online_assessment'),
     ('We are excited to extend you an offer for the position of Systems Engineer.', 'offer'),
     ('Congratulations on your new job offer with Silverpine! We are preparing the letter.', 'offer'),

@@ -458,7 +458,7 @@ def read_intent(evidence: EmailEvidence) -> Reading:
         action = re.compile(
             r"\b(?:invite you to|invited to|invitation to|please (?:complete|take|schedule|book)|complete (?:the|an|your)|take (?:the|an|your)|schedule (?:an?|your|a time for an?)|availability for|selected for|reminder[^.!?\n]{0,35}(?:complete|take)|reschedule (?:your|the))\s+(?:a |an |the |your )?(?:" + noun + r")\b"
             r"|\b(?:" + noun + r")[^.!?\n]{0,60}\b(?:invitation|invite|scheduled|confirmed|rescheduled|deadline|due by|due on|due in|reminder|please complete)\b"
-            r"|\b(?:you['’]re|you are|you['’]ve (?:just )?been|you have (?:just )?been) (?:just )?invited (?:by [^.!?\n]{1,80} )?to (?:take|complete) (?:our |your |the |a |an )?(?:[A-Z][\w-]* ){0,5}(?:" + noun + r")\b", re.I)
+            r"|\b(?:you['’]re|you are|you['’]ve (?:just )?been|you have (?:just )?been) (?:just )?invited (?:by [^.!?\n]{1,80} )?to (?:take|complete) (?:our |your |the |a |an )?(?:[\w-]+ ){0,5}(?:" + noun + r")\b", re.I)
         spans = list(_asserted(action, body))
         if spans:
             sentence = spans[0][1]
