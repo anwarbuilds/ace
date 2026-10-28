@@ -321,7 +321,7 @@ _INTERVIEW_NOUN = r"(?:(?:technical |phone |video |onsite |hiring.manager |recru
 
 
 def read_intent(evidence: EmailEvidence) -> Reading:
-    body = _new_text(evidence.body)
+    body = re.sub(r"(?<!\n)\n(?!\n)", " ", _new_text(evidence.body).replace("\r\n", "\n"))
     subject = "" if _forwarded(evidence.subject) else evidence.subject
     reqs = _labelled_ids(subject + "\n" + body)
     req = next(iter(reqs)) if len(reqs) == 1 else None

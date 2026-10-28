@@ -194,3 +194,14 @@ def test_self_closing_html_elements_do_not_expose_a_quoted_rejection():
     markup='<div class><p>We received your application.</p><blockquote><br/><p>Your application was rejected.</p></blockquote></div>'
     data['payload'].update(mimeType='text/html',body={'data':base64.urlsafe_b64encode(markup.encode()).decode()})
     assert read_intent(inbox._message_evidence(data)).classification=='application_confirmation'
+
+
+
+@pytest.mark.parametrize('body,kind',[
+    ('We cannot proceed\nwith your application.','rejection'),
+    ('We invite you to\na technical interview.','interview'),
+    ('Your online assessment\nhas been completed.','assessment_completed'),
+    ('If you do not qualify,\nwe cannot proceed with your application.','unknown'),
+])
+def test_soft_wrapped_sentences_keep_their_meaning(body,kind):
+    assert read_intent(evidence(body)).classification==kind
