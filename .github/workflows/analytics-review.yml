@@ -31,7 +31,9 @@ jobs:
         working-directory: web
       - name: Analytics calculations and actual component rendering
         working-directory: web
-        run: node --max-old-space-size=256 --test tests/analytics-calculations.test.mjs tests/analytics-rejections-render.test.mjs
+        run: |
+          node --max-old-space-size=256 --test tests/analytics-calculations.test.mjs tests/analytics-rejections-render.test.mjs
+          npm run test:inbox
       - name: Existing backend application and evidence regressions
         run: python -m pytest -q backend/tests/test_analytics_read.py backend/tests/test_inbox_reconciliation.py backend/tests/test_inbox_persistence.py backend/tests/test_petition_reports.py backend/tests/test_job_marks.py backend/tests/test_auth.py
       - name: TypeScript, full lint and production build

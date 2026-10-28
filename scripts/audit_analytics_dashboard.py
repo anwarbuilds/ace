@@ -45,8 +45,8 @@ def audit(db: Session) -> dict:
             "timing_buckets_reconcile": sum(row["count"] for row in d["timing"]) == d["timing_sample"],
             "attribution_not_invented": d["attribution"]["resume"] == d["attribution"]["channel"] == "Not recorded" and not d["attribution"]["combinations"],
         }
-        public_fields = ("as_of", "timezone", "days", "start", "end", "total_submitted", "submitted", "undated", "week_total", "positive", "assessments", "interviews", "has_outcome_evidence", "statuses", "daily", "granularity", "week", "cohort", "timing", "median_days", "timing_sample", "evidence", "review", "roles", "attribution", "annual", "rejection_summary")
-        ranges[days] = {"projection": {key: d[key] for key in public_fields}, "checks": checks,
+        public_fields = ("as_of", "timezone", "days", "start", "end", "total_submitted", "submitted", "undated", "week_total", "positive", "assessments", "interviews", "has_outcome_evidence", "statuses", "daily", "granularity", "week", "cohort", "timing", "median_days", "timing_sample", "evidence", "review", "inbox_audit", "roles", "attribution", "annual", "rejection_summary")
+        ranges[days] = {"projection": {key: d[key] for key in public_fields if key in d}, "checks": checks,
                        "companies": [{"rank": i + 1, **{key: row[key] for key in ("submitted", "eligible", "responses", "rejections", "assessments", "interviews", "rate")}} for i, row in enumerate(d["companies"])],
                        "verified_companies": len(d["verified_companies"]), "official_reports": len(d["reports"])}
     # Real application keys, company names, titles, answers and mail content

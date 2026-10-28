@@ -25,6 +25,7 @@ const router={replace:()=>{},refresh:()=>{projectionRefreshes++;}};
 const params=new URLSearchParams();
 const passthrough=({children})=>React.createElement("div",null,children);
 const mocks={
+  "server-only":{},
   "next/navigation":{useRouter:()=>router,useSearchParams:()=>params,usePathname:()=>pathname},
   "next/link":{__esModule:true,default:({href,children,className})=>React.createElement("a",{href,className},children)},
   "next/form":{__esModule:true,default:({children,...props})=>React.createElement("form",props,children)},
@@ -49,6 +50,9 @@ function load(filename){
     if(name.endsWith(".css"))return {};
     if(name.startsWith("@/")||name.startsWith(".")){
       const base=name.startsWith("@/")?path.join(sourceRoot,name.slice(2)):path.resolve(path.dirname(filename),name);
+      // Relative and alias imports must meet the same mocked server boundary.
+      const alias="@/"+path.relative(sourceRoot,base).split(path.sep).join("/");
+      if(mocks[alias])return mocks[alias];
       const found=[base+".ts",base+".tsx"].find(fs.existsSync);
       return found?load(found):createRequire(filename)(name);
     }
@@ -355,4 +359,34 @@ test("Analytics response replacement cannot restart refresh coordination in the 
     globalThis.BroadcastChannel=previousChannel;
     pathname="/app/analytics";
   }
+});
+
+
+test("Analytics supplemental reader uses complete identities and sends only aggregates to the UI",async()=>{
+  const {readAnalyticsSupplement}=load(path.join(sourceRoot,"lib/analyticsRead.ts"));
+  const d={as_of:"2026-10-27T19:00:00Z",timezone:"America/Los_Angeles",start:"2026-10-26",end:"2026-10-27",days:"custom",family:null,total_submitted:2,submitted:2,week_total:2};
+  const calls=[];
+  serverRead=async(route)=>{calls.push(route);return {items:[{key:"job:1",applied_at:"2026-10-26T18:00:00Z",company:"Private fictional label"},{key:"external:2",applied_at:"2026-10-27T18:00:00Z"}]};};
+  const result=await readAnalyticsSupplement(d,"daily");
+  assert.deepEqual(calls,["/api/inbox/applications"]);
+  assert.equal(result.timeline.reduce((sum,p)=>sum+p.count,0),2);
+  assert.doesNotMatch(JSON.stringify(result),/job:1|external:2|Private fictional label/);
+  serverRead=async()=>({items:[]});
+  assert.equal(await readAnalyticsSupplement(d,"daily"),null);
+});
+
+test("Analytics role detail reads every page and refuses changed or duplicated snapshots",async()=>{
+  const {readAnalyticsSupplement}=load(path.join(sourceRoot,"lib/analyticsRead.ts"));
+  const d={as_of:"2026-10-27T19:00:00Z",timezone:"America/Los_Angeles",start:"2026-09-01",end:"2026-09-30",days:"custom",family:"SOFTWARE_ENGINEERING",submitted:101,week_total:0};
+  const row=i=>({key:`job:${i}`,submitted_at:"2026-09-03T12:00:00Z"});
+  const queries=[];
+  serverRead=async(route,fallback,q)=>{queries.push(q);return {record_total:101,records:q.offset?[row(100)]:Array.from({length:100},(_,i)=>row(i))};};
+  const result=await readAnalyticsSupplement(d,"weekly");
+  assert.equal(result.timeline.reduce((sum,p)=>sum+p.count,0),101);
+  assert.deepEqual(queries.map(q=>q.offset??"0"),["0","100"]);
+  assert.ok(queries.every(q=>q.records==="1"&&q.family===d.family&&q.days==="all"));
+  serverRead=async(route,fallback,q)=>({record_total:q.offset?102:101,records:[row(0)]});
+  assert.equal(await readAnalyticsSupplement(d,"weekly"),null);
+  serverRead=async(route,fallback,q)=>({record_total:101,records:q.offset?[row(0)]:Array.from({length:100},(_,i)=>row(i))});
+  assert.equal(await readAnalyticsSupplement(d,"weekly"),null);
 });
