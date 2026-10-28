@@ -14,7 +14,23 @@ It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
 
-## Extension 1.31.2 and learned-answer API LIVE, 2026-10-28 Pacific
+## Extension 1.31.3 and learned-answer API LIVE, 2026-10-28 Pacific
+
+Follow-up 1.31.3 (extension only), from the owner's Workday screenshots. The self-identification Date
+showed ACE's digits but Workday reported "The field Date is required and must have a value": the
+ArrowUp method did not register on the real widget and the plain-write fallback only drew the digits.
+Date sections are now clicked and typed per digit (keydown, keypress, `document.execCommand('insertText')`
+unless the page took the key, keyup), with ArrowUp and the plain write as fallbacks, and a date whose
+box shows the value while Workday reports it missing or invalid (or `aria-valuetext` is still a
+placeholder) is typed again. ACE ignores its own trusted typing events (`aceTyping`). This mirrors the
+public Workday-Autofill-Assistant approach; it is unverified on a live Workday page. Name boxes holding
+only the owner's own name words in another split (a résumé import put a middle name as Last Name) are
+replaced by the saved name; other names stay. "Please check one of the boxes below" disability boxes
+are recognized from their options (disability, veteran, gender and race option sets map to their
+Answers-page rows) and an exact repeat of an answered question always matches. Automatic theme now
+matches the page background (`pageTheme`), not the computer. 105 DOM contracts pass.
+
+### Follow-up 1.31.2
 
 Follow-up 1.31.2 (extension only, no server change), after two owner reports. (1) On an embedded
 Greenhouse form, a content.googleapis.com picker frame woken by the toolbar Fill started an empty card

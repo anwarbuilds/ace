@@ -288,6 +288,9 @@
         // that answer was not itself given to a different reviewed fact.
         else if (bank && parts.source === "bank") score = parts.name === bank && !(fact && screeningConcept(entry.question, context)) ? 3 : 0;
         else if (fact) return;
+        // The same question word for word always matches, however few
+        // meaning words it has ("Please check one of the boxes below").
+        else if (norm(entry.question) === norm(question)) score = 1;
         else {
           score = similarity(mine, topic(entry.question, hostWords(entry.source_host)));
           if (score < 0.72) score = 0;

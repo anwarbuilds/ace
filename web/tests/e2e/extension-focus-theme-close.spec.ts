@@ -58,29 +58,29 @@ async function mount(page: Page, storage: Record<string, unknown> = {}) {
 const stored = (page: Page) =>
   page.evaluate(() => (window as typeof window & { __storage: Record<string, unknown> }).__storage.aceStudioThemeMode);
 
-test("the card follows the computer's theme until the owner picks one", async ({ page }) => {
+test("the card matches the website, not the computer, until the owner picks one", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   const panel = await mount(page);
-  await expect(panel).toHaveClass(/night/);
-
-  // The computer switches to Day: the open card follows without a reload.
-  await page.emulateMedia({ colorScheme: "light" });
+  // A light page gets the Day card even while the computer is dark.
   await expect(panel).not.toHaveClass(/night/);
 
-  // An explicit Night choice holds even when the computer changes again.
-  await panel.getByRole("button", { name: "Switch to Night theme" }).click();
-  await expect(panel).toHaveClass(/night/);
-  expect(await stored(page)).toBe("night");
-  await page.emulateMedia({ colorScheme: "dark" });
-  await page.emulateMedia({ colorScheme: "light" });
+  // A dark page gets the Night card.
+  await page.evaluate(() => { document.body.style.background = "rgb(18, 18, 22)"; });
+  await panel.getByRole("button", { name: /Scan fields/ }).click();
   await expect(panel).toHaveClass(/night/);
 
-  // Choosing the computer's own theme returns to following it.
+  // An explicit Day choice holds on the dark page.
   await panel.getByRole("button", { name: "Switch to Day theme" }).click();
   await expect(panel).not.toHaveClass(/night/);
-  expect(await stored(page)).toBe("system");
-  await page.emulateMedia({ colorScheme: "dark" });
+  expect(await stored(page)).toBe("day");
+
+  // Choosing the website's own theme returns to matching it.
+  await panel.getByRole("button", { name: "Switch to Night theme" }).click();
   await expect(panel).toHaveClass(/night/);
+  expect(await stored(page)).toBe("system");
+  await page.evaluate(() => { document.body.style.background = "rgb(255, 255, 255)"; });
+  await panel.getByRole("button", { name: /Scan fields/ }).click();
+  await expect(panel).not.toHaveClass(/night/);
 });
 
 test("a saved Night choice is restored, and the old Day/Night key is ignored", async ({ page }) => {
