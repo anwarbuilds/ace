@@ -308,17 +308,42 @@ def _headers(payload: dict) -> dict[str, str]:
     return {str(h.get("name", "")).lower(): str(h.get("value", "")) for h in payload.get("headers", [])}
 
 
+def _authenticated_sender(raw_headers: list[dict], sender_domain: str) -> bool:
+    """Use Google's own result, retaining domain alignment and failure guards.
+
+    Google can report the parent author domain for mail from a subdomain. In
+    that case also require a passed DKIM identity at that parent or the exact
+    visible sender domain; an unrelated platform signature never qualifies.
+    """
+    auth = next((str(h.get("value", "")) for h in raw_headers
+                 if h.get("name", "").casefold() == "authentication-results"
+                 and re.match(r"(?i)^\s*mx\.google\.com\s*;", str(h.get("value", "")))), "")
+    if not sender_domain or re.search(r"(?:^|;)\s*dmarc=fail\b", auth, re.I):
+        return False
+    dmarc = re.search(r"(?:^|;)\s*dmarc=pass\b[^;]*\bheader\.from=([a-z0-9.-]+)", auth, re.I)
+    if not dmarc:
+        return False
+    author = dmarc[1].casefold()
+    if author == sender_domain:
+        return True
+    if "." not in author or not sender_domain.endswith("." + author):
+        return False
+    for clause in re.finditer(r"(?:^|;)\s*dkim=pass\b([^;]*)", auth, re.I):
+        for kind, identity in re.findall(r"\bheader\.(i|d)=([^\s;]+)", clause[1], re.I):
+            value = identity.strip('"').casefold()
+            signing_domain = value.rpartition("@")[2] if kind.casefold() == "i" else value
+            if signing_domain in {author, sender_domain}:
+                return True
+    return False
+
+
 def _message_evidence(data: dict) -> EmailEvidence:
     raw_headers = data.get("payload", {}).get("headers", [])
     headers = {h.get("name", "").lower(): h.get("value", "") for h in raw_headers}
     sender_domain = parseaddr(headers.get("from", ""))[1].rpartition("@")[2].casefold()
     # Gmail's own Authentication-Results is the first mx.google.com result.
     # A displayed From address alone is never sufficient for automation.
-    auth = next((str(h.get("value", "")) for h in raw_headers
-                 if h.get("name", "").casefold() == "authentication-results"
-                 and re.match(r"(?i)^\s*mx\.google\.com\s*;", str(h.get("value", "")))), "")
-    dmarc = re.search(r"(?i)\bdmarc=pass\b[^;]*\bheader\.from=([a-z0-9.-]+)", auth)
-    authenticated = bool(sender_domain and dmarc and dmarc.group(1).casefold() == sender_domain)
+    authenticated = _authenticated_sender(raw_headers, sender_domain)
     try:
         stamp = parsedate_to_datetime(headers.get("date", ""))
     except (TypeError, ValueError):

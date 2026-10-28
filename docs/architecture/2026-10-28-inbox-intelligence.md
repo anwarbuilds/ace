@@ -41,6 +41,7 @@ The intent reader also handles short role-qualified application decisions such
 as the fictional “Your application for Data Scientist was rejected,” with
 conditional, negation, quoted-example and question safeguards. Public learning
 events need substantive event/registration purpose, rather than one adjective.
+Google-authenticated parent domains for subdomain senders additionally require a passed aligned DKIM identity; unrelated signatures and explicit DMARC failures stay blocked. This uses Google's own first authentication result, consistent with [Gmail authentication guidance](https://support.google.com/mail/answer/180707) and the identifier-alignment distinction in [RFC 9989](https://www.rfc-editor.org/rfc/rfc9989.html).
 Automatic versus owner provenance no longer treats a machine explanation
 starting “You applied...” as an owner decision. Positive automation keeps the
 existing strict opt-in/live/exact-ID/employer-origin policy.
