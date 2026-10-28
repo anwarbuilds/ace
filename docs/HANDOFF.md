@@ -320,6 +320,13 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
+**2026-10-28 extension 1.31.1 (local):** every owner answer on a form is learned and reused by
+meaning (Memory policy `learned`), Answers-page EEO and screening values fill again, Workday date
+sections no longer fail "Invalid Date", the card counts Filled by ACE, Known, Unknown and Saved, and
+updates inject into open tabs. The API half
+needs owner deploy approval; until then answers wait in the browser. See the first section of
+`ACE_NEXT_KNOWLEDGE.md` and `docs/knowledge/06-extension-autofill.md`.
+
 **2026-10-27 current Inbox scope: ALL history.** The owner explicitly rejected
 concentrating on 30 days. Full retained-mailbox sync/backfill and Analytics now
 default to all time, including archived mail and retained Spam/Trash. The latest

@@ -14,6 +14,68 @@ It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
 
+## Extension 1.31.1: every owner answer is learned, Workday dates fixed (local, 2026-10-28 Pacific)
+
+Status: extension source in the root checkout, loaded unpacked by Chrome after Reload. The matching
+API change is local and needs specific owner approval to deploy (API only, no migration). Until then
+learned answers are kept in the browser and used for filling. Not committed or pushed in this session.
+
+The owner reported a Workday From date failing as "Error: Invalid Date: 01/", voluntary disclosures and
+common screening questions (authorization, sponsorship, government ties, conflict of interest, other
+opportunities, accuracy acknowledgement, privacy tick box) never filling or saving, and asked for clear
+filled/saved counts and reuse by meaning rather than exact wording.
+
+Causes:
+1. Workday date sections (`dateSectionMonth|Day|Year-input`) accept a value only through their own key
+   handling. ACE typed the value and blurred the month, so Workday validated "01/" and never stored the year.
+2. Since the V4 Memory release (2e7c1dc, 2026-10-25) the extension refused to fill Answers-page values
+   for sensitive or company questions (EEO, sponsorship, government, consent), and both the extension and
+   the API refused to save them. Before V4 every bank value filled.
+3. History detection treated any question containing "to", "from" or "organization" as a job-block
+   field, hiding whole Workday question pages from filling and saving.
+
+Changes:
+- Dates: set one below the target, ArrowUp keydown, click; walk with arrows if needed; blur only once
+  every section holds a value; a section Workday rejected after an earlier fill is redone; a
+  self-identification Date gets today. Technique cross-checked with the public job_app_filler extension.
+- Answers-page values fill every matching question again. Company motivation stays excluded; a US
+  authorization or sponsorship value never answers a foreign-country question; under-18 wording is guarded.
+- New Memory policy `learned`: every finished owner answer is saved except motivation, signatures,
+  passwords, history-owned fields, date sections and native multi-selects. Keys:
+  `learn:fact|bank|topic:<text|choice>:<name>[@tenant]`. Reuse: exact reviewed screening fact, else the
+  same answer-bank rule, else topic similarity at least 0.72 (Dice, or 0.8 times containment when the
+  shorter question has 4+ meaning words) with equal negation, timeframe, numbers and country. History
+  with a named employer (worked, applied, interviewed, referred) is scoped to the tenant. Learned beats
+  older reusable/scoped records; newest wins. Choices reuse by exact label, then the label before its
+  qualifier, so "Asian (not Hispanic or Latino)" never selects "Hispanic or Latino".
+- Server refusal or no connection keeps the answer in `chrome.storage.local` key `aceLearnedLocal`,
+  fills from it, and migrates it on the next connection (one probe per page load).
+- Rules added: Government official or close links (composed from both bank rows), Conflict of interest,
+  Responses are accurate and complete, Privacy notice acknowledgement; more phrases for Consent to keep
+  my application on file. History roles need short labels (6 words, description 12, bare from/to 3).
+- Card: "N filled by ACE · N saved for next time" opens "Answers on this form" with each answer and its
+  source. The Memory switch is now "Save my answers for next time".
+- API (`backend/app/api/main.py`, `backend/app/answers/screening.py`): `reuse_policy=learned` only with
+  `learn:` keys; refuses motivation and signatures. Routine and scoped rules unchanged; no migration.
+
+Follow-up 1.31.1, same day. The owner reloaded the extension without refreshing an open Workday tab;
+its old content script showed "Extension context invalidated" when saving. Chrome never re-injects
+declared content scripts on reload, so `background.js` now injects the new scripts into open tabs on
+`onInstalled` reason `update`. Each copy marks its card `data-ace-instance`, a shared `#ace-card-owner`
+style hides every other copy's card, and Alt+A is taken on the window in capture so an orphaned copy
+cannot fill with old rules. The outer-frame card accepts the new `focus-answers` class. The card now
+counts Filled by ACE, Known, Unknown and Saved from page load (`formCounts`); "Saved" includes answers on
+the form ACE already holds. The V4 release (2e7c1dc) had rewritten the Meijer, Verizon, ServiceNow and
+Workday screening Playwright specs to expect blanks, disabling the owner's 2026-10-24 mappings; their
+original expectations are restored (except the later rule that "now or in the future" needs both saved
+sponsorship facts) and the same fixtures now run in the DOM suite.
+
+Validation: 97 DOM contracts, 267 rule cases, Memory cases, 88 backend auth/Memory tests, TypeScript,
+ESLint, dash and whitespace checks. Backend tests ran with pyenv 3.12.12 plus
+`PYTHONPATH=.venv/lib/python3.12/site-packages`: the `.venv` python symlink now points at
+/usr/bin/python3.12 and fails importing `_ctypes`. No Chrome (cooling); Playwright specs updated only.
+No real Workday page was exercised: the date fix is proven against a simulated Workday spinbutton.
+
 ## Inbox backlog correction LIVE with explicitly scoped cleanup, 2026-10-28 Pacific
 
 The owner approved exact API source **`6ee2eb223ce91f5464c9e825bf3d66f8d11aadd3`**

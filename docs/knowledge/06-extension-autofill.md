@@ -4,6 +4,25 @@
 >
 > Read this when: you change the autofill matcher, the panel, the answer bank or anything that touches a live application form.
 
+## Safety rules had stopped the extension filling or learning common answers (2026-10-28)
+
+Problem: a Workday From date always failed "Invalid Date: 01/", and voluntary disclosures,
+authorization, sponsorship, government, conflict and acknowledgement questions were neither filled nor
+saved, so the owner answered them on every application.
+
+Cause: Workday date sections only accept values through their own key handling; the V4 Memory release
+blocked Answers-page values and saving for every "sensitive" or "company" question; and history
+detection claimed any question containing "to" or "organization" as a job field.
+
+Fix: ArrowUp stepping with a blur only when the date is complete; bank values fill again; a `learned`
+Memory policy saves every finished owner answer and reuses it by answer-bank rule or meaning words with
+negation, timeframe, number and country guards; history roles need short labels; the card counts and
+lists what was filled and saved. Details: `ACE_NEXT_KNOWLEDGE.md`, first section.
+
+Lesson: a safety rule that silently blocks the owner's own saved answers is a defect, not a safeguard.
+Every rule that withholds an answer must be visible to the owner, and tests must cover the questions the
+owner actually meets, not only the dangerous ones.
+
 ## Applying faster: the bank was empty and hidden (2026-09-07)
 
 The user asked to cut the time spent retyping the same details. The

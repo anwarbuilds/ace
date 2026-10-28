@@ -73,9 +73,10 @@ test("Meijer first page keeps consent and company histories separate", async ({ 
     { label: "Previously worked for Meijer or Fresh Thyme", value: "No" },
     { label: "Previously employed by this company", value: "Yes" },
   ]);
-  for (const id of ["authorized", "sponsorship", "age", "texts", "contracted", "worked"]) {
-    await expect(page.locator(`#${id}`)).toHaveText("Select One");
-  }
+  for (const [id, value] of Object.entries({
+    authorized: "Yes", sponsorship: "No", age: "18 years or older",
+    texts: "No", contracted: "Yes", worked: "No",
+  })) await expect(page.locator(`#${id}`)).toHaveText(value);
 });
 
 test("adult status does not guess an age band", async ({ page }) => {
@@ -107,10 +108,11 @@ test("Meijer second page uses distinct recruiter, contractor and footprint answe
     { label: "Need sponsorship in future", value: "Yes" },
     { label: "Current visa or sponsorship description", value: "Example status" },
   ]);
-  for (const id of ["recruiter", "contractor", "footprint", "relocate", "sponsorship"]) {
-    await expect(page.locator(`#${id}`)).toHaveText("Select One");
-  }
-  await expect(page.locator("#visa")).toHaveValue("");
+  for (const [id, value] of Object.entries({
+    recruiter: "No", contractor: "Yes", footprint: "No", sponsorship: "Yes",
+  })) await expect(page.locator(`#${id}`)).toHaveText(value);
+  await expect(page.locator("#relocate")).toContainText("Yes, I am willing");
+  await expect(page.locator("#visa")).toHaveValue("Example status");
 });
 
 test("Meijer technical questions use their own saved answers", async ({ page }) => {
@@ -130,8 +132,8 @@ test("Meijer technical questions use their own saved answers", async ({ page }) 
   await expect(page.locator("#ai")).toHaveText("Yes");
   await expect(page.locator("#azure")).toHaveText("2-4 years");
   await expect(page.locator("#coding")).toHaveValue("Example coding assistant");
-  await expect(page.locator("#opt")).toHaveText("Select One");
-  await expect(page.locator("#hybrid")).toHaveText("Select One");
+  await expect(page.locator("#opt")).toHaveText("No");
+  await expect(page.locator("#hybrid")).toHaveText("Yes");
 });
 
 test("similar broad answers cannot fill unsaved Meijer questions", async ({ page }) => {
@@ -175,9 +177,12 @@ test("Verizon Workday questions keep each saved fact separate", async ({ page })
     { label: "Personally served in US military", value: "Yes" },
     { label: "Spouse served in US military", value: "No" },
   ]);
-  for (const id of ["authorized", "now", "future", "adult", "employee", "agreement", "government", "board", "military", "spouse"]) {
-    await expect(page.locator(`#${id}`)).toHaveText("Select One");
-  }
+  for (const [id, value] of Object.entries({
+    authorized: "No", adult: "Yes", employee: "Yes", agreement: "No",
+    government: "Yes", board: "No", military: "Yes", spouse: "No",
+  })) await expect(page.locator(`#${id}`)).toHaveText(value);
+  await expect(page.locator("#now")).toContainText("Yes, I do require");
+  await expect(page.locator("#future")).toContainText("No, I will not");
 });
 
 test("broad saved answers do not fill distinct Verizon questions", async ({ page }) => {

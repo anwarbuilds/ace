@@ -65,7 +65,9 @@ var CASES = [
   // Must stay empty.
   ["would you like to receive communications via sms and email", null],
   ["have you worked at doordash?*", null],
-  ["applicant privacy acknowledgement *", null],
+  // Owner decision 2026-10-28: a privacy acknowledgement is learned from
+  // the owner's own answer and filled again. It has no answer-bank value.
+  ["applicant privacy acknowledgement *", "Privacy notice acknowledgement"],
   ["what is your age range?", null],
   ["current company", null],
   ["video link url", null],
@@ -581,7 +583,16 @@ var SCREENING_CASES = [
   ["E. Are you currently, or have you been previously, suspended/debarred, proposed for suspension/debarment, or declared ineligible for award of a contract by any Government entity?", "yesno", "Government contract suspension or debarment"],
   ["Are you a graduate of the RiseUp with ServiceNow (formerly NextGen) Program?", "choice", "ServiceNow RiseUp graduate"],
   ["Name (Signature Field)", "text", null],
-  ["You declare that you have read and understand the privacy notice of ServiceNow", "yesno", null],
+  ["You declare that you have read and understand the privacy notice of ServiceNow", "yesno", "Privacy notice acknowledgement"],
+  ["Are you currently a government official or do you have any close links to a government official (including but not limited to a family member) who may have been working on Example Labs related products or business any time in the last 12 months?", "choice", "Government official or close links"],
+  ["Do you have any relationships or connections with an individual, business or organization which currently or potentially has a competitive or business relationship with Example Labs?", "choice", "Conflict of interest"],
+  ["Do you wish to be considered for other opportunities that may become available in the future and for which you are qualified?", "choice", "Consent to keep my application on file"],
+  ["I acknowledge that my responses are accurate and complete.", "choice", "Responses are accurate and complete"],
+  ["Are you currently legally eligible to work in the country for which the position is located?", "choice", "Work authorisation"],
+  ["Do you require any type of sponsorship now or in the future?", "choice", "Need sponsorship in future"],
+  ["Are you a Protected Veteran?", "choice", "Veteran status"],
+  ["Please select your race/ethnicity.", "choice", "Race or ethnicity"],
+  ["Please select your gender.", "choice", "Gender"],
   ["Are you a citizen or permanent resident of the United States?", "yesno", "US citizen or permanent resident"],
   ["Have you ever worked for this company?", "yesno", "Previously employed by this company"],
   ["Are you a former employee of our company?", "yesno", "Previously employed by this company"],

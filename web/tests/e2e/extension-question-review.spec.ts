@@ -67,7 +67,8 @@ test('Workday checkbox choices show the full question and fill once after approv
   await expect(page.locator('#choice-3')).toBeChecked();
   for (let at = 0; at < 3; at++) await expect(page.locator(`#choice-${at}`)).not.toBeChecked();
   await expect(panel.locator('.studio-question').filter({ hasText: question })).toHaveCount(0);
-  expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(0);
+  // Owner decision 2026-10-28: the answer is saved, kept with this employer.
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
   expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
 });
 
@@ -254,9 +255,9 @@ test('native choices save without approval while synthetic page events cannot te
   expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
   await panel.getByRole('button', { name: 'Settings & activity', exact: true }).click();
   await panel.getByRole("button", { name: "Memory", exact: true }).click();
-  await expect(panel.getByRole('switch', { name: 'Auto-save reusable answers: On' })).toBeChecked();
-  await panel.getByRole('switch', { name: 'Auto-save reusable answers: On' }).click();
-  await expect(panel.getByRole('switch', { name: 'Auto-save reusable answers: Off' })).not.toBeChecked();
+  await expect(panel.getByRole('switch', { name: 'Save my answers for next time: On' })).toBeChecked();
+  await panel.getByRole('switch', { name: 'Save my answers for next time: On' }).click();
+  await expect(panel.getByRole('switch', { name: 'Save my answers for next time: Off' })).not.toBeChecked();
 });
 
 
@@ -279,7 +280,7 @@ test('employer focus preserves the selected question and filling requires a clic
   await expect(page.locator('#detail-0')).toHaveValue('');
 });
 
-test('a direct protected custom dropdown choice completes without another approval and never enters Memory', async ({ page }) => {
+test('a direct sponsorship dropdown choice completes without another approval and is saved for next time', async ({ page }) => {
   const panel = await load(page, '<label id="sponsor-label">Will you require visa sponsorship?</label><div id="sponsor" role="combobox" aria-labelledby="sponsor-label" aria-controls="sponsor-options" tabindex="0">Select One</div>', [], false, true);
   await page.evaluate(() => {
     const field = document.getElementById('sponsor')!;
@@ -292,9 +293,9 @@ test('a direct protected custom dropdown choice completes without another approv
   });
   await page.locator('#sponsor').click(); await page.getByRole('option', { name: 'Yes', exact: true }).click();
   await expect(panel.getByText('Answered on form', { exact: true })).toBeVisible();
-  await expect(panel.getByText('Your choice is recorded for this application only.')).toBeVisible();
   await expect(panel.getByRole('button', { name: /Approve/ })).toHaveCount(0);
-  expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(0);
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
+  await expect(panel.getByText('Saved. ACE fills it on questions that mean the same thing.')).toBeVisible();
   expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
 });
 
