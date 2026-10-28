@@ -19,7 +19,7 @@ export function LineChart({ points, interval, href }: { points: ChartPoint[]; in
       {[0, 1, 2, 3, 4].map(i => <g key={i}><line x1="38" x2="748" y1={116 - i * 25} y2={116 - i * 25} stroke="var(--border-subtle)" /><text x="23" y={120 - i * 25} textAnchor="end">{step * i}</text></g>)}
       {plotted.length > 0 && <><polygon points={`38,116 ${line} ${plotted.at(-1)!.x},116`} fill={`url(#${id})`} /><polyline points={line} fill="none" stroke="var(--accent)" strokeWidth="2.3" />{plotted.map((p, i) => <g key={p.date}>
         {plotted.length <= 100 && <a href={href(p)} aria-label={`${p.date}${p.end !== p.date ? ` through ${p.end}` : ""}: ${p.count} submissions. Open applications.`}><circle cx={p.x} cy={p.y} r="4" fill="var(--accent)" stroke="var(--surface-1)" strokeWidth="1.5"><title>{`${p.date}: ${p.count} submissions`}</title></circle></a>}
-        {(i % Math.max(1, Math.ceil(plotted.length / 8)) === 0 || i === plotted.length - 1) && <text x={p.x} y="141" textAnchor="middle">{tick(p.date)}</text>}
+        {(i === plotted.length - 1 || (i % Math.max(1, Math.ceil(plotted.length / 8)) === 0 && plotted.length - 1 - i >= Math.max(1, Math.ceil(plotted.length / 8)) * .7)) && <text className="an-x-tick" x={p.x} y="141" textAnchor="middle">{tick(p.date)}</text>}
       </g>)}</>}
     </svg>
     <details className="an-chart-details"><summary>View chart data</summary><div className="an-data-scroll"><table className="an-table"><thead><tr><th>Submission dates</th><th>Applications</th><th>Records</th></tr></thead><tbody>{points.map(p => <tr key={p.date}><th>{p.date}{p.end !== p.date && ` to ${p.end}`}</th><td>{p.count}</td><td><Link href={href(p)}>View applications</Link></td></tr>)}</tbody></table></div></details>

@@ -90,10 +90,10 @@
 .an-week-picker button:disabled { opacity: .4; cursor: default; }
 .an-foot { font-size: var(--text-small); color: var(--text-secondary); margin: 9px 0 0; line-height: var(--leading-nav); }
 .an-columns { display: flex; gap: 26px; align-items: stretch; height: 180px; padding: 0 12px; margin-top: 20px; }
-.an-weekly { height: 116px; gap: 22px; margin-top: 16px; }
+.an-weekly { height: 98px; gap: 22px; margin-top: 26px; }
 .an-column { display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: center; gap: 5px; font-size: var(--text-small); color: var(--text-secondary); text-align: center; }
 .an-column-plot { width: 100%; height: 125px; display: flex; align-items: flex-end; border-bottom: 1px solid var(--border-subtle); }
-.an-weekly .an-column-plot { height: 88px; }
+.an-weekly .an-column-plot { height: 70px; }
 .an-column-plot i { position: relative; display: block; width: 100%; max-width: 56px; margin: 0 auto; border-radius: 4px 4px 0 0; }
 .an-weekly .an-column-plot i { max-width: 38px; }
 .an-column-plot i>span { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); font-style: normal; }
@@ -172,7 +172,9 @@
 .an-empty-combinations p { margin: 0; font-size: var(--text-label); line-height: var(--leading-nav); }
 .an-tab-companies { padding-top: 6px; }
 .an-tab-companies .an-hero { min-height: 84px; margin-bottom: 8px; }
-.an-tab-companies .an-metric { min-height: 104px; }
+.an-tab-companies .an-eyebrow { line-height: var(--leading-compact); }
+.an-tab-companies .an-hero h1 { margin-bottom: 3px; }
+.an-tab-companies .an-metric { min-height: 104px; padding-block: 11px; }
 .an-tab-companies .an-metric-label { margin-bottom: 2px; }
 .an-tab-companies .an-metric-value { font-size: var(--text-title); }
 .an-tab-companies .an-metric-number { margin-bottom: 4px; }
@@ -180,7 +182,7 @@
 .an-company-top .an-panel { min-height: 280px; padding: 12px 16px; }
 .an-company-top .an-panel h2,.an-company-mid .an-panel h2,.an-company-bottom .an-panel h2 { font-size: var(--text-card); }
 .an-company-top .an-panel-head { margin-bottom: 9px; }
-.an-company-top .an-table th,.an-company-top .an-table td { padding: 4px 3px; }
+.an-company-top .an-table th,.an-company-top .an-table td { padding: 3px; }
 .an-company-table td:nth-child(3) { text-align: left; }
 .an-company-top .company-logo { --logo-size: 24px; }
 .an-company-top .company-logo img { width: 22px; height: 22px; }
@@ -320,3 +322,15 @@
 @media(max-width:650px){.an-record-search,.an-record-search label,.an-record-search input[type=search]{width:100%}.an-page-size{margin-left:0}.an-evidence-list,.an-evidence-list li{justify-items:start;justify-content:flex-start}}
 
 .an-company-select{display:inline-flex;align-items:center;gap:6px;min-width:0}
+
+/* Keep native inspection controls compact at the approved desktop geometry. */
+@media(min-width:1101px) {
+  .an-role-top>.an-panel:first-child { position: relative; }
+  .an-role-details:not([open]) { position: absolute; right: var(--an-pad); top: 17px; margin: 0; }
+  .an-role-top .an-table th,.an-role-top .an-table td { padding-top: 5px; padding-bottom: 5px; }
+  .an-history-table>a,.an-history-head { padding-top: 1px; padding-bottom: 1px; }
+}
+@media(min-width:1600px) {
+  .an-company-mid>.an-panel:nth-child(2) { position: relative; }
+  .an-company-mid>.an-panel:nth-child(2)>.an-chart-key { position: absolute; right: 16px; top: 12px; margin: 0; gap: 8px; }
+}

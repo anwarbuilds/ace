@@ -23,10 +23,13 @@ for (const theme of ["light","dark"] as const) {
       await expect(page.locator(".an-metric").first().locator(".an-metric-value")).toHaveText(String(report.submitted));
       await expect(page.locator(".an-metric").nth(1).locator(".an-metric-value")).toHaveText(String(report.week_total));
       await page.evaluate(()=>document.fonts.ready);
+      await expect(page.locator(".an-page")).toHaveCount(1);
+      await page.evaluate(()=>window.scrollTo(0,0));
+      await expect(page.getByRole("heading",{name:"Analytics",exact:true})).toBeInViewport();
       expect(await page.evaluate(TEXT_SCAN)).toEqual([]);
       expect(await page.evaluate(DRAWN_SCAN)).toEqual([]);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
-      expect(await page.locator('.an-tabs a[aria-current="page"]').count()).toBe(1);
+      await expect(page.locator('.an-tabs a[aria-current="page"]')).toHaveCount(1);
       await page.screenshot({path:path.join(root,`${theme}-${tab}.png`)});
       await page.screenshot({path:path.join(root,`${theme}-${tab}-full.png`),fullPage:true});
     }
@@ -94,6 +97,11 @@ test("company selector, verified petitions, logo asset and monogram fallback wor
 
 test("chart controls, data table and keyboard navigation work",async({page})=>{
   await page.goto("/app/analytics?days=30");
+  await expect(page.locator(".an-page")).toHaveCount(1);
+  await expect(page.locator(".an-line-chart .an-x-tick").first()).toBeVisible();
+  await page.evaluate(()=>document.fonts.ready);
+  const ticks=await page.locator(".an-line-chart .an-x-tick").evaluateAll(nodes=>nodes.map(node=>{const b=node.getBoundingClientRect();return {left:b.left,right:b.right};}));
+  expect(ticks.every((tick,index)=>index===0||tick.left>=ticks[index-1].right)).toBe(true);
   await page.getByLabel("Chart interval").selectOption("weekly");
   await expect(page.getByRole("img",{name:/Unique submissions by calendar week/})).toBeVisible();
   await page.getByText("View chart data",{exact:true}).click();
@@ -273,6 +281,9 @@ test("calendar aggregation and historical weeks preserve headline scope",async({
 test("reference desktop keeps five aligned KPIs and the six company modules in order",async({page})=>{
   await page.setViewportSize({width:1672,height:941});
   await page.goto("/app/analytics?days=30");
+  await expect(page.getByRole("heading",{name:"Applications over time",exact:true})).toBeVisible();
+  await expect(page.locator(".an-page")).toHaveCount(1);
+  await expect(page.locator(".an-overview-top .an-panel").first()).toBeVisible();
   const cards=await page.locator(".an-metric").evaluateAll(nodes=>nodes.map(node=>{const b=node.getBoundingClientRect();return {y:b.y,height:b.height};}));
   expect(cards).toHaveLength(5);
   expect(new Set(cards.map(b=>b.y)).size).toBe(1);

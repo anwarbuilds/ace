@@ -130,3 +130,10 @@ test("Analytics shows selected-scope evidence exclusions and total pending mail 
   assert.match(html,/Decide later/);
   assert.match(html,/has not been verified/);
 });
+
+
+test("an empty cohort has no invented zero-denominator percentage",()=>{
+  const html=renderToStaticMarkup(React.createElement(AnalyticsView,{d:base,connection:null,tab:"outcomes",query:{}}));
+  assert.match(html,/>n\/a</);
+  assert.doesNotMatch(html,/>0%</);
+});
