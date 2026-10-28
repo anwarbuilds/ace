@@ -212,7 +212,7 @@ class ExtensionMemoryInput(BaseModel):
     answer_type: str = Field(pattern="^(text|choice|yesno)$")
     source_host: str = Field(default="", max_length=255)
     expected_revision: int | None = None
-    reuse_policy: str = Field(default="reusable", pattern="^(reusable|scoped)$")
+    reuse_policy: str = Field(default="reusable", pattern="^(reusable|scoped|learned)$")
 
 
 class HistoryItem(BaseModel):
@@ -1615,17 +1615,24 @@ def create_app() -> FastAPI:
     @app.put("/api/extension/memory")
     def put_extension_memory(payload: ExtensionMemoryInput, session: Session = Depends(get_session)) -> dict:
         # The extension token may write only this narrow, idempotent resource.
-        # Explicit ACE answers and committed owner edits under the auto-save
-        # preference may save only routine answers or the reviewed scoped facts.
+        # Routine answers and reviewed scoped facts keep their original rules.
+        # Learned answers are the owner's own answers from employer forms,
+        # reused for questions with the same meaning (owner decision,
+        # 2026-10-28); company motivation and signatures are never stored.
         question = payload.question.strip()
-        from backend.app.answers.screening import valid_screening_memory
+        from backend.app.answers.screening import valid_learned_memory, valid_screening_memory
         scoped = payload.reuse_policy == "scoped"
+        learned = payload.reuse_policy == "learned"
         if not scoped and payload.concept.strip().startswith("fact:v1:"):
             raise HTTPException(status_code=422, detail="Screening facts require their scoped reuse policy.")
+        if learned != payload.concept.strip().startswith("learn:"):
+            raise HTTPException(status_code=422, detail="Learned answers use their own reuse policy and keys.")
+        if learned and not valid_learned_memory(question, payload.concept.strip()):
+            raise HTTPException(status_code=422, detail="Company motivation and signatures stay on the employer form.")
         if scoped and not valid_screening_memory(question, payload.concept.strip(), payload.answer,
                                                   payload.answer_type, payload.source_host):
             raise HTTPException(status_code=422, detail="This screening answer has no compatible reusable scope.")
-        if not scoped and (re.search(
+        if not scoped and not learned and (re.search(
             r"\b(visa|sponsor(?:ship|ed|ing)?|work authori[sz]\w*|authorization to work|authorisation to work|authorized to work|authorised to work|right to work|citizen\w*|immigration|opt|cpt|practical training|f-?1|h-?1b|disability|veteran|ethnic\w*|race|gender|age|at least 18|18 years old|birth|criminal|felon|government|military|board of directors|export control|signature|certif\w*|attest\w*|privacy|consent\w*|acknowledg\w*|declar\w*|agree\w*|authoriz\w*|authoris\w*|salary|compensation|non.?compet\w*|non.?solicit\w*|signed|subject to any agreement|conflict of interest)\b",
             question, re.I,
         ) or re.search(r"\b(why do you want to|why are you interested in|what makes you want to join|ever worked|previously worked|formerly worked|been employed|currently employed|previously employed|employee of|employed at|employed with|worked at|worked for|temporary work for|interviewed for|search agency|employment agency|recruitment agency|contracted with|contractor at|contractor for|current contractor|current or former|applied to|applied for|recruiters?|agencies|referred by|our footprint|our 6.state footprint|this hybrid schedule|onsite at the office at least|family members|relatives|personal relationship|work at [a-z]|work for [a-z])\b", question, re.I)):

@@ -296,7 +296,24 @@ var ACE_RULES = [
     // about being a referral of one, and are answered by their own
     // rules below.
     not: ["family relationship", "close personal relationship",
-          "referral of"] },
+          "referral of", "close links", "links to a government official"] },
+  // Some Workday forms ask both at once: "Are you currently a government
+  // official or do you have any close links to a government official
+  // (including but not limited to a family member) ...". One answer covers
+  // the pair, so it is composed from the two rows above, or learned.
+  { answer: "Government official or close links", type: ACE_YESNO,
+    any: ["close links to a government official",
+          "links to a government official",
+          "government official or do you have",
+          "government official or related to",
+          "government official or a close relative"] },
+  // Asked of a relationship with a competitor or business partner of the
+  // hiring company, not of a relative's own business.
+  { answer: "Conflict of interest", type: ACE_YESNO,
+    any: ["conflict of interest", "conflicts of interest",
+          "potential conflict", "competitive or business relationship",
+          "relationships or connections with an individual",
+          "lower your impartiality", "impartiality"] },
   { answer: "Related to a government official", type: ACE_YESNO,
     any: ["with a government official",
           "relationship with a government official"],
@@ -319,7 +336,24 @@ var ACE_RULES = [
   { answer: "Consent to keep my application on file", type: ACE_YESNO,
     any: ["retain your application", "keep your application on file",
           "subsequent job opportunities", "future job opportunities",
-          "consider you for other", "talent community"] },
+          "consider you for other", "talent community",
+          "considered for other opportunities", "considered for other positions",
+          "considered for other roles", "considered for future opportunities",
+          "other opportunities that may become available"] },
+  // "I acknowledge that my responses are accurate and complete." Its own
+  // statement, kept apart from agreeing to an employer's terms.
+  { answer: "Responses are accurate and complete", type: ACE_YESNO,
+    any: ["responses are accurate", "accurate and complete",
+          "true and complete", "true correct and complete",
+          "true and correct", "true accurate and complete",
+          "information provided is true", "inaccurate or incomplete"] },
+  // Workday and others ask the applicant to confirm reading the employer's
+  // candidate privacy notice before they will continue.
+  { answer: "Privacy notice acknowledgement", type: ACE_YESNO,
+    any: ["privacy notice", "privacy policy", "privacy statement",
+          "candidate privacy", "applicant privacy", "data privacy notice",
+          "processing of my personal data", "use of personal data"],
+    not: ["sms", "text message", "whatsapp"] },
   // "Medtronic uses AI-based tools in the recruitment process ... By
   // selecting Yes, you consent to the use of AI in the recruitment
   // process." Asked of the process, never of the candidate's own skill:
@@ -528,7 +562,8 @@ var ACE_RULES = [
     // "relocate" bare is what a name attribute says, and a question
     // containing the word is not plausibly about anything else.
     any: ["willing to relocate", "open to relocat", "relocation required",
-          "able to relocate", "relocate", "relocation"] },
+          "able to relocate", "relocate", "relocation", "open to relocating",
+          "relocating"] },
   { answer: "Willing to work onsite", type: ACE_YESNO,
     any: ["willing to work from", "local office", "onsite and in person",
           "work in office", "work from the office", "work onsite",
@@ -1219,10 +1254,8 @@ function aceAnswerNameFor(question, kind, availableNames) {
     return null;
   }
 
-  // A typed name here is a legal signature, and a privacy declaration
-  // is an attestation. The person must choose those themselves.
-  if (["signature field", "electronic signature", "electronically signing",
-       "privacy notice", "privacy acknowledgement"].some(function (phrase) {
+  // A typed name here is a legal signature. The person signs themselves.
+  if (["signature field", "electronic signature", "electronically signing"].some(function (phrase) {
     return acePhraseIn(question, phrase);
   })) return null;
 
@@ -1470,6 +1503,43 @@ function aceChooseOption(options, answer, aliases) {
   return only(contained);
 }
 
+/* A choice the owner made on another form, found among this form's options.
+
+   Option labels often name other categories in a qualifier: "Asian (not
+   Hispanic or Latino)". Read with containment alone, that qualifier
+   matches a "Hispanic or Latino" option, which is the wrong answer on a
+   federal self-identification form. So the exact text decides first,
+   then the label before its qualifier, and only then the general rules,
+   which still refuse to choose between two equally good options. */
+function aceLearnedHead(text) {
+  return aceNormalise(String(text || "").split(/\(|\[|\s-\s|:/)[0]);
+}
+
+function aceChooseLearnedOption(options, answer) {
+  var wanted = aceNormalise(answer);
+  if (!wanted) return -1;
+
+  var texts = options.map(aceNormalise);
+  var exact = texts.indexOf(wanted);
+  if (exact >= 0) return exact;
+
+  var head = aceLearnedHead(answer);
+  if (head) {
+    var heads = [];
+    options.forEach(function (option, index) {
+      if (aceLearnedHead(option) === head) heads.push(index);
+    });
+    if (heads.length === 1) return heads[0];
+    if (heads.length > 1) return -1;
+    if (head !== wanted) {
+      var byHead = aceChooseOption(options, head);
+      if (byHead >= 0) return byHead;
+    }
+  }
+
+  return aceChooseOption(options, answer);
+}
+
 /* The candidate sharing the most meaningful words with the answer.
 
    Requires a clear winner: a tie means the answer does not choose
@@ -1595,8 +1665,17 @@ function aceHistoryRole(field, question) {
   // "employer", so a first-match rule read the Yes/No beside the dates
   // as another employer box. That made every radio its own block, and
   // the form came out as four blocks of one field each.
+  // A history label names one field in a few words: "Company", "From",
+  // "Job Title", "Role Description". A screening question that merely
+  // contains "to" or "organization" is not one. Claiming it made every
+  // question on a Workday page part of a job block, so none was filled
+  // or saved, and "eligible to work" was offered a job's end date.
+  var words = aceNormalise(question).replace(/[^a-z0-9 ]+/g, " ").trim().split(/\s+/).filter(Boolean);
+  if (words.length > 12) return null;
+
   var best = null;
   var bestScore = 0;
+  var bestPhrase = "";
 
   for (var i = 0; i < ACE_HISTORY_ROLES.length; i++) {
     var rule = ACE_HISTORY_ROLES[i];
@@ -1605,13 +1684,17 @@ function aceHistoryRole(field, question) {
       if (acePhraseIn(question, phrase) && phrase.length > bestScore) {
         bestScore = phrase.length;
         best = rule.role;
+        bestPhrase = phrase;
       }
     });
   }
 
+  if (best && best !== "description" && words.length > 6) return null;
+  if ((bestPhrase === "from" || bestPhrase === "to") && words.length > 3) return null;
   if (best) return best;
 
   // A bare "Month" or "Year", which is what these actually say.
+  if (words.length > 4) return null;
   if (acePhraseIn(question, "month")) return "month";
   if (acePhraseIn(question, "year")) return "year";
 

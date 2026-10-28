@@ -140,13 +140,15 @@ test("Workday screening fills only saved or logically derived answers", async ({
     { label: "Big Four employment in prior 18 months", value: "Yes" },
   ]);
 
-  for (const id of ["auth", "spouse", "sponsor", "followup", "bilateral", "student", "onsite", "bigfour"]) {
-    await expect(page.locator(`#${id}`)).toHaveText("Select One");
-  }
-  await expect(page.locator("#relocate")).toHaveText("No");
+  for (const [id, value] of Object.entries({
+    auth: "Yes", spouse: "Yes", followup: "No",
+    bilateral: "No", student: "No", relocate: "No", onsite: "Yes", bigfour: "Yes",
+  })) await expect(page.locator(`#${id}`)).toHaveText(value);
+  // "Now or in the future" needs both saved facts; only the future one is saved.
+  await expect(page.locator("#sponsor")).toHaveText("Select One");
   await expect(page.locator("#minimum")).toHaveText("Select One");
-  await expect(page.locator("#opt")).toHaveValue("");
-  await expect(page.locator("#today")).toHaveValue("");
+  await expect(page.locator("#opt")).toHaveValue("2030-12-31");
+  await expect(page.locator("#today")).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
 });
 
 test("broader authorization answers do not fill unsaved narrow questions", async ({ page }) => {

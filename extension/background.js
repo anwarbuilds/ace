@@ -126,6 +126,27 @@ function routeFocusPanel(message, sender, respond) {
   });
 }
 
+/* An extension update leaves every open tab running the previous content
+   script, cut off from Chrome ("Extension context invalidated"): it can no
+   longer load or save answers. The new one is injected into open pages, so
+   an application in progress keeps working without a reload that could lose
+   what was typed. The new copy claims the card and the old one is hidden.
+   Pages ACE may not access are left alone. */
+if (chrome.runtime.onInstalled) chrome.runtime.onInstalled.addListener(function (details) {
+  if (!details || details.reason !== "update") return;
+  chrome.tabs.query({}, function (tabs) {
+    (tabs || []).forEach(function (tab) {
+      if (!Number.isSafeInteger(tab.id)) return;
+      chrome.scripting.executeScript({
+        target: { tabId: tab.id, allFrames: true },
+        files: ["fields.js", "memory.js", "content.js"],
+      }, function () {
+        void chrome.runtime.lastError;
+      });
+    });
+  });
+});
+
 chrome.runtime.onMessage.addListener(
   function (message, sender, respond) {
     if (message && message.type === 'aceFocusRoute') {

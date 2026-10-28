@@ -77,3 +77,35 @@ for (const [a, b] of [
 assert.equal(memory.storagePolicy(tenantQuestion, 'yesno', 'https://unknown.greenhouse.io/apply'), null);
 assert.equal(memory.equivalent('Describe your experience building integration tests', 'Tell us about your experience writing integration tests', 'text', 'text'), true);
 console.log('scoped screening and paraphrase cases pass');
+
+// Owner decision 2026-10-28: every owner answer is learned and reused for
+// questions with the same meaning. Fictional employers only.
+const ctx = 'https://silverpine.wd5.myworkdayjobs.com/en-US/Careers/job/Engineer_R1/apply/applyManually';
+assert.equal(memory.learnable('Do you require any type of sponsorship now or in the future?'), true);
+assert.equal(memory.learnable('Please select your gender.'), true);
+assert.equal(memory.learnable('Why do you want to join Silverpine?'), false);
+assert.equal(memory.learnable('Electronic signature: type your full name'), false);
+const sim = (a, b) => memory.similarity(memory.topic(a), memory.topic(b));
+assert.ok(sim('Describe your experience writing integration tests', 'Please tell us about your experience writing integration tests.') >= 0.72);
+assert.ok(sim('Describe your experience writing integration tests', 'Describe your experience writing unit tests') < 0.72);
+assert.ok(sim('Do you require sponsorship now?', 'Do you require sponsorship in the future?') < 0.72, 'timeframe');
+assert.ok(sim('Are you comfortable working in an office five days a week?', 'Are you comfortable working in an office three days a week?') < 0.72, 'number words');
+assert.ok(sim('Are you authorized to work in the U.S.?', 'Are you legally authorized to work in Canada?') < 0.72, 'country');
+assert.ok(sim('Are you willing to relocate?', 'Are you willing to travel?') < 0.72);
+assert.equal(memory.employerScoped('Have you ever worked for Silverpine Labs?'), true);
+assert.equal(memory.employerScoped('Were you referred by an employee?'), true);
+assert.equal(memory.employerScoped('Do you have relatives working at Silverpine?'), false);
+assert.equal(memory.employerScoped('Have you worked with React?'), false);
+const bankKey = memory.learnedConcept('Please select your gender.', 'choice', ctx, 'Gender', ['silverpine']);
+assert.equal(bankKey, 'learn:bank:choice:gender');
+const genderRecord = { concept: bankKey, question: 'Please select your gender.', answer: 'Male', answer_type: 'choice', reuse_policy: 'learned' };
+assert.equal(memory.learnedMatch('What is your gender?', 'yesno', [genderRecord], 'https://boards.greenhouse.io/cobalt/jobs/1', 'Gender', ['cobalt'])?.answer, 'Male');
+assert.equal(memory.learnedMatch('What is your gender?', 'text', [genderRecord], 'https://boards.greenhouse.io/cobalt/jobs/1', 'Gender', ['cobalt']), null, 'text never takes a choice answer');
+const workedKey = memory.learnedConcept('Have you previously worked for Silverpine?', 'text', ctx, null, ['silverpine']);
+assert.match(workedKey, /@silverpine\.wd5\.myworkdayjobs\.com\/careers$/);
+const workedRecord = { concept: workedKey, question: 'Have you previously worked for Silverpine?', answer: 'No', answer_type: 'text', reuse_policy: 'learned' };
+assert.equal(memory.learnedMatch('Have you previously worked for Cobalt?', 'text', [workedRecord], 'https://cobalt.wd1.myworkdayjobs.com/en-US/Jobs/job/X/apply', null, ['cobalt']), null, 'another employer never reuses it');
+assert.equal(memory.learnedConcept('Are you a U.S. citizen or permanent resident?', 'choice', ctx, 'US citizen or permanent resident'), 'learn:fact:choice:us-status:citizen,resident');
+const older = { ...genderRecord, concept: 'q:please select your gender', reuse_policy: 'reusable', answer: 'Female', approved_at: '2026-10-01T00:00:00Z' };
+assert.equal(memory.learnedMatch('Please select your gender.', 'choice', [older, genderRecord], ctx, 'Gender')?.answer, 'Male', 'learned answers win over older records');
+console.log('learned answer cases pass');

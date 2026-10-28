@@ -120,6 +120,188 @@
     if (/^(choice|yesno)$/.test(kind) && screeningConcept(question, context)) return "scoped";
     return policy(question) === "reusable" ? "reusable" : null;
   }
+
+  // Owner decision, 2026-10-28: every answer the owner gives on an employer
+  // form is saved and filled again when a later question means the same
+  // thing, including authorization, sponsorship, voluntary disclosures,
+  // conflicts and acknowledgements. Company motivation stays on the employer
+  // form, and signatures and credentials are never saved.
+  function learnable(question) {
+    var q = norm(question);
+    if (!q || isEmployerMotivation(question)) return false;
+    return !/\b(signature|esignature|e signature|electronic(?:ally)? sign\w*|sign your name|type your (?:full |legal )?name to sign|password|passcode|captcha)\b/.test(q);
+  }
+  var STOP = {};
+  ("a an the you your yours are is am was were be been being do does did have has had having any of to in into " +
+   "for on at by with from as or and nor if then than that this these those it its will would could should can may " +
+   "might must shall please kindly select choose indicate provide enter state answer below above following one each " +
+   "which who whom whose what when where how our us we i me my there their they them so such also all both either " +
+   "about etc eg ie e g type kind sort required optional question box field legally lawfully ever currently current " +
+   "now presently present future previously previous past former formerly before prior not never no without none " +
+   "last within over since time period month months year years day days describe explain share tell give briefly " +
+   "example examples detail details experience experiences writing building developing implementing using utilizing " +
+   "utilize use").split(" ").forEach(function (word) { STOP[word] = 1; });
+  var NUMBERS = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11,
+    twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, hundred: 100 };
+  var SAME = {
+    authorised: "authorized", authorise: "authorized", authorize: "authorized", authorization: "authorized",
+    authorisation: "authorized", eligible: "authorized", eligibility: "authorized", permitted: "authorized",
+    entitled: "authorized", allowed: "authorized", sponsor: "sponsorship", sponsored: "sponsorship",
+    sponsoring: "sponsorship", require: "need", requires: "need", requiring: "need", needed: "need",
+    role: "opportunity", position: "opportunity", job: "opportunity", opening: "opportunity", vacancy: "opportunity",
+    considered: "consider", consideration: "consider", wish: "want", like: "want", interested: "want",
+    relationship: "relation", connection: "relation", link: "relation", tie: "relation", affiliation: "relation",
+    relative: "family", household: "family", acknowledgement: "acknowledge", acknowledgment: "acknowledge",
+    certify: "acknowledge", certification: "acknowledge", attest: "acknowledge", affirm: "acknowledge",
+    confirm: "acknowledge", declare: "acknowledge", true: "accurate", correct: "accurate", complete: "accurate",
+    truthful: "accurate", employed: "work", employment: "work", employee: "work", working: "work", worked: "work",
+    employer: "company", organization: "company", organisation: "company", firm: "company",
+    governmental: "government", disabled: "disability", sex: "gender", racial: "race", ethnicity: "race",
+    ethnic: "race", relocation: "relocate", traveling: "travel", travelling: "travel", agree: "consent",
+    agreement: "consent", accept: "consent", acceptance: "consent", convicted: "criminal", conviction: "criminal",
+    felony: "criminal", crime: "criminal", competitor: "compete", competing: "compete", competition: "compete",
+    competitive: "compete", referred: "referral", refer: "referral"
+  };
+  var CANONICAL = {};
+  Object.keys(SAME).forEach(function (key) { CANONICAL[SAME[key]] = 1; });
+  // Plural and ending forms of one word share a stem: relocate, relocating
+  // and relocation all read as "relocat".
+  function word(token) {
+    if (token.length > 4 && /ies$/.test(token)) token = token.slice(0, -3) + "y";
+    else if (token.length > 3 && /s$/.test(token) && !/ss$/.test(token)) token = token.slice(0, -1);
+    if (SAME[token]) return SAME[token];
+    if (CANONICAL[token]) return token;
+    if (token.length >= 6 && /ing$/.test(token)) return token.slice(0, -3);
+    if (token.length >= 7 && /ion$/.test(token)) return token.slice(0, -3);
+    if (token.length >= 5 && /ed$/.test(token)) return token.slice(0, -2);
+    if (token.length >= 5 && /e$/.test(token)) return token.slice(0, -1);
+    return token;
+  }
+  function hostWords(context) {
+    var host = "";
+    try { host = new URL(context || "").hostname.toLowerCase(); } catch (_) { host = String(context || "").toLowerCase(); }
+    return host.split(".").filter(function (part) {
+      return part.length > 2 && !/^(www|jobs|careers|career|apply|boards|job|wd\d+|myworkdayjobs|myworkdaysite|greenhouse|lever|ashbyhq|workable|smartrecruiters|icims|taleo|oraclecloud|com|net|org|io|co)$/.test(part);
+    });
+  }
+  // The meaning-bearing words of a question. The employer's own name is left
+  // out, so the same question asked by another company still matches. Kept
+  // for reuse: the card recounts every question on each change.
+  var topics = {}, topicCount = 0;
+  function topic(question, employerWords) {
+    var cacheKey = String(question || "") + "|" + (employerWords || []).join("|");
+    if (topics[cacheKey]) return topics[cacheKey];
+    if (++topicCount > 4000) { topics = {}; topicCount = 1; }
+    return (topics[cacheKey] = readTopic(question, employerWords));
+  }
+  function readTopic(question, employerWords) {
+    var q = norm(question).replace(/\bu s\b/g, "us").replace(/\bunited states(?: of america)?\b/g, "us")
+      .replace(/\b[a-z]+\b/g, function (token) { return NUMBERS[token] ? String(NUMBERS[token]) : token; });
+    var skip = {};
+    (employerWords || []).forEach(function (name) { norm(name).split(" ").forEach(function (part) { if (part) skip[part] = 1; }); });
+    var tokens = [];
+    q.split(" ").forEach(function (token) {
+      if (!token || STOP[token] || skip[token] || /^\d+$/.test(token)) return;
+      token = word(token);
+      if (!STOP[token] && !skip[token] && tokens.indexOf(token) < 0) tokens.push(token);
+    });
+    var countries = [];
+    (norm(question).match(/\b(united states|u s a|u s|usa|america|canada|mexico|united kingdom|uk|britain|england|ireland|germany|france|netherlands|spain|italy|poland|switzerland|sweden|europe|eu|india|china|singapore|japan|korea|australia|new zealand|brazil|israel|philippines)\b/g) || []).forEach(function (name) {
+      name = /^(united states|u s a|u s|usa|america)$/.test(name) ? "us" : /^(united kingdom|britain|england)$/.test(name) ? "uk" : name;
+      if (countries.indexOf(name) < 0) countries.push(name);
+    });
+    return { tokens: tokens, countries: countries.sort().join("|"),
+      // A negation, timeframe or number can reverse an answer while every
+      // subject word stays the same.
+      negative: /\b(not|never|no longer|without|none)\b/.test(q),
+      future: /\b(future|going forward)\b/.test(q),
+      past: /\b(ever|previously|previous|past|former|formerly|before|prior|in the last|within the last|over the last|have you been)\b/.test(q),
+      numbers: (q.match(/\d+/g) || []).join("|") };
+  }
+  function similarity(a, b) {
+    if (a.tokens.length < 2 || b.tokens.length < 2) return 0;
+    // A different country is a different question, however alike the words.
+    if (a.negative !== b.negative || a.future !== b.future || a.past !== b.past || a.numbers !== b.numbers || a.countries !== b.countries) return 0;
+    var shared = a.tokens.filter(function (token) { return b.tokens.indexOf(token) >= 0; }).length;
+    var smaller = Math.min(a.tokens.length, b.tokens.length);
+    // A short question wholly inside a long one is the same question with
+    // the employer's extra explanation, once it has enough words to say so.
+    return Math.max(2 * shared / (a.tokens.length + b.tokens.length), smaller >= 4 ? 0.8 * shared / smaller : 0);
+  }
+  // A question about the owner's own history with this employer keeps its
+  // answer with this employer: worked, employed, applied, interviewed or
+  // referred here. Relationship and conflict questions are about the owner.
+  function employerScoped(question, employerWords) {
+    var q = norm(question);
+    if (/\b(referred|referral)\b/.test(q)) return true;
+    if (/\b(authori[sz]ed|eligible|sponsor\w*|visa|permit)\b/.test(q)) return false;
+    if (!/\b(worked|work for|work at|employed|former employee|employee of|contracted|contractor|intern|interned|internship|interviewed|applied|application to|application with)\b/.test(q)) return false;
+    if (/\b(this company|our company|the company|this organization|our organization|this employer|us|our|here|subsidiar\w*|affiliate\w*)\b/.test(q) ||
+        (employerWords || []).some(function (name) {
+          var named = norm(name);
+          return named.length > 2 && new RegExp("\\b" + named + "\\b").test(q);
+        })) return true;
+    // "Have you worked for Silverpine Labs?" names an organisation, where
+    // "worked for a government agency" names only a kind of employer.
+    var generic = "(?!(?:a|an|any|the|another|other|government|federal|state|local|public|private|us|this|our|your|their|similar|multiple|such|more|less)\\b)";
+    return new RegExp("\\b(?:(?:worked|work|employed|interned|contracted) (?:for|at|by)|interviewed (?:with|at|for)|applied (?:to|at|with)|employee of) " + generic + "[a-z0-9]").test(q);
+  }
+  function kindClass(kind) { return kind === "text" ? "text" : "choice"; }
+  function learnedScope(question, context, employerWords) {
+    return employerScoped(question, employerWords) ? "@" + (tenantScope(context) || hostWords(context).join(".") || "unknown").slice(0, 80) : "";
+  }
+  // `bankName` is the answer-bank row this question maps to, when one does.
+  // Questions that share a row share one learned answer, whatever wording.
+  function learnedConcept(question, kind, context, bankName, employerWords) {
+    // A reviewed screening fact keeps its exact status set, country,
+    // timeframe and employer, which a broader answer-bank row would merge.
+    var fact = kindClass(kind) === "choice" && screeningConcept(question, context);
+    if (fact) return "learn:fact:choice:" + fact.slice(8);
+    var scope = learnedScope(question, context, employerWords);
+    if (bankName) return "learn:bank:" + kindClass(kind) + ":" + norm(bankName).replace(/ /g, "-") + scope;
+    var words = topic(question, employerWords).tokens.slice().sort().join("-");
+    return "learn:topic:" + kindClass(kind) + ":" + (words || norm(question).replace(/ /g, "-")) + scope;
+  }
+  function learnedParts(concept) {
+    var match = /^learn:(bank|topic|fact):(text|choice):([^@]*)(@.*)?$/.exec(String(concept || ""));
+    return match ? { source: match[1], kind: match[2], name: match[3], scope: match[4] || "" } : null;
+  }
+  // The owner's newest matching answer for this question, or null. Legacy
+  // reusable and scoped records keep their original matching rules.
+  function learnedMatch(question, kind, entries, context, bankName, employerWords) {
+    if (!learnable(question)) return null;
+    var cls = kindClass(kind), scope = learnedScope(question, context, employerWords);
+    var fact = cls === "choice" ? screeningConcept(question, context) : null;
+    var mine = topic(question, employerWords), bank = bankName ? norm(bankName).replace(/ /g, "-") : "";
+    // Answers learned under this policy are the owner's newest decisions and
+    // win over older reusable or scoped records for the same question.
+    var best = null;
+    (entries || []).forEach(function (entry) {
+      if (!entry || !entry.answer || isEmployerMotivation(entry.question)) return;
+      var score = 0;
+      if (entry.reuse_policy === "learned") {
+        var parts = learnedParts(entry.concept);
+        if (!parts || parts.kind !== cls) return;
+        if (parts.source === "fact") score = fact && "fact:v1:" + parts.name === fact ? 4 : 0;
+        else if (parts.scope !== scope) return;
+        // A reviewed fact question accepts a broader learned row only when
+        // that answer was not itself given to a different reviewed fact.
+        else if (bank && parts.source === "bank") score = parts.name === bank && !(fact && screeningConcept(entry.question, context)) ? 3 : 0;
+        else if (fact) return;
+        else {
+          score = similarity(mine, topic(entry.question, hostWords(entry.source_host)));
+          if (score < 0.72) score = 0;
+        }
+        if (score) score += 10;
+      } else if (entry.reuse_policy === "scoped" || entry.reuse_policy === "reusable") {
+        score = candidates(question, kind, [entry], context).length ? 1 : 0;
+      }
+      if (!score) return;
+      var when = Date.parse(entry.approved_at || entry.saved_at || "") || 0;
+      if (!best || score > best.score || score === best.score && when > best.when) best = { entry: entry, score: score, when: when };
+    });
+    return best ? best.entry : null;
+  }
   function equivalent(a, b, kindA, kindB) {
     if (kindA !== kindB || policy(a) !== "reusable" || policy(b) !== "reusable") return false;
     // A negation or a time qualifier can reverse the answer while leaving
@@ -151,6 +333,8 @@
     return hits.length && hits.every(function (entry) { return entry.answer.trim() === hits[0].answer.trim(); }) ? hits[0] : null;
   }
   root.aceMemory = { norm: norm, policy: policy, concept: concept, equivalent: equivalent, resolve: resolve, candidates: candidates,
-    screeningConcept: screeningConcept, storagePolicy: storagePolicy, isEmployerMotivation: isEmployerMotivation };
+    screeningConcept: screeningConcept, storagePolicy: storagePolicy, isEmployerMotivation: isEmployerMotivation,
+    learnable: learnable, topic: topic, similarity: similarity, employerScoped: employerScoped, hostWords: hostWords,
+    learnedConcept: learnedConcept, learnedParts: learnedParts, learnedMatch: learnedMatch, tenantScope: tenantScope };
   if (typeof module !== "undefined") module.exports = root.aceMemory;
 })(typeof globalThis !== "undefined" ? globalThis : this);

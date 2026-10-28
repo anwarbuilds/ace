@@ -28,6 +28,19 @@
   var focusPosition = null;
   var embeddedPanel = !!window.top && window.top !== window;
   var focusSession = String(Date.now()) + ':' + Math.random().toString(36).slice(2);
+  // This copy's own card. An extension update injects a new copy into tabs
+  // already open; the previous copy keeps drawing its card, which is hidden,
+  // and never shares this one.
+  function ownHost() { return document.querySelector('.ace-root[data-ace-instance="' + focusSession + '"]'); }
+  function claimCard() {
+    var owner = document.getElementById('ace-card-owner');
+    if (!owner) {
+      owner = document.createElement('style');
+      owner.id = 'ace-card-owner';
+      (document.head || document.documentElement).appendChild(owner);
+    }
+    owner.textContent = '.ace-root:not([data-ace-instance="' + focusSession + '"]){display:none!important}';
+  }
   var focusRevision = 0;
   var focusPublishTimer = null;
   var remoteFocus = null;
@@ -57,6 +70,15 @@
   var reviewQuestion = "";
   var editConcept = "";
   var studioFields = [];
+  var bankCount = 0;
+  // Learned answers wait in this browser while the ACE server cannot store
+  // them (an older server or no connection) and move to the server on the
+  // next connection. Values never enter diagnostics or activity.
+  var localLearned = [];
+  var migratingLocal = false;
+  // Saving waits for the first Memory reply, success or failure, so a
+  // correction updates the record it matches instead of adding another.
+  var memoryChecked = false;
   function activityNote(label, count) {
     activity.unshift({ label: label, count: count || 0, at: new Date().toLocaleTimeString() });
     activity = activity.slice(0, 35);
@@ -64,77 +86,128 @@
   }
   function memoryFailure(error) {
     var message = String(error || "");
+    if (/context invalidated/i.test(message)) return "ACE was updated. Refresh this page to keep saving answers. Your answers on this form are safe.";
     if (message.indexOf("404") >= 0) return "Answer Memory needs the ACE server V4 update. Existing answers are safe.";
     if (message.indexOf("422") >= 0) return "ACE could not save this screening fact. The server may need the scoped Memory update. Your answer on this form is safe.";
     if (message.indexOf("unpaired") >= 0 || message.indexOf("401") >= 0) return "ACE is not paired. Check the ACE address and pair this browser again.";
     return "Answer Memory cannot reach ACE right now. Check the ACE address and try again.";
   }
+  function localStore() { return chrome.storage && chrome.storage.local; }
+  function saveLocalLearned() { if (localStore()) chrome.storage.local.set({ aceLearnedLocal: localLearned }); }
+  function useMemory(serverItems) {
+    memory.forEach(function (item) { delete answers["Memory:" + item.concept]; delete aliases["Memory:" + item.concept]; });
+    var onServer = {};
+    serverItems.forEach(function (item) { onServer[item.concept] = 1; });
+    // Keep historical records on the server, but never surface or reuse an
+    // employer-motivation answer in this extension.
+    memory = serverItems.concat(localLearned.filter(function (item) { return !onServer[item.concept]; }).map(function (item) {
+      return Object.assign({}, item, { id: -item.localId, local: true, revision: 0 });
+    })).filter(function (item) { return !aceMemory.isEmployerMotivation(item.question); });
+    memory.forEach(function (item) {
+      answers["Memory:" + item.concept] = item.answer;
+      aliases["Memory:" + item.concept] = [];
+    });
+  }
+  // Answers saved in this browser move to the ACE server once it accepts
+  // them. The first one probes: a server that still refuses it is not asked
+  // again until the next connection. A later refusal keeps only that one.
+  function migrateLocalLearned() {
+    if (migratingLocal || !memoryAvailable || !localLearned.length) return;
+    migratingLocal = true;
+    var queue = localLearned.slice();
+    (function next(probe) {
+      var entry = queue.shift();
+      if (!entry) { migratingLocal = false; renderLearningState(); return; }
+      var payload = { concept: entry.concept, question: entry.question, answer: entry.answer,
+        answer_type: entry.answer_type, source_host: entry.source_host || '', reuse_policy: 'learned' };
+      chrome.runtime.sendMessage({ type: 'memorySave', item: payload }, function (reply) {
+        if (chrome.runtime.lastError || !reply || !reply.ok) {
+          if (probe) migratingLocal = false; else next(false);
+          return;
+        }
+        localLearned = localLearned.filter(function (item) { return item.concept !== entry.concept; });
+        saveLocalLearned();
+        useMemory(memory.filter(function (item) { return !item.local && item.concept !== entry.concept; }).concat(Object.assign(payload, {
+          id: reply.item.id, revision: reply.item.revision, approved_at: entry.saved_at })));
+        next(false);
+      });
+    })(true);
+  }
   function loadMemory(done) {
     chrome.runtime.sendMessage({ type: "memory" }, function (reply) {
+      memoryChecked = true;
       if (chrome.runtime.lastError || !reply || !reply.ok) {
         memoryAvailable = false;
         studioError = memoryFailure(reply && reply.error || chrome.runtime.lastError && chrome.runtime.lastError.message);
+        useMemory(memory.filter(function (item) { return !item.local; }));
       } else {
-        memory.forEach(function (item) { delete answers["Memory:" + item.concept]; });
-        // Keep historical records on the server, but never surface or reuse
-        // an employer-motivation answer in this extension.
-        memory = (Array.isArray(reply.items) ? reply.items : []).filter(function (item) {
-          return !aceMemory.isEmployerMotivation(item.question);
-        });
-        memory.forEach(function (item) {
-          answers["Memory:" + item.concept] = item.answer;
-          aliases["Memory:" + item.concept] = [];
-        });
+        useMemory(Array.isArray(reply.items) ? reply.items : []);
         memoryAvailable = true;
         if (studioError.indexOf("Answer Memory") === 0) studioError = "";
-        // A delayed connection must still adopt eligible committed edits. This
-        // schedules saving only; it never starts another employer-form fill.
-        fillable().forEach(function (field) { if (ownerEdits.has(field)) scheduleRoutineLearning(field); });
+        migrateLocalLearned();
       }
-      var existing = document.querySelector(".ace-root");
+      // A delayed connection must still adopt eligible committed edits. This
+      // schedules saving only; it never starts another employer-form fill.
+      fillable().forEach(function (field) { if (ownerEdits.has(field)) scheduleRoutineLearning(field); });
+      var existing = ownHost();
       if (existing && !dismissed) renderStudio(existing.shadowRoot.querySelector(".ace-panel"));
       if (done) done();
     });
   }
+  // The employer's own name, so a question that names it still matches the
+  // same question asked by another company.
+  function employerWords() {
+    var words = aceMemory.hostWords(location.href);
+    var tenant = aceMemory.tenantScope(location.href);
+    if (tenant && tenant.indexOf('/') > 0) words = words.concat(tenant.split('/').slice(1));
+    var parts = String(document.title || '').split(/\s[|·-]\s/);
+    if (parts.length > 1) words.push(parts[parts.length - 1]);
+    return words.filter(function (word) { return word && !/^(careers?|jobs?|apply|application|workday|home)$/i.test(word.trim()); });
+  }
+  // A US authorization or sponsorship answer never answers a question
+  // about another country.
+  var ACE_FOREIGN = /\b(canada|canadian|mexico|mexican|united kingdom|uk|britain|british|england|ireland|germany|german|france|french|netherlands|spain|italy|poland|switzerland|sweden|europe|european|eu|india|china|singapore|japan|korea|australia|australian|new zealand|brazil|israel|philippines)\b/;
+  var ACE_US_FACTS = ['Work authorisation', 'Authorized to work for any US employer', 'Need sponsorship now',
+    'Need sponsorship in future', 'Currently require employer visa sponsorship', 'US citizen or permanent resident',
+    'On a temporary work visa', 'Sponsorship follow-up from answers 1 and 2'];
+  // The answer-bank row this question means, whatever its wording. Also the
+  // shared key that lets one learned answer serve every wording of a row.
+  function bankConcept(question, kind) {
+    if (!question || aceMemory.isEmployerMotivation(question)) return null;
+    var name = aceAnswerNameFor(question, kind, Object.keys(answers));
+    if (!name || /^(Memory|Form):/.test(name)) return null;
+    if (ACE_US_FACTS.indexOf(name) >= 0 && ACE_FOREIGN.test(question)) return null;
+    return name;
+  }
+  // Which answers entry fills this question from the bank, or null.
+  function bankAnswerName(question, kind, name) {
+    if (!name) return null;
+    if (name === 'Need sponsorship in future' && /\b(?:now|currently) or (?:in )?(?:the )?future\b/.test(question)) {
+      var present = aceIntent(answers['Need sponsorship now']);
+      var future = aceIntent(answers['Need sponsorship in future']);
+      if (future === 'yes') return name;
+      if (present === 'yes') return 'Need sponsorship now';
+      if (present !== 'no' || future !== 'no') return null;
+    }
+    if (name === 'At least 18 years old' && (/\b(?:under|below|younger than|less than) (?:the age of )?18\b/.test(question) ||
+        !/\b(at least 18|18 (?:years (?:of age )?)?or older|over 18|over the age of 18|age of 18|18 years old|18 years of age|legal working age)\b/.test(question))) return null;
+    return name;
+  }
+  // The owner's own answers come first: one given on this form, then one
+  // learned on an earlier form for a question with the same meaning, then
+  // the Answers page. Company motivation is never answered.
   function answerNameFor(question, kind, field) {
-    var policy = aceMemory.policy(question);
-    if (policy !== 'reusable') {
-      var onForm = aceMemory.resolve(question, kind, formAnswers.filter(function (entry) {
+    if (!question || aceMemory.isEmployerMotivation(question)) return null;
+    var row = bankConcept(question, kind);
+    if (!field || !isDateSection(field)) {
+      var onForm = aceMemory.learnedMatch(question, kind, formAnswers.filter(function (entry) {
         return entry.href === location.href && sameFormAnswer(entry.receipt);
-      }), location.href);
+      }), location.href, row, employerWords());
       if (onForm) return 'Form:' + onForm.concept;
-      var scoped = aceMemory.resolve(question, kind, memory, location.href);
-      if (scoped) return 'Memory:' + scoped.concept;
-      // These are explicitly saved profile facts, filled only by the owner's
-      // Fill action. Protected answers are never inferred from routine Memory.
-      var fact = aceAnswerNameFor(question, kind, Object.keys(answers));
-      var allowed = ['Work authorisation', 'Authorized to work for any US employer',
-        'Need sponsorship now', 'Need sponsorship in future',
-        'Currently require employer visa sponsorship', 'At least 18 years old'];
-      if (policy !== 'sensitive' || allowed.indexOf(fact) < 0 || !answers[fact] ||
-          /\b(not|without|ever|previously|past|former|certify|attest|agree|consent|signature|canada|canadian|australia|australian|united kingdom|uk|germany|india)\b/.test(question)) return null;
-      if ((fact === 'Work authorisation' || fact === 'Authorized to work for any US employer') &&
-          !/\b(united states|us|u s)\b/.test(question)) return null;
-      if (fact === 'Need sponsorship in future' && /\b(?:now|currently) or (?:in )?(?:the )?future\b/.test(question)) {
-        var present = aceIntent(answers['Need sponsorship now']);
-        var future = aceIntent(answers['Need sponsorship in future']);
-        if (future === 'yes') return fact;
-        if (present === 'yes') return 'Need sponsorship now';
-        if (present !== 'no' || future !== 'no') return null;
-      }
-      if (fact === 'At least 18 years old' && !/\b(at least 18|18 (?:years (?:of age )?)?or older)\b/.test(question)) return null;
-      return fact;
+      var saved = aceMemory.learnedMatch(question, kind, memory, location.href, row, employerWords());
+      if (saved) return 'Memory:' + saved.concept;
     }
-    if (field && !reusableItem({ field: field, question: question })) {
-      return aceAnswerNameFor(question, kind, Object.keys(answers));
-    }
-    var local = aceMemory.resolve(question, kind, formAnswers.filter(function (entry) {
-      return entry.href === location.href && sameFormAnswer(entry.receipt);
-    }), location.href);
-    if (local) return "Form:" + local.concept;
-    var saved = aceMemory.resolve(question, kind === "yesno" ? "yesno" : kind === "choice" ? "choice" : "text", memory, location.href);
-    if (saved) return "Memory:" + saved.concept;
-    return aceAnswerNameFor(question, kind, Object.keys(answers));
+    return bankAnswerName(question, kind, row);
   }
 
   function questionKey(field, question, kind) {
@@ -143,8 +216,11 @@
     return aceMemory.norm(question) + '|' + kind + '|' + fieldKeys.get(anchor);
   }
 
+  // Whether the owner's answer to this question can be saved for later
+  // applications. Checked from the question before any value is read.
   function reusableItem(item) {
-    if (!item || !aceMemory.storagePolicy(item.question, item.kind || kindOf(item.field), location.href) || item.field.multiple || item.field.type === 'checkbox') return false;
+    if (!item || !item.field || !aceMemory.learnable(item.question) || isDateSection(item.field) ||
+        item.field.multiple || /^(password|file|hidden)$/.test(item.field.type || '')) return false;
     // A repeated From/To/current-job prompt belongs to one history entry,
     // never to a global answer shared with another job or school.
     var role = aceHistoryRole(item.field, item.question);
@@ -153,18 +229,19 @@
     });
   }
 
+  function learnedKeyFor(item) {
+    return aceMemory.learnedConcept(item.question, item.kind, location.href, bankConcept(item.question, item.kind), employerWords());
+  }
+
   function rememberOnForm(item) {
     if (!reusableItem(item)) return;
     var value = reviewValue(item), answer = reviewAnswerLabel(item);
     if (!value || !answer) return;
-    var mode = aceMemory.storagePolicy(item.question, item.kind, location.href);
-    var concept = mode === 'scoped' ? aceMemory.screeningConcept(item.question, location.href) : item.key;
-    formAnswers = formAnswers.filter(function (entry) {
-      if (mode === 'scoped') return entry.concept !== concept;
-      return !aceMemory.equivalent(item.question, entry.question, item.kind, entry.answer_type);
-    });
+    var concept = learnedKeyFor(item);
+    forgetFormAnswers(item.question, item.kind);
     formAnswers.push({ concept: concept, question: item.question, answer: answer,
-      answer_type: item.kind, reuse_policy: mode, href: location.href,
+      answer_type: item.kind, reuse_policy: 'learned', href: location.href, source_host: location.hostname,
+      saved_at: new Date().toISOString(),
       receipt: { field: item.field, question: item.question, kind: item.kind,
         value: value, options: reviewOptionsSignature(item) } });
     answers['Form:' + concept] = answer;
@@ -172,57 +249,86 @@
   }
 
   function forgetFormAnswers(question, kind) {
+    var row = bankConcept(question, kind);
     formAnswers = formAnswers.filter(function (entry) {
-      var scoped = entry.reuse_policy === 'scoped' && entry.concept === aceMemory.screeningConcept(question, location.href);
-      if (!scoped && !aceMemory.equivalent(question, entry.question, kind, entry.answer_type)) return true;
+      if (aceMemory.learnedMatch(question, kind, [entry], location.href, row, employerWords()) !== entry) return true;
       delete answers['Form:' + entry.concept]; delete aliases['Form:' + entry.concept];
       return false;
     });
   }
 
-  async function memoryKey(item) {
-    var existing = aceMemory.resolve(item.question, item.kind, memory, location.href);
-    var equivalents = aceMemory.candidates(item.question, item.kind, memory, location.href);
-    if (equivalents.length && !existing) throw new Error('Answer Memory has conflicting entries. Review them in Memory before saving.');
-    var mode = aceMemory.storagePolicy(item.question, item.kind, location.href);
-    var key = existing ? existing.concept : mode === 'scoped' ? aceMemory.screeningConcept(item.question, location.href) : aceMemory.concept(item.question);
-    var occupied = memory.some(function (entry) { return entry.concept === key; });
-    if (existing || !occupied) { if (key.length <= 180) return key; }
-    else key = item.kind + ':' + aceMemory.norm(item.question);
-    // The existing API bounds concept keys, while retaining full questions.
-    // Hash only the key; equivalence still compares the complete question.
+  // A new learned record's key. The API bounds concept keys while keeping
+  // full questions, so only the topic words are hashed when they run long;
+  // matching still compares the whole question.
+  async function learnedTarget(item) {
+    var key = learnedKeyFor(item);
+    if (key.length <= 180) return { key: key, policy: 'learned' };
     if (!globalThis.crypto || !globalThis.crypto.subtle) throw new Error('Answer Memory cannot save this question in this browser.');
-    var digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
-    return 'q:sha256:' + Array.from(new Uint8Array(digest)).map(function (byte) { return byte.toString(16).padStart(2, '0'); }).join('');
+    var parts = aceMemory.learnedParts(key);
+    var digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(parts.name));
+    return { policy: 'learned', key: 'learn:' + parts.source + ':' + parts.kind + ':sha256:' +
+      Array.from(new Uint8Array(digest)).map(function (byte) { return byte.toString(16).padStart(2, '0'); }).join('') + parts.scope };
+  }
+
+  // One record per meaning: a correction updates the record it matched,
+  // rather than leaving two answers to disagree. An older reusable or
+  // scoped record keeps its policy when the server still accepts it there.
+  async function memoryKey(item, value) {
+    var existing = aceMemory.learnedMatch(item.question, item.kind, memory, location.href, bankConcept(item.question, item.kind), employerWords());
+    if (existing && existing.reuse_policy === 'learned') return { key: existing.concept, policy: 'learned' };
+    var learned = await learnedTarget(item);
+    if (existing && !existing.local && (existing.reuse_policy === 'reusable' &&
+        aceMemory.storagePolicy(item.question, item.kind, location.href) === 'reusable' ||
+        existing.reuse_policy === 'scoped' && /^(yes|no)$/.test(aceMemory.norm(value)) &&
+        aceMemory.screeningConcept(item.question, location.href) === existing.concept)) {
+      return { key: existing.concept, policy: existing.reuse_policy, fallback: learned };
+    }
+    return learned;
+  }
+
+  function rememberLocally(record) {
+    var existing = localLearned.find(function (entry) { return entry.concept === record.concept; });
+    var entry = Object.assign({}, record, { reuse_policy: 'learned', saved_at: new Date().toISOString(),
+      localId: existing ? existing.localId : Date.now() + Math.floor(Math.random() * 1000) });
+    delete entry.expected_revision;
+    localLearned = localLearned.filter(function (item) { return item.concept !== record.concept; }).concat(entry);
+    saveLocalLearned();
+    useMemory(memory.filter(function (item) { return !item.local; }));
+    return memory.find(function (item) { return item.concept === record.concept; });
   }
 
   function saveReusableAnswer(item, value, stillCurrent) {
-    return memoryKey(item).then(function (key) {
+    return memoryKey(item, value).then(function (target) {
+      var key = target.key;
       var previous = memoryWrites.get(key) || Promise.resolve();
       var write = previous.catch(function () {}).then(function () {
         if (stillCurrent && !stillCurrent()) return null;
+        if (!reusableItem(item)) throw new Error('This question stays on this application.');
         var existing = memory.find(function (entry) { return entry.concept === key; });
-        var mode = aceMemory.storagePolicy(item.question, item.kind, location.href);
-        if (!mode) throw new Error('This question stays on this application.');
-        if (mode === 'scoped' && !/^(yes|no)$/.test(aceMemory.norm(value))) throw new Error('Only an exact Yes or No can be saved for this screening fact.');
-        if (existing && existing.answer === value && existing.answer_type === item.kind && existing.reuse_policy === mode) return existing;
+        if (existing && existing.answer === value && existing.answer_type === item.kind) return existing;
+        var payload = { concept: key, question: item.display || item.question, answer: value,
+          answer_type: item.kind, source_host: location.hostname, reuse_policy: target.policy };
+        if (existing && !existing.local) payload.expected_revision = existing.revision;
         return new Promise(function (resolve, reject) {
-          var payload = { concept: key, question: item.display, answer: value,
-            answer_type: item.kind, source_host: location.hostname, reuse_policy: mode };
-          if (existing) payload.expected_revision = existing.revision;
           chrome.runtime.sendMessage({ type: 'memorySave', item: payload }, function (reply) {
-            if (chrome.runtime.lastError || !reply || !reply.ok) {
-              reject(new Error(memoryFailure(reply && reply.error || chrome.runtime.lastError && chrome.runtime.lastError.message)));
+            var failure = chrome.runtime.lastError ? chrome.runtime.lastError.message || 'unavailable' : !reply ? 'unavailable' : !reply.ok ? String(reply.error || 'failed') : '';
+            if (failure) {
+              // A conflicting revision is a real disagreement to resolve in
+              // Memory. Anything else keeps the answer in this browser.
+              if (failure.indexOf('409') >= 0 || !localStore()) { reject(new Error(memoryFailure(failure))); return; }
+              resolve(rememberLocally(target.fallback ? Object.assign({}, payload, { concept: target.fallback.key }) : payload));
               return;
             }
-            var record = { id: reply.item.id, concept: key, question: item.display,
-              answer: value, answer_type: item.kind, reuse_policy: mode,
-              revision: reply.item.revision, source_host: location.hostname };
-            if (existing) Object.assign(existing, record); else memory.push(record);
+            var record = Object.assign({}, payload, { id: reply.item.id, revision: reply.item.revision,
+              approved_at: new Date().toISOString() });
+            delete record.expected_revision;
+            if (localLearned.some(function (entry) { return entry.concept === key; })) {
+              localLearned = localLearned.filter(function (entry) { return entry.concept !== key; });
+              saveLocalLearned();
+            }
+            useMemory(memory.filter(function (entry) { return !entry.local && entry.concept !== key; }).concat(record));
             memoryAvailable = true;
-            answers['Memory:' + key] = value;
-            aliases['Memory:' + key] = [];
-            resolve(record);
+            resolve(memory.find(function (entry) { return entry.concept === key; }));
           });
         });
       });
@@ -233,8 +339,34 @@
     });
   }
 
+  // Whether ACE already holds this exact answer for this question, so
+  // saving it again would add nothing. The copy kept for this form does
+  // not count: it exists only until the save finishes.
+  function alreadyKnown(item, answer) {
+    var row = bankConcept(item.question, item.kind);
+    var saved = aceMemory.learnedMatch(item.question, item.kind, memory, location.href, row, employerWords());
+    var name = saved ? 'Memory:' + saved.concept : bankAnswerName(item.question, item.kind, row);
+    var known = name && answers[name];
+    if (!known) return false;
+    if (aceNormalise(known) === aceNormalise(answer)) return true;
+    if (/^(Memory|Form):/.test(name) || item.kind === 'text' || /\n/.test(answer)) return false;
+    // Judged against this form's real options where they are known: a saved
+    // answer too vague to pick one of them left the owner to choose, and that
+    // choice is new knowledge worth saving.
+    var options = item.field.tagName === 'SELECT'
+      ? Array.from(item.field.options).filter(function (option, at) { return !(at === 0 && isPlaceholderText(option.textContent)); }).map(function (option) { return option.textContent; })
+      : aceIsChoiceControl(item.field) ? groupMembers(item.field).map(aceOptionRaw) : customOptions.get(item.key);
+    if (options && options.length > 1) {
+      var at = aceChooseOption(options, known, aliases[name] || []);
+      return at >= 0 && aceNormalise(options[at]) === aceNormalise(answer);
+    }
+    var a = aceIntent(known), b = aceIntent(answer);
+    if (a || b) return a === b;
+    return aceChooseOption([answer], known, aliases[name] || []) === 0;
+  }
+
   function autoLearnItem(field) {
-    if (!autoLearn || !memoryAvailable || !loaded || dismissed || !field || !field.isConnected || aceShouldSkip(field)) return null;
+    if (!autoLearn || !memoryChecked || !loaded || dismissed || !field || !field.isConnected || aceShouldSkip(field)) return null;
     var question = aceQuestionFor(field);
     // Inspect policy before reading an answer, including motivation fields.
     if (!question || !reusableItem({ field: field, question: question })) return null;
@@ -243,13 +375,11 @@
     if (aceIsAutocomplete(field) && !edit.choiceCommitted) return null;
     if (fillable().indexOf(field) < 0 || field.getAttribute('aria-invalid') === 'true' || field.validity && !field.validity.valid) return null;
     var kind = kindOf(field), key = questionKey(field, question, kind);
-    var name = answerNameFor(question, kind, field);
-    if (name && !/^(Memory|Form):/.test(name) && answers[name] && !reviewSeen.has(key)) return null;
     return { field: field, question: question, display: aceQuestionLabelFor(field), kind: kind, key: key };
   }
 
   function renderLearningState() {
-    var host = document.querySelector('.ace-root');
+    var host = ownHost();
     if (!dismissed && host && host.shadowRoot) renderStudio(host.shadowRoot.querySelector('.ace-panel'));
   }
 
@@ -262,6 +392,7 @@
       if (!item || filling) return;
       var value = reviewValue(item), answer = reviewAnswerLabel(item);
       if (!value || !answer) return;
+      if (alreadyKnown(item, answer)) { learningState.set(item.key, 'known'); renderLearningState(); return; }
       var options = reviewOptionsSignature(item);
       function current() {
         return !!autoLearnItem(field) && reviewValue(item) === value && reviewOptionsSignature(item) === options;
@@ -314,7 +445,85 @@
   var lastSignature = "";
   var filling = false;
 
-  function setNatively(field, value) {
+  /* Workday's date is a row of spinbuttons: dateSectionMonth-input, then
+     Day and Year. Each takes a value only through its own key handling,
+     so the box is set one below the wanted number and stepped up with
+     ArrowUp, which is what its state accepts. Typing a value and leaving
+     the box, as every other field gets, left the year out of Workday's
+     state and validated the date as "01/" the moment the month blurred.
+     No section is blurred until all of them hold a value. */
+  function isDateSection(field) {
+    return !!field && field.tagName === 'INPUT' &&
+      /^datesection(month|day|year)-input$/.test((field.getAttribute('data-automation-id') || '').toLowerCase());
+  }
+  function dateSections(field) {
+    var wrapper = field.closest('[data-automation-id="dateInputWrapper"]') ||
+      field.closest('[data-automation-id^="formField-"]');
+    var parts = wrapper ? Array.prototype.filter.call(wrapper.querySelectorAll('input'), isDateSection) : [];
+    return parts.length ? parts : [field];
+  }
+  function sectionNumber(field) {
+    var now = parseInt(field.getAttribute('aria-valuenow') || '', 10);
+    return isNaN(now) ? parseInt(String(field.value || '').trim(), 10) : now;
+  }
+  function stepSection(field, key) {
+    var code = key === 'ArrowUp' ? 38 : 40;
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: key, code: key, keyCode: code, which: code, bubbles: true, cancelable: true }));
+  }
+  function fillDateSection(field, value) {
+    var target = parseInt(String(value || '').trim(), 10);
+    if (!(target > 0)) return false;
+    try { field.focus({ preventScroll: true }); } catch (error) { /* fill anyway */ }
+    field.value = String(target - 1);
+    stepSection(field, 'ArrowUp');
+    field.click();
+    // A section that steps from its own state rather than the box is walked
+    // to the number instead, never past a step that stops changing it.
+    for (var guard = 0; sectionNumber(field) !== target && guard < 120; guard++) {
+      var before = sectionNumber(field);
+      stepSection(field, isNaN(before) || before < target ? 'ArrowUp' : 'ArrowDown');
+      if (!isNaN(before) && sectionNumber(field) === before) break;
+    }
+    if (sectionNumber(field) !== target) setNatively(field, String(value), true);
+    if (dateSections(field).every(function (part) { return !!String(part.value || '').trim(); })) {
+      try { field.blur(); } catch (error) { /* nothing to validate */ }
+    }
+    return sectionNumber(field) === target;
+  }
+  // The voluntary self-identification of disability form dates the owner's
+  // declaration. Only a field labelled for today, or that form's plain
+  // Date, gets today's month, day and year.
+  function todayPartFor(field) {
+    var scope = field.closest('[data-automation-id^="formField-"]');
+    if (!scope) return null;
+    var heading = scope.querySelector('label, legend');
+    var label = aceNormalise(aceTextWithoutControls(heading || scope)).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    var id = scope.getAttribute('data-automation-id') || '';
+    var today = /\b(today|todays|date signed|signature date|signed on)\b/.test(label) || /date.?signed|signed.?on|today/i.test(id) ||
+      label === 'date' && /self.?identification of disability|disability status/i.test(document.body.textContent || '');
+    if (!today) return null;
+    var now = new Date(), part = (field.getAttribute('data-automation-id') || '').toLowerCase();
+    if (part.indexOf('month') >= 0) return String(now.getMonth() + 1).padStart(2, '0');
+    if (part.indexOf('day') >= 0) return String(now.getDate()).padStart(2, '0');
+    return String(now.getFullYear());
+  }
+  // An earlier fill that Workday rejected: the box shows ACE's number while
+  // the field reports an invalid date. Only then is a filled section redone.
+  function dateNeedsRepair(field, value) {
+    if (!isDateSection(field) || sectionNumber(field) !== parseInt(value, 10)) return false;
+    var scope = field.closest('[data-automation-id^="formField-"]') || field.closest('[data-automation-id="dateInputWrapper"]');
+    return field.getAttribute('aria-invalid') === 'true' || !!(scope && /invalid date/i.test(scope.textContent || ''));
+  }
+  function clearDateSection(field) {
+    try { field.focus({ preventScroll: true }); } catch (error) { /* clear anyway */ }
+    field.value = '';
+    ['Backspace', 'Delete'].forEach(function (key) {
+      field.dispatchEvent(new KeyboardEvent('keydown', { key: key, code: key, bubbles: true, cancelable: true }));
+    });
+    try { field.blur(); } catch (error) { /* nothing to restore */ }
+  }
+
+  function setNatively(field, value, keepFocus) {
     // React tracks its own value on the node and ignores a plain
     // assignment, so the change never reaches its state and the box
     // reverts the moment it re-renders. The prototype setter is what
@@ -360,6 +569,7 @@
     // and run its validator, on blur and not before: without this a
     // box with the right answer visibly in it still submits as "this
     // field is required", which is what the user was hitting.
+    if (keepFocus) return;
     try {
       field.blur();
     } catch (error) {
@@ -522,6 +732,9 @@
 
   function chooseMatchedOption(field, options, wanted, alts) {
     var name = answerNameFor(aceQuestionFor(field), kindOf(field), field);
+    // A choice the owner made on another form is matched by its exact
+    // text and its label before any qualifier, see aceChooseLearnedOption.
+    if (name && /^(Memory|Form):/.test(name)) return aceChooseLearnedOption(options, wanted);
     if (name === "Field of study" || name === "Age range from adult status") {
       // A saved major must beat a nearby but different major. An adult
       // answer may only select an exact 18+ option, never an age band.
@@ -596,6 +809,8 @@
      passed rather than looked up, because fillOne is handed a value and
      never the question it came from. */
   function fillOne(field, value, alts) {
+    if (isDateSection(field)) return fillDateSection(field, value);
+
     if (field.tagName === "SELECT") {
       var option = chooseOption(field, value, alts);
       if (!option) return false;
@@ -629,11 +844,22 @@
         return true;
       }
 
-      var chosen = aceChooseOption(
-        members.map(aceOptionText),
-        value,
-        alts
-      );
+      // Several boxes the owner ticked together on an earlier form, one
+      // saved line each. Every line must find its own box, or none is ticked.
+      var lines = String(value || '').split('\n').map(function (line) { return line.trim(); }).filter(Boolean);
+      if (lines.length > 1 && members[0].type === 'checkbox') {
+        var picks = lines.map(function (line) { return chooseMatchedOption(field, members.map(aceOptionRaw), line, []); });
+        if (picks.some(function (at) { return at < 0 || members[at].disabled; })) return false;
+        picks.forEach(function (at, order) {
+          if (aceIsChosen(members[at])) return;
+          members[at].click();
+          if (order) lastFill.push({ field: members[at], previous: members[at].value, wrote: members[at].value, ticked: true });
+        });
+        lastPicked = members[picks[0]];
+        return true;
+      }
+
+      var chosen = chooseMatchedOption(field, members.map(aceOptionRaw), value, alts);
 
       if (chosen < 0) return false;
 
@@ -924,7 +1150,8 @@
           return;
         }
 
-        if (!group.every(aceIsEmpty)) return;
+        var repair = dateNeedsRepair(slot.field, value);
+        if (!repair && !group.every(aceIsEmpty)) return;
 
         var label = historyLabel(kind, index, slot.role);
 
@@ -952,11 +1179,12 @@
 
         var touched = lastPicked || slot.field;
 
-          lastFill.push({
+        lastFill.push({
           field: touched,
           previous: previous,
           wrote: touched.value,
-          ticked: aceIsChoiceControl(touched)
+          ticked: aceIsChoiceControl(touched),
+          name: kind === 'work' ? 'Work history' : 'Education history'
         });
 
         if (reported[label]) return;
@@ -1054,6 +1282,19 @@
       // box of every education block.
       if (ownedByHistory(field)) return;
 
+      // A date box outside a job or school block is a date, never a saved
+      // answer. The one ACE knows is today's, on a dated declaration.
+      if (isDateSection(field)) {
+        var part = todayPartFor(field);
+        if (!part || !aceIsEmpty(field) && !dateNeedsRepair(field, part)) return;
+        var before = field.value;
+        if (fillOne(field, part)) {
+          lastFill.push({ field: field, previous: before, wrote: field.value, ticked: false, name: "Today's date" });
+          if (filled.indexOf("Today's date") < 0) filled.push("Today's date");
+        }
+        return;
+      }
+
       var question = aceQuestionFor(field);
       if (!question) return;
 
@@ -1116,7 +1357,8 @@
         field: touched,
         previous: previous,
         wrote: touched.value,
-        ticked: aceIsChoiceControl(touched)
+        ticked: aceIsChoiceControl(touched),
+        name: name
       });
 
       filled.push(name);
@@ -1835,7 +2077,8 @@
               field: field,
               previous: previous,
               formValue: reviewValue({ field: field }),
-              ticked: false
+              ticked: false,
+              name: name
             });
 
             filled.push(name);
@@ -1869,6 +2112,8 @@
       if (record.ticked) return;
       if (!record.wrote) return;
       if (!record.field.isConnected) return;
+      // Workday may print a stepped date section as "1" for "01".
+      if (isDateSection(record.field)) return;
 
       var now = aceNormalise(String(record.field.value || ""));
       var meant = aceNormalise(String(record.wrote));
@@ -1933,6 +2178,8 @@
         // A Workday dropdown has no value to write back and, once
         // answered, usually no "Select One" left to choose. Left as
         // chosen rather than throwing halfway through the undo.
+      } else if (isDateSection(record.field) && !record.previous) {
+        clearDateSection(record.field);
       } else {
         setNatively(record.field, record.previous);
       }
@@ -2181,6 +2428,18 @@
   .focus-panel{color-scheme:light}.focus-panel.night{color-scheme:dark}
   .focus-panel .focus-remaining{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:10px 0}.focus-panel .focus-question-picker{margin:12px 0;color:var(--secondary);font-size:11px}.focus-panel .focus-question-picker summary{cursor:pointer;padding:5px 0}.focus-panel .focus-question-picker .focus-chips{display:grid;max-height:180px;overflow:auto;margin-top:8px}.focus-panel .focus-question-picker .focus-chip{white-space:normal;text-align:left}.focus-panel .focus-review-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   .focus-panel .focus-review-actions>.wine{grid-column:1/-1}
+  .ace-panel.focus-panel.focus-answers{width:min(348px,calc(100vw - 24px));max-height:min(79vh,735px)}
+  @media(max-width:520px){.ace-panel.focus-panel.focus-answers{max-height:calc(100dvh - 24px)}}
+  .focus-panel .focus-status-link{width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer}.focus-panel .focus-status-link:hover,.focus-panel .focus-status-link:focus-visible{box-shadow:inset 0 0 0 1px var(--wine)}
+  .focus-panel .focus-status-link{flex-wrap:wrap;align-items:center}.focus-panel .focus-status-link>span:not(.focus-counts){display:inline-flex;align-items:center;gap:2px}.focus-panel .focus-status-link>span svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round}
+  .focus-panel .focus-counts{flex:1 1 100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}.focus-panel .focus-count{display:flex;flex-direction:column;align-items:center;gap:1px;background:var(--surface);border-radius:8px;padding:6px 2px;text-align:center}
+  .focus-panel .focus-count b{font-size:15px;line-height:1.2;font-weight:var(--weight-strong);color:var(--ink);font-variant-numeric:tabular-nums}.focus-panel .focus-count small{font-size:var(--text-tick);line-height:1.25;color:var(--secondary)}.focus-panel .focus-count[data-count="unknown"] b{color:var(--wine)}
+  .focus-panel .focus-known{margin:14px 0 0}.focus-panel .focus-known h3{display:flex;justify-content:space-between;align-items:center;margin:0 0 7px;font-size:var(--text-tick);font-weight:var(--weight-strong);color:var(--ink)}.focus-panel .focus-known h3 span{color:var(--wine);font-variant-numeric:tabular-nums}
+  .focus-panel .focus-known-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;align-items:center;background:var(--soft);border-radius:10px;padding:9px 10px;margin:0 0 6px}
+  .focus-panel .focus-known-q{grid-column:1;font-size:var(--text-tick);line-height:1.45;color:var(--secondary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+  .focus-panel .focus-known-a{grid-column:1;font-size:12px;line-height:1.4;font-weight:var(--weight-semibold);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .focus-panel .focus-known-tag{grid-column:2;grid-row:1/span 2;font-size:var(--text-tick);font-weight:var(--weight-semibold);color:var(--wine);white-space:nowrap;background:none;border:0;padding:0}.focus-panel button.focus-known-tag{cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+  .focus-panel .focus-known-empty{font-size:var(--text-tick);color:var(--muted);margin:0 0 6px}.focus-panel .focus-save-all{width:100%;margin:2px 0 4px}
   .focus-panel .focus-review-actions>.studio-button{width:100%;min-height:39px;padding:9px 10px;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
   .focus-panel .studio-live{white-space:nowrap}
   .focus-panel .focus-dock-status strong,.focus-panel .focus-dock-status small{overflow:hidden;text-overflow:ellipsis}
@@ -2271,7 +2530,7 @@
       }
       if (message.event === 'click' && message.action === 'close') { close(); respond({ ok: true }); return; }
       if (message.revision !== focusRevision || dismissed) { respond({ ok: false }); return; }
-      var host = document.querySelector('.ace-root');
+      var host = ownHost();
       var card = host && host.shadowRoot.querySelector('.ace-panel');
       var control = card && focusControls(card)[message.control];
       if (!control || !/^(click|input|change)$/.test(message.event) || message.event === 'click' && control.getAttribute('data-ace') !== message.action) { respond({ ok: false }); return; }
@@ -2289,7 +2548,7 @@
       respond({ ok: true }); return;
     }
     if (message.op !== 'render' || typeof message.html !== 'string' ||
-        !/^ace-panel focus-panel focus-(compact|review|workspace|dock)( night)?$/.test(message.className || '') ||
+        !/^ace-panel focus-panel focus-(compact|review|workspace|dock|answers)( night)?$/.test(message.className || '') ||
         (loaded && !dismissed) || remoteFocus && remoteFocus.sourceFrame !== message.sourceFrame) { respond({ ok: false }); return; }
     if (!remoteFocus) {
       var overlay = document.createElement('div'); overlay.className = 'ace-remote-root';
@@ -2350,7 +2609,7 @@
   window.addEventListener('pagehide', hideFocusPanel);
 
   function panel() {
-    var existing = document.querySelector(".ace-root");
+    var existing = ownHost();
 
     if (existing && existing.shadowRoot) {
       return existing.shadowRoot.querySelector(".ace-panel");
@@ -2358,6 +2617,7 @@
 
     var host = document.createElement("div");
     host.className = "ace-root";
+    host.setAttribute("data-ace-instance", focusSession);
 
     // The host itself is the one node the page can see, so it carries
     // nothing for a stylesheet to act on beyond taking it out of flow.
@@ -2430,7 +2690,7 @@
     var followSystemTheme = function () {
       if (studioThemeMode !== "system") return;
       applyThemeMode("system");
-      var existing = document.querySelector(".ace-root");
+      var existing = ownHost();
       if (existing && !dismissed) renderStudio(existing.shadowRoot.querySelector(".ace-panel"));
     };
     if (colorScheme.addEventListener) colorScheme.addEventListener("change", followSystemTheme);
@@ -2442,7 +2702,7 @@
   function close() {
     dismissed = true;
     hideFocusPanel();
-    var existing = document.querySelector(".ace-root");
+    var existing = ownHost();
     if (existing) existing.remove();
   }
 
@@ -2512,7 +2772,7 @@
     historyOwned = null;
 
     fillable().forEach(function (field) {
-      if (ownedByHistory(field)) return;
+      if (ownedByHistory(field) || isDateSection(field)) return;
 
       var question = aceQuestionFor(field);
       if (!question) return;
@@ -2563,11 +2823,7 @@
         }
         shown = tidy(option.textContent);
       } else if (aceIsChoiceControl(field)) {
-        var index = aceChooseOption(
-          group.map(aceOptionText),
-          value,
-          aliases[name]
-        );
+        var index = chooseMatchedOption(field, group.map(aceOptionRaw), value, aliases[name]);
         if (index < 0) {
           seen["a:" + name] = 1;
           noOption.push([name, tidy(value)]);
@@ -2626,12 +2882,12 @@
       var receipt = completedOnForm.get(key);
       var answered = !group.every(aceIsEmpty) || !!(receipt && sameFormAnswer(receipt));
       var name = answerNameFor(question, kind, field);
-      if ((!name || !answers[name]) && (!answered || aceMemory.policy(question) !== 'reusable') &&
-          !approvedQuestions.has(key) && !skippedQuestions.has(key)) reviewSeen.add(key);
+      if ((!name || !answers[name]) && !answered && !approvedQuestions.has(key) && !skippedQuestions.has(key)) reviewSeen.add(key);
       var display = aceQuestionLabelFor(field) || question;
       studioFields.push({ field: field, question: question, kind: kind, key: key,
-        display: display, answered: answered, name: name, protected: aceMemory.policy(question),
-        source: name && name.indexOf("Memory:") === 0 ? "Answer Memory" : "Profile and answers" });
+        display: display, answered: answered, name: name,
+        protected: reusableItem({ field: field, question: question }) ? 'reusable' : 'application',
+        source: name && /^(Memory|Form):/.test(name) ? "Answer Memory" : "Profile and answers" });
     });
     return studioFields;
   }
@@ -2697,7 +2953,8 @@
           ? 'Your choice is recorded for this application only.'
           : saveState === 'error' ? 'Your form is answered. Saving for next time failed.'
           : saveState === 'saving' ? 'Your form is answered. Saving for next time.'
-          : saveState === 'saved' ? 'Saved for matching questions on future applications.'
+          : saveState === 'saved' ? 'Saved. ACE fills it on questions that mean the same thing.'
+          : saveState === 'known' ? 'ACE already knows this answer for next time.'
           : 'No need to enter or approve this answer again.') + '</p></article>' +
         (saveState === 'error' ? '<button class="studio-button" data-ace="retry-save:' + index + '">Retry saving</button>' : '') +
         '<div class="studio-actions focus-review-actions"><button class="studio-button" data-ace="next-review">Next unanswered question</button><button class="studio-button" data-ace="edit-answer:' + index + '">Edit answer in ACE</button><button class="studio-button" data-ace="show-form">Show on form</button></div><div class="focus-utility"><button data-ace="tab:overview">Back to fill</button><button data-ace="workspace">Settings &amp; activity</button></div>';
@@ -2737,7 +2994,7 @@
     } else {
       control = reviewTextControl(selected, draft ? draft.values[0] : current || reviewDrafts.get(selected.key) || '');
     }
-    var why = reusable ? 'Answer once. ACE can reuse it for equivalent questions.' :
+    var why = reusable ? 'Answer once. ACE saves it and fills questions that mean the same thing.' :
       'Use your answer for this application.';
     html += '<article class="studio-card focus-question"><span class="studio-pill ' + (selected.protected === 'reusable' ? 'good' : '') + '">' +
       (selected.protected === 'reusable' ? 'New question' : 'Review required') + (aceIsChoiceControl(selected.field) ? selected.field.type === 'checkbox' ? ' · Checkboxes' : ' · Radio options' : isChoice || aceIsAutocomplete(selected.field) ? ' · Dropdown' : '') + '</span><div class="studio-question">' + esc(plain(selected.display)) + '</div><p>' + why + '</p></article>' +
@@ -2807,9 +3064,9 @@
     if (input) search = input.value.toLowerCase();
     var entries = memory.filter(function (m) { return (m.question + " " + m.answer).toLowerCase().indexOf(search) >= 0; });
     return '<div class="studio-between"><h2>Answer Memory</h2><span class="studio-pill good">' + memory.length + ' saved</span></div><p class="studio-receipt">ACE ' + esc(version()) + '</p><p>Saved answers available to equivalent, safe questions.</p>' +
-      '<div class="studio-card"><button class="studio-button" data-ace="auto-learn" role="switch" aria-checked="' + autoLearn + '">Auto-save reusable answers: ' + (autoLearn ? 'On' : 'Off') + '</button><p>Text saves when you leave the field. Selections save after choosing. Screening facts retain their company, country and timeframe. Attestations and other protected decisions stay on this application.</p><p>Filling starts only from Fill all known answers or Alt+A. Opening, focusing or editing the employer form never starts a fill.</p></div><div class="studio-memory-status"><span class="studio-pill ' + (memoryAvailable ? 'good' : '') + '">' + (memoryAvailable ? 'Connected' : 'Unavailable') + '</span><button class="studio-button small" data-ace="retry-memory">Retry connection</button></div><input class="studio-search" type="search" placeholder="Search saved answers" value="' + esc(search) + '">' +
+      '<div class="studio-card"><button class="studio-button" data-ace="auto-learn" role="switch" aria-checked="' + autoLearn + '">Save my answers for next time: ' + (autoLearn ? 'On' : 'Off') + '</button><p>Every answer you give on a form is saved when you finish it, and filled again for questions with the same meaning, worded any way. Answers about your history with one company stay with that company. Company motivation, signatures and passwords are never saved.</p><p>Filling starts only from Fill all known answers or Alt+A. Opening, focusing or editing the employer form never starts a fill.</p></div><div class="studio-memory-status"><span class="studio-pill ' + (memoryAvailable ? 'good' : '') + '">' + (memoryAvailable ? 'Connected' : 'Unavailable') + '</span><button class="studio-button small" data-ace="retry-memory">Retry connection</button></div><input class="studio-search" type="search" placeholder="Search saved answers" value="' + esc(search) + '">' +
       (entries.length ? entries.map(function (m) {
-        return '<article class="studio-card"><span class="studio-pill good">Saved for reuse</span><div class="studio-question">' + esc(plain(m.question)) + '</div><p class="studio-memory-answer">' + esc(plain(m.answer)) + '</p><p class="studio-receipt">Saved on ' + esc(m.source_host || 'an application') + '. Revision ' + m.revision + '</p>' +
+        return '<article class="studio-card"><span class="studio-pill good">' + (m.local ? 'In this browser' : 'Saved for reuse') + '</span><div class="studio-question">' + esc(plain(m.question)) + '</div><p class="studio-memory-answer">' + esc(plain(m.answer)) + '</p><p class="studio-receipt">' + (m.local ? 'Waiting to move to ACE. Filled from this browser until then.' : 'Saved on ' + esc(m.source_host || 'an application') + '. Revision ' + m.revision) + '</p>' +
           (m.reuse_policy === 'scoped' ? '<p class="studio-receipt">Screening fact: matching scope only.</p>' : '') +
           (m.last_used_at ? '<p class="studio-receipt">Last used ' + esc(new Date(m.last_used_at).toLocaleDateString()) + '</p>' : '') +
           (editConcept === m.concept ? '<textarea id="studio-memory-edit" class="studio-input" aria-label="Edit answer">' + esc(m.answer) + '</textarea><div class="studio-actions"><button class="studio-button wine" data-ace="save-edit:' + m.id + '">Save</button><button class="studio-button" data-ace="cancel-edit">Cancel</button></div>' : '<div class="studio-actions"><button class="studio-button" data-ace="edit:' + m.id + '">Edit</button><button class="studio-button" data-ace="delete:' + m.id + '">Delete</button></div>') + '</article>';
@@ -2825,18 +3082,109 @@
       '<button class="studio-button small" data-ace="undo"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h9a6 6 0 0 1 0 12h-2"/></svg>Undo last fill</button> <button class="studio-button small" data-ace="copy">Copy field diagnostics</button><span class="ace-copied studio-receipt"></span>';
   }
 
+  // The fill record for this question, if ACE filled it.
+  function aceFillFor(field) {
+    var group = aceIsChoiceControl(field.field) ? groupMembers(field.field) : [field.field];
+    return lastFill.find(function (entry) { return entry.field && entry.field.isConnected && group.indexOf(entry.field) >= 0; }) || null;
+  }
+  function savedRecordFor(field) {
+    var row = bankConcept(field.question, field.kind);
+    return aceMemory.learnedMatch(field.question, field.kind, memory, location.href, row, employerWords());
+  }
+  // An unanswered question ACE can fill: it holds an answer and, after a
+  // Fill, that answer matched one of the form's options.
+  function knownAnswerFor(field) {
+    if (field.answered || !field.name || !answers[field.name]) return '';
+    if (pending && pending.noOption.some(function (item) { return item[0] === field.name; })) return '';
+    return answers[field.name];
+  }
+  // Whether ACE holds this answered question's current answer for next time.
+  function savedForNextTime(field) {
+    if (!field.answered || !reusableItem(field)) return '';
+    var state = learningState.get(field.key);
+    if (state === 'saved' || state === 'known') return state;
+    var answer = reviewAnswerLabel(field);
+    return answer && alreadyKnown(field, answer) ? 'known' : '';
+  }
+  // One partition of the form's questions, the same on the card and in the
+  // list: filled by ACE, known (ready to fill), unknown (needs the owner),
+  // answered and saved for next time, answered but not saved.
+  function formCounts(fields) {
+    var counts = { filled: [], known: [], unknown: [], saved: [], other: [], answered: 0 };
+    fields.forEach(function (field) {
+      if (field.answered) counts.answered += 1;
+      if (aceFillFor(field)) counts.filled.push(field);
+      else if (!field.answered) (knownAnswerFor(field) ? counts.known : counts.unknown).push(field);
+      else if (savedForNextTime(field)) counts.saved.push(field);
+      else counts.other.push(field);
+    });
+    return counts;
+  }
   function focusCompact(fields) {
     var open = fields.filter(function (field) { return needsStudioReview(field) || skippedQuestions.has(field.key); }).length;
-    var filled = lastFill.filter(function (entry) { return entry.field && entry.field.isConnected; }).length;
-    var answered = fields.filter(function (field) { return field.answered; }).length;
-    var saved = fields.filter(function (field) { return learningState.get(field.key) === 'saved' && field.answered; }).length;
+    var counts = formCounts(fields);
+    var left = counts.known.length + counts.unknown.length;
+    function cell(name, list, label) {
+      return '<span class="focus-count" data-count="' + name + '"><b>' + list.length + '</b><small>' + label + '</small></span>';
+    }
+    var summary = counts.answered + ' of ' + fields.length + ' questions answered: ' + counts.filled.length + ' filled by ACE, ' +
+      counts.known.length + ' known, ' + counts.unknown.length + ' unknown, ' + counts.saved.length + ' saved for next time';
     return '<h2 class="focus-compact-title">Fill your application</h2>' +
       '<p class="focus-compact-copy">Your saved answers, matched to this form.</p>' +
       '<div class="focus-compact-actions"><button class="studio-button wine" data-ace="fill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Fill all known answers</button></div>' +
-      '<div class="focus-status" role="status"><p><strong>' + answered + ' of ' + fields.length + ' questions answered</strong><br><small>' + filled + ' filled by ACE' + (saved ? ' · ' + saved + ' saved for next time' : '') + '</small></p><span>' + open + ' left</span></div>' +
+      '<button type="button" class="focus-status focus-status-link" data-ace="answers" aria-label="' + esc(summary) + '. See every answer" title="See every question with its answer and where it came from">' +
+        '<p role="status"><strong>' + counts.answered + ' of ' + fields.length + ' questions answered</strong></p><span>' + left + ' left<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>' +
+        '<span class="focus-counts">' + cell('filled', counts.filled, 'Filled by ACE') + cell('known', counts.known, 'Known') +
+          cell('unknown', counts.unknown, 'Unknown') + cell('saved', counts.saved, 'Saved') + '</span></button>' +
       '<button class="studio-button focus-remaining" data-ace="tab:review">' + (open ? 'Answer remaining questions (' + open + ')' : 'Check answers') + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>' +
-      '<p class="focus-hint">' + (autoLearn ? 'Answer here or on the form. Reusable answers are saved for matching questions.' : 'Answer here or on the form. Automatic learning is off in Settings.') + '</p>' +
+      '<p class="focus-hint">' + (autoLearn ? 'Known answers fill when you click Fill. Answer an unknown one here or on the form, and ACE saves it for next time.' : 'Known answers fill when you click Fill. Saving answers for next time is off in Settings.') + '</p>' +
       '<div class="focus-utility"><button data-ace="undo">Undo fill</button><button data-ace="scan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9V5h4M15 5h4v4M19 15v4h-4M9 19H5v-4M7 12h10"/></svg>Scan fields</button><button data-ace="workspace">Settings &amp; activity</button></div>';
+  }
+
+  // Every question on this form with its answer and where it came from, in
+  // the same groups the card counts, so the owner can check before submitting.
+  function focusAnswers(fields) {
+    function source(name) {
+      if (!name) return 'ACE';
+      if (/^(Memory|Form):/.test(name)) return 'Learned from you';
+      if (/history$/.test(name) || name === 'Saved history') return name === 'Education history' ? 'Education history' : 'Work history';
+      if (name === "Today's date") return "Today's date";
+      return 'Answers page';
+    }
+    function row(field, answer, tag, action) {
+      return '<div class="focus-known-row"><span class="focus-known-q">' + esc(plain(field.display)) + '</span>' +
+        (answer ? '<b class="focus-known-a">' + esc(plain(String(answer).replace(/\n/g, ', '))) + '</b>' : '') +
+        (action ? '<button class="focus-known-tag" data-ace="' + action + '">' + tag + '</button>' : '<span class="focus-known-tag">' + tag + '</span>') + '</div>';
+    }
+    function group(title, items, render, empty) {
+      return '<section class="focus-known"><h3>' + title + '<span>' + items.length + '</span></h3>' +
+        (items.length ? items.map(render).join('') : '<p class="focus-known-empty">' + (empty || 'None on this form.') + '</p>') + '</section>';
+    }
+    var counts = formCounts(fields);
+    var waiting = memory.filter(function (entry) { return entry.local; }).length;
+    return '<div class="focus-title-row"><h2>Answers on this form</h2><span class="studio-pill">' + fields.length + ' questions</span></div>' +
+      '<p class="focus-subtitle">ACE knows ' + bankCount + ' answer' + (bankCount === 1 ? '' : 's') + ' from your Answers page and ' + memory.length + ' you gave on earlier forms.' +
+        (waiting ? ' ' + waiting + ' of those wait in this browser until ACE accepts them.' : '') + '</p>' +
+      group('Filled by ACE', counts.filled, function (field) {
+        var fill = aceFillFor(field); return row(field, reviewAnswerLabel(field), source(fill && fill.name));
+      }) +
+      group('Known, ready to fill', counts.known, function (field) { return row(field, knownAnswerFor(field), source(field.name)); }, 'Nothing waiting. Fill all known answers has added what ACE knows.') +
+      group('Unknown, needs your answer', counts.unknown, function (field) { return row(field, '', 'Answer', 'answer-q:' + fields.indexOf(field)); }, 'ACE knows every remaining question.') +
+      group('Saved for next time', counts.saved, function (field) {
+        var record = savedRecordFor(field);
+        return row(field, reviewAnswerLabel(field), record && record.local ? 'In this browser' : record ? 'Saved' : 'Answers page');
+      }) +
+      // Answers ACE did not see being given, such as ones entered before an
+      // update reached this tab or filled in by the employer. Saved only on
+      // the owner's click, never silently.
+      (counts.other.length ? group('Answered, not saved', counts.other, function (field) {
+        var history = !!aceHistoryRole(field.field, field.question) && ownedByHistory(field.field);
+        if (history) return row(field, reviewAnswerLabel(field), 'Job history');
+        if (!reusableItem(field)) return row(field, reviewAnswerLabel(field), 'This form only');
+        return row(field, reviewAnswerLabel(field), learningState.get(field.key) === 'saving' ? 'Saving' : 'Save', 'save-answer:' + fields.indexOf(field));
+      }) + (counts.other.some(function (field) { return reusableItem(field) && !(aceHistoryRole(field.field, field.question) && ownedByHistory(field.field)); })
+        ? '<button class="studio-button small focus-save-all" data-ace="save-answered">Save all answered</button>' : '') : '') +
+      '<div class="focus-utility"><button data-ace="tab:overview">Back to fill</button><button data-ace="tab:memory">Saved answers</button><button data-ace="workspace">Settings &amp; activity</button></div>';
   }
 
   function focusGrip() {
@@ -2928,6 +3276,7 @@
     var employer = (titleParts.length > 1 ? titleParts[titleParts.length - 1] : location.hostname.replace(/^www\./, "")) || "Application form";
     var role = titleParts.length > 1 ? titleParts[0] : document.title || 'Application form';
     var body = focusMode === 'review' ? studioReview(fields) : focusMode === 'compact' ? focusCompact(fields) :
+      focusMode === 'answers' ? focusAnswers(fields) :
       studioTab === "memory" ? studioMemory() : studioTab === "activity" ? studioActivity() : studioOverview(fields);
     host.className = 'ace-panel focus-panel focus-' + focusMode + (studioTheme === 'night' ? ' night' : '');
     var legacyStatus = lastResult ? 'Filled ' + lastResult.filled.length + ' fields' : 'Fill ' + (pending ? pending.willFill.length : 0) + ' fields';
@@ -3180,7 +3529,7 @@
     // document reload. A deliberate toolbar Wake still overrides this guard.
     if (!isWorkdayListing()) manualListingOpen = false;
     if (isWorkdayListing() && !manualListingOpen) {
-      var listingPanel = document.querySelector('.ace-root');
+      var listingPanel = ownHost();
       if (listingPanel) listingPanel.remove();
       hideFocusPanel();
       return;
@@ -3252,7 +3601,7 @@
     if (lastResult && !signatureChanged) {
       // Custom widgets often update their label or pressed state without a
       // change event. Keep an open Review current after a Fill operation.
-      var existing = document.querySelector('.ace-root');
+      var existing = ownHost();
       if (!dismissed && existing && existing.shadowRoot) renderStudio(existing.shadowRoot.querySelector('.ace-panel'));
       return;
     }
@@ -3262,6 +3611,7 @@
   }
 
   function start(fillAfterReady) {
+    claimCard();
     chrome.runtime.sendMessage({ type: "answers" }, function (reply) {
       if (chrome.runtime.lastError) return;
 
@@ -3317,6 +3667,15 @@
         aliases["Sponsorship follow-up from answers 1 and 2"] = [];
       }
 
+      // A single question about being, or being close to, a government
+      // official is answered from the two separate saved rows.
+      var official = aceIntent(answers["Government official"]);
+      var linked = aceIntent(answers["Related to a government official"]);
+      if (official === "yes" || linked === "yes" || official === "no" && linked === "no") {
+        answers["Government official or close links"] = official === "yes" || linked === "yes" ? "Yes" : "No";
+        aliases["Government official or close links"] = [];
+      }
+
       if (aceIntent(answers["At least 18 years old"]) === "yes") {
         answers["Age range from adult status"] = "18 years or older";
         aliases["Age range from adult status"] = ["18 or older", "18+"];
@@ -3344,11 +3703,12 @@
         aliases["City and state"] = [];
       }
 
+      bankCount = known;
       if (!known) studioError = "No answers saved yet. Add answers in ACE or approve questions in Review.";
 
       loaded = true;
       lastHref = location.href;
-      var pendingResponses = 3;
+      var pendingResponses = 4;
       function sourceReady() {
         pendingResponses -= 1;
         if (pendingResponses === 0 && fillAfterReady === true) {
@@ -3368,7 +3728,16 @@
       });
       else sourceReady();
 
-      loadMemory(sourceReady);
+      // Answers saved in this browser load before Memory, so a learned answer
+      // is ready even when the server cannot be reached.
+      if (localStore()) chrome.storage.local.get({ aceLearnedLocal: [] }, function (prefs) {
+        localLearned = (Array.isArray(prefs.aceLearnedLocal) ? prefs.aceLearnedLocal : []).filter(function (entry) {
+          return entry && entry.concept && entry.answer && entry.localId;
+        });
+        loadMemory(sourceReady);
+        sourceReady();
+      });
+      else { loadMemory(sourceReady); sourceReady(); }
 
       // Fetched after the answers rather than in parallel: a page with
       // no repeating section is the common case, and the panel should
@@ -3488,6 +3857,31 @@
     }
 
     if (action === 'minimize') { focusMode = 'dock'; renderStudio(panel()); return; }
+    if (action === 'answers') { focusMode = 'answers'; renderStudio(panel()); return; }
+    if (action.indexOf('save-answer:') === 0 || action === 'save-answered') {
+      var keep = action === 'save-answered' ? formCounts(studioFields).other : [studioFields[Number(action.slice(12))]];
+      keep.filter(function (item) {
+        return item && item.answered && reusableItem(item) && !(aceHistoryRole(item.field, item.question) && ownedByHistory(item.field));
+      }).forEach(function (item) {
+        var label = reviewAnswerLabel(item);
+        if (!label) return;
+        learningState.set(item.key, 'saving');
+        saveReusableAnswer(item, label, function () { return item.field.isConnected && reviewAnswerLabel(item) === label; }).then(function (record) {
+          if (record) { learningState.set(item.key, 'saved'); activityNote('Answer saved for matching questions'); } else learningState.delete(item.key);
+          renderLearningState();
+        }, function (error) {
+          learningState.set(item.key, 'error');
+          studioError = 'This answer was not saved to Memory. ' + error.message;
+          renderLearningState();
+        });
+      });
+      renderStudio(panel()); return;
+    }
+    if (action.indexOf('answer-q:') === 0) {
+      var asked = studioFields[Number(action.slice(9))];
+      if (asked) { reviewQuestion = asked.key; pointedField = asked.field; skippedQuestions.delete(asked.key); }
+      studioTab = 'review'; focusMode = 'review'; renderStudio(panel()); return;
+    }
     if (action === 'expand') { focusMode = studioTab === 'review' ? 'review' : 'compact'; renderStudio(panel()); return; }
     if (action === 'workspace') { focusMode = 'workspace'; studioTab = 'activity'; renderStudio(panel()); return; }
     if (action === 'resume-review') { skippedQuestions.clear(); renderStudio(panel()); return; }
@@ -3785,6 +4179,14 @@
       var editBox = panel().querySelector("#studio-memory-edit");
       if (!row || !editBox || !editBox.value.trim()) return;
       var updated = editBox.value.trim();
+      if (row.local) {
+        localLearned.forEach(function (entry) { if (entry.concept === row.concept) entry.answer = updated; });
+        saveLocalLearned(); forgetFormAnswers(row.question, row.answer_type);
+        useMemory(memory.filter(function (item) { return !item.local; }));
+        editConcept = ""; studioError = ""; activityNote("Answer Memory updated");
+        renderStudio(panel()); migrateLocalLearned();
+        return;
+      }
       chrome.runtime.sendMessage({ type: "memorySave", item: {
         concept: row.concept, question: row.question, answer: updated,
         answer_type: row.answer_type, source_host: row.source_host,
@@ -3806,6 +4208,17 @@
 
     if (action.indexOf("delete:") === 0) {
       var id = Number(action.slice(7));
+      if (id < 0) {
+        var local = memory.find(function (m) { return m.id === id; });
+        if (local) {
+          forgetFormAnswers(local.question, local.answer_type);
+          localLearned = localLearned.filter(function (entry) { return entry.concept !== local.concept; });
+          saveLocalLearned(); useMemory(memory.filter(function (item) { return !item.local; }));
+          activityNote("Answer removed from Memory"); studioError = "";
+        }
+        renderStudio(panel());
+        return;
+      }
       chrome.runtime.sendMessage({ type: "memoryDelete", id: id }, function (reply) {
         if (chrome.runtime.lastError || !reply || !reply.ok) studioError = memoryFailure(reply && reply.error || chrome.runtime.lastError && chrome.runtime.lastError.message) + " The answer was not deleted.";
         else {
@@ -3841,21 +4254,23 @@
   }
 
   // Alt+A rather than a bare letter: a form is full of text boxes and
-  // a plain shortcut would type into them.
-  document.addEventListener("keydown", function (event) {
+  // a plain shortcut would type into them. Taken on the window, ahead of the
+  // document, so an older copy left in this tab by an extension update does
+  // not fill with its old rules alongside this one.
+  window.addEventListener("keydown", function (event) {
     if (event.altKey && (event.key === "a" || event.key === "A")) {
       if (remoteFocus) {
-        event.preventDefault();
+        event.preventDefault(); event.stopImmediatePropagation();
         focusRoute({ op: 'event', session: remoteFocus.session, sourceFrame: remoteFocus.sourceFrame,
           sourceDocument: remoteFocus.sourceDocument, event: 'wake' });
         return;
       }
       if (loaded) {
-        event.preventDefault();
+        event.preventDefault(); event.stopImmediatePropagation();
         runFill();
       }
     }
-  });
+  }, true);
 
   /* document_idle should guarantee a body, but the script also runs in
      every frame, and a frame can be that early. Without this the first
@@ -3999,7 +4414,7 @@
       var name = answerNameFor(aceQuestionFor(field), kindOf(field), field);
       if (name && !/^(Memory|Form):/.test(name) && answers[name] && !reviewSeen.has(editedKey)) return;
       reviewSeen.add(editedKey);
-      var host = document.querySelector('.ace-root');
+      var host = ownHost();
       if (host && host.shadowRoot) renderStudio(host.shadowRoot.querySelector('.ace-panel'));
     }, 180);
   }
@@ -4067,7 +4482,7 @@
       if (!options.length) return;
       customOptions.set(questionKey(field, question, kindOf(field)), options);
       if (focusMode === 'review') {
-        var host = document.querySelector('.ace-root');
+        var host = ownHost();
         if (host && host.shadowRoot) renderStudio(host.shadowRoot.querySelector('.ace-panel'));
       }
     }, 100);

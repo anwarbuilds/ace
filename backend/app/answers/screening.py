@@ -1,4 +1,4 @@
-"""Reviewed factual screening reuse. No attestation or inferred answer reuse."""
+"""Reviewed factual screening reuse, and the owner's learned answers."""
 import re
 
 
@@ -67,3 +67,29 @@ def valid_screening_memory(question: str, concept: str, answer: str, answer_type
         return False
     return (concept.startswith(prefix) and tenant.split("/", 1)[0] == source_host
             and bool(re.fullmatch(r"[a-z0-9.-]+(?:/[a-z0-9_-]+){0,3}", tenant)))
+
+
+def is_employer_motivation(question: str) -> bool:
+    """Company motivation stays on the employer form. Mirrors extension/memory.js."""
+    q = normalized(question)
+    if not q:
+        return False
+    if re.search(r"\bwhy (?:this|our|the) (?:company|employer|organization|organisation|team|role|position)\b", q):
+        return True
+    if (re.search(r"\b(?:why|what|tell us why|explain why)\b", q)
+            and re.search(r"\b(?:want|wish|hope|choose|chose|interested|interest|excite\w*|attract\w*|motivat\w*)\b", q)
+            and re.search(r"\b(?:work|working|join|joining|company|employer|organization|organisation|team|us|our|here)\b", q)):
+        return True
+    if re.search(r"\bwhat (?:interests|excites|attracts|motivates) you\b", q) and re.search(r"\b(?:about|in|to|at|with|joining|working|us|our)\b", q):
+        return True
+    return bool(re.search(r"\b(?:reason|reasons|motivation) for (?:applying|joining|working)\b", q))
+
+
+def valid_learned_memory(question: str, concept: str) -> bool:
+    """Owner decision, 2026-10-28: any answer the owner gives on an employer form
+    may be learned for questions with the same meaning, except company
+    motivation and signatures. Keys stay in the extension's learn: namespace."""
+    q = normalized(question)
+    if not concept.startswith("learn:") or is_employer_motivation(question):
+        return False
+    return not re.search(r"\b(signature|esignature|e signature|electronic(?:ally)? sign\w*|sign your name|password|passcode|captcha)\b", q)

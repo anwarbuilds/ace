@@ -219,7 +219,8 @@ test('parent prompt and all uniquely named checkbox choices remain one exact que
   await until(() => f.document.querySelector('#option-3').checked, 'approval must fill the employer choice');
   await until(() => !f.panel().textContent.includes(prompt), 'verified answer must leave the open queue');
   assert.deepEqual(Array.from(f.document.querySelectorAll('input[type=checkbox]'), input => input.checked), [false, false, false, true]);
-  assert.equal(f.saved.length, 0, 'employer-specific checkbox answer is not reusable');
+  await until(() => f.saved.length === 1, 'the answer about one named employer is saved for that employer');
+  assert.equal(f.saved[0].reuse_policy, 'learned'); assert.match(f.saved[0].concept, /^learn:topic:choice:.+@fixture\.example$/);
   assert.equal(f.submissions(), 0);
   f.click('workspace'); f.click('tab:activity'); f.click('undo');
   assert.equal(f.document.querySelector('#option-3').checked, false, 'undo restores the previous choice state');
@@ -342,14 +343,22 @@ test('a standalone checkbox uses its own full statement rather than the precedin
   assert.equal(f.context.aceQuestionLabelFor(f.document.querySelector('#fluent')), 'I am fluent in this language.');
 });
 
-test('protected authorization answers fill for this application and are not reusable', async t => {
-  const f = fixture('<label for="authorization">Are you authorized to work in the U.S.?</label><select id="authorization"><option value="">Select one</option><option value="yes-code">Yes</option><option value="no-code">No</option></select>'); t.after(f.dispose);
+test('an authorization answer saves once and fills differently worded questions, never another country', async t => {
+  const memoryStore = [];
+  const f = fixture('<label for="authorization">Are you authorized to work in the U.S.?</label><select id="authorization"><option value="">Select one</option><option value="yes-code">Yes</option><option value="no-code">No</option></select>', { memoryStore }); t.after(f.dispose);
   f.review('Are you authorized');
   const select = f.panel().querySelector('#studio-answer'); select.value = 'yes-code'; select.dispatchEvent(new f.window.Event('change', { bubbles: true }));
   assert.equal(Boolean(f.panel().querySelector('#studio-reuse')), false);
   f.click(f.panel().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
-  await until(() => !f.panel().textContent.includes('Are you authorized'), 'protected approval must fill and verify');
-  assert.equal(f.document.querySelector('#authorization').value, 'yes-code'); assert.equal(f.saved.length, 0);
+  await until(() => !f.panel().textContent.includes('Are you authorized'), 'approval must fill and verify');
+  assert.equal(f.document.querySelector('#authorization').value, 'yes-code');
+  await until(() => f.saved.length === 1, 'the authorization answer is saved for next time');
+  assert.equal(f.saved[0].concept, 'learn:bank:choice:work-authorisation'); assert.equal(f.saved[0].answer, 'Yes'); assert.equal(f.saved[0].reuse_policy, 'learned');
+  const later = fixture('<label for="eligible">Are you currently legally eligible to work in the country for which the position is located?</label><select id="eligible"><option value="">Select One</option><option value="y">Yes</option><option value="n">No</option></select><label for="canada">Are you legally authorized to work in Canada?</label><select id="canada"><option value="">Select One</option><option value="cy">Yes</option><option value="cn">No</option></select>', { memoryStore }); t.after(later.dispose);
+  later.click('fill');
+  assert.equal(later.document.getElementById('eligible').value, 'y', 'a different wording of the same question fills');
+  assert.equal(later.document.getElementById('canada').value, '', 'a US answer never answers another country');
+  assert.equal(f.submissions() + later.submissions(), 0);
 });
 
 test('an unlabelled radio option never becomes a profile question', t => {
@@ -688,30 +697,38 @@ test('Memory switch cancels pending saving without asking for the completed form
   await until(() => f.saved.length === 1, 'explicit approval still saves with auto-learning disabled');
 });
 
-test('protected, motivation and multi-answer controls never auto-save', async t => {
+test('sponsorship, employer-history and checkbox answers save while motivation is never read', async t => {
   const f = fixture('<label for="sponsor">Do you require sponsorship?</label><input id="sponsor"><label for="company">Have you previously worked for Silverpine?</label><input id="company"><label for="why">Why this company?</label><textarea id="why"></textarea><fieldset><legend>Which interview formats do you prefer?</legend><input type="checkbox" id="remote"><label for="remote">Remote</label></fieldset>', { autoLearn: true }); t.after(f.dispose);
   for (const id of ['sponsor', 'company', 'remote']) {
     const field = f.document.getElementById(id); field.value = 'Fictional answer'; field.checked = true; ownerEvent(f, field, 'input'); ownerEvent(f, field, 'change'); ownerEvent(f, field, 'focusout');
   }
   const why = f.document.getElementById('why'); let reads = 0; Object.defineProperty(why, 'value', { get() { reads++; return 'Excluded'; } });
   ownerEvent(f, why, 'input'); ownerEvent(f, why, 'change'); ownerEvent(f, why, 'focusout');
-  await sleep(500); assert.equal(f.saved.length, 0); assert.equal(reads, 0);
+  await until(() => f.saved.length === 3, 'every finished owner answer except motivation is saved');
+  assert.equal(reads, 0); assert.ok(!f.saved.some(item => /why this company/i.test(item.question)));
+  const byQuestion = Object.fromEntries(f.saved.map(item => [item.question, item]));
+  assert.equal(byQuestion['Do you require sponsorship?'].concept, 'learn:bank:text:need-sponsorship-now');
+  assert.match(byQuestion['Have you previously worked for Silverpine?'].concept, /@fixture\.example$/, 'employer history stays with that employer');
+  assert.ok(f.saved.every(item => item.reuse_policy === 'learned'));
 });
 
-test('failed auto-save stays visible and can be retried without approving', async t => {
-  const config = { autoLearn: true, failSave: true }; const f = fixture(routine, config); t.after(f.dispose);
+test('a refused server save keeps the answer in this browser, fills from it and moves it to ACE later', async t => {
+  const config = { autoLearn: true, failSave: true }; const f = fixture(routine + '<label for="again">Please tell us about your experience writing integration tests.</label><textarea id="again"></textarea>', config); t.after(f.dispose);
   f.review('Describe your experience'); const field = f.document.getElementById('detail'); field.value = 'Fictional final answer'; ownerEvent(f, field, 'input'); ownerEvent(f, field, 'focusout');
-  await until(() => f.panel().textContent.includes('Saving for next time failed.'), 'failure remains honest');
-  assert.ok(f.panel().textContent.includes('Retry saving')); config.failSave = false;
-  f.click(f.panel().querySelector('[data-ace^="retry-save:"]').getAttribute('data-ace'));
-  await until(() => f.saved.length === 2 && !f.panel().textContent.includes('Saving for next time failed.'), 'retry saves without approval'); assert.equal(f.saved.length, 2);
+  await until(() => f.saved.length === 1 && f.panel().textContent.includes('Saved. ACE fills it'), 'the answer is kept even though the server refused it');
+  assert.ok(!f.panel().textContent.includes('Saving for next time failed.'));
+  f.click('tab:overview'); f.click('answers'); assert.ok(f.panel().textContent.includes('In this browser'), 'the list says where the answer waits');
+  f.click('tab:overview'); f.click('fill'); assert.equal(f.document.getElementById('again').value, field.value, 'the browser copy fills an equivalent question');
+  config.failSave = false; f.click('workspace'); f.click('tab:memory'); f.click('retry-memory');
+  await until(() => f.saved.length === 2 && f.saved[1].reuse_policy === 'learned', 'the next connection moves the answer to ACE');
+  assert.equal(f.saved[1].answer, field.value); assert.equal(f.submissions(), 0);
 });
 
 test('long question keys fit the existing API and remain reusable', async t => {
-  const question = 'Describe your experience ' + 'building fictional integration fixtures '.repeat(7);
+  const question = 'Describe your experience with ' + Array.from({ length: 40 }, (_, at) => 'fixture' + String.fromCharCode(97 + at % 26) + String.fromCharCode(97 + Math.floor(at / 26))).join(' ');
   const memoryStore = []; const f = fixture(`<label for="detail">${question}</label><textarea id="detail"></textarea>`, { autoLearn: true, memoryStore }); t.after(f.dispose);
   const field = f.document.getElementById('detail'); field.value = 'Fictional technical answer'; ownerEvent(f, field, 'input'); ownerEvent(f, field, 'focusout');
-  await until(() => f.saved.length === 1, 'long question can save'); assert.match(f.saved[0].concept, /^q:sha256:[a-f0-9]{64}$/);
+  await until(() => f.saved.length === 1, 'long question can save'); assert.match(f.saved[0].concept, /^learn:topic:text:sha256:[a-f0-9]{64}$/);
   const next = fixture(`<label for="detail">${question}</label><textarea id="detail"></textarea>`, { autoKnown: true, autoLearn: true, memoryStore }); t.after(next.dispose); next.click('fill');
   await until(() => next.document.getElementById('detail').value === field.value, 'hashed key still matches full question');
 });
@@ -885,13 +902,13 @@ test('employer focus does not change the chosen ACE prompt or disturb an editor 
   assert.equal(f.document.getElementById('detail-0').value, '');
 });
 
-test('a committed protected employer selection finishes locally without a second approval or Memory save', async t => {
+test('a committed sponsorship selection finishes without a second approval and saves once for next time', async t => {
   const f = fixture('<label for="sponsor">Will you require visa sponsorship?</label><select id="sponsor"><option value="">Select One</option><option value="yes-9">Yes</option><option value="no-3">No</option></select>', { autoLearn: true }); t.after(f.dispose);
   f.click('tab:review');
   const field = f.document.getElementById('sponsor'); ownerEvent(f, field, 'focusin'); field.value = 'yes-9'; ownerEvent(f, field, 'change');
   await until(() => f.panel().textContent.includes('Answered on form'), 'actual applicant selection is the per-form decision');
-  assert.ok(f.panel().textContent.includes('this application only')); assert.equal(Boolean(f.panel().querySelector('[data-ace^="approve:"]')), false); assert.equal(Boolean(f.panel().querySelector('#studio-answer')), false);
-  await sleep(400); assert.equal(f.saved.length, 0);
+  assert.equal(Boolean(f.panel().querySelector('[data-ace^="approve:"]')), false); assert.equal(Boolean(f.panel().querySelector('#studio-answer')), false);
+  await until(() => f.saved.length === 1, 'the owner sponsorship answer is saved'); assert.equal(f.saved[0].answer, 'Yes'); assert.equal(f.saved[0].reuse_policy, 'learned');
   field.dispatchEvent(new f.window.Event('change', { bubbles: true })); await sleep(220);
   assert.ok(f.panel().textContent.includes('Answered on form'), 'unchanged synthetic events cannot reopen a completed question');
   field.value = ''; f.click('theme');
@@ -899,13 +916,14 @@ test('a committed protected employer selection finishes locally without a second
   assert.equal(f.submissions(), 0);
 });
 
-test('protected prefills stay visible for confirmation rather than being silently approved by focus', async t => {
+test('an employer prefilled answer counts as answered and is never saved as the owner\'s answer', async t => {
   const f = fixture('<label for="sponsor">Will you require visa sponsorship?</label><select id="sponsor"><option value="">Select One</option><option value="yes-9" selected>Yes</option></select>', { autoLearn: true }); t.after(f.dispose);
   f.click('tab:review');
   const field = f.document.getElementById('sponsor'); ownerEvent(f, field, 'focusin');
-  await until(() => f.panel().querySelector('.focus-detected'), 'existing answer is shown without re-entry');
-  assert.ok(f.panel().querySelector('.focus-detected').textContent.includes('Yes'));
-  assert.equal(f.panel().querySelector('[data-ace^="approve:"]').textContent, 'Use answer'); assert.equal(f.saved.length, 0);
+  await sleep(400);
+  assert.ok(!Array.from(f.panel().querySelectorAll('[data-ace^="question:"]')).some(button => button.textContent.includes('visa sponsorship')), 'an answered question is not open work');
+  f.click('tab:overview'); f.click('answers'); assert.ok(f.panel().textContent.includes('Will you require visa sponsorship?'));
+  assert.equal(f.saved.length, 0);
 });
 
 test('inputless ARIA comboboxes expose their actual selected label and committed protected choice', async t => {
@@ -1073,8 +1091,8 @@ test('committed scoped screening facts save and fill a later equivalent question
   const first = fixture(binaryScreen('status', question), { memoryStore, autoLearn: true }); t.after(first.dispose);
   const field = first.document.getElementById('status'); field.value = 'no-status'; ownerEvent(first, field, 'change');
   await until(() => first.saved.length === 1, 'a committed applicant screening fact must save privately');
-  assert.equal(first.saved[0].reuse_policy, 'scoped'); assert.equal(first.saved[0].answer, 'No');
-  assert.equal(first.saved[0].concept, 'fact:v1:us-status:citizen,resident,refugee,asylee');
+  assert.equal(first.saved[0].reuse_policy, 'learned'); assert.equal(first.saved[0].answer, 'No');
+  assert.equal(first.saved[0].concept, 'learn:fact:choice:us-status:citizen,resident,refugee,asylee');
   const later = fixture(binaryScreen('same', question.replace('U.S.', 'United States')) + binaryScreen('narrow', 'Are you a US citizen or permanent resident?'), { memoryStore }); t.after(later.dispose);
   assert.equal(later.document.getElementById('same').value, '');
   later.click('fill'); assert.equal(later.document.getElementById('same').value, 'no-same');
@@ -1119,11 +1137,12 @@ test('answers committed before a delayed Memory connection are adopted after con
   f.click('fill'); assert.equal(f.document.getElementById('later').value, field.value); assert.equal(f.submissions(), 0);
 });
 
-test('a scoped save failure leaves completion intact and exposes retry without overwriting manual edits', async t => {
+test('a refused screening save leaves completion intact, keeps the answer in this browser and never overwrites manual edits', async t => {
   const question = 'Have you ever worked for Silverpine Labs?';
   const f = fixture(binaryScreen('history', question), { autoLearn: true, failSave: true }); t.after(f.dispose);
+  const before = Number(countOf(f, 'saved'));
   const field = f.document.getElementById('history'); field.value = 'no-history'; ownerEvent(f, field, 'change');
-  await until(() => f.saved.length === 1 && f.panel().textContent.includes('not saved to Memory'), 'the failed save must be visible');
+  await until(() => f.saved.length === 1 && countOf(f, 'saved') === String(before + 1), 'the refused save is kept in this browser');
   assert.equal(field.value, 'no-history'); f.click('tab:review');
   assert.ok(!f.panel().querySelector('[data-ace^="approve:"]'), 'the already committed employer choice needs no second approval');
   assert.equal(f.submissions(), 0);
@@ -1140,11 +1159,12 @@ test('a committed Workday-style screening dropdown saves a binary fact for a lat
     const option = f.document.createElement('div'); option.setAttribute('role', 'option'); option.textContent = 'No';
     option.addEventListener('click', () => setTimeout(() => { field.textContent = 'No'; menu.remove(); }, 0)); menu.append(option); field.append(menu);
   }, 0); });
+  const before = Number(countOf(f, 'saved'));
   ownerEvent(f, field, 'click'); await until(() => f.document.querySelector('#status-options [role=option]'), 'the real employer menu must open');
   ownerEvent(f, f.document.querySelector('#status-options [role=option]'), 'click');
   await until(() => f.saved.length === 1, 'a committed associated custom choice must save');
-  assert.equal(f.saved[0].answer, 'No'); assert.equal(f.saved[0].reuse_policy, 'scoped');
-  await until(() => f.panel().textContent.includes('1 saved for next time'), 'only a confirmed private save earns the receipt');
+  assert.equal(f.saved[0].answer, 'No'); assert.equal(f.saved[0].reuse_policy, 'learned');
+  await until(() => countOf(f, 'saved') === String(before + 1), 'only a confirmed private save earns the receipt');
   const later = fixture(binaryScreen('later', question), { memoryStore }); t.after(later.dispose);
   later.click('fill'); assert.equal(later.document.getElementById('later').value, 'no-later');
   assert.equal(f.submissions() + later.submissions(), 0);
@@ -1160,4 +1180,329 @@ test('correcting a saved screening fact invalidates its earlier on-form reuse co
   f.document.querySelector('form').insertAdjacentHTML('beforeend', binaryScreen('new', question));
   f.click('fill'); assert.equal(f.document.getElementById('new').value, 'yes-new');
   assert.equal(field.value, 'no-old', 'the applicant\'s original employer answer remains intact'); assert.equal(f.submissions(), 0);
+});
+
+// Workday-style dropdown: a button that opens a separately mounted menu.
+const listbox = (id, question) => `<div data-automation-id="formField-${id}"><label id="${id}-label">${question}</label><button type="button" id="${id}" aria-haspopup="listbox" aria-labelledby="${id}-label">Select One</button></div>`;
+function wireListbox(f, id, choices) {
+  const trigger = f.document.getElementById(id);
+  // Opened and committed after the event, as React renders them.
+  trigger.addEventListener('click', event => { if (event.target === trigger) setTimeout(() => {
+    if (f.document.getElementById(`${id}-menu`)) return;
+    const menu = f.document.createElement('div'); menu.id = `${id}-menu`; menu.setAttribute('role', 'listbox');
+    for (const text of choices) {
+      const option = f.document.createElement('div'); option.setAttribute('role', 'option'); option.textContent = text;
+      option.addEventListener('click', () => setTimeout(() => { trigger.textContent = text; menu.remove(); }, 0)); menu.append(option);
+    }
+    f.document.body.append(menu);
+  }, 0); });
+}
+async function ownerPicks(f, id, text) {
+  ownerEvent(f, f.document.getElementById(id), 'click');
+  await until(() => f.document.getElementById(`${id}-menu`), `the ${id} menu opens`);
+  ownerEvent(f, Array.from(f.document.querySelectorAll(`#${id}-menu [role=option]`)).find(node => node.textContent === text), 'click');
+  await until(() => f.document.getElementById(id).textContent === text, `the ${id} choice commits`);
+}
+
+// Workday's date: spinbuttons whose state changes only through ArrowUp and
+// ArrowDown from the box's value. Typed values and input events are ignored,
+// and leaving a section validates the date the state holds.
+const sectionDate = (prefix, label, parts = ['Month', 'Year']) => `<div data-automation-id="formField-${prefix}"><label>${label}*</label><div data-automation-id="dateInputWrapper">${parts.map(part => `<input id="${prefix}-${part.toLowerCase()}" aria-label="${part}" role="spinbutton" data-automation-id="dateSection${part}-input">`).join('<span>/</span>')}</div><p class="error"></p></div>`;
+function spinbuttons(f, prefix, parts = ['Month', 'Year']) {
+  const state = {}, validations = [];
+  const error = f.document.querySelector(`[data-automation-id="formField-${prefix}"] .error`);
+  const inputs = parts.map(part => f.document.getElementById(`${prefix}-${part.toLowerCase()}`));
+  inputs.forEach((input, at) => {
+    const part = parts[at];
+    input.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+      const base = parseInt(input.value, 10);
+      const next = (isNaN(base) ? (part === 'Year' ? 2025 : 0) : base) + (event.key === 'ArrowUp' ? 1 : -1);
+      state[part] = part === 'Year' ? String(next) : String(next).padStart(2, '0');
+      input.value = state[part]; input.setAttribute('aria-valuenow', String(next));
+    });
+    const leave = input.blur;
+    input.blur = function () {
+      leave.call(this);
+      const shown = parts.map(name => state[name] || '').join('/');
+      validations.push(shown);
+      error.textContent = parts.every(name => state[name]) ? '' : `Error: Invalid Date: ${shown}`;
+      inputs.forEach(node => node.setAttribute('aria-invalid', String(!!error.textContent)));
+    };
+  });
+  return { state, validations, error };
+}
+
+test('Workday From dates are stepped into Workday state and validated only once complete', t => {
+  const body = `<section><h2>Work Experience 1</h2><label for="company">Company</label><input id="company" value="Fictional Research Group"><label for="current">I currently work here</label><input id="current" type="checkbox">${sectionDate('start', 'From')}</section>`;
+  const f = fixture(body, { work: [{ employer: 'Fictional Research Group', is_current: true, start_month: 1, start_year: 2026 }] }); t.after(f.dispose);
+  const date = spinbuttons(f, 'start');
+  f.click('fill');
+  assert.equal(date.state.Month, '01'); assert.equal(date.state.Year, '2026');
+  assert.deepEqual(date.validations, ['01/2026'], 'the date is validated once, with both parts');
+  assert.equal(date.error.textContent, '', 'no Invalid Date error');
+  assert.equal(f.document.getElementById('current').checked, true);
+  assert.equal(f.submissions(), 0);
+});
+
+test('a date Workday rejected after an earlier fill is stepped in again and its error clears', t => {
+  const body = `<section><h2>Work Experience 1</h2><label for="company">Company</label><input id="company" value="Fictional Research Group">${sectionDate('start', 'From')}</section>`;
+  const f = fixture(body, { work: [{ employer: 'Fictional Research Group', is_current: true, start_month: 1, start_year: 2026 }] }); t.after(f.dispose);
+  const date = spinbuttons(f, 'start');
+  const month = f.document.getElementById('start-month'), year = f.document.getElementById('start-year');
+  month.value = '01'; month.setAttribute('aria-valuenow', '1'); date.state.Month = '01'; year.value = '2026';
+  date.error.textContent = 'Error: Invalid Date: 01/'; month.setAttribute('aria-invalid', 'true');
+  f.click('fill');
+  assert.equal(date.state.Year, '2026'); assert.equal(date.error.textContent, '');
+  assert.equal(date.validations[date.validations.length - 1], '01/2026');
+});
+
+test('a self-identification date gets today in Workday month, day and year sections', t => {
+  const f = fixture(sectionDate('dateSignedOn', 'Date', ['Month', 'Day', 'Year'])); t.after(f.dispose);
+  const date = spinbuttons(f, 'dateSignedOn', ['Month', 'Day', 'Year']);
+  f.click('fill');
+  const now = new Date();
+  assert.equal(date.state.Month, String(now.getMonth() + 1).padStart(2, '0'));
+  assert.equal(date.state.Day, String(now.getDate()).padStart(2, '0'));
+  assert.equal(date.state.Year, String(now.getFullYear()));
+  assert.equal(date.error.textContent, '');
+});
+
+test('screening answers given once on one employer fill reworded questions at another employer', async t => {
+  const memoryStore = [];
+  const answersGiven = [
+    ['eligible', 'Are you currently legally eligible to work in the country for which the position is located?', 'Yes'],
+    ['sponsor', 'Do you require any type of sponsorship now or in the future?', 'Yes'],
+    ['official', 'Are you currently a government official or do you have any close links to a government official (including but not limited to a family member) who may have been working on Silverpine related products or business any time in the last 12 months?', 'No'],
+    ['conflict', 'Do you have any relationships or connections with an individual, business or organization which currently or potentially has a competitive or business relationship with Silverpine?', 'No'],
+    ['future', 'Do you wish to be considered for other opportunities that may become available in the future and for which you are qualified?', 'No'],
+    ['accurate', 'I acknowledge that my responses are accurate and complete.', 'Yes'],
+  ];
+  const first = fixture(answersGiven.map(([id, question]) => listbox(id, question)).join(''), { memoryStore, autoLearn: true, url: 'https://silverpine.wd5.myworkdayjobs.com/en-US/Careers/job/Engineer_R1/apply/applyManually' }); t.after(first.dispose);
+  const savedBefore = Number(countOf(first, 'saved'));
+  for (const [id, , answer] of answersGiven) { wireListbox(first, id, ['Yes', 'No']); await ownerPicks(first, id, answer); }
+  await until(() => first.saved.length === 6, 'every answer the owner gave is saved');
+  assert.ok(first.saved.every(item => item.reuse_policy === 'learned'));
+  assert.deepEqual(first.saved.map(item => item.concept).sort(), [
+    'learn:bank:choice:conflict-of-interest', 'learn:bank:choice:consent-to-keep-my-application-on-file',
+    'learn:bank:choice:government-official-or-close-links', 'learn:bank:choice:need-sponsorship-in-future',
+    'learn:bank:choice:responses-are-accurate-and-complete', 'learn:bank:choice:work-authorisation']);
+  await until(() => countOf(first, 'saved') === String(savedBefore + 6), 'the card counts what was saved');
+  const reworded = [
+    ['eligible', 'Are you legally authorized to work in the United States?', 'Yes'],
+    ['sponsor', 'Will you now or in the future require sponsorship for employment visa status?', 'Yes'],
+    ['official', 'Are you a government official or related to a government official?', 'No'],
+    ['conflict', 'Do you have any conflicts of interest with Cobalt Systems?', 'No'],
+    ['future', 'Would you like to be considered for other positions in the future?', 'No'],
+    ['accurate', 'I certify that the information provided is true and complete.', 'Yes'],
+  ];
+  const later = fixture(reworded.map(([id, question]) => listbox(id, question)).join(''), { memoryStore, url: 'https://cobalt.wd1.myworkdayjobs.com/en-US/Jobs/job/Engineer_R2/apply/applyManually' }); t.after(later.dispose);
+  for (const [id] of reworded) wireListbox(later, id, ['Yes', 'No']);
+  later.click('fill');
+  await until(() => reworded.every(([id, , answer]) => later.document.getElementById(id).textContent === answer), 'every reworded question fills from the saved answers');
+  await until(() => countOf(later, 'filled') === '6', 'the card counts what ACE filled');
+  later.click('answers');
+  assert.ok(later.panel().textContent.includes('Learned from you'), 'the list names where each answer came from');
+  assert.equal(later.saved.length, 0, 'ACE filling is never saved as owner input');
+  assert.equal(first.submissions() + later.submissions(), 0);
+});
+
+test('voluntary disclosures save once and choose the matching option on another employer, never a qualifier', async t => {
+  const memoryStore = [];
+  const race = ['Asian (not Hispanic or Latino)', 'Hispanic or Latino', 'White (not Hispanic or Latino)', 'I do not wish to answer'];
+  const veteran = ['I am not a veteran', 'I am a protected veteran', 'I am a veteran, but not a protected veteran'];
+  const gender = ['Male', 'Female', 'I do not wish to answer'];
+  const body = listbox('race', 'Please select your race/ethnicity.') + listbox('veteran', 'Are you a Protected Veteran?') + listbox('gender', 'Please select your gender.') +
+    '<div data-automation-id="formField-terms"><label for="terms">Please select the tick box to continue.</label><input id="terms" type="checkbox"></div>';
+  const url = 'https://silverpine.wd5.myworkdayjobs.com/en-US/Careers/job/Engineer_R1/apply/applyManually';
+  const first = fixture(body, { memoryStore, autoLearn: true, url }); t.after(first.dispose);
+  wireListbox(first, 'race', race); wireListbox(first, 'veteran', veteran); wireListbox(first, 'gender', gender);
+  await ownerPicks(first, 'race', race[0]); await ownerPicks(first, 'veteran', veteran[0]); await ownerPicks(first, 'gender', 'Male');
+  const terms = first.document.getElementById('terms'); terms.checked = true; ownerEvent(first, terms, 'change');
+  await until(() => first.saved.length === 4, 'voluntary disclosures and the acknowledgement are saved');
+  const other = '<label for="race2">What is your race or ethnicity?</label><select id="race2"><option value="">Select</option><option value="h">Hispanic or Latino</option><option value="a">Asian (United States of America)</option><option value="w">White (United States of America)</option></select>' +
+    '<label for="veteran2">Veteran status</label><select id="veteran2"><option value="">Select</option><option value="p">I identify as one or more of the classifications of protected veteran</option><option value="n">I am not a protected veteran</option><option value="d">I don\'t wish to answer</option></select>' +
+    '<fieldset><legend>Gender</legend><input type="radio" name="g" id="g-f"><label for="g-f">Female</label><input type="radio" name="g" id="g-m"><label for="g-m">Male</label></fieldset>';
+  const later = fixture(other, { memoryStore, url: 'https://boards.greenhouse.io/cobalt/jobs/7' }); t.after(later.dispose);
+  later.click('fill');
+  assert.equal(later.document.getElementById('race2').value, 'a', 'the qualifier in the saved label never chooses Hispanic or Latino');
+  assert.equal(later.document.getElementById('veteran2').value, 'n');
+  assert.equal(later.document.getElementById('g-m').checked, true);
+  const again = fixture(body, { memoryStore, url: 'https://silverpine.wd5.myworkdayjobs.com/en-US/Careers/job/Engineer_R3/apply/applyManually' }); t.after(again.dispose);
+  wireListbox(again, 'race', race); wireListbox(again, 'veteran', veteran); wireListbox(again, 'gender', gender);
+  again.click('fill');
+  await until(() => again.document.getElementById('gender').textContent === 'Male', 'the same employer page fills again');
+  assert.equal(again.document.getElementById('race').textContent, race[0]);
+  assert.equal(again.document.getElementById('terms').checked, true, 'the acknowledgement box is ticked again');
+  assert.equal(first.submissions() + later.submissions() + again.submissions(), 0);
+});
+
+test('saved Answers page values fill voluntary disclosures and screening questions', t => {
+  const answerItems = [{ label: 'Gender', value: 'Male' }, { label: 'Veteran status', value: 'I am not a protected veteran' },
+    { label: 'Disability status', value: 'No, I do not have a disability' }, { label: 'Work authorisation', value: 'Yes' },
+    { label: 'Government official', value: 'No' }, { label: 'Related to a government official', value: 'No' }];
+  const select = (id, question, options) => `<label for="${id}">${question}</label><select id="${id}"><option value="">Select One</option>${options.map((option, at) => `<option value="${id}-${at}">${option}</option>`).join('')}</select>`;
+  const f = fixture(select('gender', 'Gender', ['Female', 'Male']) + select('veteran', 'Protected veteran status', ['I identify as a protected veteran', 'I am not a protected veteran']) +
+    select('disability', 'Disability status', ['Yes, I have a disability', 'No, I don\'t have a disability', 'I do not want to answer']) +
+    select('eligible', 'Are you legally eligible to work in the country for which the position is located?', ['Yes', 'No']) +
+    select('official', 'Are you currently a government official or do you have any close links to a government official?', ['Yes', 'No']), { answerItems }); t.after(f.dispose);
+  f.click('fill');
+  assert.equal(f.document.getElementById('gender').value, 'gender-1');
+  assert.equal(f.document.getElementById('veteran').value, 'veteran-1');
+  assert.equal(f.document.getElementById('disability').value, 'disability-1');
+  assert.equal(f.document.getElementById('eligible').value, 'eligible-0');
+  assert.equal(f.document.getElementById('official').value, 'official-1', 'the combined question uses both saved rows');
+  assert.equal(f.saved.length, 0); assert.equal(f.submissions(), 0);
+});
+
+test('several boxes ticked together are saved as one answer and ticked together next time', async t => {
+  const memoryStore = [];
+  const group = id => `<fieldset><legend>Which office locations are you open to?</legend>${['Seattle', 'Austin', 'Boston'].map(city => `<input type="checkbox" id="${id}-${city}"><label for="${id}-${city}">${city}</label>`).join('')}</fieldset>`;
+  const first = fixture(group('a'), { memoryStore, autoLearn: true }); t.after(first.dispose);
+  for (const city of ['Seattle', 'Austin']) { const box = first.document.getElementById(`a-${city}`); box.checked = true; ownerEvent(first, box, 'change'); await sleep(450); }
+  await until(() => memoryStore.length === 1 && memoryStore[0].answer === 'Seattle\nAustin', 'both choices are one saved answer');
+  const later = fixture(group('b'), { memoryStore }); t.after(later.dispose);
+  later.click('fill');
+  assert.deepEqual(['Seattle', 'Austin', 'Boston'].map(city => later.document.getElementById(`b-${city}`).checked), [true, true, false]);
+});
+
+test('screening questions that mention "to" or an organization are never claimed by work history', t => {
+  const answerItems = [{ label: 'Work authorisation', value: 'Yes' }, { label: 'Employer relationship with this company', value: 'No' }];
+  const select = (id, question) => `<div data-automation-id="formField-${id}"><label for="${id}">${question}</label><select id="${id}"><option value="">Select One</option><option value="${id}-yes">Yes</option><option value="${id}-no">No</option></select></div>`;
+  const f = fixture(select('eligible', 'Are you currently legally eligible to work in the country for which the position is located?') +
+    select('conflict', 'Do you have any relationships or connections with an individual, business or organization which currently or potentially has a competitive or business relationship with Silverpine?'),
+  { answerItems, work: [{ employer: 'Fictional Previous Lab', is_current: false, start_month: 6, start_year: 2020, end_month: 8, end_year: 2023 }] }); t.after(f.dispose);
+  assert.equal(f.context.aceHistoryRole(f.document.getElementById('eligible'), f.context.aceQuestionFor(f.document.getElementById('eligible'))), null);
+  f.click('fill');
+  assert.equal(f.document.getElementById('eligible').value, 'eligible-yes', 'the saved authorization answer fills, not a job date');
+  assert.equal(f.submissions(), 0);
+});
+
+test('a manual choice is saved when the Answers page value was too vague for this form', async t => {
+  const memoryStore = [];
+  const race = id => `<label for="${id}">Please select your race/ethnicity.</label><select id="${id}"><option value="">Select One</option><option value="${id}-south">Asian (Indian subcontinent)</option><option value="${id}-east">Asian (East Asia)</option><option value="${id}-white">White</option></select>`;
+  const answerItems = [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Race or ethnicity', value: 'Asian' }];
+  const first = fixture(race('a'), { memoryStore, answerItems, autoLearn: true }); t.after(first.dispose);
+  first.click('fill'); assert.equal(first.document.getElementById('a').value, '', 'two Asian options: ACE does not guess');
+  const field = first.document.getElementById('a'); field.value = 'a-south'; ownerEvent(first, field, 'change');
+  await until(() => first.saved.length === 1, 'the owner choice is new knowledge');
+  assert.equal(first.saved[0].answer, 'Asian (Indian subcontinent)'); assert.equal(first.saved[0].concept, 'learn:bank:choice:race-or-ethnicity');
+  const later = fixture(race('b'), { memoryStore, answerItems }); t.after(later.dispose);
+  later.click('fill'); assert.equal(later.document.getElementById('b').value, 'b-south');
+});
+
+// The same fixtures as the Meijer, Verizon and Workday Playwright specs: the
+// answer mappings the owner approved on 2026-10-24 fill again.
+async function screeningPage(questions, answerItems, url = 'https://fixture.example/apply') {
+  const body = questions.map(([id, question, choices]) => choices ? listbox(id, question) : `<label for="${id}">${question}</label><textarea id="${id}"></textarea>`).join('');
+  const f = fixture(body, { answerItems, url });
+  for (const [id, , choices] of questions) if (choices) wireListbox(f, id, choices);
+  f.click('fill');
+  return f;
+}
+const text = (f, id) => f.document.getElementById(id).textContent;
+
+test('approved Meijer answers fill distinct recruiter, contractor, footprint, relocation and sponsorship questions', async t => {
+  const f = await screeningPage([
+    ['recruiter', 'Have you spoken to any recruiters/agencies that have presented opportunities at Meijer?', ['Yes', 'No']],
+    ['contractor', 'Are you a current contractor at Meijer or another client?', ['Yes', 'No']],
+    ['footprint', 'Do you live in our footprint? [Michigan, Ohio, Indiana, Illinois, Wisconsin, Kentucky]', ['Yes', 'No']],
+    ['relocate', 'If not within our 6-state footprint, are you willing to relocate?', ['Yes, I am willing to relocate to footprint for Remote work', 'No']],
+    ['sponsorship', 'Will you now or in the future require sponsorship to continue working in the United States?', ['Yes', 'No']],
+    ['visa', 'Please list the type of your current visa/sponsorship.'],
+  ], [
+    { label: 'Discussed Meijer opportunities with recruiters', value: 'No' }, { label: 'Current contractor at Meijer or another client', value: 'Yes' },
+    { label: 'Live in Meijer six-state footprint', value: 'No' }, { label: 'Willing to relocate', value: 'Yes' },
+    { label: 'Need sponsorship in future', value: 'Yes' }, { label: 'Current visa or sponsorship description', value: 'Example status' },
+  ]); t.after(f.dispose);
+  await until(() => text(f, 'sponsorship') === 'Yes', 'the dropdowns fill in turn');
+  assert.deepEqual(['recruiter', 'contractor', 'footprint'].map(id => text(f, id)), ['No', 'Yes', 'No']);
+  assert.ok(text(f, 'relocate').startsWith('Yes, I am willing'));
+  assert.equal(f.document.getElementById('visa').value, 'Example status');
+});
+
+test('approved Verizon answers keep each saved fact separate', async t => {
+  const yes = ['Yes', 'No'];
+  const f = await screeningPage([
+    ['authorized', 'Are you currently authorized to work for any employer in the U.S.?', yes],
+    ['now', 'Do you currently require sponsorship for an employment visa in order to work in the U.S.?', ['Yes, I do require sponsorship', 'No, I do not']],
+    ['future', 'Will you require visa sponsorship at some time in the future in order to continue work in the U.S.?', ['Yes, I will require sponsorship', 'No, I will not']],
+    ['adult', 'Are you at least 18 years old?', yes],
+    ['employee', 'Do you have any family members or persons with whom you have/had a close personal relationship who are employed by Verizon?', yes],
+    ['agreement', 'Have you signed or are you subject to any non-competition, employee non-solicitation, customer non-solicitation or any agreement that could restrict or prevent you from working at Verizon?', yes],
+    ['government', 'Are you currently employed, or have you previously been employed, by the United States Federal, State or Local government?', yes],
+    ['board', 'Do you have any family members who are part of Verizon Communication Inc\'s Board of Directors?', yes],
+    ['military', 'Are you currently serving or have you previously served in the U.S. Military?', yes],
+    ['spouse', 'Are you currently an active military spouse, or has your spouse previously served in the U.S. Military?', yes],
+  ], [
+    { label: 'Authorized to work for any US employer', value: 'No' }, { label: 'Currently require employer visa sponsorship', value: 'Yes' },
+    { label: 'Need sponsorship in future', value: 'No' }, { label: 'At least 18 years old', value: 'Yes' },
+    { label: 'Family or close personal relationship with employee here', value: 'Yes' }, { label: 'Agreement restricting work for employer', value: 'No' },
+    { label: 'Federal state or local government employment', value: 'Yes' }, { label: 'Family member on employer board', value: 'No' },
+    { label: 'Personally served in US military', value: 'Yes' }, { label: 'Spouse served in US military', value: 'No' },
+  ]); t.after(f.dispose);
+  await until(() => text(f, 'spouse') !== 'Select One', 'the dropdowns fill in turn');
+  assert.deepEqual(['authorized', 'adult', 'employee', 'agreement', 'government', 'board', 'military', 'spouse'].map(id => text(f, id)),
+    ['No', 'Yes', 'Yes', 'No', 'Yes', 'No', 'Yes', 'No']);
+  assert.ok(text(f, 'now').startsWith('Yes, I do require')); assert.ok(text(f, 'future').startsWith('No, I will not'));
+});
+
+test('broad saved answers still never fill a narrower distinct question', async t => {
+  const yes = ['Yes', 'No'];
+  const f = await screeningPage([
+    ['authorized', 'Are you currently authorized to work for any employer in the U.S.?', yes],
+    ['employee', 'Do you have any family members or persons with whom you have/had a close personal relationship who are employed by Verizon?', yes],
+    ['worked', 'Have you previously worked for Meijer or Fresh Thyme?', yes],
+    ['sponsor', 'Will you need ExampleCo to sponsor you for a visa now or in the future?', yes],
+  ], [
+    { label: 'Work authorisation', value: 'Yes' }, { label: 'Related to an employee here', value: 'No' },
+    { label: 'Previously employed by Meijer', value: 'No' }, { label: 'Need sponsorship in future', value: 'No' },
+  ]); t.after(f.dispose);
+  await sleep(400);
+  assert.deepEqual(['authorized', 'employee', 'worked', 'sponsor'].map(id => text(f, id)), ['Select One', 'Select One', 'Select One', 'Select One']);
+});
+
+// The card's four numbers: filled by ACE, known, unknown and saved.
+function countOf(f, name) { return f.panel()?.querySelector(`[data-count="${name}"] b`)?.textContent; }
+
+test('on load the card counts known and unknown questions, then filled and saved ones', async t => {
+  const memoryStore = [];
+  const answerItems = [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Gender', value: 'Male' }, { label: 'Work authorisation', value: 'Yes' }];
+  const select = (id, question, options) => `<label for="${id}">${question}</label><select id="${id}"><option value="">Select One</option>${options.map((o, at) => `<option value="${id}-${at}">${o}</option>`).join('')}</select>`;
+  const f = fixture(select('gender', 'Please select your gender.', ['Male', 'Female']) + select('eligible', 'Are you legally eligible to work in the country for which the position is located?', ['Yes', 'No']) +
+    select('app', 'Have you used our mobile app before?', ['Yes', 'No']), { memoryStore, answerItems, autoLearn: true }); t.after(f.dispose);
+  await until(() => countOf(f, 'known') === '2', 'two questions ACE can answer are counted before any fill');
+  assert.equal(countOf(f, 'unknown'), '1'); assert.equal(countOf(f, 'filled'), '0'); assert.equal(countOf(f, 'saved'), '1', 'an answer already on the form that ACE knows counts as saved');
+  assert.ok(f.panel().querySelector('[data-ace="answers"]').getAttribute('aria-label').includes('2 known, 1 unknown'));
+  f.click('fill');
+  assert.equal(countOf(f, 'filled'), '2'); assert.equal(countOf(f, 'known'), '0'); assert.equal(countOf(f, 'unknown'), '1');
+  const app = f.document.getElementById('app'); app.value = 'app-1'; ownerEvent(f, app, 'change');
+  await until(() => memoryStore.length === 1 && countOf(f, 'unknown') === '0' && countOf(f, 'saved') === '2', 'the owner answer moves from unknown to saved');
+  f.click('answers');
+  for (const heading of ['Filled by ACE', 'Known, ready to fill', 'Unknown, needs your answer', 'Saved for next time']) assert.ok(f.panel().textContent.includes(heading), heading);
+  assert.equal(f.submissions(), 0);
+});
+
+test('an update copy hides an older card left in the tab and answers Alt+A alone', async t => {
+  const f = fixture('<label for="detail">Describe your experience writing integration tests</label><textarea id="detail"></textarea>'); t.after(f.dispose);
+  const stale = f.document.createElement('div'); stale.className = 'ace-root'; f.document.documentElement.appendChild(stale);
+  const own = f.document.querySelector('.ace-root[data-ace-instance]');
+  assert.ok(own, 'this copy marks its own card');
+  const rule = f.document.getElementById('ace-card-owner').textContent;
+  assert.ok(rule.includes(':not([data-ace-instance="' + own.getAttribute('data-ace-instance') + '"])') && rule.includes('display:none'), 'every other card is hidden');
+  assert.equal(f.panel(), own.shadowRoot.querySelector('.ace-panel'));
+});
+
+test('answers given before this copy arrived are saved only on the owner click', async t => {
+  const memoryStore = [];
+  const f = fixture('<label for="relocate">Are you open to relocating for this role?</label><select id="relocate"><option value="">Select One</option><option value="r-yes">Yes</option><option value="r-no">No</option></select>', { memoryStore, autoLearn: true }); t.after(f.dispose);
+  f.document.getElementById('relocate').value = 'r-yes';
+  f.click('scan'); f.click('answers');
+  await sleep(400); assert.equal(memoryStore.length, 0, 'an answer ACE did not see given is never saved silently');
+  const save = Array.from(f.panel().querySelectorAll('[data-ace^="save-answer:"]')).find(button => button.closest('.focus-known-row').textContent.includes('relocating'));
+  assert.ok(save, 'the unsaved answer offers Save');
+  f.click(save.getAttribute('data-ace'));
+  await until(() => memoryStore.length === 1, 'one click saves it'); assert.equal(memoryStore[0].answer, 'Yes');
+  const later = fixture('<label for="move">Would you be willing to relocate for this position?</label><select id="move"><option value="">Select One</option><option value="m-yes">Yes</option><option value="m-no">No</option></select>', { memoryStore }); t.after(later.dispose);
+  later.click('fill'); assert.equal(later.document.getElementById('move').value, 'm-yes');
 });

@@ -50,7 +50,8 @@ test("screening autofill uses only saved matching answers", async ({ page }) => 
   )).toMatch(/^Filled/);
 
   await expect(page.locator("#school")).toHaveValue("Example University");
-  for (const id of ["employer", "pwc", "federal", "conflict", "signature"]) {
+  await expect(page.locator("#employer")).toHaveValue("No");
+  for (const id of ["pwc", "federal", "conflict", "signature"]) {
     await expect(page.locator(`#${id}`)).toHaveValue("");
   }
   await expect(page.locator("#privacy")).not.toBeChecked();

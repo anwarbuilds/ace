@@ -54,3 +54,32 @@ def test_invalid_scoped_policy_cannot_bypass_protected_question_guard(client):
         payload = dict(question=question, concept='fact:v1:us-status:citizen,resident', answer='No', answer_type='yesno', reuse_policy='scoped')
         assert extension.put('/api/extension/memory', json=payload, headers=headers).status_code == 422
     assert extension.get('/api/extension/memory', headers=headers).json()['items'] == []
+
+
+def test_learned_answers_store_protected_questions_but_never_motivation(client):
+    token = _pair(client)
+    extension = TestClient(client.app)
+    headers = {'Authorization': 'Bearer ' + token}
+    for concept, question, answer in [
+        ('learn:bank:choice:need-sponsorship-in-future', 'Do you require any type of sponsorship now or in the future?', 'Yes'),
+        ('learn:bank:choice:gender', 'Please select your gender.', 'Male'),
+        ('learn:bank:choice:government-official-or-close-links', 'Are you currently a government official or do you have any close links to a government official?', 'No'),
+        ('learn:topic:choice:continue-tick@fictional.wd5.myworkdayjobs.com/careers', 'Please select the tick box to continue.', 'Yes'),
+    ]:
+        saved = extension.put('/api/extension/memory', json=dict(concept=concept, question=question, answer=answer, answer_type='choice', source_host='fictional.example', reuse_policy='learned'), headers=headers)
+        assert saved.status_code == 200, question
+    items = extension.get('/api/extension/memory', headers=headers).json()['items']
+    assert {item['reuse_policy'] for item in items} == {'learned'} and len(items) == 4
+    update = extension.put('/api/extension/memory', json=dict(concept='learn:bank:choice:gender', question='What is your gender?', answer='Female', answer_type='choice', reuse_policy='learned', expected_revision=1), headers=headers)
+    assert update.json()['revision'] == 2
+    for concept, question in [
+        ('learn:topic:text:join-silverpine', 'Why do you want to join Silverpine?'),
+        ('learn:topic:text:full-name-signature', 'Electronic signature: type your full name'),
+        ('q:sponsorship', 'Do you require sponsorship?'),
+        ('fact:v1:us-status:citizen,resident', 'Are you a US citizen or permanent resident?'),
+    ]:
+        refused = extension.put('/api/extension/memory', json=dict(concept=concept, question=question, answer='No', answer_type='choice', reuse_policy='learned'), headers=headers)
+        assert refused.status_code == 422, question
+    reusable = extension.put('/api/extension/memory', json=dict(concept='learn:bank:choice:gender', question='Please select your gender.', answer='Male', answer_type='choice', reuse_policy='reusable'), headers=headers)
+    assert reusable.status_code == 422, 'the learn: namespace never enters the routine policy'
+    assert len(extension.get('/api/extension/memory', headers=headers).json()['items']) == 4
