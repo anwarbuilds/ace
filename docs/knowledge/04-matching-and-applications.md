@@ -6,6 +6,22 @@
 
 > **Status of the sheet entries:** The spreadsheet upload and import UI was removed on 2026-10-10 at the user's request, because applications are made through ace. Export CSV remains, and the API endpoints `/api/applications/preview` and `/api/applications/import` still exist, unused. The entries about the sheet are history; their lessons (never guess identity, wait for the write, show the user what was skipped) still apply.
 
+## Inbox parser 11 continuous intelligence LIVE (2026-10-28)
+
+API/frontend `5109fcd` is live, schema 0050. Contextual comparisons and explicit
+role-qualified decisions are recognized with assertion/contradiction guards.
+Public ATS posting identities include provider, tenant and posting ID; links,
+requisitions, employer and role evidence must agree. Title analysis precedes
+chronology filtering so future specific roles cannot fall back to older generic
+ones. No nearest-date inference, automatic identity merging or parent aliases.
+An authenticated rejection predating all recorded applications at its employer
+can remain searchable unlinked evidence, excluded from confirmed Analytics
+outcomes. SQL/Python share that projection; stored `update` supports code rollback.
+Actual new mail was classified, filed and recorded after activation; existing
+owner decisions, old mail and events remain intact. Historical rechecks stay
+disabled and the newly enumerated historical proposal is unapplied pending
+separate approval. Read the first root knowledge section for measured limits.
+
 ## Inbox parser 10 LIVE and explicit historical filing cleanup (2026-10-28)
 
 Exact API source `6ee2eb2` is live, schema 0050, PR #12 merged; frontend remains

@@ -1,9 +1,12 @@
 # Inbox intelligence upgrade
 
-## Parser 11 candidate: continuous checks and contextual identity
+## Parser 11 live: continuous checks and contextual identity
 
-Status: source implementation under validation, **not deployed**. The live
-parser-10 release below remains authoritative until a verified activation.
+Status: API/frontend source `5109fcd919b76a588bed848c4ac4bf07d0e5acbc` is **LIVE**
+at https://ace.opik.net with owner authorization, 2026-10-28 16:29 Pacific,
+schema 0050. Only API/web were replaced; no migration or historical replay.
+The first root knowledge section controls exact verification, backup and rollback.
+The new historical proposal remains separately unapproved and unapplied.
 
 The API lifespan owns a bounded Gmail monitor for existing ready grants. It
 checks about every three minutes, uses a dedicated PostgreSQL advisory lease
@@ -44,6 +47,10 @@ The intent reader also handles short role-qualified application decisions such
 as the fictional “Your application for Data Scientist was rejected,” with
 conditional, negation, quoted-example and question safeguards. Public learning
 events need substantive event/registration purpose, rather than one adjective.
+Polite comparative decisions need asserted candidate-specific application
+context, contrasting closer-fit applicants and a later explicit reference to
+this role's decision; punctuation in named roles is supported. Quotes, examples,
+conditional references, current review, offers and interviews retain safeguards.
 Google-authenticated parent domains for subdomain senders additionally require a passed aligned DKIM identity; unrelated signatures and explicit DMARC failures stay blocked. This uses Google's own first authentication result, consistent with [Gmail authentication guidance](https://support.google.com/mail/answer/180707) and the identifier-alignment distinction in [RFC 9989](https://www.rfc-editor.org/rfc/rfc9989.html).
 Automatic versus owner provenance no longer treats a machine explanation
 starting “You applied...” as an owner decision. Positive automation keeps the
@@ -54,6 +61,16 @@ SQL/Python states, Analytics exclusion, provider errors, concurrent owner Pause,
 shutdown and actual frontend render/interaction behavior. Population precision,
 recall and complete mailbox observation remain unmeasured without independent
 labels and provider coverage; passing examples are not a perfect-accuracy claim.
+
+Exact-source verification: 1,921 full backend, 687 focused backend, 38 hosted
+Inbox/Analytics browser cases, render/DOM, TypeScript/lint/build pass. The full
+workflow's extension browser failure reproduces canonical and skips later app
+browsers; overall CI remains red. A read-only PostgreSQL lease exclusion/release
+check, all 350 running backend source hashes, exact public web assets, real-mail
+route probes and actual new ingestion are separately verified in production.
+Cutover and subsequent legitimate ingestion are distinct preservation intervals.
+No signed-in production browser session was created. Private actual measurements
+and the historical proposal are in the ignored owner-local release package.
 
 Parser 10 follow-up LIVE at API source `6ee2eb2`, schema 0050, PR #12 merged: distinguish optional coding lessons,
 account access, public digests and financial/administrative notices from hiring

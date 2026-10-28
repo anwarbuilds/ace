@@ -4,6 +4,21 @@
 >
 > Read this when: you touch alert emails, freshness or Resend, or you start the sign-in work (read the authentication entry first).
 
+## Continuous Gmail checks and authenticated subdomain senders (2026-10-28)
+
+Inbox parser 11/API source `5109fcd` is live. A bounded API-lifespan monitor
+checks existing ready grants about every three minutes without an open page.
+It uses a dedicated PostgreSQL advisory lease, separate from discovery, and
+retains Pause/disconnect/grant controls, resumable reads and quota cooldowns.
+New grants still start paused; no new scope or scheduler service was added.
+Historical rechecks stay disabled. The actual PostgreSQL lease, running leader,
+provider reads and new ingestion were verified; real body details stay private.
+For Gmail-authenticated parent domains of visible subdomain senders, aligned
+passed DKIM is additionally required. Explicit DMARC failure, unrelated/sibling
+signatures and absent DMARC remain blocked. Sender authentication is still
+separate from employer identity; it does not authorize a parent/subsidiary match.
+Root knowledge contains current code/backup/rollback evidence and limits.
+
 ## Actionable Inbox review and bounded errors (2026-10-25)
 
 The quota fix exposed a storage bug: its explanatory error exceeded the existing

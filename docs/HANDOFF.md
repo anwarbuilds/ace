@@ -1,5 +1,29 @@
 # ace handoff
 
+**LIVE, 2026-10-28 16:29 Pacific, continuous Inbox Intelligence:**
+API/frontend `5109fcd919b76a588bed848c4ac4bf07d0e5acbc`, parser 11/schema 0050,
+healthy at https://ace.opik.net. API/web only were recreated. Learned-answer API
+support and concurrent extension 1.31.2 are preserved; scheduler, PostgreSQL,
+Caddy and environment bytes are unchanged. All 350 backend source hashes,
+public exact web SHA/assets/auth, read-only real-mail viewer/Analytics probes
+and cutover preservation pass. The single-monitor PostgreSQL lease and actual
+new-mail ingestion/filing/recording are verified separately from cutover hashes.
+No migration or historical rewrite occurred. Historical rechecks remain disabled;
+parser-7 operator remains stopped. The owner approved the reviewed historical update and then requested company-level
+rejection handling. That follow-up is being implemented; history remains unapplied.
+Do not treat the completed earlier cohort approval as blanket permission.
+
+Fresh fully expanded archive backup and verified API/web rollback images:
+`/opt/ace/private-backups/inbox-system-20261028T2320Z/`. Rollback keeps SQL data
+and uses the previous learned-answer API, not the stale 19:42 image.
+Full backend 1,921, focused backend 687, matcher 267, hosted Inbox/Analytics
+browser 38, rendering/DOM and web checks/build pass. Full CI retains one
+canonical-reproduced extension browser failure (46/1); remaining broader browser
+steps were skipped at this source. No signed-in production browser claim or
+representative multi-category accuracy claim. Read the first root knowledge
+section and ignored private `artifacts/inbox-intelligence-system-20261028/RELEASE.md`.
+The root checkout and concurrent worktrees retain their runtime/extension work.
+
 **LIVE, 2026-10-28 11:27 Pacific, Inbox backlog correction and approved cleanup:**
 API `6ee2eb223ce91f5464c9e825bf3d66f8d11aadd3`, parser 10/schema 0050, PR #12 merged.
 Frontend remains exact 95f4a97; API alone was recreated. The separately approved

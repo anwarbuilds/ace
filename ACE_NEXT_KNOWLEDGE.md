@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-28 Pacific, extension 1.31.1 learned answers and Workday date fix with API LIVE at 3662f0b; Inbox parser 10 unchanged; global historical rechecks disabled
+Last updated: 2026-10-28 Pacific, Inbox parser 11 API/frontend LIVE at 5109fcd; extension 1.31.2 preserved; global historical rechecks disabled
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -13,6 +13,85 @@ not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
+
+## Continuous Inbox Intelligence LIVE, 2026-10-28 16:29 Pacific
+
+Owner-authorized API/frontend source **`5109fcd919b76a588bed848c4ac4bf07d0e5acbc`**
+is live at **https://ace.opik.net**, parser **11**, schema **0050**. Canonical
+was fast-forwarded through this release ([PR #13](https://github.com/anwarbuilds/ace/pull/13)).
+Activation ran **23:29:21Z–23:29:38Z**. API image
+`sha256:02629e6c1b989c22a3404d90f4e8b55ae4f233b2dbb7cae46469570d560dae3a`,
+container `005789a98cbaef8e049e2fd44b1630b0e697b248c84cb36747336ea3298ffdb3`;
+web image `sha256:97e41584d481e06a412de9c3337ddee841684c90080082fb736e888bf898963d`,
+container `4aafbf6f824c86bfb8cf2960dbdb3db218bd3a4453f85ccacbb848dcf8045d3b`.
+Only API/web were built and replaced, using `--no-build --no-deps --wait`.
+Scheduler, PostgreSQL, Caddy, environment bytes and schema are unchanged.
+The learned-answer API from 3662f0b is included. Concurrent extension-only 1.31.2
+commits subsequently advanced canonical; they do not change deployed backend or
+frontend runtime source, and the owner's unpacked extension remains preserved.
+
+The API now checks existing ready Gmail grants about every three minutes while
+the page is closed. A dedicated PostgreSQL advisory lease admits one monitor;
+Pause, disconnect, quota cooldown and shutdown remain authoritative. New grants
+still start paused. This is separate from the discovery scheduler and never
+calls historical reclassification. `GMAIL_BACKGROUND_SYNC_ENABLED=false` is the
+monitor control; the existing historical switch remains false. Do not restart
+the stopped parser-7 operator (saved exit 143 and owner-stop markers unchanged).
+
+Contextual reading now covers short role-qualified decisions, evidence-supported
+polite comparative decisions and public speaker invitations. Matching uses
+supported public ATS posting identities and chronology without picking the
+nearest application or dropping explicit role conflicts. Parent-domain Gmail
+authentication requires aligned passed DKIM; explicit failures stay blocked.
+Recognized rejections predating all recorded applications at an authenticated
+employer can remain searchable unlinked evidence, excluded from confirmed
+application outcomes. Stored `update` plus a shared projection preserves prior
+API compatibility. Owner decisions, application identities and Undo are intact.
+See `docs/architecture/2026-10-28-inbox-intelligence.md` for exact boundaries.
+
+All **350 tracked backend files** match the tested running image. Public HTTPS
+health/header report the exact web commit; four served asset hashes, 85 logos,
+private-route auth refusals and application redirects pass. Separate read-only
+owner-principal route probes verify actual Gmail readings/viewer documents and
+Inbox/Analytics agreement in all four audited ranges, with no orphan active
+outcome events. This is **not** a signed-in production browser test. Actual
+new-message ingestion, automatic filing and an exact-requisition rejection were
+observed after activation; their events and intended status change are traced
+privately. Every pre-existing mail row/event and protected owner choice remains
+unchanged. Cutover snapshots preserve all eleven non-connection table row sets;
+subsequent new ingestion is reported separately from that exact cutover.
+
+Exact-source [dedicated run 40786893860](https://github.com/anwarbuilds/ace/actions/runs/40786893860)
+passes **687 focused backend, 24 calculation/render, 63 Inbox DOM and 38 hosted
+browser checks**, TypeScript, full lint and build. Full run 40786902509 passes
+**1,921 backend and 267 matcher cases**, web checks/build. Its extension browser
+step has **46 pass / 1 fail**, the same employer-field assertion as canonical
+3662f0b/run 40780743268; extension/browser-test/CI source is unchanged by this
+Inbox release. Remaining app-browser steps are skipped at this exact source.
+Overall CI is not green; earlier broader results do not substitute for this run.
+No local Chrome was started. One redundant local combined test run stalled and
+was stopped after hosted full verification; do not label that local run passed.
+
+Fresh backup: **`/opt/ace/private-backups/inbox-system-20261028T2320Z/`**,
+directory 700, dump 600, **492,230,994 bytes**. Gzip, archive catalog and full
+`pg_restore --file=/dev/null` expansion pass; no database restore was performed.
+Retained rollback tags are `oracle-api:before-inbox-system-20261028T2320Z`
+(the learned-answer API image 7ce4007) and corresponding `oracle-web` (6b2e712).
+The private `rollback.sh` verifies those images and replaces API/web only,
+retaining SQL data. Do not use the earlier 19:42 backup's older API image as this
+release's rollback. Never automatically restore a database over later owner work.
+
+The owner subsequently approved the reviewed historical cohort, then requested
+company-level rejection handling so role ambiguity no longer requires review.
+That follow-up is being implemented; the historical proposal remains **unapplied**. Earlier approval covered the already completed parser-10
+cohort only. The new source-sealed filing plan preserves all statuses; a separate
+explicit proposal identifies verified rejection outcomes. Current measurements,
+reference confusion counts, protected disagreements, queue reasons, screenshots,
+preservation evidence and rollback details stay in the ignored private package
+`artifacts/inbox-intelligence-system-20261028/RELEASE.md`. Saved owner decisions
+provide a narrow rejection reference set, not representative population accuracy.
+Independent per-category precision/recall and full-mailbox recall remain
+unmeasured, as the owner chose existing decisions rather than new labeling.
 
 ## Extension 1.31.2 and learned-answer API LIVE, 2026-10-28 Pacific
 

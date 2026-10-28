@@ -4,6 +4,20 @@
 >
 > Read this when: you change the old single-file UI or build its Next.js replacement; it records what each screen is for and what went wrong.
 
+## Inbox evidence states and continuous checks LIVE (2026-10-28)
+
+Web `5109fcd` preserves Wine and Rose Day/Night structure and controls. A separate
+searchable unlinked-history filter/banner and Analytics evidence-review entry
+retain recognized outcomes without counting fabricated application outcomes.
+Linking that historical evidence is optional. Existing owner controls and Undo
+remain; classifier reasons starting “You applied...” no longer imply owner
+provenance. Rules describe continuous checking only when the server reports it
+enabled. Exact hosted verification passes 38 Inbox/Analytics browser cases and
+63 Inbox DOM cases; Day/Night/mobile evidence is retained privately. Production
+commit/header, served assets, auth boundaries and real-mail API route probes
+pass; no signed-in production browser test is claimed. The new historical plan
+is separately unapproved, so deploying the UI does not rewrite old decisions.
+
 ## Analytics reference rebuild and truthful unavailable states (2026-10-27)
 
 Status: deployed with owner approval as web `70d95a9` at 18:58 Pacific,

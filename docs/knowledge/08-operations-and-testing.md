@@ -4,6 +4,35 @@
 >
 > Read this when: you deploy, restart, debug the scheduler, or write browser tests.
 
+## Continuous Inbox API/frontend release and preserved concurrent work (2026-10-28)
+
+Source `5109fcd` is live, parser 11/schema 0050. Merge the newer learned-answer
+API before preparing images; do not deploy the older Inbox branch over it.
+Concurrent extension-only 1.31.2 work remains preserved. Only API/web activation
+ran. Fresh backup under `inbox-system-20261028T2320Z` passes gzip, archive catalog
+and full expansion; retained rollback API is 7ce4007 (learned answers), web 6b2e712.
+The earlier 19:42 backup captured an older API and is not this release's rollback.
+Never automatically restore SQL data during image rollback.
+
+All 350 running backend hashes, public exact web SHA/four assets/85 logos, auth,
+real-mail viewer and four-range Analytics probes pass. PostgreSQL read-only
+lease exclusion/reacquisition and actual background ingestion are verified.
+Cutover preserves all eleven non-connection table row sets and existing events;
+new ingestion later appends email/outcome events and one intended status change,
+with old mail and protected decisions intact. Keep those intervals separate.
+The first new-mail probe incorrectly compared raw `unknown` intent with stored
+`unclear` correspondence. Preserve that diagnostic; compare reconciliation's
+documented projection instead. The corrected complete probe passes. Do not
+alter production data to make a validation assumption pass.
+
+Dedicated checks pass 687 backend and 38 hosted browsers; full backend 1,921 and
+matcher 267 pass, with web checks/build. Full extension browsers 46/1 reproduce
+the canonical employer-field assertion; broader app browsers are skipped at this
+source, and overall CI stays red. No local Chrome or signed-in production browser
+claim. The new historical plan remains unapplied pending condition-4 approval;
+global historical checks stay false and parser-7 remains stopped. Root knowledge
+and the ignored private release package contain the complete evidence and limits.
+
 ## Inbox parser-10 API-only release and scoped cleanup (2026-10-28)
 
 Owner-approved `6ee2eb2` is live; frontend remains 95f4a97 and all four other
