@@ -822,8 +822,10 @@ test('outer Review edits, approval, Memory and undo operate only on the originat
   await until(() => f.remote(), 'outer card should appear'); f.click('tab:review');
   await until(() => f.remote()?.querySelector('.focus-chips'), 'Review should appear');
   const priorEditor = f.remote().querySelector('#studio-answer');
+  const renders = f.routes.filter(route => route.message.op === 'render').length;
   const chip = Array.from(f.remote().querySelectorAll('[data-ace^="question:"]')).find(button => button.textContent.includes('integration tests')); chip.click();
-  await until(() => f.remote()?.querySelector('#studio-answer') !== priorEditor, 'source refresh arrives after question selection');
+  await until(() => f.routes.filter(route => route.message.op === 'render').length > renders, 'source refresh arrives after question selection');
+  assert.equal(f.remote().querySelector('#studio-answer'), priorEditor, 'an unchanged card keeps its editor element');
   await until(() => f.remote()?.querySelector('.studio-question')?.textContent.includes('integration tests'), 'right source question should appear');
   const editor = f.remote().querySelector('#studio-answer'); editor.value = 'Fictional answer entered in the outer card'; editor.dispatchEvent(new f.top.window.Event('input', { bubbles: true }));
   assert.equal(f.source.document.getElementById('detail').value, '', 'typing in ACE remains a draft');
@@ -838,19 +840,22 @@ test('outer Review edits, approval, Memory and undo operate only on the originat
   assert.ok(f.routes.filter(route => route.message.op === 'event').every(route => route.target.frameId === 7 && route.target.documentId === 'fictional-document-7'));
 });
 
-test('outer native choices preserve opaque values and protected decisions remain application-only', async t => {
+test('outer native choices preserve opaque values and the answer is saved for next time', async t => {
   const f = framedFixture('<label for="sponsor">Do you require sponsorship?</label><select id="sponsor"><option value="">Select One</option><option value="sponsor-19">Yes</option></select>'); t.after(f.dispose);
   await until(() => f.remote(), 'outer card appears'); f.click('tab:review');
   await until(() => f.remote()?.querySelector('.focus-chips'), 'Review appears');
   const priorEditor = f.remote().querySelector('#studio-answer');
+  const renders = f.routes.filter(route => route.message.op === 'render').length;
   Array.from(f.remote().querySelectorAll('[data-ace^="question:"]')).find(button => button.textContent.includes('sponsorship')).click();
-  await until(() => f.remote()?.querySelector('#studio-answer') !== priorEditor, 'source refresh arrives after question selection');
+  await until(() => f.routes.filter(route => route.message.op === 'render').length > renders, 'source refresh arrives after question selection');
+  assert.ok(priorEditor);
   await until(() => f.remote()?.querySelector('.studio-question')?.textContent.includes('sponsorship'), 'protected prompt appears');
   const select = f.remote().querySelector('#studio-answer'); select.value = 'sponsor-19'; select.dispatchEvent(new f.top.window.Event('change', { bubbles: true }));
   assert.equal(f.source.document.getElementById('sponsor').value, '');
   f.click(f.remote().querySelector('[data-ace^="approve:"]').getAttribute('data-ace'));
   await until(() => f.source.document.getElementById('sponsor').value === 'sponsor-19', 'exact original option is selected');
-  assert.equal(f.source.saved.length, 0); assert.equal(f.source.submissions(), 0);
+  await until(() => f.source.saved.length === 1 && f.source.saved[0].reuse_policy === 'learned', 'the sponsorship answer is saved for next time');
+  assert.equal(f.source.submissions(), 0);
 });
 
 test('outer Close, popup Wake, dock and keyboard movement remain connected', async t => {
@@ -1505,4 +1510,56 @@ test('answers given before this copy arrived are saved only on the owner click',
   await until(() => memoryStore.length === 1, 'one click saves it'); assert.equal(memoryStore[0].answer, 'Yes');
   const later = fixture('<label for="move">Would you be willing to relocate for this position?</label><select id="move"><option value="">Select One</option><option value="m-yes">Yes</option><option value="m-no">No</option></select>', { memoryStore }); t.after(later.dispose);
   later.click('fill'); assert.equal(later.document.getElementById('move').value, 'm-yes');
+});
+
+test('a helper frame without questions never takes the full-page card from the form frame', async t => {
+  const endpoints = new Map(), routes = [];
+  let route;
+  const runtime = { id: 'fixture-extension', lastError: null, onMessage: { addListener(listener) { route = listener; } } };
+  const background = vm.createContext({ chrome: { runtime, tabs: { sendMessage(tab, message, target, reply) {
+    routes.push({ message, target }); reply(endpoints.get(target.frameId)?.deliver(message));
+  } } } });
+  vm.runInContext(fs.readFileSync(path.join(extension, 'background.js'), 'utf8'), background);
+  const config = (frame, extra) => ({ autoLearn: false, ...extra, onSend(message, reply) {
+    if (message.type !== 'aceFocusRoute') return false;
+    route(message, { id: runtime.id, tab: { id: 17 }, frameId: frame, documentId: `fictional-document-${frame}` }, reply); return true;
+  } });
+  const top = fixture('', config(0, { topOnly: true })); endpoints.set(0, top); t.after(top.dispose);
+  top.document.body.append(top.document.createElement('iframe'));
+  const helper = fixture('', config(9, { topOnly: true, embedded: true })); endpoints.set(9, helper); t.after(helper.dispose);
+  // The toolbar Fill wakes every frame, including the page and a picker frame.
+  top.deliver({ type: 'wake' }); helper.deliver({ type: 'wake' });
+  await sleep(300);
+  assert.equal(top.internals.remotePanel(), null, 'no empty card is relayed');
+  assert.equal(top.document.querySelector('.ace-root')?.style.getPropertyValue('display') ?? 'none', 'none', 'the page without questions shows no card of its own');
+  const source = fixture(routine, config(7, { embedded: true, width: 600, height: 700 })); endpoints.set(7, source); t.after(source.dispose);
+  await until(() => top.internals.remotePanel()?.textContent.includes('Fill your application'), 'the form frame owns the full-page card');
+  assert.ok(!routes.some(entry => entry.message.sourceFrame === 9 && entry.message.op === 'render'), 'the helper frame never sends a card');
+  await until(() => source.document.querySelector('.ace-root').style.visibility === 'hidden', 'the form frame card moves out of its frame');
+});
+
+test('an unchanged redraw keeps the same Fill button, so a click is never lost', t => {
+  const f = fixture(routine); t.after(f.dispose);
+  const before = f.panel().querySelector('[data-ace="fill"]');
+  f.click('scan'); f.click('scan');
+  assert.equal(f.panel().querySelector('[data-ace="fill"]'), before, 'the button under the pointer is not replaced');
+});
+
+test('a failure during Fill is shown on the card and the next click fills', t => {
+  const answerItems = [{ label: 'Full name', value: 'Example Applicant' }, { label: 'LinkedIn', value: 'https://linkedin.example/in/fictional' }];
+  const f = fixture('<label for="profile">LinkedIn Profile</label><input id="profile">', { answerItems }); t.after(f.dispose);
+  const real = f.context.aceAnswerNameFor;
+  f.context.aceAnswerNameFor = () => { throw new Error('Fictional matcher failure'); };
+  f.click('fill');
+  assert.ok(f.panel().textContent.includes('ACE stopped: Fictional matcher failure'), 'the error is visible');
+  f.context.aceAnswerNameFor = real;
+  f.click('fill');
+  assert.equal(f.document.getElementById('profile').value, 'https://linkedin.example/in/fictional', 'a failed fill never blocks the next one');
+});
+
+test('a copy cut off by an extension reload says so instead of ignoring clicks', t => {
+  const f = fixture(routine); t.after(f.dispose);
+  f.context.chrome.runtime.id = undefined;
+  f.click('fill');
+  assert.ok(f.panel().textContent.includes('ACE was updated'), 'the card asks for a refresh');
 });

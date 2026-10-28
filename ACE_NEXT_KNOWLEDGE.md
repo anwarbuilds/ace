@@ -14,7 +14,24 @@ It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
 
-## Extension 1.31.1 and learned-answer API LIVE, 2026-10-28 Pacific
+## Extension 1.31.2 and learned-answer API LIVE, 2026-10-28 Pacific
+
+Follow-up 1.31.2 (extension only, no server change), after two owner reports. (1) On an embedded
+Greenhouse form, a content.googleapis.com picker frame woken by the toolbar Fill started an empty card
+and took the full-viewport relay slot first, leaving the real card confined to its iframe. Frames with
+no questions (and a top page that has frames) now never render or publish a card, and the top page
+accepts a relayed card whenever its own card is not shown. (2) On a Rubrik application, Fill appeared
+dead. Not reproduced in the DOM harness (a Greenhouse-shaped fill works in 210 ms); likely causes fixed:
+`render()` rebuilt the card every few hundred milliseconds on busy pages, replacing the button under a
+click in progress (now redrawn only when the HTML changes; the relayed card does the same and keeps
+outer edits); a stuck `filling` flag after any exception silently disabled Fill and refresh (now
+try/finally, a 45-second self-heal, and every fill entry point surfaces the error on the card with Try
+again); and a copy cut off by an extension reload, including its relayed card, ignored clicks (it now
+says "ACE was updated" and asks for a refresh; relayed cards carry `data-ace-instance` and the owner
+style hides stale ones). Matcher maps are prototype-free. 101 DOM contracts pass. If Fill still fails,
+the card now shows the exact error to report.
+
+### Release 1.31.1 and learned-answer API
 
 Status: the owner approved ("deploy. I need ace to work."). Canonical `wine-rose-platform` was
 fast-forwarded to **`3662f0bef4fc3cb59458e1adb5e0153888799bdf`** ([PR #14](https://github.com/anwarbuilds/ace/pull/14)).

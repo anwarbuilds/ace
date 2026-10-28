@@ -32,6 +32,18 @@
   // already open; the previous copy keeps drawing its card, which is hidden,
   // and never shares this one.
   function ownHost() { return document.querySelector('.ace-root[data-ace-instance="' + focusSession + '"]'); }
+  // An extension reload cuts the running copy off from Chrome. Its card then
+  // cannot load, save or relay anything, so it says so instead of ignoring clicks.
+  function extensionAlive() {
+    try { return !!(chrome.runtime && chrome.runtime.id); } catch (error) { return false; }
+  }
+  function showUpdated() {
+    var note = '<div class="studio-scroll"><div class="studio-error">ACE was updated. Save your progress on this page, then refresh it to keep filling and saving answers.</div></div>';
+    [ownHost(), remoteFocus && remoteFocus.root].forEach(function (place) {
+      var card = place && (place.shadowRoot || place).querySelector && (place.shadowRoot || place).querySelector('.ace-panel');
+      if (card && card.getAttribute('data-ace-updated') !== '1') { card.innerHTML = note; card.setAttribute('data-ace-updated', '1'); }
+    });
+  }
   function claimCard() {
     var owner = document.getElementById('ace-card-owner');
     if (!owner) {
@@ -39,7 +51,7 @@
       owner.id = 'ace-card-owner';
       (document.head || document.documentElement).appendChild(owner);
     }
-    owner.textContent = '.ace-root:not([data-ace-instance="' + focusSession + '"]){display:none!important}';
+    owner.textContent = '.ace-root:not([data-ace-instance="' + focusSession + '"]),.ace-remote-root:not([data-ace-instance="' + focusSession + '"]){display:none!important}';
   }
   var focusRevision = 0;
   var focusPublishTimer = null;
@@ -444,6 +456,7 @@
   var lastHref = "";
   var lastSignature = "";
   var filling = false;
+  var fillingSince = 0;
 
   /* Workday's date is a row of spinbuttons: dateSectionMonth-input, then
      Day and Year. Each takes a value only through its own key handling,
@@ -2205,8 +2218,31 @@
       .replace(/"/g, "&quot;");
   }
 
+  // A frame with no questions shows no card, so the frame that holds the
+  // form can take the full-page card. A helper frame on an application page,
+  // such as a file picker's, otherwise claimed it with an empty card and left
+  // the real card confined to its form. A top page with frames of its own
+  // stays quiet the same way; one without frames still says what it found.
+  function idleFrame() {
+    if (!embeddedPanel && !document.querySelector('iframe')) return false;
+    return !fillable().some(function (field) { return !!aceQuestionFor(field); });
+  }
+  function ownCardShown() {
+    var own = ownHost();
+    return !!own && own.style.getPropertyValue('display') !== 'none';
+  }
   function render(host, html) {
-    host.innerHTML = html;
+    var shown = host.getRootNode && host.getRootNode().host;
+    if (idleFrame()) {
+      if (shown && shown.style) shown.style.setProperty('display', 'none', 'important');
+      hideFocusPanel();
+      return;
+    }
+    if (shown && shown.style) shown.style.removeProperty('display');
+    // Redrawn only when something changed. The page's own changes trigger a
+    // redraw every few hundred milliseconds, and replacing an unchanged card
+    // removed the button under a click in progress, so Fill seemed dead.
+    if (host.__aceHtml !== html || !host.firstChild) { host.innerHTML = html; host.__aceHtml = html; }
     publishFocusPanel(host);
   }
 
@@ -2523,7 +2559,7 @@
       if (!embeddedPanel || message.session !== focusSession) { respond({ ok: false }); return; }
       if (message.event === 'wake') {
         dismissed = false; focusMode = studioTab === 'review' ? 'review' : 'compact';
-        lastResult = null; refresh(); runFill(); respond({ ok: true }); return;
+        lastResult = null; refresh(); safeFill(); respond({ ok: true }); return;
       }
       if (message.event === 'status') {
         respond({ ok: true, fields: fillable().filter(function (field) { return !!answerNameFor(aceQuestionFor(field), kindOf(field), field); }).length }); return;
@@ -2549,9 +2585,10 @@
     }
     if (message.op !== 'render' || typeof message.html !== 'string' ||
         !/^ace-panel focus-panel focus-(compact|review|workspace|dock|answers)( night)?$/.test(message.className || '') ||
-        (loaded && !dismissed) || remoteFocus && remoteFocus.sourceFrame !== message.sourceFrame) { respond({ ok: false }); return; }
+        (loaded && !dismissed && ownCardShown()) || remoteFocus && remoteFocus.sourceFrame !== message.sourceFrame) { respond({ ok: false }); return; }
     if (!remoteFocus) {
       var overlay = document.createElement('div'); overlay.className = 'ace-remote-root';
+      overlay.setAttribute('data-ace-instance', focusSession); claimCard();
       overlay.style.cssText = 'all:initial;position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647';
       var root = overlay.attachShadow({ mode: 'closed' });
       root.innerHTML = '<style>' + PANEL_CSS + '</style><div class="ace-panel focus-panel"></div>';
@@ -2562,6 +2599,7 @@
         root.addEventListener(type, function (event) {
           var state = remoteFocus;
           if (!state || state.host !== overlay || !event.target.matches('button,input,textarea,select') && !event.target.closest('button[data-ace]')) return;
+          if (!extensionAlive()) { event.preventDefault(); event.stopPropagation(); showUpdated(); return; }
           var target = event.target.closest('button,input,textarea,select');
           if (type === 'click' && !target.hasAttribute('data-ace')) return;
           if (type === 'click') { event.preventDefault(); event.stopPropagation(); }
@@ -2586,6 +2624,9 @@
     if (remoteFocus.session === message.session && message.revision < remoteFocus.revision) { respond({ ok: false }); return; }
     Object.assign(remoteFocus, { session: message.session, revision: message.revision, sourceDocument: message.sourceDocument });
     var root = remoteFocus.root, card = root.querySelector('.ace-panel');
+    // Unchanged: keep the buttons and whatever the owner is typing here.
+    if (remoteFocus.html === message.html && card.className === message.className) { respond({ ok: true }); return; }
+    remoteFocus.html = message.html;
     var active = root.activeElement;
     var priorQuestion = card.querySelector('.studio-question');
     var priorQuestionText = priorQuestion ? priorQuestion.textContent : '';
@@ -2618,6 +2659,7 @@
     var host = document.createElement("div");
     host.className = "ace-root";
     host.setAttribute("data-ace-instance", focusSession);
+    claimCard();
 
     // The host itself is the one node the page can see, so it carries
     // nothing for a stylesheet to act on beyond taking it out of flow.
@@ -3044,6 +3086,8 @@
   }
 
   function showReviewDraft(root) {
+    var drawn = root.querySelector && root.querySelector('.ace-panel');
+    if (drawn) drawn.__aceHtml = null;
     var detected = root.querySelector('.focus-detected');
     if (detected) detected.remove();
     var approve = root.querySelector('[data-ace^="approve:"]');
@@ -3291,7 +3335,8 @@
         (focusMode === 'workspace' ? '<nav class="studio-tabs" aria-label="ACE sections">' + ["overview", "review", "memory", "activity"].map(function (tab) { return '<button data-ace="tab:' + tab + '" class="' + (studioTab === tab ? 'active' : '') + '">' + tab.charAt(0).toUpperCase() + tab.slice(1) + '</button>'; }).join('') + '</nav>' : '') +
         '<div class="studio-scroll">' + (studioError ? '<div class="studio-error">' + esc(studioError) + '</div>' : '') + body + '</div>' +
         '<footer class="studio-foot">' + (focusMode === 'workspace' ? '<div class="studio-foot-actions"><button class="studio-button wine" data-ace="fill">Fill all known answers</button><button class="studio-button" data-ace="scan">Scan fields</button></div>' : '') + '<small><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>ACE fills. You review. You submit.</small></footer>');
-      host.querySelector(".studio-scroll").scrollTop = scroll;
+      var scroller = host.querySelector(".studio-scroll");
+      if (scroller) scroller.scrollTop = scroll;
     }
     positionFocus(host);
     var searchBox = host.querySelector(".studio-search[type=search]");
@@ -3524,6 +3569,7 @@
 
   function refresh() {
     if (!loaded) return;
+    if (!extensionAlive()) { showUpdated(); return; }
 
     // Workday routes between an application and Search For Jobs without a
     // document reload. A deliberate toolbar Wake still overrides this guard.
@@ -3713,7 +3759,7 @@
         pendingResponses -= 1;
         if (pendingResponses === 0 && fillAfterReady === true) {
           fillAfterReady = false;
-          runFill();
+          safeFill();
         }
       }
       if (!(chrome.storage && chrome.storage.local)) autoLearn = false;
@@ -3775,9 +3821,10 @@
     // already had a value" over a form ACE had in fact just filled
     // correctly. lastResult was not set until the combobox pass
     // finished, so nothing held the panel still in between.
-    if (filling) return;
+    if (filling && Date.now() - fillingSince < 45000) return;
 
     filling = true;
+    fillingSince = Date.now();
     var focusBefore = document.activeElement;
     function restoreOwnerFocus() {
       if (focusBefore && focusBefore.isConnected && /^(INPUT|SELECT|TEXTAREA)$/.test(focusBefore.tagName) &&
@@ -3791,8 +3838,8 @@
     var comboFields = fillable().filter(aceIsAutocomplete);
 
     if (!comboFields.length) {
-      var flat = plan();
-      filling = false;
+      var flat;
+      try { flat = plan(); } finally { filling = false; }
       lastResult = flat;
       showResult(host, flat);
       restoreOwnerFocus();
@@ -3818,8 +3865,7 @@
     // plain fields either: if the first pass rejects, plan() has not
     // run yet, so it runs here.
     function finish() {
-      restoreClobbered();
-      filling = false;
+      try { restoreClobbered(); } finally { filling = false; }
       lastResult = result || plan();
       showResult(host, lastResult);
       restoreOwnerFocus();
@@ -3839,10 +3885,36 @@
       result.filled = result.filled.concat(rest.filled);
       result.unmatched = result.unmatched.concat(rest.unmatched);
       finish();
-    }, finish);
+    }, finish).catch(reportFailure);
   }
 
+  // Any failure is shown on the card, and a fill can never stay stuck: a stuck
+  // fill made every later click and every refresh do nothing at all.
+  function safeFill() {
+    if (!extensionAlive()) { showUpdated(); return; }
+    try { runFill(); } catch (error) { reportFailure(error); }
+  }
   function onAceClick(event) {
+    if (!extensionAlive()) {
+      if (event.target.closest && event.target.closest('[data-ace]')) { event.preventDefault(); event.stopPropagation(); showUpdated(); }
+      return;
+    }
+    try { handleAceClick(event); } catch (error) { reportFailure(error); }
+  }
+  function reportFailure(error) {
+    filling = false;
+    studioError = 'ACE stopped: ' + (error && error.message ? error.message : String(error)) + '. Click again; if it repeats, copy diagnostics in Settings & activity.';
+    try { renderStudio(panel()); } catch (_) {
+      // Drawing failed too: show the message on its own, with a retry.
+      var card = panel();
+      card.innerHTML = '<div class="studio-scroll"><div class="studio-error">' + esc(studioError) + '</div>' +
+        '<button class="studio-button wine" data-ace="fill">Try again</button></div>';
+      card.__aceHtml = null;
+      publishFocusPanel(card);
+    }
+    if (typeof console !== 'undefined' && console.error) console.error('ACE', error);
+  }
+  function handleAceClick(event) {
     var button = event.target.closest("[data-ace]");
     if (!button) return;
 
@@ -4147,7 +4219,7 @@
         var memoryValue = reviewAnswerLabel(chosen);
         finishApproval();
         if (!save) return;
-        runFill();
+        safeFill();
         learningState.set(chosen.key, 'saving');
         saveReusableAnswer(chosen, memoryValue, function () {
           return chosen.field.isConnected && reviewValue(chosen) === value;
@@ -4236,7 +4308,7 @@
     }
 
     if (action === "fill") {
-      runFill();
+      safeFill();
       return;
     }
 
@@ -4267,7 +4339,7 @@
       }
       if (loaded) {
         event.preventDefault(); event.stopImmediatePropagation();
-        runFill();
+        safeFill();
       }
     }
   }, true);
@@ -4306,7 +4378,7 @@
         if (loaded) {
           lastResult = null;
           refresh();
-          runFill();
+          safeFill();
         } else {
           start(true);
         }

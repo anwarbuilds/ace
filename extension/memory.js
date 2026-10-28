@@ -131,7 +131,7 @@
     if (!q || isEmployerMotivation(question)) return false;
     return !/\b(signature|esignature|e signature|electronic(?:ally)? sign\w*|sign your name|type your (?:full |legal )?name to sign|password|passcode|captcha)\b/.test(q);
   }
-  var STOP = {};
+  var STOP = Object.create(null);
   ("a an the you your yours are is am was were be been being do does did have has had having any of to in into " +
    "for on at by with from as or and nor if then than that this these those it its will would could should can may " +
    "might must shall please kindly select choose indicate provide enter state answer below above following one each " +
@@ -141,9 +141,9 @@
    "last within over since time period month months year years day days describe explain share tell give briefly " +
    "example examples detail details experience experiences writing building developing implementing using utilizing " +
    "utilize use").split(" ").forEach(function (word) { STOP[word] = 1; });
-  var NUMBERS = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11,
-    twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, hundred: 100 };
-  var SAME = {
+  var NUMBERS = Object.assign(Object.create(null), { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11,
+    twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, hundred: 100 });
+  var SAME = Object.assign(Object.create(null), {
     authorised: "authorized", authorise: "authorized", authorize: "authorized", authorization: "authorized",
     authorisation: "authorized", eligible: "authorized", eligibility: "authorized", permitted: "authorized",
     entitled: "authorized", allowed: "authorized", sponsor: "sponsorship", sponsored: "sponsorship",
@@ -161,8 +161,8 @@
     agreement: "consent", accept: "consent", acceptance: "consent", convicted: "criminal", conviction: "criminal",
     felony: "criminal", crime: "criminal", competitor: "compete", competing: "compete", competition: "compete",
     competitive: "compete", referred: "referral", refer: "referral"
-  };
-  var CANONICAL = {};
+  });
+  var CANONICAL = Object.create(null);
   Object.keys(SAME).forEach(function (key) { CANONICAL[SAME[key]] = 1; });
   // Plural and ending forms of one word share a stem: relocate, relocating
   // and relocation all read as "relocat".
@@ -187,17 +187,17 @@
   // The meaning-bearing words of a question. The employer's own name is left
   // out, so the same question asked by another company still matches. Kept
   // for reuse: the card recounts every question on each change.
-  var topics = {}, topicCount = 0;
+  var topics = Object.create(null), topicCount = 0;
   function topic(question, employerWords) {
     var cacheKey = String(question || "") + "|" + (employerWords || []).join("|");
     if (topics[cacheKey]) return topics[cacheKey];
-    if (++topicCount > 4000) { topics = {}; topicCount = 1; }
+    if (++topicCount > 4000) { topics = Object.create(null); topicCount = 1; }
     return (topics[cacheKey] = readTopic(question, employerWords));
   }
   function readTopic(question, employerWords) {
     var q = norm(question).replace(/\bu s\b/g, "us").replace(/\bunited states(?: of america)?\b/g, "us")
       .replace(/\b[a-z]+\b/g, function (token) { return NUMBERS[token] ? String(NUMBERS[token]) : token; });
-    var skip = {};
+    var skip = Object.create(null);
     (employerWords || []).forEach(function (name) { norm(name).split(" ").forEach(function (part) { if (part) skip[part] = 1; }); });
     var tokens = [];
     q.split(" ").forEach(function (token) {
