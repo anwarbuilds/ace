@@ -336,3 +336,27 @@ def test_wrong_outcome_recording_blocks_release_even_without_a_stage_change():
                       'expected_target':'job:1','target':'job:2','would_change_status':False,'would_record_outcome':True}])
     assert result['false_automatic_rejections']==1 and result['wrong_application_updates']==1
     assert result['release_blocking_errors']==2
+
+
+def test_parser_release_cannot_reclassify_history_without_separate_authorization(database, monkeypatch):
+    from sqlalchemy import func
+    from backend.app.config import get_settings
+    session, conn = database
+    row = stored(session, conn, 'release-history', 'review', 'Your application',
+                 version='8', reason='No application could be matched with confidence')
+    verified_scope(session, conn)
+    monkeypatch.delenv('GMAIL_HISTORICAL_RECHECKS_ENABLED', raising=False)
+    get_settings.cache_clear()
+    assert get_settings().gmail_historical_rechecks_enabled is False
+    monkeypatch.setattr(inbox.gmail, 'get_json', lambda *a, **k: pytest.fail('Historical Gmail read was not authorized'))
+    before = (row.classification, row.decision, row.parser_version, row.snippet, statuses(session), len(job_events(session)))
+    assert session.scalar(select(func.count()).select_from(inbox._eligible_stale_query(conn).subquery())) == 0
+    assert inbox.messages(owner_request(), session, None, 0, 50)['counts']['stale'] == 0
+    assert inbox.recheck(inbox.RecheckRequest(), owner_request(), session) == {
+        'checked': 0, 'counts': {}, 'remaining': 0, 'historical_disabled': True}
+    session.refresh(row)
+    assert (row.classification, row.decision, row.parser_version, row.snippet, statuses(session), len(job_events(session))) == before
+    # The switch protects saved mail; it does not disable new-message reading.
+    assert inbox._ingest(session, conn, message('new-after-release', 'Req ID: SE-101. Your application was rejected.'),
+                         inbox._identities(session), preview=False) == 'automatic'
+    assert statuses(session) == ['applied', 'rejected', 'applied']

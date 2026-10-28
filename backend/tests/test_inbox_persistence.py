@@ -44,6 +44,8 @@ def statuses(session: Session) -> list[str]:
 def database(monkeypatch):
     monkeypatch.delenv("GMAIL_AUTO_REJECTIONS", raising=False)
     monkeypatch.setenv("GMAIL_AUTO_OUTCOMES_ALLOWED", "true")
+    # These persistence tests exercise separately authorized historical reads.
+    monkeypatch.setenv("GMAIL_HISTORICAL_RECHECKS_ENABLED", "true")
     get_settings.cache_clear()
     inbox._FULL_SCANS.clear(); inbox._COVERAGE.clear()
     engine = create_engine("sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)

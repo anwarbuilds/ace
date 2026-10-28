@@ -142,6 +142,9 @@ class Settings(BaseSettings):
     # without a manual step (owner decision, 2026-10-26). False sends
     # every rejection back to review.
     gmail_auto_rejections: bool = True
+    # A parser release must not implicitly authorize rewriting saved mail.
+    # Enable only for an owner-approved historical reclassification operation.
+    gmail_historical_rechecks_enabled: bool = False
 
     # The interactive API docs list every route. Off unless asked for.
     api_docs: bool = False

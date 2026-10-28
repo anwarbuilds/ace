@@ -851,7 +851,7 @@ def _scoped_scan(conn):
 def _eligible_stale_query(conn):
     scan = _scoped_scan(conn)
     return _stale_query(conn.id).where(GmailMessageRecord.gmail_id.in_(
-        sorted(scan.ids) if scan and scan.phase == "complete" else []))
+        sorted(scan.ids) if get_settings().gmail_historical_rechecks_enabled and scan and scan.phase == "complete" else []))
 
 
 def understanding(row: GmailMessageRecord) -> dict:
@@ -994,6 +994,8 @@ def recheck(body: RecheckRequest, request: Request, session: Session = Depends(g
 
 
 def _recheck_locked(body: RecheckRequest, session: Session, conn: GmailConnectionRecord) -> dict:
+    if not get_settings().gmail_historical_rechecks_enabled:
+        return {"checked": 0, "counts": {}, "remaining": 0, "historical_disabled": True}
     scan = _scoped_scan(conn)
     if scan is None or scan.phase != "complete":
         return {"checked": 0, "counts": {}, "remaining": 0, "scope_pending": True}
