@@ -82,6 +82,23 @@ def test_workdaysite_tenant_prevents_same_requisition_across_employers_colliding
     assert posting_identity(url)!=posting_identity(url.replace('/silverpine/','/copperfin/'))
 
 
+@pytest.mark.parametrize('role',['Data Engineer','Senior Software Engineer','Software Engineer Storage'])
+def test_unrecorded_explicit_role_cannot_be_overridden_by_posting_or_requisition(role):
+    app=replace(APP,official_url=FIRST,requisition_id='SE-123456')
+    for ending in ['View job details: '+FIRST, 'Job ID: SE-123456.']:
+        ev=evidence(f'Your application was rejected for the {role} role. '+ending)
+        assert reconcile(ev,[app]).target is None
+
+
+@pytest.mark.parametrize('footer', ['Data Scientist (SE-10202)', 'Job ID: SE-10202.', 'https://careers.silverpine.example/job/SE-10202'])
+def test_recommended_job_ids_cannot_supply_identity(footer):
+    from backend.app.inbox.reconcile import read_intent
+    apps=[replace(APP,requisition_id='SE-10101'),replace(APP,key='job:2',title='Data Scientist',requisition_id='SE-10202')]
+    ev=evidence('Your application was rejected. Other jobs recommended for you: '+footer)
+    assert read_intent(ev).requisition_id is None
+    assert reconcile(ev,apps).target is None
+
+
 def test_multiple_postings_and_duplicate_records_stay_ambiguous():
     apps = [replace(APP, official_url=FIRST, requisition_id=None), replace(APP, key='job:2', official_url=SECOND, requisition_id=None)]
     ev = evidence('Your application was rejected. View job details: '+FIRST+' or '+SECOND)

@@ -31,7 +31,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from urllib.parse import urlparse
 
-from backend.app.inbox.postings import contextual_links, posting_identity, primary_link_text
+from backend.app.inbox.postings import compatible_role, contextual_links, posting_identity, primary_link_text, role_claims
 
 PARSER_VERSION = "11"
 MAX_CLASSIFIER_BODY = 60000
@@ -408,7 +408,7 @@ _INTERVIEW_NOUN = r"(?:(?:technical |phone |video |virtual |onsite |hiring.manag
 def read_intent(evidence: EmailEvidence) -> Reading:
     body = re.sub(r"(?<!\n)\n(?!\n)", " ", _new_text(evidence.body).replace("\r\n", "\n"))
     subject = "" if _forwarded(evidence.subject) else evidence.subject
-    reqs = _labelled_ids(subject + "\n" + body)
+    reqs = _labelled_ids(subject + "\n" + primary_link_text(body))
     req = next(iter(reqs)) if len(reqs) == 1 else None
     digest = _digest_reading(evidence, re.sub(r"\s+", " ", re.sub(r"https?://\S+", " ", body)))
     if digest:
@@ -692,7 +692,7 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
         weak.discard("workday")
 
     labelled_key = _id_key(labelled) if labelled else None
-    ids = {_id_key(token) for token in _ID_TOKEN.findall(f"{subject} {body}") if not re.fullmatch(r"(?:19|20)\d{2}", token)}
+    ids = {_id_key(token) for token in _ID_TOKEN.findall(f"{subject} {identity_body}") if not re.fullmatch(r"(?:19|20)\d{2}", token)}
     ids |= {labelled_key} if labelled_key else set()
     words = set(all_text.split())
     by_id = [app for app in applications if app.requisition_id and len(_id_key(app.requisition_id)) >= 4
@@ -726,10 +726,12 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
     ranked = sorted(considered, key=lambda app: (-score(app), -_aware(app.submitted_at).timestamp() if app.submitted_at else 0, app.key))
     keys = tuple(app.key for app in ranked[:10])
     title_mentions = _mentioned_titles(applications, all_text)
+    declared_roles = role_claims(subject + "\n" + identity_body)
     def role_conflict(app):
-        return any(_company_words(other.company) == _company_words(app.company)
-                   and _words(other.title) != _words(app.title) for other in title_mentions)
-    if len(_labelled_ids(f"{subject} {body}")) > 1:
+        return (any(not compatible_role(app.title, claim) for claim in declared_roles)
+                or any(_company_words(other.company) == _company_words(app.company)
+                       and not compatible_role(app.title, other.title) for other in title_mentions))
+    if len(_labelled_ids(f"{subject} {identity_body}")) > 1:
         return _Match(None, "The email names multiple requisitions; choose the application it concerns", keys, labelled)
     if by_posting:
         if (len(posting_keys) > 1 or len(by_posting) > 1
@@ -770,7 +772,7 @@ def _match(evidence: EmailEvidence, applications: list[ApplicationIdentity], lab
 
     def other_job(app: ApplicationIdentity) -> bool:
         # The email names a job ID, and it is not this application's.
-        return bool((labelled_key and app.requisition_id and _id_key(app.requisition_id) != labelled_key)
+        return bool(role_conflict(app) or (labelled_key and app.requisition_id and _id_key(app.requisition_id) != labelled_key)
                     or (posting_keys and posting_identity(app.official_url) not in posting_keys))
 
     titled = [app for app in mentioned if existed(app)]

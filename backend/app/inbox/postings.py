@@ -10,6 +10,33 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 Posting = tuple[str, str, str]
 
+_ROLE_CLAIMS = (
+    re.compile(r"\b(?:for|regarding)\s+(?!(?:your\s+(?:interest|time|application)|applying|taking)\b)(?:(?:the|our|your|a|an)\s+)?([^.!?;\n]{2,160}?)\s+(?:role|position|opening)\b", re.I),
+    re.compile(r"\b(?:application|candidacy|applied|applying)\s+(?:for|to)\s+(?:(?:the|our|your|a|an)\s+)?([^.!?;\n]{2,160}?)(?=\s+(?:was|is|has been|at|with|position|role)\b|,\s*(?:we|you|your|and|but|unfortunately|however)\b|[.!?;\n]|$)", re.I),
+    re.compile(r"\b(?:job title|position title)\s*:\s*([^.!?;\n]{2,160})", re.I),
+)
+_ROLE_WORDS = re.compile(r"\b(?:engineers?|developers?|scientists?|analysts?|interns?|internship|designers?|architects?|researchers?|programmers?|consultants?|specialists?|managers?|engineering)\b", re.I)
+
+
+def role_claims(text: str) -> tuple[str, ...]:
+    claims = []
+    for pattern in _ROLE_CLAIMS:
+        for match in pattern.finditer(text):
+            claim = re.sub(r"^(?:applying|applied)\s+(?:for|to)\s+(?:the\s+)?", "", match[1], flags=re.I).strip()
+            if _ROLE_WORDS.search(claim) and claim not in claims:
+                claims.append(claim)
+    return tuple(claims)
+
+
+def compatible_role(title: str, claim: str) -> bool:
+    # A generic Software Engineer claim can describe a specific storage role;
+    # a Storage/Data/Senior claim cannot describe a generic or different role.
+    # Keep level, specialty and numerals. Do not equate different role families.
+    def tokens(value):
+        return set(re.findall(r"[a-z0-9]+", value.casefold())) - {"the", "a", "an", "our", "your", "position", "role", "opening"}
+    claimed = tokens(claim)
+    return bool(claimed) and claimed <= tokens(title)
+
 
 def primary_link_text(body: str) -> str:
     """End application-link evidence where recommendations or history begin."""
