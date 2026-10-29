@@ -77,7 +77,7 @@ test("default review queue exposes all pending messages beyond the latest 100",a
   await inboxFixture(page);
   await page.goto("/app/applications/inbox");
   await expect(page.getByLabel("Email view")).toHaveValue("pending");
-  await expect(page.getByRole("button",{name:/Needs clarification/})).toContainText("107");
+  await expect(page.locator(".inbox-kpis").getByRole("button",{name:/Needs clarification/})).toContainText("107");
   await expect(page.locator(".inbox-status")).toContainText("107 emails need clarification");
   await expect(page.locator(".inbox-mail")).toHaveCount(50);
   await expect(page.getByRole("heading",{name:"ACE thinks this is about"})).toBeVisible();
@@ -104,7 +104,7 @@ test("one click records the outcome for the suggested application",async({page})
   await page.goto("/app/applications/inbox");
   await expect(page.getByRole("button",{name:/^Interview/})).toHaveClass(/suggested/);
   await page.getByRole("button",{name:/^Interview/}).click();
-  await expect(page.getByRole("button",{name:/Needs clarification/})).toContainText("106");
+  await expect(page.locator(".inbox-kpis").getByRole("button",{name:/Needs clarification/})).toContainText("106");
   expect(fixture.submitted).toEqual([{message_id:1,application_key:"job:1",status:"interviewing",expected_status:"applied",confirmed:true,kind:"interview"}]);
 });
 
@@ -181,7 +181,7 @@ test("full history is the default and narrower checks never replace it silently"
   expect(fixture.windows).toEqual([0,90]);
   await expect(page.locator(".inbox-status")).not.toContainText("All caught up");
   expect(fixture.previews).toEqual([]);
-  await expect(page.getByRole("button",{name:/Needs clarification/})).toContainText("107");
+  await expect(page.locator(".inbox-kpis").getByRole("button",{name:/Needs clarification/})).toContainText("107");
 });
 
 test("selecting another email starts again from its own suggestion",async({page})=>{
@@ -216,7 +216,7 @@ for(const theme of ["light","dark"] as const){
     await page.setViewportSize({width:1672,height:941});
     await page.goto("/app/applications/inbox");
     await expect(page.locator(".inbox-status")).toContainText("107 emails need clarification");
-    await expect(page.getByRole("button",{name:/Recorded automatically/})).toContainText("2");
+    await expect(page.locator(".inbox-kpis").getByRole("button",{name:/Recorded automatically/})).toContainText("2");
     await page.getByLabel("Email view").selectOption("company_rejection");
     await expect(page).toHaveURL(/decision=company_rejection/);
     await expect(page.locator(".inbox-mail")).toHaveCount(1);
@@ -233,8 +233,8 @@ for(const theme of ["light","dark"] as const){
     await page.screenshot({path:path.join(root,`${theme}-inbox-company-rejection.png`),fullPage:true});
     await page.getByRole("button",{name:"Undo this change",exact:true}).click();
     await expect.poll(()=>fixture.undos).toEqual([77]);
-    await expect(page.getByRole("button",{name:/Needs clarification/})).toContainText("108");
-    await expect(page.getByRole("button",{name:/Recorded automatically/})).toContainText("1");
+    await expect(page.locator(".inbox-kpis").getByRole("button",{name:/Needs clarification/})).toContainText("108");
+    await expect(page.locator(".inbox-kpis").getByRole("button",{name:/Recorded automatically/})).toContainText("1");
     await expect(page.locator(".inbox-mail")).toHaveCount(0);
     await page.getByLabel("Email view").selectOption("pending");
     await expect(page.locator(".inbox-mail").first()).toContainText("Company decision from Fictional Labs");
@@ -252,7 +252,7 @@ for(const theme of ["light","dark"] as const){
     await page.setViewportSize({width:1672,height:941});
     await page.goto("/app/applications/inbox");
     await expect(page.locator(".inbox-status")).toContainText("107 emails need clarification");
-    await expect(page.getByRole("button",{name:/Needs clarification/})).toContainText("107");
+    await expect(page.locator(".inbox-kpis").getByRole("button",{name:/Needs clarification/})).toContainText("107");
     const evidence=page.getByRole("button",{name:"1 recognized historical outcomes without an eligible application",exact:true});
     await expect(evidence.locator("..")).toContainText("excluded from application outcomes in Analytics. Linking is optional.");
     await evidence.click();
