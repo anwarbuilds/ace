@@ -1,6 +1,41 @@
 # Inbox intelligence upgrade
 
 
+
+## Parser 13 candidate: recognize and file before application attribution
+
+Status: follow-up implementation under validation; the parser-12 LIVE record
+below remains the deployed state until separately verified activation.
+
+Fresh complete authenticated rejection, assessment, interview, offer, recruiter
+reply and candidate-action readings can be filed without selecting an
+application. `classified_rejection` and `classified_action` are shared SQL/Python
+projections over stored `update` plus explicit classifier markers. They do not
+create company/application outcomes or change an application status. Matching
+candidates and the specific linkage explanation remain available as optional
+correction context. Partial, unauthenticated or conflicting meaning and explicit
+owner holds remain visible for clarification. Existing exact positive automation
+still requires its live-message, employer-origin and opt-in safeguards.
+
+The existing Inbox layout provides category counts, assessment/interview/offer
+and rejection views, explicit filed labels and optional correction controls.
+Analytics presents recognized email progress using receipt dates, separately
+from confirmed application-stage counts. A later rejection preserves prior
+assessment/interview events; tests exercise that complete sequence. Unknown
+company/role attribution is excluded from selected employer/family metrics.
+Earlier approved action corrections remain visible through exact legacy markers
+without rewriting their rows. The reader also treats a simultaneous rejection
+and current assessment request as conflicting meaning, requiring clarification.
+No migration, blanket historical replay, scheduler or Resume Studio change.
+
+Local verification passes 749 Inbox/Analytics backend cases and 81 render/DOM
+cases. Hosted TypeScript/lint/build and 44 browser cases are pending at this
+checkpoint. The bounded current-mail preview stays read-only and server-private;
+its complete source/grant/row/evidence seal must match before any authorized
+filing. Owner decisions, Undo, application histories and unrelated services
+remain protected. No representative population accuracy claim is made.
+
+
 ## Parser 12 LIVE: company evidence and completed guarded history
 
 API/frontend `873ee080fa724fcbe0022ad47939d38c083ca8e9` is live at

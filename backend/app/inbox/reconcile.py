@@ -9,8 +9,10 @@ authenticated the sender, the sender is not a personal mailbox, the timing
 fits and exactly one application fits: by job ID, by exact title at the named
 company, or as the owner's only application at that company. Interviews,
 assessments and offers keep the stricter rule: an exact job ID from the
-employer's own domain. Receipts are filed without changing anything, and
-everything uncertain goes to review with the likeliest application first.
+employer's own domain. Complete authenticated meaning can be filed separately
+when application linkage or update policy is unresolved, without changing an
+application. Unclear meaning, incomplete evidence and failed authentication
+remain in review. Receipts are filed without changing anything.
 
 Parser version 3 (2026-10-26) never files an email as a receipt when it also
 sounds like a decision, or when only part of it could be read: a rejection
@@ -33,8 +35,9 @@ from urllib.parse import urlparse
 
 from backend.app.inbox.postings import compatible_role, contextual_links, posting_identity, primary_link_text, role_claims, subject_role_claim
 from backend.app.inbox.company_outcomes import COMPANY_REASON
+from backend.app.inbox.filed_evidence import ACTION_KINDS, ACTION_PREFIX, DECISIONS as FILED_DECISIONS, REJECTION_PREFIX
 
-PARSER_VERSION = "12"
+PARSER_VERSION = "13"
 MAX_CLASSIFIER_BODY = 60000
 
 _OTHERS = r"(?:other|another|a\s+different|different|more\s+qualified|alternative)\s+(?:candidates?|applicants?|individuals?|profiles?)"
@@ -541,6 +544,7 @@ def read_intent(evidence: EmailEvidence) -> Reading:
     # A completed test can be followed by a new interview request. That new
     # requested action is the primary intent, rather than the earlier completion.
     interview_request = list(_action_asserted(_action_pattern(_INTERVIEW_NOUN), body))
+    assessment_request = list(_action_asserted(_action_pattern(_ASSESSMENT_NOUN), body))
     if interview_request and not negative and re.search(_ASSESSMENT_NOUN, body, re.I) and re.search(r"\b(?:completed|submitted|finished)\b", body, re.I):
         return _reading("interview", req, interview_request[0][1], "invitation")
     still_review = re.search(r"\byour application (?:is|remains) (?:still )?under (?:review|consideration)\b", body, re.I)
@@ -552,6 +556,8 @@ def read_intent(evidence: EmailEvidence) -> Reading:
         return _reading("possible_rejection", req, negative[0][1] + " " + still_review.group(), "conflicting_progress")
     if negative and interview_request:
         return _reading("possible_rejection", req, negative[0][1] + " " + interview_request[0][1], "conflicting_outcomes")
+    if negative and assessment_request:
+        return _reading("possible_rejection", req, negative[0][1] + " " + assessment_request[0][1], "conflicting_outcomes")
     if negative and offer:
         return _reading("possible_rejection", req, negative[0][1] + " " + offer[0][1], "conflicting_outcomes")
     if negative and recruiting and not _WITHDRAWN.search(body):
@@ -982,6 +988,36 @@ def _rejection_company(evidence: EmailEvidence, applications: list[ApplicationId
     return apps[0].company, tuple(sorted(app.key for app in apps))
 
 
+def file_recognized(decision: Decision, evidence: EmailEvidence) -> Decision:
+    """File clear email meaning when application linkage or mutation is optional.
+
+    No application target survives this evidence-only fallback. Callers retain
+    their mutation opt-ins, owner protections and audit policy; a verified
+    positive can use this helper only after its automatic update is disallowed.
+    """
+    if (decision.disposition not in {"review", "exact_preview", "verified", *FILED_DECISIONS}
+            or decision.classification not in {"rejection", *ACTION_KINDS}
+            or not evidence.complete or not evidence.sender_authenticated
+            or decision.reason == PARTIAL_REASON
+            or decision.reason.startswith(("You undid", "You marked", "You chose", "You recorded"))):
+        return decision
+    # A saved classification alone never proves that the current complete body
+    # still has the same meaning or is free of conflicting outcomes.
+    if read_intent(evidence).classification != decision.classification:
+        return decision
+    disposition = "classified_rejection" if decision.classification == "rejection" else "classified_action"
+    prefix = REJECTION_PREFIX if decision.classification == "rejection" else ACTION_PREFIX
+    reason = decision.reason
+    if reason == "Sender could not be authenticated":
+        # Authenticated personal mail does not prove employer authority, but
+        # its recognized meaning can be filed without changing an application.
+        reason = "The sender does not establish employer authority for an application status change"
+    if reason.startswith(prefix):
+        reason = reason[len(prefix):]
+    return replace(decision, target=None, matched_target=None, company=None, disposition=disposition,
+                   reason=(prefix + reason)[:300], sender_verified=True)
+
+
 def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], account: str | None = None, *, thread_keys: tuple[str, ...] = ()) -> Decision:
     found = None
     def company_fallback(decision):
@@ -993,7 +1029,8 @@ def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], 
                                 True, matched_target=None, company=name)
         return decision
     def decided(*args):
-        return company_fallback(Decision(*args, matched_target=found.target if found and evidence.complete else None))
+        decision = company_fallback(Decision(*args, matched_target=found.target if found and evidence.complete else None))
+        return file_recognized(decision, evidence) if decision.disposition == "review" else decision
     if account and parseaddr(evidence.sender)[1].casefold() == account.casefold():
         return decided("unknown", None, (), None, "ignored", "Sent by the connected account", False)
     reading = read_intent(evidence)
@@ -1042,8 +1079,9 @@ def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], 
         if not _sender_trusted(evidence):
             return decided(classification, found.requisition, candidates, None, "review", "Sender could not be authenticated", False)
         if not _origin_supports_identity(evidence, app):
-            return company_fallback(Decision(classification, found.requisition, candidates, None, "review",
+            decision = company_fallback(Decision(classification, found.requisition, candidates, None, "review",
                             "The authenticated sender does not establish this employer identity", False))
+            return file_recognized(decision, evidence) if decision.disposition == "review" else decision
     elif not (evidence.sender_authenticated and found.basis == "its job ID" and _sender_matches(evidence.sender, app)):
         return decided(classification, found.requisition, candidates, None, "review",
                         "Matched by " + found.basis + "; positive outcomes need your confirmation", False)

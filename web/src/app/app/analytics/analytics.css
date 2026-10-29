@@ -69,6 +69,8 @@
 .an-outcomes { grid-template-columns: 1.62fr 1fr; }
 .an-column-stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .an-panel { min-width: 0; border: 1px solid var(--border); border-radius: var(--an-radius); padding: 15px var(--an-pad); background: var(--surface-1); }
+.an-classified-email-evidence { margin-bottom: var(--an-gap); }
+.an-classified-email-evidence h3 { margin: 16px 0 8px; font-size: var(--text-label); font-weight: var(--weight-semibold); }
 .an-panel-head { margin-bottom: 12px; }
 .an-panel-title { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .an-panel h2 { font-size: var(--text-section); letter-spacing: var(--tracking-section); font-weight: var(--weight-heading); line-height: var(--leading-heading); margin: 0 0 2px; }

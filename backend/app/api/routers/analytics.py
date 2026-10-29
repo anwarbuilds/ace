@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from backend.app.api.deps import get_session
 from backend.app.api.routers.inbox import _identities, _eligible_stale_query, PENDING
 from backend.app.inbox.queue import decision_expression
+from backend.app.inbox.filed_evidence import DECISIONS as FILED_DECISIONS
 from backend.app.db.models import ApplicationEventRecord, CompanyPetitionReportRecord, GmailMessageRecord, JobEvaluationRecord, GmailConnectionRecord
 from backend.app.inbox.reconcile import _MARKING_GRACE
 from backend.app.inbox.company_outcomes import COMPANY_REASON, KIND as COMPANY_REJECTION, event_company
@@ -105,6 +106,34 @@ def _company_rejection_evidence(session: Session, *, start: date, end: date, zon
     return rows, summary
 
 
+def _classified_email_evidence(session: Session, *, start: date, end: date, zone: ZoneInfo,
+                               now: datetime, all_dates: bool, company: str | None,
+                               family: str | None) -> dict:
+    """Recognized message history, with no guessed application/company attribution.
+
+    These receipt-date counts are separate from confirmed application-stage
+    counts. A later rejected application cannot erase a filed earlier invitation.
+    """
+    categories = {kind: 0 for kind in ("rejection", "online_assessment", "interview", "offer", "recruiter_reply", "action_required")}
+    query = select(GmailMessageRecord).where(
+        decision_expression().in_(FILED_DECISIONS),
+        GmailMessageRecord.selected_application_key.is_(None))
+    count = 0
+    for message in session.scalars(query):
+        stamp = aware(message.received_at)
+        day = stamp.astimezone(zone).date()
+        if stamp > now or day > end or (not all_dates and day < start):
+            continue
+        count += 1
+        if not family and not company:
+            categories[message.classification] += 1
+    return {"total": sum(categories.values()), "categories": categories,
+            "date_basis": "email_received", "application_status_changed": False,
+            "start": None if all_dates else start.isoformat(), "end": end.isoformat(),
+            "family_excluded_messages": count if family else 0,
+            "company_excluded_messages": count if company else 0}
+
+
 def analytics_read(session: Session, *, days: str = "all", family: str | None = None,
                    start: date | None = None, end: date | None = None, tz: str = "UTC",
                    company: str | None = None, now: datetime | None = None, records: bool = False,
@@ -129,6 +158,9 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
     if start > end or end > today or (end - start).days > 36600:
         raise HTTPException(422, "Choose a valid date range ending today or earlier, up to 100 years.")
     company_rejections, company_rejection_summary = _company_rejection_evidence(
+        session, start=start, end=end, zone=zone, now=now, all_dates=include_undated,
+        company=company, family=family)
+    classified_email_evidence = _classified_email_evidence(
         session, start=start, end=end, zone=zone, now=now, all_dates=include_undated,
         company=company, family=family)
     eligible_family = [a for a in identities if not family or role[a.key] == family]
@@ -386,6 +418,7 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
                                   "latest_at": newest_rejection.isoformat() if newest_rejection else None},
             "company_rejections": company_rejections,
             "company_rejection_summary": company_rejection_summary,
+            "classified_email_evidence": classified_email_evidence,
             "verified_companies": [{"name": name, **group(employers[name]), "reports": sum(r.ace_company == name for r in reports)} for name in employers if any(r.ace_company == name for r in reports)],
             "reports": sorted(report_items, key=lambda r: r["period"], reverse=True),
             "annual": [{"period": period, **counts, "rate": counts["approvals"] / sum(counts.values()) if sum(counts.values()) else None} for period, counts in sorted(annual.items())]}

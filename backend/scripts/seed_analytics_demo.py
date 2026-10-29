@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 
 from backend.scripts.seed_demo import seed
 from backend.app.db.models import ApplicationEventRecord, CompanyPetitionReportRecord, ExternalApplicationRecord, GmailConnectionRecord, GmailMessageRecord, JobMarkRecord, JobRecord
+from backend.app.inbox.filed_evidence import ACTION_PREFIX
+from backend.app.inbox.reconcile import PARSER_VERSION
 
 DATABASE = Path("/tmp/ace-analytics-fictional.db")
 
@@ -48,6 +50,19 @@ def main():
         session.add(conn);session.flush()
         for i,decision in enumerate(["review","review","exact_preview","manual"]):
             session.add(GmailMessageRecord(connection_id=conn.id,gmail_id=f"fictional-{i}",thread_id=f"thread-{i}",received_at=now-timedelta(days=i),sender="recruiter@fictional.example",subject=f"Fictional recruiting evidence {i}",snippet="Fictional evidence used only for local browser validation",classification="interview",decision=decision,candidate_keys=[f"job:{jobs[0].id}",f"job:{jobs[1].id}"] if i==0 else [f"job:{jobs[2].id}"],decision_reason="Fictional candidate review",parser_version="fixture"))
+        # Classified meaning remains visible without inventing application
+        # attribution, an outstanding task, or a confirmed stage transition.
+        for i, kind in enumerate(("online_assessment", "interview", "offer")):
+            session.add(GmailMessageRecord(
+                connection_id=conn.id, gmail_id=f"fictional-classified-{kind}",
+                thread_id=f"fictional-classified-thread-{kind}",
+                received_at=now-timedelta(days=4+i), sender="talent@fictional.example",
+                subject=f"Fictional {kind.replace('_', ' ')} email history",
+                snippet="Invented employer evidence for hosted UI validation only.",
+                classification=kind, decision="update", candidate_keys=[],
+                selected_application_key=None,
+                decision_reason=ACTION_PREFIX+"The fictional application identity is not verified.",
+                parser_version=PARSER_VERSION))
         session.commit()
     print("Fictional Analytics fixture ready at /tmp/ace-analytics-fictional.db")
 

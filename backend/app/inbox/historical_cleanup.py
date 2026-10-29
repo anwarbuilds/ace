@@ -13,8 +13,9 @@ from sqlalchemy import select
 
 from backend.app.api.routers import inbox
 from backend.app.db.models import GmailMessageRecord as Mail, ApplicationEventRecord as Event
-from backend.app.inbox.reconcile import PARSER_VERSION, read_intent, reassess
+from backend.app.inbox.reconcile import PARSER_VERSION, read_intent, reassess, file_recognized
 from backend.app.inbox.company_outcomes import COMPANY_REASON, KIND as COMPANY_KIND, event_company
+from backend.app.inbox.filed_evidence import DECISIONS as FILED_DECISIONS
 from backend.app.config import get_settings
 
 FIELDS = ('classification', 'decision', 'decision_reason', 'requisition_id',
@@ -43,8 +44,12 @@ def projection(session, conn, row, data) -> dict:
     decision = reassess(evidence, identities, row.classification, conn.email,
                        thread_keys=inbox._thread_keys(session, conn, data, evidence, identities),
                        previous_reason=row.decision_reason)
+    if decision.disposition == 'verified' and decision.classification != 'rejection':
+        # Classification-only history does not replay a positive stage update.
+        # Its recognized invitation remains useful without changing that stage.
+        decision = file_recognized(decision, evidence)
     company_outcome = decision.disposition == COMPANY_KIND and get_settings().gmail_auto_rejections
-    disposition = ('update' if company_outcome else 'review' if decision.disposition in {'verified', COMPANY_KIND}
+    disposition = ('update' if company_outcome or decision.disposition in FILED_DECISIONS else 'review' if decision.disposition in {'verified', COMPANY_KIND}
                    else 'update' if decision.disposition == 'unlinked' else decision.disposition)
     reason = decision.reason
     if company_outcome:

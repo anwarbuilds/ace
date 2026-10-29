@@ -345,3 +345,41 @@ for (const route of ["/app/analytics?days=all", "/app/applications/analytics?day
     expect(errors).toEqual([]);
   });
 }
+
+for(const theme of ["light","dark"] as const){
+  test(`${theme}: classified hiring progress is visible separately from confirmed application stages`,async({page,context,baseURL})=>{
+    await setThemeCookies(context,baseURL!,theme);
+    await page.setViewportSize({width:1672,height:941});
+    const errors=watchErrors(page);
+    const before=await(await page.request.get("/api/analytics?days=all&tz=America%2FLos_Angeles")).json();
+    const progress=before.classified_email_evidence;
+    expect(progress.total).toBe(3);
+    expect(progress.application_status_changed).toBe(false);
+    expect(progress.date_basis).toBe("email_received");
+    await page.goto("/app/analytics?days=all&tab=outcomes");
+    const panel=page.locator(".an-classified-email-evidence");
+    await expect(panel.getByRole("heading",{name:"Recognized hiring progress",exact:true})).toBeVisible();
+    await expect(panel).toContainText("3 classified emails in this scope.");
+    await expect(panel).toContainText("A later rejection does not erase an earlier assessment or interview.");
+    for(const [filter,label] of [["assessments","Assessment emails"],["interviews","Interview emails"],["offers","Offer emails"]]){
+      const link=panel.getByRole("link",{name:new RegExp(`^${label}`)});
+      await expect(link).toHaveAttribute("href",`/app/applications/inbox?decision=${filter}`);
+      await expect(link.locator("b")).toHaveText("1");
+    }
+    await expect(panel).toContainText("email counts, not additional applications or confirmed stage totals");
+    await expect(page.locator(".an-metric").nth(0).locator("strong")).toHaveText(String(before.submitted));
+    await expect(page.locator(".an-metric").nth(3).locator("strong")).toHaveText(String(before.assessments));
+    await expect(page.locator(".an-metric").nth(4).locator("strong")).toHaveText(String(before.interviews));
+    expect(await page.evaluate(TEXT_SCAN)).toEqual([]);
+    expect(await page.evaluate(DRAWN_SCAN)).toEqual([]);
+    const directory=path.resolve("../artifacts/inbox-intelligence-validation");
+    fs.mkdirSync(directory,{recursive:true});
+    await panel.screenshot({path:path.join(directory,`${theme}-analytics-classified-progress.png`)});
+    await page.setViewportSize({width:390,height:844});
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
+    await panel.screenshot({path:path.join(directory,`${theme}-analytics-classified-progress-mobile.png`)});
+    const after=await(await page.request.get("/api/analytics?days=all&tz=America%2FLos_Angeles")).json();
+    for(const key of ["submitted","statuses","positive","assessments","interviews","classified_email_evidence"])expect(after[key]).toEqual(before[key]);
+    expect(errors).toEqual([]);
+  });
+}

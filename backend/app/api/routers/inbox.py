@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+from dataclasses import replace
 from collections import deque
 import re
 import secrets
@@ -32,11 +33,12 @@ from backend.app.db.models import (
 )
 from backend.app.inbox import display, gmail
 from backend.app.inbox.company_outcomes import COMPANY_REASON, KIND as COMPANY_KIND, display_reason, encode_reason, event_company
+from backend.app.inbox.filed_evidence import ACTION_KINDS, ACTION_PREFIX, DECISIONS as FILED_DECISIONS, REJECTION_PREFIX
 from backend.app.inbox.full_history import FullMailboxScan
 from backend.app.inbox.postings import contextual_links, primary_link_text
 from backend.app.inbox.queue import (decision_expression, projected_decision, projected_reason, workflow_expression, workflow_state)
 from backend.app.inbox.reconcile import (
-    ApplicationIdentity, Decision, EmailEvidence, MAX_CLASSIFIER_BODY, PARSER_VERSION, RECEIPT_REASON, _MARKING_GRACE, _new_text, conflict, reconcile, reassess, read_intent, CLASSIFICATION_REASONS,
+    ApplicationIdentity, Decision, EmailEvidence, MAX_CLASSIFIER_BODY, PARSER_VERSION, RECEIPT_REASON, _MARKING_GRACE, _new_text, conflict, reconcile, reassess, read_intent, file_recognized, CLASSIFICATION_REASONS,
 )
 
 router = APIRouter()
@@ -508,6 +510,29 @@ def _apply(session: Session, conn: GmailConnectionRecord, row: GmailMessageRecor
     Other outcomes still need the separately approved automation and a live
     import. Every change is in the audit trail with Undo.
     """
+    if decision.disposition in FILED_DECISIONS:
+        if (not allow_automation or not evidence.complete or not evidence.sender_authenticated
+                or decision.target is not None or decision.matched_target is not None or decision.company is not None
+                or read_intent(evidence).classification != decision.classification):
+            row.decision = "review"
+            row.selected_application_key = None
+            row.decision_reason = ("Email is in Spam or Trash; automatic filing is unavailable" if not allow_automation
+                                   else "The email needs a complete, authenticated current reading before automatic filing")
+            return
+        expected = REJECTION_PREFIX if decision.classification == "rejection" else ACTION_PREFIX if decision.classification in ACTION_KINDS else None
+        if expected is None or not decision.reason.startswith(expected):
+            raise ValueError("Recognized evidence requires its explicit filing marker")
+        if (row.decision in {"manual", "deferred", "unrelated"}
+                or row.decision_reason.startswith(("You undid", "You marked", "You chose", "You recorded"))
+                or session.scalar(select(ApplicationEventRecord.id).where(
+                    ApplicationEventRecord.gmail_message_id == row.id,
+                    or_(ApplicationEventRecord.actor.in_(("owner", "verified_automation")),
+                        ApplicationEventRecord.kind == "undo", ApplicationEventRecord.undo_of_id.is_not(None))).limit(1))):
+            raise ValueError("Owner decisions and recorded evidence protect this email")
+        row.decision = "update"
+        row.decision_reason = decision.reason
+        row.selected_application_key = None
+        return
     if decision.disposition == COMPANY_KIND:
         if (not allow_automation or not get_settings().gmail_auto_rejections
                 or not evidence.complete or not evidence.sender_authenticated):
@@ -533,6 +558,10 @@ def _apply(session: Session, conn: GmailConnectionRecord, row: GmailMessageRecor
     rejection = decision.classification == "rejection"
     allowed = s.gmail_auto_rejections if rejection else (not preview and conn.auto_outcomes_enabled and s.gmail_auto_outcomes_allowed)
     if not allowed:
+        filed = file_recognized(replace(decision, disposition="review", reason=decision.reason + "; automatic application status updates are off"), evidence)
+        if filed.disposition in FILED_DECISIONS:
+            _apply(session, conn, row, filed, evidence, preview=preview, allow_automation=allow_automation)
+            return
         row.decision = "exact_preview" if preview else "review"
         if not preview:
             row.decision_reason = decision.reason + "; automatic updates are off"
@@ -916,6 +945,14 @@ def _message_query(connection_id: int, decision: str | None = None, q: str | Non
         query = query.where(GmailMessageRecord.classification.in_(("online_assessment", "assessment_completed", "assessment_cancelled")))
     elif decision == "interviews":
         query = query.where(GmailMessageRecord.classification.in_(("interview", "interview_cancelled")))
+    elif decision == "offers":
+        query = query.where(GmailMessageRecord.classification == "offer")
+    elif decision == "rejections":
+        query = query.where(GmailMessageRecord.classification == "rejection")
+    elif decision == "filed":
+        query = query.where(workflow_expression().in_(("filed", *FILED_DECISIONS)))
+    elif decision in FILED_DECISIONS:
+        query = query.where(projected == decision)
     elif decision in {"awaiting_link", "owner_review", "filed", "routine", "unlinked_outcome", "company_recorded"}:
         query = query.where(workflow_expression() == decision)
     elif decision == "automatic":
@@ -986,7 +1023,7 @@ def understanding(row: GmailMessageRecord) -> dict:
             "classification_state": "uncertain" if row.classification in {"unknown", "unclear", "possible_rejection"} or "part of this email" in reason else "recognized",
             "matching_state": "company" if decision == COMPANY_KIND else "identity_uncertain" if reason == "The authenticated sender does not establish this employer identity" else "linked" if row.selected_application_key else "ambiguous" if len(row.candidate_keys or []) > 1 else "unlinked",
             "workflow_state": state,
-            "update_policy": "company_recorded" if state == "company_recorded" else "recorded" if state == "recorded" else "no_status_change" if state in {"filed", "routine", "unlinked_outcome"} else "confirmation_required",
+            "update_policy": "company_recorded" if state == "company_recorded" else "recorded" if state == "recorded" else "no_status_change" if state in {"filed", "routine", "unlinked_outcome", *FILED_DECISIONS} else "confirmation_required",
             "review_reason": reason if decision in PENDING else None,
             "evidence_source": "retained_excerpt", "evidence_excerpt": html.unescape(row.snippet or "")}
 
@@ -1006,7 +1043,7 @@ def messages(request: Request, session: Session = Depends(get_session), decision
     """One page of imported email. ``decision=auto`` shows what waits for the
     owner when anything does, else the recent recruiting email."""
     conn = _connection(session, current_owner(request))
-    counts = {"stored": 0, "needs_review": 0, "automatic": 0, "manual": 0, "reviewed": 0, "receipts": 0, "updates": 0, "unlinked": 0, "company_rejections": 0, "stale": 0}
+    counts = {"stored": 0, "needs_review": 0, "automatic": 0, "manual": 0, "reviewed": 0, "receipts": 0, "updates": 0, "unlinked": 0, "company_rejections": 0, "classified_rejections": 0, "classified_actions": 0, "assessments": 0, "interviews": 0, "offers": 0, "rejections": 0, "stale": 0}
     if not conn:
         return {"items": [], "review_count": 0, "total": 0, "offset": offset, "has_more": False,
                 "view": ("pending" if decision == "auto" else decision) or "all", "latest_received_at": None, "counts": counts}
@@ -1024,7 +1061,11 @@ def messages(request: Request, session: Session = Depends(get_session), decision
                    "automatic": by_decision.get("automatic", 0) + by_decision.get(COMPANY_KIND, 0), "manual": by_decision.get("manual", 0),
                    "reviewed": sum(by_decision.get(key, 0) for key in ("manual", "automatic", "unrelated", COMPANY_KIND)),
                    "receipts": by_decision.get("receipt", 0), "updates": by_decision.get("update", 0),
-                   "unlinked": by_decision.get("unlinked", 0), "company_rejections": by_decision.get(COMPANY_KIND, 0), "stale": stale})
+                   "unlinked": by_decision.get("unlinked", 0), "company_rejections": by_decision.get(COMPANY_KIND, 0),
+                   "classified_rejections": by_decision.get("classified_rejection", 0),
+                   "classified_actions": by_decision.get("classified_action", 0), "stale": stale})
+    for name in ("assessments", "interviews", "offers", "rejections"):
+        counts[name] = session.scalar(select(func.count()).select_from(_message_query(conn.id, name).subquery())) or 0
     return {"items": [_item(r) for r in rows], "review_count": review_count, "total": total, "offset": offset,
             "has_more": offset + len(rows) < total, "view": decision or "all",
             "latest_received_at": latest.isoformat() if latest else None, "counts": counts}

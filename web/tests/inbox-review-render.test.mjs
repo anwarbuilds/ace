@@ -81,20 +81,25 @@ test("without a likely application the outcome buttons wait for a choice", () =>
   assert.doesNotMatch(choice(html, "Not about my applications"), /disabled/);
 });
 
-test("an email ACE found nothing in can still be decided by hand", () => {
+test("mail without a hiring outcome is filed and offers optional correction", () => {
   const html = render({ ...message, decision: "ignored", classification: "unknown" });
-  assert.match(html, /Nothing recorded/);
-  assert.match(html, /ACE found no application outcome in it\./);
-  assert.ok(choice(html, "Rejection"));
+  assert.match(html, /Filed without an application outcome/);
+  assert.match(html, /ACE did not identify a hiring outcome\./);
+  assert.match(html, /No review is required/);
+  assert.match(html, /Link or correct this email/);
+  assert.ok(!choice(html, "Rejection"));
   assert.ok(!choice(html, "Decide later"));
+  assert.doesNotMatch(html, /Which application\?|Nothing recorded/);
 });
 
 test("a filed acknowledgement says so and can be changed", () => {
   const html = render({ ...message, decision: "receipt", classification: "application_confirmation" });
   assert.match(html, /Filed as an acknowledgement\./);
-  assert.match(choice(html, "Acknowledgement"), /disabled/);
-  assert.match(choice(html, "Acknowledgement"), /suggested/);
-  assert.doesNotMatch(choice(html, "Status update"), /disabled/);
+  assert.match(html, /Acknowledgement filed/);
+  assert.match(html, /No review is required/);
+  assert.match(html, /Link or correct this email/);
+  assert.ok(!choice(html, "Acknowledgement"));
+  assert.doesNotMatch(html, /Which application\?|Saved correspondence/);
 });
 
 test("a recognized unlinked outcome explains its evidence without asking for a decision", () => {
@@ -120,10 +125,10 @@ test("a recognized unlinked outcome explains its evidence without asking for a d
   assert.match(html, /ACE.s classification: Rejection/);
   assert.match(html, /Application linkage: unlinked\. No application status changed\./);
   assert.match(html, /No eligible application existed in ACE when this email arrived/);
-  assert.match(html, /No application outcome was recorded\. Linking is optional; the email remains searchable/);
+  assert.match(html, /Linking an application is optional; the email remains searchable/);
   assert.match(html, /predates every recorded application at this employer/);
-  assert.match(choice(html, "Rejection"), /disabled/);
-  assert.match(choice(html, "Rejection"), /suggested/);
+  assert.ok(!choice(html, "Rejection"));
+  assert.match(html, /Link or correct this email/);
   assert.doesNotMatch(html, /Needs you|Why it waits:|Decision needed:|Undo this change|ACE recorded this email/);
   assert.ok(!choice(html, "Decide later"));
 });
@@ -225,10 +230,35 @@ test("the email text and initials tenants suggest the stored application", () =>
 const { companyNamed, confirmCompany } = loadSource(path.join(sourceRoot, "components/inbox/InboxReviewPanel.tsx"));
 const { coverageText, verifyInbox } = loadSource(path.join(sourceRoot, "lib/inboxSync.ts"));
 
-test("unclear recruiting mail is labeled Application correspondence and stays actionable", () => {
+test("unclear recruiting mail explains that its outcome is not established and stays actionable", () => {
   const html = render({...message, classification:"unclear"});
-  assert.match(html, /Application correspondence/);
+  assert.match(html, /Outcome not established/);
+  assert.match(html, /Needs clarification/);
   assert.doesNotMatch(choice(html,"Rejection"), /disabled/);
+});
+
+for(const [classification,decision] of [["rejection","classified_rejection"],["online_assessment","classified_action"],["interview","classified_action"],["offer","classified_action"]]){
+  test(`${classification}: recognized email is filed without requiring an application choice`,()=>{
+    const html=render({...message,classification,decision,candidate_keys:[],reason:"Clear employer message; its application cannot be verified.",understanding:{classification_reason:"Clear employer message.",classification_state:"recognized",matching_state:"unlinked",workflow_state:decision,update_policy:"no_status_change",review_reason:null,evidence_source:"retained_excerpt",evidence_excerpt:"Fictional employer action."}});
+    assert.match(html,/aria-label="Filed email evidence"/);
+    assert.match(html,/Classified and filed\./);
+    assert.match(html,/No application status changed\. No review is required/);
+    assert.match(html,/Linking an application is optional/);
+    assert.match(html,/Link or correct this email/);
+    assert.doesNotMatch(html,/Which application\?|Why it waits:|Decision needed:|Decide later|Undo this change/);
+    assert.ok(!choice(html,"Rejection"));
+    if(decision==="classified_action")assert.match(html,/Check its received date and newer messages before acting/);
+  });
+}
+
+test("filed routine and unrelated email is visibly complete without a role picker",()=>{
+  for(const decision of ["update","ignored","unrelated"]){
+    const html=render({...message,classification:"status_update",decision,candidate_keys:[]});
+    assert.match(html,/Classified and filed\./);
+    assert.match(html,/No review is required/);
+    assert.match(html,/Link or correct this email/);
+    assert.doesNotMatch(html,/Which application\?|Nothing recorded|Saved correspondence/);
+  }
 });
 
 test("an absent company warns before any outcome is recorded and requires a deliberate override", () => {

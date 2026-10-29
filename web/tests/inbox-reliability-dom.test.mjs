@@ -81,12 +81,12 @@ async function mounted(element,run){
   }
 }
 const complete={days:0,scope:"job_mail",includes_spam_trash:false,gmail:125,in_ace:125,missing:0,complete:true,checked_at:new Date().toISOString()};
-function fixture({coverage=complete,stale=0,state="ready",fail=false,pending=0,unlinked=0,backgroundSyncEnabled}={}){
+function fixture({coverage=complete,stale=0,state="ready",fail=false,pending=0,unlinked=0,backgroundSyncEnabled,counts={}}={}){
   const calls=[];
   const connection={coverage,state,connected:true,available:true,email:"owner-fixture@example.test",last_synced_at:new Date().toISOString(),following_changes:true,auto_rejections:true,background_sync_enabled:backgroundSyncEnabled};
   read=async route=>{
     if(route==="/api/inbox/connection")return {...connection};
-    if(route==="/api/inbox/messages")return {items:[],total:0,has_more:false,view:"recruiting",latest_received_at:null,counts:{stored:125,needs_review:pending,automatic:0,manual:0,reviewed:0,receipts:0,updates:0,unlinked,stale}};
+    if(route==="/api/inbox/messages")return {items:[],total:0,has_more:false,view:"recruiting",latest_received_at:null,counts:{stored:125,needs_review:pending,automatic:0,manual:0,reviewed:0,receipts:0,updates:0,unlinked,stale,...counts}};
     if(route==="/api/inbox/applications"||route==="/api/inbox/events")return {items:[]};
     throw Error(`Unexpected fictional read ${route}`);
   };
@@ -169,7 +169,7 @@ test("recognized historical evidence opens its own filter without adding to the 
   router.replace=(url)=>destinations.push(url);
   try{
     await mounted(React.createElement(InboxIntelligence),async(container,window)=>{
-      assert.match(container.querySelector(".inbox-status h2").textContent,/2 emails need you/);
+      assert.match(container.querySelector(".inbox-status h2").textContent,/2 emails need clarification/);
       const note=[...container.querySelectorAll(".inbox-status-note")].find(item=>item.textContent.includes("recognized historical outcomes"));
       assert.ok(note);
       assert.match(note.textContent,/6 recognized historical outcomes without an eligible application/);
@@ -190,12 +190,15 @@ test("an unlinked historical rejection changes an application only after an expl
   read=async route=>{reads.push(route);return {...message,text:"Fictional Labs application update. We will not move forward with your application.",document:"<p>Fictional rejection</p>",blocked_images:0};};
   send=async(method,route,body)=>{writes.push({method,route,body});};
   await mounted(React.createElement(InboxReviewPanel,{message,applications:[application],events:[],busy:false,action:async run=>run()}),async(container,window)=>{
-    const rejection=[...container.querySelectorAll("button")].find(button=>button.querySelector("strong")?.textContent==="Rejection");
-    assert.equal(rejection.disabled,true);
-    assert.match(container.textContent,/Linking is optional; the email remains searchable/);
+    assert.equal(container.querySelector(".inbox-target"),null,"filed history must not demand an application choice");
+    assert.match(container.textContent,/Linking an application is optional; the email remains searchable/);
     assert.doesNotMatch(container.textContent,/Why it waits:|Undo this change|Decide later/);
     assert.deepEqual(writes,[]);
     assert.deepEqual(reads,["/api/inbox/messages/98721/full"],"viewing unlinked evidence must not request recorded-outcome history");
+    const correction=[...container.querySelectorAll("button")].find(button=>button.textContent==="Link or correct this email");
+    await act(async()=>{correction.dispatchEvent(new window.Event("click",{bubbles:true}));});
+    const rejection=[...container.querySelectorAll("button")].find(button=>button.querySelector("strong")?.textContent==="Rejection");
+    assert.equal(rejection.disabled,true);
     const option=container.querySelector(".inbox-options button");
     assert.ok(option,"optional manual linkage remains available");
     await act(async()=>{option.dispatchEvent(new window.Event("click",{bubbles:true}));});
@@ -240,8 +243,8 @@ test("the actual records page explains empty rejection searches with status, dat
   assert.match(html,/Where is my application\?/);
   assert.match(html,/Outside the selected submission dates/);
   assert.match(html,/Applied/);
-  assert.match(html,/Needs you/);
-  assert.match(html,/Application correspondence/);
+  assert.match(html,/Needs clarification/);
+  assert.match(html,/Outcome not established/);
   assert.match(html,/href="\/app\/jobs\/7"/);
   assert.match(html,/href="\/app\/applications\/inbox\?message=52"/);
   assert.match(html,/Search all applications, all time/);
@@ -373,8 +376,8 @@ test("filing acknowledgements and updates uses only the email decision endpoint"
 test("review totals render as one formatted number without concatenated counters",async()=>{
   fixture({pending:1318});
   await mounted(React.createElement(InboxIntelligence),async container=>{
-    assert.match(container.querySelector(".inbox-status").textContent,/1,318 emails need you/);
-    assert.match(container.querySelector(".inbox-queue-tools select").textContent,/Waiting for you \(1,318\)/);
+    assert.match(container.querySelector(".inbox-status").textContent,/1,318 emails need clarification/);
+    assert.match(container.querySelector(".inbox-queue-tools select").textContent,/Needs clarification \(1,318\)/);
     assert.doesNotMatch(container.textContent,/13018/);
   });
 });
@@ -453,4 +456,65 @@ test("Analytics role detail reads every page and refuses changed or duplicated s
   assert.equal(await readAnalyticsSupplement(d,"weekly"),null);
   serverRead=async(route,fallback,q)=>({record_total:101,records:q.offset?[row(0)]:Array.from({length:100},(_,i)=>row(i))});
   assert.equal(await readAnalyticsSupplement(d,"weekly"),null);
+});
+
+for(const [classification,decision] of [["rejection","classified_rejection"],["online_assessment","classified_action"],["interview","classified_action"],["offer","classified_action"]]){
+  test(`${classification}: viewing classified email needs no owner decision and correction stays deliberate`,async()=>{
+    const id={rejection:70001,online_assessment:70002,interview:70003,offer:70004}[classification];
+    const message={id,sender:"Fictional Labs <talent@fictional.example>",subject:"Fictional Labs hiring message",snippet:"A fictional employer message.",received_at:"2025-01-10T12:00:00Z",classification,decision,candidate_keys:[],reason:"The email meaning is clear; no application identity is verified.",selected_application_key:null,understanding:{classification_reason:"A clear employer message.",classification_state:"recognized",matching_state:"unlinked",workflow_state:decision,update_policy:"no_status_change",review_reason:null,evidence_source:"retained_excerpt",evidence_excerpt:"A fictional employer message."}};
+    const application={key:"job:70000",company:"Fictional Labs",title:"Engineer",status:"applied",applied_at:"2025-01-01T12:00:00Z"};
+    const reads=[],writes=[];
+    read=async route=>{reads.push(route);return {...message,text:"Fictional Labs hiring message.",document:"<p>Fictional employer message.</p>",blocked_images:0};};
+    send=async(method,route,body)=>{writes.push({method,route,body});};
+    await mounted(React.createElement(InboxReviewPanel,{message,applications:[application],events:[],busy:false,action:async run=>run()}),async(container,window)=>{
+      assert.match(container.textContent,/No review is required/);
+      assert.match(container.textContent,/Jan 10, 2025/);
+      assert.equal(container.querySelector(".inbox-target"),null);
+      assert.equal(container.querySelector('[role="group"][aria-label="What is this email?"]'),null);
+      assert.doesNotMatch(container.textContent,/Why it waits:|Decision needed:|Decide later/);
+      if(decision==="classified_action")assert.match(container.textContent,/older invitations may already be completed or cancelled/);
+      assert.deepEqual(writes,[]);
+      assert.deepEqual(reads,[`/api/inbox/messages/${id}/full`]);
+      const click=async label=>act(async()=>{[...container.querySelectorAll("button")].find(button=>button.textContent===label).dispatchEvent(new window.Event("click",{bubbles:true}));});
+      await click("Link or correct this email");
+      assert.match(container.textContent,/Optional correction/);
+      assert.equal([...container.querySelectorAll("button")].find(button=>button.querySelector("strong")?.textContent==="Rejection").disabled,true);
+      assert.deepEqual(writes,[],"opening optional controls must not record an outcome");
+      await click("Back to the filed email");
+      assert.equal(container.querySelector(".inbox-target"),null);
+      assert.deepEqual(writes,[]);
+      await click("Link or correct this email");
+      await act(async()=>{container.querySelector(".inbox-options button").dispatchEvent(new window.Event("click",{bubbles:true}));});
+      assert.deepEqual(writes,[],"choosing a link must not record a status change");
+      const rejection=[...container.querySelectorAll("button")].find(button=>button.querySelector("strong")?.textContent==="Rejection");
+      await act(async()=>{rejection.dispatchEvent(new window.Event("click",{bubbles:true}));});
+      assert.deepEqual(writes,[{method:"POST",route:"/api/inbox/review",body:{message_id:id,application_key:"job:70000",status:"rejected",expected_status:"applied",confirmed:true,kind:"rejection"}}]);
+    });
+  });
+}
+
+test("recognized category totals open separate email views without review or status writes",async()=>{
+  const {calls}=fixture({pending:1,counts:{classified_rejections:36,classified_actions:17,assessments:14,interviews:1,offers:2,rejections:39}});
+  const previous=router.replace;
+  const destinations=[];
+  router.replace=url=>destinations.push(url);
+  try{
+    await mounted(React.createElement(InboxIntelligence),async(container,window)=>{
+      assert.match(container.querySelector(".inbox-status h2").textContent,/1 email needs clarification/);
+      const categories=container.querySelector('nav[aria-label="Recognized email categories"]');
+      assert.ok(categories);
+      for(const [index,label,count] of [[0,"Assessments and tests",14],[1,"Interviews and screens",1],[2,"Offers",2],[3,"Rejection emails",39]]){
+        const button=categories.querySelectorAll("button")[index];
+        assert.equal(button.textContent,`${label} (${count})`);
+        await act(async()=>{button.dispatchEvent(new window.Event("click",{bubbles:true}));});
+      }
+      assert.deepEqual(destinations.map(url=>new URL(url,"https://fixture.example").searchParams.get("decision")),["assessments","interviews","offers","rejections"]);
+      const filed=[...container.querySelectorAll(".inbox-status-note")].find(node=>node.textContent.includes("Classified and filed automatically:"));
+      assert.match(filed.textContent,/36 rejection emails.*17 action emails/);
+      assert.match(filed.textContent,/Application linkage is optional; no application status changed/);
+      const options=[...container.querySelectorAll(".inbox-queue-tools option")].map(option=>option.value);
+      for(const decision of ["classified_rejection","classified_action","assessments","interviews","offers","rejections"])assert.ok(options.includes(decision));
+      assert.deepEqual(calls,[],"opening category views must not write email or application decisions");
+    });
+  }finally{router.replace=previous;}
 });

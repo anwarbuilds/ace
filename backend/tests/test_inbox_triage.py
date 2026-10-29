@@ -131,8 +131,12 @@ def test_routine_subject_cannot_hide_an_explicit_body_outcome(database,subject,b
     data=message("outcome-under-generic-subject",body)
     data["payload"]["headers"][2]["value"]=subject
     result=inbox._ingest(session,conn,data,inbox._identities(session),preview=True)
-    assert result in {"automatic","exact_preview"}
-    assert row_for(session,data["id"]).classification==kind
+    assert result == ("automatic" if kind == "rejection" else "classified_action")
+    row = row_for(session,data["id"])
+    assert row.classification==kind
+    if kind != "rejection":
+        assert row.selected_application_key is None
+        assert statuses(session)==["applied"]*3 and not job_events(session)
 
 
 @pytest.mark.parametrize("subject,body",[("HackerRank account verification","Verify your email to use HackerRank."),
@@ -176,12 +180,13 @@ def test_thread_hint_never_overrides_conflicts_or_positive_and_date_guards(datab
     if variant=="positive":body="We invite you to interview."
     data=message("guarded-thread",body,NOW-timedelta(days=2500) if variant=="historical" else NOW)
     if variant=="different_sender":data["payload"]["headers"][1]["value"]="other@careers.silverpine.example"
-    assert inbox._ingest(session,conn,data,inbox._identities(session),preview=True)==("review" if variant=="positive" else KIND)
+    assert inbox._ingest(session,conn,data,inbox._identities(session),preview=True)==("classified_action" if variant=="positive" else KIND)
     assert statuses(session)==["applied"]*3 and not job_events(session)
     if variant!='positive':
         assert row_for(session,'guarded-thread').selected_application_key is None
         assert [event_company(event) for event in company_events(session)]==['Silverpine Labs']
     else:
+        assert row_for(session,'guarded-thread').selected_application_key is None
         assert not company_events(session)
 
 
@@ -199,8 +204,11 @@ def test_only_new_scoped_history_additions_can_automate_opted_in_exact_positives
     assert finish(session,conn)["coverage"]["complete"]
     live=True
     assert finish(session,conn)["coverage"]["complete"]
-    assert row_for(session,"live-positive").decision==("automatic" if exact else "review")
+    assert projected_decision(row_for(session,"live-positive"))==("automatic" if exact else "classified_action")
     assert statuses(session)==["applied","interviewing" if exact else "applied","applied"]
+    if not exact:
+        assert row_for(session,"live-positive").selected_application_key is None
+        assert not job_events(session)
 
 
 @pytest.mark.parametrize("body,kind",[

@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 // All Inbox requests and mutations below are fictional and intercepted.
-async function inboxFixture(page: import("@playwright/test").Page, options: {lastSync?: string | null; ambiguous?:boolean; unlinked?:boolean; company?:boolean; backgroundSyncEnabled?:boolean} = {}) {
+async function inboxFixture(page: import("@playwright/test").Page, options: {lastSync?: string | null; ambiguous?:boolean; unlinked?:boolean; company?:boolean; classified?:boolean; backgroundSyncEnabled?:boolean} = {}) {
   const reviewed: number[]=[];
   const submitted: Record<string,unknown>[]=[];
   const filed: Record<string,unknown>[]=[];
@@ -23,6 +23,7 @@ async function inboxFixture(page: import("@playwright/test").Page, options: {las
   const unlinked={id:600,received_at:"2025-12-15T12:00:00Z",sender:"Fictional Labs Talent <talent@fictional.example>",subject:"Earlier application update at Fictional Labs",snippet:"We will not move forward with your application.",classification:"rejection",requisition_id:null,decision:"unlinked",candidate_keys:[],reason:"Recognized rejection; all recorded applications at this employer were submitted after this email. Retained as unlinked evidence, excluded from application outcomes",selected_application_key:null,understanding:{decision_type:"Automatic classification",classification_reason:"The employer communicates a rejection.",classification_state:"recognized",matching_state:"unlinked",workflow_state:"unlinked_outcome",update_policy:"no_status_change",review_reason:null,evidence_source:"retained_excerpt",evidence_excerpt:"We will not move forward with your application."}};
   const companyMessage={id:700,received_at:"2026-01-12T12:00:00Z",sender:"Fictional Labs Talent <talent@fictional.example>",subject:"Company decision from Fictional Labs",snippet:"We will not move forward with your application.",classification:"rejection",requisition_id:null,decision:"company_rejection",candidate_keys:["job:1","job:3"],reason:"Company rejection recorded; the email does not need a role-level application match",selected_application_key:null,understanding:{decision_type:"Automatic classification",classification_reason:"The employer communicates a rejection.",classification_state:"recognized",matching_state:"company",workflow_state:"company_recorded",update_policy:"company_recorded",review_reason:null,evidence_source:"retained_excerpt",evidence_excerpt:"We will not move forward with your application."}};
   const companyEvent={id:77,application_key:"email:700",gmail_message_id:700,kind:"company_rejection",before:null,after:null,actor:"verified_automation",reason:"Rejection received from Fictional Labs; no individual application changed",recorded_at:"2026-01-12T12:00:00Z",undo_of_id:null,scope:"company",company:"Fictional Labs"};
+  const classifiedRows=["online_assessment","interview","offer","rejection"].map((classification,i)=>({id:800+i,received_at:"2025-01-10T12:00:00Z",sender:"Fictional Labs Talent <talent@fictional.example>",subject:`Fictional Labs ${classification.replaceAll("_"," ")} history`,snippet:"Fictional employer email evidence.",classification,requisition_id:null,decision:classification==="rejection"?"classified_rejection":"classified_action",candidate_keys:[],reason:"The email meaning is clear; no application identity is verified.",selected_application_key:null,understanding:{decision_type:"Automatic classification",classification_reason:"Clear employer email evidence.",classification_state:"recognized",matching_state:"unlinked",workflow_state:classification==="rejection"?"classified_rejection":"classified_action",update_policy:"no_status_change",review_reason:null,evidence_source:"retained_excerpt",evidence_excerpt:"Fictional employer email evidence."}}));
   const companyState=()=>companyUndone?{...companyMessage,decision:"review",reason:"You undid the company rejection",understanding:{...companyMessage.understanding,decision_type:"Owner decision",matching_state:"ambiguous",workflow_state:"owner_review",update_policy:"confirmation_required",review_reason:"You undid the company rejection"}}:companyMessage;
   const lastSync=options.lastSync===undefined?new Date().toISOString():options.lastSync;
   await page.route("**/api/inbox/**",async route=>{
@@ -36,12 +37,12 @@ async function inboxFixture(page: import("@playwright/test").Page, options: {las
     else if(path==="/api/inbox/events/77/undo"&&request.method()==="POST"){undos.push(77);companyUndone=true;body={event_id:78,status:"review"};}
     else if(/^\/api\/inbox\/messages\/\d+\/full$/.test(path)){
       const id=Number(path.split("/")[4]);
-      const selected=id===recorded.id?recorded:id===unlinked.id?unlinked:id===companyMessage.id?companyState():rows.find(row=>row.id===id)??rows[0];
-      const historical=selected.decision==="unlinked"||id===companyMessage.id;
+      const selected=classifiedRows.find(row=>row.id===id)??(id===recorded.id?recorded:id===unlinked.id?unlinked:id===companyMessage.id?companyState():rows.find(row=>row.id===id)??rows[0]);
+      const historical=selected.decision==="unlinked"||id===companyMessage.id||selected.decision.startsWith("classified_");
       const content=historical?selected.snippet:"Please schedule an interview for requisition FIX-1.";
-      body={sender:selected.sender,to:"fixture@example.test",subject:selected.subject,received_at:selected.received_at,text:`Hello Fictional Labs,\n\n${content}\n\nThe fictional recruiting team`,document:`<!doctype html><html><head><meta charset="utf-8"></head><body><p>Hello Fictional Labs,</p><p>${content}</p><p>The fictional recruiting team</p></body></html>`,current_reading:{classification:historical?"rejection":"interview",reason:historical?"The employer communicates a rejection.":"The employer requests an interview time.",variant:historical?"explicit_rejection":"invitation",excerpt:content,complete:true},format:"html",blocked_images:0,message_id_header:`<fixture-${id}@example.test>`,thread_id:`thread-${id}`};
+      body={sender:selected.sender,to:"fixture@example.test",subject:selected.subject,received_at:selected.received_at,text:`Hello Fictional Labs,\n\n${content}\n\nThe fictional recruiting team`,document:`<!doctype html><html><head><meta charset="utf-8"></head><body><p>Hello Fictional Labs,</p><p>${content}</p><p>The fictional recruiting team</p></body></html>`,current_reading:{classification:selected.classification,reason:"Clear fictional employer evidence.",variant:historical?"fixture":"invitation",excerpt:content,complete:true},format:"html",blocked_images:0,message_id_header:`<fixture-${id}@example.test>`,thread_id:`thread-${id}`};
     }
-    else if(/^\/api\/inbox\/messages\/\d+$/.test(path)){const id=Number(path.split("/").pop());body=id===recorded.id?recorded:id===unlinked.id?unlinked:id===companyMessage.id?companyState():rows[0];}
+    else if(/^\/api\/inbox\/messages\/\d+$/.test(path)){const id=Number(path.split("/").pop());body=classifiedRows.find(row=>row.id===id)??(id===recorded.id?recorded:id===unlinked.id?unlinked:id===companyMessage.id?companyState():rows[0]);}
     else if(path==="/api/inbox/messages"){
       const decision=url.searchParams.get("decision")??"all";
       const q=url.searchParams.get("q");
@@ -49,9 +50,11 @@ async function inboxFixture(page: import("@playwright/test").Page, options: {las
       const view=decision==="auto"?(pending.length?"pending":"recruiting"):decision;
       const historical=options.unlinked?[unlinked]:[];
       const company=options.company&&!companyUndone?[companyState()]:[];
-      const listed=(view==="automatic"?[recorded,...company]:view==="company_rejection"?company:view==="unlinked_outcome"?historical:["recruiting","all"].includes(view)?[...pending,...historical,...company]:pending).filter(row=>!q||row.subject.toLowerCase().includes(q.toLowerCase()));
+      const classified=options.classified?classifiedRows:[];
+      const category=({assessments:"online_assessment",interviews:"interview",offers:"offer",rejections:"rejection"} as Record<string,string>)[view];
+      const listed=(category?classified.filter(row=>row.classification===category):view==="classified_rejection"||view==="classified_action"?classified.filter(row=>row.decision===view):view==="automatic"?[recorded,...company]:view==="company_rejection"?company:view==="unlinked_outcome"?historical:["recruiting","all"].includes(view)?[...pending,...historical,...company,...classified]:pending).filter(row=>!q||row.subject.toLowerCase().includes(q.toLowerCase()));
       const offset=Number(url.searchParams.get("offset")??0);
-      body={items:listed.slice(offset,offset+50),total:listed.length,offset,has_more:offset+50<listed.length,view,latest_received_at:"2026-01-11T12:00:00Z",counts:{stored:407,needs_review:pending.length,automatic:1+company.length,manual:0,reviewed:reviewed.length,receipts:0,updates:0,unlinked:historical.length,company_rejections:company.length,stale:0}};
+      body={items:listed.slice(offset,offset+50),total:listed.length,offset,has_more:offset+50<listed.length,view,latest_received_at:"2026-01-11T12:00:00Z",counts:{stored:407,needs_review:pending.length,automatic:1+company.length,manual:0,reviewed:reviewed.length,receipts:0,updates:0,unlinked:historical.length,company_rejections:company.length,stale:0,...(options.classified?{classified_rejections:1,classified_actions:3,assessments:1,interviews:1,offers:1,rejections:1}:{})}};
     }else if(path==="/api/inbox/review"){
       const data=request.postDataJSON();submitted.push(data);reviewed.push(data.message_id);
       body={event_id:1,application_key:data.application_key,status:data.status};
@@ -74,8 +77,8 @@ test("default review queue exposes all pending messages beyond the latest 100",a
   await inboxFixture(page);
   await page.goto("/app/applications/inbox");
   await expect(page.getByLabel("Email view")).toHaveValue("pending");
-  await expect(page.getByRole("button",{name:/Waiting for you/})).toContainText("107");
-  await expect(page.locator(".inbox-status")).toContainText("107 emails need you");
+  await expect(page.getByRole("button",{name:/Needs clarification/})).toContainText("107");
+  await expect(page.locator(".inbox-status")).toContainText("107 emails need clarification");
   await expect(page.locator(".inbox-mail")).toHaveCount(50);
   await expect(page.getByRole("heading",{name:"ACE thinks this is about"})).toBeVisible();
   await page.getByRole("button",{name:"Next messages"}).click();
@@ -101,7 +104,7 @@ test("one click records the outcome for the suggested application",async({page})
   await page.goto("/app/applications/inbox");
   await expect(page.getByRole("button",{name:/^Interview/})).toHaveClass(/suggested/);
   await page.getByRole("button",{name:/^Interview/}).click();
-  await expect(page.getByRole("button",{name:/Waiting for you/})).toContainText("106");
+  await expect(page.getByRole("button",{name:/Needs clarification/})).toContainText("106");
   expect(fixture.submitted).toEqual([{message_id:1,application_key:"job:1",status:"interviewing",expected_status:"applied",confirmed:true,kind:"interview"}]);
 });
 
@@ -178,7 +181,7 @@ test("full history is the default and narrower checks never replace it silently"
   expect(fixture.windows).toEqual([0,90]);
   await expect(page.locator(".inbox-status")).not.toContainText("All caught up");
   expect(fixture.previews).toEqual([]);
-  await expect(page.getByRole("button",{name:/Waiting for you/})).toContainText("107");
+  await expect(page.getByRole("button",{name:/Needs clarification/})).toContainText("107");
 });
 
 test("selecting another email starts again from its own suggestion",async({page})=>{
@@ -212,7 +215,7 @@ for(const theme of ["light","dark"] as const){
     const fixture=await inboxFixture(page,{company:true});
     await page.setViewportSize({width:1672,height:941});
     await page.goto("/app/applications/inbox");
-    await expect(page.locator(".inbox-status")).toContainText("107 emails need you");
+    await expect(page.locator(".inbox-status")).toContainText("107 emails need clarification");
     await expect(page.getByRole("button",{name:/Recorded automatically/})).toContainText("2");
     await page.getByLabel("Email view").selectOption("company_rejection");
     await expect(page).toHaveURL(/decision=company_rejection/);
@@ -230,12 +233,12 @@ for(const theme of ["light","dark"] as const){
     await page.screenshot({path:path.join(root,`${theme}-inbox-company-rejection.png`),fullPage:true});
     await page.getByRole("button",{name:"Undo this change",exact:true}).click();
     await expect.poll(()=>fixture.undos).toEqual([77]);
-    await expect(page.getByRole("button",{name:/Waiting for you/})).toContainText("108");
+    await expect(page.getByRole("button",{name:/Needs clarification/})).toContainText("108");
     await expect(page.getByRole("button",{name:/Recorded automatically/})).toContainText("1");
     await expect(page.locator(".inbox-mail")).toHaveCount(0);
     await page.getByLabel("Email view").selectOption("pending");
     await expect(page.locator(".inbox-mail").first()).toContainText("Company decision from Fictional Labs");
-    await expect(page.locator(".inbox-inspector .inbox-state")).toHaveText("Needs you");
+    await expect(page.locator(".inbox-inspector .inbox-state")).toHaveText("Needs clarification");
     await expect(page.getByRole("button",{name:/^Rejection/})).toBeDisabled();
     expect(fixture.submitted).toEqual([]);
     expect(fixture.added).toEqual([]);
@@ -248,8 +251,8 @@ for(const theme of ["light","dark"] as const){
     const fixture=await inboxFixture(page,{unlinked:true,backgroundSyncEnabled:true});
     await page.setViewportSize({width:1672,height:941});
     await page.goto("/app/applications/inbox");
-    await expect(page.locator(".inbox-status")).toContainText("107 emails need you");
-    await expect(page.getByRole("button",{name:/Waiting for you/})).toContainText("107");
+    await expect(page.locator(".inbox-status")).toContainText("107 emails need clarification");
+    await expect(page.getByRole("button",{name:/Needs clarification/})).toContainText("107");
     const evidence=page.getByRole("button",{name:"1 recognized historical outcomes without an eligible application",exact:true});
     await expect(evidence.locator("..")).toContainText("excluded from application outcomes in Analytics. Linking is optional.");
     await evidence.click();
@@ -260,9 +263,10 @@ for(const theme of ["light","dark"] as const){
     const inspector=page.locator(".inbox-inspector");
     await expect(inspector.locator(".inbox-state")).toHaveText("Recognized, unlinked");
     await expect(page.getByLabel("ACE understanding")).toContainText("Application linkage: unlinked. No application status changed.");
-    await expect(inspector).toContainText("No application outcome was recorded. Linking is optional; the email remains searchable.");
+    await expect(inspector).toContainText("Linking an application is optional; the email remains searchable.");
     await expect(inspector).not.toContainText("Why it waits:");
-    await expect(page.getByRole("button",{name:/^Rejection/})).toBeDisabled();
+    await expect(inspector.locator(".inbox-target")).toHaveCount(0);
+    await expect(page.getByRole("button",{name:"Link or correct this email",exact:true})).toBeVisible();
     await expect(page.getByRole("button",{name:/^Decide later/})).toHaveCount(0);
     await expect(page.frameLocator("iframe.inbox-frame").locator("body")).toContainText("We will not move forward with your application.");
     const root=path.resolve("../artifacts/inbox-intelligence-validation");
@@ -297,5 +301,45 @@ for(const theme of ["light","dark"] as const){
     await expect(explanation).toBeVisible();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
     await page.screenshot({path:path.join(root,`${theme}-inbox-mobile.png`),fullPage:true});
+  });
+}
+
+for(const theme of ["light","dark"] as const){
+  test(`${theme}: recognized assessments, interviews, offers and rejections are filed without an application task`,async({page,context,baseURL})=>{
+    await setThemeCookies(context,baseURL!,theme);
+    const fixture=await inboxFixture(page,{classified:true});
+    await page.setViewportSize({width:1672,height:941});
+    await page.goto("/app/applications/inbox?decision=assessments");
+    const inspector=page.locator(".inbox-inspector");
+    for(const [filter,label,classification] of [["assessments","Assessments and tests","Assessment"],["interviews","Interviews and screens","Interview"],["offers","Offers","Offer"],["rejections","Rejection emails","Rejection"]]){
+      await page.getByRole("navigation",{name:"Recognized email categories"}).getByRole("button",{name:`${label} (1)`,exact:true}).click();
+      await expect(page.getByLabel("Email view")).toHaveValue(filter);
+      await expect(page.locator(".inbox-mail")).toHaveCount(1);
+      await expect(page.locator(".inbox-mail")).not.toHaveClass(/needs/);
+      await expect(inspector.getByLabel("Filed email evidence")).toContainText("No application status changed. No review is required.");
+      await expect(inspector.locator(".inbox-kind")).toHaveText(classification);
+      await expect(inspector.locator(".inbox-target")).toHaveCount(0);
+      await expect(inspector).not.toContainText("Decision needed:");
+      await expect(inspector.getByRole("button",{name:"Link or correct this email",exact:true})).toBeVisible();
+      if(filter!=="rejections")await expect(inspector.getByRole("note")).toContainText("older invitations may already be completed or cancelled");
+    }
+    const directory=path.resolve("../artifacts/inbox-intelligence-validation");
+    await fs.mkdir(directory,{recursive:true});
+    await page.getByLabel("Email view").selectOption("interviews");
+    await expect(inspector.locator(".inbox-kind")).toHaveText("Interview");
+    await page.screenshot({path:path.join(directory,`${theme}-inbox-classified-progress.png`),fullPage:true});
+    await inspector.getByRole("button",{name:"Link or correct this email",exact:true}).click();
+    await expect(inspector).toContainText("Optional correction.");
+    await expect(inspector.getByRole("button",{name:/^Interview/})).toBeDisabled();
+    await inspector.getByRole("button",{name:"Back to the filed email",exact:true}).click();
+    await expect(inspector.locator(".inbox-target")).toHaveCount(0);
+    await page.setViewportSize({width:390,height:844});
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
+    await page.screenshot({path:path.join(directory,`${theme}-inbox-classified-progress-mobile.png`),fullPage:true});
+    expect(fixture.submitted).toEqual([]);
+    expect(fixture.filed).toEqual([]);
+    expect(fixture.added).toEqual([]);
+    expect(fixture.undos).toEqual([]);
+    expect(fixture.applications.map(application=>application.status)).toEqual(["applied","applied"]);
   });
 }

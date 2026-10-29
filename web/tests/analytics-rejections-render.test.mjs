@@ -226,3 +226,51 @@ test("an empty cohort has no invented zero-denominator percentage",()=>{
   assert.match(html,/>n\/a</);
   assert.doesNotMatch(html,/>0%</);
 });
+
+const classifiedEvidence={total:19,categories:{rejection:6,online_assessment:7,interview:3,offer:1,recruiter_reply:1,action_required:1},date_basis:"email_received",application_status_changed:false,family_excluded_messages:0,company_excluded_messages:0};
+for(const tab of ["overview","outcomes"]){
+  test(`${tab}: recognized hiring progress survives later rejection without inflating application metrics`,()=>{
+    const d={...base,days:"all",positive:2,assessments:1,interviews:1,statuses:{applied:6,rejected:3},classified_email_evidence:classifiedEvidence};
+    const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab,query:{tab}})));
+    const panel=document.querySelector(".an-classified-email-evidence");
+    assert.ok(panel);
+    assert.match(panel.textContent,/Email receipt dates: All dates through 2026-10-26.*America\/Los_Angeles/);
+    assert.match(panel.textContent,/19 classified emails in this scope/);
+    assert.match(panel.textContent,/A later rejection does not erase an earlier assessment or interview/);
+    assert.match(panel.textContent,/email counts, not additional applications or confirmed stage totals/);
+    for(const [filter,label,count] of [["assessments","Assessment emails",7],["interviews","Interview emails",3],["offers","Offer emails",1],["classified_rejection","Rejection emails classified and filed",6]]){
+      const link=panel.querySelector(`a[href="/app/applications/inbox?decision=${filter}"]`);
+      assert.equal(link.querySelector("strong").textContent,label);
+      assert.equal(link.querySelector("b").textContent,String(count));
+    }
+    assert.match(panel.textContent,/Recruiter reply emails: 1.*Other action instructions: 1/);
+    assert.ok(panel.querySelector('a[href="/app/applications/inbox?decision=classified_action"]'));
+    const metrics=[...document.querySelectorAll(".an-metric")];
+    const metric=label=>metrics.find(node=>node.querySelector(".an-metric-label").textContent===label);
+    assert.equal(metric("Applications sent").querySelector("strong").textContent,"9");
+    assert.equal(metric("Meaningful replies").querySelector("strong").textContent,"2");
+    assert.equal(metric("Online assessments").querySelector("strong").textContent,"1");
+    assert.equal(metric("Interview invitations").querySelector("strong").textContent,"1");
+    assert.match(metric("Online assessments").textContent,/including later rejections/);
+    assert.match(panel.textContent,/historical invitations may already be completed or cancelled/);
+    assert.doesNotMatch(panel.innerHTML,/evidence=online_assessment|evidence=interview|evidence=rejection/);
+  });
+}
+
+test("recognized email progress explains unknown company and role exclusions in scoped views",()=>{
+  const d={...base,family:"ML_ENGINEERING",classified_email_evidence:{...classifiedEvidence,total:0,categories:{rejection:0,online_assessment:0,interview:0,offer:0,recruiter_reply:0,action_required:0},family_excluded_messages:13,company_excluded_messages:6}};
+  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"outcomes",query:{family:"ML_ENGINEERING",company:"Wayfern"}})));
+  const panel=document.querySelector(".an-classified-email-evidence");
+  assert.ok(panel);
+  assert.match(panel.textContent,/13 classified emails lack a verified role family and are excluded from this family selection/);
+  assert.match(panel.textContent,/6 classified emails lack a verified company and are excluded from this company selection/);
+  assert.match(panel.textContent,/0 classified emails in this scope/);
+  assert.equal(document.querySelectorAll(".an-cohort-strip span").length,0,"unattributed emails cannot create application cohort outcomes");
+});
+
+test("missing or empty classified evidence does not add a fabricated progress panel",()=>{
+  for(const evidence of [undefined,{...classifiedEvidence,total:0,categories:{rejection:0,online_assessment:0,interview:0,offer:0,recruiter_reply:0,action_required:0}}]){
+    const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d:{...base,classified_email_evidence:evidence},connection:null,tab:"overview",query:{}})));
+    assert.equal(document.querySelector(".an-classified-email-evidence"),null);
+  }
+});

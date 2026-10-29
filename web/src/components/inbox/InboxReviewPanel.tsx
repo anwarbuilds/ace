@@ -36,7 +36,7 @@ const FILINGS = [
 ] as const;
 // ACE's reading, as the choice to suggest.
 const SUGGEST: Record<string,string> = {rejection:"rejection",possible_rejection:"rejection",interview:"interview",online_assessment:"online_assessment",offer:"offer",recruiter_reply:"recruiter_reply",application_confirmation:"receipt"};
-const FILED: Record<string,string> = {unlinked:"Recognized historical outcome. No eligible application existed in ACE when this email arrived.",receipt:"Filed as an acknowledgement.",update:"Filed as a status update.",unrelated:"Marked not about your applications.",ignored:"ACE found no application outcome in it."};
+const FILED: Record<string,string> = {unlinked:"Recognized historical outcome. No eligible application existed in ACE when this email arrived.",receipt:"Filed as an acknowledgement.",update:"Filed correspondence. No application outcome was established.",unrelated:"Filed as unrelated to your applications.",ignored:"Filed without an application outcome. ACE did not identify a hiring outcome."};
 
 const dates = (value:string|null)=>value ? new Date(value).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "Date not recorded";
 const status = (value:string)=>STATUS_LABEL[value as ApplicationStatus]??clean(value);
@@ -158,6 +158,7 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
   },[id,decision]);
   const [targetKey,setTargetKey]=useState(()=>["ambiguous","identity_uncertain"].includes(message?.understanding?.matching_state??"")?"":message?.selected_application_key??message?.candidate_keys[0]??"");
   const [choosing,setChoosing]=useState(false);
+  const [correctingFiled,setCorrectingFiled]=useState(false);
   const [search,setSearch]=useState("");
   // An application ACE never had: added from this email, then recorded.
   const [draft,setDraft]=useState<{company:string;title:string;applied:string}|null>(null);
@@ -172,6 +173,8 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
   if(!message)return <section className="panel inbox-inspector"><h2>Nothing selected</h2><p>Choose an email on the left to see it exactly as it arrived.</p></section>;
 
   const pending=PENDING.includes(message.decision);
+  const classified=message.decision==="classified_rejection"||message.decision==="classified_action";
+  const filed=classified||Boolean(FILED[message.decision]);
   const companyRecorded=message.decision==="company_rejection";
   const applied=message.decision==="automatic"||message.decision==="manual"||companyRecorded;
   const target=byKey.get(targetKey);
@@ -201,7 +204,7 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
 
   return <section className="panel inbox-inspector" aria-label="Selected email">
     <header className="inbox-mail-head">
-      <div className="inbox-chips">{message.classification!=="unknown"&&<span className={`inbox-kind k-${message.classification}`}>{KIND[message.classification]??clean(message.classification)}</span>}<span className={`inbox-state d-${message.decision}`}>{STATE[message.decision]??clean(message.decision)}</span></div>
+      <div className="inbox-chips"><span className={`inbox-kind k-${message.classification}`}>{KIND[message.classification]??clean(message.classification)}</span><span className={`inbox-state d-${message.decision}`}>{STATE[message.decision]??clean(message.decision)}</span></div>
       <h2>{clean(full?.subject??message.subject)||"No subject"}</h2>
       <dl className="inbox-mail-meta">
         <dt>From</dt><dd><strong>{clean(sender.name)}</strong>{sender.address&&sender.address!==sender.name&&<span className="inbox-address"> &lt;{sender.address}&gt;</span>}</dd>
@@ -238,8 +241,15 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
       <p className="inbox-muted">{companyRecorded?`${clean(change?.company??candidates[0]?.company??"The employer")}: rejection received. No role choice is needed.`:clean(message.reason)+"."}</p>
       {linked&&<AppCard app={linked}/>}
       {change?<button className="btn" disabled={busy} onClick={()=>void action(()=>sendJson("POST",`/api/inbox/events/${change.id}/undo`,{}),"Undone. The email is back in your queue.")}>Undo this change</button>:<p className="inbox-muted">Undo it from Audit trail.</p>}
-    </div> : <div className="inbox-decide">
-      {!pending&&FILED[message.decision]&&<p className="inbox-filed"><strong>{FILED[message.decision]}</strong> {message.decision==="unlinked" ? "No application outcome was recorded. Linking is optional; the email remains searchable. " + clean(message.reason) : "Nothing changed. If that is wrong, choose what it is below."}</p>}
+    </div> : filed&&!correctingFiled?<div className="inbox-decided" aria-label="Filed email evidence">
+      <h3>Classified and filed.</h3>
+      <p>{classified?`ACE identified: ${KIND[message.classification]??clean(message.classification)}.`:FILED[message.decision]} No application status changed. No review is required.</p>
+      {(classified||message.decision==="unlinked")&&<p>Linking an application is optional; the email remains searchable.</p>}
+      {message.decision==="classified_action"&&<p className="inbox-filed" role="note">The email describes an employer action. Check its received date and newer messages before acting; older invitations may already be completed or cancelled. Follow the instructions in the original email.</p>}
+      <details className="inbox-muted"><summary>Why no application status changed</summary><p>{clean(message.reason)}</p><p>{classified?"This classified email evidence appears separately from verified application outcomes in Analytics.":"Filing preserves the email; it does not establish an application outcome."}</p></details>
+      <button className="btn" onClick={()=>setCorrectingFiled(true)}>Link or correct this email</button>
+    </div>:<div className="inbox-decide">
+      {filed&&<div className="inbox-filed"><strong>Optional correction.</strong> Nothing changes until you choose and confirm an outcome below. <button className="link-btn" onClick={()=>setCorrectingFiled(false)}>Back to the filed email</button></div>}
       <div className="inbox-target">
         <div className="inbox-target-head"><h3>{draft?"Add it to your applications":target?guessed?"ACE thinks this is about":"Application":"Which application?"}</h3>{target&&!choosing&&!draft&&<button className="btn btn-sm" onClick={()=>setChoosing(true)}>Change</button>}</div>
         {draft?<div className="inbox-add">

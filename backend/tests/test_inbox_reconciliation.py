@@ -176,9 +176,12 @@ def test_exact_title_picks_one_of_several_applications():
 def test_rejection_rules_keep_their_protections():
     body = "We regret to inform you that we will not be moving forward with your application."
     personal = reconcile(ats_mail("Northwind Robotics", body, address="recruiter@gmail.com"), [northwind()])
-    assert personal.disposition == "review" and personal.reason == "Sender could not be authenticated"
+    assert personal.disposition == "classified_rejection"
+    assert personal.target is personal.matched_target is personal.company is None
+    assert 'does not establish employer authority' in personal.reason
     unauthenticated = reconcile(ats_mail("Northwind Robotics", body, authenticated=False), [northwind()])
-    assert unauthenticated.target is None
+    assert unauthenticated.disposition == 'review' and unauthenticated.target is unauthenticated.company is None
+    assert not unauthenticated.sender_verified
     accepted_app = northwind(status="accepted")
     accepted = reconcile(ats_mail("Northwind Robotics", body), [accepted_app])
     assert accepted.reason == COMPANY_REASON and accepted.company == accepted_app.company
@@ -198,10 +201,11 @@ def test_an_already_rejected_application_gets_the_email_date():
     assert (result.disposition, result.target) == ("verified", "job:7")
 
 
-def test_positive_outcomes_from_a_shared_platform_still_need_the_owner():
+def test_positive_outcomes_from_a_shared_platform_are_filed_without_application_authority():
     result = reconcile(ats_mail("Northwind Robotics interview", "Job ID 137787. We would like to invite you to interview."),
                        [northwind(req="137787")])
-    assert result.disposition == "review" and result.candidates[0] == "job:7"
+    assert result.disposition == "classified_action" and result.candidates[0] == "job:7"
+    assert result.target is result.matched_target is result.company is None
 
 
 def test_receipts_are_filed_and_years_are_not_job_ids():
@@ -381,5 +385,6 @@ def test_conditional_eligibility_wording_never_automates_a_rejection(sentence):
 ])
 def test_automatic_positive_outcome_cannot_regress_a_later_stage(status,classification,body):
     result=reconcile(mail(body),[app("job:1","SE-102",status)])
-    assert result.classification==classification and result.disposition=="review"
-    assert result.reason=="Existing later application stage is protected"
+    assert result.classification==classification and result.disposition=="classified_action"
+    assert result.reason.endswith("Existing later application stage is protected")
+    assert result.target is result.matched_target is result.company is None

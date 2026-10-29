@@ -117,7 +117,9 @@ def test_positive_outcomes_keep_the_stricter_path(database):
     session, conn = database
     identities = _identities(session)
     preview = message("preview-interview", "Req ID: SE-102. We invite you to interview.")
-    assert _ingest(session, conn, preview, identities, preview=True) == "exact_preview"
+    assert _ingest(session, conn, preview, identities, preview=True) == "classified_action"
+    assert row_for(session, 'preview-interview').selected_application_key is None
+    assert statuses(session) == ['applied'] * 3 and not job_events(session)
     assessment = message("assessment", "Req ID: SE-100. Please complete the online assessment.")
     assert _ingest(session, conn, assessment, identities, preview=False) == "automatic"
     interview = message("new-interview", "Req ID: SE-102. We invite you to interview.")
@@ -133,13 +135,14 @@ def test_positive_outcomes_keep_the_stricter_path(database):
     assert mark_counts(session)["applications_total"] == 3
 
 
-def test_server_switch_sends_rejections_back_to_review(database, monkeypatch):
+def test_server_switch_preserves_classification_without_automatic_application_rejection(database, monkeypatch):
     session, conn = database
     monkeypatch.setenv("GMAIL_AUTO_REJECTIONS", "false")
     get_settings.cache_clear()
     exact = message("exact", "Req ID: SE-101. You have not been selected.")
-    assert _ingest(session, conn, exact, _identities(session), preview=False) == "review"
-    assert job_events(session) == []
+    assert _ingest(session, conn, exact, _identities(session), preview=False) == "classified_rejection"
+    assert row_for(session, 'exact').selected_application_key is None
+    assert job_events(session) == [] and statuses(session) == ['applied'] * 3
 
 
 def test_receipts_are_filed_without_changing_anything(database):
@@ -432,7 +435,9 @@ def test_verifying_further_back_never_automates_historical_positive_outcomes(dat
         return message("fictional-interview", "Req ID: SE-101. We invite you to interview.")
     monkeypatch.setattr(inbox.gmail, "get_json", get)
     result = inbox.sync_once(session, conn, 90)
-    assert result["counts"] == {"exact_preview": 1}
+    assert result["counts"] == {"classified_action": 1}
+    assert row_for(session, 'fictional-interview').selected_application_key is None
+    assert not job_events(session)
     assert statuses(session) == ["applied", "applied", "applied"]
 
 
@@ -473,7 +478,8 @@ def test_full_initial_history_never_automates_historical_positive_outcomes(datab
         result=inbox.sync_once(session,conn,0)
         if not result["more"]:break
     assert result["coverage"]["complete"]
-    assert row_for(session,"historical-positive-fictional").decision=="exact_preview"
+    assert projected_decision(row_for(session,"historical-positive-fictional"))=="classified_action"
+    assert row_for(session,"historical-positive-fictional").selected_application_key is None
     assert statuses(session)==["applied"]*3 and not job_events(session)
 
 

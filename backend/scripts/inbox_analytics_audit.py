@@ -20,6 +20,7 @@ from backend.app.config import get_settings
 from backend.app.db.models import ApplicationEventRecord, GmailMessageRecord, JobMarkRecord, ExternalApplicationRecord
 from backend.app.inbox.reconcile import PARSER_VERSION
 from backend.app.inbox.queue import projected_decision
+from backend.app.inbox.filed_evidence import DECISIONS as FILED_DECISIONS
 
 
 def audit(db: Session, *, now: datetime | None = None) -> dict:
@@ -116,7 +117,13 @@ def audit(db: Session, *, now: datetime | None = None) -> dict:
         "analytics_messages": d.get("company_rejection_summary", {}).get("messages", 0),
     }
     output["company_evidence"]["agrees"] = output["company_evidence"]["inbox_messages"] == output["company_evidence"]["analytics_messages"]
-    output["projection_checks_pass"] = all(all(r["checks"].values()) for r in ranges.values()) and output["company_evidence"]["agrees"]
+    output["classified_email_evidence"] = {
+        "inbox_messages": sum(projected_decision(m) in FILED_DECISIONS and aware(m.received_at) <= now for m in messages),
+        "analytics_messages": d.get("classified_email_evidence", {}).get("total", 0),
+    }
+    output["classified_email_evidence"]["agrees"] = output["classified_email_evidence"]["inbox_messages"] == output["classified_email_evidence"]["analytics_messages"]
+    output["projection_checks_pass"] = (all(all(r["checks"].values()) for r in ranges.values())
+                                        and output["company_evidence"]["agrees"] and output["classified_email_evidence"]["agrees"])
     issue_keys = {"missing_selected_application", "conflicting_application_targets", "no_active_confirmed_application_event",
                   "future_outcome_timestamp", "missing_outcome_type_in_analytics", "only_undated_status_fallback_no_email_link"}
     output["recorded_events_need_review"] = sum(reconciliation[key] for key in issue_keys)

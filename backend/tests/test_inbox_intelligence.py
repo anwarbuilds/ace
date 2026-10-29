@@ -292,7 +292,7 @@ def test_a_subsidiary_cannot_update_the_only_parent_application(sender):
     parent=replace(APP,company='Silverpine',official_url='https://careers.silverpine.example/jobs')
     mail=replace(evidence('Your application was rejected.','Your Silverpine Health application'),sender=sender)
     result=reconcile(mail,[parent])
-    assert result.classification=='rejection' and result.disposition=='review' and result.target is None
+    assert result.classification=='rejection' and result.disposition=='classified_rejection' and result.target is None
     assert 'employer identity' in result.reason and result.matched_target is None
 
 
@@ -307,7 +307,7 @@ def test_shared_ats_host_is_never_employer_origin_for_positive_automation(host):
     app=replace(APP,official_url=f'https://{host}/employer/SE-102')
     mail=replace(evidence('Req ID: SE-102. We invite you to interview.'),sender=f'Silverpine Labs <no-reply@{host}>')
     result=reconcile(mail,[app])
-    assert result.classification=='interview' and result.disposition=='review' and result.target is None
+    assert result.classification=='interview' and result.disposition=='classified_action' and result.target is None
 
 
 def test_shared_ats_host_and_parent_name_cannot_establish_a_subsidiary_application():
