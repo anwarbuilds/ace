@@ -20,7 +20,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict
 
 
-ROLE_RULE_VERSION = "2026-09-02-v2"
+ROLE_RULE_VERSION = "2026-10-29-v3"
 
 
 class RoleFamily(str, Enum):
@@ -36,6 +36,12 @@ class RoleFamily(str, Enum):
     # graduates and early career: asked for and withdrawn on 2026-10-09.
     DATA_ENGINEERING = "DATA_ENGINEERING"
     DATA_SCIENCE = "DATA_SCIENCE"
+    # Named for the same reason, and never on the list: the owner said on
+    # 2026-10-29 that site reliability and mobile roles are not wanted.
+    SITE_RELIABILITY_ENGINEERING = (
+        "SITE_RELIABILITY_ENGINEERING"
+    )
+    MOBILE_ENGINEERING = "MOBILE_ENGINEERING"
     OTHER = "OTHER"
 
 
@@ -44,6 +50,15 @@ NEW_GRAD_ONLY_FAMILIES = frozenset(
     {
         RoleFamily.DATA_ENGINEERING,
         RoleFamily.DATA_SCIENCE,
+    }
+)
+
+
+# Software trades the owner does not want, at any level.
+EXCLUDED_FAMILIES = frozenset(
+    {
+        RoleFamily.SITE_RELIABILITY_ENGINEERING,
+        RoleFamily.MOBILE_ENGINEERING,
     }
 )
 
@@ -151,6 +166,69 @@ AI_ML_PATTERNS = (
 )
 
 
+# Site reliability, whatever the title leads with: "Site Reliability
+# Engineer", "SRE II", "Software Reliability Engineer", "Software
+# Engineer, Reliability". A bare "Reliability Engineer" is left where it
+# was, outside the families: in a factory or a battery lab it tests
+# hardware, not services.
+SITE_RELIABILITY_PATTERNS = (
+    r"\bsite[- ]reliability\b",
+    r"\bsre\b",
+    r"\b(?:software|systems?|production|services?|infrastructure|"
+    r"platform|cloud|database|network|devops)\b.*\breliability\b",
+    r"\breliability\b.*\b(?:software|infrastructure|platform|cloud|"
+    r"devops)\b",
+)
+
+
+# "Mobile" as the app platform: not Mobile, Alabama, not T-Mobile, and
+# not mobile robots or mobile networks, which are robotics and telecom.
+_MOBILE = (
+    r"(?<![a-z]-)\bmobile\b(?!,?\s+(?:al|alabama)\b)"
+    r"(?!\s+(?:wireless|networks?|networking|broadband|carriers?|"
+    r"telecom\w*|5g|lte|robot\w*|manipulation|autonomy)\b)"
+)
+
+
+# Mobile apps, by the platform or by the word. A bare "Mobile Engineer"
+# is still not the trade: in facilities it is a building engineer who
+# travels between sites, as Jones Lang LaSalle's "Mobile Engineer" and
+# "Union Mobile Engineer" are.
+MOBILE_PATTERNS = (
+    # Cisco's IOS XR and IOS XE are router operating systems.
+    r"\bios\b(?![\s-]*(?:xr|xe|xrv|xrd)\b)",
+    r"\b(?:ipados|watchos|visionos|tvos)\b",
+    r"\bandroid\b",
+    r"\breact[- ]native\b",
+    r"\bflutter\b",
+    r"\bswiftui\b",
+    r"\bswift (?:software )?(?:engineer|developer)\b",
+    r"\bmobile (?:software|app(?:lication)?s?|frontend|front[- ]end|"
+    r"client|platform|infrastructure|sdk) (?:engineer(?:ing)?|developer|"
+    r"programmer)\b",
+    r"\bmobile developer\b",
+    r"\bmobile engineer(?:ing)?\b(?=.*\b(?:app|apps|software)\b)",
+    r"\b(?:software|frontend|front[- ]end|client|product|platform|sdk) "
+    r"(?:engineer(?:ing)?|developer)\b.*" + _MOBILE,
+    r"\bswe\b.*" + _MOBILE,
+)
+
+
+# A title that names web, backend or full stack work beside mobile is
+# that work too, and stays software: "Full Stack Engineer (Web and
+# Mobile)", "Backend Engineer, Mobile Payments". So does one that offers
+# software engineering as the alternative.
+MOBILE_SHARED_SCOPE_PATTERNS = (
+    r"\bfull[- ]?stack\b",
+    r"\bback[- ]?end\b",
+    r"\bweb\b",
+    # A title offering either: "Software Engineer/Mobile Engineer New
+    # Grad", which is how one campus programme names a single req.
+    r"\bsoftware (?:engineer|developer)\s*(?:/|\bor\b)\s*mobile\b",
+    r"\bmobile (?:engineer|developer)\s*(?:/|\bor\b)\s*software\b",
+)
+
+
 # The trailing "(?:ing)?" is the difference between reading a title and
 # reading only half of them. University recruiting routinely titles a
 # req by discipline rather than by role -- "Software Engineering, New
@@ -199,23 +277,14 @@ SOFTWARE_ENGINEERING_PATTERNS = (
     # still judged by every other rule; only the family was wrong.
     r"\bfront[- ]?end (?:software )?(?:engineer(?:ing)?|developer)\b",
     r"\bback[- ]?end (?:software )?(?:engineer(?:ing)?|developer)\b",
-    r"\b(?:ios|android) (?:software )?(?:engineer|developer)\b",
-    r"\bmobile (?:ios|android) (?:engineer|developer)\b",
-    # "Mobile" alone is not the trade: in facilities, a Mobile Engineer
-    # is a building engineer who travels between sites -- Jones Lang
-    # LaSalle's "Mobile Engineer" and "Union Mobile Engineer" filled the
-    # queue under the bare rule. Software when the title says so.
-    r"\bmobile (?:software|app(?:lication)?s?) (?:engineer|developer)\b",
-    r"\bmobile developer\b",
-    r"\bmobile engineer\b(?=.*\b(?:ios|android|react native|flutter|app)\b)",
-    r"\b(?:android|ios) and (?:android|ios) (?:engineer|developer)\b",
+    # Mobile and site reliability titles were read here too, until the
+    # owner said on 2026-10-29 that neither is wanted. They have families
+    # of their own now, checked before this list.
     r"\bweb (?:software |application )?(?:engineer|developer)\b",
     r"\bapplications? developer\b",
     # Bare "Applications Development Engineer" is KLA's and Applied
     # Materials' semiconductor process role; only the software one counts.
     r"\b(?:software|sw|ai) applications? development engineer\b",
-    r"\bsite reliability engineer(?:ing)?\b",
-    r"\bsre\b",
     r"\bcloud (?:software )?developer\b",
     r"\bsw (?:engineer|developer)\b",
     r"\b(?:java|python|golang|go|ruby|scala|kotlin|swift|react|javascript|"
@@ -334,6 +403,9 @@ def classify_role(
 
     rather than both being classified as generic software engineering.
 
+    Site reliability and mobile titles get families of their own, which
+    the gate keeps off the list.
+
     Startup-oriented titles such as Founding Engineer, Full Stack
     Developer, Member of Technical Staff, and SWE are included
     to protect discovery recall. Eligibility remains responsible for
@@ -368,6 +440,25 @@ def classify_role(
             matched_pattern=fde_match,
         )
 
+    # Before machine learning, so "Site Reliability Engineer, AI
+    # Infrastructure" is read as the reliability role it is.
+    reliability_match = (
+        _first_matching_pattern(
+            title,
+            SITE_RELIABILITY_PATTERNS,
+        )
+    )
+
+    if reliability_match:
+        return RoleClassification(
+            family=(
+                RoleFamily
+                .SITE_RELIABILITY_ENGINEERING
+            ),
+            priority=RolePriority.NONE,
+            matched_pattern=reliability_match,
+        )
+
     ai_ml_match = (
         _first_matching_pattern(
             title,
@@ -384,6 +475,25 @@ def classify_role(
                 RolePriority.PRIMARY
             ),
             matched_pattern=ai_ml_match,
+        )
+
+    # After machine learning: "Machine Learning Engineer, Android" is a
+    # machine learning role that happens to ship on a phone.
+    mobile_match = (
+        _first_matching_pattern(
+            title,
+            MOBILE_PATTERNS,
+        )
+    )
+
+    if mobile_match and not _first_matching_pattern(
+        title,
+        MOBILE_SHARED_SCOPE_PATTERNS,
+    ):
+        return RoleClassification(
+            family=RoleFamily.MOBILE_ENGINEERING,
+            priority=RolePriority.NONE,
+            matched_pattern=mobile_match,
         )
 
     software_match = (

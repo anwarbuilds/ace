@@ -293,18 +293,16 @@ def test_a_discipline_named_inside_another_role_is_not_claimed() -> None:
 
 def test_the_rest_of_the_software_trade_is_software_engineering() -> None:
     """411 active roles with titles like these were rejected as outside
-    the target families, IBM's "Entry Level Back End Developer" and
-    xAI's "Mobile Android Engineer" among them."""
+    the target families, IBM's "Entry Level Back End Developer" among
+    them. Mobile and site reliability titles were in this list until the
+    owner asked on 2026-10-29 for neither; they are pinned below."""
 
     for title in (
         "Entry Level Back End Developer - Poughkeepsie, NY - 2027",
         "Entry Level Back-End Developer - Dallas, TX - 2027",
         "Associate Application Developer AWS - 2027",
-        "Mobile Android Engineer",
-        "Mobile Engineer, iOS",
         "Frontend Engineer",
         "Front-End Developer",
-        "Site Reliability Engineer 2",
         "Java Developer",
         ".NET Developer",
         "C++ Developer",
@@ -332,7 +330,6 @@ def test_the_rest_of_the_software_trade_is_software_engineering() -> None:
         "Software Programmer - Career",
         "Entry Level Programmer / Developer",
         # Pipelines named in the plural.
-        "Software Engineers, Mobile",
         "Real-Time Software Engineers (Associate or Experienced)",
         "Infrastructure Engineers",
     ):
@@ -340,6 +337,116 @@ def test_the_rest_of_the_software_trade_is_software_engineering() -> None:
             classify_role(title).family
             == RoleFamily.SOFTWARE_ENGINEERING
         ), title
+
+
+def test_site_reliability_is_its_own_family() -> None:
+    """The owner does not want site reliability roles (2026-10-29),
+    under any of the names they are posted under."""
+
+    for title in (
+        "Site Reliability Engineer",
+        "Site Reliability Engineer 2",
+        "SRE II",
+        "Software Reliability Engineer",
+        "Software Engineer, Reliability",
+        "Software Engineer, Site Reliability",
+        "Production Reliability Engineer",
+        "Database Reliability Engineer",
+        # Read as the reliability role it is, not as machine learning.
+        "Site Reliability Engineer, AI Infrastructure",
+    ):
+        result = classify_role(
+            title
+        )
+
+        assert (
+            result.family
+            == RoleFamily.SITE_RELIABILITY_ENGINEERING
+        ), title
+
+        assert result.priority == RolePriority.NONE, title
+
+
+def test_mobile_is_its_own_family() -> None:
+    """The owner does not want mobile roles (2026-10-29): Shopify's
+    "Software Engineers, Mobile" and xAI's "Mobile Android Engineer"
+    were software engineering until then."""
+
+    for title in (
+        "iOS Engineer",
+        "Android Developer",
+        "Software Engineer, iOS",
+        "Software Engineer - Android",
+        "Software Engineer (Mobile)",
+        "Software Engineers, Mobile",
+        "SWE, Mobile",
+        "Mobile Software Engineer",
+        "Mobile App Developer",
+        "Mobile Developer",
+        "Mobile Engineer, iOS",
+        "Mobile Android Engineer",
+        "React Native Engineer",
+        "Flutter Developer",
+        "Swift Developer",
+        "Android Framework Engineer",
+    ):
+        result = classify_role(
+            title
+        )
+
+        assert (
+            result.family
+            == RoleFamily.MOBILE_ENGINEERING
+        ), title
+
+        assert result.priority == RolePriority.NONE, title
+
+
+def test_titles_that_only_sound_mobile_or_reliable_keep_their_family() -> None:
+    for title, family in (
+        # Mobile, Alabama; T-Mobile; Cisco's router operating system.
+        ("Software Engineer - Mobile, AL", RoleFamily.SOFTWARE_ENGINEERING),
+        ("Software Engineer, T-Mobile Ads", RoleFamily.SOFTWARE_ENGINEERING),
+        ("Software Engineer - Cisco IOS XR", RoleFamily.SOFTWARE_ENGINEERING),
+        # Web, backend or full stack work beside mobile is still that work.
+        (
+            "Full Stack Engineer (Web and Mobile)",
+            RoleFamily.SOFTWARE_ENGINEERING,
+        ),
+        (
+            "Backend Engineer, Mobile Payments",
+            RoleFamily.SOFTWARE_ENGINEERING,
+        ),
+        # Robots and networks that move are not mobile apps.
+        (
+            "Software Engineer, Mobile Robotics",
+            RoleFamily.SOFTWARE_ENGINEERING,
+        ),
+        (
+            "Software Engineer, Pixel Mobile Wireless, Metrics Analysis",
+            RoleFamily.SOFTWARE_ENGINEERING,
+        ),
+        # A single campus req offering either path keeps the software one.
+        (
+            "Software Engineer/Mobile Engineer New Grad - Ads Core",
+            RoleFamily.SOFTWARE_ENGINEERING,
+        ),
+        # Machine learning that ships on a phone is machine learning.
+        (
+            "Machine Learning Engineer, Android",
+            RoleFamily.AI_ML_ENGINEERING,
+        ),
+        # A bare reliability engineer tests hardware; a bare mobile
+        # engineer maintains buildings. Both stay outside the families.
+        ("Reliability Engineer", RoleFamily.OTHER),
+        ("Reliability Engineer - Battery Cells", RoleFamily.OTHER),
+        ("Mobile Engineer", RoleFamily.OTHER),
+        # DevOps was never on the list and is not renamed here.
+        ("DevOps Engineer", RoleFamily.OTHER),
+    ):
+        assert classify_role(
+            title
+        ).family == family, title
 
 
 def test_data_engineering_and_data_science_are_their_own_families() -> None:

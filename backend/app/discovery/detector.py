@@ -554,6 +554,53 @@ def _detect_workable(
     )
 
 
+# Paths on jobs.gem.com that are Gem's own pages, not a board.
+_GEM_RESERVED = frozenset(
+    {
+        "api",
+        "job_board",
+        "static",
+        "assets",
+        "embed",
+    }
+)
+
+
+def _detect_gem(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect Gem boards: jobs.gem.com/{board}/{posting}.
+
+    ACE reads a Gem board from its public API, so the identity carries
+    the API host, as boards registered by hand already do (Groq's,
+    Retool's). Startup networks link hundreds of postings here --
+    Luma AI's and Agora's among them -- and every one went unread
+    because the detector did not know the host.
+    """
+
+    if host != "jobs.gem.com" or not segments:
+        return None
+
+    board = segments[0]
+
+    if board.casefold() in _GEM_RESERVED or not re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9_-]*",
+        board,
+    ):
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.GEM,
+        source_account=board,
+        source_host="api.gem.com",
+    )
+
+
 def detect_source_from_url(
     url: str,
 ) -> DetectedSourceIdentity | None:
@@ -603,6 +650,7 @@ def detect_source_from_url(
         _detect_workday_site,
         _detect_oracle_recruiting,
         _detect_workable,
+        _detect_gem,
     )
 
     for detector in detectors:
