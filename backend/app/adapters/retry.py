@@ -85,6 +85,7 @@ def _retry_after_seconds(
 def request_with_retry(
     send: Callable[[], httpx.Response],
     *,
+    retry_statuses: frozenset[int] = RETRYABLE_STATUS_CODES,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     base_delay_seconds: float = (
         DEFAULT_BASE_DELAY_SECONDS
@@ -97,6 +98,9 @@ def request_with_retry(
 
     Args:
         send: Performs one attempt and returns its response.
+        retry_statuses: Statuses worth repeating. A provider whose 429
+            is a standing refusal leaves it out, so the poll fails at
+            once and the scheduler's refusal backoff takes over.
 
     Returns:
         The first non-retryable response, which may still be an error
@@ -139,7 +143,7 @@ def request_with_retry(
 
         if (
             response.status_code
-            not in RETRYABLE_STATUS_CODES
+            not in retry_statuses
         ):
             return response
 

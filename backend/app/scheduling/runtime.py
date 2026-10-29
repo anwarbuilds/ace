@@ -73,9 +73,12 @@ LOGGER = logging.getLogger(
 )
 
 
-# Bounded well below the SQLAlchemy pool so a full cycle cannot exhaust
-# database connections.
-DEFAULT_CONCURRENCY = 6
+# Bounded below the SQLAlchemy pool (twelve, plus eight overflow) so a full
+# cycle cannot exhaust database connections. Six until 2026-10-29, when
+# all six were measured busy all the time -- most of it Workday paging and
+# Workable refusals -- with the CPU mostly idle, and boards meant for
+# fifteen minutes were read every twenty to twenty-five.
+DEFAULT_CONCURRENCY = 8
 
 
 # A suspend shorter than this is not worth a line in the log: a
