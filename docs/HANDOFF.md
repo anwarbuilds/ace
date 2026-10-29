@@ -1,5 +1,34 @@
 # ace handoff
 
+**LIVE, 2026-10-28 21:22 Pacific, company-aware Inbox Intelligence:**
+API/frontend `873ee080fa724fcbe0022ad47939d38c083ca8e9`, parser 12/schema 0050,
+is healthy at https://ace.opik.net. Only API/web were replaced; all 355 backend
+source files, protected cutover rows/events, public source/auth/assets and logos
+are verified. Extension 1.31.3 and unrelated services remain preserved. Company
+rejections are recorded without arbitrary role selection or an application
+status change, with separate Analytics evidence and Undo. Assessment/test and
+interview/screen filters are live.
+
+Separately approved sealed historical filing, exact-target outcomes and targeted
+reading corrections are complete. Only explicitly authorized application status
+transitions occurred; owner choices, Undo, prior ledger entries, Gmail metadata,
+outside-cohort mail and unrelated data remain intact. Final real-mail routes,
+Inbox/Analytics ranges, monitor lease and subsequent sync checks pass. Actual
+results and remaining review reasons stay private. Global historical rechecks
+remain disabled; do not restart the stopped parser-7 runner or broaden history.
+Fresh verified backup and API/web rollback images are under
+`/opt/ace/private-backups/inbox-system-20261028T2355Z/`.
+
+Dedicated validation passes 811 backend and 40 hosted browser cases plus web
+checks; full backend passes 2,045. Overall CI remains red from a demonstrated
+canonical-extension/stale-runtime-stub incompatibility; later full app browsers
+were skipped. Read the first root knowledge section for exact evidence, rollback
+and accuracy limits. No signed-in production browser or perfect accuracy claim.
+
+
+
+Status: the following parser-11 checkpoint is historical; the parser-12 record above controls.
+
 **LIVE, 2026-10-28 16:29 Pacific, continuous Inbox Intelligence:**
 API/frontend `5109fcd919b76a588bed848c4ac4bf07d0e5acbc`, parser 11/schema 0050,
 healthy at https://ace.opik.net. API/web only were recreated. Learned-answer API

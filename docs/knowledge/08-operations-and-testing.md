@@ -4,7 +4,39 @@
 >
 > Read this when: you deploy, restart, debug the scheduler, or write browser tests.
 
+
+## Parser 12 API/frontend release and completed bounded history (2026-10-28)
+
+Owner-authorized `873ee080` is live, parser 12/schema 0050, activated at
+2026-10-29T04:21:54Z–04:22:11Z (October 28 21:22 Pacific). Only API/web were
+replaced. All 355 backend files match running source; protected cutover row sets
+and pre-existing events match exactly. Source/header, HTTPS/auth, served assets,
+logos, real-mail routes, filters, monitor lease and subsequent sync checks pass.
+Scheduler, PostgreSQL, Caddy, authentication, Studio and extension 1.31.3 remain
+preserved. No migration or signed-in production browser session is claimed.
+
+The fresh 495,228,138-byte backup is
+`/opt/ace/private-backups/inbox-system-20261028T2355Z/database-pre-activation.dump.gz`.
+Gzip, catalog and full expansion checks pass; no restore ran. Retained prior API
+`02629e6` and web `97e4158` support API/web-only rollback without overwriting SQL
+data. Use current guarded evidence rollback before retiring its supporting code
+if that operation is separately authorized. Historical filing, exact-target
+outcomes and targeted corrections completed with private preservation proofs;
+no second operator or unrestricted replay is authorized. Historical rechecks
+stay disabled and the stopped parser-7 runner remains stopped.
+
+Dedicated CI passes 811 backend and 40 hosted browsers plus render/DOM,
+TypeScript/lint/build; full backend passes 2,045 and matcher 267. Full CI remains
+red: its older extension browser stub lacks `chrome.runtime.id`, which canonical
+extension 1.31.2+ now requires before drawing a card. Actual source-function
+reproduction proves the early exit without an API call; preserved extension,
+browser tests and CI bytes match canonical. Do not claim the failing browser
+suite passed or substitute earlier broader results. No local Chrome was started.
+
+
 ## Continuous Inbox API/frontend release and preserved concurrent work (2026-10-28)
+
+Status: historical release checkpoint; superseded by the parser-12 LIVE record above.
 
 Source `5109fcd` is live, parser 11/schema 0050. Merge the newer learned-answer
 API before preparing images; do not deploy the older Inbox branch over it.

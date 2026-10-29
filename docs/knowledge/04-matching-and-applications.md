@@ -6,7 +6,33 @@
 
 > **Status of the sheet entries:** The spreadsheet upload and import UI was removed on 2026-10-10 at the user's request, because applications are made through ace. Export CSV remains, and the API endpoints `/api/applications/preview` and `/api/applications/import` still exist, unused. The entries about the sheet are history; their lessons (never guess identity, wait for the write, show the user what was skipped) still apply.
 
+
+## Company rejection evidence and guarded history LIVE (2026-10-28 21:22 Pacific)
+
+API/frontend `873ee080` is live, parser 12/schema 0050. An explicit rejection
+with a confirmed employer can be recorded as company-scoped email evidence when
+an individual role cannot be established. Its event has an `email:<id>` key,
+validated company metadata and no previous/new application status. No arbitrary
+role is chosen and no employer-wide application status is inferred. Exact
+application outcomes and positive-automation safeguards remain separate. Owner
+choices and Undo stay authoritative.
+
+Analytics counts unique active company emails separately from rejected
+applications, using local email receipt dates and exact company filtering.
+Unknown roles cannot enter role-family, stage, response-timing or application
+cohort metrics. Separately approved sealed historical filing, exact-application
+outcomes and targeted action corrections are complete; only specifically
+authorized status transitions occurred. Protected decisions, earlier events,
+Gmail metadata, outside-cohort mail and unrelated data are preserved. Final
+Inbox/Analytics projections reconcile without orphan active outcome events.
+Actual counts, examples and journals remain private. Global historical rechecks
+stay disabled; no approval for an expanded replay is implied. Read the first
+root knowledge section for release proof and unmeasured accuracy limits.
+
+
 ## Inbox parser 11 continuous intelligence LIVE (2026-10-28)
+
+Status: historical release checkpoint; superseded by the parser-12 LIVE record above.
 
 API/frontend `5109fcd` is live, schema 0050. Contextual comparisons and explicit
 role-qualified decisions are recognized with assertion/contradiction guards.

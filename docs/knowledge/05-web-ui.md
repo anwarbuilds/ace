@@ -4,7 +4,33 @@
 >
 > Read this when: you change the old single-file UI or build its Next.js replacement; it records what each screen is for and what went wrong.
 
+
+## Company evidence without role-selection work LIVE (2026-10-28 21:22 Pacific)
+
+Web `873ee080` preserves the approved Wine and Rose Day/Night layout. Recorded
+company rejection emails have a dedicated filter and contribute to Recorded
+automatically; their inspector shows the employer, decisive reading and Undo
+without asking for an application role. Undo returns that email to review and
+does not change an individual application. Assessments and tests, and Interviews
+and screens, provide direct views of recognized actions and their completed or
+cancelled variants.
+
+The Companies view has a separate company-rejection evidence panel with exact
+email links. Its calendar follows receipt dates, including older history in All
+time; it does not add company emails to exact rejected-application, role, timing
+or cohort totals. A role-family selection explains exclusion of unassigned
+roles. Hosted Day/Night captures and interactions pass, including company Undo
+without application writes. The live source/header, assets/auth and real-mail
+API routes are verified separately; no signed-in production browser test is
+claimed. The separately approved bounded history is complete with protected
+choices and evidence preserved. Hosted captures, private message counts and remaining review reasons stay in
+the ignored release package. Population accuracy
+remains unmeasured; read the first root release record for CI and rollback limits.
+
+
 ## Inbox evidence states and continuous checks LIVE (2026-10-28)
+
+Status: historical release checkpoint; superseded by the parser-12 LIVE record above.
 
 Web `5109fcd` preserves Wine and Rose Day/Night structure and controls. A separate
 searchable unlinked-history filter/banner and Analytics evidence-review entry

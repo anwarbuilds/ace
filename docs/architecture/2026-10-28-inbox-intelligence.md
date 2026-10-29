@@ -1,6 +1,51 @@
 # Inbox intelligence upgrade
 
+
+## Parser 12 LIVE: company evidence and completed guarded history
+
+API/frontend `873ee080fa724fcbe0022ad47939d38c083ca8e9` is live at
+https://ace.opik.net, schema 0050, owner-authorized activation October 28 at
+21:22 Pacific. Only API/web were replaced. The existing background Gmail
+monitor and its Pause, disconnect, quota, shutdown and advisory-lease controls
+remain intact; this adds no service, Gmail scope or migration. Extension 1.31.3
+and unrelated services remain preserved.
+
+A confirmed employer rejection without an exact role becomes a company evidence
+event under the email ledger key, with validated scope/version/company metadata
+and no application status transition. The stored email remains `update` with
+an exact classifier reason; shared SQL/Python presentation exposes
+`company_rejection`. The inspector avoids role selection, retains the source
+email and offers event Undo. Company Undo appends a correction and returns only
+the email to review. Application identities are never merged or chosen merely
+to reduce the queue.
+
+Analytics projects active validated company events separately from exact
+application outcomes. It deduplicates repeated email events, observes Undo and
+later owner filing, rejects malformed/conflicting claims and uses Gmail receipt
+dates in the display timezone. All-time includes email history before the
+application register; exact company filters apply. Unknown roles are excluded
+from selected role families with explanatory evidence scope, and never enter
+application stages, response timing or cohort rates. Assessment and interview
+filters expose actionable, completed and cancelled correspondence; 56 fictional
+intent regressions cover contextual action language and assertion safeguards.
+
+Separately approved sealed historical filing, exact-application outcomes and
+targeted action corrections completed with final preservation and projection
+checks. Only the explicitly authorized outcome plan changed application
+statuses. Owner choices, Undo, prior ledger entries, Gmail identity/metadata,
+outside-cohort mail and unrelated data remain intact. Historical rechecks stay
+disabled; exact private manifests and journals do not authorize further replay.
+All 355 running backend files, public source/auth/assets, real-mail routes,
+filters and monitor lease/sync behavior are verified. Hosted focused validation
+passes; overall CI stays red from the demonstrated preserved-extension/runtime
+stub mismatch, with broader full app browsers skipped. No signed-in production
+browser or representative population precision/recall claim is made. The first
+root knowledge section contains exact CI, backup and rollback details.
+
+
 ## Parser 11 live: continuous checks and contextual identity
+
+Status: historical release checkpoint; superseded by the parser-12 LIVE record above.
 
 Status: API/frontend source `5109fcd919b76a588bed848c4ac4bf07d0e5acbc` is **LIVE**
 at https://ace.opik.net with owner authorization, 2026-10-28 16:29 Pacific,

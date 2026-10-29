@@ -4,6 +4,28 @@ Written 2026-10-15 for the local session that finished the interface. The approv
 `ace-pulls-first-demo.html`; the requirements are `ACE-CODEX-PULLS-FIRST-IMPLEMENTATION-PROMPT.md`. Both live only on
 the owner's machine in `design/` (ignored by git). Verified on branch `next-app`, commit a82cb9a or later.
 
+
+## Live Inbox/Analytics update, 2026-10-28 21:22 Pacific
+
+The approved Wine and Rose V2 website now runs API/frontend `873ee080`, parser
+12/schema 0050. Inbox records confirmed company rejections without a role picker,
+retains Undo, and exposes assessment/test and interview/screen filters. Analytics
+shows company email evidence separately from exact application outcomes, using
+receipt-date scope and explicit exclusion of unknown role families. No unrelated
+page, shell design, application register or extension 1.31.3 was replaced by this
+feature.
+
+Hosted Day/Night company and Undo behavior passes within 40 focused browser
+cases; live source/auth/assets and private real-mail routes are separately
+verified. Historical processing was separately authorized and completed with
+preservation checks; only its explicit exact-target outcome plan changed
+application statuses. Full CI remains red from the canonical extension browser
+stub missing `chrome.runtime.id`; this does not certify broader browser coverage
+or population classification accuracy. Read the first root knowledge section
+for the complete live release, verified backup, rollback and private evidence
+boundaries. The older page-by-page snapshot below remains historical.
+
+
 ## What exists, page by page
 
 | Route | State | Gap against the prototype |

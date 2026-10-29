@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-28 Pacific, Inbox parser 11 API/frontend LIVE at 5109fcd; extension 1.31.3 preserved; global historical rechecks disabled
+Last updated: 2026-10-28 Pacific, Inbox parser 12 API/frontend LIVE at 873ee080; approved bounded history complete; extension 1.31.3 preserved; global historical rechecks disabled
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -14,7 +14,131 @@ It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
 
+
+## Company-aware Inbox Intelligence LIVE, 2026-10-28 21:22 Pacific
+
+Owner-authorized API/frontend source **`873ee080fa724fcbe0022ad47939d38c083ca8e9`**
+is live at **https://ace.opik.net**, parser **12**, schema **0050**. Activation
+ran **2026-10-29T04:21:54Z–04:22:11Z**, the evening of October 28 in Pacific
+time. Only API/web were replaced. All **355 tracked backend source files**
+match the tested running implementation. API image:
+`sha256:ff88fa7d10425b2eca76dd664fe029746963666ff79f8a91b2a2a4b27f8f69ec`;
+web image:
+`sha256:f35ec43f44a4995aaff5af9afb1399d936430094a3b3fae251369e879b2d5ae7`.
+PostgreSQL, the discovery scheduler,
+Caddy, authentication, Resume Studio, Pulls and the owner's extension **1.31.3**
+remain preserved. No migration or extension publication accompanied this release.
+
+A clear rejection with a reliably identified employer can now be recorded as
+**company rejection evidence** without asking the owner to choose among roles.
+Its audit event uses the email's own ledger key, validated company metadata and
+no application status transition. The stored email decision remains `update`
+with an exact classifier reason; the shared projection exposes
+`company_rejection`. This preserves prior API compatibility and the original
+email evidence. The recorded inspector shows the employer, decisive reading and
+Undo, with no role picker. The Recorded automatically total includes company
+filings, with a separate company rejection filter. Undo appends a correction and
+returns the email to review without changing an individual application. Owner
+choices and existing application outcomes remain authoritative.
+
+Analytics presents company rejection emails separately from exact rejected
+applications. Company evidence counts unique active emails, excludes undone,
+refiled, linked, malformed or contradictory claims, and opens the underlying
+messages. Its date filter follows **email receipt dates** in the selected time
+zone, rather than borrowing submission dates. All-time includes historical
+emails that predate the application register. Company filters remain exact;
+unknown roles are excluded from selected role-family totals with an explicit
+explanation. Company-only evidence never enters individual application statuses,
+role stages, response timing or application cohort rates, and does not mark every
+application at an employer rejected.
+
+Inbox also provides **Assessments and tests** and **Interviews and screens**
+filters. The action-language reader distinguishes invitations and reminders from
+completed tests, cancellations, routine coordination and public learning mail.
+Its **56 fictional intent regressions** include safeguards for conditional,
+negated, quoted and conflicting wording. A recognized employer action can remain
+visible without becoming a fabricated application outcome. Positive automation
+retains its existing opt-in, live-message, exact-job-identity and employer-origin
+requirements.
+
+The existing API-owned Gmail monitor continues bounded checks for ready grants
+while the page is closed. Pause, disconnect, changed grants, quota cooldown and
+shutdown remain authoritative. `GMAIL_BACKGROUND_SYNC_ENABLED=false` disables
+that monitor. Global historical rechecks remain disabled; approved historical
+work uses explicit sealed operator plans. Do not restart the stopped parser-7
+operator or treat a parser bump as permission for an unrestricted replay.
+
+Cutover verification preserves **all eleven protected row sets and the complete
+pre-existing event set exactly**. Public HTTPS health, exact frontend source,
+private-route authentication, four served asset hashes and all 85 logo hashes
+pass. These production checks are separate from hosted fictional browser tests;
+no signed-in production browser session is claimed.
+
+Exact-source [dedicated run 40791122175](https://github.com/anwarbuilds/ace/actions/runs/40791122175)
+passes **811 focused backend, 27 calculation/render, 67 Inbox DOM and 40 hosted
+Inbox/Analytics browser cases**, plus TypeScript, full lint and production build.
+The calculation/render and Inbox commands overlap in their render cases; those
+totals are not a count of unique tests. Viewed Day/Night company screenshots
+show recorded evidence without a role choice and a visible Undo control. Both
+hosted company cases verify that Undo returns only the email to review and makes
+no application-review, creation or filing request.
+
+[Full run 40791129522](https://github.com/anwarbuilds/ace/actions/runs/40791129522)
+passes **2,045 backend, 267 matcher, 105 extension DOM, 11 logo and 67 Inbox DOM
+checks**, TypeScript, lint and build. Its extension browser step has **25 pass /
+22 fail**; subsequent app-browser steps are skipped. The preserved canonical
+extension now requires `chrome.runtime.id` before refreshing its card, while the
+older browser fixture omits that property. Executing the actual source guard and
+refresh functions with and without the missing property reproduces the absent
+panel before any API call. Extension/browser-test/CI source is byte-identical to
+canonical `b633b7c`; no exact canonical workflow run exists for that commit, so
+this is a demonstrated fixture mismatch, not a claim that the 22 failures were
+rerun on canonical. **Overall CI remains red.** No local Chrome was launched.
+
+Fresh pre-activation backup:
+**`/opt/ace/private-backups/inbox-system-20261028T2355Z/database-pre-activation.dump.gz`**,
+**495,228,138 bytes**, refreshed immediately before activation. Gzip integrity,
+archive catalog and full expansion checks pass; no database restore was
+performed. The private rollback plan retains the prior API image **`02629e6`**
+and web image **`97e4158`** and replaces only API/web, retaining SQL data. Full
+image digests and rollback commands remain in the private release record.
+Never restore a database automatically over later owner work. Company evidence
+remains readable as stored correspondence after an image rollback; use the
+current guarded event/row rollback while its supporting code is available if a
+separately authorized evidence rollback is required.
+
+**The separately approved bounded historical processing is complete and its
+final preservation checks pass.** Classification and filing changes preserved
+application statuses. A separately authorized exact-application outcome plan
+changed only its verified targets; existing matching statuses received evidence
+without an unnecessary transition. Targeted action-reading corrections were
+filed separately. No arbitrary role was selected to reduce the review queue.
+
+Protected owner decisions, Undo, all prior ledger entries, original Gmail
+identity/metadata, outside-cohort mail and unrelated application data remain
+preserved. Only the specifically authorized application status transitions and
+append-only evidence/correction events occurred. Post-processing Inbox/Analytics
+projections agree across all four audited ranges, with no orphan active outcome
+events. Live Gmail viewer/readings, the supported filters, PostgreSQL monitor
+lease exclusion and single-leader and post-activation sync checks pass. Actual cohorts,
+results, remaining review reasons, exact seals and journals stay in the private
+owner package; no private message totals, internal IDs, employer examples or
+owner decisions belong in the public continuity record. The completed scope is
+not permission for another historical replay or an expanded cohort.
+
+Population precision, recall and false-positive rates remain unmeasured. The
+available independent owner decisions are predominantly rejections and do not
+establish representative accuracy across acknowledgements, assessments,
+interviews, offers and routine mail. Passing the defined regressions and private
+live checks does not establish perfect accuracy or complete mailbox observation.
+
+Private release evidence and rollback instructions: ignored owner-local
+`artifacts/inbox-intelligence-system-20261028/RELEASE.md`.
+
+
 ## Continuous Inbox Intelligence LIVE, 2026-10-28 16:29 Pacific
+
+Status: historical release checkpoint; superseded by the parser-12 LIVE record above.
 
 Owner-authorized API/frontend source **`5109fcd919b76a588bed848c4ac4bf07d0e5acbc`**
 is live at **https://ace.opik.net**, parser **11**, schema **0050**. Canonical
