@@ -158,6 +158,31 @@ def _same_employer(
     )
 
 
+def _initials_of(
+    first: str,
+    second: str,
+) -> bool:
+    """Whether one name is the initials of the other's words."""
+
+    for short, long in (
+        (first, second),
+        (second, first),
+    ):
+        words = normalise_company(
+            long
+        ).split()
+
+        if len(words) >= 2 and normalise_company(
+            short
+        ).replace(" ", "") == "".join(
+            word[0]
+            for word in words
+        ):
+            return True
+
+    return False
+
+
 def settle_name(
     listed: str,
     declared: str | None,
@@ -180,6 +205,18 @@ def settle_name(
         declared,
     ):
         return listed, None
+
+    # "ASI" is Air Space Intelligence and "BCC" Black Canyon Consulting:
+    # one name is the other's initials, and the longer one says more.
+    if _initials_of(
+        listed,
+        declared,
+    ):
+        return max(
+            listed,
+            declared,
+            key=len,
+        ), None
 
     if _FIRM_NAME.search(
         declared

@@ -367,6 +367,17 @@ def test_a_board_is_registered_under_the_name_it_declares() -> None:
         "Fictional Tower",
     ) == ("Fictional Tower", None)
 
+    # Initials are the same employer; the longer name says more.
+    assert settle_name(
+        "Fictional Space Intelligence",
+        "FSI",
+    ) == ("Fictional Space Intelligence", None)
+
+    assert settle_name(
+        "FSI",
+        "Fictional Space Intelligence",
+    ) == ("Fictional Space Intelligence", None)
+
     # Agreeing names, a domain suffix and silence keep the listed name.
     for declared in ("Fictional AI", "Fictional.ai", "Fictional", None, ""):
         assert settle_name(

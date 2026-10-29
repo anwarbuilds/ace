@@ -876,3 +876,48 @@ which needs the user's mailbox consent -- proposed, not built.
   Cloudflare), Citadel Securities (403), D. E. Shaw (sitemap lists ~78
   roles by slug, page content loads from disallowed `/recruit/`),
   LinkedIn (`User-agent: * Disallow: /`).
+
+## Startup talent networks (2026-10-29)
+
+The owner pointed at a16z's speedrun talent network and said ACE was missing startups with new grad roles across US
+cities. Venture firms and accelerators publish their portfolio companies' open roles, and each role links to the
+company's own board, so a network is a list of boards, read the way feed links already are: an aggregator is a floor,
+never a ceiling. Nothing was stored from a network itself.
+
+- **What could be read**, all within robots.txt and with no refusal in 3,910 requests: speedrun (custom site; its
+  sitemap lists every company and posting, and decoy `/jobs/*-ad00000` postings exist to catch crawlers that ignore
+  robots.txt, so the matcher has to honour wildcards, which `urllib.robotparser` does not); 35 Getro boards (one
+  posting page per company carries the original link in `__NEXT_DATA__`; `api.getro.com` disallows crawlers, so it
+  was not used); a16z's and Initialized's CareerPuck boards; South Park Commons, Greylock and Paradigm pages (first page
+  only); three months of HN "Who is hiring?" through the public item API.
+- **What could not**: 20 Consider boards, including Sequoia, Kleiner Perkins, GV, Lightspeed, Bessemer, Felicis, NEA,
+  First Round and USV, whose job API answers `INVALID_CSRF` without the page's token. That is a refusal, not a puzzle.
+  speedrun's "backed by" collections cover part of those portfolios. Thirteen boards' robots.txt disallow their job
+  pages; Climatebase answers a bot challenge; YC's Work at a Startup shows about 40 roles before a sign-in.
+- **Gaps by reader**: startups whose links go to Rippling (72 distinct), Notion pages, Paylocity, Wellfound, Dover
+  (robots.txt disallows its API), BambooHR, Breezy, JazzHR and Teamtailor. Rippling's board pages are server rendered
+  with twenty postings a page, so it is the next reader worth writing.
+- **Gem** boards were in the links (`jobs.gem.com/<board>`) and ACE has read Gem since Groq, but the detector did not
+  know the host. It does now, with the API host hand-registered Gem boards carry.
+
+Registration (`backend/scripts/register_network_boards.py`, data in `backend/app/discovery/network_boards.json`) reads
+each new board once through the normal adapter and adds it only when it reads, is not an agency's and has at least one
+US software, machine learning or forward deployed role today. Boards left out are not recorded, so a later run adds
+them once they hire. A board with a role passing the gate today is polled every fifteen minutes; the rest hourly
+(`NETWORK_POLL_INTERVAL_SECONDS`), promoted the first time they produce a passing role. `promote_productive_sources`
+no longer lifts a `talent_network` board to fifteen minutes just for being single-request: several hundred at once
+would have added about a third to the scheduler's work, and the legacy scheduler on the same catalog already keeps
+fifteen-minute boards at a median of 11 to 14 minutes old and a 90th percentile near 20. Workday and Oracle boards are
+skipped unless `--include-paged`. Register only after the scheduler runs the release that carries the cadence rule,
+or the old scheduler promotes the hourly boards within half an hour.
+
+Result on 2026-10-29: 79 networks explored, 42 read; 2,181 readable boards, 682 already known, 732 new ones hiring US
+engineers (241 with 395 roles passing v55 now), 580 left out until they hire, 41 agencies, Pear VC's shared portfolio
+board. Twenty-four boards declare another employer than the network listed (acquisitions and renames) and register
+under their own name. Not deployed at the time of writing; see the root knowledge file.
+
+Lessons: Workable answered 429 from this laptop even at four seconds a board, because the legacy scheduler on the same
+address polls 123 Workable boards; the legacy catalog shows Workable boards a median of three hours stale. A
+verification pass that runs the whole gate on every posting of every board is CPU bound; classify the title first and
+run the gate only on software, machine learning and forward deployed titles. `pkill -f` with a pattern that appears in
+the shell's own command line kills that shell; bracket one character (`verify[.]py`).

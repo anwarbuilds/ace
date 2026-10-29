@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-28 Pacific, Inbox parser 12 API/frontend LIVE at 873ee080; approved bounded history complete; extension 1.31.3 preserved; global historical rechecks disabled
+Last updated: 2026-10-29 Pacific, startup talent-network boards and gate v55 (no site reliability or mobile roles) ready for approval on branch startup-sources-20261029, not deployed; production remains Inbox parser 12 at 873ee080
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -13,6 +13,76 @@ not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
+
+
+## Startup talent networks and gate v55, ready for approval, 2026-10-29 Pacific
+
+Not deployed. Branch `startup-sources-20261029` (from canonical `e64c547`), worktree
+`artifacts/startup-sources-worktree`. Production stays as recorded below until the
+owner approves this release.
+
+The owner asked for every startup in networks like a16z's speedrun talent network
+(new grad roles across US cities), listed first, then added without breaking
+anything; and for site reliability and mobile engineer roles to stop appearing.
+
+- **Networks**: 79 explored, 42 read within robots.txt with zero refusals in 3,910
+  requests (speedrun, 35 Getro boards, a16z and Initialized CareerPuck, South Park
+  Commons, Greylock, Paradigm, HN "Who is hiring?" August to October). 20 Consider
+  boards (Sequoia, Kleiner Perkins, GV, Lightspeed, Bessemer, Felicis, NEA, First
+  Round, USV and others) refuse with a CSRF requirement and were not read; 13
+  disallow their job pages; Climatebase challenges; YC Work at a Startup needs a
+  sign-in. `api.getro.com` disallows crawlers and was never called.
+- **Boards**: 2,181 readable employer boards; 682 already in ACE (legacy proxy); **732
+  new boards hiring US software, ML or FDE engineers** (241 with 395 roles passing
+  v55 now; 2,188 US engineering roles); 580 left out until they hire; 41 agencies;
+  Pear VC's shared board; 117 Workday, Workable and Oracle boards left to the server.
+- **List for the owner**: `artifacts/startup-networks-20261029/boards-to-add.md`
+  (private, ignored). Committed data: `backend/app/discovery/network_boards.json`.
+- **Registration**: `backend/scripts/register_network_boards.py`, dry run by default.
+  Reads each new board once through the normal adapter; adds it only when it reads,
+  is not an agency's or a firm's shared portfolio board (Pear VC's Ashby board lists
+  a dozen companies), and has a US software, ML or FDE role today. Registers under
+  the board's own declared name when the network used another (Data.ai is Sensor
+  Tower now). `discovery_source = talent_network`. A board with a role passing today
+  polls every 15 minutes; the rest hourly, promoted on their first passing role
+  (`coverage/cadence.py`). Workday and Oracle boards only with `--include-paged`.
+  Run it only after the scheduler carries this release, or the old scheduler
+  promotes the hourly boards within half an hour.
+- **Gem**: the detector now recognizes `jobs.gem.com/<board>` (API host
+  `api.gem.com`), so feed and network links to Gem boards are read.
+- **Gate v55** (`2026-10-29-v55`, `-v55-sde2`): `SITE_RELIABILITY_ENGINEERING` and
+  `MOBILE_ENGINEERING` families, rejected as `NON_TARGET_ROLE` with a reason. Keeps
+  robotics, wireless, Mobile AL, T-Mobile, Cisco IOS XR, full stack or backend
+  beside mobile, dual software-or-mobile campus titles, ML on Android and bare
+  hardware "Reliability Engineer" where they were. Legacy-corpus measurement: 156 of
+  3,133 active passing roles change (88 SRE, 68 mobile), every title read.
+  `backfill_job_evaluations.py --status PASS --apply` re-evaluates only stored PASS
+  rows. Web needs no change (`familyLabel`).
+- **Validation**: full hermetic backend 2,162 passed (pyenv 3.12.12 with the venv
+  site-packages); dash scan 0; whitespace clean; an end-to-end dry run and apply of
+  the registration script against a throwaway SQLite database with real boards.
+  No browser or production check was possible: the agent permission classifier
+  refused even read-only production queries this session.
+- **Release plan** (needs approval): private `artifacts/startup-networks-20261029/release.sh`
+  takes the approved SHA, makes and checks a fresh backup, tags rollback images,
+  builds and recreates `api` and `scheduler` only (`--no-deps`), verifies gate
+  v55 in both, runs the PASS backfill, then starts the registration in the
+  background with its log beside the backup. No migration; web, PostgreSQL and
+  Caddy untouched. Rollback: previous images; new rows switched off with
+  `UPDATE job_sources SET enabled = false WHERE discovery_source = 'talent_network'`.
+- **Load**: about 1,455 more polls an hour on roughly 9,400 (legacy catalog proxy).
+  The legacy scheduler keeps 15-minute boards at a median of 11 to 14 minutes old,
+  90th percentile near 20; watch the same after release.
+- **Gaps**: no reader for Rippling (72 startups in these links; server-rendered
+  pages, the next reader worth writing), Dover (robots.txt disallows its API),
+  BambooHR, Breezy, JazzHR, Teamtailor, Paylocity, Notion pages, Wellfound, Work at
+  a Startup. Workable answered 429 from this laptop (the legacy scheduler on the
+  same address polls 123 Workable boards); its 40 boards are read on the server.
+- The legacy system keeps gate v54 and its catalog, so the independent comparison
+  will show these boards and the SRE/mobile difference as ACE Next only.
+
+Details: `docs/architecture/2026-10-29-startup-networks.md`,
+`docs/knowledge/03-coverage-and-discovery.md` and `01-gate-and-roles.md`.
 
 
 ## Company-aware Inbox Intelligence LIVE, 2026-10-28 21:22 Pacific

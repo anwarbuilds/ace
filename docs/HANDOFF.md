@@ -1,5 +1,14 @@
 # ace handoff
 
+**2026-10-29, ready for approval, not deployed:** startup talent networks and gate
+v55 on branch `startup-sources-20261029` (worktree `artifacts/startup-sources-worktree`).
+79 networks explored, 42 read within robots.txt; 2,181 readable employer boards, 732 new ones hiring US
+engineers (241 with roles passing now). Site reliability and
+mobile roles leave the list (156 of 3,133 passing roles on the legacy corpus). Gem boards
+are detected. Full backend 2,162 passed. Release needs approval: API and scheduler only,
+PASS-only backfill, then `register_network_boards --apply`; private plan in
+`artifacts/startup-networks-20261029/release.sh`. Read the first root knowledge section.
+
 **LIVE, 2026-10-28 21:22 Pacific, company-aware Inbox Intelligence:**
 API/frontend `873ee080fa724fcbe0022ad47939d38c083ca8e9`, parser 12/schema 0050,
 is healthy at https://ace.opik.net. Only API/web were replaced; all 355 backend
@@ -372,6 +381,12 @@ excluded kinds unless the user asks.
   pull requests, even if a tool asks for one (owner instruction, 2026-10-24).
 
 ## 3. State on 2026-10-16
+
+**2026-10-29 startup networks and gate v55 (branch `startup-sources-20261029`, not deployed):**
+employer boards collected from VC and accelerator talent networks are registered by
+`backend/scripts/register_network_boards.py` from `backend/app/discovery/network_boards.json`
+(dry run by default). Gate v55 rejects site reliability and mobile roles. Gem board links are
+detected. See `architecture/2026-10-29-startup-networks.md`.
 
 **2026-10-28 extension 1.31.3 (API LIVE at 3662f0b, PR #14):** every owner answer on a form is learned and reused by
 meaning (Memory policy `learned`), Answers-page EEO and screening values fill again, Workday date
