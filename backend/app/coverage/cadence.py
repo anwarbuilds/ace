@@ -18,6 +18,10 @@ four requests an hour, and waiting for a first passing role meant that
 first role waited a day. Duolingo's reached the feed a day before ACE
 read it on Duolingo's own board.
 
+Boards registered in bulk from startup talent networks are the exception:
+they start hourly and are promoted only once they produce a passing role,
+so several hundred of them do not add a third to the scheduler's work.
+
 Promotion only: a board is never slowed down here, so a cadence someone
 set by hand -- Starbucks and Arcadis on Eightfold, every six hours -- is
 never undone.
@@ -32,6 +36,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.coverage.companies import (
     MULTI_EMPLOYER_SOURCES,
+    NETWORK_DISCOVERY_SOURCE,
     SINGLE_REQUEST_PROVIDERS,
     productive_interval,
     registration_interval,
@@ -125,6 +130,10 @@ def promote_productive_sources(
         elif (
             record.source_type
             in SINGLE_REQUEST_PROVIDERS
+            # Found in bulk through a talent network: it earns fifteen
+            # minutes by producing a passing role, like a Workday board.
+            and record.discovery_source
+            != NETWORK_DISCOVERY_SOURCE
         ):
             target = registration_interval(
                 record.source_type
