@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from backend.app.api.routers.analytics import analytics_read
 from backend.app.db.models import ApplicationEventRecord as Event, GmailConnectionRecord, GmailMessageRecord as Mail, JobMarkRecord
-from backend.app.inbox.filed_evidence import ACTION_PREFIX, REJECTION_PREFIX
+from backend.app.inbox.filed_evidence import ACTION_PREFIX, REJECTION_PREFIX, UNVERIFIED_NOTE
 from backend.tests.test_analytics_read import NOW, app, db, outcome
 
 
@@ -43,6 +43,7 @@ def test_all_recognized_categories_are_visible_without_changing_confirmed_applic
         'total': 6, 'categories': dict.fromkeys(kinds, 1), 'date_basis': 'email_received',
         'application_status_changed': False, 'start': None, 'end': '2026-10-25',
         'family_excluded_messages': 0, 'company_excluded_messages': 0,
+        'unverified_source_messages': 0,
     }
     for field in ('total_submitted', 'submitted', 'statuses', 'positive', 'assessments', 'interviews',
                   'cohort', 'roles', 'timing', 'median_days', 'timing_sample', 'records', 'rejected_companies'):
@@ -108,4 +109,28 @@ def test_unknown_application_identity_is_excluded_from_company_and_family_attrib
     assert result['total'] == 0 and not any(result['categories'].values())
     assert result['company_excluded_messages'] == (2 if filters.get('company') else 0)
     assert result['family_excluded_messages'] == (2 if filters.get('family') else 0)
+
+
+def test_unverified_source_count_follows_active_visible_evidence_and_selected_receipt_dates(db):
+    filed(db, 1, decision_reason=ACTION_PREFIX + UNVERIFIED_NOTE + 'No role was selected')
+    filed(db, 2, 'rejection', decision_reason=REJECTION_PREFIX + UNVERIFIED_NOTE + 'No role was selected')
+    filed(db, 3, 'interview')
+    filed(db, 4, received=NOW-timedelta(days=100), decision_reason=ACTION_PREFIX + UNVERIFIED_NOTE + 'Older evidence')
+    filed(db, 5, received=NOW+timedelta(days=1), decision_reason=ACTION_PREFIX + UNVERIFIED_NOTE + 'Future evidence')
+    filed(db, 6, decision='review', decision_reason=ACTION_PREFIX + UNVERIFIED_NOTE + 'Unresolved')
+    filed(db, 7, selected_application_key='job:1', decision_reason=ACTION_PREFIX + UNVERIFIED_NOTE + 'Linked')
+    all_time = read(db)['classified_email_evidence']
+    assert all_time['total'] == 4 and all_time['unverified_source_messages'] == 3
+    recent = read(db, days='30')['classified_email_evidence']
+    assert recent['total'] == 3 and recent['unverified_source_messages'] == 2
+    assert recent['categories']['rejection'] == 1 and recent['categories']['interview'] == 1
+    assert not list(db.scalars(select(Event)))
+
+
+@pytest.mark.parametrize('filters', [{'company': 'Silverpine Labs'}, {'family': 'SOFTWARE_ENGINEERING'}])
+def test_unverified_source_metadata_cannot_assign_filtered_application_identity(db, filters):
+    app(db, 1)
+    filed(db, 1, decision_reason=ACTION_PREFIX + UNVERIFIED_NOTE + 'No role was selected')
+    result = read(db, **filters)['classified_email_evidence']
+    assert result['total'] == result['unverified_source_messages'] == 0
 

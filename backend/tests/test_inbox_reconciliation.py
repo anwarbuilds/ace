@@ -180,7 +180,8 @@ def test_rejection_rules_keep_their_protections():
     assert personal.target is personal.matched_target is personal.company is None
     assert 'does not establish employer authority' in personal.reason
     unauthenticated = reconcile(ats_mail("Northwind Robotics", body, authenticated=False), [northwind()])
-    assert unauthenticated.disposition == 'review' and unauthenticated.target is unauthenticated.company is None
+    assert unauthenticated.disposition == 'classified_rejection'
+    assert unauthenticated.target is unauthenticated.matched_target is unauthenticated.company is None
     assert not unauthenticated.sender_verified
     accepted_app = northwind(status="accepted")
     accepted = reconcile(ats_mail("Northwind Robotics", body), [accepted_app])

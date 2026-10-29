@@ -9,7 +9,7 @@ from backend.app.api.routers import inbox
 from backend.app.config import get_settings
 from backend.app.db.models import ApplicationEventRecord as Event, JobMarkRecord
 from backend.app.inbox import historical_cleanup as cleanup
-from backend.app.inbox.filed_evidence import ACTION_PREFIX, REJECTION_PREFIX
+from backend.app.inbox.filed_evidence import ACTION_PREFIX, REJECTION_PREFIX, UNVERIFIED_NOTE
 from backend.app.inbox.queue import decision_expression, projected_decision
 from backend.app.inbox.reconcile import reconcile
 from backend.tests.test_inbox_persistence import (
@@ -96,6 +96,30 @@ def test_authenticated_personal_mail_has_recognized_meaning_but_never_employer_a
     assert row.selected_application_key is None
     assert statuses(session) == ['applied'] * 3 and not job_events(session)
     assert not session.scalars(select(Event).where(Event.kind == 'company_rejection')).all()
+
+
+@pytest.mark.parametrize('kind', ['rejection', 'interview'])
+def test_unverified_sender_meaning_is_filed_explicitly_without_any_application_or_company_authority(database, kind):
+    session, conn = database
+    data = message('unverified-exact-req-' + kind, 'Req ID: SE-101. ' + BODIES[kind])
+    for header in data['payload']['headers']:
+        if header['name'] == 'Authentication-Results':
+            header['value'] = 'mx.google.com; dmarc=fail header.from=careers.silverpine.example'
+    evidence = inbox._message_evidence(data)
+    assert not evidence.sender_authenticated
+    decision = reconcile(evidence, inbox._identities(session))
+    assert not decision.sender_verified
+    assert decision.target is decision.matched_target is decision.company is None
+    expected = 'classified_rejection' if kind == 'rejection' else 'classified_action'
+    assert inbox._ingest(session, conn, data, inbox._identities(session), preview=False) == expected
+    row = row_for(session, data['id'])
+    prefix = REJECTION_PREFIX if kind == 'rejection' else ACTION_PREFIX
+    assert row.decision_reason.startswith(prefix + UNVERIFIED_NOTE)
+    assert row.selected_application_key is None and row.decision == 'update'
+    assert inbox._item(row)['understanding']['source_authentication'] == 'unverified'
+    assert statuses(session) == ['applied'] * 3 and not job_events(session)
+    events = session.scalars(select(Event)).all()
+    assert [(event.kind, event.actor) for event in events] == [('email_classified', 'classifier')]
 
 
 def test_old_interview_is_visible_without_reopening_a_rejected_application(database):

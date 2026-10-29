@@ -274,3 +274,20 @@ test("missing or empty classified evidence does not add a fabricated progress pa
     assert.equal(document.querySelector(".an-classified-email-evidence"),null);
   }
 });
+
+test("unverified source counts describe message meaning without confirming employer outcomes",()=>{
+  for(const count of [1,3]){
+    const d={...base,classified_email_evidence:{...classifiedEvidence,unverified_source_messages:count}};
+    const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"overview",query:{}})));
+    const panel=document.querySelector(".an-classified-email-evidence");
+    const note=panel.querySelector('[role="note"][aria-label="Unverified email sources"]');
+    assert.ok(note);
+    assert.match(note.textContent,new RegExp(`^${count} classified ${count===1?"email has an unverified sender":"emails have unverified senders"}`));
+    assert.match(note.textContent,/message meaning only; no employer or application outcome is verified/);
+    assert.match(panel.textContent,/19 classified emails in this scope/);
+    assert.equal(document.querySelector(".an-metric strong").textContent,"9");
+    assert.equal(panel.querySelector('a[href="/app/applications/inbox?decision=classified_rejection"] b').textContent,"6");
+  }
+  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d:{...base,classified_email_evidence:{...classifiedEvidence,unverified_source_messages:0}},connection:null,tab:"overview",query:{}})));
+  assert.equal(document.querySelector('[aria-label="Unverified email sources"]'),null);
+});

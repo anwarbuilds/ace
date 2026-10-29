@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from backend.app.api.deps import get_session
 from backend.app.api.routers.inbox import _identities, _eligible_stale_query, PENDING
 from backend.app.inbox.queue import decision_expression
-from backend.app.inbox.filed_evidence import DECISIONS as FILED_DECISIONS
+from backend.app.inbox.filed_evidence import ACTION_PREFIX, DECISIONS as FILED_DECISIONS, REJECTION_PREFIX, UNVERIFIED_NOTE
 from backend.app.db.models import ApplicationEventRecord, CompanyPetitionReportRecord, GmailMessageRecord, JobEvaluationRecord, GmailConnectionRecord
 from backend.app.inbox.reconcile import _MARKING_GRACE
 from backend.app.inbox.company_outcomes import COMPANY_REASON, KIND as COMPANY_REJECTION, event_company
@@ -119,6 +119,7 @@ def _classified_email_evidence(session: Session, *, start: date, end: date, zone
         decision_expression().in_(FILED_DECISIONS),
         GmailMessageRecord.selected_application_key.is_(None))
     count = 0
+    unverified = 0
     for message in session.scalars(query):
         stamp = aware(message.received_at)
         day = stamp.astimezone(zone).date()
@@ -127,8 +128,10 @@ def _classified_email_evidence(session: Session, *, start: date, end: date, zone
         count += 1
         if not family and not company:
             categories[message.classification] += 1
+            unverified += int(message.decision_reason.startswith((REJECTION_PREFIX + UNVERIFIED_NOTE, ACTION_PREFIX + UNVERIFIED_NOTE)))
     return {"total": sum(categories.values()), "categories": categories,
             "date_basis": "email_received", "application_status_changed": False,
+            "unverified_source_messages": unverified,
             "start": None if all_dates else start.isoformat(), "end": end.isoformat(),
             "family_excluded_messages": count if family else 0,
             "company_excluded_messages": count if company else 0}

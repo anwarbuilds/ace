@@ -35,7 +35,7 @@ from urllib.parse import urlparse
 
 from backend.app.inbox.postings import compatible_role, contextual_links, posting_identity, primary_link_text, role_claims, subject_role_claim
 from backend.app.inbox.company_outcomes import COMPANY_REASON
-from backend.app.inbox.filed_evidence import ACTION_KINDS, ACTION_PREFIX, DECISIONS as FILED_DECISIONS, REJECTION_PREFIX
+from backend.app.inbox.filed_evidence import ACTION_KINDS, ACTION_PREFIX, DECISIONS as FILED_DECISIONS, REJECTION_PREFIX, UNVERIFIED_NOTE
 
 PARSER_VERSION = "13"
 MAX_CLASSIFIER_BODY = 60000
@@ -997,7 +997,7 @@ def file_recognized(decision: Decision, evidence: EmailEvidence) -> Decision:
     """
     if (decision.disposition not in {"review", "exact_preview", "verified", *FILED_DECISIONS}
             or decision.classification not in {"rejection", *ACTION_KINDS}
-            or not evidence.complete or not evidence.sender_authenticated
+            or not evidence.complete
             or decision.reason == PARTIAL_REASON
             or decision.reason.startswith(("You undid", "You marked", "You chose", "You recorded"))):
         return decision
@@ -1008,14 +1008,17 @@ def file_recognized(decision: Decision, evidence: EmailEvidence) -> Decision:
     disposition = "classified_rejection" if decision.classification == "rejection" else "classified_action"
     prefix = REJECTION_PREFIX if decision.classification == "rejection" else ACTION_PREFIX
     reason = decision.reason
-    if reason == "Sender could not be authenticated":
+    if reason == "Sender could not be authenticated" and evidence.sender_authenticated:
         # Authenticated personal mail does not prove employer authority, but
         # its recognized meaning can be filed without changing an application.
         reason = "The sender does not establish employer authority for an application status change"
     if reason.startswith(prefix):
         reason = reason[len(prefix):]
+    if reason.startswith(UNVERIFIED_NOTE):
+        reason = reason[len(UNVERIFIED_NOTE):]
+    source_note = "" if evidence.sender_authenticated else UNVERIFIED_NOTE
     return replace(decision, target=None, matched_target=None, company=None, disposition=disposition,
-                   reason=(prefix + reason)[:300], sender_verified=True)
+                   reason=(prefix + source_note + reason)[:300], sender_verified=bool(evidence.sender_authenticated))
 
 
 def reconcile(evidence: EmailEvidence, applications: list[ApplicationIdentity], account: str | None = None, *, thread_keys: tuple[str, ...] = ()) -> Decision:

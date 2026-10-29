@@ -21,7 +21,7 @@ export interface AnalyticsData {
   rejection_summary: { applications: number; companies: number; dated: number; latest_at: string | null };
   company_rejections?: {company:string;messages:number;latest_at:string;message_ids:number[]}[];
   company_rejection_summary?: {companies:number;messages:number;latest_at:string|null;date_basis:"email_received";start:string|null;end:string;family_excluded_messages:number};
-  classified_email_evidence?: {total:number;categories:Record<"rejection"|"online_assessment"|"interview"|"offer"|"recruiter_reply"|"action_required",number>;date_basis:"email_received";application_status_changed:false;family_excluded_messages:number;company_excluded_messages:number};
+  classified_email_evidence?: {total:number;categories:Record<"rejection"|"online_assessment"|"interview"|"offer"|"recruiter_reply"|"action_required",number>;date_basis:"email_received";application_status_changed:false;family_excluded_messages:number;company_excluded_messages:number;unverified_source_messages?:number};
   verified_companies: (AnalyticsGroup & { name: string; reports: number })[];
   reports: PetitionReport[]; annual: { period: string; approvals: number; denials: number; rate: number | null }[];
 }

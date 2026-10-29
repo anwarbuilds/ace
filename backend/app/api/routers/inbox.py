@@ -33,7 +33,7 @@ from backend.app.db.models import (
 )
 from backend.app.inbox import display, gmail
 from backend.app.inbox.company_outcomes import COMPANY_REASON, KIND as COMPANY_KIND, display_reason, encode_reason, event_company
-from backend.app.inbox.filed_evidence import ACTION_KINDS, ACTION_PREFIX, DECISIONS as FILED_DECISIONS, REJECTION_PREFIX
+from backend.app.inbox.filed_evidence import ACTION_KINDS, ACTION_PREFIX, DECISIONS as FILED_DECISIONS, REJECTION_PREFIX, UNVERIFIED_NOTE
 from backend.app.inbox.full_history import FullMailboxScan
 from backend.app.inbox.postings import contextual_links, primary_link_text
 from backend.app.inbox.queue import (decision_expression, projected_decision, projected_reason, workflow_expression, workflow_state)
@@ -511,17 +511,22 @@ def _apply(session: Session, conn: GmailConnectionRecord, row: GmailMessageRecor
     import. Every change is in the audit trail with Undo.
     """
     if decision.disposition in FILED_DECISIONS:
-        if (not allow_automation or not evidence.complete or not evidence.sender_authenticated
+        if (not allow_automation or not evidence.complete
                 or decision.target is not None or decision.matched_target is not None or decision.company is not None
                 or read_intent(evidence).classification != decision.classification):
             row.decision = "review"
             row.selected_application_key = None
             row.decision_reason = ("Email is in Spam or Trash; automatic filing is unavailable" if not allow_automation
-                                   else "The email needs a complete, authenticated current reading before automatic filing")
+                                   else "The email needs a complete current reading before automatic filing")
             return
         expected = REJECTION_PREFIX if decision.classification == "rejection" else ACTION_PREFIX if decision.classification in ACTION_KINDS else None
         if expected is None or not decision.reason.startswith(expected):
             raise ValueError("Recognized evidence requires its explicit filing marker")
+        if decision.reason.startswith(expected + UNVERIFIED_NOTE) == bool(evidence.sender_authenticated):
+            row.decision = "review"
+            row.selected_application_key = None
+            row.decision_reason = "The sender authentication changed after the email reading; verify its current source"
+            return
         if (row.decision in {"manual", "deferred", "unrelated"}
                 or row.decision_reason.startswith(("You undid", "You marked", "You chose", "You recorded"))
                 or session.scalar(select(ApplicationEventRecord.id).where(
@@ -1023,6 +1028,8 @@ def understanding(row: GmailMessageRecord) -> dict:
             "classification_state": "uncertain" if row.classification in {"unknown", "unclear", "possible_rejection"} or "part of this email" in reason else "recognized",
             "matching_state": "company" if decision == COMPANY_KIND else "identity_uncertain" if reason == "The authenticated sender does not establish this employer identity" else "linked" if row.selected_application_key else "ambiguous" if len(row.candidate_keys or []) > 1 else "unlinked",
             "workflow_state": state,
+            "source_authentication": ("unverified" if decision in FILED_DECISIONS and reason.startswith((REJECTION_PREFIX + UNVERIFIED_NOTE, ACTION_PREFIX + UNVERIFIED_NOTE))
+                                      else "authenticated" if decision in FILED_DECISIONS or decision == COMPANY_KIND else "not_recorded"),
             "update_policy": "company_recorded" if state == "company_recorded" else "recorded" if state == "recorded" else "no_status_change" if state in {"filed", "routine", "unlinked_outcome", *FILED_DECISIONS} else "confirmation_required",
             "review_reason": reason if decision in PENDING else None,
             "evidence_source": "retained_excerpt", "evidence_excerpt": html.unescape(row.snippet or "")}

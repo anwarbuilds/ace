@@ -518,3 +518,28 @@ test("recognized category totals open separate email views without review or sta
     });
   }finally{router.replace=previous;}
 });
+
+for(const [classification,decision] of [["rejection","classified_rejection"],["interview","classified_action"]]){
+  test(`${classification}: unverified sender meaning stays filed with a visible source note and no automatic outcome`,async()=>{
+    const id=classification==="rejection"?70101:70102;
+    const message={id,sender:"Fictional sender <unverified@fictional.example>",subject:"Fictional hiring message",snippet:"Fictional message meaning.",received_at:"2025-01-10T12:00:00Z",classification,decision,candidate_keys:[],reason:"Clear message meaning; sender authentication is unverified.",selected_application_key:null,understanding:{source_authentication:"unverified",classification_reason:"Clear message meaning.",classification_state:"recognized",matching_state:"unlinked",workflow_state:decision,update_policy:"no_status_change",review_reason:null,evidence_source:"retained_excerpt",evidence_excerpt:"Fictional message meaning."}};
+    const writes=[];
+    read=async()=>({...message,text:"Fictional message meaning.",document:"<p>Fictional message.</p>",blocked_images:0});
+    send=async(...args)=>{writes.push(args);};
+    await mounted(React.createElement(InboxReviewPanel,{message,applications:[],events:[],busy:false,action:async run=>run()}),async(container,window)=>{
+      const note=container.querySelector('[role="note"][aria-label="Unverified sender"]');
+      assert.ok(note,"sender uncertainty must remain visible independently of classification");
+      assert.match(note.textContent,/Unverified sender: this records the email.s meaning; no employer or application outcome is verified/);
+      assert.match(container.textContent,/No review is required/);
+      assert.equal(container.querySelector(".inbox-target"),null);
+      assert.doesNotMatch(container.textContent,/Decision needed:|Why it waits:|Recorded by ACE|Company rejection recorded/);
+      assert.deepEqual(writes,[]);
+      const correction=[...container.querySelectorAll("button")].find(button=>button.textContent==="Link or correct this email");
+      await act(async()=>{correction.dispatchEvent(new window.Event("click",{bubbles:true}));});
+      assert.ok(container.querySelector('[aria-label="Unverified sender"]'),"optional correction cannot hide the source note");
+      const rejection=[...container.querySelectorAll("button")].find(button=>button.querySelector("strong")?.textContent==="Rejection");
+      assert.equal(rejection.disabled,true);
+      assert.deepEqual(writes,[],"classifying or inspecting sender uncertainty never records an application outcome");
+    });
+  });
+}

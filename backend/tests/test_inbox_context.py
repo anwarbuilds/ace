@@ -200,7 +200,9 @@ def test_authenticated_rejection_without_a_historical_application_is_company_evi
     assert result.company == APP.company
     # Company evidence requires actual meaning and employer identity. Missing
     # chronology does not prevent a separately safe exact application match.
-    assert reconcile(replace(ev,sender_authenticated=False), [future]).disposition == 'review'
+    unverified = reconcile(replace(ev,sender_authenticated=False), [future])
+    assert unverified.disposition == 'classified_rejection' and not unverified.sender_verified
+    assert unverified.target is unverified.matched_target is unverified.company is None
     different = reconcile(replace(ev,sender='Other Subsidiary <notice@greenhouse-mail.io>'), [future])
     assert different.disposition == 'classified_rejection'
     assert different.target is different.matched_target is different.company is None

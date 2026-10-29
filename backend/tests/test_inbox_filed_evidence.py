@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from backend.app.db.models import ApplicationEventRecord as Event, GmailMessageRecord as Mail
-from backend.app.inbox.filed_evidence import ACTION_KINDS, ACTION_PREFIX, DECISIONS, LEGACY_ACTION_REASONS, REJECTION_PREFIX
+from backend.app.inbox.filed_evidence import ACTION_KINDS, ACTION_PREFIX, DECISIONS, LEGACY_ACTION_REASONS, REJECTION_PREFIX, UNVERIFIED_NOTE
 from backend.app.inbox.queue import PENDING, decision_expression, projected_decision, workflow_expression, workflow_state
 from backend.app.inbox.reconcile import ApplicationIdentity, Decision, EmailEvidence, file_recognized, read_intent, reconcile
 from backend.tests.test_inbox_persistence import database, message, statuses
@@ -43,10 +43,16 @@ def test_complete_authenticated_meaning_is_filed_without_guessing_an_application
 
 @pytest.mark.parametrize('kind', sorted(BODIES))
 @pytest.mark.parametrize('missing', ['authentication', 'complete_body'])
-def test_partial_or_unauthenticated_meaning_remains_review(kind, missing):
+def test_partial_meaning_requires_review_and_unverified_source_files_with_no_authority(kind, missing):
     result = reconcile(evidence(BODIES[kind], authenticated=missing != 'authentication',
                                 complete=missing != 'complete_body'), [APP])
-    assert result.disposition == 'review' and result.disposition not in DECISIONS
+    if missing == 'complete_body':
+        assert result.disposition == 'review' and result.disposition not in DECISIONS
+    else:
+        assert result.disposition in DECISIONS and not result.sender_verified
+        prefix = REJECTION_PREFIX if kind == 'rejection' else ACTION_PREFIX
+        assert result.reason.startswith(prefix + UNVERIFIED_NOTE)
+        assert result.matched_target is result.company is None
     assert result.target is None
 
 
@@ -77,9 +83,12 @@ def test_file_helper_never_erases_owner_undo_or_a_failed_protection_reason(reaso
     assert file_recognized(saved, evidence(BODIES['interview'])) == saved
 
 
-def test_failed_sender_authentication_is_a_material_review_reason():
+def test_failed_sender_authentication_is_retained_as_unverified_meaning_without_outcome_authority():
     saved = Decision('interview', None, (), None, 'review', 'Sender could not be authenticated', False)
-    assert file_recognized(saved, evidence(BODIES['interview'], authenticated=False)) == saved
+    filed = file_recognized(saved, evidence(BODIES['interview'], authenticated=False))
+    assert filed.disposition == 'classified_action'
+    assert filed.reason.startswith(ACTION_PREFIX + UNVERIFIED_NOTE)
+    assert not filed.sender_verified and filed.target is filed.matched_target is filed.company is None
 
 
 @pytest.mark.parametrize('applications', [[], [APP]])

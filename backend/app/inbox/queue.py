@@ -1,7 +1,7 @@
 """Shared, non-destructive projection of legacy unclassified correspondence.
 
-Freshly authenticated, complete recognized evidence can be filed independently
-of application linkage. Partial reads and protected owner choices retain their
+Fresh complete recognized evidence can be filed independently of application
+linkage, with source verification kept separate from application authority. Partial reads and protected owner choices retain their
 existing states. No age cutoff removes historical evidence.
 """
 from sqlalchemy import and_, case, func, or_

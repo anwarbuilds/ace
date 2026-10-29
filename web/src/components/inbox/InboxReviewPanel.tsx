@@ -7,7 +7,7 @@ import { clean, parseDate, STATUS_LABEL } from "@/lib/format";
 import { getJson, RequestError, sendJson } from "@/lib/client";
 import type { ApplicationStatus } from "@/lib/types";
 
-export interface Understanding {decision_type?:string; classification_reason:string; classification_state:string; matching_state:string; workflow_state:string; update_policy:string; review_reason:string|null; evidence_source:string; evidence_excerpt:string}
+export interface Understanding {decision_type?:string; source_authentication?:string; classification_reason:string; classification_state:string; matching_state:string; workflow_state:string; update_policy:string; review_reason:string|null; evidence_source:string; evidence_excerpt:string}
 export interface InboxMessage {understanding?:Understanding; id:number; received_at:string; sender:string; subject:string; snippet:string; classification:string; requisition_id:string|null; decision:string; candidate_keys:string[]; reason:string; selected_application_key:string|null}
 export interface InboxApplication {key:string; company:string; title:string; requisition_id:string|null; applied_at:string|null; status:string}
 export interface InboxEvent {company?:string|null; scope?:string; id:number; application_key:string; kind:string; before:string|null; after:string|null; actor:string; reason:string; recorded_at:string; undo_of_id:number|null; gmail_message_id:number|null}
@@ -223,6 +223,7 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
     </div>
     <div className="inbox-filed" aria-label="ACE understanding">
       <strong>ACE&rsquo;s classification: {KIND[message.classification]??clean(message.classification)}</strong>
+      {classified&&message.understanding?.source_authentication==="unverified"&&<p role="note" aria-label="Unverified sender">Unverified sender: this records the email&rsquo;s meaning; no employer or application outcome is verified.</p>}
       {message.understanding&&<>
         <p>{clean(message.understanding.classification_reason)}</p>
         {message.understanding.decision_type&&<p>{clean(message.understanding.decision_type)}</p>}
