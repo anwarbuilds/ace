@@ -7,9 +7,9 @@
 
 ## Inbox accuracy correction in progress — 2026-10-29 Pacific
 
-Parser 13 source `e64c54719245b886aa3db4829cfb41f99b928535` is deployed, but the
-owner has disputed the semantic accuracy of acknowledgements, offers and an
-interview after reviewing the live UI. The release is not accepted as accurate.
+Inbox parser 13 remains deployed (frontend `e64c547`; the newer startup-network
+API release preserves that Inbox implementation). The owner disputed the semantic
+accuracy of acknowledgements, offers and an interview after reviewing the live UI. The release is not accepted as accurate.
 Source, health, preservation and arithmetic projection checks do not establish
 semantic accuracy; agreement between a saved label and the same parser's fresh
 reading is not independent validation.

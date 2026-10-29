@@ -112,8 +112,28 @@ def _to_canonical(
 def _stale_filter(
     *,
     rebuild_all: bool,
+    status: str | None = None,
 ):
-    """Return the predicate selecting jobs needing evaluation."""
+    """Return the predicate selecting jobs needing evaluation.
+
+    ``status`` narrows it to jobs whose stored decision is that one.
+    After a rule change that can only reject more, the jobs still shown
+    are the ones whose decision can change, and re-evaluating those
+    first takes minutes where the whole corpus takes hours.
+    """
+
+    if status is not None:
+        narrowed = (
+            JobEvaluationRecord.eligibility_status
+            == status
+        )
+
+        if rebuild_all:
+            return narrowed
+
+        return narrowed & _stale_filter(
+            rebuild_all=False,
+        )
 
     if rebuild_all:
         return None
@@ -138,6 +158,7 @@ def count_pending(
     session: Session,
     *,
     rebuild_all: bool,
+    status: str | None = None,
 ) -> int:
     """Count jobs whose evaluation is missing or stale."""
 
@@ -156,7 +177,8 @@ def count_pending(
     )
 
     predicate = _stale_filter(
-        rebuild_all=rebuild_all
+        rebuild_all=rebuild_all,
+        status=status,
     )
 
     if predicate is not None:
@@ -178,6 +200,7 @@ def load_batch(
     rebuild_all: bool,
     after_id: int,
     batch_size: int,
+    status: str | None = None,
 ) -> list[JobRecord]:
     """Load the next batch of jobs requiring evaluation."""
 
@@ -202,7 +225,8 @@ def load_batch(
     )
 
     predicate = _stale_filter(
-        rebuild_all=rebuild_all
+        rebuild_all=rebuild_all,
+        status=status,
     )
 
     if predicate is not None:
@@ -244,6 +268,19 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Re-evaluate every job, not "
             "only missing or stale ones."
+        ),
+    )
+
+    parser.add_argument(
+        "--status",
+        choices=(
+            "PASS",
+            "REJECT",
+        ),
+        default=None,
+        help=(
+            "Only jobs whose stored "
+            "decision is this one."
         ),
     )
 
@@ -304,6 +341,11 @@ def main(
     print(
         f"Scope:         "
         f"{'all jobs' if args.rebuild_all else 'missing or stale only'}"
+        + (
+            f", stored {args.status} only"
+            if args.status
+            else ""
+        )
     )
 
     with SessionLocal() as session:
@@ -312,6 +354,7 @@ def main(
             rebuild_all=(
                 args.rebuild_all
             ),
+            status=args.status,
         )
 
         total_jobs = int(
@@ -369,6 +412,7 @@ def main(
                 batch_size=(
                     args.batch_size
                 ),
+                status=args.status,
             )
 
             if not records:

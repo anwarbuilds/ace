@@ -63,6 +63,7 @@ def add_source(
     interval: int,
     *,
     enabled: bool = True,
+    discovery_source: str | None = None,
 ) -> None:
     session.add(
         JobSourceRecord(
@@ -71,6 +72,7 @@ def add_source(
             company_name=account,
             enabled=enabled,
             poll_interval_seconds=interval,
+            discovery_source=discovery_source,
         )
     )
 
@@ -265,3 +267,42 @@ def test_a_productive_workday_board_is_polled_every_fifteen_minutes(
     )
 
     assert interval(session, "workday", "chewy/External") == 900
+
+
+def test_a_network_board_earns_fifteen_minutes_by_producing_a_passing_role(
+    session: Session,
+) -> None:
+    """Several hundred startup boards were registered from talent
+    networks on 2026-10-29. Fifteen minutes for all of them would add
+    about a third to the scheduler's work, so a quiet one stays hourly."""
+
+    add_source(
+        session,
+        "ashby",
+        "fictional-quiet",
+        3600,
+        discovery_source="talent_network",
+    )
+    add_job(session, "ashby", "fictional-quiet", "REJECT", "1")
+
+    add_source(
+        session,
+        "ashby",
+        "fictional-hiring",
+        3600,
+        discovery_source="talent_network",
+    )
+    add_job(session, "ashby", "fictional-hiring", "PASS", "2")
+
+    promoted = {
+        promotion.source_account: promotion.new_interval
+        for promotion in promote_productive_sources(
+            session
+        )
+    }
+
+    assert promoted == {
+        "fictional-hiring": 900,
+    }
+
+    assert interval(session, "ashby", "fictional-quiet") == 3600

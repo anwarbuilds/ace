@@ -261,3 +261,32 @@ def test_known_host_without_account_returns_none() -> None:
         )
         is None
     )
+
+def test_detects_gem_board_url_with_the_api_host() -> None:
+    """Gem boards are read from api.gem.com, the host boards registered
+    by hand already carry."""
+
+    for url in (
+        "https://jobs.gem.com/lumalabs-ai/583bb471-29ad-4011-837c-a1029700720c",
+        "https://jobs.gem.com/lumalabs-ai?utm_source=jobs.example.com",
+        "jobs.gem.com/lumalabs-ai",
+    ):
+        assert detect_source_from_url(
+            url
+        ) == DetectedSourceIdentity(
+            source_type=SourceType.GEM,
+            source_account="lumalabs-ai",
+            source_host="api.gem.com",
+        ), url
+
+
+def test_gem_pages_that_are_not_boards_are_not_detected() -> None:
+    for url in (
+        "https://jobs.gem.com/",
+        "https://jobs.gem.com/api/whatever",
+        "https://jobs.gem.com/static/app.js",
+        "https://www.gem.com/careers",
+    ):
+        assert detect_source_from_url(
+            url
+        ) is None, url

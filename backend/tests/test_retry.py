@@ -300,3 +300,26 @@ def test_backoff_grows_and_stays_bounded() -> None:
         0 < wait <= MAX_DELAY_SECONDS
         for wait in waits
     )
+
+
+def test_a_status_left_out_of_retry_statuses_returns_at_once() -> None:
+    """A provider whose 429 is a standing refusal fails the poll at once,
+    so the scheduler's refusal backoff starts instead of a worker
+    sleeping forty seconds."""
+
+    send, calls = responder(
+        [429, 200],
+        headers={"retry-after": "20"},
+    )
+
+    slept: list[float] = []
+
+    response = request_with_retry(
+        send,
+        retry_statuses=RETRYABLE_STATUS_CODES - {429},
+        sleeper=slept.append,
+    )
+
+    assert response.status_code == 429
+    assert len(calls) == 1
+    assert slept == []

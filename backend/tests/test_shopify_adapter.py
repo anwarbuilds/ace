@@ -212,9 +212,10 @@ def test_every_listed_posting_is_read_with_its_places() -> None:
 
 
 def test_a_remote_americas_engineer_passes_the_gate() -> None:
+    # Not the mobile pipeline: mobile roles left the list on 2026-10-29.
     client, _asked = site(
         careers_page(
-            posting("p-1", "Software Engineers, Mobile"),
+            posting("p-1", "Software Engineers, Backend"),
         )
     )
 
@@ -224,7 +225,7 @@ def test_a_remote_americas_engineer_passes_the_gate() -> None:
     )
 
     assert jobs[0].official_url == (
-        "https://www.shopify.com/careers/software-engineers-mobile_p-1"
+        "https://www.shopify.com/careers/software-engineers-backend_p-1"
     )
 
     assert "React Native" in jobs[0].description

@@ -34,6 +34,7 @@ from pydantic import (
 )
 
 from backend.app.intelligence.roles import (
+    EXCLUDED_FAMILIES,
     NEW_GRAD_ONLY_FAMILIES,
     RoleFamily,
     RolePriority,
@@ -76,12 +77,14 @@ PROFILES: dict[str, CandidateProfile] = {
     # be there, three-plus should not". v54 changes no threshold; it
     # reads "SDE" titles as software engineering and stops counting an
     # inline "preferred" figure as the requirement, both recall fixes.
+    # v55 changes no threshold either: site reliability and mobile roles
+    # leave the list, at the owner's request on 2026-10-29.
     "early-career": CandidateProfile(
         key="early-career",
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=3,
-        rule_version="2026-10-14-v54",
+        rule_version="2026-10-29-v55",
     ),
     # New grad roles stay the primary target (they sort first), and SDE
     # II comes in: with three years, a posting asking "3+ years" is one
@@ -92,7 +95,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=4,
-        rule_version="2026-10-14-v54-sde2",
+        rule_version="2026-10-29-v55-sde2",
     ),
 }
 
@@ -2650,6 +2653,25 @@ def evaluate_job(
             (
                 "Role is outside ACE "
                 "target role families."
+            )
+        )
+
+    if role.family in EXCLUDED_FAMILIES:
+        reject_codes.append(
+            EligibilityReasonCode
+            .NON_TARGET_ROLE
+        )
+
+        reject_reasons.append(
+            (
+                "Site reliability engineering "
+                "roles are not on the list."
+            )
+            if role.family
+            == RoleFamily.SITE_RELIABILITY_ENGINEERING
+            else (
+                "Mobile engineering roles "
+                "are not on the list."
             )
         )
 

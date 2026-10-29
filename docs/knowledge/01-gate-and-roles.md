@@ -283,3 +283,31 @@ Two recall fixes found while building the fixtures, shipped in v54 for both prof
 
 After deploying v54, the stale-evaluation refresh re-evaluates the corpus (about 25 jobs a second). Tests:
 `test_candidate_profiles.py` (the full matrix for both profiles), `test_gate_dry_run.py`.
+
+## Site reliability and mobile leave the list (2026-10-29)
+
+The owner was being shown site reliability ("software reliable engineer") and mobile engineer roles and said they do
+not want them. Both had been read as software engineering since 2026-10-08, when 411 titles of the wider trade were
+let in. Gate v55 (`2026-10-29-v55`, and `-v55-sde2`) changes no threshold: `roles.py` gives each its own family,
+`SITE_RELIABILITY_ENGINEERING` and `MOBILE_ENGINEERING`, and the gate rejects both as `NON_TARGET_ROLE` with a reason
+that names the trade. Named families rather than `OTHER`, so a job page says why, as data roles do.
+
+- Site reliability: "site reliability", `SRE`, and "reliability" beside software, systems, production, service,
+  infrastructure, platform, cloud, database, network or DevOps ("Software Engineer, Reliability", "Database
+  Reliability Engineer"). Checked before machine learning, so "Site Reliability Engineer, AI Infrastructure" is read as
+  reliability. A bare "Reliability Engineer" stays `OTHER`: in a factory or a battery lab it tests hardware.
+- Mobile: iOS (not Cisco's IOS XR or XE), Android, React Native, Flutter, SwiftUI, Swift developer, and "mobile" as
+  the app platform. Not Mobile, Alabama, not T-Mobile, not mobile robots or mobile networks. Checked after machine
+  learning, so "Machine Learning Engineer, Android" stays machine learning. A title that also names full stack,
+  backend or web work stays software, as does one offering software engineering as the alternative ("Software
+  Engineer/Mobile Engineer New Grad"). A bare "Mobile Engineer" stays `OTHER`, as before: in facilities it maintains
+  buildings.
+- Measured on the legacy corpus (titles only, read-only): 156 of 3,133 active passing roles change, 88 site
+  reliability and 68 mobile. Every one was read; the robotics, wireless and dual-title cases above came from that read.
+- The web needs no change: `familyLabel` formats any family ("Site reliability engineering", "Mobile engineering").
+
+The change only ever rejects more, so the decisions that can change are the passing ones.
+`backfill_job_evaluations.py --status PASS --apply` re-evaluates only stale rows whose stored decision is PASS:
+minutes, not the hours a whole-corpus pass takes. Run it right after the API and scheduler carry v55; the scheduler
+re-evaluates a job only when its content changes. Tests: `test_roles.py`, `test_eligibility.py`,
+`test_backfill_job_evaluations.py`; Shopify's gate fixture moved from "Software Engineers, Mobile" to a backend title.

@@ -33,6 +33,7 @@ from typing import Any
 import httpx
 
 from backend.app.adapters.retry import (
+    RETRYABLE_STATUS_CODES,
     request_with_retry,
 )
 from backend.app.models.job import CanonicalJob
@@ -363,6 +364,17 @@ def fetch_workable_jobs(
     return jobs
 
 
+# Workable's 429 is a standing refusal of this address, not a blip: it
+# answered 429 to 113 boards for hours on 2026-10-29. Retried twice for up
+# to twenty seconds each, every refused listing held one of the
+# scheduler's six workers for forty seconds, about a sixth of all its
+# time, before the scheduler's own refusal backoff applied anyway. A
+# listing refused now fails at once and the backoff starts at once.
+LISTING_RETRY_STATUSES = RETRYABLE_STATUS_CODES - {
+    429,
+}
+
+
 def _list_all(
     http: httpx.Client,
     *,
@@ -393,7 +405,8 @@ def _list_all(
             lambda body=body: http.post(
                 f"{API}/v3/accounts/{account}/jobs",
                 json=body,
-            )
+            ),
+            retry_statuses=LISTING_RETRY_STATUSES,
         )
 
         response.raise_for_status()

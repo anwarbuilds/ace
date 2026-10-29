@@ -2709,3 +2709,56 @@ def test_export_control_is_read_for_who_carries_the_licence() -> None:
 
             assert blocked == (expected == "reject"), (expected, text[:50])
             assert caveat == (expected == "caveat"), (expected, text[:50])
+
+
+def test_site_reliability_and_mobile_roles_are_not_on_the_list() -> None:
+    """Asked for on 2026-10-29: the owner was being shown site
+    reliability and mobile engineer roles and wants neither, at any
+    level, new grad included."""
+
+    for title, reason in (
+        (
+            "Site Reliability Engineer, New Grad",
+            "Site reliability engineering roles are not on the list.",
+        ),
+        (
+            "Software Reliability Engineer I",
+            "Site reliability engineering roles are not on the list.",
+        ),
+        (
+            "iOS Engineer, New Grad",
+            "Mobile engineering roles are not on the list.",
+        ),
+        (
+            "Software Engineer, Mobile (New Grad)",
+            "Mobile engineering roles are not on the list.",
+        ),
+    ):
+        decision = evaluate_job(
+            make_job(
+                title=title,
+            )
+        )
+
+        assert (
+            decision.status
+            == EligibilityStatus.REJECT
+        ), title
+
+        assert (
+            EligibilityReasonCode.NON_TARGET_ROLE
+            in decision.reason_codes
+        ), title
+
+        assert reason in decision.reasons, title
+
+    for title in (
+        "Software Engineer, New Grad",
+        "Full Stack Engineer (Web and Mobile)",
+        "Machine Learning Engineer, Android",
+    ):
+        assert evaluate_job(
+            make_job(
+                title=title,
+            )
+        ).status == EligibilityStatus.PASS, title

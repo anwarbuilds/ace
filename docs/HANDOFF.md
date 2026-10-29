@@ -2,9 +2,9 @@
 
 ## Inbox accuracy correction in progress — 2026-10-29 Pacific
 
-Parser 13 source `e64c54719245b886aa3db4829cfb41f99b928535` is deployed, but the
-owner has disputed the semantic accuracy of acknowledgements, offers and an
-interview after reviewing the live UI. The release is not accepted as accurate.
+Inbox parser 13 remains deployed (frontend `e64c547`; the newer startup-network
+API release preserves that Inbox implementation). The owner disputed the semantic
+accuracy of acknowledgements, offers and an interview after reviewing the live UI. The release is not accepted as accurate.
 Source, health, preservation and arithmetic projection checks do not establish
 semantic accuracy; agreement between a saved label and the same parser's fresh
 reading is not independent validation.
@@ -15,6 +15,17 @@ audit/Undo, while the active Inbox and email progress metrics use that scope.
 Correction and representative regression work are in progress. No new historical
 rewrite or deployment is implied by this checkpoint. Resume Studio is outside
 scope. The stopped parser-7 runner and global historical rechecks remain off.
+
+
+**LIVE 2026-10-29 16:04 Pacific (API and scheduler at `fc81876`):** startup talent
+networks and gate v55 (from branch `startup-sources-20261029`, PR #17 merged).
+79 networks explored, 42 read within robots.txt; 2,181 readable employer boards, 732 new ones hiring US
+engineers (241 with roles passing now). Site reliability and
+mobile roles leave the list (156 of 3,133 passing roles on the legacy corpus). Gem boards
+are detected. Full backend 2,162 passed. Released with a fresh backup: API and scheduler
+only, PASS-only backfill (zero SRE or mobile among passing roles), then
+`register_network_boards --apply` in the background on the VM. Read the first root
+knowledge section for evidence and rollback.
 
 Status: historical parser-12 checkpoint. The parser-13 accuracy correction above controls.
 
@@ -390,6 +401,12 @@ excluded kinds unless the user asks.
   pull requests, even if a tool asks for one (owner instruction, 2026-10-24).
 
 ## 3. State on 2026-10-16
+
+**2026-10-29 startup networks and gate v55 (LIVE on API and scheduler, `fc81876`):**
+employer boards collected from VC and accelerator talent networks are registered by
+`backend/scripts/register_network_boards.py` from `backend/app/discovery/network_boards.json`
+(dry run by default). Gate v55 rejects site reliability and mobile roles. Gem board links are
+detected. See `architecture/2026-10-29-startup-networks.md`.
 
 **2026-10-28 extension 1.31.3 (API LIVE at 3662f0b, PR #14):** every owner answer on a form is learned and reused by
 meaning (Memory policy `learned`), Answers-page EEO and screening values fill again, Workday date

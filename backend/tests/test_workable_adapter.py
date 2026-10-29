@@ -310,3 +310,47 @@ def test_a_workable_link_names_its_board() -> None:
         detected.source_type.value,
         detected.source_account,
     ) == ("workable", "avalore")
+
+
+def test_a_refused_listing_fails_at_once_without_waiting(
+    store,
+) -> None:
+    """Workable answered 429 to this address for hours; retrying each
+    refused listing held a scheduler worker for forty seconds."""
+
+    requests: list[str] = []
+
+    def handler(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        requests.append(
+            request.url.path
+        )
+
+        return httpx.Response(
+            429,
+            headers={"retry-after": "20"},
+        )
+
+    started = datetime.now(
+        timezone.utc
+    )
+
+    with httpx.Client(
+        transport=httpx.MockTransport(
+            handler
+        )
+    ) as client:
+        with pytest.raises(httpx.HTTPStatusError) as raised:
+            fetch_workable_jobs(
+                source_account="avalore",
+                company_name="Avalore",
+                store=store,
+                client=client,
+            )
+
+    assert raised.value.response.status_code == 429
+    assert len(requests) == 1
+    assert (
+        datetime.now(timezone.utc) - started
+    ).total_seconds() < 5

@@ -567,6 +567,17 @@ SINGLE_REQUEST_PROVIDERS = frozenset(
 )
 
 
+# Boards registered from startup talent networks (2026-10-29), several
+# hundred at once. One already showing a role that passes is polled at
+# its provider's cadence; the rest hourly, and promoted the first time
+# they produce a passing role. Fifteen minutes for all of them would add
+# about a third to the scheduler's work for boards that, so far, post
+# only roles the owner would not apply to.
+NETWORK_DISCOVERY_SOURCE = "talent_network"
+
+NETWORK_POLL_INTERVAL_SECONDS = 3600
+
+
 # How often a board that has produced a passing role is polled. Fifteen
 # minutes everywhere but Eightfold, whose shared edge refused ACE on
 # every tenant after its boards were swept together.
