@@ -81,12 +81,12 @@ async function mounted(element,run){
   }
 }
 const complete={days:0,scope:"job_mail",includes_spam_trash:false,gmail:125,in_ace:125,missing:0,complete:true,checked_at:new Date().toISOString()};
-function fixture({coverage=complete,stale=0,state="ready",fail=false,pending=0,unlinked=0,backgroundSyncEnabled,counts={}}={}){
+function fixture({coverage=complete,stale=0,state="ready",fail=false,pending=0,unlinked=0,backgroundSyncEnabled,counts={},evidenceScope}={}){
   const calls=[];
   const connection={coverage,state,connected:true,available:true,email:"owner-fixture@example.test",last_synced_at:new Date().toISOString(),following_changes:true,auto_rejections:true,background_sync_enabled:backgroundSyncEnabled};
   read=async route=>{
     if(route==="/api/inbox/connection")return {...connection};
-    if(route==="/api/inbox/messages")return {items:[],total:0,has_more:false,view:"recruiting",latest_received_at:null,counts:{stored:125,needs_review:pending,automatic:0,manual:0,reviewed:0,receipts:0,updates:0,unlinked,stale,...counts}};
+    if(route==="/api/inbox/messages")return {items:[],total:0,has_more:false,view:"recruiting",latest_received_at:null,evidence_scope:evidenceScope,counts:{stored:125,needs_review:pending,automatic:0,manual:0,reviewed:0,receipts:0,updates:0,unlinked,stale,...counts}};
     if(route==="/api/inbox/applications"||route==="/api/inbox/events")return {items:[]};
     throw Error(`Unexpected fictional read ${route}`);
   };
@@ -543,3 +543,19 @@ for(const [classification,decision] of [["rejection","classified_rejection"],["i
     });
   });
 }
+
+test("Inbox labels server-scoped email counts separately from full Gmail coverage",async()=>{
+  const evidenceScope={start:"2026-07-01",timezone:"America/Los_Angeles",start_at:"2026-07-01T07:00:00Z",application_cohort_unchanged:true};
+  const {calls}=fixture({evidenceScope,counts:{stored:12,offers:1}});
+  await mounted(React.createElement(InboxIntelligence),async container=>{
+    assert.match(container.querySelector('[aria-label="Email history period"]').textContent,/Since July 1, 2026.*America\/Los_Angeles/);
+    const imported=[...container.querySelectorAll(".inbox-kpi-button")].find(node=>node.textContent.includes("Emails in this period"));
+    assert.equal(imported.querySelector(".kpi-n").textContent,"12");
+    assert.match(imported.textContent,/Since July 1, 2026/);
+    assert.match(container.querySelector(".inbox-status").textContent,/Gmail coverage snapshot, separate from the visible email period/);
+    assert.match(container.querySelector(".inbox-status").textContent,/Gmail has 125 emails/);
+    assert.equal(container.querySelector('option[value="all"]').textContent,"All email in this period");
+    assert.doesNotMatch(imported.textContent,/Everything ACE has read/);
+    assert.deepEqual(calls,[],"displaying the date boundary cannot reclassify or delete history");
+  });
+});

@@ -34,9 +34,11 @@ from backend.app.db.models import (
 from backend.app.inbox import display, gmail
 from backend.app.inbox.company_outcomes import COMPANY_REASON, KIND as COMPANY_KIND, display_reason, encode_reason, event_company
 from backend.app.inbox.filed_evidence import ACTION_KINDS, ACTION_PREFIX, DECISIONS as FILED_DECISIONS, REJECTION_PREFIX, UNVERIFIED_NOTE
+from backend.app.inbox import evidence_scope
 from backend.app.inbox.full_history import FullMailboxScan
 from backend.app.inbox.postings import contextual_links, primary_link_text
-from backend.app.inbox.queue import (decision_expression, projected_decision, projected_reason, workflow_expression, workflow_state)
+from backend.app.inbox.queue import (classification_expression, decision_expression, is_owner_receipt,
+    projected_classification, projected_decision, projected_reason, workflow_expression, workflow_state)
 from backend.app.inbox.reconcile import (
     ApplicationIdentity, Decision, EmailEvidence, MAX_CLASSIFIER_BODY, PARSER_VERSION, RECEIPT_REASON, _MARKING_GRACE, _new_text, conflict, reconcile, reassess, read_intent, file_recognized, CLASSIFICATION_REASONS,
 )
@@ -942,18 +944,20 @@ def _backfill_locked(body: SyncRequest, request: Request, session: Session, conn
 
 
 def _message_query(connection_id: int, decision: str | None = None, q: str | None = None):
-    query = select(GmailMessageRecord).where(GmailMessageRecord.connection_id == connection_id)
+    query = select(GmailMessageRecord).where(GmailMessageRecord.connection_id == connection_id,
+                                            evidence_scope.mail_clause())
     projected = decision_expression()
+    classification = classification_expression()
     if decision == "pending":
         query = query.where(projected.in_(PENDING))
     elif decision == "assessments":
-        query = query.where(GmailMessageRecord.classification.in_(("online_assessment", "assessment_completed", "assessment_cancelled")))
+        query = query.where(classification.in_(("online_assessment", "assessment_completed", "assessment_cancelled")))
     elif decision == "interviews":
-        query = query.where(GmailMessageRecord.classification.in_(("interview", "interview_cancelled")))
+        query = query.where(classification.in_(("interview", "interview_cancelled")))
     elif decision == "offers":
-        query = query.where(GmailMessageRecord.classification == "offer")
+        query = query.where(classification == "offer")
     elif decision == "rejections":
-        query = query.where(GmailMessageRecord.classification == "rejection")
+        query = query.where(classification == "rejection")
     elif decision == "filed":
         query = query.where(workflow_expression().in_(("filed", *FILED_DECISIONS)))
     elif decision in FILED_DECISIONS:
@@ -994,7 +998,7 @@ def _stale_query(connection_id: int):
     Owner filings, deferred choices, Undo and recorded outcomes stay protected.
     """
     return select(GmailMessageRecord).where(
-        GmailMessageRecord.connection_id == connection_id, GmailMessageRecord.parser_version != PARSER_VERSION,
+        GmailMessageRecord.connection_id == connection_id, evidence_scope.mail_clause(), GmailMessageRecord.parser_version != PARSER_VERSION,
         GmailMessageRecord.decision_reason.not_in(("You undid ACE's change for this email", "You undid the change this email made")),
         or_(GmailMessageRecord.decision.in_(("review", "exact_preview")),
             and_(GmailMessageRecord.decision == "receipt", GmailMessageRecord.decision_reason == RECEIPT_REASON),
@@ -1023,9 +1027,13 @@ def understanding(row: GmailMessageRecord) -> dict:
     reason = projected_reason(row) or ""
     decision = projected_decision(row)
     state = workflow_state(row)
+    classification = projected_classification(row)
+    owner_receipt = is_owner_receipt(row)
     return {"decision_type": "Owner decision" if row.decision in {"manual", "unrelated", "deferred"} or reason.startswith(("You undid", "You marked", "You chose", "You recorded")) else "Automatic classification",
-            "classification_reason": CLASSIFICATION_REASONS.get(row.classification, "Saved recruiting correspondence."),
-            "classification_state": "uncertain" if row.classification in {"unknown", "unclear", "possible_rejection"} or "part of this email" in reason else "recognized",
+            "classification_reason": ("You marked this email as an application receipt; its earlier classifier reading is retained for audit."
+                                      if owner_receipt else CLASSIFICATION_REASONS.get(classification, "Saved recruiting correspondence.")),
+            "classification_source": "owner_decision" if owner_receipt else "classifier",
+            "classification_state": "uncertain" if classification in {"unknown", "unclear", "possible_rejection"} or "part of this email" in reason else "recognized",
             "matching_state": "company" if decision == COMPANY_KIND else "identity_uncertain" if reason == "The authenticated sender does not establish this employer identity" else "linked" if row.selected_application_key else "ambiguous" if len(row.candidate_keys or []) > 1 else "unlinked",
             "workflow_state": state,
             "source_authentication": ("unverified" if decision in FILED_DECISIONS and reason.startswith((REJECTION_PREFIX + UNVERIFIED_NOTE, ACTION_PREFIX + UNVERIFIED_NOTE))
@@ -1037,7 +1045,8 @@ def understanding(row: GmailMessageRecord) -> dict:
 
 def _item(r: GmailMessageRecord) -> dict:
     return {"id": r.id, "received_at": r.received_at.isoformat(), "sender": r.sender, "subject": r.subject,
-            "snippet": html.unescape(r.snippet), "classification": r.classification, "requisition_id": r.requisition_id,
+            "snippet": html.unescape(r.snippet), "classification": projected_classification(r), "saved_classification": r.classification,
+            "requisition_id": r.requisition_id,
             "decision": projected_decision(r), "candidate_keys": r.candidate_keys or [], "reason": projected_reason(r),
             "selected_application_key": r.selected_application_key,
             "understanding": understanding(r)}
@@ -1050,21 +1059,25 @@ def messages(request: Request, session: Session = Depends(get_session), decision
     """One page of imported email. ``decision=auto`` shows what waits for the
     owner when anything does, else the recent recruiting email."""
     conn = _connection(session, current_owner(request))
-    counts = {"stored": 0, "needs_review": 0, "automatic": 0, "manual": 0, "reviewed": 0, "receipts": 0, "updates": 0, "unlinked": 0, "company_rejections": 0, "classified_rejections": 0, "classified_actions": 0, "assessments": 0, "interviews": 0, "offers": 0, "rejections": 0, "stale": 0}
+    counts = {"stored": 0, "stored_all_dates": 0, "needs_review": 0, "automatic": 0, "manual": 0, "reviewed": 0, "receipts": 0, "updates": 0, "unlinked": 0, "company_rejections": 0, "classified_rejections": 0, "classified_actions": 0, "assessments": 0, "interviews": 0, "offers": 0, "rejections": 0, "stale": 0}
     if not conn:
         return {"items": [], "review_count": 0, "total": 0, "offset": offset, "has_more": False,
-                "view": ("pending" if decision == "auto" else decision) or "all", "latest_received_at": None, "counts": counts}
+                "view": ("pending" if decision == "auto" else decision) or "all", "latest_received_at": None, "counts": counts,
+                "evidence_scope": evidence_scope.metadata()}
     projected = decision_expression()
     by_decision = dict(session.execute(select(projected, func.count()).where(
-        GmailMessageRecord.connection_id == conn.id).group_by(projected)).all())
+        GmailMessageRecord.connection_id == conn.id, evidence_scope.mail_clause()).group_by(projected)).all())
     review_count = sum(by_decision.get(key, 0) for key in PENDING)
     if decision == "auto":
         decision = "pending" if review_count else "recruiting"
     stale = session.scalar(select(func.count()).select_from(_eligible_stale_query(conn).subquery())) or 0
-    latest = session.scalar(select(func.max(GmailMessageRecord.received_at)).where(GmailMessageRecord.connection_id == conn.id))
+    latest = session.scalar(select(func.max(GmailMessageRecord.received_at)).where(GmailMessageRecord.connection_id == conn.id,
+                                                                                evidence_scope.mail_clause()))
     total = session.scalar(select(func.count()).select_from(_message_query(conn.id, decision, q).subquery())) or 0
     rows = _message_rows(session, conn.id, decision, offset, limit, q)
-    counts.update({"stored": sum(by_decision.values()), "needs_review": review_count,
+    counts.update({"stored": sum(by_decision.values()),
+                   "stored_all_dates": session.scalar(select(func.count()).select_from(GmailMessageRecord).where(GmailMessageRecord.connection_id == conn.id)) or 0,
+                   "needs_review": review_count,
                    "automatic": by_decision.get("automatic", 0) + by_decision.get(COMPANY_KIND, 0), "manual": by_decision.get("manual", 0),
                    "reviewed": sum(by_decision.get(key, 0) for key in ("manual", "automatic", "unrelated", COMPANY_KIND)),
                    "receipts": by_decision.get("receipt", 0), "updates": by_decision.get("update", 0),
@@ -1075,7 +1088,8 @@ def messages(request: Request, session: Session = Depends(get_session), decision
         counts[name] = session.scalar(select(func.count()).select_from(_message_query(conn.id, name).subquery())) or 0
     return {"items": [_item(r) for r in rows], "review_count": review_count, "total": total, "offset": offset,
             "has_more": offset + len(rows) < total, "view": decision or "all",
-            "latest_received_at": latest.isoformat() if latest else None, "counts": counts}
+            "latest_received_at": latest.isoformat() if latest else None, "counts": counts,
+            "evidence_scope": evidence_scope.metadata()}
 
 
 def _owned(session: Session, request: Request, message_id: int) -> tuple[GmailConnectionRecord, GmailMessageRecord]:

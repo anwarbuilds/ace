@@ -20,6 +20,7 @@ from backend.app.config import get_settings
 from backend.app.db.models import ApplicationEventRecord, GmailMessageRecord, JobMarkRecord, ExternalApplicationRecord
 from backend.app.inbox.reconcile import PARSER_VERSION
 from backend.app.inbox.queue import projected_decision
+from backend.app.inbox import evidence_scope
 from backend.app.inbox.filed_evidence import DECISIONS as FILED_DECISIONS
 
 
@@ -27,6 +28,7 @@ def audit(db: Session, *, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     identities = {a.key: a for a in _identities(db)}
     messages = list(db.scalars(select(GmailMessageRecord)))
+    scoped_messages = [message for message in messages if evidence_scope.includes(message.received_at)]
     ledger = list(db.scalars(select(ApplicationEventRecord)))
     undone = {e.undo_of_id for e in ledger if e.undo_of_id}
     active = [e for e in ledger if e.id not in undone and e.kind != "undo"
@@ -38,7 +40,9 @@ def audit(db: Session, *, now: datetime | None = None) -> dict:
     marked = db.scalar(select(func.count()).select_from(JobMarkRecord).where(JobMarkRecord.applied_at.is_not(None))) or 0
     external = db.scalar(select(func.count()).select_from(ExternalApplicationRecord)) or 0
     output = {"observed_at": now.isoformat(), "parser": PARSER_VERSION, "identities": len(identities),
-              "persisted_applied_marks": marked, "persisted_external_applications": external}
+              "persisted_applied_marks": marked, "persisted_external_applications": external,
+              "evidence_scope": evidence_scope.metadata(), "stored_mail_all_dates": len(messages),
+              "stored_mail_in_scope": len(scoped_messages)}
     possible_duplicates: dict[tuple, set[str]] = defaultdict(set)
     for app in identities.values():
         if app.submitted_at:
@@ -106,19 +110,19 @@ def audit(db: Session, *, now: datetime | None = None) -> dict:
                 reconciliation["only_undated_status_fallback_no_email_link"] += 1
     output["recorded_messages"] = len(recorded)
     output["recorded_message_reconciliation"] = dict(reconciliation)
-    output["review_queue"] = {"inbox_pending": sum(projected_decision(m) in PENDING for m in messages),
+    output["review_queue"] = {"inbox_pending": sum(projected_decision(m) in PENDING for m in scoped_messages),
                               "analytics_pending": sum(d["review"].get(key, 0) for key in ("needs_review", "exact_preview", "deferred")),
-                              "deferred": sum(m.decision == "deferred" for m in messages)}
+                              "deferred": sum(m.decision == "deferred" for m in scoped_messages)}
     output["orphan_active_outcome_events"] = sum(
         e.application_key.startswith(("job:", "external:")) and e.application_key not in identities
         and e.kind in POSITIVE | {"rejection", "manual_correction"} for e in active)
     output["company_evidence"] = {
-        "inbox_messages": sum(projected_decision(m) == "company_rejection" for m in messages),
+        "inbox_messages": sum(projected_decision(m) == "company_rejection" for m in scoped_messages),
         "analytics_messages": d.get("company_rejection_summary", {}).get("messages", 0),
     }
     output["company_evidence"]["agrees"] = output["company_evidence"]["inbox_messages"] == output["company_evidence"]["analytics_messages"]
     output["classified_email_evidence"] = {
-        "inbox_messages": sum(projected_decision(m) in FILED_DECISIONS and aware(m.received_at) <= now for m in messages),
+        "inbox_messages": sum(projected_decision(m) in FILED_DECISIONS and aware(m.received_at) <= now for m in scoped_messages),
         "analytics_messages": d.get("classified_email_evidence", {}).get("total", 0),
     }
     output["classified_email_evidence"]["agrees"] = output["classified_email_evidence"]["inbox_messages"] == output["classified_email_evidence"]["analytics_messages"]

@@ -41,7 +41,7 @@ def test_all_recognized_categories_are_visible_without_changing_confirmed_applic
     result = read(db, records=True)
     assert result['classified_email_evidence'] == {
         'total': 6, 'categories': dict.fromkeys(kinds, 1), 'date_basis': 'email_received',
-        'application_status_changed': False, 'start': None, 'end': '2026-10-25',
+        'application_status_changed': False, 'start': '2026-07-01', 'end': '2026-10-25',
         'family_excluded_messages': 0, 'company_excluded_messages': 0,
         'unverified_source_messages': 0,
     }
@@ -71,7 +71,8 @@ def test_recognized_history_is_independent_of_later_rejection_and_preserves_conf
 
 def test_all_time_includes_email_before_first_application_but_finite_range_uses_receipt_date(db):
     app(db, 1, age=1)
-    filed(db, 1, received=NOW-timedelta(days=300))
+    filed(db, 1, received=NOW-timedelta(days=60))
+    filed(db, 2, received=NOW-timedelta(days=300))  # Retained storage outside this search.
     assert read(db)['classified_email_evidence']['total'] == 1
     assert read(db, days='30')['classified_email_evidence']['total'] == 0
 

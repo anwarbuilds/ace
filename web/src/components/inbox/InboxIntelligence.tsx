@@ -12,12 +12,13 @@ import { useApp } from "@/components/shell/AppProvider";
 import { getJson, RequestError, sendJson } from "@/lib/client";
 import { clean, parseDate } from "@/lib/format";
 import { coverageText, verifyInbox, type InboxCoverage } from "@/lib/inboxSync";
+import { inboxHistoryLabel, type InboxEvidenceScope } from "@/lib/inboxScope";
 import { InboxReviewPanel, KIND, PENDING, senderParts, since, STATE, type InboxEvent as Event, type InboxMessage as Message, type InboxApplication as Application } from "./InboxReviewPanel";
 
 type Tab = "emails" | "register" | "audit" | "rules";
 interface Connection {coverage: InboxCoverage | null; available: boolean; connected: boolean; state: string; email: string | null; last_synced_at: string | null; following_changes: boolean; background_sync_enabled?: boolean; last_error: string | null; auto_outcomes_enabled: boolean; automation_available: boolean; auto_rejections: boolean}
 interface Counts {stored: number; needs_review: number; automatic: number; manual: number; reviewed: number; receipts: number; updates: number; unlinked?: number; company_rejections?: number; classified_rejections?:number; classified_actions?:number; assessments?:number; interviews?:number; offers?:number; rejections?:number; stale: number}
-interface Page {items: Message[]; total: number; has_more: boolean; counts: Counts; view: string; latest_received_at: string | null}
+interface Page {items: Message[]; total: number; has_more: boolean; counts: Counts; view: string; latest_received_at: string | null; evidence_scope?:InboxEvidenceScope}
 interface Sync {running: boolean; note: string; error: string; progress: string}
 
 const PAGE = 50;
@@ -203,7 +204,7 @@ export function InboxIntelligence() {
     buttons = <button className="btn primary" onClick={() => window.location.assign("/api/inbox/google/start")}>Reconnect Gmail</button>;
   } else if (connection) {
     const checked = connection.last_synced_at ? `Gmail checked ${checkedAgo || "recently"} (${stamp(connection.last_synced_at)}).` : "Gmail has not been checked for new email yet.";
-    const coverage = coverageText(connection.coverage);
+    const coverage = `${page.evidence_scope?"Gmail coverage snapshot, separate from the visible email period: ":""}${coverageText(connection.coverage)}`;
     const newest = page.latest_received_at ? ` Newest email in ACE arrived ${stamp(page.latest_received_at)}.` : "";
     if (sync.running) { tone = "busy"; headline = sync.progress || "Checking Gmail for new email"; detail = checked; }
     else if (sync.error) { tone = "warn"; headline = "Gmail could not be checked"; detail = `${sync.error} ${checked}`; }
@@ -215,6 +216,7 @@ export function InboxIntelligence() {
 
   return <div className="pg inbox-page">
     <div className="page-hero"><div><div className="eyebrow">Application intelligence</div><h1 className="h1">Inbox Intelligence</h1><p className="subtitle">ACE identifies and files application email automatically. Assessments, interviews and offers have their own views. Only uncertain readings or decisions you held stay in clarification.</p></div></div>
+    {page.evidence_scope&&<p className="inbox-status-note" aria-label="Email history period"><strong>Email history: {inboxHistoryLabel(page.evidence_scope)}</strong> · {page.evidence_scope.timezone}. Email categories and counts use this received-date period. Application records and audit history are preserved.</p>}
     <section className={`inbox-status s-${tone}`} aria-live="polite" aria-busy={sync.running}>
       <span className="inbox-status-icon" aria-hidden="true">{tone === "ok" ? <svg viewBox="0 0 24 24"><path d="m5 12.5 4.2 4.2L19 7"/></svg> : <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>}</span>
       <div className="inbox-status-text">
@@ -230,7 +232,7 @@ export function InboxIntelligence() {
       <button className="kpi inbox-kpi-button" onClick={() => changeView("pending")}><span className="kpi-l">Needs clarification</span><span className="kpi-n">{counts.needs_review}</span><span className="kpi-f">Uncertain readings or your held decisions</span></button>
       <button className="kpi inbox-kpi-button" onClick={() => changeView("automatic")}><span className="kpi-l">Recorded automatically</span><span className="kpi-n">{counts.automatic}</span><span className="kpi-f">Clear outcomes, each with Undo</span></button>
       <button className="kpi inbox-kpi-button" onClick={() => changeView("receipt")}><span className="kpi-l">Acknowledgements</span><span className="kpi-n">{counts.receipts}</span><span className="kpi-f">Application received, nothing to do</span></button>
-      <button className="kpi inbox-kpi-button" onClick={() => changeView("all")}><span className="kpi-l">Emails imported</span><span className="kpi-n">{counts.stored}</span><span className="kpi-f">Everything ACE has read</span></button>
+      <button className="kpi inbox-kpi-button" onClick={() => changeView("all")}><span className="kpi-l">{page.evidence_scope?"Emails in this period":"Emails imported"}</span><span className="kpi-n">{counts.stored}</span><span className="kpi-f">{page.evidence_scope?inboxHistoryLabel(page.evidence_scope):"Everything ACE has read"}</span></button>
     </div>
     {Boolean((counts.classified_rejections??0)+(counts.classified_actions??0))&&<p className="inbox-status-note">Classified and filed automatically: <button className="link-btn" onClick={()=>changeView("classified_rejection")}>{plural(counts.classified_rejections??0,"rejection email")}</button> · <button className="link-btn" onClick={()=>changeView("classified_action")}>{plural(counts.classified_actions??0,"action email")}</button>. Application linkage is optional; no application status changed.</p>}
     {[counts.assessments,counts.interviews,counts.offers,counts.rejections].some(value=>value!==undefined)&&<nav className="btns inbox-status-note" aria-label="Recognized email categories">{([["assessments","Assessments and tests",counts.assessments??0],["interviews","Interviews and screens",counts.interviews??0],["offers","Offers",counts.offers??0],["rejections","Rejection emails",counts.rejections??0]] as const).map(([filter,label,count])=><button className="btn btn-sm" key={filter} onClick={()=>changeView(filter)}>{label} ({count.toLocaleString("en-US")})</button>)}</nav>}
@@ -240,7 +242,7 @@ export function InboxIntelligence() {
     {tab === "emails" && <>
       {["review","exact_preview","ambiguous"].includes(view) && <p className="inbox-muted">Analytics evidence filter: {viewLabel}. <Link href="/app/applications/inbox">Show clarification and held decisions</Link></p>}
       <div className="inbox-queue-tools">
-        <label>Email view<select value={view} disabled={busy} onChange={event => changeView(event.target.value)}>{VIEWS.map(([key, label]) => <option key={key} value={key}>{label}{key === "pending" ? ` (${counts.needs_review.toLocaleString("en-US")})` : ""}</option>)}</select></label>
+        <label>Email view<select value={view} disabled={busy} onChange={event => changeView(event.target.value)}>{VIEWS.map(([key, label]) => <option key={key} value={key}>{key==="all"&&page.evidence_scope?"All email in this period":label}{key === "pending" ? ` (${counts.needs_review.toLocaleString("en-US")})` : ""}</option>)}</select></label>
         <form className="inbox-search" role="search" onSubmit={event => { event.preventDefault(); go({q: query.trim() || null, offset: null, message: null}); }}>
           <label>Search email<input type="search" autoComplete="off" value={query} placeholder="Sender, company or subject" onChange={event => setQuery(event.target.value)}/></label>
           <button className="btn" type="submit" disabled={busy}>Search</button>
@@ -259,9 +261,9 @@ export function InboxIntelligence() {
               <span className="inbox-mail-subject">{clean(m.subject) || "No subject"}</span>
               <span className="inbox-mail-tags"><span className={`inbox-kind k-${m.classification}`}>{KIND[m.classification] ?? clean(m.classification)}</span><span className={`inbox-state d-${m.decision}`}>{STATE[m.decision] ?? clean(m.decision)}</span>{app && <small><CompanyIdentity name={app.company}/>, {clean(app.title)}</small>}</span>
             </button>;
-          }) : loadedOnce && <div className="inbox-empty">{searched ? <p>No email in this view matches that search. <button className="link-btn" onClick={() => go({decision: "all", offset: null})}>Search all imported email</button></p> : view === "pending" ? <p>No email needs clarification. <button className="link-btn" onClick={() => changeView("recruiting")}>See recent recruiting email</button></p> : <p>No email in this view.</p>}</div>}
+          }) : loadedOnce && <div className="inbox-empty">{searched ? <p>No email in this view matches that search. <button className="link-btn" onClick={() => go({decision: "all", offset: null})}>{page.evidence_scope?"Search all email in this period":"Search all imported email"}</button></p> : view === "pending" ? <p>No email needs clarification. <button className="link-btn" onClick={() => changeView("recruiting")}>See recent recruiting email</button></p> : <p>No email in this view.</p>}</div>}
         </section>
-        <div ref={inspector} className="inbox-inspector-wrap"><InboxReviewPanel key={active?.id ?? "empty"} message={active} applications={applications} events={events} busy={busy} action={action} account={connection?.email} now={now}/></div>
+        <div ref={inspector} className="inbox-inspector-wrap"><InboxReviewPanel key={active?.id ?? "empty"} message={active} applications={applications} events={events} busy={busy} action={action} account={connection?.email} now={now} evidenceScope={page.evidence_scope}/></div>
       </div>
       {connection?.connected && <details className="inbox-import">
         <summary>Verify mailbox history</summary>

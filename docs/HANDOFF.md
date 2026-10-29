@@ -1,5 +1,23 @@
 # ace handoff
 
+## Inbox accuracy correction in progress — 2026-10-29 Pacific
+
+Parser 13 source `e64c54719245b886aa3db4829cfb41f99b928535` is deployed, but the
+owner has disputed the semantic accuracy of acknowledgements, offers and an
+interview after reviewing the live UI. The release is not accepted as accurate.
+Source, health, preservation and arithmetic projection checks do not establish
+semantic accuracy; agreement between a saved label and the same parser's fresh
+reading is not independent validation.
+
+The confirmed active email scope is July 1, 2026 onward, using the owner's
+America/Los_Angeles calendar. Older Gmail evidence must remain preserved for
+audit/Undo, while the active Inbox and email progress metrics use that scope.
+Correction and representative regression work are in progress. No new historical
+rewrite or deployment is implied by this checkpoint. Resume Studio is outside
+scope. The stopped parser-7 runner and global historical rechecks remain off.
+
+Status: historical parser-12 checkpoint. The parser-13 accuracy correction above controls.
+
 **LIVE, 2026-10-28 21:22 Pacific, company-aware Inbox Intelligence:**
 API/frontend `873ee080fa724fcbe0022ad47939d38c083ca8e9`, parser 12/schema 0050,
 is healthy at https://ace.opik.net. Only API/web were replaced; all 355 backend

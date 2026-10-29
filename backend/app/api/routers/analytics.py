@@ -22,7 +22,8 @@ from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
 from backend.app.api.routers.inbox import _identities, _eligible_stale_query, PENDING
-from backend.app.inbox.queue import decision_expression
+from backend.app.inbox.queue import decision_expression, projected_classification
+from backend.app.inbox import evidence_scope
 from backend.app.inbox.filed_evidence import ACTION_PREFIX, DECISIONS as FILED_DECISIONS, REJECTION_PREFIX, UNVERIFIED_NOTE
 from backend.app.db.models import ApplicationEventRecord, CompanyPetitionReportRecord, GmailMessageRecord, JobEvaluationRecord, GmailConnectionRecord
 from backend.app.inbox.reconcile import _MARKING_GRACE
@@ -58,7 +59,7 @@ def _company_rejection_evidence(session: Session, *, start: date, end: date, zon
         ApplicationEventRecord.undo_of_id.in_(ids)))) if ids else set()
     message_ids = {event.gmail_message_id for event in ledger if event.gmail_message_id}
     messages = {message.id: message for message in session.scalars(select(GmailMessageRecord).where(
-        GmailMessageRecord.id.in_(message_ids)))} if message_ids else {}
+        GmailMessageRecord.id.in_(message_ids), evidence_scope.mail_clause()))} if message_ids else {}
     by_message: dict[int, dict[str, str]] = defaultdict(dict)
     for event in ledger:
         employer = event_company(event)
@@ -101,7 +102,7 @@ def _company_rejection_evidence(session: Session, *, start: date, end: date, zon
         rows = []
     summary = {"companies": len(rows), "messages": sum(row["messages"] for row in rows),
                "latest_at": rows[0]["latest_at"] if rows else None, "date_basis": "email_received",
-               "start": None if all_dates else start.isoformat(), "end": end.isoformat(),
+               "start": evidence_scope.effective_calendar_start(start, zone, all_dates=all_dates).isoformat(), "end": end.isoformat(),
                "family_excluded_messages": excluded_family}
     return rows, summary
 
@@ -117,6 +118,7 @@ def _classified_email_evidence(session: Session, *, start: date, end: date, zone
     categories = {kind: 0 for kind in ("rejection", "online_assessment", "interview", "offer", "recruiter_reply", "action_required")}
     query = select(GmailMessageRecord).where(
         decision_expression().in_(FILED_DECISIONS),
+        evidence_scope.mail_clause(),
         GmailMessageRecord.selected_application_key.is_(None))
     count = 0
     unverified = 0
@@ -132,7 +134,7 @@ def _classified_email_evidence(session: Session, *, start: date, end: date, zone
     return {"total": sum(categories.values()), "categories": categories,
             "date_basis": "email_received", "application_status_changed": False,
             "unverified_source_messages": unverified,
-            "start": None if all_dates else start.isoformat(), "end": end.isoformat(),
+            "start": evidence_scope.effective_calendar_start(start, zone, all_dates=all_dates).isoformat(), "end": end.isoformat(),
             "family_excluded_messages": count if family else 0,
             "company_excluded_messages": count if company else 0}
 
@@ -352,11 +354,11 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
             lags.append(lag)
             timing["0 to 7 days" if lag <= 7 else "8 to 14 days" if lag <= 14 else "15 to 30 days" if lag <= 30 else "30+ days"] += 1
     queue_decision = decision_expression()
-    review_counts = dict(session.execute(select(queue_decision, func.count()).group_by(queue_decision)).all())
+    review_counts = dict(session.execute(select(queue_decision, func.count()).where(evidence_scope.mail_clause()).group_by(queue_decision)).all())
     stale = sum(session.scalar(select(func.count()).select_from(_eligible_stale_query(connection).subquery())) or 0
                 for connection in session.scalars(select(GmailConnectionRecord)))
     ambiguous = sum(len(candidate_keys or []) > 1 for candidate_keys in session.scalars(
-        select(GmailMessageRecord.candidate_keys).where(queue_decision == "review")))
+        select(GmailMessageRecord.candidate_keys).where(queue_decision == "review", evidence_scope.mail_clause())))
     reports = session.scalars(select(CompanyPetitionReportRecord).where(CompanyPetitionReportRecord.ace_company.in_(employers), CompanyPetitionReportRecord.entity_verified.is_(True))).all() if employers else []
     # Exact entity + metric + year reconciliation; newer revisions replace old
     # releases instead of adding duplicate totals. DOL stays a separate metric.
@@ -391,6 +393,7 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
     for period in incomplete_years:
         annual.pop(period, None)
     result = {"as_of": now.isoformat(), "timezone": tz, "start": start.isoformat(), "end": end.isoformat(), "days": "custom" if explicit_dates else days, "family": family,
+            "evidence_scope": evidence_scope.metadata(),
             "available_families": sorted(set(role.values())), "total_submitted": len(identities), "submitted": len(selected), "undated": sum(a.key not in dated for a in eligible_family),
             "week_total": sum(weekly.values()), "positive": len(positive), "assessments": len(assessed), "interviews": len(interviewed),
             "has_outcome_evidence": bool(positive or rejected), "statuses": dict(Counter(a.current_status for a in selected)),
@@ -470,7 +473,7 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
         if words and not matching:
             other = [a for a in identities if found(a)]
             other.sort(key=lambda a: (aware(a.submitted_at) if a.submitted_at else datetime.min.replace(tzinfo=timezone.utc), a.key), reverse=True)
-            mail_query = select(GmailMessageRecord)
+            mail_query = select(GmailMessageRecord).where(evidence_scope.mail_clause())
             for word in words:
                 pattern = "%" + re.sub(r"([\\%_])", r"\\\1", word) + "%"
                 mail_query = mail_query.where(or_(*(column.ilike(pattern, escape="\\") for column in
@@ -483,7 +486,8 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
                                   "outside_range": (not include_undated if a.key not in dated else not start <= dated[a.key] <= end),
                                   "href": f"/app/jobs/{a.key.split(':')[1]}" if a.key.startswith("job:") else "/app/applications"}
                                  for a in other[:25]],
-                "emails": [{"id": m.id, "subject": m.subject, "decision": m.decision, "classification": m.classification,
+                "emails": [{"id": m.id, "subject": m.subject, "decision": m.decision, "classification": projected_classification(m),
+                            "saved_classification": m.classification,
                             "received_at": aware(m.received_at).isoformat()} for m in related_mail],
                 "application_total": len(other), "email_total": email_total,
             }

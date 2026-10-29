@@ -5,6 +5,22 @@
 > Read this when: you change the old single-file UI or build its Next.js replacement; it records what each screen is for and what went wrong.
 
 
+## Inbox accuracy correction in progress — 2026-10-29 Pacific
+
+Parser 13 source `e64c54719245b886aa3db4829cfb41f99b928535` is deployed, but the
+owner has disputed the semantic accuracy of acknowledgements, offers and an
+interview after reviewing the live UI. The release is not accepted as accurate.
+Source, health, preservation and arithmetic projection checks do not establish
+semantic accuracy; agreement between a saved label and the same parser's fresh
+reading is not independent validation.
+
+The confirmed active email scope is July 1, 2026 onward, using the owner's
+America/Los_Angeles calendar. Older Gmail evidence must remain preserved for
+audit/Undo, while the active Inbox and email progress metrics use that scope.
+Correction and representative regression work are in progress. No new historical
+rewrite or deployment is implied by this checkpoint. Resume Studio is outside
+scope. The stopped parser-7 runner and global historical rechecks remain off.
+
 ## Company evidence without role-selection work LIVE (2026-10-28 21:22 Pacific)
 
 Web `873ee080` preserves the approved Wine and Rose Day/Night layout. Recorded

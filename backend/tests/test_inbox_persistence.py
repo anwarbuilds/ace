@@ -378,7 +378,7 @@ def test_an_application_ace_never_knew_about_can_be_added_from_its_email(databas
     assert error.value.status_code == 422
 
 
-def test_all_ignored_history_is_reread_but_owner_filings_stay(database, gmail_reads, monkeypatch):
+def test_current_search_ignored_mail_is_reread_while_older_history_and_owner_filings_stay(database, gmail_reads, monkeypatch):
     session, conn = database
     ignored = stored(session, conn, "forgotten-rejection", "ignored", subject="Application update", snippet="Your application", version="5")
     old = stored(session, conn, "old-ignored", "ignored", subject="Application update", version="5")
@@ -387,26 +387,27 @@ def test_all_ignored_history_is_reread_but_owner_filings_stay(database, gmail_re
     owner = stored(session, conn, "owner-filed", "unrelated", subject="Application update", version="5")
     manual = stored(session, conn, "owner-recorded", "manual", subject="Application update", version="5")
     session.commit()
+    old_before = (old.received_at, old.classification, old.decision, old.decision_reason, old.parser_version)
     reads=[]
     def get(path, *args):
         key=path.rsplit("/",1)[-1]; reads.append(key)
         if key=="forgotten-rejection":
             return message(key,"Req ID: SE-101. We cannot proceed with your application because our immigration policy does not include sponsorship for this role.")
         if key=="old-ignored":
-            return message(key,"Req ID: SE-102. We have decided to move forward with other candidates.", NOW-timedelta(days=2500))
+            pytest.fail('Pre-search email must not enter the current-window recheck')
         return message(key,"Fictional newsletter with no application outcome.")
     monkeypatch.setattr(inbox.gmail, "get_json", get)
     verified_scope(session, conn)
     result = inbox.recheck(inbox.RecheckRequest(), owner_request(), session)
-    assert result["checked"]==3 and result["remaining"]==0
-    assert set(reads)=={"forgotten-rejection","old-ignored","unrelated-ignored"}
+    assert result["checked"]==2 and result["remaining"]==0
+    assert set(reads)=={"forgotten-rejection","unrelated-ignored"}
     assert result["counts"]["automatic"]==1
     assert ignored.decision == "automatic" and ignored.parser_version == PARSER_VERSION
     assert statuses(session) == ["applied", "rejected", "applied"]
-    assert [row.parser_version for row in [old, unrelated, owner, manual]] == [PARSER_VERSION,PARSER_VERSION,"5","5"]
-    assert old.decision=="update" and projected_decision(old)==KIND
-    assert old.decision_reason==COMPANY_REASON and old.selected_application_key is None
-    assert [event_company(event) for event in company_events(session)]==["Silverpine Labs"]
+    assert [row.parser_version for row in [old, unrelated, owner, manual]] == ["5",PARSER_VERSION,"5","5"]
+    assert (old.received_at, old.classification, old.decision, old.decision_reason, old.parser_version) == old_before
+    assert old.decision == 'ignored' and old.selected_application_key is None
+    assert company_events(session) == []
     event = job_events(session)[0]
     inbox.undo(event.id, owner_request(), session)
     assert ignored.decision == "review" and statuses(session) == ["applied"]*3
@@ -535,7 +536,7 @@ def test_rejection_after_old_inner_body_limit_is_not_filed_as_a_receipt(database
 @pytest.mark.parametrize("prefix_outcome", ["Thank you for applying.", "We have decided not to proceed with your application.", "We invite you to interview."])
 def test_truncated_body_cannot_file_a_receipt_or_automate_an_outcome(database, prefix_outcome):
     session, conn = database
-    body = "Req ID: SE-101. " + prefix_outcome + "\n" + "Role details. " * 5000
+    body = "Req ID: SE-101. " + prefix_outcome + "\n" + "Role details. " * (inbox.MAX_CLASSIFIER_BODY // len("Role details. ") + 1)
     data = message("truncated", body)
     evidence = inbox._message_evidence(data)
     assert len(evidence.body) == inbox.MAX_CLASSIFIER_BODY and not evidence.complete

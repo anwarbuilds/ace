@@ -78,7 +78,7 @@ def test_company_evidence_counts_unique_emails_without_changing_any_application_
     ]
     assert result["company_rejection_summary"] == {
         "companies": 2, "messages": 3, "latest_at": latest.received_at.isoformat(),
-        "date_basis": "email_received", "start": None, "end": "2026-10-25", "family_excluded_messages": 0,
+        "date_basis": "email_received", "start": "2026-07-01", "end": "2026-10-25", "family_excluded_messages": 0,
     }
     for field in ("total_submitted", "submitted", "statuses", "positive", "assessments", "interviews",
                   "has_outcome_evidence", "evidence", "cohort", "roles", "timing", "median_days", "timing_sample",
@@ -122,13 +122,14 @@ def test_company_evidence_uses_local_email_dates_instead_of_submission_or_record
 
 def test_all_time_includes_email_before_first_submission_and_company_filter_is_exact(db):
     app(db, 1, age=1)
-    older = mail(db, 1, received=NOW - timedelta(days=300))
+    older = mail(db, 1, received=NOW - timedelta(days=60))
     record(db, older)
+    record(db, mail(db, 3, received=NOW - timedelta(days=300)))
     record(db, mail(db, 2), company="Silverpine Labs Holdings")
     result = read(db, company="silverpine labs")
     assert result["company_rejections"][0]["message_ids"] == [older.id]
     assert result["company_rejection_summary"]["messages"] == 1
-    assert result["company_rejection_summary"]["start"] is None
+    assert result["company_rejection_summary"]["start"] == "2026-07-01"
     assert not read(db, days="30", company="Silverpine Labs")["company_rejections"]
     assert not read(db, company="Silverpine")["company_rejections"]
 

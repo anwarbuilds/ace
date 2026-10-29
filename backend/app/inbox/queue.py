@@ -13,6 +13,24 @@ from backend.app.inbox.filed_evidence import ACTION_KINDS, ACTION_PREFIX, DECISI
 PENDING = ("review", "exact_preview", "deferred")
 OWNER_UNDO = "You undid ACE's change for this email"
 SAVED_REASON = "Saved application correspondence; no confirmed outcome to record"
+OWNER_RECEIPT_REASON = "You marked it an application receipt"
+
+
+def owner_receipt_clause():
+    return and_(Mail.decision == 'receipt', Mail.decision_reason == OWNER_RECEIPT_REASON)
+
+
+def is_owner_receipt(row):
+    return row.decision == 'receipt' and row.decision_reason == OWNER_RECEIPT_REASON
+
+
+def classification_expression():
+    """Explicit owner filing overrides an earlier classifier label for display."""
+    return case((owner_receipt_clause(), 'application_confirmation'), else_=Mail.classification)
+
+
+def projected_classification(row):
+    return 'application_confirmation' if is_owner_receipt(row) else row.classification
 
 
 def passive_clause():

@@ -6,9 +6,10 @@ import { EmailFrame } from "@/components/inbox/EmailFrame";
 import { clean, parseDate, STATUS_LABEL } from "@/lib/format";
 import { getJson, RequestError, sendJson } from "@/lib/client";
 import type { ApplicationStatus } from "@/lib/types";
+import { inboxHistoryLabel, outsideInboxHistory, type InboxEvidenceScope } from "@/lib/inboxScope";
 
-export interface Understanding {decision_type?:string; source_authentication?:string; classification_reason:string; classification_state:string; matching_state:string; workflow_state:string; update_policy:string; review_reason:string|null; evidence_source:string; evidence_excerpt:string}
-export interface InboxMessage {understanding?:Understanding; id:number; received_at:string; sender:string; subject:string; snippet:string; classification:string; requisition_id:string|null; decision:string; candidate_keys:string[]; reason:string; selected_application_key:string|null}
+export interface Understanding {decision_type?:string; source_authentication?:string; classification_source?:string; classification_reason:string; classification_state:string; matching_state:string; workflow_state:string; update_policy:string; review_reason:string|null; evidence_source:string; evidence_excerpt:string}
+export interface InboxMessage {understanding?:Understanding; id:number; received_at:string; sender:string; subject:string; snippet:string; classification:string; saved_classification?:string; requisition_id:string|null; decision:string; candidate_keys:string[]; reason:string; selected_application_key:string|null}
 export interface InboxApplication {key:string; company:string; title:string; requisition_id:string|null; applied_at:string|null; status:string}
 export interface InboxEvent {company?:string|null; scope?:string; id:number; application_key:string; kind:string; before:string|null; after:string|null; actor:string; reason:string; recorded_at:string; undo_of_id:number|null; gmail_message_id:number|null}
 /** The email as Gmail has it now, read live and never stored. */
@@ -142,7 +143,7 @@ function AppCard({app}:{app:InboxApplication}) {
   return <div className="inbox-app"><CompanyLogo name={app.company}/><div><strong>{clean(app.company)}</strong><span>{clean(app.title)}</span><small>Applied {dates(app.applied_at)} · {status(app.status)}{app.requisition_id?` · Job ID ${clean(app.requisition_id)}`:""}</small></div></div>;
 }
 
-export function InboxReviewPanel({message,applications,events,busy,action,account,now=0}: {message:InboxMessage|null; applications:InboxApplication[]; events:InboxEvent[]; busy:boolean; action:Action; account?:string|null; now?:number}) {
+export function InboxReviewPanel({message,applications,events,busy,action,account,now=0,evidenceScope}: {message:InboxMessage|null; applications:InboxApplication[]; events:InboxEvent[]; busy:boolean; action:Action; account?:string|null; now?:number; evidenceScope?:InboxEvidenceScope}) {
   const id=message?.id;
   const decision=message?.decision;
   const [full,setFull]=useState<FullEmail|null>(()=>id==null?null:loaded.get(id)??null);
@@ -173,6 +174,7 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
   if(!message)return <section className="panel inbox-inspector"><h2>Nothing selected</h2><p>Choose an email on the left to see it exactly as it arrived.</p></section>;
 
   const pending=PENDING.includes(message.decision);
+  const ownerClassification=message.understanding?.classification_source==="owner_decision";
   const classified=message.decision==="classified_rejection"||message.decision==="classified_action";
   const filed=classified||Boolean(FILED[message.decision]);
   const companyRecorded=message.decision==="company_rejection";
@@ -203,6 +205,7 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
   const ago=since(message.received_at,now);
 
   return <section className="panel inbox-inspector" aria-label="Selected email">
+    {evidenceScope&&outsideInboxHistory(message.received_at,evidenceScope)&&<p className="inbox-filed" role="note" aria-label="Outside current email history">This email is outside the current email history ({inboxHistoryLabel(evidenceScope)}). It remains available from its audit link, with existing corrections and Undo. It is excluded from the current email lists and counts.</p>}
     <header className="inbox-mail-head">
       <div className="inbox-chips"><span className={`inbox-kind k-${message.classification}`}>{KIND[message.classification]??clean(message.classification)}</span><span className={`inbox-state d-${message.decision}`}>{STATE[message.decision]??clean(message.decision)}</span></div>
       <h2>{clean(full?.subject??message.subject)||"No subject"}</h2>
@@ -222,7 +225,8 @@ export function InboxReviewPanel({message,applications,events,busy,action,accoun
       </div>}
     </div>
     <div className="inbox-filed" aria-label="ACE understanding">
-      <strong>ACE&rsquo;s classification: {KIND[message.classification]??clean(message.classification)}</strong>
+      <strong>{ownerClassification?"Your classification":"ACE’s classification"}: {KIND[message.classification]??clean(message.classification)}</strong>
+      {ownerClassification&&message.saved_classification&&message.saved_classification!==message.classification&&<p>Earlier machine reading: {KIND[message.saved_classification]??clean(message.saved_classification)}. Your saved classification takes precedence.</p>}
       {classified&&message.understanding?.source_authentication==="unverified"&&<p role="note" aria-label="Unverified sender">Unverified sender: this records the email&rsquo;s meaning; no employer or application outcome is verified.</p>}
       {message.understanding&&<>
         <p>{clean(message.understanding.classification_reason)}</p>

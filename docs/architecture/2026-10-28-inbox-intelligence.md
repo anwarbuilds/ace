@@ -2,10 +2,47 @@
 
 
 
+## Inbox accuracy correction in progress — 2026-10-29 Pacific
+
+Parser 13 source `e64c54719245b886aa3db4829cfb41f99b928535` is deployed, but the
+owner has disputed the semantic accuracy of acknowledgements, offers and an
+interview after reviewing the live UI. The release is not accepted as accurate.
+Source, health, preservation and arithmetic projection checks do not establish
+semantic accuracy; agreement between a saved label and the same parser's fresh
+reading is not independent validation.
+
+The confirmed active email scope is July 1, 2026 onward, using the owner's
+America/Los_Angeles calendar. Older Gmail evidence must remain preserved for
+audit/Undo, while the active Inbox and email progress metrics use that scope.
+Correction and representative regression work are in progress. No new historical
+rewrite or deployment is implied by this checkpoint. Resume Studio is outside
+scope. The stopped parser-7 runner and global historical rechecks remain off.
+
+## Parser 14 corrective candidate
+
+The candidate enforces a shared email floor of July 1, 2026 at midnight in
+America/Los_Angeles (07:00Z). SQL lists, categories, pagination, search and counts
+use the same boundary as email-only Analytics. Older data and direct historical
+viewer/Undo access remain available. Confirmed application cohorts and prior
+assessment/interview stages remain separate from this email window.
+
+An exact owner receipt decision projects to acknowledgement in both SQL and
+Python. The old machine classification remains available for audit; no stored
+row or owner event is rewritten for that display correction. Other owner actions
+and automatic receipts do not trigger this override.
+
+The bounded body reader accepts up to 256,000 characters, allowing long ATS
+acknowledgements to be read completely while retaining partial-evidence guards.
+Regression cases include a genuine rejection late in a long message. Interview
+rules distinguish personal invitations from third-person and conditional future
+process wording. Saved stale classifier readings need a separately reviewed,
+source-sealed correction; changing the parser does not authorize a bulk replay.
+No new deployment or historical correction is claimed here.
+
 ## Parser 13 candidate: recognize and file before application attribution
 
-Status: follow-up implementation under validation; the parser-12 LIVE record
-below remains the deployed state until separately verified activation.
+Status: historical parser-13 development checkpoint. Source e64c547 was deployed;
+the accuracy dispute and parser-14 correction above now control.
 
 Fresh complete rejection, assessment, interview, offer, recruiter
 reply and candidate-action readings can be filed without selecting an

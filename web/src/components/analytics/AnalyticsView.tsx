@@ -10,6 +10,7 @@ import { AnalyticsChartInterval, AnalyticsCompanySelect, AnalyticsFilters, Analy
 import { ColumnChart, Donut, LineChart, MiniBar, PetitionChart } from "./AnalyticsCharts";
 import { ApplicationMetrics, InboxBand, AnalyticsEvidenceNote } from "./AnalyticsSummary";
 import { groupSubmissions, localDate, type AnalyticsSupplement, type ChartPoint } from "@/lib/analyticsCalculations";
+import { inboxHistoryLabel } from "@/lib/inboxScope";
 
 const INBOX = "/app/applications/inbox";
 const APPS = "/app/applications";
@@ -47,9 +48,12 @@ function RecognizedEmailProgress({d}:{d:AnalyticsData}) {
   const evidence=d.classified_email_evidence;
   if(!evidence||!(evidence.total||evidence.family_excluded_messages||evidence.company_excluded_messages))return null;
   const categories=evidence.categories;
+  const requestedStart=d.days==="all"?null:d.start;
+  const fallbackStart=d.evidence_scope&&(!requestedStart||d.evidence_scope.start>requestedStart)?d.evidence_scope.start:requestedStart??"All dates";
   const stages=[{filter:"assessments",label:"Assessment emails",count:categories.online_assessment},{filter:"interviews",label:"Interview emails",count:categories.interview},{filter:"offers",label:"Offer emails",count:categories.offer}];
   return <Panel className="an-classified-email-evidence" title="Recognized hiring progress" subtitle="Classified email evidence, separate from verified application stages.">
-    <p className="an-foot">Email receipt dates: {d.days==="all"?"All dates":d.start} through {d.end} · {d.timezone}. {n(evidence.total)} classified emails in this scope.</p>
+    {d.evidence_scope&&<p className="an-foot" aria-label="Email history period"><strong>Email history: {inboxHistoryLabel(d.evidence_scope)}</strong> · {d.evidence_scope.timezone}. Application submission dates and confirmed stage history remain separate.</p>}
+    <p className="an-foot">Email receipt dates: {evidence.start??fallbackStart} through {evidence.end??d.end} · {d.timezone}. {n(evidence.total)} classified emails in this scope.</p>
     {Boolean(evidence.unverified_source_messages)&&<p className="an-foot" role="note" aria-label="Unverified email sources">{n(evidence.unverified_source_messages??0)} classified {evidence.unverified_source_messages===1?"email has an unverified sender":"emails have unverified senders"}. These record message meaning only; no employer or application outcome is verified.</p>}
     <h3>Assessments, interviews and offers</h3>
     <div className="an-review-list">{stages.map(row=><Link key={row.filter} href={`${INBOX}?decision=${row.filter}`}><i style={{background:CHART_COLORS[3]}}/><div><strong>{row.label}</strong><span>Classified and filed; application linkage is optional</span></div><b>{n(row.count)}</b><NavIcon name="right" size="sm"/></Link>)}</div>
@@ -92,6 +96,7 @@ function CompanyRejectionEvidence({d,query}:{d:AnalyticsData;query:Record<string
   const day=(iso:string)=>new Date(iso).toLocaleDateString("en-US",{timeZone:d.timezone,month:"short",day:"numeric",year:"numeric"});
   const allRoles=new URLSearchParams(query);allRoles.delete("family");allRoles.set("tab","companies");
   return <Panel className="an-rejections an-company-rejection-evidence" title="Company rejection evidence" subtitle="Employer identified; the individual application or role is not assigned." action={<Jump href={`${INBOX}?decision=company_rejection`}>View company rejection emails</Jump>}>
+    {d.evidence_scope&&<p className="an-foot">Email history: {inboxHistoryLabel(d.evidence_scope)} · {d.evidence_scope.timezone}.</p>}
     <p className="an-foot">Email outcome dates: {summary.start??"All dates"} through {summary.end} · {d.timezone}. Filtered by when the email arrived, separately from application submission dates.</p>
     {d.family?<Unavailable>{n(summary.family_excluded_messages)} company rejection {summary.family_excluded_messages===1?"email is":"emails are"} excluded from this role family selection because the role is not verified. <Link href={`/app/analytics?${allRoles}`}>View all role families</Link></Unavailable>:<>
       <p className="an-foot">{n(summary.messages)} rejection {summary.messages===1?"email":"emails"} from {n(summary.companies)} {summary.companies===1?"company":"companies"}. These are email evidence counts, separate from rejected application totals.</p>
