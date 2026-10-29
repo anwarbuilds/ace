@@ -64,7 +64,7 @@ function fixture(body, config = {}) {
   window.Node.DOCUMENT_POSITION_FOLLOWING = 4;
   class DOMEvent extends window.Event { constructor(type, init = {}) { super(type, init); Object.assign(this, init); } }
   const context = vm.createContext({ window, document, Node: window.Node, HTMLElement, HTMLInputElement,
-    HTMLSelectElement, HTMLTextAreaElement: window.HTMLTextAreaElement, Event: window.Event, MouseEvent: DOMEvent, KeyboardEvent: DOMEvent,
+    HTMLSelectElement, HTMLTextAreaElement: window.HTMLTextAreaElement, Event: window.Event, MouseEvent: DOMEvent, KeyboardEvent: DOMEvent, InputEvent: DOMEvent,
     location: { href: config.url || 'https://fixture.example/apply', hostname: new URL(config.url || 'https://fixture.example/apply').hostname, pathname: new URL(config.url || 'https://fixture.example/apply').pathname },
     CSS: { escape: value => String(value).replace(/[^a-zA-Z0-9_-]/g, character => `\\${character}`) },
     innerWidth: config.width || 1440, innerHeight: config.height || 900, console, crypto: webcrypto, TextEncoder, URL,
@@ -1219,6 +1219,13 @@ function spinbuttons(f, prefix, parts = ['Month', 'Year']) {
   const inputs = parts.map(part => f.document.getElementById(`${prefix}-${part.toLowerCase()}`));
   inputs.forEach((input, at) => {
     const part = parts[at];
+    // A typed digit is what Workday takes from a person; a box written with
+    // a plain input event (the old fill) changes only what the box shows.
+    input.addEventListener('input', event => {
+      if (event.inputType !== 'insertText' || !/^\d$/.test(event.data || '')) return;
+      const typed = String(input.value || '').replace(/\D/g, '').slice(part === 'Year' ? -4 : -2);
+      state[part] = typed; input.setAttribute('aria-valuenow', String(parseInt(typed, 10)));
+    });
     input.addEventListener('keydown', event => {
       if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
       const base = parseInt(input.value, 10);
@@ -1562,4 +1569,46 @@ test('a copy cut off by an extension reload says so instead of ignoring clicks',
   f.context.chrome.runtime.id = undefined;
   f.click('fill');
   assert.ok(f.panel().textContent.includes('ACE was updated'), 'the card asks for a refresh');
+});
+
+test('a self-identification date Workday reports as missing is typed in again', t => {
+  const f = fixture(sectionDate('dateSignedOn', 'Date', ['Month', 'Day', 'Year']) +
+    '<div data-automation-id="formField-disability"><label>Please check one of the boxes below:</label></div>'); t.after(f.dispose);
+  const date = spinbuttons(f, 'dateSignedOn', ['Month', 'Day', 'Year']);
+  const now = new Date();
+  const shown = [String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0'), String(now.getFullYear())];
+  ['month', 'day', 'year'].forEach((part, at) => { f.document.getElementById(`dateSignedOn-${part}`).value = shown[at]; });
+  date.error.textContent = 'Error: The field Date is required and must have a value.';
+  f.click('fill');
+  assert.deepEqual([date.state.Month, date.state.Day, date.state.Year], shown, 'Workday now holds the date it only showed before');
+  assert.equal(date.error.textContent, '');
+});
+
+test('a résumé split of the owner name is replaced by the saved name, never another person', t => {
+  const answerItems = [{ label: 'First name', value: 'Example' }, { label: 'Last name', value: 'Applicant' }, { label: 'Full name', value: 'Example Middle Applicant' }];
+  const f = fixture('<label for="first">First Name</label><input id="first" value="Example"><label for="last">Last Name</label><input id="last" value="Middle">' +
+    '<label for="other-last">Last Name</label><input id="other-last" value="Someone">', { answerItems }); t.after(f.dispose);
+  f.click('fill');
+  assert.equal(f.document.getElementById('first').value, 'Example');
+  assert.equal(f.document.getElementById('last').value, 'Applicant', 'a part of the owner name in the wrong box is corrected');
+  assert.equal(f.document.getElementById('other-last').value, 'Someone', 'a name that is not the owner\'s stays');
+});
+
+test('the disability statement boxes are answered from the saved disability status', t => {
+  const answerItems = [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Disability status', value: 'No, I do not have a disability' }];
+  const choices = ['Yes, I have a disability, or have had one in the past', 'No, I do not have a disability and have not had one in the past', 'I do not want to answer'];
+  const f = fixture(`<div data-automation-id="formField-disabilityStatus"><label>Please check one of the boxes below:</label><div role="group">${choices.map((label, at) => `<div><input type="checkbox" id="d-${at}"><label for="d-${at}">${label}</label></div>`).join('')}</div></div>`, { answerItems }); t.after(f.dispose);
+  f.click('fill');
+  assert.deepEqual(choices.map((_, at) => f.document.getElementById(`d-${at}`).checked), [false, true, false]);
+});
+
+test('the card matches the website, not the computer, until the owner picks a theme', t => {
+  const f = fixture(routine); t.after(f.dispose);
+  let background = 'rgb(255, 255, 255)';
+  f.window.getComputedStyle = node => ({ backgroundColor: node === f.document.body ? background : 'rgba(0, 0, 0, 0)', colorScheme: 'normal' });
+  f.click('scan'); assert.ok(!f.panel().classList.contains('night'), 'a light page gets the Day card');
+  background = 'rgb(18, 18, 22)'; f.click('scan'); assert.ok(f.panel().classList.contains('night'), 'a dark page gets the Night card');
+  f.click('theme'); assert.ok(!f.panel().classList.contains('night'), 'an explicit Day choice holds');
+  background = 'rgb(255, 255, 255)'; f.click('scan'); assert.ok(!f.panel().classList.contains('night'));
+  f.click('theme'); assert.ok(f.panel().classList.contains('night'), 'an explicit Night choice holds on a light page');
 });

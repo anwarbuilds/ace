@@ -184,9 +184,22 @@
     'On a temporary work visa', 'Sponsorship follow-up from answers 1 and 2'];
   // The answer-bank row this question means, whatever its wording. Also the
   // shared key that lets one learned answer serve every wording of a row.
-  function bankConcept(question, kind) {
+  // A voluntary disclosure that names its subject only in its options, such
+  // as "Please check one of the boxes below" over the disability statements.
+  function optionConcept(field) {
+    if (!field) return null;
+    var texts = field.tagName === 'SELECT' ? Array.from(field.options).map(function (option) { return option.textContent; })
+      : aceIsChoiceControl(field) ? groupMembers(field).map(aceOptionRaw) : [];
+    var all = aceNormalise(texts.join(' | '));
+    if (/\bdisabilit/.test(all)) return 'Disability status';
+    if (/\bveteran/.test(all)) return 'Veteran status';
+    if (/\bfemale\b/.test(all) && /\bmale\b/.test(all)) return 'Gender';
+    if ((all.match(/\b(asian|white|black|hispanic|native hawaiian|american indian)\b/g) || []).length >= 2) return 'Race or ethnicity';
+    return null;
+  }
+  function bankConcept(question, kind, field) {
     if (!question || aceMemory.isEmployerMotivation(question)) return null;
-    var name = aceAnswerNameFor(question, kind, Object.keys(answers));
+    var name = aceAnswerNameFor(question, kind, Object.keys(answers)) || optionConcept(field);
     if (!name || /^(Memory|Form):/.test(name)) return null;
     if (ACE_US_FACTS.indexOf(name) >= 0 && ACE_FOREIGN.test(question)) return null;
     return name;
@@ -210,7 +223,7 @@
   // the Answers page. Company motivation is never answered.
   function answerNameFor(question, kind, field) {
     if (!question || aceMemory.isEmployerMotivation(question)) return null;
-    var row = bankConcept(question, kind);
+    var row = bankConcept(question, kind, field);
     if (!field || !isDateSection(field)) {
       var onForm = aceMemory.learnedMatch(question, kind, formAnswers.filter(function (entry) {
         return entry.href === location.href && sameFormAnswer(entry.receipt);
@@ -242,7 +255,7 @@
   }
 
   function learnedKeyFor(item) {
-    return aceMemory.learnedConcept(item.question, item.kind, location.href, bankConcept(item.question, item.kind), employerWords());
+    return aceMemory.learnedConcept(item.question, item.kind, location.href, bankConcept(item.question, item.kind, item.field), employerWords());
   }
 
   function rememberOnForm(item) {
@@ -286,7 +299,7 @@
   // rather than leaving two answers to disagree. An older reusable or
   // scoped record keeps its policy when the server still accepts it there.
   async function memoryKey(item, value) {
-    var existing = aceMemory.learnedMatch(item.question, item.kind, memory, location.href, bankConcept(item.question, item.kind), employerWords());
+    var existing = aceMemory.learnedMatch(item.question, item.kind, memory, location.href, bankConcept(item.question, item.kind, item.field), employerWords());
     if (existing && existing.reuse_policy === 'learned') return { key: existing.concept, policy: 'learned' };
     var learned = await learnedTarget(item);
     if (existing && !existing.local && (existing.reuse_policy === 'reusable' &&
@@ -355,7 +368,7 @@
   // saving it again would add nothing. The copy kept for this form does
   // not count: it exists only until the save finishes.
   function alreadyKnown(item, answer) {
-    var row = bankConcept(item.question, item.kind);
+    var row = bankConcept(item.question, item.kind, item.field);
     var saved = aceMemory.learnedMatch(item.question, item.kind, memory, location.href, row, employerWords());
     var name = saved ? 'Memory:' + saved.concept : bankAnswerName(item.question, item.kind, row);
     var known = name && answers[name];
@@ -457,6 +470,9 @@
   var lastSignature = "";
   var filling = false;
   var fillingSince = 0;
+  // Set while ACE types into Workday's date boxes. The browser marks those
+  // edits as trusted, and they are ACE's, never the owner's answer.
+  var aceTyping = false;
 
   /* Workday's date is a row of spinbuttons: dateSectionMonth-input, then
      Day and Year. Each takes a value only through its own key handling,
@@ -475,29 +491,73 @@
     var parts = wrapper ? Array.prototype.filter.call(wrapper.querySelectorAll('input'), isDateSection) : [];
     return parts.length ? parts : [field];
   }
+  // What Workday holds for a section. Its spinbutton reports its own value
+  // in aria-valuenow, or aria-valuetext, and a box can show digits Workday
+  // never took, so the box's text is the last resort.
   function sectionNumber(field) {
     var now = parseInt(field.getAttribute('aria-valuenow') || '', 10);
-    return isNaN(now) ? parseInt(String(field.value || '').trim(), 10) : now;
+    if (!isNaN(now)) return now;
+    var said = String(field.getAttribute('aria-valuetext') || '').trim();
+    if (said) return /^\d+$/.test(said) ? parseInt(said, 10) : NaN;
+    return parseInt(String(field.value || '').trim(), 10);
   }
   function stepSection(field, key) {
     var code = key === 'ArrowUp' ? 38 : 40;
     field.dispatchEvent(new KeyboardEvent('keydown', { key: key, code: key, keyCode: code, which: code, bubbles: true, cancelable: true }));
   }
+  // One character, as a keyboard sends it: keydown, keypress, the browser's
+  // own insertText edit unless the page took the key itself, then keyup.
+  function typeCharacter(field, character) {
+    var keyCode = character.charCodeAt(0);
+    var init = { key: character, code: /\d/.test(character) ? 'Digit' + character : 'Slash', keyCode: keyCode, which: keyCode, charCode: keyCode, bubbles: true, cancelable: true };
+    var proceed = field.dispatchEvent(new KeyboardEvent('keydown', init));
+    proceed = field.dispatchEvent(new KeyboardEvent('keypress', init)) && proceed;
+    if (proceed) {
+      var typed = false;
+      try { typed = document.execCommand('insertText', false, character); } catch (error) { typed = false; }
+      if (!typed) {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(field, String(field.value || '') + character);
+        field.dispatchEvent(typeof InputEvent === 'function'
+          ? new InputEvent('input', { bubbles: true, inputType: 'insertText', data: character })
+          : new Event('input', { bubbles: true }));
+      }
+    }
+    field.dispatchEvent(new KeyboardEvent('keyup', init));
+  }
+  // Workday's date sections take a value the way a person enters one: the
+  // box is clicked and its digits are typed. Stepping with ArrowUp and, last,
+  // writing the box remain as fallbacks. No section is left until every one
+  // holds a value, so Workday checks the date once, complete.
   function fillDateSection(field, value) {
     var target = parseInt(String(value || '').trim(), 10);
     if (!(target > 0)) return false;
-    try { field.focus({ preventScroll: true }); } catch (error) { /* fill anyway */ }
-    field.value = String(target - 1);
-    stepSection(field, 'ArrowUp');
-    field.click();
-    // A section that steps from its own state rather than the box is walked
-    // to the number instead, never past a step that stops changing it.
-    for (var guard = 0; sectionNumber(field) !== target && guard < 120; guard++) {
-      var before = sectionNumber(field);
-      stepSection(field, isNaN(before) || before < target ? 'ArrowUp' : 'ArrowDown');
-      if (!isNaN(before) && sectionNumber(field) === before) break;
+    var year = /year/i.test(field.getAttribute('data-automation-id') || '');
+    var digits = year ? String(target) : String(target).padStart(2, '0');
+    aceTyping = true;
+    try {
+      try { field.focus({ preventScroll: true }); } catch (error) { /* type anyway */ }
+      field.click();
+      try { field.select(); } catch (error) { /* nothing selected to replace */ }
+      // Typing replaces what the box showed, as select-all then typing does.
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(field, '');
+      digits.split('').forEach(function (character) {
+        if (document.activeElement !== field) { try { field.focus({ preventScroll: true }); } catch (error) { /* type anyway */ } }
+        typeCharacter(field, character);
+      });
+      if (sectionNumber(field) !== target) {
+        try { field.focus({ preventScroll: true }); } catch (error) { /* step anyway */ }
+        field.value = String(target - 1);
+        stepSection(field, 'ArrowUp');
+        for (var guard = 0; sectionNumber(field) !== target && guard < 120; guard++) {
+          var before = sectionNumber(field);
+          stepSection(field, isNaN(before) || before < target ? 'ArrowUp' : 'ArrowDown');
+          if (!isNaN(before) && sectionNumber(field) === before) break;
+        }
+      }
+      if (sectionNumber(field) !== target) setNatively(field, digits, true);
+    } finally {
+      aceTyping = false;
     }
-    if (sectionNumber(field) !== target) setNatively(field, String(value), true);
     if (dateSections(field).every(function (part) { return !!String(part.value || '').trim(); })) {
       try { field.blur(); } catch (error) { /* nothing to validate */ }
     }
@@ -523,9 +583,11 @@
   // An earlier fill that Workday rejected: the box shows ACE's number while
   // the field reports an invalid date. Only then is a filled section redone.
   function dateNeedsRepair(field, value) {
-    if (!isDateSection(field) || sectionNumber(field) !== parseInt(value, 10)) return false;
+    if (!isDateSection(field) || parseInt(String(field.value || ''), 10) !== parseInt(value, 10)) return false;
+    // The box shows the number while Workday's own value is still empty.
+    if (/^(mm|dd|yy|yyyy)$/i.test(String(field.getAttribute('aria-valuetext') || '').trim())) return true;
     var scope = field.closest('[data-automation-id^="formField-"]') || field.closest('[data-automation-id="dateInputWrapper"]');
-    return field.getAttribute('aria-invalid') === 'true' || !!(scope && /invalid date/i.test(scope.textContent || ''));
+    return field.getAttribute('aria-invalid') === 'true' || !!(scope && /invalid date|must have a value/i.test(scope.textContent || ''));
   }
   function clearDateSection(field) {
     try { field.focus({ preventScroll: true }); } catch (error) { /* clear anyway */ }
@@ -1251,7 +1313,15 @@
         });
     });
 
-    return aceIsCopiedOwnName(field.value, own);
+    var current = String(field.value || '').trim();
+    var wanted = String(answers[name] || '').trim();
+    if (!current || !wanted || current === wanted) return false;
+    if (aceIsCopiedOwnName(current, own)) return true;
+    // A résumé import that split the owner's name differently, "Anwar" as a
+    // last name say, holds only the owner's own name words in another
+    // order or part. The saved answer for this box replaces it.
+    var words = current.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+    return words.length > 0 && words.every(function (word) { return own.indexOf(word) >= 0; });
   }
 
   /* A phone box holding the user's own number with its dial code, on a
@@ -2720,13 +2790,31 @@
     }
   }
 
+  // Automatic means matching the website the card sits on: a light employer
+  // page gets the Day card and a dark one the Night card, whatever the
+  // computer's setting. A page without a background of its own shows the
+  // browser's light canvas unless it declares a dark color scheme.
+  function pageTheme() {
+    try {
+      var nodes = [document.body, document.documentElement];
+      for (var i = 0; i < nodes.length; i++) {
+        if (!nodes[i]) continue;
+        var paint = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s\/]+([\d.]+)(%?))?\s*\)/.exec(window.getComputedStyle(nodes[i]).backgroundColor || '');
+        if (!paint || paint[4] !== undefined && parseFloat(paint[4]) / (paint[5] ? 100 : 1) < 0.5) continue;
+        return (0.2126 * paint[1] + 0.7152 * paint[2] + 0.0722 * paint[3]) / 255 < 0.45 ? 'night' : 'day';
+      }
+      var scheme = String(window.getComputedStyle(document.documentElement).colorScheme || '');
+      if (/^dark$/.test(scheme.trim()) || /dark/.test(scheme) && systemTheme() === 'night') return 'night';
+    } catch (error) { /* the light canvas */ }
+    return 'day';
+  }
   function applyThemeMode(mode) {
     studioThemeMode = mode === "day" || mode === "night" ? mode : "system";
-    studioTheme = studioThemeMode === "system" ? systemTheme() : studioThemeMode;
+    studioTheme = studioThemeMode === "system" ? pageTheme() : studioThemeMode;
   }
 
-  // While ACE follows the computer, a Day or Night change there repaints the
-  // open card at once, without reloading the employer page.
+  // While ACE matches the website, a Day or Night change on the computer can
+  // repaint the page, so the open card is matched again at once.
   try {
     var colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
     var followSystemTheme = function () {
@@ -3132,7 +3220,7 @@
     return lastFill.find(function (entry) { return entry.field && entry.field.isConnected && group.indexOf(entry.field) >= 0; }) || null;
   }
   function savedRecordFor(field) {
-    var row = bankConcept(field.question, field.kind);
+    var row = bankConcept(field.question, field.kind, field.field);
     return aceMemory.learnedMatch(field.question, field.kind, memory, location.href, row, employerWords());
   }
   // An unanswered question ACE can fill: it holds an answer and, after a
@@ -3314,6 +3402,8 @@
   function renderStudio(host) {
     var previous = host.querySelector(".studio-scroll");
     var scroll = previous ? previous.scrollTop : 0;
+    // Matching the website follows the page if its colours change.
+    if (studioThemeMode === "system") studioTheme = pageTheme();
     var fields = collectStudioFields();
     var open = fields.filter(function (field) { return needsStudioReview(field) || skippedQuestions.has(field.key); }).length;
     var titleParts = document.title.split(/\s[|·]\s/);
@@ -3325,7 +3415,7 @@
     host.className = 'ace-panel focus-panel focus-' + focusMode + (studioTheme === 'night' ? ' night' : '');
     var legacyStatus = lastResult ? 'Filled ' + lastResult.filled.length + ' fields' : 'Fill ' + (pending ? pending.willFill.length : 0) + ' fields';
     var themeLabel = studioTheme === "day" ? "Switch to Night theme" : "Switch to Day theme";
-    var themeTitle = themeLabel + (studioThemeMode === "system" ? ". Now following your computer" : ". Switch again to follow your computer");
+    var themeTitle = themeLabel + (studioThemeMode === "system" ? ". Now matching this website" : ". Switch again to match this website");
     var closeIcon = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>';
     var themeSvg = studioTheme === "day" ? '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"/></svg>' : '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>';
     if (focusMode === 'dock') {
@@ -3991,8 +4081,8 @@
 
     if (action === "theme") {
       var nextTheme = studioTheme === "day" ? "night" : "day";
-      // Choosing the theme the computer already uses goes back to following it.
-      applyThemeMode(nextTheme === systemTheme() ? "system" : nextTheme);
+      // Choosing the theme the website already has goes back to matching it.
+      applyThemeMode(nextTheme === pageTheme() ? "system" : nextTheme);
       if (chrome.storage && chrome.storage.local) chrome.storage.local.set({ aceStudioThemeMode: studioThemeMode });
       renderStudio(panel());
       return;
@@ -4458,6 +4548,7 @@
   // control value can be observed. Other review controls mirror user edits.
   var pendingEmployerReview = null;
   function employerAnswerEdited(event, ownerIntent) {
+    if (aceTyping) return;
     var field = event.target;
     if (!loaded || filling && event.isTrusted !== true && !ownerIntent || !field || field.closest && field.closest('.ace-root')) return;
     if (!field.matches || !field.matches('input,textarea,select,button,[role=combobox]')) return;
