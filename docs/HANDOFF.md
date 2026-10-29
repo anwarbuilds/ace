@@ -1,13 +1,14 @@
 # ace handoff
 
-**2026-10-29, ready for approval, not deployed:** startup talent networks and gate
-v55 on branch `startup-sources-20261029` (worktree `artifacts/startup-sources-worktree`).
+**LIVE 2026-10-29 16:04 Pacific (API and scheduler at `fc81876`):** startup talent
+networks and gate v55 (from branch `startup-sources-20261029`, PR #17 merged).
 79 networks explored, 42 read within robots.txt; 2,181 readable employer boards, 732 new ones hiring US
 engineers (241 with roles passing now). Site reliability and
 mobile roles leave the list (156 of 3,133 passing roles on the legacy corpus). Gem boards
-are detected. Full backend 2,162 passed. Release needs approval: API and scheduler only,
-PASS-only backfill, then `register_network_boards --apply`; private plan in
-`artifacts/startup-networks-20261029/release.sh`. Read the first root knowledge section.
+are detected. Full backend 2,162 passed. Released with a fresh backup: API and scheduler
+only, PASS-only backfill (zero SRE or mobile among passing roles), then
+`register_network_boards --apply` in the background on the VM. Read the first root
+knowledge section for evidence and rollback.
 
 **LIVE, 2026-10-28 21:22 Pacific, company-aware Inbox Intelligence:**
 API/frontend `873ee080fa724fcbe0022ad47939d38c083ca8e9`, parser 12/schema 0050,
@@ -382,7 +383,7 @@ excluded kinds unless the user asks.
 
 ## 3. State on 2026-10-16
 
-**2026-10-29 startup networks and gate v55 (branch `startup-sources-20261029`, not deployed):**
+**2026-10-29 startup networks and gate v55 (LIVE on API and scheduler, `fc81876`):**
 employer boards collected from VC and accelerator talent networks are registered by
 `backend/scripts/register_network_boards.py` from `backend/app/discovery/network_boards.json`
 (dry run by default). Gate v55 rejects site reliability and mobile roles. Gem board links are

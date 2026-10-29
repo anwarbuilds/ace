@@ -914,7 +914,7 @@ or the old scheduler promotes the hourly boards within half an hour.
 Result on 2026-10-29: 79 networks explored, 42 read; 2,181 readable boards, 682 already known, 732 new ones hiring US
 engineers (241 with 395 roles passing v55 now), 580 left out until they hire, 41 agencies, Pear VC's shared portfolio
 board. Twenty-four boards declare another employer than the network listed (acquisitions and renames) and register
-under their own name. Not deployed at the time of writing; see the root knowledge file.
+under their own name. Live on API and scheduler from 2026-10-29 16:03 Pacific (`fc81876`); see the root knowledge file.
 
 Lessons: Workable answered 429 from this laptop even at four seconds a board, because the legacy scheduler on the same
 address polls 123 Workable boards; the legacy catalog shows Workable boards a median of three hours stale. A

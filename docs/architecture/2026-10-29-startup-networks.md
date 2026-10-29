@@ -1,7 +1,8 @@
 # Startup talent networks and the site reliability and mobile exclusion, 2026-10-29
 
-Status: implemented on branch `startup-sources-20261029`, tested locally, **not deployed**. Registering the boards and
-activating gate v55 on https://ace.opik.net each need the owner's approval.
+Status: **LIVE** on API and scheduler since 2026-10-29 23:03 UTC (16:03 Pacific), commit `fc81876`, with the
+owner's approval. Board registration ran in the background afterwards; see the root knowledge file for the result,
+evidence and rollback.
 
 ## Owner request
 
@@ -93,7 +94,7 @@ as `NON_TARGET_ROLE` with a reason; measured on the legacy corpus, 156 of 3,133 
 - Forbidden-dash scan 0, `git diff --check` clean. No browser, web or production check: the web is unchanged, and
   the agent permission classifier refused even read-only production queries this session.
 
-## Release plan (needs approval)
+## Release plan (approved and run)
 
 1. Fresh private backup; record running images and protected inventories, as in earlier releases.
 2. Fast-forward canonical to the reviewed commit; build `api` and `scheduler` only.

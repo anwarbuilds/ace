@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-29 Pacific, startup talent-network boards and gate v55 (no site reliability or mobile roles) ready for approval on branch startup-sources-20261029, not deployed; production remains Inbox parser 12 at 873ee080
+Last updated: 2026-10-29 Pacific, gate v55 (no site reliability or mobile roles), Gem detection and startup talent-network board registration LIVE on API and scheduler at fc81876
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -15,11 +15,63 @@ or database dump content because the GitHub repository is public.
 
 
 
-## Startup talent networks and gate v55, ready for approval, 2026-10-29 Pacific
+## Startup talent networks and gate v55 LIVE, 2026-10-29 16:04 Pacific
 
-Not deployed. Branch `startup-sources-20261029` (from canonical `e64c547`), worktree
-`artifacts/startup-sources-worktree`. Production stays as recorded below until the
-owner approves this release.
+The owner approved ("Approve, go live", hourly cadence for boards without a passing
+role). Canonical `wine-rose-platform` fast-forwarded `e64c547` to
+**`fc8187680e5ed0dc18a982af28477bd2eeadade7`** ([PR #17](https://github.com/anwarbuilds/ace/pull/17)
+recorded merged). Only **api** and **scheduler** were built and recreated
+(`--no-deps`; API with `--wait`, the scheduler started without it because its health
+check first runs five minutes in, then confirmed healthy). Activation 23:03:5x UTC.
+Web, PostgreSQL and Caddy kept their container IDs; schema stays **0050**; applied
+marks (969), external applications (48) and users (1) unchanged. Both containers
+report gate `2026-10-29-v55`. The PASS-only backfill re-evaluated all 4,956 stored
+passing decisions; passing roles are now 3,758 software, 800 ML, 165 FDE and **zero**
+site reliability or mobile. Public `/healthz` ok; web still reports `e64c547`.
+
+- Images: API `sha256:0b32c359087b92e512578bbe179f57db60fd07f7b6363046c712d98c5d863039`,
+  scheduler `sha256:c71974526266852fb03e2955ca963d404e4535c13c4f99021bd06c3657e69214`.
+  Rollback tags `oracle-api:before-startup-networks-20261029T2302Z` (`afa126d9`, the API
+  found running, built from `e64c547` rather than the older 873ee080 record below) and
+  `oracle-scheduler:before-startup-networks-20261029T2302Z` (`84c91f31`).
+- Fresh private backup: `/opt/ace/private-backups/startup-networks-20261029T2302Z/`,
+  mode 700, `database.dump.gz` 507,220,377 bytes, mode 600, gzip and 293-entry catalog
+  checks passed (not a restore drill). The folder holds `release.log`, inventories,
+  container and image records and `register.log`.
+- `register_network_boards --apply` runs in the background on the VM (nohup), about ten
+  boards a minute: 2,139 collected, 683 already in ACE, 1,379 to read, 77 Workday or
+  Oracle left out. **Result: 727 boards registered** (239 at 15 minutes with a role
+  passing now, 488 hourly), finished 23:30 UTC. One more read as hiring but had just
+  been registered by the feed path. Left out: 580 with no US software or ML role today,
+  18 unreadable (moved boards, 404), 13 empty, 1 agency. Workable answered 429 on its
+  first board, so the other 39 Workable boards were not read; run the script again
+  later to read them (it skips everything already registered).
+- First scheduler minutes: normal polling; two pre-existing empty-board refusals
+  ("Refusing to process an empty source snapshot as authoritative", 2K early careers
+  and 21Shares), Workable 429s as before, and the feed maintenance registering boards
+  as usual (including a Gem board, now detectable).
+
+- Scheduler after the restart (measured read-only): all 727 new boards were polled
+  within 40 minutes and held **382 active passing roles** at 23:46 UTC. Existing
+  15-minute boards were a median 20 to 23 minutes old 15 minutes after the restart,
+  then 15 to 19 (90th percentile 23 to 25) at 23:46 as the queue drained (1,865 to
+  1,315). The scheduler completes about 5,400 polls an hour against a nominal 10,900
+  for 3,262 enabled sources: its six workers were 100% busy, 54% of worker time on
+  Workday, 16.5% on Workable 429 waits, 10.5% on Oracle, and about 14% on 950 Ashby,
+  Greenhouse and Lever polls (under half a second each). It was saturated before
+  this release; the new boards add little. Load average stayed below 1.8 on 2 cores;
+  PostgreSQL 24 of 100 connections; pool 12 plus 8 overflow per process.
+- Next, each needing its own approval: (1) re-run `register_network_boards --apply`
+  when Workable is not refusing the VM, for the 39 Workable boards; (2) the scheduler
+  is close to its six-worker capacity: a refused Workable poll holds a worker for
+  about 40 seconds (`adapters/retry.py` retries 429 twice, up to 20 seconds each,
+  before the runtime's own refusal backoff), and every restart resets that backoff
+  for all 113 Workable boards at once; failing fast on 429 inside scheduled polls
+  and raising `DEFAULT_CONCURRENCY` from 6 (CPU and connections allow about 10)
+  would restore headroom; (3) a Rippling reader (72 startups in these networks link
+  Rippling boards).
+
+What the release contains, as prepared before approval:
 
 The owner asked for every startup in networks like a16z's speedrun talent network
 (new grad roles across US cities), listed first, then added without breaking
