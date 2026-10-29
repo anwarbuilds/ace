@@ -308,6 +308,8 @@ for(const theme of ["light","dark"] as const){
   test(`${theme}: recognized assessments, interviews, offers and rejections are filed without an application task`,async({page,context,baseURL})=>{
     await setThemeCookies(context,baseURL!,theme);
     const fixture=await inboxFixture(page,{classified:true});
+    const directory=path.resolve("../artifacts/inbox-intelligence-validation");
+    await fs.mkdir(directory,{recursive:true});
     await page.setViewportSize({width:1672,height:941});
     await page.goto("/app/applications/inbox?decision=assessments");
     const inspector=page.locator(".inbox-inspector");
@@ -322,10 +324,14 @@ for(const theme of ["light","dark"] as const){
       await expect(inspector).not.toContainText("Decision needed:");
       await expect(inspector.getByRole("button",{name:"Link or correct this email",exact:true})).toBeVisible();
       if(filter!=="rejections")await expect(inspector.getByRole("note")).toContainText("older invitations may already be completed or cancelled");
-      if(filter==="rejections")await expect(inspector.getByRole("note",{name:"Unverified sender",exact:true})).toContainText("no employer or application outcome is verified");
+      if(filter==="rejections"){
+        await expect(inspector.getByRole("note",{name:"Unverified sender",exact:true})).toContainText("no employer or application outcome is verified");
+        await inspector.screenshot({path:path.join(directory,`${theme}-inbox-unverified-sender.png`)});
+        await page.setViewportSize({width:390,height:844});
+        await inspector.screenshot({path:path.join(directory,`${theme}-inbox-unverified-sender-mobile.png`)});
+        await page.setViewportSize({width:1672,height:941});
+      }
     }
-    const directory=path.resolve("../artifacts/inbox-intelligence-validation");
-    await fs.mkdir(directory,{recursive:true});
     await page.getByLabel("Email view").selectOption("interviews");
     await expect(inspector.locator(".inbox-kind")).toHaveText("Interview");
     await page.screenshot({path:path.join(directory,`${theme}-inbox-classified-progress.png`),fullPage:true});
