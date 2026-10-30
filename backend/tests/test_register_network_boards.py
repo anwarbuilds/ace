@@ -436,3 +436,32 @@ def test_a_renamed_board_registers_under_its_own_name(
                 JobSourceRecord.company_name
             )
         ).one() == "Fictional Tower"
+
+
+def test_the_collected_list_can_be_read_as_it_stands() -> None:
+    """Every Workday board needs its tenant host to be read at all: the
+    first round-two run read 90 Workday boards without one, and every one
+    failed before a request was made."""
+
+    from backend.scripts.register_network_boards import DEFAULT_INPUT
+
+    candidates = load_candidates(
+        DEFAULT_INPUT
+    )
+
+    assert candidates
+
+    assert len(
+        {candidate.key for candidate in candidates}
+    ) == len(candidates)
+
+    for candidate in candidates:
+        host = candidate.definition().source_host
+
+        if candidate.source_type == "workday":
+            assert host and host.endswith(
+                ("myworkdayjobs.com", "myworkdaysite.com")
+            ), candidate
+
+        if candidate.source_type == "gem":
+            assert host == "api.gem.com", candidate
