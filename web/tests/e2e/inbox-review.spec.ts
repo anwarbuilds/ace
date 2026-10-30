@@ -350,3 +350,61 @@ for(const theme of ["light","dark"] as const){
     expect(fixture.applications.map(application=>application.status)).toEqual(["applied","applied"]);
   });
 }
+
+for(const theme of ["light","dark"] as const){
+  test(`${theme}: July email history excludes older offers from pagination and keeps their audit viewer`,async({page,context,baseURL})=>{
+    await setThemeCookies(context,baseURL!,theme);
+    const fixture=await inboxFixture(page);
+    const evidence_scope={start:"2026-07-01",timezone:"America/Los_Angeles",start_at:"2026-07-01T07:00:00Z",application_cohort_unchanged:true};
+    const row=(id:number,classification:string,received_at:string,subject:string)=>({id,classification,received_at,subject,sender:"Fictional Labs <talent@fictional.example>",snippet:"Fictional hiring email evidence.",decision:"classified_action",candidate_keys:[],selected_application_key:null,requisition_id:null,reason:"Fictional classified evidence without application attribution."});
+    const recent=Array.from({length:53},(_,i)=>row(9100+i,"interview","2026-07-02T12:00:00Z",`Fictional July interview ${i+1}`));
+    const boundary=row(9200,"online_assessment",evidence_scope.start_at,"Fictional assessment at July boundary");
+    const offer=row(9201,"offer","2026-07-02T12:00:00Z","Fictional offer in July history");
+    const older=row(9202,"offer","2026-07-01T06:59:59.999Z","Fictional offer before July boundary");
+    const stored=[...recent,boundary,offer,older];
+    await page.route("**/api/inbox/messages**",async route=>{
+      const url=new URL(route.request().url());
+      if(url.pathname==="/api/inbox/messages"){
+        const view=url.searchParams.get("decision")??"all";
+        const q=(url.searchParams.get("q")??"").toLowerCase();
+        const visible=stored.filter(message=>Date.parse(message.received_at)>=Date.parse(evidence_scope.start_at));
+        const category=({offers:"offer",assessments:"online_assessment",interviews:"interview"} as Record<string,string>)[view];
+        const listed=visible.filter(message=>(!category||message.classification===category)&&message.subject.toLowerCase().includes(q));
+        const offset=Number(url.searchParams.get("offset")??0);
+        return route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({items:listed.slice(offset,offset+50),total:listed.length,has_more:offset+50<listed.length,view,evidence_scope,latest_received_at:recent[0].received_at,counts:{stored:55,needs_review:0,automatic:0,manual:0,reviewed:0,receipts:0,updates:0,stale:0,classified_actions:55,classified_rejections:0,assessments:1,interviews:53,offers:1,rejections:0}})});
+      }
+      const match=url.pathname.match(/^\/api\/inbox\/messages\/(\d+)(\/full)?$/);
+      const selected=match&&stored.find(message=>message.id===Number(match[1]));
+      if(!selected)return route.fallback();
+      const result=match?.[2]?{...selected,text:"Fictional hiring email evidence.",document:"<p>Fictional hiring email evidence.</p>",to:"fixture@example.test",blocked_images:0,format:"html",message_id_header:null,thread_id:null}:selected;
+      return route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(result)});
+    });
+    await page.goto("/app/applications/inbox?decision=all");
+    await expect(page.getByLabel("Email history period")).toContainText("Since July 1, 2026");
+    await expect(page.locator(".inbox-status")).toContainText("Gmail coverage snapshot, separate from the visible email period");
+    await expect(page.locator(".inbox-kpis").getByRole("button",{name:/Emails in this period/})).toContainText("55");
+    await expect(page.locator(".inbox-mail")).toHaveCount(50);
+    await page.getByRole("button",{name:"Next messages",exact:true}).click();
+    await expect(page.locator(".inbox-mail")).toHaveCount(5);
+    await expect(page.locator(".inbox-list")).not.toContainText(older.subject);
+    await expect(page.locator(".inbox-list")).toContainText(boundary.subject);
+    await expect(page.getByRole("button",{name:"Next messages",exact:true})).toBeDisabled();
+    await page.getByLabel("Email view").selectOption("offers");
+    await expect(page.locator(".inbox-mail")).toHaveCount(1);
+    await expect(page.locator(".inbox-list")).toContainText(offer.subject);
+    await expect(page.locator(".inbox-list")).not.toContainText(older.subject);
+    await page.goto(`/app/applications/inbox?decision=offers&message=${older.id}`);
+    await expect(page.locator(".inbox-inspector h2")).toHaveText(older.subject);
+    await expect(page.getByRole("note",{name:"Outside current email history",exact:true})).toContainText("excluded from the current email lists and counts");
+    await expect(page.locator(".inbox-mail")).toHaveCount(1);
+    await expect(page.locator(".inbox-list")).not.toContainText(older.subject);
+    await expect(page.locator(".inbox-inspector").getByRole("button",{name:"Link or correct this email",exact:true})).toBeVisible();
+    const directory=path.resolve("../artifacts/inbox-intelligence-validation");
+    await fs.mkdir(directory,{recursive:true});
+    await page.screenshot({path:path.join(directory,`${theme}-inbox-july-history-audit.png`),fullPage:true});
+    expect(fixture.submitted).toEqual([]);
+    expect(fixture.filed).toEqual([]);
+    expect(fixture.added).toEqual([]);
+    expect(fixture.undos).toEqual([]);
+  });
+}

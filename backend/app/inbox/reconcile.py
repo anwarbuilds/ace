@@ -37,8 +37,10 @@ from backend.app.inbox.postings import compatible_role, contextual_links, postin
 from backend.app.inbox.company_outcomes import COMPANY_REASON
 from backend.app.inbox.filed_evidence import ACTION_KINDS, ACTION_PREFIX, DECISIONS as FILED_DECISIONS, REJECTION_PREFIX, UNVERIFIED_NOTE
 
-PARSER_VERSION = "13"
-MAX_CLASSIFIER_BODY = 60000
+PARSER_VERSION = "14"
+# ATS acknowledgement templates can exceed 100k visible characters. Read the
+# complete bounded message before deciding whether it contains a later outcome.
+MAX_CLASSIFIER_BODY = 256000
 
 _OTHERS = r"(?:other|another|a\s+different|different|more\s+qualified|alternative)\s+(?:candidates?|applicants?|individuals?|profiles?)"
 _ONWARD = r"(?:moving\s+(?:forward|ahead)|proceeding|progressing|advancing|continuing)"
@@ -450,6 +452,27 @@ def _action_asserted(pattern, body: str):
         start = max(body.rfind(c, 0, match.start()) for c in ".!?\n") + 1
         prefix = body[start:match.start()]
         clause_prefix = re.split(r"[;,:]|\b(?:but|however)\b", prefix, flags=re.I)[-1]
+        # A process heading such as "onsite interviews by invitation only"
+        # states an event's format, without inviting this candidate. A later
+        # personal request in the same email remains eligible on its own.
+        if (re.match(r"(?:" + _INTERVIEW_NOUN + r")s?\b", match.group(), re.I)
+                and re.search(r"\bby invitation\b|\binvitation[ -]only\b",
+                              body[match.start():match.end()+20], re.I)
+                and not re.search(r"\byour(?: [\w-]+){0,2}\s*$", prefix, re.I)):
+            continue
+        # "Should your qualifications match, we will contact you to schedule"
+        # describes the process; "you should complete your assessment" is a
+        # present request and must remain eligible.
+        if re.search(r"\bshould (?:your|our|we|there)\b"
+                     r"|\bshould you (?:be|meet|qualify|pass|match)\b", sentence, re.I):
+            continue
+        if re.search(r"\b(?:candidates|applicants)(?: who| that)? "
+                     r"(?:are|have been|will be|may be|might be|would be)\s*$", prefix, re.I):
+            continue
+        if (re.search(r"\b(?:" + _INTERVIEW_NOUN + r")[^.!?\n]{0,35}\b"
+                      r"(?:will|would|may|might|could) be (?:scheduled|arranged|confirmed)\b", sentence, re.I)
+                and not re.search(r"\byour (?:" + _INTERVIEW_NOUN + r")\b", sentence, re.I)):
+            continue
         if re.search(
                 r"\b(?:no need (?:for you )?to|(?:do not|does not|don['’]t|doesn['’]t) need to|not required to"
                 r"|(?:haven['’]t|hasn['’]t|hadn['’]t) (?:yet )?(?:been )?|won['’]t)\s*$",
@@ -468,6 +491,19 @@ def _action_asserted(pattern, body: str):
             continue
         if (re.search(r"\bcancell?(?:ed|ation)\b", sentence, re.I)
                 and not re.search(r"\b(?:please|book|select|choose|reschedule|invite you|invited to)\b", match.group(), re.I)):
+            continue
+        yield match, sentence
+
+
+def _offer_asserted(pattern, body: str):
+    """An employment policy or future possibility is not a present offer."""
+    for match, sentence in _asserted(pattern, body):
+        start = max(body.rfind(c, 0, match.start()) for c in ".!?\n") + 1
+        prefix = body[start:match.start()]
+        if re.search(r"\b(?:should|when|once|provided that|in the event that)\s*$"
+                     r"|\b(?:will|would|could|might|may)(?: be)?\s*$", prefix, re.I):
+            continue
+        if re.match(r"\s+(?:template|sample|example|policy)\b", body[match.end():], re.I):
             continue
         yield match, sentence
 
@@ -536,10 +572,11 @@ def read_intent(evidence: EmailEvidence) -> Reading:
         negative += list(_asserted(re.compile(r"\bit has been (?:filled|closed|cancelled)\b", re.I), body))
     # Sponsorship policy alone is information. An explicit personal eligibility
     # decision or refusal to continue is captured by _ENDING instead.
-    offer = list(_asserted(re.compile(
+    offer = list(_offer_asserted(re.compile(
         r"\b(?:(?:pleased|excited|delighted) to offer you (?:the |a |an )?(?:(?-i:[A-Z][\w-]+(?: [A-Z][\w-]+){0,7}) )?(?:position|role|job|employment)"
         r"|(?:attached|enclosed|please (?:review|sign|accept)) (?:employment )?offer letter"
-        r"|(?:extend|extending) (?:you )?an offer (?:of employment|for the (?:position|role|job))"
+        r"|(?:we (?:hereby )?extend|we are extending|we['’]re extending|(?:pleased|excited|delighted|happy) to extend) "
+        r"(?:you )?an offer (?:of employment|for the (?:position|role|job))"
         r"|congratulations on your (?:new )?(?:job |employment )?offer with)\b", re.I), body))
     # A completed test can be followed by a new interview request. That new
     # requested action is the primary intent, rather than the earlier completion.

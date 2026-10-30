@@ -291,3 +291,18 @@ test("unverified source counts describe message meaning without confirming emplo
   const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d:{...base,classified_email_evidence:{...classifiedEvidence,unverified_source_messages:0}},connection:null,tab:"overview",query:{}})));
   assert.equal(document.querySelector('[aria-label="Unverified email sources"]'),null);
 });
+
+test("recognized progress uses effective email dates while application cohorts keep their own selection",()=>{
+  const evidence_scope={start:"2026-07-01",timezone:"America/Los_Angeles",start_at:"2026-07-01T07:00:00Z",application_cohort_unchanged:true};
+  for(const [days,start,effective] of [["all","2025-01-01","2026-07-01"],["custom","2026-09-01","2026-09-01"]]){
+    const d={...base,days,start,evidence_scope,classified_email_evidence:{...classifiedEvidence,start:effective,end:"2026-10-26"}};
+    const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"outcomes",query:{}})));
+    const panel=document.querySelector(".an-classified-email-evidence");
+    assert.match(panel.querySelector('[aria-label="Email history period"]').textContent,/Since July 1, 2026/);
+    assert.match(panel.textContent,new RegExp(`Email receipt dates: ${effective} through 2026-10-26`));
+    assert.match(panel.textContent,/Application submission dates and confirmed stage history remain separate/);
+    assert.equal(document.querySelector(".an-metric strong").textContent,"9");
+    assert.match(document.querySelector(".an-bottom-links").textContent,new RegExp(`Submission dates.*${start}`));
+    assert.doesNotMatch(panel.textContent,/Email receipt dates: All dates/);
+  }
+});

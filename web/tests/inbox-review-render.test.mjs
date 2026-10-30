@@ -36,8 +36,8 @@ function loadSource(filename) {
 const { InboxReviewPanel, senderParts, since, likelyApplications, applicationFromEmail } = loadSource(path.join(sourceRoot, "components/inbox/InboxReviewPanel.tsx"));
 const message = { id: 1, received_at: "2026-01-01T12:00:00Z", sender: "Fictional Talent <fixture@example.test>", subject: "Fictional interview", snippet: "Fictional interview invitation", classification: "interview", requisition_id: "FIX-1", decision: "review", candidate_keys: ["job:1"], reason: "Matched by its job ID; positive outcomes need your confirmation", selected_application_key: null };
 const applications = [{ key: "job:1", company: "Fictional Labs", title: "Fictional engineer", requisition_id: "FIX-1", applied_at: "2025-12-01T12:00:00Z", status: "applied" }];
-function render(selected = message, apps = applications, events = []) {
-  return renderToStaticMarkup(React.createElement(InboxReviewPanel, { message: selected, applications: apps, events, busy: false, action: async () => { throw Error("Rendering must not mutate"); } }));
+function render(selected = message, apps = applications, events = [], evidenceScope) {
+  return renderToStaticMarkup(React.createElement(InboxReviewPanel, { message: selected, applications: apps, events, evidenceScope, busy: false, action: async () => { throw Error("Rendering must not mutate"); } }));
 }
 // A one-click choice: its label, its hint and, when suggested, ACE's reading.
 const choice = (html, label) => html.match(new RegExp(`<button[^>]*><strong>${label}</strong>[\\s\\S]*?</button>`))?.[0] ?? "";
@@ -377,4 +377,34 @@ test("ambiguous and unverified employer identities require an explicit applicati
     assert.match(html,/Which application/);
     assert.doesNotMatch(html,/ACE thinks this is about/);
   }
+});
+
+const julyScope={start:"2026-07-01",timezone:"America/Los_Angeles",start_at:"2026-07-01T07:00:00Z",application_cohort_unchanged:true};
+test("a historical audit link explains exclusion while preserving its recorded outcome and Undo",()=>{
+  const recorded={...message,received_at:"2026-07-01T06:59:59.999Z",classification:"rejection",decision:"automatic",selected_application_key:"job:1"};
+  const event={id:79,application_key:"job:1",gmail_message_id:1,kind:"rejection",before:"applied",after:"rejected",actor:"verified_automation",reason:"Fictional confirmed evidence",recorded_at:"2026-07-01T07:01:00Z",undo_of_id:null};
+  const html=render(recorded,applications,[event],julyScope);
+  assert.match(html,/aria-label="Outside current email history"/);
+  assert.match(html,/Since July 1, 2026/);
+  assert.match(html,/excluded from the current email lists and counts/);
+  assert.match(html,/Undo this change/);
+  assert.match(html,/ACE recorded this email/);
+});
+test("the exact July boundary is included independently of the browser timezone",()=>{
+  for(const received_at of ["2026-07-01T07:00:00Z","2026-07-01T00:00:00-07:00","2026-07-02T12:00:00Z"]){
+    const html=render({...message,received_at,classification:"offer",decision:"classified_action"},applications,[],julyScope);
+    assert.doesNotMatch(html,/Outside current email history/);
+    assert.match(html,/Classified and filed/);
+  }
+});
+
+test("an owner-confirmed receipt shows Acknowledgement while retaining the earlier machine offer reading as audit context",()=>{
+  const html=render({...message,classification:"application_confirmation",saved_classification:"offer",decision:"receipt",candidate_keys:[],reason:"You marked it an application receipt",understanding:{classification_source:"owner_decision",classification_reason:"You marked this email as an application receipt; its earlier classifier reading is retained for audit.",classification_state:"recognized",matching_state:"unlinked",workflow_state:"filed",update_policy:"no_status_change",review_reason:null,evidence_source:"retained_excerpt",evidence_excerpt:"Thank you for applying."}});
+  assert.match(html,/<span class="inbox-kind k-application_confirmation">Acknowledgement<\/span>/);
+  assert.doesNotMatch(html,/class="inbox-kind k-offer"|ACE.s classification: Offer/);
+  assert.match(html,/Your classification: Acknowledgement/);
+  assert.match(html,/Earlier machine reading: Offer\. Your saved classification takes precedence/);
+  assert.match(html,/earlier classifier reading is retained for audit/);
+  assert.match(html,/Acknowledgement filed/);
+  assert.doesNotMatch(html,/Which application\?|Why it waits:/);
 });

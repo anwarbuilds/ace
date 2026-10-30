@@ -93,7 +93,7 @@ def test_both_historical_undo_reasons_are_protected(database,gmail_reads,monkeyp
     assert projected_decision(row)=="review"
 
 
-def test_sql_python_api_and_analytics_queue_agree_without_hiding_old_outcomes(database):
+def test_sql_python_api_and_analytics_queue_agree_within_the_current_search_window(database):
     session,conn=database
     cases=[("unclear","review",UNCLEAR_REASON,"update"),("rejection","review","Email predates application","review"),
         ("online_assessment","review","No application could be matched with confidence","review"),
@@ -103,7 +103,7 @@ def test_sql_python_api_and_analytics_queue_agree_without_hiding_old_outcomes(da
     expected={}
     for i,(kind,decision,reason,projected) in enumerate(cases):
         row=stored(session,conn,f"projection-{i}",decision,"Your application",version="7")
-        row.classification=kind;row.decision_reason=reason;row.received_at=NOW-timedelta(days=2500)
+        row.classification=kind;row.decision_reason=reason;row.received_at=NOW-timedelta(days=60)
         expected[row.id]=projected
     session.commit()
     sql=dict(session.execute(select(GmailMessageRecord.id,decision_expression())).all())
@@ -119,7 +119,7 @@ def test_sql_python_api_and_analytics_queue_agree_without_hiding_old_outcomes(da
     assert sum(analytics["review"][key] for key in ("needs_review","exact_preview","deferred"))==pending
     updates=inbox.messages(owner_request(),session,"update",0,100)
     assert updates["total"]==2 and api["counts"]["reviewed"]==1  # Saved correspondence never claims owner review.
-    assert all(m["received_at"].startswith(str((NOW-timedelta(days=2500)).year)) for m in second["items"])
+    assert all(m["received_at"].startswith(str((NOW-timedelta(days=60)).year)) for m in second["items"])
 
 
 @pytest.mark.parametrize("subject",["Verify your account","Your job recommendations","Password reset"])

@@ -56,13 +56,32 @@ def main():
             session.add(GmailMessageRecord(
                 connection_id=conn.id, gmail_id=f"fictional-classified-{kind}",
                 thread_id=f"fictional-classified-thread-{kind}",
-                received_at=now-timedelta(days=4+i), sender="talent@fictional.example",
+                received_at=datetime(2026,7,1,7,tzinfo=timezone.utc) if i==0 else now-timedelta(days=4+i), sender="talent@fictional.example",
                 subject=f"Fictional {kind.replace('_', ' ')} email history",
                 snippet="Invented employer evidence for hosted UI validation only.",
                 classification=kind, decision="update", candidate_keys=[],
                 selected_application_key=None,
                 decision_reason=ACTION_PREFIX+"The fictional application identity is not verified.",
                 parser_version=PARSER_VERSION))
+        session.add(GmailMessageRecord(
+            connection_id=conn.id, gmail_id="fictional-classified-before-july",
+            thread_id="fictional-classified-before-july-thread",
+            received_at=datetime(2026,7,1,6,59,tzinfo=timezone.utc),
+            sender="talent@fictional.example", subject="Fictional pre-July offer history",
+            snippet="Invented older offer evidence retained for boundary validation.",
+            classification="offer", decision="update", candidate_keys=[],
+            selected_application_key=None,
+            decision_reason=ACTION_PREFIX+"The fictional application identity is not verified.",
+            parser_version=PARSER_VERSION))
+        session.add(GmailMessageRecord(
+            connection_id=conn.id, gmail_id="fictional-owner-receipt",
+            thread_id="fictional-owner-receipt-thread",
+            received_at=now-timedelta(days=2), sender="talent@fictional.example",
+            subject="Fictional owner receipt feedback",
+            snippet="Thank you for applying. Your application was received.",
+            classification="offer", decision="receipt", candidate_keys=[],
+            selected_application_key=None,
+            decision_reason="You marked it an application receipt", parser_version="2"))
         session.commit()
     print("Fictional Analytics fixture ready at /tmp/ace-analytics-fictional.db")
 

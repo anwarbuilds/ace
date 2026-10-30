@@ -5,6 +5,77 @@
 > Read this when: you deploy, restart, debug the scheduler, or write browser tests.
 
 
+## Inbox parser 14 corrective release LIVE — 2026-10-29 Pacific
+
+Owner-approved API/frontend source **`4116aa01dd5cdd3a6ea3d707017a7d9f7fad5bd7`**
+is live at https://ace.opik.net, parser **14**, schema **0050**. API/web activation
+ran 00:38:13–00:38:30 UTC on October 30 (17:38 Pacific October 29). All **367**
+tracked backend hashes and prepared image IDs match the running implementation;
+public health, deployed frontend SHA, served assets and auth boundaries pass.
+Only API/web were replaced. The concurrent gate-v55/startup code is retained;
+the eight-worker scheduler at `4796e4c`, PostgreSQL and Caddy kept their identities.
+Resume Studio, Pulls, authentication and extension 1.31.3 are preserved.
+
+Inbox and email Analytics share a July 1, 2026 midnight America/Los_Angeles floor
+(`2026-07-01T07:00:00Z`) across counts, categories, search and pagination. Older
+mail remains stored and accessible by audit/Undo links. Application cohorts stay
+independently selectable. Exact owner receipt choices now project as
+acknowledgements while preserving earlier raw machine classifications for audit;
+this projection rewrites neither owner-filed receipt. The reader accepts complete
+bodies up to 256,000 characters and distinguishes personal interviews from generic
+future selection processes and invitation-only event headings.
+
+Separately approved historical work corrected exactly three unprotected message
+meanings: two acknowledgements and one personal video-interview reminder. Only
+four classification/filing fields changed, with three appended email audits;
+application statuses, links, snippets, Gmail metadata, owner choices, Undo and
+prior ledger entries remain intact. Stale-preview guards first stopped without
+writes while owner application activity advanced. A tested atomic wrapper then
+preserved the exact approved body/row/event/patch fingerprints, refreshed only
+application context and verified all three changes in one REPEATABLE READ
+transaction. Subsequent owner application/answer-memory activity is preserved
+and reported separately from the transaction proof. No guard was bypassed.
+
+Validation: 2,241 backend and 267 matcher tests; dedicated 983 focused backend,
+89 Inbox DOM, 33 overlapping render/calculation and 48 hosted browser cases;
+TypeScript, lint and build pass. Private operator/verifier/atomic checks pass.
+A read-only 121-candidate real-mail audit plus nine subsequent arrivals verifies
+the reviewed controls, including six future-process negatives. Fresh committed
+row/audit checks, all four Analytics ranges, a single Gmail monitor lease and
+sync advancement pass. Population precision/recall remains unmeasured; this is
+not a claim of perfect or exhaustive classification. No signed-in production
+browser was used. Full CI retains the same 22 unrelated extension-browser failed
+names (25 pass), with zero new names; later broad app browsers were skipped.
+The owner approved that known limitation. Dedicated Inbox browsers pass.
+
+Fresh backup completed 00:01:47 UTC:
+`/opt/ace/private-backups/inbox-july-corrections-20261030T0000Z/database.dump.gz`,
+533,672,847 bytes; gzip, catalog and full archive expansion pass, without a restore
+drill. Retained API/web tags `oracle-api:before-inbox-july14-20261030T0000Z` and
+`oracle-web:before-inbox-july14-20261030T0000Z` preserve the immediately preceding
+startup API and Inbox frontend. The folder's guarded `rollback.sh` recreates only
+API/web. Data compensation is separate and must protect later owner activity.
+Private applied HMAC journal: `semantic-atomic-final/atomic-apply-plan.json` under
+that folder; source/row/audit proof and rollback notes remain private. Global
+historical rechecks stay false and the stopped parser-7 operator stays stopped.
+Do not broaden the three-message approval or infer a full-mailbox replay.
+
+## Historical accuracy dispute — parser 13, superseded by parser 14 above
+
+Inbox parser 13 remains deployed (frontend `e64c547`; the newer startup-network
+API release preserves that Inbox implementation). The owner disputed the semantic
+accuracy of acknowledgements, offers and an interview after reviewing the live UI. The release is not accepted as accurate.
+Source, health, preservation and arithmetic projection checks do not establish
+semantic accuracy; agreement between a saved label and the same parser's fresh
+reading is not independent validation.
+
+The confirmed active email scope is July 1, 2026 onward, using the owner's
+America/Los_Angeles calendar. Older Gmail evidence must remain preserved for
+audit/Undo, while the active Inbox and email progress metrics use that scope.
+Correction and representative regression work are in progress. No new historical
+rewrite or deployment is implied by this checkpoint. Resume Studio is outside
+scope. The stopped parser-7 runner and global historical rechecks remain off.
+
 ## Parser 12 API/frontend release and completed bounded history (2026-10-28)
 
 Owner-authorized `873ee080` is live, parser 12/schema 0050, activated at

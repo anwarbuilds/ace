@@ -1,9 +1,11 @@
 import type { InboxCoverage } from "./inboxSync";
+import type { InboxEvidenceScope } from "./inboxScope";
 export const CHART_COLORS = ["var(--accent)", "#dd7b9e", "#b7a3cc", "#329477", "#f27b86", "#aaa2b0", "#dc9c37", "#8c739f"];
 export interface AnalyticsGroup { submitted: number; eligible: number; responses: number; rejections: number; assessments: number; interviews: number; rate: number | null }
 export interface AnalyticsCompany extends AnalyticsGroup { name: string; latest: string; latest_at: string | null }
 export interface PetitionReport { entity: string; period: string; source: string; url: string; metric: string; version: string; checked_at: string; approvals: number | null; denials: number | null; rate: number | null }
 export interface AnalyticsData {
+  evidence_scope?:InboxEvidenceScope;
   as_of: string; timezone: string; start: string; end: string; days: string; family: string | null;
   available_families: string[]; total_submitted: number; submitted: number; undated: number;
   week_total: number; positive: number; assessments: number; interviews: number; has_outcome_evidence: boolean;
@@ -21,7 +23,7 @@ export interface AnalyticsData {
   rejection_summary: { applications: number; companies: number; dated: number; latest_at: string | null };
   company_rejections?: {company:string;messages:number;latest_at:string;message_ids:number[]}[];
   company_rejection_summary?: {companies:number;messages:number;latest_at:string|null;date_basis:"email_received";start:string|null;end:string;family_excluded_messages:number};
-  classified_email_evidence?: {total:number;categories:Record<"rejection"|"online_assessment"|"interview"|"offer"|"recruiter_reply"|"action_required",number>;date_basis:"email_received";application_status_changed:false;family_excluded_messages:number;company_excluded_messages:number;unverified_source_messages?:number};
+  classified_email_evidence?: {total:number;categories:Record<"rejection"|"online_assessment"|"interview"|"offer"|"recruiter_reply"|"action_required",number>;date_basis:"email_received";application_status_changed:false;start?:string|null;end?:string;family_excluded_messages:number;company_excluded_messages:number;unverified_source_messages?:number};
   verified_companies: (AnalyticsGroup & { name: string; reports: number })[];
   reports: PetitionReport[]; annual: { period: string; approvals: number; denials: number; rate: number | null }[];
 }

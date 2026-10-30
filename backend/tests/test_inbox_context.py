@@ -251,7 +251,7 @@ def test_unlinked_evidence_sql_python_and_analytics_agree_without_outcome_inflat
         app(session,1)
         conn=GmailConnectionRecord(owner_id=1,email='fictional@example.test',encrypted_refresh_token=b'',scope='gmail.readonly',state='disconnected')
         session.add(conn);session.flush()
-        row=GmailMessageRecord(connection_id=conn.id,gmail_id='unlinked-fictional',received_at=NOW-timedelta(days=300),sender='Talent <talent@silverpine.example>',subject='Application decision',snippet='Your application was rejected.',classification='rejection',decision='unlinked',candidate_keys=[],decision_reason='Recognized historical rejection without an application',parser_version='11')
+        row=GmailMessageRecord(connection_id=conn.id,gmail_id='unlinked-fictional',received_at=NOW-timedelta(days=60),sender='Talent <talent@silverpine.example>',subject='Application decision',snippet='Your application was rejected.',classification='rejection',decision='unlinked',candidate_keys=[],decision_reason='Recognized historical rejection without an application',parser_version='11')
         session.add(row);session.flush()
         assert workflow_state(row)==session.scalar(select(workflow_expression()).where(GmailMessageRecord.id==row.id))=='unlinked_outcome'
         assert inbox._message_rows(session,conn.id,'unlinked_outcome')==[row]

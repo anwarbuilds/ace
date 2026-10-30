@@ -383,3 +383,53 @@ for(const theme of ["light","dark"] as const){
     expect(errors).toEqual([]);
   });
 }
+
+test("July email floor excludes the older offer while preserving application metrics and boundary evidence",async({page})=>{
+  const before=await(await page.request.get("/api/analytics?days=all&tz=America%2FLos_Angeles")).json();
+  expect(before.evidence_scope).toMatchObject({start:"2026-07-01",timezone:"America/Los_Angeles",start_at:"2026-07-01T07:00:00Z",application_cohort_unchanged:true});
+  expect(before.classified_email_evidence.total).toBe(3);
+  expect(before.classified_email_evidence.categories.offer).toBe(1);
+  expect(before.classified_email_evidence.start).toBe("2026-07-01");
+  const older=await(await page.request.get("/api/inbox/messages?decision=offers&q=Fictional%20pre-July")).json();
+  expect(older.total).toBe(0);
+  expect(older.items).toEqual([]);
+  expect(older.counts.offers).toBe(1);
+  const assessments=await(await page.request.get("/api/inbox/messages?decision=assessments")).json();
+  const boundary=assessments.items.find((message:{subject:string})=>message.subject==="Fictional online assessment email history");
+  expect(boundary).toBeTruthy();
+  expect(Date.parse(boundary.received_at)).toBe(Date.parse("2026-07-01T07:00:00Z"));
+  await page.goto("/app/analytics?days=all&tab=outcomes");
+  const panel=page.locator(".an-classified-email-evidence");
+  await expect(panel.getByLabel("Email history period")).toContainText("Since July 1, 2026");
+  await expect(panel).toContainText("Email receipt dates: 2026-07-01");
+  await expect(panel).not.toContainText("Email receipt dates: All dates");
+  await expect(page.locator(".an-metric").first().locator("strong")).toHaveText(String(before.submitted));
+  const after=await(await page.request.get("/api/analytics?days=all&tz=America%2FLos_Angeles")).json();
+  for(const key of ["submitted","statuses","positive","assessments","interviews","classified_email_evidence"])expect(after[key]).toEqual(before[key]);
+});
+
+test("owner receipt feedback supersedes a stale offer reading in API categories and the Inbox",async({page})=>{
+  const query="Fictional%20owner%20receipt%20feedback";
+  const before=await(await page.request.get("/api/analytics?days=all&tz=America%2FLos_Angeles")).json();
+  const offers=await(await page.request.get(`/api/inbox/messages?decision=offers&q=${query}`)).json();
+  expect(offers.total).toBe(0);
+  expect(offers.items).toEqual([]);
+  expect(offers.counts.offers).toBe(1);
+  const receipts=await(await page.request.get(`/api/inbox/messages?decision=receipt&q=${query}`)).json();
+  expect(receipts.total).toBe(1);
+  expect(receipts.items[0]).toMatchObject({classification:"application_confirmation",saved_classification:"offer",decision:"receipt",selected_application_key:null,understanding:{classification_source:"owner_decision"}});
+  const writes:string[]=[];
+  page.on("request",request=>{if(new URL(request.url()).pathname.startsWith("/api/inbox/")&&!["GET","HEAD"].includes(request.method()))writes.push(`${request.method()} ${new URL(request.url()).pathname}`);});
+  await page.goto(`/app/applications/inbox?decision=receipt&q=${query}`);
+  await expect(page.locator(".inbox-mail")).toHaveCount(1);
+  await expect(page.locator(".inbox-mail .inbox-kind")).toHaveText("Acknowledgement");
+  await expect(page.locator(".inbox-inspector .inbox-kind")).toHaveText("Acknowledgement");
+  await expect(page.locator(".inbox-inspector .inbox-state")).toHaveText("Acknowledgement filed");
+  await expect(page.getByLabel("ACE understanding")).toContainText("Your classification: Acknowledgement");
+  await expect(page.getByLabel("ACE understanding")).toContainText("earlier classifier reading is retained for audit");
+  await expect(page.locator(".inbox-kind.k-offer")).toHaveCount(0);
+  await expect(page.locator(".inbox-inspector .inbox-target")).toHaveCount(0);
+  expect(writes).toEqual([]);
+  const after=await(await page.request.get("/api/analytics?days=all&tz=America%2FLos_Angeles")).json();
+  for(const key of ["submitted","statuses","positive","assessments","interviews","classified_email_evidence"])expect(after[key]).toEqual(before[key]);
+});
