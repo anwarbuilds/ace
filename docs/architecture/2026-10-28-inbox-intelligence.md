@@ -2,6 +2,36 @@
 
 
 
+## Personal interview recognition failure — corrective work, 2026-10-29
+
+The owner reported a genuine interview invitation missing from the live Inbox.
+A targeted read-only trace confirms the complete, authenticated email was stored
+as unclear correspondence and the deployed parser 14 still reads it as unknown.
+The July floor and application matching are not the cause. Rigid invitation
+phrasing and a blanket conditional guard fail to combine personal hiring contact,
+interview context and scheduling when the recipient is asked whether interested.
+
+The archived 121-message audit did include and read this message as unknown.
+It was not asserted as an independently labelled positive, and that false negative
+was not investigated. Earlier passing controls and queue counts did not validate
+recall. Do not treat routine filing or zero pending as successful recognition.
+An initial diagnostic membership claim was corrected after loading the archived
+manifest; container replacement had cleared the earlier temporary copy.
+
+The parser-15 candidate now explicitly recognizes the actual reported invitation
+as interview/classified_action in a private read-only check. Its 93 new fictional
+regressions and 436 focused backend cases pass. Broader hosted checks remain
+pending, and this is a known-case regression check, not held-out accuracy.
+
+An isolated parser-15 candidate adds bounded personal recruitment scheduling,
+recipient-choice handling and interview-description passage corroboration with
+fictional negative controls. This is source development, not a live fix. Keep the
+actual owner-labelled invitation as an explicit required positive. No historical
+row, application status, event or service was changed by this investigation.
+Any additional deployment/historical correction requires the owner's applicable
+approval after this confirmed accuracy failure. Preserve concurrent gate-v56,
+city-network and scheduler work at fca4673. Raw mail/identifiers remain private.
+
 ## Inbox parser 14 corrective release LIVE — 2026-10-29 Pacific
 
 Owner-approved API/frontend source **`4116aa01dd5cdd3a6ea3d707017a7d9f7fad5bd7`**
