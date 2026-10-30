@@ -86,6 +86,21 @@ standalone main, reads this entire file and current handoff, fetches current ref
 and follows the owner's next request. Legacy restart, production changes and
 archive/volume deletion need specific authorization; do not revive old operators.
 
+### Consolidation CI and exact-image recovery follow-up
+
+Consolidation full CI [41140888866](https://github.com/anwarbuilds/ace/actions/runs/41140888866)
+on documentation source `a8d2c5d549f552fcfcaaca91c91a0d665ab73a60` completed:
+backend and web passed; extension browsers had **25 pass / 22 fail**. Exact
+traceback-name comparison with PR #19 found zero new or resolved failed names.
+Later application-browser steps were skipped. Overall CI remains red; no test
+was disabled or weakened. The final follow-up records these results and the
+verified six-image private backup without changing runtime/test/workflow source.
+
+The private `legacy-images.tar.gz` archive contains all six original local
+service images (311,903,396 bytes), checked by full gzip/tar readback and exact
+image configuration hashes. The original volume and local recovery images are
+also retained. Four compressed archives passed a final complete gzip check.
+
 ## Historical continuity records
 
 The following records retain their original dated facts. Current consolidation

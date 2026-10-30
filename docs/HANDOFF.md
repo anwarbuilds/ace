@@ -65,7 +65,7 @@ production. Private comparison detail is not public documentation.
 Recovery entry point:
 `/home/ubuntu/ace-private-backups/consolidation-20261030T170532Z/`
 (mode 700). It contains `all-history.bundle`, `shared-git.tar.gz`,
-`workspaces-private.tar.gz`, `legacy-final.dump.gz`, exact manifests, restore and
+`workspaces-private.tar.gz`, `legacy-final.dump.gz`, `legacy-images.tar.gz`, exact manifests, restore and
 production proofs, job configurations and original workspace snapshots. Bundle
 recovery verified all 63 original refs, the stash and 334 reflog/unreferenced
 commits independently. Public `legacy-main-final` points to verified old main
@@ -108,6 +108,14 @@ backend, web, extension, workflow and Compose runtime bytes are unchanged.
 Main pushes run CI with all assertions intact. See the
 [current workflow results](https://github.com/anwarbuilds/ace/actions/workflows/ci.yml)
 and private final verification for the consolidation run; do not claim overall green.
+
+Consolidation full CI [41140888866](https://github.com/anwarbuilds/ace/actions/runs/41140888866)
+on documentation source `a8d2c5d549f552fcfcaaca91c91a0d665ab73a60` completed:
+backend and web passed; extension browsers had **25 pass / 22 fail**. Exact
+traceback-name comparison with PR #19 found zero new or resolved failed names.
+Later application-browser steps were skipped. Overall CI remains red; no test
+was disabled or weakened. The final follow-up records these results and the
+verified six-image private backup without changing runtime/test/workflow source.
 
 ## Future sessions
 

@@ -51,6 +51,7 @@ Nothing in this private directory was published. Key artifacts:
 | `refs-before.txt`, `worktrees-before.txt`, `recovery-tags.txt` | Original branch names, exact tips and layout |
 | `independent-recovery.git`, `git-recovery-proof.json` | Independent bundle clone/fsck and recovery proof |
 | `workspace-snapshots/`, `retired-shared.git` | Original folders retained privately as inert snapshots; old linked Git pointers removed |
+| `legacy-images.tar.gz` | All six exact legacy images, saved privately and checked against their configuration/image hashes |
 | `legacy-final.dump.gz`, catalog/checksum/restore proof | Final frozen legacy PostgreSQL backup, verified by actual isolated restore |
 | `legacy-archive-only-comparison.json` | Private stable-identity comparison; differing older owner states remain archive-only |
 | `local-containers-before.json`, container-private temporary files | Exact original service/config/image recovery material |
@@ -142,7 +143,7 @@ production discovery/owner activity continues independently of this cleanup.
 
 ## Validation
 
-A fresh Python environment and locked npm install succeeded. Focused fictional
+A fresh Python 3.12.12 environment and locked npm install succeeded. Local Node was 24.14.1; CI uses Node 22. Focused fictional
 backend, matcher/Memory, extension/company/Inbox DOM and Analytics calculations,
 route-type generation, TypeScript, lint, production web build and demo seed all
 passed. Fourteen fictional signed-in local HTTP routes passed; no browser ran.
@@ -160,6 +161,14 @@ results are recorded privately and reported to the owner; the
 remains the authority. Do not equate these local checks with production
 classification accuracy or complete mailbox/source coverage.
 
+Consolidation full CI [41140888866](https://github.com/anwarbuilds/ace/actions/runs/41140888866)
+on documentation source `a8d2c5d549f552fcfcaaca91c91a0d665ab73a60` completed:
+backend and web passed; extension browsers had **25 pass / 22 fail**. Exact
+traceback-name comparison with PR #19 found zero new or resolved failed names.
+Later application-browser steps were skipped. Overall CI remains red; no test
+was disabled or weakened. The final follow-up records these results and the
+verified six-image private backup without changing runtime/test/workflow source.
+
 ## Recovery
 
 Do recovery work in a new private directory. Do not overwrite current main,
@@ -168,6 +177,7 @@ jobs as a test. Keep the original archive files unchanged.
 
 ```bash
 # Replace the destination with a new private directory.
+umask 077
 git clone /home/ubuntu/ace-private-backups/consolidation-20261030T170532Z/all-history.bundle /tmp/ace-recovery
 cd /tmp/ace-recovery
 git fsck --full
