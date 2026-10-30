@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-29 Pacific, Inbox parser 14 corrective release LIVE at 4116aa0; July email scope; concurrent gate v55/startup and eight-worker scheduler releases preserved
+Last updated: 2026-10-29 Pacific (2026-10-30 UTC), gate v56 (no infrastructure, platform, cloud, DevOps, site reliability or mobile roles) and round-two city startup boards LIVE on API and scheduler at fca4673; Inbox parser 14, July email scope and eight-worker scheduler preserved
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -14,6 +14,57 @@ It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
 
+
+## Gate v56 and city startup networks LIVE, 2026-10-29 18:18 Pacific
+
+The owner approved ("Approve, go live", Workday and Oracle boards included). Canonical
+fast-forwarded to **`fca4673033dc92833bbf217182738026f414bf3d`**, rebased onto the
+concurrent Inbox parser 14 release (`ecc72c6`) without touching it. Only **api** and
+**scheduler** were built and recreated; web stays the Inbox release's `4116aa0`;
+PostgreSQL and Caddy untouched. Both containers report gate `2026-10-29-v56`. The
+PASS-only backfill re-evaluated 5,133 stored passing decisions: passing roles are now
+3,849 software, 879 ML and 214 forward deployed, none infrastructure, site reliability
+or mobile. Scheduler healthy. Fresh private backup
+`/opt/ace/private-backups/startup-networks-round2-20261030T0116Z/database.dump.gz`
+(534,810,553 bytes, mode 600, gzip and catalog checks); rollback tags
+`oracle-api:before-startup-networks-round2-20261030T0116Z` and the matching
+`oracle-scheduler`. Applied marks moved 1,007 to 1,010 during the release: the owner
+applying, not the release, which writes no application data.
+
+- Gate v56: infrastructure, platform, cloud and DevOps titles off the list, as the
+  owner asked ("not on this cloud DevOps"); software, backend, frontend, full stack,
+  developer, founding, member of technical staff, ML (including ML infrastructure and
+  AI platform) and forward deployed stay; "Software Engineer, Infrastructure" stays.
+  Experience unchanged (0 to 3 years; open-ended 3+, 4+, senior rejected): the owner
+  asked for 3+ and corrected it to "only up to 3 years" within minutes. See
+  `docs/knowledge/01-gate-and-roles.md`.
+- Round two of city networks: 15 regional VC boards, YC's hiring companies (public
+  yc-oss dataset) and Built In entry-level and junior listings in 22 cities; boards
+  found by ACE's verified name and careers-page lookup. The collected list grew from
+  2,139 to 2,726 boards; 105 networks explored, 59 read. Details in
+  `docs/architecture/2026-10-29-startup-networks.md`.
+- Registration on the server: 1,443 already in ACE, 1,283 read with
+  `--include-paged`: **336 registered** (228 Ashby, 58 Greenhouse, 23 Lever, 21
+  SmartRecruiters, 3 Gem, 3 Oracle), 164 with 299 roles passing at once; left out 767
+  with no US software or ML role today, 99 unreadable, 26 agencies, 15 empty; Workable
+  answered 429 again. Every Workday board failed in that run: the collected list had
+  kept the source host only for Gem, and a Workday source cannot be read without its
+  tenant host. `4cfc188` restored all 251 hosts and added a test that reads the
+  committed list as the script does; a Workday-only run (`--input` a filtered copy in
+  the container) then registered **34** large employers (45 had no US software or ML
+  role today). Total from the networks today: **1,097 boards**.
+- At 01:50 UTC: 1,094 of the 1,097 boards polled, holding **667 active passing
+  roles**; fifteen-minute boards a median 8 to 9 minutes old, 90th percentile 15 to 16;
+  about 192 polls a minute; load average 1.4 to 1.7 on 2 cores. Workable stays stale
+  (refusal backoff), as before.
+- Read-only feature check after the release (`check_features.py` in the private
+  release folder, run in the API container as a local caller with read-only
+  connections): all 40 page, filter and sort requests answered 200 (Opportunities,
+  family, new grad, early career, experience fit, verified, match, big tech, source,
+  search, age, company include and exclude, Applications, Saved, Archive, Pulls,
+  Analytics, Coverage, Resume Studio, Answers, history); the family filter offers only
+  software, ML and forward deployed; no excluded family among passing results.
+  Opportunities 1,347 before, 1,275 after.
 
 ## Inbox parser 14 corrective release LIVE — 2026-10-29 Pacific
 

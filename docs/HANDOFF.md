@@ -72,6 +72,12 @@ rewrite or deployment is implied by this checkpoint. Resume Studio is outside
 scope. The stopped parser-7 runner and global historical rechecks remain off.
 
 
+**LIVE 2026-10-29 18:18 Pacific, API and scheduler `fca4673` (data fix `4cfc188`):** gate v56 also
+drops infrastructure, platform, cloud and DevOps roles (experience unchanged, 0 to 3 years); round two
+of city startup networks (regional VCs, YC hiring companies, Built In in 22 cities) registered 370 more
+boards. 1,097 network boards in all, 667 passing roles; feature and filter check 40 of 40. Inbox parser
+14 and the web release from the concurrent session preserved.
+
 **LIVE 2026-10-29 16:54 Pacific, scheduler `4796e4c`:** eight workers and Workable 429
 failing fast (all six workers had been busy all the time); API stays `fc81876`.
 

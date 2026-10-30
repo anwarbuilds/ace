@@ -921,3 +921,12 @@ address polls 123 Workable boards; the legacy catalog shows Workable boards a me
 verification pass that runs the whole gate on every posting of every board is CPU bound; classify the title first and
 run the gate only on software, machine learning and forward deployed titles. `pkill -f` with a pattern that appears in
 the shell's own command line kills that shell; bracket one character (`verify[.]py`).
+
+Round two, the same evening (the owner: "explore all the websites like that speedrun ... in each city"): 15 more regional
+VC boards, YC's hiring companies from the public yc-oss dataset (YC's own directory disallows query strings; Work at a
+Startup needs a sign-in for most roles) and Built In's entry-level and junior listings in 22 cities (apply links need a
+sign-in and were not followed). Companies were resolved to their own boards with `find_board` and
+`find_board_via_careers_page`, started from the real website where one was known. 370 more boards registered, 34 of
+them large employers on Workday. Lesson: a collected board list must keep every field its adapter needs; Workday
+needs the tenant host, and a list that kept it only for Gem made every Workday read fail before a request.
+`test_the_collected_list_can_be_read_as_it_stands` pins it.
