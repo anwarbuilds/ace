@@ -57,7 +57,7 @@ within robots.txt, terms of service and no-sign-in rules. A paid API only with a
 Private lists (complete CSV, startup boards by network, the read-only regeneration query) are in the ignored
 `artifacts/ace-sources-20261030/` folder on the owner's laptop.
 
-Release caution (2026-10-30): another session put API `b03d251` (Inbox parser 15, gate v56 preserved) live; canonical `wine-rose-platform` does not contain it until PR #19 is merged. Before any API release from source work, rebase onto that source or confirm the merge, or the release rolls parser 15 back. Check the running image first.
+Release note (2026-10-30): production API is `b03d251` (Inbox parser 15, gate v56 preserved), merged into canonical `wine-rose-platform` as `9c884dc`. Start new source work from canonical at or after that commit, and check the running images before any release.
 
 ## Gate v56 and city startup networks LIVE, 2026-10-29 18:18 Pacific
 
