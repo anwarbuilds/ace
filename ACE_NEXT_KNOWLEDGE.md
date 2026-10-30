@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-29 Pacific, gate v55 (no site reliability or mobile roles), Gem detection and startup talent-network board registration LIVE on API and scheduler at fc81876
+Last updated: 2026-10-29 Pacific, gate v55 (no site reliability or mobile roles), Gem detection and 727 startup talent-network boards LIVE (API fc81876, scheduler 4796e4c: eight workers, Workable 429 fails fast)
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -14,6 +14,34 @@ It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
 
+
+## Scheduler capacity release LIVE, 2026-10-29 16:54 Pacific
+
+The owner approved ("Yes, do it now") after the measurement below showed all six
+workers busy all the time. Canonical fast-forwarded to
+**`4796e4c396cfb267f6b110a9bb1e417066978c69`**; only the **scheduler** was built and
+recreated (API stays `fc81876`; web, PostgreSQL and Caddy untouched, container IDs
+verified). The running scheduler reports `DEFAULT_CONCURRENCY` 8, Workable listing
+retries `[500, 502, 503, 504]` (no 429) and gate v55; healthy. Fresh private backup
+`/opt/ace/private-backups/scheduler-capacity-20261029T2352Z/database.dump.gz`,
+533,736,103 bytes, mode 600 (gzip and catalog checks); rollback tag
+`oracle-scheduler:before-scheduler-capacity-20261029T2352Z`.
+
+- Why: Workable's 429 is a standing refusal of the VM's address; each refused listing
+  was retried twice for up to 20 seconds before the runtime's refusal backoff, holding
+  a worker 40 seconds (16.5% of all worker time). `request_with_retry` takes
+  `retry_statuses`; Workable's listing passes `LISTING_RETRY_STATUSES` (without 429).
+  Eight workers stay below the twelve-connection pool. Tests: `test_retry.py`,
+  `test_workable_adapter.py`; full backend 2,167 passed.
+- Measured 15 minutes after (00:09 UTC, read-only): 1,357 polls in 10 minutes (about
+  136 a minute, up from about 88); 1,271 sources read in the last 10 minutes (was
+  855). Fifteen-minute boards a median 8 to 11.5 minutes old, 90th percentile 17 to
+  19 (were 15 to 19 and 23 to 25). Workers 7.85 of 8 busy, Workday now 67% of worker
+  time; Workable no longer holds workers. Scheduler container about 17% of one core,
+  PostgreSQL 3%, 3 GB of 12 GB memory in use; load average 2.7 to 3.7 on 2 cores
+  while the new boards' first polls write their jobs, falling. Public health 0.15 to
+  0.25 s and the sign-in page about 0.2 s. Workable boards stay stale (refusal
+  backoff, a median 5 hours): Workable refuses this address, as before.
 
 ## Startup talent networks and gate v55 LIVE, 2026-10-29 16:04 Pacific
 
@@ -62,14 +90,10 @@ site reliability or mobile. Public `/healthz` ok; web still reports `e64c547`.
   this release; the new boards add little. Load average stayed below 1.8 on 2 cores;
   PostgreSQL 24 of 100 connections; pool 12 plus 8 overflow per process.
 - Next, each needing its own approval: (1) re-run `register_network_boards --apply`
-  when Workable is not refusing the VM, for the 39 Workable boards; (2) the scheduler
-  is close to its six-worker capacity: a refused Workable poll holds a worker for
-  about 40 seconds (`adapters/retry.py` retries 429 twice, up to 20 seconds each,
-  before the runtime's own refusal backoff), and every restart resets that backoff
-  for all 113 Workable boards at once; failing fast on 429 inside scheduled polls
-  and raising `DEFAULT_CONCURRENCY` from 6 (CPU and connections allow about 10)
-  would restore headroom; (3) a Rippling reader (72 startups in these networks link
-  Rippling boards).
+  when Workable is not refusing the VM, for the 39 Workable boards; (2) done the same
+  day: the scheduler capacity release above; (3) a Rippling reader (72 startups in
+  these networks link Rippling boards). Every scheduler restart still resets the
+  in-memory refusal backoff, so each restart briefly repeats the Workable refusals.
 
 What the release contains, as prepared before approval:
 

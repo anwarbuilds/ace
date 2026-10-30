@@ -377,3 +377,20 @@ at worst -- against 10.7 minutes measured for Cursor before.
   2026-10-09 (92 boards, Workable and Workday). Transient errors now
   record nothing and the provider is skipped for the rest of the run;
   the 92 rows were deleted so the sweep re-reads them.
+
+## Six workers were all busy, all the time (2026-10-29)
+
+Measured read-only after the startup-network release: 3,262 enabled sources asked for about 10,900 polls an hour and
+the scheduler completed about 5,400. Its six workers were busy 100% of a 15-minute window with the CPU mostly idle
+(load below 1.8 on two cores): Workday paging 54% of worker time, Workable 16.5%, Oracle 10.5%, and 950 Ashby,
+Greenhouse and Lever polls about 14% at under half a second each. Boards meant for fifteen minutes were read every
+twenty to twenty-five.
+
+Workable's 429 had become a standing refusal of the VM's address. `request_with_retry` retried it twice, honouring
+`Retry-After` up to 20 seconds, so each refused listing held a worker for 40 seconds before the runtime's own refusal
+backoff applied. It now takes `retry_statuses`; Workable's listing leaves 429 out (`LISTING_RETRY_STATUSES`), so the
+backoff starts at once. `DEFAULT_CONCURRENCY` is 8 (pool 12 plus 8 overflow). The refusal backoff is in memory, so a
+restart repeats every Workable refusal once; that is now a fast failure rather than 40 seconds a board.
+
+After: about 136 polls a minute instead of 88; fifteen-minute boards a median 8 to 11.5 minutes old, 90th percentile
+17 to 19, instead of 15 to 19 and 23 to 25. Workday is now two thirds of worker time; that is the next limit.

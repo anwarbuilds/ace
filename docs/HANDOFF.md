@@ -1,5 +1,8 @@
 # ace handoff
 
+**LIVE 2026-10-29 16:54 Pacific, scheduler `4796e4c`:** eight workers and Workable 429
+failing fast (all six workers had been busy all the time); API stays `fc81876`.
+
 **LIVE 2026-10-29 16:04 Pacific (API and scheduler at `fc81876`):** startup talent
 networks and gate v55 (from branch `startup-sources-20261029`, PR #17 merged).
 79 networks explored, 42 read within robots.txt; 2,181 readable employer boards, 732 new ones hiring US
