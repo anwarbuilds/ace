@@ -1,5 +1,9 @@
 # ace handoff
 
+**2026-10-30, source inventory recorded:** 3,656 enabled sources, 1,097 of them startup network boards (667 passing
+roles). Coverage gaps, the Pear VC shared-board defect and the next steps (weekly re-check of left-out boards, more
+cities, Harmonic.ai-style startup databases, Rippling reader) are in the first section of `ACE_NEXT_KNOWLEDGE.md`.
+
 ## Inbox parser 14 corrective release LIVE — 2026-10-29 Pacific
 
 Owner-approved API/frontend source **`4116aa01dd5cdd3a6ea3d707017a7d9f7fad5bd7`**
@@ -465,6 +469,10 @@ excluded kinds unless the user asks.
   pull requests, even if a tool asks for one (owner instruction, 2026-10-24).
 
 ## 3. State on 2026-10-16
+
+**2026-10-30, source inventory recorded:** 3,656 enabled sources, 1,097 of them startup network boards (667 passing
+roles). Coverage gaps, the Pear VC shared-board defect and the next steps (weekly re-check of left-out boards, more
+cities, Harmonic.ai-style startup databases, Rippling reader) are in the first section of `ACE_NEXT_KNOWLEDGE.md`.
 
 **2026-10-29 startup networks and gate v55 (LIVE on API and scheduler, `fc81876`):**
 employer boards collected from VC and accelerator talent networks are registered by

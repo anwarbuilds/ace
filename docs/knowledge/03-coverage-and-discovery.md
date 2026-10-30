@@ -930,3 +930,20 @@ sign-in and were not followed). Companies were resolved to their own boards with
 them large employers on Workday. Lesson: a collected board list must keep every field its adapter needs; Workday
 needs the tenant host, and a list that kept it only for Gem made every Workday read fail before a request.
 `test_the_collected_list_can_be_read_as_it_stands` pins it.
+
+## Source inventory and what the networks still miss (2026-10-30)
+
+The owner asked for every source ACE reads. The answer listed 3,656 enabled sources and their check frequencies but did
+not mark the 1,097 startup boards added the day before or name what was still missing; the owner had to ask twice.
+Lesson: an inventory answer marks what is new and lists every gap with counts, unprompted.
+
+Measured gaps: about 1,390 network boards left out for having no US software or ML role on the day they were read,
+with nothing re-checking them (the largest fixable gap, since new grad roles open in waves); about 1,400 companies
+with no readable board (mostly YC Work at a Startup only, and Built In); about 300 startups on boards without a
+reader (Rippling the largest); refused or sign-in networks; cities never searched (Detroit, Phoenix, Nashville,
+Columbus, Indianapolis, Charlotte, Tampa, St. Louis, Kansas City, Baltimore, Madison, Orange County, New Jersey);
+Workable refusing the VM.
+
+Pear VC's shared portfolio board was registered in round two: Built In named it by the firm's own name, and the
+shared-board check only compares a non-firm network name with a firm declared name. A declared firm name on a board
+with several companies' roles should be rejected regardless of what the network called it.

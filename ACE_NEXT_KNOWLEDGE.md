@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-29 Pacific (2026-10-30 UTC), gate v56 (no infrastructure, platform, cloud, DevOps, site reliability or mobile roles) and round-two city startup boards LIVE on API and scheduler at fca4673; Inbox parser 14, July email scope and eight-worker scheduler preserved
+Last updated: 2026-10-30 Pacific, source inventory and startup coverage gaps recorded. Before that, 2026-10-29 Pacific (2026-10-30 UTC), gate v56 (no infrastructure, platform, cloud, DevOps, site reliability or mobile roles) and round-two city startup boards LIVE on API and scheduler at fca4673; Inbox parser 14, July email scope and eight-worker scheduler preserved
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -14,6 +14,48 @@ It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
 
 
+
+## Source inventory and startup coverage gaps, 2026-10-30
+
+Read-only production snapshot, about 07:00 Pacific. ACE reads **3,656 enabled sources** (3,793 catalog rows; 137
+switched off: agencies, duplicates, dead boards), about 3,450 companies, holding **3,433 open passing roles**. By
+reader: Ashby 1,208, Greenhouse 870, Workday 865, Lever 255, SmartRecruiters 155, Workable 118, Oracle 115, Gem 34,
+Eightfold 16, 17 own-site readers (Apple, Google, Amazon, IBM, Meta, Intuit, Arm, Synopsys, ByteDance, TikTok,
+Atlassian, Shopify, AMD, Booking, SIG, EA, Two Sigma) and 3 feeds (Simplify new grad and internships, RippleMatch).
+
+Planned check interval, sources, measured minutes since last read (median / 90th percentile): 5 min, 111 (4 / 8);
+15 min, 2,345 (10 / 17); 30 min, 4 (27 / 35); hourly, 1,185 (21 / 51); 6 hours, 1; daily, 10 (RippleMatch and nine
+Workday employers, about 14 hours). Workable is planned at 15 minutes but read about every 17 hours: Workable refuses
+the VM with 429. The 1,097 `talent_network` boards hold 667 passing roles on 405 boards; 414 are checked every 15
+minutes, 683 hourly until their first passing role.
+
+Gaps. State them whenever coverage is discussed: the owner found them only by asking, after receiving a source list
+in which the new startup boards were not marked.
+
+1. About 1,390 network boards were left out because they had no US software or ML role on 2026-10-29, and nothing
+   re-checks them. Next step agreed in principle: a weekly automatic re-check (`register_network_boards` skips
+   registered boards, so a re-run adds those that have started hiring).
+2. About 1,400 companies with no readable board found: about 770 YC companies that post only on Work at a Startup
+   (sign-in) and about 625 Built In companies.
+3. About 300 startups on boards ACE has no reader for: Rippling 72, Notion pages 63, Paylocity 39, Dover 33 (robots
+   disallows its API), BambooHR 27, Breezy 27, JazzHR 21, Teamtailor 17.
+4. Refused or disallowed: about 23 Consider boards (CSRF token), about 19 robots-disallowed firm boards, Climatebase
+   (challenge), TrueUp (403), Wellfound, LinkedIn, Handshake and Work at a Startup (sign-in). Never bypass these.
+5. Cities never searched for their own startup networks: Detroit and Ann Arbor, Phoenix, Nashville, Columbus,
+   Indianapolis, Charlotte, Tampa, St. Louis, Kansas City, Baltimore, Madison, Orange County, New Jersey.
+6. About 40 Workable boards unread (429), and every Workable board stale as above.
+
+Defect found: Pear VC's shared Ashby board (`pear-vc`, about a dozen portfolio startups) was registered in round two.
+Built In listed it under the firm's own name, so the shared-board check in `settle_name` (a non-firm network name
+against a firm declared name) did not fire. Its 16 passing roles are real startup roles shown with company "Pear VC"
+and the startup in the title. Owner decision pending: keep, or disable (`enabled = false`, a production write that
+needs approval). Fix the check either way, with a fictional regression.
+
+Owner direction for the next session: deep research into startup databases like Harmonic.ai and similar public
+lists of startups that are hiring; add every accessible source whose boards pass the filters, as many as possible,
+within robots.txt, terms of service and no-sign-in rules. A paid API only with a key the owner adds to `.env`.
+Private lists (complete CSV, startup boards by network, the read-only regeneration query) are in the ignored
+`artifacts/ace-sources-20261030/` folder on the owner's laptop.
 
 ## Gate v56 and city startup networks LIVE, 2026-10-29 18:18 Pacific
 
