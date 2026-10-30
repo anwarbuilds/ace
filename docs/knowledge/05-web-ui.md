@@ -1,5 +1,8 @@
 # The web interface: design, behaviour and its lessons
 
+> Current layout, 2026-10-30: canonical/default branch is main; ace-next is standalone. Local legacy services/comparison are retired with verified recovery retained. Use the current handoff and consolidation record; older dated operating instructions below are historical.
+
+
 > Part of the ace knowledge set (index: `README.md`). Dated entries, each a problem found, its cause, the fix and the lesson. An entry describes the system on its date: where it disagrees with the code, trust the code and fix the entry. Superseded entries carry a Status line.
 >
 > Read this when: you change the old single-file UI or build its Next.js replacement; it records what each screen is for and what went wrong.

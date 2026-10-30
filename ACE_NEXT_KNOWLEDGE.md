@@ -1,5 +1,96 @@
 # ACE Next knowledge
 
+Last updated: 2026-10-30 Pacific, owner-authorized main promotion, local legacy retirement, standalone workspace and README consolidation.
+
+## Current platform consolidation completed, 2026-10-30 Pacific
+
+The owner's explicit consolidation authorization supersedes all older instructions
+below to keep legacy discovery running, avoid main promotion, preserve the restored
+root runtime in place, or continue comparison. Those dated narratives remain
+historical evidence, not active tasks. Do not replay any completed release or
+historical Gmail operator. The parser-15/PR #19 work below was already complete.
+
+**Canonical source is now `main`, GitHub default, in `anwarbuilds/ace`.** Wine Rose
+history was renamed intact from `98b112a`, including reviewed PR #19 merge
+`9c884dc`; no force-push, flattening or old runtime merge. Remote tag
+`legacy-main-final` verifies old main `a3c9449370b7ca070c3bad5d5fc68876eb1e6ccb`.
+Nineteen named archived remote development branches were deleted after exact-tip
+rechecks. There were 21 remote branches total before promotion, not 21 deletions.
+No open PR, branch protection or ruleset existed; none was silently dropped.
+
+`/home/ubuntu/Documents/ace-next` is now a **standalone main clone**, with its own
+`.git` directory/common dir and no alternates or dependency on the old shared
+Git database. Eleven old worktree locations, 29 local branch tips and the stash
+are preserved privately; their old registrations/branches/live stash were removed.
+Original folders became inert private snapshots with linked `.git` pointers removed.
+`~/Documents/ace` is absent. Keep local `recovery-20261030/*` tags, including stash,
+private; push only the intended main ref. All twelve extension files are unchanged
+at the existing unpacked path; no reload/publication ran. Private release evidence,
+design references and reports were restored with hashes. Active `.env` has fresh
+example development values; former configuration is inactive `.env.legacy-retired`.
+
+Private recovery root (mode 700):
+`/home/ubuntu/ace-private-backups/consolidation-20261030T170532Z/`.
+`all-history.bundle` and independent fsck/clone checks preserve all 63 original
+refs, the stash and 334 reflog/unreferenced commits. Exact raw Git/workspace
+archives, named tags, branch manifests, original snapshots, container/job records,
+checksums and restoration proofs are there. Do not publish private archives.
+
+The positively identified local `ace` stack is retired: writers and its one
+comparison cron stopped; final dump passed gzip/catalog and a real isolated
+restore matching 28 table counts, twelve protected hashes and schema 0040. All
+six old containers were removed without volume deletion. **Retain legacy volume
+`ace_ace_postgres_data` and exact recovery images until a separate owner retention
+decision.** No legacy-only application/resume identity was found at the documented
+read-only comparison snapshot; differing older states and all legacy history
+remain archive-only. No records were transferred and no old replica was restarted.
+
+Production `/opt/ace` is now on main tracking origin/main, but source commit stays
+`fca4673033dc92833bbf217182738026f414bf3d`. Its obsolete single-branch fetch refspec
+was corrected. API remains `b03d251047f531ba60a75812d9c088b395a6d943` (parser 15),
+web `4116aa01dd5cdd3a6ea3d707017a7d9f7fad5bd7`, scheduler `fca4673` (181 runtime
+hashes matched), schema 0050. Six production container IDs, image IDs, starts,
+mounts and .env/Caddy/Compose hashes matched exactly before/after; public web/API
+health passed. No production deployment, image operation, restart, migration,
+write, reclassification or scheduler action ran. Keep deliberately different
+source/image revisions; pushing source never deploys it.
+
+README was completely rewritten from current canonical routes/source. It covers
+Pulls, Opportunities, Applications, Inbox, Analytics, Studio, extension/Answers,
+Archive, Coverage, Settings, architecture, fictional setup, configuration, tests,
+privacy and limitations. Old handoff and deployment narratives are archived; use
+the compact current `docs/HANDOFF.md`, updated repository instructions,
+`deploy/oracle/README.md` and `docs/operations/testing.md` going forward.
+Only missing legacy scheduler/relisting lessons were carried into topic knowledge.
+
+Fresh dependency installation, focused fictional backend/matcher/Memory/DOM/
+calculation checks, TypeScript, lint, web build and demo seeding passed. Fourteen
+fictional signed-in local HTTP routes passed; no Chrome or production browser
+claim. Rechecked prior PR #19 full CI 41075615441 had backend/web pass and the
+known 22 extension-browser failures; dedicated Inbox 41075606426 passed. Main
+pushes run unchanged CI; retain failures and compare exact names. Current run
+results and final checks are in the private consolidation evidence and the
+GitHub workflow. Backend/web/extension/workflow/Compose runtime source is unchanged.
+
+Classification, application linkage and status permission remain separate.
+Assessment/interview history survives later rejection; unlinked recognized email
+history is not a confirmed application-stage event. Never submit or mark Applied
+after Fill, infer historical submitted resumes/channels/response rates, promise
+complete source/mailbox coverage or call classification perfect. Historical
+rechecks remain false and parser-7 stays stopped. Offsite backup, coverage gaps,
+unmeasured population accuracy and resume tailoring/export remain limitations.
+
+Full exact service identities, removed/retained name lists and recovery procedure:
+`docs/operations/platform-consolidation-2026-10-30.md`. Future work starts from
+standalone main, reads this entire file and current handoff, fetches current refs
+and follows the owner's next request. Legacy restart, production changes and
+archive/volume deletion need specific authorization; do not revive old operators.
+
+## Historical continuity records
+
+The following records retain their original dated facts. Current consolidation
+and the newest applicable owner instruction supersede their operating paths and pending lists.
+
 Last updated: 2026-10-30 Pacific, global-memory consolidation after the completed Inbox parser 15 release and owner-approved PR #19 merge at 9c884dc; live API b03d251, verified one-email correction, rollback and accuracy limits recorded; concurrent inventory, gate v56, city-network and scheduler continuity preserved
 
 This is the single, standalone continuity document for ACE Next and its

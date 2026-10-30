@@ -947,3 +947,7 @@ Workable refusing the VM.
 Pear VC's shared portfolio board was registered in round two: Built In named it by the firm's own name, and the
 shared-board check only compares a non-firm network name with a firm declared name. A declared firm name on a board
 with several companies' roles should be rejected regardless of what the network called it.
+
+## A Greenhouse posted date can predate the listing by days (2026-10-21)
+
+Consolidated from legacy main notes `a7b42bb` and its corrected timeline `a3c9449`. Greenhouse `first_published` can survive a takedown and later relisting. The audited posting was absent from complete reads before reappearing; its older publish date did not prove ACE had been six days late. Early scheduler startup gaps also limit what can be inferred before the first continuous board read. Compare first observation with complete neighboring board snapshots and an independent feed, starting no earlier than the board's first read. Never measure discovery lateness from `posted_at` alone. Dated benchmark results remain in `legacy-main-final`; they are not permanent recall percentages.

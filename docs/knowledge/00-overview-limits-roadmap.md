@@ -1,5 +1,8 @@
 # ace: overview, limits, roadmap and recent log
 
+> Current layout, 2026-10-30: canonical/default branch is main; ace-next is standalone. Local legacy services/comparison are retired with verified recovery retained. Use the current handoff and consolidation record; older dated operating instructions below are historical.
+
+
 > Part of the ace knowledge set (index: `README.md`). Read this when you need the shape of the whole system, the rules
 > that must never break, what is known to be limited, or what happened most recently.
 

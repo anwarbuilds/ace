@@ -1,5 +1,8 @@
 # Operations, incidents and testing lessons
 
+> Current layout, 2026-10-30: canonical/default branch is main; ace-next is standalone. Local legacy services/comparison are retired with verified recovery retained. Use the current handoff and consolidation record; older dated operating instructions below are historical.
+
+
 > Part of the ace knowledge set (index: `README.md`). Dated entries, each a problem found, its cause, the fix and the lesson. An entry describes the system on its date: where it disagrees with the code, trust the code and fix the entry. Superseded entries carry a Status line.
 >
 > Read this when: you deploy, restart, debug the scheduler, or write browser tests.
@@ -487,3 +490,7 @@ regressions passed there too. Use an approved execution outside this sandbox
 for Starlette TestClient's local wakeup sockets when this specific stall recurs.
 This does not authorize connecting to real data or running Chrome; the laptop
 cooling restriction still applies.
+
+## Legacy scheduler exit 137 (2026-10-19, archived lesson)
+
+Legacy main commit `99987b6` recorded a scheduler ending with exit 137 while the web service continued. Neither Docker nor the kernel recorded an OOM kill, and the evidence suggested an external stop rather than proving a crash cause. Process/web health alone did not prove discovery freshness; inspect successful source reads. The historical direct-container recovery avoided an incompatible migration dependency. The local legacy stack is now retired: this is not an instruction to start it again.

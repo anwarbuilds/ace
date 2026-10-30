@@ -89,3 +89,6 @@ ace-demo.db
 
 # Read-only comparison snapshots can contain real job titles and links.
 /private-reports/
+
+# Private operational archives and database recovery material.
+/private-backups/

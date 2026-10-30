@@ -1,5 +1,8 @@
 # ace knowledge set
 
+> Current layout, 2026-10-30: canonical/default branch is main; ace-next is standalone. Local legacy services/comparison are retired with verified recovery retained. Use the current handoff and consolidation record; older dated operating instructions below are historical.
+
+
 Everything learned building ace, from the first week to now, split by topic so a session reads only what it needs.
 Start with `../../ACE_NEXT_KNOWLEDGE.md` (current verified state) and `../HANDOFF.md` (rules and plan; both load through the root `CLAUDE.md`), then open
 a topic file when you work in that area. Reading all of it is about 53k tokens; do not.
