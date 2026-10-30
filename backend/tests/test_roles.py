@@ -248,7 +248,7 @@ def test_engineering_as_a_discipline_is_still_the_role() -> None:
         "Associate Software Engineering",
         "Software Engineering - Associate",
         "Backend Engineering, New Grad",
-        "Platform Engineering",
+        "Distributed Systems Engineering",
         "Full Stack Engineering",
     ):
         assert classify_role(
@@ -307,7 +307,6 @@ def test_the_rest_of_the_software_trade_is_software_engineering() -> None:
         ".NET Developer",
         "C++ Developer",
         "Web Developer, Marketing Site",
-        "Entry Level Cloud Developer - Chicago, IL - 2027",
         "SW Developer | AI Center of Excellence",
         "Associate Developer - Adobe 2027",
         "Software Application Development Engineer",
@@ -331,7 +330,6 @@ def test_the_rest_of_the_software_trade_is_software_engineering() -> None:
         "Entry Level Programmer / Developer",
         # Pipelines named in the plural.
         "Real-Time Software Engineers (Associate or Experienced)",
-        "Infrastructure Engineers",
     ):
         assert (
             classify_role(title).family
@@ -441,8 +439,65 @@ def test_titles_that_only_sound_mobile_or_reliable_keep_their_family() -> None:
         ("Reliability Engineer", RoleFamily.OTHER),
         ("Reliability Engineer - Battery Cells", RoleFamily.OTHER),
         ("Mobile Engineer", RoleFamily.OTHER),
-        # DevOps was never on the list and is not renamed here.
-        ("DevOps Engineer", RoleFamily.OTHER),
+    ):
+        assert classify_role(
+            title
+        ).family == family, title
+
+
+def test_infrastructure_platform_cloud_and_devops_are_their_own_family() -> None:
+    """The owner wants software, backend, full stack, ML and forward
+    deployed work, "not on this cloud DevOps" (2026-10-29)."""
+
+    for title in (
+        "Infrastructure Engineer",
+        "Infrastructure Engineers",
+        "Infrastructure Engineer II",
+        "Platform Engineer",
+        "Platform Engineering",
+        "New Grad 2027 - Platform Engineer",
+        "Cloud Engineer",
+        "Cloud Platform Engineer - New Grad",
+        "Entry Level Cloud Developer - Chicago, IL - 2027",
+        "DevOps Engineer",
+        "DevOps Software Engineer (On-Site)",
+        "Software Engineer, DevOps",
+        "Platform Engineer / DevSecOps Engineer",
+    ):
+        result = classify_role(
+            title
+        )
+
+        assert (
+            result.family
+            == RoleFamily.INFRASTRUCTURE_ENGINEERING
+        ), title
+
+        assert result.priority == RolePriority.NONE, title
+
+
+def test_software_work_on_an_infrastructure_team_stays_software() -> None:
+    """The title names the trade; the team after it does not change it.
+    Meta's new grad posting is "Software Engineer, Infrastructure"."""
+
+    for title, family in (
+        ("Software Engineer, Infrastructure", RoleFamily.SOFTWARE_ENGINEERING),
+        ("Infrastructure Software Engineer", RoleFamily.SOFTWARE_ENGINEERING),
+        ("Software Engineer - Platform", RoleFamily.SOFTWARE_ENGINEERING),
+        ("Cloud Software Engineer", RoleFamily.SOFTWARE_ENGINEERING),
+        ("Backend Engineer, Platform", RoleFamily.SOFTWARE_ENGINEERING),
+        ("Distributed Systems Engineer", RoleFamily.SOFTWARE_ENGINEERING),
+        ("Founding Platform Engineer", RoleFamily.SOFTWARE_ENGINEERING),
+        ("Full Stack Engineer", RoleFamily.SOFTWARE_ENGINEERING),
+        ("Member of Technical Staff", RoleFamily.SOFTWARE_ENGINEERING),
+        # Machine learning infrastructure and AI platform stay ML.
+        ("ML Platform Engineer", RoleFamily.AI_ML_ENGINEERING),
+        (
+            "Machine Learning Infrastructure Engineer New Grad - Ads Infra",
+            RoleFamily.AI_ML_ENGINEERING,
+        ),
+        ("AI Inference Platform Engineer", RoleFamily.AI_ML_ENGINEERING),
+        ("Platform Engineer - Generative AI", RoleFamily.AI_ML_ENGINEERING),
     ):
         assert classify_role(
             title
@@ -457,7 +512,8 @@ def test_data_engineering_and_data_science_are_their_own_families() -> None:
         ("Data Engineer, 2027 Graduate U.S", RoleFamily.DATA_ENGINEERING),
         ("Analytics Engineer, New Grad", RoleFamily.DATA_ENGINEERING),
         ("Data Pipeline Engineer", RoleFamily.DATA_ENGINEERING),
-        ("Data Platform Engineer I", RoleFamily.SOFTWARE_ENGINEERING),
+        # Data engineering since platform roles left software on 2026-10-29.
+        ("Data Platform Engineer I", RoleFamily.DATA_ENGINEERING),
         ("Data Scientist, 2027 Graduate U.S.", RoleFamily.DATA_SCIENCE),
         ("Associate Data Scientist", RoleFamily.DATA_SCIENCE),
         ("Applied Scientist I", RoleFamily.DATA_SCIENCE),

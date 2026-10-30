@@ -72,19 +72,34 @@ class CandidateProfile:
     rule_version: str
 
 
+EXCLUDED_FAMILY_REASONS = {
+    RoleFamily.SITE_RELIABILITY_ENGINEERING: (
+        "Site reliability engineering roles are not on the list."
+    ),
+    RoleFamily.MOBILE_ENGINEERING: (
+        "Mobile engineering roles are not on the list."
+    ),
+    RoleFamily.INFRASTRUCTURE_ENGINEERING: (
+        "Infrastructure, platform, cloud and DevOps roles are not on "
+        "the list."
+    ),
+}
+
+
 PROFILES: dict[str, CandidateProfile] = {
     # The long-standing rule: "anything between zero and three should
     # be there, three-plus should not". v54 changes no threshold; it
     # reads "SDE" titles as software engineering and stops counting an
     # inline "preferred" figure as the requirement, both recall fixes.
     # v55 changes no threshold either: site reliability and mobile roles
-    # leave the list, at the owner's request on 2026-10-29.
+    # leave the list, at the owner's request on 2026-10-29; v56 the same
+    # day takes infrastructure, platform, cloud and DevOps titles off too.
     "early-career": CandidateProfile(
         key="early-career",
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=3,
-        rule_version="2026-10-29-v55",
+        rule_version="2026-10-29-v56",
     ),
     # New grad roles stay the primary target (they sort first), and SDE
     # II comes in: with three years, a posting asking "3+ years" is one
@@ -95,7 +110,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=4,
-        rule_version="2026-10-29-v55-sde2",
+        rule_version="2026-10-29-v56-sde2",
     ),
 }
 
@@ -2663,16 +2678,9 @@ def evaluate_job(
         )
 
         reject_reasons.append(
-            (
-                "Site reliability engineering "
-                "roles are not on the list."
-            )
-            if role.family
-            == RoleFamily.SITE_RELIABILITY_ENGINEERING
-            else (
-                "Mobile engineering roles "
-                "are not on the list."
-            )
+            EXCLUDED_FAMILY_REASONS[
+                role.family
+            ]
         )
 
     if _is_us_location(

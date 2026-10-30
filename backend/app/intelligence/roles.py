@@ -20,7 +20,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict
 
 
-ROLE_RULE_VERSION = "2026-10-29-v3"
+ROLE_RULE_VERSION = "2026-10-29-v4"
 
 
 class RoleFamily(str, Enum):
@@ -42,6 +42,11 @@ class RoleFamily(str, Enum):
         "SITE_RELIABILITY_ENGINEERING"
     )
     MOBILE_ENGINEERING = "MOBILE_ENGINEERING"
+    # Infrastructure, platform, cloud and DevOps, also asked off the list
+    # on 2026-10-29: "not on this cloud DevOps".
+    INFRASTRUCTURE_ENGINEERING = (
+        "INFRASTRUCTURE_ENGINEERING"
+    )
     OTHER = "OTHER"
 
 
@@ -59,6 +64,7 @@ EXCLUDED_FAMILIES = frozenset(
     {
         RoleFamily.SITE_RELIABILITY_ENGINEERING,
         RoleFamily.MOBILE_ENGINEERING,
+        RoleFamily.INFRASTRUCTURE_ENGINEERING,
     }
 )
 
@@ -159,6 +165,14 @@ AI_ML_PATTERNS = (
     r"\bai research engineer\b",
     r"\bmachine learning research engineer\b",
 
+    # Machine learning infrastructure and AI platform roles, kept by the
+    # owner on 2026-10-29 when infrastructure and platform roles left.
+    r"\bmachine learning (?:infrastructure|platform) engineer\b",
+    r"\b(?:ai|ml|machine learning|llm|genai|generative ai|inference)\b"
+    r"(?:\s+\w+){0,2}\s+(?:infrastructure|platform) engineer\b",
+    r"\b(?:infrastructure|platform) engineer\b.*"
+    r"\b(?:generative ai|genai|llm|machine learning|ml|ai)\b",
+
     # Startup-style inverted titles.
     r"\bengineer[\s,/-]+ai\b",
     r"\bengineer[\s,/-]+ml\b",
@@ -214,7 +228,47 @@ MOBILE_PATTERNS = (
 )
 
 
-# A title that names web, backend or full stack work beside mobile is
+# Infrastructure, platform, cloud and DevOps titles. "Platform Engineer"
+# and "Infrastructure Engineer" were read as software engineering until
+# 2026-10-29; the owner wants software, backend, full stack, ML and
+# forward deployed work, "not on this cloud DevOps". Machine learning
+# infrastructure and AI platform roles are checked first and stay machine
+# learning; a data platform engineer is data engineering.
+INFRASTRUCTURE_PATTERNS = (
+    r"(?<!data )\binfrastructure engineer(?:ing)?\b",
+    r"(?<!data )\bplatform engineer(?:ing)?\b",
+    r"\bcloud (?:software |infrastructure |platform |solutions? )?"
+    r"(?:engineer(?:ing)?|developer|architect)\b",
+    r"\bdev[ -]?ops\b",
+    r"\bdevsecops\b",
+)
+
+
+# DevOps is the trade even when the title also says software engineer:
+# "DevOps Software Engineer" is not the owner's work.
+DEVOPS_PATTERNS = (
+    r"\bdev[ -]?ops\b",
+    r"\bdevsecops\b",
+)
+
+
+# A title that names the software trade itself keeps it, whatever team it
+# names: "Software Engineer, Infrastructure" is Meta's new grad posting,
+# and "Backend Engineer, Platform" is a backend role.
+SOFTWARE_CORE_PATTERNS = (
+    r"\bsoftware (?:engineer(?:ing)?|developer|development engineer)\b",
+    r"\bsde\b",
+    r"\bswe\b",
+    r"\bsw (?:engineer|developer)\b",
+    r"\bback[- ]?end\b",
+    r"\bfront[- ]?end\b",
+    r"\bfull[- ]?stack\b",
+    r"\bfounding\b(?:\s+\w+){0,2}\s+engineer\b",
+    r"\bmember of technical staff\b",
+)
+
+
+# A title that names web, backend or full stack work beside mobile is# A title that names web, backend or full stack work beside mobile is
 # that work too, and stays software: "Full Stack Engineer (Web and
 # Mobile)", "Backend Engineer, Mobile Payments". So does one that offers
 # software engineering as the alternative.
@@ -263,9 +317,7 @@ SOFTWARE_ENGINEERING_PATTERNS = (
     r"\bfull[- ]?stack engineer(?:ing)?\b",
     r"\bfull[- ]?stack developer\b",
     r"\bplatform software engineer(?:ing)?\b",
-    r"\bplatform engineer(?:ing)?\b",
     r"\binfrastructure software engineer(?:ing)?\b",
-    r"\binfrastructure engineer(?:ing)?\b",
     r"\bdistributed systems engineer(?:ing)?\b",
 
     # The rest of the software trade, by its own names. On 2026-10-08,
@@ -285,7 +337,6 @@ SOFTWARE_ENGINEERING_PATTERNS = (
     # Bare "Applications Development Engineer" is KLA's and Applied
     # Materials' semiconductor process role; only the software one counts.
     r"\b(?:software|sw|ai) applications? development engineer\b",
-    r"\bcloud (?:software )?developer\b",
     r"\bsw (?:engineer|developer)\b",
     r"\b(?:java|python|golang|go|ruby|scala|kotlin|swift|react|javascript|"
     r"typescript|node(?:\.js)?|php) (?:software )?(?:engineer|developer)\b",
@@ -312,8 +363,9 @@ SOFTWARE_ENGINEERING_PATTERNS = (
     r"\bprogrammer[/ ]analyst\b",
     r"\banalyst[/ ]programmer\b",
 
-    # Common startup titles.
-    r"\bfounding engineer\b",
+    # Common startup titles. "Founding Platform Engineer" and "Founding
+    # Web Engineer" are a startup's first engineers, whatever they name.
+    r"\bfounding\b(?:\s+\w+){0,2}\s+engineer\b",
     r"\bmember of technical staff\b",
 
     # Common compact recruiting title.
@@ -403,8 +455,8 @@ def classify_role(
 
     rather than both being classified as generic software engineering.
 
-    Site reliability and mobile titles get families of their own, which
-    the gate keeps off the list.
+    Site reliability, mobile and infrastructure (platform, cloud, DevOps)
+    titles get families of their own, which the gate keeps off the list.
 
     Startup-oriented titles such as Founding Engineer, Full Stack
     Developer, Member of Technical Staff, and SWE are included
@@ -494,6 +546,29 @@ def classify_role(
             family=RoleFamily.MOBILE_ENGINEERING,
             priority=RolePriority.NONE,
             matched_pattern=mobile_match,
+        )
+
+    infrastructure_match = (
+        _first_matching_pattern(
+            title,
+            INFRASTRUCTURE_PATTERNS,
+        )
+    )
+
+    if infrastructure_match and (
+        _first_matching_pattern(
+            title,
+            DEVOPS_PATTERNS,
+        )
+        or not _first_matching_pattern(
+            title,
+            SOFTWARE_CORE_PATTERNS,
+        )
+    ):
+        return RoleClassification(
+            family=RoleFamily.INFRASTRUCTURE_ENGINEERING,
+            priority=RolePriority.NONE,
+            matched_pattern=infrastructure_match,
         )
 
     software_match = (

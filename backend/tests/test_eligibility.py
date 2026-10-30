@@ -2733,6 +2733,16 @@ def test_site_reliability_and_mobile_roles_are_not_on_the_list() -> None:
             "Software Engineer, Mobile (New Grad)",
             "Mobile engineering roles are not on the list.",
         ),
+        (
+            "Platform Engineer, New Grad",
+            "Infrastructure, platform, cloud and DevOps roles are not on "
+            "the list.",
+        ),
+        (
+            "Cloud Infrastructure Engineer I",
+            "Infrastructure, platform, cloud and DevOps roles are not on "
+            "the list.",
+        ),
     ):
         decision = evaluate_job(
             make_job(
@@ -2756,6 +2766,8 @@ def test_site_reliability_and_mobile_roles_are_not_on_the_list() -> None:
         "Software Engineer, New Grad",
         "Full Stack Engineer (Web and Mobile)",
         "Machine Learning Engineer, Android",
+        "Software Engineer, Infrastructure",
+        "Backend Engineer",
     ):
         assert evaluate_job(
             make_job(

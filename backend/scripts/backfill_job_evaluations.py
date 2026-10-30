@@ -113,6 +113,7 @@ def _stale_filter(
     *,
     rebuild_all: bool,
     status: str | None = None,
+    required_years: int | None = None,
 ):
     """Return the predicate selecting jobs needing evaluation.
 
@@ -121,6 +122,26 @@ def _stale_filter(
     are the ones whose decision can change, and re-evaluating those
     first takes minutes where the whole corpus takes hours.
     """
+
+    if required_years is not None:
+        # Switching to the sde2 profile admits only open-ended "3+"
+        # postings, which are stored with three required years, so those
+        # are the only rejected decisions that can turn into passes.
+        narrowed = (
+            JobEvaluationRecord.required_experience_years
+            == required_years
+        )
+
+        rest = _stale_filter(
+            rebuild_all=rebuild_all,
+            status=status,
+        )
+
+        return (
+            narrowed
+            if rest is None
+            else narrowed & rest
+        )
 
     if status is not None:
         narrowed = (
@@ -159,6 +180,7 @@ def count_pending(
     *,
     rebuild_all: bool,
     status: str | None = None,
+    required_years: int | None = None,
 ) -> int:
     """Count jobs whose evaluation is missing or stale."""
 
@@ -179,6 +201,7 @@ def count_pending(
     predicate = _stale_filter(
         rebuild_all=rebuild_all,
         status=status,
+        required_years=required_years,
     )
 
     if predicate is not None:
@@ -201,6 +224,7 @@ def load_batch(
     after_id: int,
     batch_size: int,
     status: str | None = None,
+    required_years: int | None = None,
 ) -> list[JobRecord]:
     """Load the next batch of jobs requiring evaluation."""
 
@@ -227,6 +251,7 @@ def load_batch(
     predicate = _stale_filter(
         rebuild_all=rebuild_all,
         status=status,
+        required_years=required_years,
     )
 
     if predicate is not None:
@@ -281,6 +306,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Only jobs whose stored "
             "decision is this one."
+        ),
+    )
+
+    parser.add_argument(
+        "--required-years",
+        type=int,
+        default=None,
+        help=(
+            "Only jobs whose stored decision "
+            "read this many required years."
         ),
     )
 
@@ -346,6 +381,11 @@ def main(
             if args.status
             else ""
         )
+        + (
+            f", {args.required_years} required years only"
+            if args.required_years is not None
+            else ""
+        )
     )
 
     with SessionLocal() as session:
@@ -355,6 +395,7 @@ def main(
                 args.rebuild_all
             ),
             status=args.status,
+            required_years=args.required_years,
         )
 
         total_jobs = int(
@@ -413,6 +454,7 @@ def main(
                     args.batch_size
                 ),
                 status=args.status,
+                required_years=args.required_years,
             )
 
             if not records:

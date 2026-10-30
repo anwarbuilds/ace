@@ -210,3 +210,67 @@ def test_a_current_decision_is_not_pending_under_any_status(
             rebuild_all=False,
             status="PASS",
         ) == 0
+
+
+def test_required_years_narrows_to_the_decisions_a_profile_switch_moves(
+    session_factory,
+) -> None:
+    """The sde2 profile admits open-ended "3+" postings, stored with three
+    required years: those rejected decisions are the only ones it moves."""
+
+    with session_factory.begin() as session:
+        _store(
+            session,
+            "1",
+            "Software Engineer",
+        )
+
+        _store(
+            session,
+            "2",
+            "Software Engineer II",
+        )
+
+        session.execute(
+            update(
+                JobEvaluationRecord
+            ).values(
+                # Decided under the other profile's rules.
+                rule_version="2026-10-29-v55",
+            )
+        )
+
+        session.execute(
+            update(
+                JobEvaluationRecord
+            )
+            .where(
+                JobEvaluationRecord.job_id == 2
+            )
+            .values(
+                eligibility_status="REJECT",
+                required_experience_years=3,
+            )
+        )
+
+    with session_factory() as session:
+        assert count_pending(
+            session,
+            rebuild_all=False,
+            status="REJECT",
+            required_years=3,
+        ) == 1
+
+        assert [
+            record.title
+            for record in load_batch(
+                session,
+                rebuild_all=False,
+                after_id=0,
+                batch_size=10,
+                status="REJECT",
+                required_years=3,
+            )
+        ] == [
+            "Software Engineer II",
+        ]
