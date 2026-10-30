@@ -311,3 +311,30 @@ The change only ever rejects more, so the decisions that can change are the pass
 minutes, not the hours a whole-corpus pass takes. Run it right after the API and scheduler carry v55; the scheduler
 re-evaluates a job only when its content changes. Tests: `test_roles.py`, `test_eligibility.py`,
 `test_backfill_job_evaluations.py`; Shopify's gate fixture moved from "Software Engineers, Mobile" to a backend title.
+
+## Infrastructure, platform, cloud and DevOps leave the list too (2026-10-29, v56)
+
+Later the same day the owner said: "don't send me suggestions of this infrastructure engineer or anything", then
+narrowed it: "primarily I need to work on the software development, backend, ML, forward deployed, full stack, not on
+this cloud DevOps", and kept backend, frontend, full stack, software developer, founding engineer, member of technical
+staff, ML infrastructure and AI platform titles. Asked whether "Software Engineer, Infrastructure" should go, they kept
+it: the title names the trade, and that is Meta's new grad posting.
+
+Gate v56 (`2026-10-29-v56`, `-v56-sde2`) adds `INFRASTRUCTURE_ENGINEERING`, rejected as `NON_TARGET_ROLE` ("Infrastructure,
+platform, cloud and DevOps roles are not on the list."). `platform engineer`, `infrastructure engineer` and `cloud
+developer` left `SOFTWARE_ENGINEERING_PATTERNS`. `INFRASTRUCTURE_PATTERNS` (infrastructure, platform, cloud engineer,
+developer or architect, DevOps, DevSecOps; not after "data") applies only when no `SOFTWARE_CORE_PATTERNS` match
+(software engineer, developer or development engineer, SDE, SWE, SW engineer, backend, frontend, full stack, founding,
+member of technical staff), except that DevOps always wins. ML infrastructure and AI platform titles are checked first,
+in `AI_ML_PATTERNS`, and stay ML; "Founding Platform Engineer" stays software; "Data Platform Engineer" is data
+engineering. Web, application, Java or Python developer, programmer, UI, game, graphics and distributed systems titles
+were offered for removal and are kept: the owner wants all software development work.
+
+Measured on the legacy corpus with v55: 108 more of 3,133 active passing roles change family (IT and network
+infrastructure, cloud platform, Kubernetes, DevOps, and platform engineer roles of every kind), 14 data platform roles
+move to data engineering; every title was read before the rule shipped.
+
+Experience is unchanged. The owner briefly asked for "3+ years" to count, then corrected it: "only up to 3 years of
+experience is fine, not 3+". That is the `early-career` profile as it stands. Measured before the correction, `sde2`
+would have admitted about 1,200 open roles rejected today only for an open-ended three years.
+`backfill_job_evaluations.py --required-years 3` re-evaluates exactly those if the profile is ever switched.

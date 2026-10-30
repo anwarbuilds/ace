@@ -109,3 +109,29 @@ Rollback: the previous `api` and `scheduler` images. New catalog rows are additi
 switching them off is an `UPDATE ... SET enabled = false WHERE discovery_source = 'talent_network'`, never a delete.
 The legacy system keeps the v54 gate and its own catalog, so the independent comparison will show these boards as
 ACE Next only.
+
+## Round two: every major tech city (2026-10-29 evening)
+
+The owner asked for every speedrun-like site in each major US tech city, deep research, and all of it added. Three kinds
+of source turned out to be readable within robots.txt:
+
+- **Regional VC boards** found by probing 124 more firm and accelerator hosts: FirstMark (New York), F-Prime and .406
+  Ventures (Boston), Ascend (Seattle), Capital Factory, S3 and Silverton (Austin), M13 (Los Angeles), Innovation Works
+  (Pittsburgh), Album and Pelion (Utah), Variant, Dragonfly, Polychain and Multicoin. 619 companies, 146 readable
+  boards, 122 new. Amplify LA, Congruent and Robin Hood Ventures are Consider boards (CSRF); Jump Capital (Chicago),
+  Comcast Ventures, M12, Backstage, Energize and Entrepreneur First disallow their job pages.
+- **Y Combinator**: YC's own directory disallows query strings and Work at a Startup shows little before a sign-in,
+  but the public yc-oss dataset (GitHub Pages) lists every company marked hiring with its website: 1,497, of which
+  1,239 in the US or Canada. 1,018 were not yet covered; ACE's verified name lookup found 219 boards and its
+  careers-page reader, started from the real website, 25 more. Most of the rest post only on Work at a Startup.
+- **Built In**, entry-level and junior engineering listings in 22 cities (San Francisco, San Jose, New York, Seattle,
+  Austin, Boston, Los Angeles, Chicago, Denver, Boulder, Atlanta, Miami, Washington, San Diego, Dallas, Houston,
+  Raleigh, Pittsburgh, Philadelphia, Salt Lake City, Portland, Minneapolis): 1,396 companies. Built In's apply links
+  need a sign-in and were not followed; ACE's verified name and careers-page lookup found 270 boards for the 895 not yet
+  covered.
+
+TrueUp answers 403 and was not read. Board names come from the board's own declaration where it has one.
+
+The list grew from 2,139 to 2,726 boards. The production run reads only the boards the catalog does not hold, with
+`--include-paged` this time so large employers' Workday and Oracle boards (many with new grad programmes in speedrun's
+early-career collection) are read too, one at a time.
