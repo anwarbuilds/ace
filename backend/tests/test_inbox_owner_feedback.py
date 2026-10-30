@@ -84,6 +84,8 @@ def test_reading_a_long_message_does_not_hide_a_later_actual_rejection():
     'Candidates who are selected for an interview will receive further details.',
     'Selected candidates will be invited to interview.',
     'An interview will be scheduled by the hiring team later in the process.',
+    'Onsite interviews by invitation only. Selected candidates will be invited to interview onsite during the event.',
+    'Onsite interviews - invitation-only. Selected candidates will be invited to interview later.',
 ])
 def test_conditional_future_interview_process_does_not_become_an_invitation(process):
     ev=mail('Thank you for applying. We have received your application. '+process)
@@ -105,3 +107,13 @@ def test_personal_video_interview_reminder_is_a_hiring_stage():
     decision=reconcile(ev,[])
     assert decision.classification=='interview' and decision.disposition=='classified_action'
     assert decision.target is None and decision.matched_target is None and decision.company is None
+
+
+def test_event_format_heading_does_not_hide_a_separate_personal_invitation():
+    ev=mail('Onsite interviews by invitation only. We invite you to interview onsite for the engineering role. '
+            'Please share your availability.')
+    assert read_intent(ev).classification=='interview'
+
+
+def test_personal_plural_interviews_remain_scheduled():
+    assert read_intent(mail('Your onsite interviews are scheduled for Monday.')).classification=='interview'

@@ -452,6 +452,14 @@ def _action_asserted(pattern, body: str):
         start = max(body.rfind(c, 0, match.start()) for c in ".!?\n") + 1
         prefix = body[start:match.start()]
         clause_prefix = re.split(r"[;,:]|\b(?:but|however)\b", prefix, flags=re.I)[-1]
+        # A process heading such as "onsite interviews by invitation only"
+        # states an event's format, without inviting this candidate. A later
+        # personal request in the same email remains eligible on its own.
+        if (re.match(r"(?:" + _INTERVIEW_NOUN + r")s?\b", match.group(), re.I)
+                and re.search(r"\bby invitation\b|\binvitation[ -]only\b",
+                              body[match.start():match.end()+20], re.I)
+                and not re.search(r"\byour(?: [\w-]+){0,2}\s*$", prefix, re.I)):
+            continue
         # "Should your qualifications match, we will contact you to schedule"
         # describes the process; "you should complete your assessment" is a
         # present request and must remain eligible.
