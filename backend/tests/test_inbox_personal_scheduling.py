@@ -45,6 +45,113 @@ def test_hiring_context_can_come_from_current_body(subject, body):
     assert read_intent(mail(body, subject)).classification == "interview"
 
 
+@pytest.mark.parametrize("subject", [
+    "Interview invitation",
+    "Invitation to interview at Fictional Robotics",
+    "Invitation for a technical interview",
+    "Schedule your interview",
+    "Book your recruiter screen",
+    "Reschedule your virtual interview",
+    "Interview invitation for May 12",
+    "Interview invitation after application review",
+])
+@pytest.mark.parametrize("body", [
+    "Please select a convenient time using the link below.",
+    "Select a convenient time using the link below.",
+    "Could you choose a time below?",
+    "If you are interested, please select a convenient time below.",
+    "Please use the link below to select a time that works for you.",
+])
+def test_direct_invitation_subject_is_corroborated_by_current_body_scheduling(subject, body):
+    ev = mail(body, subject)
+    assert read_intent(ev).classification == "interview"
+    decision = reconcile(ev, [])
+    assert decision.disposition == "classified_action" and decision.target is None
+
+
+@pytest.mark.parametrize("subject", ["Interview invitation", "Invitation to interview at Fictional Robotics"])
+@pytest.mark.parametrize("body", [
+    "We would like to speak with you about your background.",
+    "We would love the opportunity to meet you.",
+    "I am interested in having a call to get to know you.",
+])
+def test_explicit_invitation_subject_and_personal_body_contact_do_not_require_extra_scheduling(subject, body):
+    decision = reconcile(mail(body, subject), [])
+    assert decision.classification == "interview" and decision.disposition == "classified_action"
+    assert decision.target is None
+
+
+@pytest.mark.parametrize("subject", [
+    "Interview preparation advice",
+    "Interview invitation preparation course",
+    "Potential interview invitation",
+    "Possible invitation to interview",
+    "Interview invitation newsletter",
+    "Invitation to interview coaching workshop",
+    "Public interview invitation",
+    "No interview invitation",
+    "Cancelled interview invitation",
+    "Example: Interview invitation",
+    "How to schedule your interview",
+    "Podcast interview invitation",
+    "Media interview invitation",
+    "Interview invitation rescinded",
+    "You may receive an interview invitation if selected",
+    "Interview process",
+    "Invitation: Candidate and Recruiter",
+])
+def test_general_or_noncurrent_interview_subject_does_not_establish_a_direct_invitation(subject):
+    assert read_intent(mail("Please select a time using the link below.", subject)).classification != "interview"
+
+
+@pytest.mark.parametrize("body", [
+    "Your account has been updated.",
+    "We will select a time if you are shortlisted.",
+    "We usually select a time after the assessment.",
+    "Selected candidates will choose a time later.",
+    "If selected, please select a time below.",
+    "Please do not select a time yet.",
+    "Please don't select a time yet.",
+    "No interview is required. Please select a time below.",
+    "This is not an interview. Please select a time below.",
+    "Please select a time for a product demo.",
+    "Please select a time for a public event.",
+    "Please select a time for an office tour.",
+    "Please select a time for a coaching consultation.",
+    "Please select a time for a public open house.",
+    "Please select a time for a sales call.",
+    "Please select a time below. This invitation has been rescinded.",
+    "Please select a time below. This interview is withdrawn.",
+    "Example: Please select a time below.",
+])
+def test_direct_invitation_subject_does_not_override_absent_or_conflicting_body_action(body):
+    assert read_intent(mail(body, "Interview invitation")).classification != "interview"
+
+
+@pytest.mark.parametrize("subject,body", [
+    ("Podcast interview invitation", "We would love to speak with you for our podcast. Please select a convenient time below."),
+    ("Interview preparation advice", "We would love to meet you about your background. Please book a time below."),
+    ("Your application", "We would love to meet you and discuss your application. We can select a time after the hiring process is complete."),
+    ("Interview process", "We would love to meet you about your background."),
+    ("Interview invitation", "We would like to speak with you about your background. This invitation has been rescinded."),
+    ("Interview invitation", "We would like to speak with you about your background. Please select a time below. This interview is withdrawn."),
+    ("Fictional Robotics Interview", "We would love to meet with you about your background. Please select a time below. You are not invited to interview yet."),
+    ("Interview invitation", "We never said we would like to meet you."),
+    ("Interview invitation", "We cannot confirm we would like to meet you."),
+    ("Interview invitation", "If selected, we would like to speak with you about your background."),
+    ("Interview invitation", "We would love to speak with you for a sales call."),
+    ("Interview invitation", "We would love to speak with you for a coaching consultation."),
+])
+def test_nonhiring_purposes_retracted_invitations_and_reported_desires_are_not_interviews(subject, body):
+    assert read_intent(mail(body, subject)).classification != "interview"
+
+
+def test_preceding_withdrawn_invitation_does_not_erase_a_later_separate_current_request():
+    ev = mail("This invitation has been rescinded. I would love to speak with you about your background now.",
+              "Interview invitation")
+    assert read_intent(ev).classification == "interview"
+
+
 @pytest.mark.parametrize("choice", [
     "If you are interested, please select a time below.",
     "If you're interested, please select a time below.",
@@ -109,8 +216,6 @@ def test_hiring_conversation_is_still_filed_without_an_application_or_sender_aut
 
 
 @pytest.mark.parametrize("subject,body", [
-    ("Interview invitation", "Please select a convenient time using the link below."),
-    ("Interview invitation", "We would like to speak with you about your background."),
     ("Meet Fictional Robotics", "We would like to chat with you. Please select a time below."),
     ("A call", "We would like to meet with you about your background. Please book a time below."),
     ("A conversation", "I'd love to speak with you. Please select a time at https://fictional.example/interview."),
@@ -141,6 +246,7 @@ def test_subject_or_url_or_generic_meeting_does_not_establish_personal_hiring_ac
     "We can't promise we would love to meet you. Please select a time below.",
     "It is not true that we would like to meet you. Please select a time below.",
     "We would like to speak with you. Please do not book a time yet.",
+    "We would like to speak with you. Please don't select a time yet.",
     "We would like to speak with you. There is no need to select a time yet.",
     'Example: We would like to speak with you. Please select a time below.',
     'Template invitation. We would like to speak with you. Please select a time below.',

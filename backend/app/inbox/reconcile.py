@@ -511,9 +511,25 @@ _PERSONAL_SCHEDULING = re.compile(
 _HIRING_CONTACT_CONTEXT = re.compile(
     r"\b(?:interviews?|(?:phone|recruiter) screen(?:ing)?|your (?:application|candidacy)"
     r"|hiring|recruit(?:er|ing|ment)|(?:the|our|this|a|an) (?:[\w-]+ ){0,6}(?:role|position|job))\b", re.I)
+_DIRECT_INTERVIEW_SUBJECT = re.compile(
+    r"\b(?:interview invitation|invitation (?:to|for) (?:an? )?(?:" + _INTERVIEW_NOUN + r")"
+    r"|(?:schedule|book|reschedule) (?:your|an?|the) (?:" + _INTERVIEW_NOUN + r"))\b", re.I)
+_NON_INVITATION_SUBJECT = re.compile(
+    r"\b(?:practice|prep|preparation|coaching|advice|tips|newsletter|digest|course|webinar|workshop"
+    r"|public|networking|sample|example|template|quoted|guide|tutorial|how to|podcast|press|media"
+    r"|cancelled|canceled|cancellation|withdrawn|rescinded|revoked|expired)\b"
+    r"|\b(?:no|not|never) (?:an? |the |your )?(?:interview|invitation)\b"
+    r"|\b(?:possible|potential|future|conditional) (?:interview|invitation)\b"
+    r"|\b(?:may|might|could|would) (?:receive|get|have|offer|invite|be invited|be scheduled)\b"
+    r"|\b(?:if|unless|once|should)\b[^.!?\n]{0,80}\b(?:select\w*|shortlist\w*|qualif\w*|pass\w*)\b", re.I)
 _RECIPIENT_CHOICE_CONDITION = re.compile(
     r"\bif (?:(?:you are|you['’]re) (?:still )?(?:interested|available|free)|(?:still )?interested)\b"
     r"(?=\s*(?:[,;:.]|(?:please|feel free|you can|you may|select|choose|pick|book|schedule)\b))", re.I)
+_INTERVIEW_RETRACTION = re.compile(
+    r"\b(?:this|your|the|our) (?:interview |screening )?invitation (?:has been|was|is) "
+    r"(?:rescinded|withdrawn|revoked|cancelled|canceled)\b"
+    r"|\b(?:this|your|the|our) (?:interview|call|meeting|conversation) (?:has been|was|is) (?:rescinded|withdrawn|revoked|cancelled|canceled)\b"
+    r"|\byou (?:are|have been) not (?:yet )?invited (?:to (?:an? )?)?interview(?: yet)?\b", re.I)
 
 
 def _recipient_choice_text(body: str) -> str:
@@ -533,19 +549,39 @@ def _personal_action_asserted(pattern, body: str):
             yield original, body[start:end].strip()
 
 
+def _direct_scheduling_request(match, body: str) -> bool:
+    """The body requests a time; a process description is insufficient."""
+    start = max(body.rfind(c, 0, match.start()) for c in ".!?\n") + 1
+    prefix = _recipient_choice_text(body[start:match.start()])
+    prefix = re.split(r"[;:]|\band (?=(?:please|kindly|could you|can you|would you)\b)", prefix, flags=re.I)[-1].lstrip(" ,")
+    return bool(not prefix.strip() or re.match(
+        r"(?:please|kindly|could you|can you|would you|you (?:can|need to|must|should)"
+        r"|(?:use|follow|click|open)\b[^.!?\n]{0,120}\b(?:to|and))\b", prefix, re.I))
+
+
 def _personal_recruitment_scheduling(body: str, subject: str):
     """A bounded hiring passage can separate invitation and scheduling details.
 
     A scheduling link, calendar boilerplate or subject alone never establishes
-    an interview. Require both a current personal contact request and current
-    scheduling instructions, corroborated by hiring context. Keep this apart
+    an interview. Require a personal hiring contact request with current
+    scheduling instructions, or a direct interview-invitation subject
+    corroborated by a current body contact/scheduling request. Keep this apart
     from bare call/chat nouns so ordinary meetings do not become interviews.
     """
     primary = re.sub(r"https?://\S+", " ", body)
-    strong_subject = re.search(r"\b(?:interviews?|(?:phone|recruiter) screen(?:ing)?)\b", subject, re.I)
-    contacts = list(_personal_action_asserted(_PERSONAL_CONTACT, primary))
-    schedules = list(_personal_action_asserted(_PERSONAL_SCHEDULING, primary))
-    for contact, contact_sentence in contacts:
+    strong_subject = (re.search(r"\b(?:interviews?|(?:phone|recruiter) screen(?:ing)?)\b", subject, re.I)
+                      and not _NON_INVITATION_SUBJECT.search(subject))
+    direct_subject = bool(_DIRECT_INTERVIEW_SUBJECT.search(subject) and not _NON_INVITATION_SUBJECT.search(subject))
+    contacts = [(match, sentence, False) for match, sentence in _personal_action_asserted(_PERSONAL_CONTACT, primary)]
+    schedules = [(match, sentence) for match, sentence in _personal_action_asserted(_PERSONAL_SCHEDULING, primary)
+                 if _direct_scheduling_request(match, primary)]
+    if direct_subject:
+        # A direct invitation subject and a current body scheduling request
+        # establish the same action without requiring an extra expression of
+        # desire to meet. The subject alone still establishes nothing.
+        contacts.extend((match, sentence, True) for match, sentence in schedules
+                        if _direct_scheduling_request(match, primary))
+    for contact, contact_sentence, subject_request in contacts:
         # A reported or denied desire is not a present invitation. Check the
         # whole matched sentence because the regex can start at either the
         # reporting "we" or the later quoted/reported "we". A separate later
@@ -555,11 +591,15 @@ def _personal_recruitment_scheduling(body: str, subject: str):
                      r"|\b(?:cannot|can['’]t|could not|couldn['’]t) (?:confirm|say|promise|guarantee)\b"
                      r"|\bnot (?:true|correct|the case) that\b", contact_sentence, re.I):
             continue
-        for schedule, schedule_sentence in schedules:
+        requests = schedules + ([(contact, contact_sentence)] if direct_subject and not subject_request else [])
+        for schedule, schedule_sentence in requests:
+            if subject_request and schedule.span() != contact.span():
+                continue
             schedule_start = max(primary.rfind(c, 0, schedule.start()) for c in ".!?\n") + 1
             schedule_prefix = primary[schedule_start:schedule.start()]
             if re.search(r"\b(?:we|i|they|candidates|applicants)\b[^.!?\n]{0,50}\bwill(?: [\w-]+){0,4}\s*$"
-                         r"|\byou will be (?:asked|invited|contacted)\b", schedule_prefix, re.I):
+                         r"|\byou will be (?:asked|invited|contacted)\b"
+                         r"|\b(?:do not|don['’]t|doesn['’]t|never)\s*$", schedule_prefix, re.I):
                 continue
             first, last = min(contact.start(), schedule.start()), max(contact.end(), schedule.end())
             if last - first > 1000:
@@ -575,6 +615,11 @@ def _personal_recruitment_scheduling(body: str, subject: str):
             next_start = min(end + 1, len(primary))
             nearby_end = min((pos for c in ".!?\n" if (pos := primary.find(c, next_start)) >= 0), default=len(primary))
             nearby = primary[nearby_start:nearby_end]
+            # A later explicit retraction of this invitation outweighs its
+            # earlier contact/scheduling request. Limit the check to the same
+            # bounded passage, with ordinary conditional/quotation guards.
+            if any(_asserted(_INTERVIEW_RETRACTION, primary[first:max(nearby_end, min(len(primary), first + 1000))])):
+                continue
             # Corroboration is local to the actual interaction, not a footer,
             # quoted old invitation, unrelated role or URL path elsewhere.
             if len(re.findall(r"[.!?\n]+", primary[first:last])) > 2:
@@ -591,7 +636,13 @@ def _personal_recruitment_scheduling(body: str, subject: str):
             if re.search(r"\b(?:example|sample|template|quoted|hypothetical|original|previous|earlier)\b"
                          r"|\bfor instance\b|\b(?:practice|webinar|demo|course|workshop|masterclass|mock interview)\b"
                          r"|\b(?:public|networking|speaker) (?:event|session)\b"
-                         r"|\bcancell?(?:ed|ation)\b", nearby, re.I):
+                         r"|\b(?:for|at|on|during) (?:a |an |the |our )?(?:podcast|press interview|media interview"
+                         r"|(?:interview |career )?coaching (?:consultation|session)|sales (?:call|demo)|public open house)\b"
+                         r"|\bnot (?:an?|the|your) interview\b"
+                         r"|\bno interview (?:is |was |will be )?(?:required|scheduled|confirmed)\b"
+                         r"|\binterview (?:is |was |has been )?(?:not|never) (?:scheduled|confirmed|required)\b", nearby, re.I):
+                continue
+            if re.search(r"\bcancell?(?:ed|ation)\b", primary[start:nearby_end], re.I):
                 continue
             if re.search(r"\b(?:if|unless|once|when|after|upon|should)\b[^.!?\n]{0,100}"
                          r"\b(?:select\w*|shortlist\w*|qualif\w*|review\w*|pass\w*|assessment)\b",

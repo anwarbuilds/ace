@@ -24,9 +24,12 @@ An initial diagnostic membership claim was corrected after loading the archived
 manifest; container replacement had cleared the earlier temporary copy.
 
 The parser-15 candidate now explicitly recognizes the actual reported invitation
-as interview/classified_action in a private read-only check. Its 93 new fictional
-regressions and 436 focused backend cases pass. Broader hosted checks remain
-pending, and this is a known-case regression check, not held-out accuracy.
+as interview/classified_action in a private read-only check. Its 186 new fictional
+regressions and 529 focused backend cases pass, as do 22 independent adversarial
+controls. Direct interview subjects require a current personal contact or scheduling
+request in the body. Nonhiring purposes, future selection, negation and explicit
+retractions stay guarded. Final hosted checks remain pending; this is a known-case
+regression check, not held-out accuracy.
 
 An isolated parser-15 candidate adds bounded personal recruitment scheduling,
 recipient-choice handling and interview-description passage corroboration with
