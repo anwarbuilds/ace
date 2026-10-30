@@ -57,6 +57,76 @@ that folder; source/row/audit proof and rollback notes remain private. Global
 historical rechecks stay false and the stopped parser-7 operator stays stopped.
 Do not broaden the three-message approval or infer a full-mailbox replay.
 
+## Inbox parser 15 API live; reviewed correction pending — 2026-10-30 Pacific
+
+API source **`b03d251047f531ba60a75812d9c088b395a6d943`** is live at
+https://ace.opik.net, parser **15**, schema **0050**. All **371** tracked backend
+file hashes match the tested source and prepared image. Only API was replaced;
+web stays the July-scope release `4116aa0`. The running gate-v56 code, registered
+city-network sources and eight-worker scheduler are preserved, as are PostgreSQL,
+Caddy, authentication, Pulls, Resume Studio and the extension. The protected mail,
+application, status, owner-decision and prior-event inventories pass cutover
+verification. One authentication last-seen heartbeat was separately identified;
+it is not an application or classification change.
+
+The owner-reported invitation was already imported, complete and authenticated,
+but parser 14 read it as unclear correspondence. The cause was rigid invitation
+phrasing, a blanket conditional guard, and a two-sentence proximity requirement;
+personal hiring interest, interview-description paragraphs and an opt-in request
+to select a time were not combined. Application linkage and the July floor were
+not responsible. The archived 121-message audit did contain this message and read
+it as unknown; it lacked an explicit owner-labelled positive assertion. That was
+a validation miss. Zero pending and same-parser agreement do not prove recall.
+
+Parser 15 combines current personal hiring contact, bounded interview context and
+scheduling, including recipient-interest/availability opt-ins. Direct invitation
+subjects require a current body contact or scheduling request. Subject-only,
+URL-only, generic calendar, future-selection, preparation, public-event and
+unrelated meeting evidence remain insufficient. An independent release check
+also exposed an older parser-14 bug: the words "interview invitation" inside a
+withdrawal were treated as a positive action. The final source applies current
+withdrawal/denial guards across both readers. Actual withdrawals can establish
+cancelled-interview evidence; not-yet-invited denials cannot invent interview
+history. A genuinely later re-invitation or reschedule remains eligible.
+
+The actual reported invitation is now an explicit required positive in read-only
+verification, with separate negative and owner-protected controls. This is a
+known-case regression check, not held-out accuracy. Exact-image validation passes
+**2,462 backend tests**; dedicated hosted checks pass **1,201 focused backend** and
+**48 Inbox browser cases**. The new fictional suite has **218 cases**, with
+**561 focused cases** passing; **83 private operator/verifier controls** pass.
+At source b03d251, a canonical-doc conflict prevented the new full CI run.
+The docs-only follow-up resolves that conflict without changing runtime source.
+Exact-image and dedicated hosted checks validate this release; do not carry an
+older full-run result forward or claim overall CI is green. Earlier full CI had
+22 existing extension-browser failures outside this change.
+
+**The one authorized historical correction completed atomically.** Exactly one
+saved email meaning changed, with four permitted classification/filing fields
+and one appended email-only audit. Application statuses, links, snippets, owner
+choices, original evidence, Undo and all prior ledger rows are preserved. The
+corrected email is returned by the production Interviews filter. Its receipt-date
+history appears in the applicable Analytics ranges; the later rejected status
+remains intact. No confirmed role-stage event or application match was invented.
+All four Analytics ranges, independent category projections, one monitor lease,
+sync advancement, public health/served assets and auth boundaries pass. No signed-in
+production browser was used. Global historical rechecks stay disabled; the stopped
+parser-7 operator remains stopped. No bulk historical replay occurred.
+
+API activation ran 14:29:32–14:29:42 UTC on 2026-10-30. Fresh backup completed
+14:19:51 UTC: 555,065,199 bytes, gzip/catalog/full archive expansion verified, no
+restore drill. Private release folder:
+`/opt/ace/private-backups/inbox-personal15-20261030T1416Z/`.
+Retained tag `oracle-api:before-inbox-personal15-20261030T1416Z` and its guarded
+`rollback.sh --apply` replace API only. Data compensation is a separate sealed,
+unchanged-row-only operation; never restore the whole database automatically or
+overwrite later owner activity. The original strict snapshot saw one normal auth
+last-seen heartbeat. An independent read-only proof checks every static auth field
+against the fresh backup and other protected records against cutover fingerprints;
+it does not claim reconstruction of opaque pre-cutover auth column values.
+Population precision/recall remain unmeasured. Calendar-only/attachment parsing
+is outside this patch.
+
 ## Historical accuracy dispute — parser 13, superseded by parser 14 above
 
 Inbox parser 13 remains deployed (frontend `e64c547`; the newer startup-network
