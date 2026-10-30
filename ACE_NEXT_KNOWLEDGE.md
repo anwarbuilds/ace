@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-30 Pacific, source inventory and startup coverage gaps recorded. Before that, 2026-10-29 Pacific (2026-10-30 UTC), gate v56 (no infrastructure, platform, cloud, DevOps, site reliability or mobile roles) and round-two city startup boards LIVE on API and scheduler at fca4673; Inbox parser 14, July email scope and eight-worker scheduler preserved
+Last updated: 2026-10-30 Pacific, global-memory consolidation after the completed Inbox parser 15 release and owner-approved PR #19 merge at 9c884dc; live API b03d251, verified one-email correction, rollback and accuracy limits recorded; concurrent inventory, gate v56, city-network and scheduler continuity preserved
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -12,6 +12,80 @@ repository instructions. Dated observations below are evidence from that date,
 not a claim that a service is healthy now.
 It intentionally contains no email address, resume text, answers, credentials
 or database dump content because the GitHub repository is public.
+
+## Current Inbox contract and continuation — 2026-10-30 Pacific
+
+The owner explicitly confirmed **`ACE_NEXT_KNOWLEDGE.md` is the global memory
+file**. Maintain this file for future chats; do not create a competing "YesNext"
+knowledge file. Read the complete file, `docs/HANDOFF.md` and the relevant topic
+under `docs/knowledge/` before changes. The newest applicable dated evidence and
+the owner's latest instructions control; older "START HERE", "OPEN WORK",
+"pending" and "LIVE" headings below are historical checkpoints, not commands
+to replay an operation. Preserve their incident evidence.
+
+The Inbox implementation, production activation, one reviewed correction and
+PR #19 merge are complete. This memory update performs no deployment or data
+operation. No release or historical apply from this work remains pending.
+Future work starts from a fresh inspection of Git, remote branches and the
+running source rather than rerunning the release scripts.
+
+### Owner requirements that must carry into the next chat
+
+- Focus on **Inbox Intelligence**. The owner corrected the earlier reference
+  to the resume system; Resume Studio parsing/matching is outside this task.
+- Detect the email's actual kind and current hiring context automatically,
+  place clear acknowledgements, rejections, assessments, interviews, offers and
+  routine mail in the appropriate category, and keep Inbox and Analytics
+  consistent. Owner review is for genuinely difficult evidence. A small review
+  queue alone is not evidence of correct classification.
+- Separate **email meaning, application identity and permission to change
+  status**. Role ambiguity alone must not hide a recognized assessment or
+  interview or make clear company rejection evidence require manual sorting.
+  The company-rejection implementation records confirmed employer evidence
+  without selecting an arbitrary role or rejecting every role at that employer.
+- Record assessment/interview progress when it occurs, even if a later message
+  rejects the application. Preserve historical progress and the later status.
+  Recognized unlinked email history is distinct from confirmed application-stage
+  metrics; never invent a role match, stage event or funnel transition.
+- Active Inbox and email Analytics scope is **July 1, 2026 onward**, using
+  America/Los_Angeles midnight (`2026-07-01T07:00:00Z`). It is not July-only.
+  Older mail remains preserved for audit/Undo; application cohorts are separate.
+- Use existing owner decisions for independent labels and report remaining
+  accuracy gaps. The owner chose this instead of supplying a new labelled set;
+  do not make additional owner labelling an unrequested completion requirement.
+  Preserve owner decisions, Gmail evidence, applications, history and Undo.
+- Historical corrections and merges were separately approved for their exact
+  scopes. Those completed approvals do not authorize a new bulk replay, migration
+  or unrelated deployment. Global historical rechecks remain disabled and the
+  parser-7 operator remains stopped.
+
+### Source locations and restart boundaries
+
+The owner's root checkout `/home/ubuntu/Documents/ace-next` is on
+`extension-context-reuse-20261026` and deliberately retains the restored older
+application/extension runtime with newer continuity documents. **Do not replace
+that runtime or mistake it for the live implementation.** The isolated Inbox
+source is in `artifacts/inbox-personal-interviews-worktree`, branch
+`inbox-intelligence-personal-interviews-20261029`. Its approved head `d995a25`
+was merged into canonical `wine-rose-platform` as `9c884dc`; the final head commit
+was documentation-only. Fetch and inspect current tips because concurrent chats
+advance them. Preserve newer inventory, gate and discovery work when integrating.
+
+The live API source remains `b03d251047f531ba60a75812d9c088b395a6d943`, parser 15,
+schema 0050. The web source remains `4116aa01dd5cdd3a6ea3d707017a7d9f7fad5bd7`.
+The merge is source integration, not another production deployment. The detailed
+parser-15 release record below is authoritative over the older parser-14 and
+parser-7 checkpoints. Future API releases must retain this Inbox source.
+
+Private evidence entry point:
+`artifacts/inbox-personal-interview-release-20261030/RELEASE.md` with
+`ROLLBACK.md`, `final-proof.json`, `final-repository-checks.json`, `readiness.json`
+and `merge-proof.json`. The corresponding production release folder is
+`/opt/ace/private-backups/inbox-personal15-20261030T1416Z/`. These ignored/private
+files may be absent in a new clone; the verified nonprivate facts are retained
+here. Keep raw mail, opaque targets, credentials, HMAC secrets and database
+archives out of Git. Dated operator instructions that say activation/apply is
+pending are superseded by the final proofs; they are not authority to run again.
 
 
 
@@ -165,7 +239,16 @@ that folder; source/row/audit proof and rollback notes remain private. Global
 historical rechecks stay false and the stopped parser-7 operator stays stopped.
 Do not broaden the three-message approval or infer a full-mailbox replay.
 
-## Inbox parser 15 API live; reviewed correction pending — 2026-10-30 Pacific
+## Inbox parser 15 LIVE; correction complete and PR #19 merged — 2026-10-30 Pacific
+
+The owner separately approved merging PR #19 at `d995a25`. It is merged into
+`wine-rose-platform` as **`9c884dc880e9f4419602a4ab5faec536e171ac6a`**, preserving
+concurrent canonical inventory, gate and Workday-board changes. Approved Inbox
+source and tests match the merged tree. This repository merge required no service
+deployment; live API source remains `b03d251` and web remains `4116aa0`. Final
+PR-head checks passed backend, web and the dedicated Inbox suite; full CI retains
+the same 22 extension-browser failures, with no new failed test names.
+
 
 API source **`b03d251047f531ba60a75812d9c088b395a6d943`** is live at
 https://ace.opik.net, parser **15**, schema **0050**. All **371** tracked backend
@@ -234,6 +317,54 @@ against the fresh backup and other protected records against cutover fingerprint
 it does not claim reconstruction of opaque pre-cutover auth column values.
 Population precision/recall remain unmeasured. Calendar-only/attachment parsing
 is outside this patch.
+
+### Final verification details and lessons for future Inbox work
+
+The corrected invitation's September receipt-date evidence is included in
+**90 days and All time**, correctly excluded from 14 and 30 days at verification.
+The production Interviews and screens filter returns it. The later rejection
+is unchanged; no confirmed application-stage interview count was fabricated.
+The correction changed only `classification`, `decision`, `decision_reason` and
+`parser_version`, with one appended email-only classifier audit. Stored `update`
+is compatibility storage; its reason projects to `classified_action`. Inspect
+the shared effective projection before diagnosing raw stored labels as a UI bug.
+
+Running API image:
+`sha256:deab872ba15f22e883e669df4769d3e7e55cf3f723620c783ce8dc07f3df3e6a`.
+Reader SHA256:
+`8fc567de267895ff5fb3b8d6d177efaadd6273238650943039cc96e6dd21f705`.
+Dedicated exact-runtime hosted run
+[41070975915](https://github.com/anwarbuilds/ace/actions/runs/41070975915)
+passed. Final documentation-head dedicated run
+[41075606426](https://github.com/anwarbuilds/ace/actions/runs/41075606426)
+also passed. Full PR-head CI
+[41075615441](https://github.com/anwarbuilds/ace/actions/runs/41075615441)
+passed backend and web, then failed in extension browsers: the same 22 failed
+names and 25 passing cases as the earlier baseline, with zero new failed names.
+Overall CI is not green; later broad application-browser steps were skipped.
+Do not carry older test counts forward as evidence for a different source.
+
+The original 121-message audit included the missed invitation as unknown. Its
+failure was not import coverage: the audit did not assert the known positive
+meaning. Future evaluation must explicitly check known real positive cases and
+both false negatives and false positives, including conversational scheduling,
+recipient opt-ins, acknowledgements, generic future selection, withdrawals,
+denials, rescheduling and assessment priority. Test the shared older and newer
+recognition paths. Same-parser agreement, a zero review queue, filed counts and
+arithmetic consistency do not establish semantic recall. A protected owner
+assessment projection is preservation evidence, not an independent parser label.
+Keep fictional regression coverage separate from measured real-mail accuracy;
+report missing representative independent labels and unseen-pattern limitations.
+
+Fresh backup verification covered gzip integrity, archive catalog and full
+expansion, not a restore drill. The API rollback script was syntax/static/image
+checked but not executed. Code rollback replaces API only; compensating the one
+saved classification is a separate guarded operation that appends an audit and
+stops after later owner changes. Never restore the full database automatically
+over subsequent activity. Private operator safety checks total 83; preservation
+and live verifiers add 13 tests, auth-heartbeat verification 33 tests plus seven
+independent COPY controls. The original strict diagnostic was retained rather
+than hidden: only the independently proved session heartbeat was allowed.
 
 ## Historical accuracy dispute — parser 13, superseded by parser 14 above
 
@@ -2166,6 +2297,11 @@ additional-candidate section of the full-history report for scope and limits.
 
 ## Continuation checkpoint for new chats, 2026-10-26
 
+**Historical and superseded:** this checkpoint's runtime table and pending
+instructions describe the parser-7 era. The current parser-15 release and
+continuation contract near the top control. Do not restart historical rechecks
+or repeat the old P1–P5/release operations from this section.
+
 This checkpoint consolidates the owner's latest decisions and the work across
 sessions. Read this complete file and repository instructions before changes.
 Use the dated release evidence below to distinguish tested source, built images
@@ -3185,11 +3321,12 @@ shell, no-submit boundary, motivation exclusion and protected choices remain.
 ## Instructions for a new Codex chat
 
 Treat this file as the continuity source for ACE. Read it completely before
-changing code or operating production. Inspect the current Git status, diff and
-recent commits afterward because this document records known state but never
-overrides newer code or an explicit owner instruction. Topic documents can be
-consulted for dated incident narratives, but a normal new session does not need
-them to understand the platform.
+changing code or operating production, then read `docs/HANDOFF.md` and the
+relevant topic in `docs/knowledge/` as repository instructions require. Inspect
+the current Git status, diff and recent commits afterward because this document
+records known state but never overrides newer code or an explicit owner
+instruction. Use the newest applicable dated record to interpret historical
+incident narratives and old pending-work lists.
 
 The complete website design contract is summarized in this file. For a task
 that requires pixel-level comparison, the following files are the retained
