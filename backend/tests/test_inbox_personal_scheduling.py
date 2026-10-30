@@ -152,6 +152,90 @@ def test_preceding_withdrawn_invitation_does_not_erase_a_later_separate_current_
     assert read_intent(ev).classification == "interview"
 
 
+@pytest.mark.parametrize("ending", ["withdrawn", "rescinded", "revoked"])
+@pytest.mark.parametrize("scheduling_text", [
+    "Please do not book a time.",
+    "Please don't book your interview.",
+    "Please do not schedule your interview.",
+])
+def test_withdrawal_noun_is_not_an_invitation_even_through_the_original_interview_reader(ending, scheduling_text):
+    ev = mail("Your interview invitation has been " + ending + ". " + scheduling_text)
+    reading = read_intent(ev)
+    assert reading.classification == "interview_cancelled"
+    decision = reconcile(ev, [])
+    assert decision.disposition == "update" and decision.target is None
+
+
+@pytest.mark.parametrize("retraction", [
+    "Your interview invitation has been withdrawn.",
+    "Your phone interview invitation has been rescinded.",
+    "This invitation has been revoked.",
+])
+def test_later_current_retraction_overrides_old_or_personal_interview_request(retraction):
+    ev = mail("Please book your interview. " + retraction)
+    assert read_intent(ev).classification == "interview_cancelled"
+    personal = mail("We would love to meet you and learn about your background. Please select a time below. " + retraction)
+    assert read_intent(personal).classification == "interview_cancelled"
+
+
+@pytest.mark.parametrize("denial", [
+    "You are not invited to an interview yet.",
+    "You haven't been invited to an interview yet.",
+    "You have not yet been invited to an interview.",
+    "You haven't yet been invited to an interview.",
+])
+def test_not_yet_invited_blocks_current_request_without_inventing_cancelled_history(denial):
+    assert read_intent(mail("Please book your interview. " + denial)).classification not in {"interview", "interview_cancelled"}
+    receipt = mail("Thank you for applying. We have received your application. " + denial)
+    assert read_intent(receipt).classification == "application_confirmation"
+    personal = mail("We would love to meet you about your application. Please select a time below. " + denial)
+    assert read_intent(personal).classification not in {"interview", "interview_cancelled"}
+
+
+@pytest.mark.parametrize("subject", ["Assessment invitation", "Interview preparation course invitation", "Company event invitation"])
+def test_generic_retracted_invitation_does_not_establish_cancelled_interview_history(subject):
+    assert read_intent(mail("This invitation has been revoked.", subject)).classification not in {"interview", "interview_cancelled"}
+
+
+def test_interview_subject_corroborates_generic_invitation_retraction():
+    assert read_intent(mail("This invitation has been revoked.", "Fictional interview invitation")).classification == "interview_cancelled"
+
+
+@pytest.mark.parametrize("body", [
+    "Your interview invitation has been withdrawn. We invite you to a technical interview for another role.",
+    "Your phone interview was cancelled. Your technical interview has been rescheduled for Monday.",
+    "Your interview invitation has been revoked. We would love to meet you for another conversation. Please select a new time below.",
+    "Your earlier interview invitation has been withdrawn. We now invite you to interview. Please select a new time.",
+    "Your interview was cancelled due to a scheduling conflict. Your interview has now been rescheduled for Friday at 2 PM.",
+])
+def test_later_genuine_invitation_or_reschedule_supersedes_earlier_retraction(body):
+    reading = read_intent(mail(body))
+    assert reading.classification == "interview"
+    assert "withdrawn" not in reading.excerpt and "revoked" not in reading.excerpt
+
+
+@pytest.mark.parametrize("history", [
+    "If this invitation is withdrawn, contact us for clarification.",
+    "If this invitation were withdrawn, contact us for clarification.",
+    "Template: Your interview invitation has been withdrawn.",
+    '"Your interview invitation has been withdrawn."',
+    "> Your interview invitation has been withdrawn.",
+])
+def test_conditional_examples_and_quoted_withdrawal_do_not_retract_current_interview(history):
+    ev = mail("We would love to meet you and learn about your background. Please select a time below.\n\n" + history)
+    assert read_intent(ev).classification == "interview"
+
+
+def test_withdrawn_interview_does_not_erase_a_separate_current_assessment_request():
+    ev = mail("Your interview invitation has been withdrawn. Please complete your coding assessment.")
+    assert read_intent(ev).classification == "online_assessment"
+
+
+def test_current_rejection_and_retained_current_interview_still_conflict():
+    ev = mail("Your previous interview was cancelled. Your application was rejected. We invite you to interview.")
+    assert read_intent(ev).classification == "possible_rejection"
+
+
 @pytest.mark.parametrize("choice", [
     "If you are interested, please select a time below.",
     "If you're interested, please select a time below.",

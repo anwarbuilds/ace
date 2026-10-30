@@ -526,10 +526,55 @@ _RECIPIENT_CHOICE_CONDITION = re.compile(
     r"\bif (?:(?:you are|you['’]re) (?:still )?(?:interested|available|free)|(?:still )?interested)\b"
     r"(?=\s*(?:[,;:.]|(?:please|feel free|you can|you may|select|choose|pick|book|schedule)\b))", re.I)
 _INTERVIEW_RETRACTION = re.compile(
-    r"\b(?:this|your|the|our) (?:interview |screening )?invitation (?:has been|was|is) "
+    r"\b(?:this|your|the|our) (?:(?:" + _INTERVIEW_NOUN + r") |screening )?invitation (?:has been|was|is) "
     r"(?:rescinded|withdrawn|revoked|cancelled|canceled)\b"
-    r"|\b(?:this|your|the|our) (?:interview|call|meeting|conversation) (?:has been|was|is) (?:rescinded|withdrawn|revoked|cancelled|canceled)\b"
-    r"|\byou (?:are|have been) not (?:yet )?invited (?:to (?:an? )?)?interview(?: yet)?\b", re.I)
+    r"|\b(?:this|your|the|our) (?:" + _INTERVIEW_NOUN + r"|call|meeting|conversation) "
+    r"(?:has been|was|is) (?:rescinded|withdrawn|revoked|cancelled|canceled)\b", re.I)
+_INTERVIEW_NONINVITATION = re.compile(
+    r"\byou (?:are not|were not|have not (?:yet )?been|have been not|aren['’]t|weren['’]t|haven['’]t (?:yet )?been) "
+    r"(?:yet )?invited (?:to (?:an? )?)?(?:" + _INTERVIEW_NOUN + r")(?: yet)?\b", re.I)
+
+
+def _asserted_interview_states(pattern, body: str):
+    """Current interview states, excluding examples and conditional history."""
+    for match, sentence in _asserted(pattern, body):
+        start = max(body.rfind(c, 0, match.start()) for c in ".!?\n") + 1
+        prefix = body[start:match.start()]
+        if re.search(r"\b(?:example|sample|template|quoted|hypothetical|original|previous|earlier)\b"
+                     r"|\bfor instance\b|\b(?:not (?:true|correct|the case) that|cannot confirm|not sure)\s*$", prefix, re.I):
+            continue
+        if (re.search(r"\b(?:once|when|after|upon|following|before)\b", sentence, re.I)
+                and re.search(r"\b(?:will|would|may|might|could)\b", sentence, re.I)):
+            continue
+        yield match, sentence
+
+
+def _interview_retractions(body: str):
+    return _asserted_interview_states(_INTERVIEW_RETRACTION, body)
+
+
+def _interview_noninvitations(body: str):
+    # A denial blocks a positive reading but never establishes an earlier
+    # invitation or cancelled interview in the email history.
+    return _asserted_interview_states(_INTERVIEW_NONINVITATION, body)
+
+
+def _current_interview_requests(body: str, requests, retractions):
+    """Retracting an invitation cannot itself count as an invitation.
+
+    Keep a genuinely later asserted request, including a reschedule, while
+    dropping the noun-only match inside the retraction and earlier requests.
+    Every request uses original-body offsets, even when URLs are ignored.
+    """
+    cutoff = max((match.end() for match, _ in retractions), default=-1)
+    for match, sentence in requests:
+        if match.start() < cutoff:
+            continue
+        start = max(body.rfind(c, 0, match.start()) for c in ".!?\n") + 1
+        prefix = body[start:match.start()]
+        if re.search(r"\b(?:do not|don['’]t|doesn['’]t|cannot|can['’]t|never)\s*$", prefix, re.I):
+            continue
+        yield match, sentence
 
 
 def _recipient_choice_text(body: str) -> str:
@@ -568,7 +613,7 @@ def _personal_recruitment_scheduling(body: str, subject: str):
     corroborated by a current body contact/scheduling request. Keep this apart
     from bare call/chat nouns so ordinary meetings do not become interviews.
     """
-    primary = re.sub(r"https?://\S+", " ", body)
+    primary = re.sub(r"https?://\S+", lambda match: " " * len(match.group()), body)
     strong_subject = (re.search(r"\b(?:interviews?|(?:phone|recruiter) screen(?:ing)?)\b", subject, re.I)
                       and not _NON_INVITATION_SUBJECT.search(subject))
     direct_subject = bool(_DIRECT_INTERVIEW_SUBJECT.search(subject) and not _NON_INVITATION_SUBJECT.search(subject))
@@ -618,7 +663,8 @@ def _personal_recruitment_scheduling(body: str, subject: str):
             # A later explicit retraction of this invitation outweighs its
             # earlier contact/scheduling request. Limit the check to the same
             # bounded passage, with ordinary conditional/quotation guards.
-            if any(_asserted(_INTERVIEW_RETRACTION, primary[first:max(nearby_end, min(len(primary), first + 1000))])):
+            remaining_passage = primary[first:max(nearby_end, min(len(primary), first + 1000))]
+            if any(_interview_retractions(remaining_passage)) or any(_interview_noninvitations(remaining_passage)):
                 continue
             # Corroboration is local to the actual interaction, not a footer,
             # quoted old invitation, unrelated role or URL path elsewhere.
@@ -737,8 +783,20 @@ def read_intent(evidence: EmailEvidence) -> Reading:
         r"|congratulations on your (?:new )?(?:job |employment )?offer with)\b", re.I), body))
     # A completed test can be followed by a new interview request. That new
     # requested action is the primary intent, rather than the earlier completion.
-    interview_request = (list(_action_asserted(_action_pattern(_INTERVIEW_NOUN), body))
-                         + list(_personal_recruitment_scheduling(body, subject)))
+    interview_retractions = list(_interview_retractions(body))
+    original_interview_requests = (list(_action_asserted(_action_pattern(_INTERVIEW_NOUN), body))
+                                   + list(_personal_recruitment_scheduling(body, subject)))
+    interview_request = list(_current_interview_requests(body, original_interview_requests,
+        interview_retractions + list(_interview_noninvitations(body))))
+    # A revoked assessment/event invitation must not invent interview history.
+    # Generic retractions can exclude a positive request, but require separate
+    # interview evidence before being classified as a cancelled interview.
+    retraction_subject = re.sub(r"\b(?:withdrawn|rescinded|revoked|cancelled|canceled|cancellation|expired)\b", "", subject, flags=re.I)
+    interview_subject = (re.search(r"\b(?:" + _INTERVIEW_NOUN + r")\b", retraction_subject, re.I)
+                         and not _NON_INVITATION_SUBJECT.search(retraction_subject))
+    cancelled_interview_retractions = [span for span in interview_retractions
+        if original_interview_requests or interview_subject
+        or re.search(r"\b(?:" + _INTERVIEW_NOUN + r")\b", span[0].group(), re.I)]
     assessment_request = list(_action_asserted(_action_pattern(_ASSESSMENT_NOUN), body))
     if interview_request and not negative and re.search(_ASSESSMENT_NOUN, body, re.I) and re.search(r"\b(?:completed|submitted|finished)\b", body, re.I):
         return _reading("interview", req, interview_request[0][1], "invitation")
@@ -771,6 +829,13 @@ def read_intent(evidence: EmailEvidence) -> Reading:
                 continue
             pattern = re.compile(r"\b(?:" + noun + r")[^.!?\n]{0,65}\b(?:" + words + r")\b|\b(?:" + words + r")[^.!?\n]{0,65}\b(?:" + noun + r")\b", re.I)
             spans = list(_asserted(pattern, body))
+            if kind == "interview" and state == "cancelled":
+                spans.extend(cancelled_interview_retractions)
+                # An explicitly later new invitation/reschedule supersedes
+                # the old cancelled slot. A later retraction still wins.
+                latest_request = max((match.start() for match, _ in interview_request), default=-1)
+                spans = sorted((span for span in spans if span[0].start() > latest_request),
+                               key=lambda span: span[0].start(), reverse=True)
             if state == "completed":
                 spans = [span for span in spans if not re.search(
                     r"\b(?:upon|on|after|following|before|when)\s+(?:your |the |successful )*completion\b",
