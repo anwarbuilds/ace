@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-29 Pacific, startup networks and gate v55 LIVE; Inbox parser 13 accuracy disputed, parser 14 corrective candidate; active email scope July 1, 2026 onward; preserve concurrent scheduler work
+Last updated: 2026-10-29 Pacific, Inbox parser 14 corrective release LIVE at 4116aa0; July email scope; concurrent gate v55/startup and eight-worker scheduler releases preserved
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -15,7 +15,62 @@ or database dump content because the GitHub repository is public.
 
 
 
-## Inbox accuracy correction in progress — 2026-10-29 Pacific
+## Inbox parser 14 corrective release LIVE — 2026-10-29 Pacific
+
+Owner-approved API/frontend source **`4116aa01dd5cdd3a6ea3d707017a7d9f7fad5bd7`**
+is live at https://ace.opik.net, parser **14**, schema **0050**. API/web activation
+ran 00:38:13–00:38:30 UTC on October 30 (17:38 Pacific October 29). All **367**
+tracked backend hashes and prepared image IDs match the running implementation;
+public health, deployed frontend SHA, served assets and auth boundaries pass.
+Only API/web were replaced. The concurrent gate-v55/startup code is retained;
+the eight-worker scheduler at `4796e4c`, PostgreSQL and Caddy kept their identities.
+Resume Studio, Pulls, authentication and extension 1.31.3 are preserved.
+
+Inbox and email Analytics share a July 1, 2026 midnight America/Los_Angeles floor
+(`2026-07-01T07:00:00Z`) across counts, categories, search and pagination. Older
+mail remains stored and accessible by audit/Undo links. Application cohorts stay
+independently selectable. Exact owner receipt choices now project as
+acknowledgements while preserving earlier raw machine classifications for audit;
+this projection rewrites neither owner-filed receipt. The reader accepts complete
+bodies up to 256,000 characters and distinguishes personal interviews from generic
+future selection processes and invitation-only event headings.
+
+Separately approved historical work corrected exactly three unprotected message
+meanings: two acknowledgements and one personal video-interview reminder. Only
+four classification/filing fields changed, with three appended email audits;
+application statuses, links, snippets, Gmail metadata, owner choices, Undo and
+prior ledger entries remain intact. Stale-preview guards first stopped without
+writes while owner application activity advanced. A tested atomic wrapper then
+preserved the exact approved body/row/event/patch fingerprints, refreshed only
+application context and verified all three changes in one REPEATABLE READ
+transaction. Subsequent owner application/answer-memory activity is preserved
+and reported separately from the transaction proof. No guard was bypassed.
+
+Validation: 2,241 backend and 267 matcher tests; dedicated 983 focused backend,
+89 Inbox DOM, 33 overlapping render/calculation and 48 hosted browser cases;
+TypeScript, lint and build pass. Private operator/verifier/atomic checks pass.
+A read-only 121-candidate real-mail audit plus nine subsequent arrivals verifies
+the reviewed controls, including six future-process negatives. Fresh committed
+row/audit checks, all four Analytics ranges, a single Gmail monitor lease and
+sync advancement pass. Population precision/recall remains unmeasured; this is
+not a claim of perfect or exhaustive classification. No signed-in production
+browser was used. Full CI retains the same 22 unrelated extension-browser failed
+names (25 pass), with zero new names; later broad app browsers were skipped.
+The owner approved that known limitation. Dedicated Inbox browsers pass.
+
+Fresh backup completed 00:01:47 UTC:
+`/opt/ace/private-backups/inbox-july-corrections-20261030T0000Z/database.dump.gz`,
+533,672,847 bytes; gzip, catalog and full archive expansion pass, without a restore
+drill. Retained API/web tags `oracle-api:before-inbox-july14-20261030T0000Z` and
+`oracle-web:before-inbox-july14-20261030T0000Z` preserve the immediately preceding
+startup API and Inbox frontend. The folder's guarded `rollback.sh` recreates only
+API/web. Data compensation is separate and must protect later owner activity.
+Private applied HMAC journal: `semantic-atomic-final/atomic-apply-plan.json` under
+that folder; source/row/audit proof and rollback notes remain private. Global
+historical rechecks stay false and the stopped parser-7 operator stays stopped.
+Do not broaden the three-message approval or infer a full-mailbox replay.
+
+## Historical accuracy dispute — parser 13, superseded by parser 14 above
 
 Inbox parser 13 remains deployed (frontend `e64c547`; the newer startup-network
 API release preserves that Inbox implementation). The owner disputed the semantic
@@ -30,6 +85,34 @@ audit/Undo, while the active Inbox and email progress metrics use that scope.
 Correction and representative regression work are in progress. No new historical
 rewrite or deployment is implied by this checkpoint. Resume Studio is outside
 scope. The stopped parser-7 runner and global historical rechecks remain off.
+
+## Scheduler capacity release LIVE, 2026-10-29 16:54 Pacific
+
+The owner approved ("Yes, do it now") after the measurement below showed all six
+workers busy all the time. Canonical fast-forwarded to
+**`4796e4c396cfb267f6b110a9bb1e417066978c69`**; only the **scheduler** was built and
+recreated (API stays `fc81876`; web, PostgreSQL and Caddy untouched, container IDs
+verified). The running scheduler reports `DEFAULT_CONCURRENCY` 8, Workable listing
+retries `[500, 502, 503, 504]` (no 429) and gate v55; healthy. Fresh private backup
+`/opt/ace/private-backups/scheduler-capacity-20261029T2352Z/database.dump.gz`,
+533,736,103 bytes, mode 600 (gzip and catalog checks); rollback tag
+`oracle-scheduler:before-scheduler-capacity-20261029T2352Z`.
+
+- Why: Workable's 429 is a standing refusal of the VM's address; each refused listing
+  was retried twice for up to 20 seconds before the runtime's refusal backoff, holding
+  a worker 40 seconds (16.5% of all worker time). `request_with_retry` takes
+  `retry_statuses`; Workable's listing passes `LISTING_RETRY_STATUSES` (without 429).
+  Eight workers stay below the twelve-connection pool. Tests: `test_retry.py`,
+  `test_workable_adapter.py`; full backend 2,167 passed.
+- Measured 15 minutes after (00:09 UTC, read-only): 1,357 polls in 10 minutes (about
+  136 a minute, up from about 88); 1,271 sources read in the last 10 minutes (was
+  855). Fifteen-minute boards a median 8 to 11.5 minutes old, 90th percentile 17 to
+  19 (were 15 to 19 and 23 to 25). Workers 7.85 of 8 busy, Workday now 67% of worker
+  time; Workable no longer holds workers. Scheduler container about 17% of one core,
+  PostgreSQL 3%, 3 GB of 12 GB memory in use; load average 2.7 to 3.7 on 2 cores
+  while the new boards' first polls write their jobs, falling. Public health 0.15 to
+  0.25 s and the sign-in page about 0.2 s. Workable boards stay stale (refusal
+  backoff, a median 5 hours): Workable refuses this address, as before.
 
 ## Startup talent networks and gate v55 LIVE, 2026-10-29 16:04 Pacific
 
@@ -78,14 +161,10 @@ site reliability or mobile. Public `/healthz` ok; web still reports `e64c547`.
   this release; the new boards add little. Load average stayed below 1.8 on 2 cores;
   PostgreSQL 24 of 100 connections; pool 12 plus 8 overflow per process.
 - Next, each needing its own approval: (1) re-run `register_network_boards --apply`
-  when Workable is not refusing the VM, for the 39 Workable boards; (2) the scheduler
-  is close to its six-worker capacity: a refused Workable poll holds a worker for
-  about 40 seconds (`adapters/retry.py` retries 429 twice, up to 20 seconds each,
-  before the runtime's own refusal backoff), and every restart resets that backoff
-  for all 113 Workable boards at once; failing fast on 429 inside scheduled polls
-  and raising `DEFAULT_CONCURRENCY` from 6 (CPU and connections allow about 10)
-  would restore headroom; (3) a Rippling reader (72 startups in these networks link
-  Rippling boards).
+  when Workable is not refusing the VM, for the 39 Workable boards; (2) done the same
+  day: the scheduler capacity release above; (3) a Rippling reader (72 startups in
+  these networks link Rippling boards). Every scheduler restart still resets the
+  in-memory refusal backoff, so each restart briefly repeats the Workable refusals.
 
 What the release contains, as prepared before approval:
 
