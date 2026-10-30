@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-29 Pacific, parser 14 live with confirmed personal-interview false negative; parser 15 corrective candidate under validation; preserve gate v56/city-network/scheduler work
+Last updated: 2026-10-30 Pacific, source inventory and startup coverage gaps recorded. Before that, 2026-10-29 Pacific (2026-10-30 UTC), gate v56 (no infrastructure, platform, cloud, DevOps, site reliability or mobile roles) and round-two city startup boards LIVE on API and scheduler at fca4673; Inbox parser 14, July email scope and eight-worker scheduler preserved
 
 This is the single, standalone continuity document for ACE Next and its
 independent legacy comparison system. A new chat should be able to understand
@@ -15,38 +15,98 @@ or database dump content because the GitHub repository is public.
 
 
 
-## Personal interview recognition failure — corrective work, 2026-10-29
+## Source inventory and startup coverage gaps, 2026-10-30
 
-The owner reported a genuine interview invitation missing from the live Inbox.
-A targeted read-only trace confirms the complete, authenticated email was stored
-as unclear correspondence and the deployed parser 14 still reads it as unknown.
-The July floor and application matching are not the cause. Rigid invitation
-phrasing and a blanket conditional guard fail to combine personal hiring contact,
-interview context and scheduling when the recipient is asked whether interested.
+Read-only production snapshot, about 07:00 Pacific. ACE reads **3,656 enabled sources** (3,793 catalog rows; 137
+switched off: agencies, duplicates, dead boards), about 3,450 companies, holding **3,433 open passing roles**. By
+reader: Ashby 1,208, Greenhouse 870, Workday 865, Lever 255, SmartRecruiters 155, Workable 118, Oracle 115, Gem 34,
+Eightfold 16, 17 own-site readers (Apple, Google, Amazon, IBM, Meta, Intuit, Arm, Synopsys, ByteDance, TikTok,
+Atlassian, Shopify, AMD, Booking, SIG, EA, Two Sigma) and 3 feeds (Simplify new grad and internships, RippleMatch).
 
-The archived 121-message audit did include and read this message as unknown.
-It was not asserted as an independently labelled positive, and that false negative
-was not investigated. Earlier passing controls and queue counts did not validate
-recall. Do not treat routine filing or zero pending as successful recognition.
-An initial diagnostic membership claim was corrected after loading the archived
-manifest; container replacement had cleared the earlier temporary copy.
+Planned check interval, sources, measured minutes since last read (median / 90th percentile): 5 min, 111 (4 / 8);
+15 min, 2,345 (10 / 17); 30 min, 4 (27 / 35); hourly, 1,185 (21 / 51); 6 hours, 1; daily, 10 (RippleMatch and nine
+Workday employers, about 14 hours). Workable is planned at 15 minutes but read about every 17 hours: Workable refuses
+the VM with 429. The 1,097 `talent_network` boards hold 667 passing roles on 405 boards; 414 are checked every 15
+minutes, 683 hourly until their first passing role.
 
-The parser-15 candidate now explicitly recognizes the actual reported invitation
-as interview/classified_action in a private read-only check. Its 186 new fictional
-regressions and 529 focused backend cases pass, as do 22 independent adversarial
-controls. Direct interview subjects require a current personal contact or scheduling
-request in the body. Nonhiring purposes, future selection, negation and explicit
-retractions stay guarded. Final hosted checks remain pending; this is a known-case
-regression check, not held-out accuracy.
+Gaps. State them whenever coverage is discussed: the owner found them only by asking, after receiving a source list
+in which the new startup boards were not marked.
 
-An isolated parser-15 candidate adds bounded personal recruitment scheduling,
-recipient-choice handling and interview-description passage corroboration with
-fictional negative controls. This is source development, not a live fix. Keep the
-actual owner-labelled invitation as an explicit required positive. No historical
-row, application status, event or service was changed by this investigation.
-Any additional deployment/historical correction requires the owner's applicable
-approval after this confirmed accuracy failure. Preserve concurrent gate-v56,
-city-network and scheduler work at fca4673. Raw mail/identifiers remain private.
+1. About 1,390 network boards were left out because they had no US software or ML role on 2026-10-29, and nothing
+   re-checks them. Next step agreed in principle: a weekly automatic re-check (`register_network_boards` skips
+   registered boards, so a re-run adds those that have started hiring).
+2. About 1,400 companies with no readable board found: about 770 YC companies that post only on Work at a Startup
+   (sign-in) and about 625 Built In companies.
+3. About 300 startups on boards ACE has no reader for: Rippling 72, Notion pages 63, Paylocity 39, Dover 33 (robots
+   disallows its API), BambooHR 27, Breezy 27, JazzHR 21, Teamtailor 17.
+4. Refused or disallowed: about 23 Consider boards (CSRF token), about 19 robots-disallowed firm boards, Climatebase
+   (challenge), TrueUp (403), Wellfound, LinkedIn, Handshake and Work at a Startup (sign-in). Never bypass these.
+5. Cities never searched for their own startup networks: Detroit and Ann Arbor, Phoenix, Nashville, Columbus,
+   Indianapolis, Charlotte, Tampa, St. Louis, Kansas City, Baltimore, Madison, Orange County, New Jersey.
+6. About 40 Workable boards unread (429), and every Workable board stale as above.
+
+Defect found: Pear VC's shared Ashby board (`pear-vc`, about a dozen portfolio startups) was registered in round two.
+Built In listed it under the firm's own name, so the shared-board check in `settle_name` (a non-firm network name
+against a firm declared name) did not fire. Its 16 passing roles are real startup roles shown with company "Pear VC"
+and the startup in the title. Owner decision pending: keep, or disable (`enabled = false`, a production write that
+needs approval). Fix the check either way, with a fictional regression.
+
+Owner direction for the next session: deep research into startup databases like Harmonic.ai and similar public
+lists of startups that are hiring; add every accessible source whose boards pass the filters, as many as possible,
+within robots.txt, terms of service and no-sign-in rules. A paid API only with a key the owner adds to `.env`.
+Private lists (complete CSV, startup boards by network, the read-only regeneration query) are in the ignored
+`artifacts/ace-sources-20261030/` folder on the owner's laptop.
+
+## Gate v56 and city startup networks LIVE, 2026-10-29 18:18 Pacific
+
+The owner approved ("Approve, go live", Workday and Oracle boards included). Canonical
+fast-forwarded to **`fca4673033dc92833bbf217182738026f414bf3d`**, rebased onto the
+concurrent Inbox parser 14 release (`ecc72c6`) without touching it. Only **api** and
+**scheduler** were built and recreated; web stays the Inbox release's `4116aa0`;
+PostgreSQL and Caddy untouched. Both containers report gate `2026-10-29-v56`. The
+PASS-only backfill re-evaluated 5,133 stored passing decisions: passing roles are now
+3,849 software, 879 ML and 214 forward deployed, none infrastructure, site reliability
+or mobile. Scheduler healthy. Fresh private backup
+`/opt/ace/private-backups/startup-networks-round2-20261030T0116Z/database.dump.gz`
+(534,810,553 bytes, mode 600, gzip and catalog checks); rollback tags
+`oracle-api:before-startup-networks-round2-20261030T0116Z` and the matching
+`oracle-scheduler`. Applied marks moved 1,007 to 1,010 during the release: the owner
+applying, not the release, which writes no application data.
+
+- Gate v56: infrastructure, platform, cloud and DevOps titles off the list, as the
+  owner asked ("not on this cloud DevOps"); software, backend, frontend, full stack,
+  developer, founding, member of technical staff, ML (including ML infrastructure and
+  AI platform) and forward deployed stay; "Software Engineer, Infrastructure" stays.
+  Experience unchanged (0 to 3 years; open-ended 3+, 4+, senior rejected): the owner
+  asked for 3+ and corrected it to "only up to 3 years" within minutes. See
+  `docs/knowledge/01-gate-and-roles.md`.
+- Round two of city networks: 15 regional VC boards, YC's hiring companies (public
+  yc-oss dataset) and Built In entry-level and junior listings in 22 cities; boards
+  found by ACE's verified name and careers-page lookup. The collected list grew from
+  2,139 to 2,726 boards; 105 networks explored, 59 read. Details in
+  `docs/architecture/2026-10-29-startup-networks.md`.
+- Registration on the server: 1,443 already in ACE, 1,283 read with
+  `--include-paged`: **336 registered** (228 Ashby, 58 Greenhouse, 23 Lever, 21
+  SmartRecruiters, 3 Gem, 3 Oracle), 164 with 299 roles passing at once; left out 767
+  with no US software or ML role today, 99 unreadable, 26 agencies, 15 empty; Workable
+  answered 429 again. Every Workday board failed in that run: the collected list had
+  kept the source host only for Gem, and a Workday source cannot be read without its
+  tenant host. `4cfc188` restored all 251 hosts and added a test that reads the
+  committed list as the script does; a Workday-only run (`--input` a filtered copy in
+  the container) then registered **34** large employers (45 had no US software or ML
+  role today). Total from the networks today: **1,097 boards**.
+- At 01:50 UTC: 1,094 of the 1,097 boards polled, holding **667 active passing
+  roles**; fifteen-minute boards a median 8 to 9 minutes old, 90th percentile 15 to 16;
+  about 192 polls a minute; load average 1.4 to 1.7 on 2 cores. Workable stays stale
+  (refusal backoff), as before.
+- Read-only feature check after the release (`check_features.py` in the private
+  release folder, run in the API container as a local caller with read-only
+  connections): all 40 page, filter and sort requests answered 200 (Opportunities,
+  family, new grad, early career, experience fit, verified, match, big tech, source,
+  search, age, company include and exclude, Applications, Saved, Archive, Pulls,
+  Analytics, Coverage, Resume Studio, Answers, history); the family filter offers only
+  software, ML and forward deployed; no excluded family among passing results.
+  Opportunities 1,347 before, 1,275 after.
 
 ## Inbox parser 14 corrective release LIVE — 2026-10-29 Pacific
 
@@ -102,6 +162,76 @@ Private applied HMAC journal: `semantic-atomic-final/atomic-apply-plan.json` und
 that folder; source/row/audit proof and rollback notes remain private. Global
 historical rechecks stay false and the stopped parser-7 operator stays stopped.
 Do not broaden the three-message approval or infer a full-mailbox replay.
+
+## Inbox parser 15 API live; reviewed correction pending — 2026-10-30 Pacific
+
+API source **`b03d251047f531ba60a75812d9c088b395a6d943`** is live at
+https://ace.opik.net, parser **15**, schema **0050**. All **371** tracked backend
+file hashes match the tested source and prepared image. Only API was replaced;
+web stays the July-scope release `4116aa0`. The running gate-v56 code, registered
+city-network sources and eight-worker scheduler are preserved, as are PostgreSQL,
+Caddy, authentication, Pulls, Resume Studio and the extension. The protected mail,
+application, status, owner-decision and prior-event inventories pass cutover
+verification. One authentication last-seen heartbeat was separately identified;
+it is not an application or classification change.
+
+The owner-reported invitation was already imported, complete and authenticated,
+but parser 14 read it as unclear correspondence. The cause was rigid invitation
+phrasing, a blanket conditional guard, and a two-sentence proximity requirement;
+personal hiring interest, interview-description paragraphs and an opt-in request
+to select a time were not combined. Application linkage and the July floor were
+not responsible. The archived 121-message audit did contain this message and read
+it as unknown; it lacked an explicit owner-labelled positive assertion. That was
+a validation miss. Zero pending and same-parser agreement do not prove recall.
+
+Parser 15 combines current personal hiring contact, bounded interview context and
+scheduling, including recipient-interest/availability opt-ins. Direct invitation
+subjects require a current body contact or scheduling request. Subject-only,
+URL-only, generic calendar, future-selection, preparation, public-event and
+unrelated meeting evidence remain insufficient. An independent release check
+also exposed an older parser-14 bug: the words "interview invitation" inside a
+withdrawal were treated as a positive action. The final source applies current
+withdrawal/denial guards across both readers. Actual withdrawals can establish
+cancelled-interview evidence; not-yet-invited denials cannot invent interview
+history. A genuinely later re-invitation or reschedule remains eligible.
+
+The actual reported invitation is now an explicit required positive in read-only
+verification, with separate negative and owner-protected controls. This is a
+known-case regression check, not held-out accuracy. Exact-image validation passes
+**2,462 backend tests**; dedicated hosted checks pass **1,201 focused backend** and
+**48 Inbox browser cases**. The new fictional suite has **218 cases**, with
+**561 focused cases** passing; **83 private operator/verifier controls** pass.
+At source b03d251, a canonical-doc conflict prevented the new full CI run.
+The docs-only follow-up resolves that conflict without changing runtime source.
+Exact-image and dedicated hosted checks validate this release; do not carry an
+older full-run result forward or claim overall CI is green. Earlier full CI had
+22 existing extension-browser failures outside this change.
+
+**The one authorized historical correction completed atomically.** Exactly one
+saved email meaning changed, with four permitted classification/filing fields
+and one appended email-only audit. Application statuses, links, snippets, owner
+choices, original evidence, Undo and all prior ledger rows are preserved. The
+corrected email is returned by the production Interviews filter. Its receipt-date
+history appears in the applicable Analytics ranges; the later rejected status
+remains intact. No confirmed role-stage event or application match was invented.
+All four Analytics ranges, independent category projections, one monitor lease,
+sync advancement, public health/served assets and auth boundaries pass. No signed-in
+production browser was used. Global historical rechecks stay disabled; the stopped
+parser-7 operator remains stopped. No bulk historical replay occurred.
+
+API activation ran 14:29:32–14:29:42 UTC on 2026-10-30. Fresh backup completed
+14:19:51 UTC: 555,065,199 bytes, gzip/catalog/full archive expansion verified, no
+restore drill. Private release folder:
+`/opt/ace/private-backups/inbox-personal15-20261030T1416Z/`.
+Retained tag `oracle-api:before-inbox-personal15-20261030T1416Z` and its guarded
+`rollback.sh --apply` replace API only. Data compensation is a separate sealed,
+unchanged-row-only operation; never restore the whole database automatically or
+overwrite later owner activity. The original strict snapshot saw one normal auth
+last-seen heartbeat. An independent read-only proof checks every static auth field
+against the fresh backup and other protected records against cutover fingerprints;
+it does not claim reconstruction of opaque pre-cutover auth column values.
+Population precision/recall remain unmeasured. Calendar-only/attachment parsing
+is outside this patch.
 
 ## Historical accuracy dispute — parser 13, superseded by parser 14 above
 
