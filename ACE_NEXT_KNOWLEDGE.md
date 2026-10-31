@@ -1,6 +1,51 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-30 Pacific, owner-approved Inbox-to-Analytics API/web release LIVE and production reconciliation verified.
+Last updated: 2026-10-31 Pacific, interview invitation headline correction prepared; live API/web remain approved source `a48d71b`.
+
+## Interview invitation headline correction, 2026-10-31 Pacific, not deployed
+
+After viewing the release, the owner reported that “Interview invitations” still
+showed zero despite recognized interview correspondence. Fresh enforced read-only
+production checks confirm a UI binding mismatch: recognized invitation emails
+and verified application-stage counts are separate, and the headline used the
+latter. Actual private range/linkage totals are not public documentation. Do not
+invent an application match or status event to force a headline value.
+
+The isolated `analytics-rebuild-invitation-card-20261031` follow-up starts from
+canonical main `60aa137`, which records the completed release below. Only
+`AnalyticsSummary.tsx` and its `AnalyticsView.tsx` caller change runtime behavior:
+the invitation headline uses `classified_email_evidence.categories.interview`,
+labels its receipt-date basis, and opens exact `emails=1&email_kind=interview`
+records with date/timezone/family/company filters preserved. Missing email
+projection shows Unavailable rather than a stage fallback or fabricated zero.
+The existing metric explanation keeps verified interview-stage counts/link
+separate; other application metrics and backend event/status authority remain.
+
+Exact tested source is **`1eb28086ab30f87dc6fd320190d3e3cc7afe3957`**, in
+[draft PR #21](https://github.com/anwarbuilds/ace/pull/21). Fictional regressions
+cover an unlinked invitation with zero application stages, recognized zero
+despite existing stages, missing projection and exact filter preservation.
+Local **117** DOM/calculation cases, routes, TypeScript, full lint, zero forbidden
+UI dashes and whitespace pass. The exact-source
+[hosted review 41206845680](https://github.com/anwarbuilds/ace/actions/runs/41206845680)
+passes **2,499 backend/PostgreSQL cases, 53 Inbox/Analytics browsers**, web checks
+and production build. Day/Night headline captures and mobile reflow were
+inspected; the approved five-card arrangement remains and the invitation card
+opens the exact email evidence. No local Chrome or signed-in production browser
+ran. [Wider CI](https://github.com/anwarbuilds/ace/actions/runs/41206848793) passes
+backend/web but has **25 pass / 22 fail** in extension browsers. Exact failed-name
+comparison with main's consolidation baseline has zero new/resolved names.
+Later broad app-browser steps are skipped; overall CI is not green. The dedicated
+53 Inbox/Analytics browser checks pass separately.
+
+Private review, fresh production aggregate check, screenshots, source-scope proof
+and local logs are under ignored `artifacts/analytics-invitation-card-20261031/`.
+Only two Analytics frontend components change runtime. A separate owner-approved
+web-only deployment would require a fresh verified backup/preservation snapshots,
+retained actual web image, exact-source build, web-only `--no-deps` activation and
+live SHA/assets/auth/drilldown verification. Rollback replaces web only and never
+restores data. No new source is deployed by this follow-up, no production data
+is changed, and approved API/web `a48d71b`, parser 15/schema 0050 remain live.
 
 ## Inbox-to-Analytics synchronization LIVE, 2026-10-30 Pacific
 

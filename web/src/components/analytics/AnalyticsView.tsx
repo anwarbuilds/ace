@@ -124,7 +124,7 @@ export function AnalyticsView({ d, connection, tab, query, supplement }: { d:Ana
   const tabs=[["overview","Overview"],["outcomes","Outcomes"],["role-resume","Role and resume"],["companies","Companies"]];
   return <div className={`an-page an-tab-${tab}`}><div className="an-hero"><div><div className="an-eyebrow">Your application intelligence</div><h1>Analytics</h1><p>Application activity, verified responses, outcomes and the evidence behind them.</p></div><AnalyticsFilters families={d.available_families} today={d.as_of?new Intl.DateTimeFormat("en-CA",{timeZone:d.timezone,year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(d.as_of)):d.end}/></div>
     {tab!=="companies"&&<InboxBand d={d} connection={connection} expanded={tab==="overview"}/>}
-    <ApplicationMetrics d={d} supplement={supplement}/>
+    <ApplicationMetrics d={d} supplement={supplement} company={query.company}/>
     <nav className="an-tabs" aria-label="Analytics views">{tabs.map(([key,label])=>{const q=new URLSearchParams(query);q.set("tab",key);return <Link key={key} href={`/app/analytics?${q}`} aria-current={tab===key?"page":undefined} scroll={false}>{label}</Link>;})}</nav>
     {d.undated>0&&<p className="an-date-note">{n(d.undated)} applications have no submission date{d.days==="all"?" and are included in all-time totals, outside the timeline":" and are excluded from this date selection"}.</p>}
     {tab==="overview"?<Overview d={d} supplement={supplement}/>:tab==="outcomes"?<Outcomes d={d}/>:tab==="role-resume"?<RoleResume d={d}/>:<Companies d={d} query={query}/>}

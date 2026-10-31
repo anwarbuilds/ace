@@ -44,6 +44,7 @@ function loadSource(filename) {
 
 const { AnalyticsView } = loadSource(path.join(sourceRoot, "components/analytics/AnalyticsView.tsx"));
 const { CorrespondenceRecords } = loadSource(path.join(sourceRoot, "components/analytics/CorrespondenceRecords.tsx"));
+const { ApplicationMetrics } = loadSource(path.join(sourceRoot, "components/analytics/AnalyticsSummary.tsx"));
 const { emailRecordsHref } = loadSource(path.join(sourceRoot, "lib/analytics.ts"));
 const emailLink=(panel,kind,scope)=>[...panel.querySelectorAll("a")].find(link=>{
   const url=new URL(link.getAttribute("href"),"https://fixture.example");
@@ -239,7 +240,7 @@ test("an empty cohort has no invented zero-denominator percentage",()=>{
 
 const classifiedEvidence={total:19,categories:{rejection:6,online_assessment:7,interview:3,offer:1,recruiter_reply:1,action_required:1},date_basis:"email_received",application_status_changed:false,family_excluded_messages:0,company_excluded_messages:0};
 for(const tab of ["overview","outcomes"]){
-  test(`${tab}: recognized hiring progress survives later rejection without inflating application metrics`,()=>{
+  test(`${tab}: recognized hiring progress survives later rejection while application metrics retain their own scope`,()=>{
     const d={...base,days:"all",positive:2,assessments:1,interviews:1,statuses:{applied:6,rejected:3},classified_email_evidence:classifiedEvidence};
     const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab,query:{tab}})));
     const panel=document.querySelector(".an-classified-email-evidence");
@@ -261,12 +262,37 @@ for(const tab of ["overview","outcomes"]){
     assert.equal(metric("Applications sent").querySelector("strong").textContent,"9");
     assert.equal(metric("Meaningful replies").querySelector("strong").textContent,"2");
     assert.equal(metric("Online assessments").querySelector("strong").textContent,"1");
-    assert.equal(metric("Interview invitations").querySelector("strong").textContent,"1");
+    assert.equal(metric("Interview invitations").querySelector("strong").textContent,"3");
     assert.match(metric("Online assessments").textContent,/including later rejections/);
     assert.match(panel.textContent,/historical invitations may already be completed or cancelled/);
     assert.doesNotMatch(panel.innerHTML,/evidence=online_assessment|evidence=interview|evidence=rejection/);
   });
 }
+
+test("interview headline counts recognized invitation emails even with zero verified application stages",()=>{
+  for(const [invites,stages] of [[1,0],[0,2],[3,1]]){
+    const d={...base,days:"custom",start:"2026-10-01",end:"2026-10-26",family:"ML_ENGINEERING",interviews:stages,
+      classified_email_evidence:{...classifiedEvidence,categories:{...classifiedEvidence.categories,interview:invites}}};
+    const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"overview",query:{company:"Wayfern"}})));
+    const card=[...document.querySelectorAll(".an-metric")].find(node=>node.querySelector(".an-metric-label").textContent==="Interview invitations");
+    assert.equal(card.querySelector("strong").textContent,String(invites));
+    assert.equal(card.querySelector("p").textContent,"Invitation emails by receipt date");
+    const target=new URL(card.getAttribute("href"),"https://fixture.test");
+    assert.equal(target.pathname,"/app/applications/analytics");
+    assert.deepEqual(Object.fromEntries(target.searchParams),{days:"custom",tz:"America/Los_Angeles",start:"2026-10-01",end:"2026-10-26",family:"ML_ENGINEERING",emails:"1",email_kind:"interview",company:"Wayfern"});
+    assert.match(document.querySelector(".an-audit-note").textContent,new RegExp(`Verified application interview stages: ${stages}`));
+    assert.match(document.querySelector(".an-audit-note").textContent,/including emails without a verified application link/);
+  }
+});
+
+test("missing interview email projection is unavailable rather than a fabricated zero or stage fallback",()=>{
+  for(const evidence of [undefined,{...classifiedEvidence,categories:{rejection:6}}]){
+    const d={...base,interviews:2,classified_email_evidence:evidence};
+    const {document}=parseHTML(renderToStaticMarkup(React.createElement(ApplicationMetrics,{d})));
+    const card=[...document.querySelectorAll(".an-metric")].find(node=>node.querySelector(".an-metric-label").textContent==="Interview invitations");
+    assert.equal(card.querySelector("strong").textContent,"Unavailable");
+  }
+});
 
 test("recognized email progress explains unknown company and role exclusions in scoped views",()=>{
   const d={...base,family:"ML_ENGINEERING",classified_email_evidence:{...classifiedEvidence,total:0,categories:{rejection:0,online_assessment:0,interview:0,offer:0,recruiter_reply:0,action_required:0},family_excluded_messages:13,company_excluded_messages:6}};
