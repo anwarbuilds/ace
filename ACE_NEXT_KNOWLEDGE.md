@@ -1,8 +1,8 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-31 Pacific, interview invitation headline correction prepared; live API/web remain approved source `a48d71b`.
+Last updated: 2026-10-31 Pacific, owner-approved invitation headline correction LIVE at web `1eb2808`; API remains `a48d71b`.
 
-## Interview invitation headline correction, 2026-10-31 Pacific, not deployed
+## Interview invitation headline correction LIVE, 2026-10-31 Pacific
 
 After viewing the release, the owner reported that “Interview invitations” still
 showed zero despite recognized interview correspondence. Fresh enforced read-only
@@ -22,7 +22,7 @@ The existing metric explanation keeps verified interview-stage counts/link
 separate; other application metrics and backend event/status authority remain.
 
 Exact tested source is **`1eb28086ab30f87dc6fd320190d3e3cc7afe3957`**, in
-[draft PR #21](https://github.com/anwarbuilds/ace/pull/21). Fictional regressions
+[merged PR #21](https://github.com/anwarbuilds/ace/pull/21). Fictional regressions
 cover an unlinked invitation with zero application stages, recognized zero
 despite existing stages, missing projection and exact filter preservation.
 Local **117** DOM/calculation cases, routes, TypeScript, full lint, zero forbidden
@@ -38,16 +38,45 @@ comparison with main's consolidation baseline has zero new/resolved names.
 Later broad app-browser steps are skipped; overall CI is not green. The dedicated
 53 Inbox/Analytics browser checks pass separately.
 
-Private review, fresh production aggregate check, screenshots, source-scope proof
-and local logs are under ignored `artifacts/analytics-invitation-card-20261031/`.
-Only two Analytics frontend components change runtime. A separate owner-approved
-web-only deployment would require a fresh verified backup/preservation snapshots,
-retained actual web image, exact-source build, web-only `--no-deps` activation and
-live SHA/assets/auth/drilldown verification. Rollback replaces web only and never
-restores data. No new source is deployed by this follow-up, no production data
-is changed, and approved API/web `a48d71b`, parser 15/schema 0050 remain live.
+The owner explicitly approved deployment of that exact source. **Only web** was
+activated at **2026-10-31T14:09:39Z–14:09:46Z** (October 31, 07:09 Pacific), using
+`--no-build --no-deps --wait`. PR #21 merged into canonical main as
+`75296621d04161143cf5220bd530fefb6cd93411`; production main deliberately uses
+the exact tested `1eb2808`, an ancestor of that merge. No later documentation
+commit is a different deployed build.
+
+The prepared/running compiled Analytics page hashes match and verify the
+effective invitation-email field, exact email drilldown and separate stage link.
+Public HTTPS health/header identify `1eb2808`; 15 served bundle/font hashes,
+85 logos and ten anonymous auth probes pass. Fresh enforced read-only invitation
+counts equal exact drilldowns in 14/30/90/all. Installed primary, independent
+Inbox and expanded audits also pass all four ranges, with zero Gmail calls,
+body reads or writes. Actual private totals remain outside public Git.
+
+All 19 protected table row sets match exactly in both preparation-to-cutover and
+cutover-to-postactivation snapshots; no authentication heartbeat changed during
+cutover. API **`a48d71b`**, scheduler, PostgreSQL, Caddy and exited migrate retain
+their exact IDs/images/starts/mounts. All 371 backend/four script hashes match;
+`.env`, Compose and Caddyfile retain hashes/modes/inodes. Parser **15**, schema
+**0050**, one monitor lease and disabled historical rechecks remain. Parser 7
+stays stopped. No API restart, migration, scheduler/extension operation, Gmail
+replay or data compensation ran. Web startup logs have no error/traceback/5xx.
+
+Fresh private backup:
+`/opt/ace/private-backups/invitation-card-20261031T1400Z/database.dump.gz`,
+**566,591,840 bytes**. Gzip integrity, catalog and full expansion pass; no restore
+drill or retention pruning ran. Actual previous web image `a48d71b` is retained
+as `oracle-web:before-invitation-card-20261031T1400Z`. The folder's guarded
+`rollback.sh` replaces web only, never the API or SQL data. Prior release backups
+and images remain retained. Review/screenshots/source-scope and copied private
+release proofs are under ignored `artifacts/analytics-invitation-card-20261031/`.
+No signed-in production browser or local Chrome ran; hosted fictional browsers
+and live HTTP/source/data verification remain distinct evidence.
 
 ## Inbox-to-Analytics synchronization LIVE, 2026-10-30 Pacific
+
+This is the prior coordinated API/web release. The API remains at its source;
+the newer web-only headline correction above supersedes its frontend revision.
 
 The owner explicitly approved deployment after the final review. Exact tested
 source **`a48d71be3a33a6188e8fa96f748b4b78ecd19ef0`** is now live for **API and

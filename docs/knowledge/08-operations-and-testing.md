@@ -8,6 +8,30 @@
 > Read this when: you deploy, restart, debug the scheduler, or write browser tests.
 
 
+## Interview invitation headline web-only release LIVE (2026-10-31 Pacific)
+
+Owner-approved exact tested web `1eb2808` activated at
+2026-10-31T14:09:39Z–14:09:46Z (07:09 Pacific). PR #21 merged on main as `7529662`;
+production main deliberately uses the tested ancestor. Only web was built and
+replaced using `--no-build --no-deps --wait`. API `a48d71b`, scheduler, PostgreSQL,
+Caddy and exited migrate retain IDs/images/starts/mounts. All 19 protected table
+row sets match across preparation/cutover/postactivation, as do private/mounted
+config hashes/modes/inodes and all 371 backend/four script hashes. Schema0050,
+parser15, one monitor lease, disabled history checks and stopped parser7 remain.
+
+Fresh 566,591,840-byte backup under
+`private-backups/invitation-card-20261031T1400Z/` passes gzip, catalog and full
+expansion, with no restore drill/pruning. Retained actual prior web `a48d71b`
+under `oracle-web:before-invitation-card-20261031T1400Z` and guarded rollback replace
+web only, never API/SQL data. Prepared/running compiled page hash/binding markers,
+public SHA, 15 bundles/fonts, 85 logos, ten auth probes and fresh four-range
+invitation/drilldown/full read-only audits pass. Startup logs have no error,
+traceback or HTTP 5xx. No historical Gmail/manual sync, migration, scheduler or
+extension operation ran. No local Chrome or signed-in production browser ran.
+Source QA passes 117 local DOM/calculation, web checks/build, 2,499 hosted backend/
+PostgreSQL and 53 Inbox/Analytics browsers; broader CI retains the same 25/22
+extension failure names, so overall CI is not green. See the latest root LIVE record.
+
 ## Inbox-to-Analytics API/web release LIVE (2026-10-30 Pacific)
 
 Owner-approved exact tested `a48d71b` activated only API/web at

@@ -1,6 +1,6 @@
 # ACE current handoff
 
-Updated 2026-10-31 Pacific with an invitation-headline correction pending after the approved release. This is
+Updated 2026-10-31 Pacific after the approved invitation-headline web release. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
@@ -27,7 +27,7 @@ before changes. Dated pending instructions are not current authorization.
 - Fetch main before future changes and push only the reviewed source. Private
   `recovery-20261030/*` tags are local recovery material; **do not push all tags**.
 
-## Pending interview invitation headline correction
+## Interview invitation headline correction LIVE
 
 The owner identified that the live “Interview invitations” headline still reads
 verified application stages rather than recognized invitation emails. Fresh
@@ -36,50 +36,51 @@ The isolated `analytics-rebuild-invitation-card-20261031` candidate binds that
 card to the existing effective interview-email count and exact receipt-date
 drilldown, preserving filters, missing-data honesty and the separate stage
 explanation. Only two Analytics frontend components change runtime behavior;
-backend/classifier/data remain unchanged. Exact tested source `1eb2808`,
-[draft PR #21](https://github.com/anwarbuilds/ace/pull/21), passes 117 local
+backend/classifier/data remain unchanged. Owner-approved exact tested `1eb2808`,
+[merged PR #21](https://github.com/anwarbuilds/ace/pull/21), passes 117 local
 DOM/calculation checks, route types/TypeScript/lint and hosted review
 [41206845680](https://github.com/anwarbuilds/ace/actions/runs/41206845680): 2,499
 backend/PostgreSQL and 53 Inbox/Analytics browser cases plus web build. Day/Night
-headline and mobile captures are inspected; no local Chrome ran. It is not
-deployed and needs separate web-only release approval. Wider CI passes backend/web
+headline and mobile captures are inspected; no local Chrome ran. **Web only**
+activated at 2026-10-31T14:09:39Z–14:09:46Z (07:09 Pacific). Wider CI passes backend/web
 and retains the same 25/22 extension-browser baseline, with zero new/resolved
-failed names; overall CI is not green. The following production record remains current.
+failed names; overall CI is not green. Live compiled-page, public SHA/assets/auth,
+four-range invitation/drilldown, full installed audit and preservation checks pass.
 
-## Production: Inbox-to-Analytics release LIVE
+## Production: current verified sources
 
-Website: **https://ace.opik.net**. Owner-approved API/web source
-**`a48d71be3a33a6188e8fa96f748b4b78ecd19ef0`** activated at
-2026-10-31T04:31:22Z–04:31:35Z (October 30, 21:31 Pacific).
-[PR #20](https://github.com/anwarbuilds/ace/pull/20) merged into canonical main
-as `1a91c7021c5186412bbb64cc2c54a7ab23b741e2`. Production `/opt/ace` main tracks
-origin/main but deliberately uses the exact tested `a48d71b`; later continuity
+Website: **https://ace.opik.net**. Web is exact approved/tested
+**`1eb28086ab30f87dc6fd320190d3e3cc7afe3957`**, activated as above. API remains
+`a48d71b` from the October 30 coordinated Inbox/Analytics release. PR #21 merged
+as `75296621d04161143cf5220bd530fefb6cd93411`. Production `/opt/ace` main tracks
+origin/main but deliberately uses exact tested `1eb2808`; later continuity
 documentation does not authorize another rebuild.
 
 | Running surface | Verified source revision |
 | --- | --- |
 | API, Inbox parser 15 | `a48d71be3a33a6188e8fa96f748b4b78ecd19ef0` |
-| Web | `a48d71be3a33a6188e8fa96f748b4b78ecd19ef0` |
+| Web | `1eb28086ab30f87dc6fd320190d3e3cc7afe3957` |
 | Discovery scheduler | `fca4673033dc92833bbf217182738026f414bf3d` (181 tracked runtime file hashes matched) |
 | Database schema | `0050` |
 
-Only API/web were replaced. All 371 backend/four script source hashes match;
+Only web was replaced in this latest release. All 371 backend/four script source hashes match;
 health, exact frontend SHA, 15 bundles/fonts, 85 logo hashes and auth boundaries
 pass. Installed primary/independent/expanded Analytics audits pass all four ranges
 and exact email drilldowns. HMAC snapshots preserve all rows across 19 protected
-tables, both preparation-to-cutover and cutover-to-post-startup. Scheduler,
+tables, both preparation-to-cutover and cutover-to-postactivation. API, scheduler,
 PostgreSQL, Caddy and exited migrate identities/images/starts/mounts stay intact;
 Caddy/.env/Compose hashes, modes and inodes match. Schema 0050/parser 15 remain.
-Exactly one monitor lease and ordinary background sync advancement pass after
-the normal startup delay. Historical rechecks remain false; parser 7 stays stopped.
+Exactly one monitor lease remains without an API restart. Historical rechecks
+remain false; parser 7 stays stopped. Web startup logs contain no error/traceback/5xx.
 
 Fresh private backup under
-`/opt/ace/private-backups/analytics-inbox-sync-20261031T0421Z/` passes gzip,
-catalog and full expansion (no restore drill). It retains the actual prior
-API/web tags and guarded image-only `rollback.sh`; never restore a database over
-later owner activity as image rollback. The first catalog-pipeline SIGPIPE and
-pre-monitor readiness observation are retained with corrected final verification.
-Private proofs are copied to ignored `artifacts/analytics-inbox-sync-20261030/release/`.
+`/opt/ace/private-backups/invitation-card-20261031T1400Z/` passes gzip,
+catalog and full expansion (566,591,840 bytes; no restore drill or pruning).
+It retains actual prior web image `a48d71b` under
+`oracle-web:before-invitation-card-20261031T1400Z` and guarded web-only
+`rollback.sh`; never restore a database over later owner activity as image rollback.
+Earlier API/web backups and images remain retained. Private proofs are copied to
+ignored `artifacts/analytics-invitation-card-20261031/release/`.
 No migration, scheduler operation, extension publication, Gmail replay or legacy
 restart ran. See [release and contracts](analytics/inbox-sync-review.md).
 

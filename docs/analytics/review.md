@@ -1,8 +1,8 @@
 # Analytics implementation review, 2026-10-27
 
 Current follow-up: [Inbox synchronization integration review, 2026-10-30](inbox-sync-review.md).
-That API/web integration is live at exact tested source `a48d71b`, activated
-October 30 at 21:31 Pacific. The dated release below remains historical evidence for the approved
+The API integration remains `a48d71b`; the invitation-headline correction is live
+in web `1eb2808`, activated October 31 at 07:09 Pacific. The dated release below remains historical evidence for the approved
 design and its original verification.
 
 Status: owner-approved and deployed; [PR #10](https://github.com/anwarbuilds/ace/pull/10) is merged.

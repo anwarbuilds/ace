@@ -1130,13 +1130,13 @@ permissions. Final totals stayed 936, schema/environment/protected container
 IDs held. No browser visual claim; see the architecture note for backup,
 rollback, concurrent mark-count change and verification limits.
 
-## Interview invitation headline source correction (2026-10-31, not deployed)
+## Interview invitation headline source correction LIVE (2026-10-31)
 
 The owner found that the Analytics headline “Interview invitations” showed the
 verified application-stage count while Inbox had recognized invitation emails.
 Those sources answer different questions; fix the UI binding rather than invent
-an application match or write a stage event. Exact tested candidate `1eb2808`
-(draft PR #21) uses the shared effective interview-email count and receipt-date
+an application match or write a stage event. Owner-approved exact tested `1eb2808`
+(merged PR #21) uses the shared effective interview-email count and receipt-date
 drilldown, preserving date/timezone/family/company filters. Its footnote names
 email receipt dates, missing evidence is Unavailable, and the existing metric
 explanation separately links verified application interview stages.
@@ -1146,6 +1146,9 @@ themes, Inter and application history remain. Fictional 117 DOM/calculation,
 routes/TypeScript/lint and hosted 2,499 backend/PostgreSQL plus 53 Inbox/Analytics
 browser checks pass; Day/Night headline and mobile captures are inspected. Wider
 CI retains the same 25/22 extension-browser failed names with no new/resolved
-names, so overall CI is not green. No local Chrome ran. Candidate is not deployed;
-API/web remain approved `a48d71b`. A separate web-only release needs owner approval,
-a fresh verified backup, retained actual web image and scoped live verification.
+names, so overall CI is not green. No local Chrome ran. Web-only activation ran
+2026-10-31T14:09:39Z–14:09:46Z (07:09 Pacific). API remains `a48d71b`; all unrelated
+service identities and protected row sets/configuration match. Fresh backup,
+retained actual prior web image, compiled binding/public assets/auth and four-range
+invitation/drilldown checks pass. No signed-in production browser ran. See the
+newest root LIVE record for the exact private backup and web-only rollback.

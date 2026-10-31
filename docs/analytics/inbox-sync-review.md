@@ -2,11 +2,50 @@
 
 Based on canonical `main` at `3bb2a9623c43cdb7c489da8f180aa08b900687d8`.
 Owner-approved exact tested source **`a48d71be3a33a6188e8fa96f748b4b78ecd19ef0`**
-is **LIVE for API/web** at https://ace.opik.net, activated
+was deployed for API/web at https://ace.opik.net, activated
 2026-10-31T04:31:22Z–04:31:35Z (October 30, 21:31 Pacific).
 [PR #20](https://github.com/anwarbuilds/ace/pull/20) merged into canonical main
 as `1a91c7021c5186412bbb64cc2c54a7ab23b741e2`. Parser 15, scheduler source
 `fca4673`, schema 0050 and the approved design are preserved.
+
+## Invitation headline correction: web-only release, 2026-10-31
+
+Current web is owner-approved exact tested **`1eb28086ab30f87dc6fd320190d3e3cc7afe3957`**,
+activated 2026-10-31T14:09:39Z–14:09:46Z (07:09 Pacific).
+[PR #21](https://github.com/anwarbuilds/ace/pull/21) merged on canonical main as
+`75296621d04161143cf5220bd530fefb6cd93411`. API remains `a48d71b` and every
+unrelated service retains its ID/image/start/mounts. Production main checkout
+deliberately uses exact tested `1eb2808`, not later continuity documentation.
+
+The headline had retained the verified application-stage counter beneath the
+“Interview invitations” label. Only AnalyticsSummary/AnalyticsView changed:
+it now uses effective invitation emails by receipt date, opens their exact
+drilldown with filters preserved, and keeps verified stages separately explained.
+No application match, stage event or backend counter is invented. Missing email
+projection is unavailable rather than a stage fallback or fabricated zero.
+
+Exact-source [review 41206845680](https://github.com/anwarbuilds/ace/actions/runs/41206845680)
+passes 2,499 backend/PostgreSQL and 53 Inbox/Analytics browser checks, web checks
+and build; 117 local DOM/calculation, routes/TypeScript/lint pass. Day/Night
+headline and mobile captures were inspected. Wider CI preserves the same 25/22
+extension failed names with zero new/resolved names; overall CI is not green.
+
+Fresh backup under `/opt/ace/private-backups/invitation-card-20261031T1400Z/`
+is 566,591,840 bytes and passes gzip/catalog/full expansion, with no restore
+drill/pruning. Actual prior web `a48d71b` is retained as
+`oracle-web:before-invitation-card-20261031T1400Z`; guarded rollback changes web
+only and never restores SQL data. Only web activation ran with `--no-deps`.
+
+Live compiled-page hashes/binding markers, approved frontend SHA, 15 bundle/font
+and 85 logo hashes plus ten anonymous auth probes pass. Fresh invitation count
+equals its exact email drilldown in all four ranges; installed primary,
+independent and expanded read-only audits pass. All 19 protected table row sets
+match across preparation/cutover/postactivation. API source hashes, all unrelated
+service identities, private/mounted configuration hashes/modes/inodes, schema
+0050/parser15 and one monitor lease remain. No historical recheck, API restart,
+scheduler/migration/extension operation ran. Startup logs have no error/traceback/5xx.
+Private proofs are copied to ignored `artifacts/analytics-invitation-card-20261031/release/`.
+No local Chrome or signed-in production browser verification is claimed.
 
 ## Consistency contract
 
