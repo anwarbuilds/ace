@@ -140,7 +140,9 @@ def test_analytics_display_timezone_cannot_move_absolute_owner_search_floor(data
     session.commit()
     result = analytics_read(session, now=NOW, days='all', tz=tz)
     assert result['evidence_scope'] == SCOPE
-    assert result['classified_email_evidence']['total'] == 1
+    assert result['classified_email_evidence']['total'] == 2
+    assert result['classified_email_evidence']['categories']['online_assessment'] == 1
+    assert result['classified_email_evidence']['categories']['rejection'] == 1
     assert result['company_rejection_summary']['messages'] == 1
     assert result['review']['needs_review'] == 1 and result['inbox_audit']['stored_messages'] == 3
     assert session.scalar(select(func.count()).select_from(Mail)) == 6
@@ -197,5 +199,6 @@ def test_analytics_email_search_and_aggregate_audit_apply_the_same_scope(databas
     assert checked['evidence_scope'] == SCOPE
     assert checked['stored_mail_all_dates'] == 2 and checked['stored_mail_in_scope'] == 1
     assert checked['review_queue']['inbox_pending'] == checked['review_queue']['analytics_pending'] == 0
-    assert checked['classified_email_evidence'] == {'inbox_messages': 1, 'analytics_messages': 1, 'agrees': True}
+    assert checked['classified_email_evidence'] == {'inbox_messages': 1, 'analytics_messages': 1,
+                                                  'categories': {'online_assessment': 1}, 'agrees': True}
     assert checked['projection_checks_pass']

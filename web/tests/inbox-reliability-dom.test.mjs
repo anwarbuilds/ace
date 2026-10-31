@@ -275,7 +275,7 @@ test("retrying an interrupted wider verification keeps its 90-day window",async(
 });
 
 
-test("Analytics uses its initial server response and refreshes on evidence, focus and return navigation",async()=>{
+test("Analytics uses its initial response, coalesces focus after evidence and refreshes on return",async()=>{
   const ActualRefresh=load(path.join(sourceRoot,"components/analytics/AnalyticsRefresh.tsx")).AnalyticsRefresh;
   const previous=globalThis.BroadcastChannel;
   const channels=[];
@@ -288,10 +288,10 @@ test("Analytics uses its initial server response and refreshes on evidence, focu
       await act(async()=>{channels[0].onmessage({data:"changed"});});
       assert.equal(projectionRefreshes,before+1);
       await act(async()=>{window.dispatchEvent(new window.Event("focus"));});
-      assert.equal(projectionRefreshes,before+2);
+      assert.equal(projectionRefreshes,before+1,"the focus burst reuses the evidence refresh");
       pathname="/app/applications/analytics";
       await act(async()=>{root.render(React.createElement(ActualRefresh));});
-      assert.equal(projectionRefreshes,before+3);
+      assert.equal(projectionRefreshes,before+2);
     });
     assert.equal(channels[0].closed,true);
   }finally{globalThis.BroadcastChannel=previous;pathname="/app/analytics";}

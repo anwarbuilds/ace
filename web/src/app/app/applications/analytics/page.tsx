@@ -1,9 +1,11 @@
 import Form from "next/form";
 import Link from "next/link";
 import { CompanyLogo } from "@/components/CompanyLogo";
+import { AnalyticsFreshness } from "@/components/analytics/AnalyticsFreshness";
+import { CorrespondenceRecords } from "@/components/analytics/CorrespondenceRecords";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGetOr } from "@/lib/api";
-import type { ApplicationAnalyticsRecords } from "@/lib/analytics";
+import type { ApplicationAnalyticsEmailRecords, ApplicationAnalyticsRecords } from "@/lib/analytics";
 import { clean, familyLabel, STATUS_LABEL } from "@/lib/format";
 import { getPrefs } from "@/lib/prefs";
 import type { ApplicationStatus } from "@/lib/types";
@@ -11,9 +13,9 @@ import { KIND, STATE } from "@/lib/inboxLabels";
 import "../../analytics/analytics.css";
 
 export const metadata={title:"Application records · ace"};
-const FILTERS=["days","start","end","family","company","status","evidence","eligible","timed","offset","limit","q","tz"];
+const FILTERS=["days","start","end","family","company","status","evidence","eligible","timed","offset","limit","q","tz","emails","email_kind","email_scope"];
 const SIZES=[25,50,100];
-const EXCLUDED:Record<string,string>={before_application_window:"Email predates the application window",future_timestamp:"Outcome date is in the future",missing_email:"Stored email is missing",conflicting_targets:"Email has conflicting application links",email_not_confirmed_for_application:"Email is not confirmed for this application",unconfirmed_actor:"Outcome is not owner-confirmed or verified"};
+const EXCLUDED:Record<string,string>={before_application_window:"Email predates the application window",future_timestamp:"Outcome date is in the future",missing_email:"Stored email is missing",conflicting_targets:"Email has conflicting application links",email_not_confirmed_for_application:"Email is not confirmed for this application",unconfirmed_actor:"Outcome is not owner-confirmed or verified",email_meaning_changed:"The effective email meaning has changed",unverified_email_source:"Email source verification is no longer supported"};
 const EVIDENCE:Record<string,string>={rejection:"Rejection",online_assessment:"Online assessment",interview:"Interview",interviewing:"Interview",recruiter_reply:"Recruiter reply",screening:"Screening",offer:"Offer",accepted:"Accepted"};
 
 /** Page numbers to show: the first, the last and two either side of the current one. */
@@ -25,11 +27,16 @@ function pageNumbers(current:number,pages:number):(number|null)[] {
 export default async function ApplicationAnalyticsRecordsPage({searchParams}:{searchParams:Promise<Record<string,string|string[]|undefined>>}) {
   const sp=await searchParams;
   const prefs=await getPrefs();
+  // eslint-disable-next-line react-hooks/purity -- Order no-store server read attempts; data freshness remains data.as_of.
+  const attemptedAt=Date.now();
   const query:Record<string,string>={records:"1",tz:prefs.tz};
   for(const key of FILTERS) if(typeof sp[key]==="string"&&sp[key])query[key]=sp[key];
   if(!query.days)query.days=query.start&&query.end?"custom":"all";
-  const data=await apiGetOr<ApplicationAnalyticsRecords|null>("/api/analytics",null,query);
-  if(!data)return <div className="pg"><h1>Application records</h1><p role="alert">This selection could not be loaded. Check the filters or return to Analytics.</p><Link className="btn" href="/app/analytics">Back to Analytics</Link></div>;
+  if(query.emails==="1"||query.emails==="true")delete query.records;
+  const scope=`/app/applications/analytics?${new URLSearchParams(query)}`;
+  const data=await apiGetOr<ApplicationAnalyticsRecords|ApplicationAnalyticsEmailRecords|null>("/api/analytics",null,query);
+  if(!data)return <ScrollArea list><AnalyticsFreshness scope={scope} attemptedAt={attemptedAt} asOf={null} timezone={query.tz} success={false}><div className="pg"><h1>Application records</h1><p>This selection could not be loaded. Check the filters or return to Analytics.</p><Link className="btn" href="/app/analytics">Back to Analytics</Link></div></AnalyticsFreshness></ScrollArea>;
+  if("email_records" in data)return <ScrollArea list><AnalyticsFreshness scope={scope} attemptedAt={attemptedAt} asOf={data.as_of} timezone={data.timezone} success><CorrespondenceRecords d={data} query={query}/></AnalyticsFreshness></ScrollArea>;
   const analyticsQuery=new URLSearchParams();
   for(const key of ["days","start","end","family"])if(query[key])analyticsQuery.set(key,query[key]);
   // Rejected companies live on the Companies tab; return there from them.
@@ -46,7 +53,7 @@ export default async function ApplicationAnalyticsRecordsPage({searchParams}:{se
   const kept=Object.entries(query).filter(([key])=>!["records","q","offset"].includes(key));
   const shownFrom=data.record_total?data.record_offset+1:0;
   const shownTo=Math.min(data.record_total,data.record_offset+data.records.length);
-  return <ScrollArea list><div className="an-page an-records-page">
+  return <ScrollArea list><AnalyticsFreshness scope={scope} attemptedAt={attemptedAt} asOf={data.as_of} timezone={data.timezone} success><div className="an-page an-records-page">
     <div className="an-hero"><div><div className="an-eyebrow">Applications / Analytics selection</div><h1>{rejected?"Rejected applications":"Application records"}</h1><p>{data.record_total.toLocaleString("en-US")} unique {data.record_total===1?"application":"applications"} ·{data.days==="all"?"All time":`${data.start} to ${data.end}`} · {data.timezone}</p></div></div>
     <div className="an-record-links"><Link className="btn" href={href({days:"all",start:null,end:null,offset:null})}>All time</Link><Link className="btn" href={`/app/analytics?${analyticsQuery}`}>Back to Analytics</Link><Link className="btn" href="/app/applications">All applications and controls</Link><a className="btn" href="/api/applications/export.csv" download>Export full application history</a></div>
     {selected.length>0&&<p className="an-record-selection">{selected.join(" · ")}</p>}
@@ -94,5 +101,5 @@ export default async function ApplicationAnalyticsRecordsPage({searchParams}:{se
       </div>
     </section>
     <p className="an-foot">Each application appears once. Multiple verified events do not create extra applications. The lifetime Applied badge remains unchanged by filters.</p>
-  </div></ScrollArea>;
+  </div></AnalyticsFreshness></ScrollArea>;
 }

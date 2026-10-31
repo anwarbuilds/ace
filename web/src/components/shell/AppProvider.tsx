@@ -365,7 +365,9 @@ export function AppProvider({
     };
     check();
     const t = setInterval(() => {
-      router.refresh();
+      // Analytics has a visibility-aware coordinator that coalesces evidence,
+      // focus and periodic reads. Keep one refresh owner for those routes.
+      if (!["/app/analytics", "/app/applications/analytics"].includes(window.location.pathname)) router.refresh();
       check();
     }, 120000);
     return () => clearInterval(t);

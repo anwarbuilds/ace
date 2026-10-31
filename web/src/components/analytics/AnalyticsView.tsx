@@ -5,7 +5,7 @@ import { CompanyLogo } from "@/components/CompanyLogo";
 import { NavIcon } from "@/components/shell/NavIcon";
 import { clean, familyLabel, STATUS_LABEL } from "@/lib/format";
 import type { ApplicationStatus } from "@/lib/types";
-import { applicationRecordsHref, CHART_COLORS, type AnalyticsData, type InboxConnection } from "@/lib/analytics";
+import { applicationRecordsHref, emailRecordsHref, CHART_COLORS, type AnalyticsData, type InboxConnection } from "@/lib/analytics";
 import { AnalyticsChartInterval, AnalyticsCompanySelect, AnalyticsFilters, AnalyticsWeekPicker } from "./AnalyticsFilters";
 import { ColumnChart, Donut, LineChart, MiniBar, PetitionChart } from "./AnalyticsCharts";
 import { ApplicationMetrics, InboxBand, AnalyticsEvidenceNote } from "./AnalyticsSummary";
@@ -44,23 +44,29 @@ function Overview({d,supplement}:{d:AnalyticsData;supplement?:AnalyticsSupplemen
     <Panel title="Outcome evidence" subtitle="Distinct application and outcome-type pairs."><div className="an-donut-layout"><Donut rows={evidence} label="outcome pairs"/><div><Legend rows={evidence} total={d.evidence.positive+d.evidence.rejected}/><p className="an-foot">An application can have both a positive response and a later rejection. These are outcome pairs, not separate applications.</p><div className="an-evidence-links"><Jump href={applicationRecordsHref(d,{evidence:"positive"})}>Positive replies</Jump><Jump href={applicationRecordsHref(d,{evidence:"rejection"})}>Rejections</Jump></div></div></div></Panel>
   </div></>;
 }
-function RecognizedEmailProgress({d}:{d:AnalyticsData}) {
+function RecognizedEmailProgress({d,query}:{d:AnalyticsData;query:Record<string,string>}) {
   const evidence=d.classified_email_evidence;
   if(!evidence||!(evidence.total||evidence.family_excluded_messages||evidence.company_excluded_messages))return null;
   const categories=evidence.categories;
   const requestedStart=d.days==="all"?null:d.start;
   const fallbackStart=d.evidence_scope&&(!requestedStart||d.evidence_scope.start>requestedStart)?d.evidence_scope.start:requestedStart??"All dates";
-  const stages=[{filter:"assessments",label:"Assessment emails",count:categories.online_assessment},{filter:"interviews",label:"Interview emails",count:categories.interview},{filter:"offers",label:"Offer emails",count:categories.offer}];
-  return <Panel className="an-classified-email-evidence" title="Recognized hiring progress" subtitle="Classified email evidence, separate from verified application stages.">
+  const href=(kind:string)=>emailRecordsHref(d,{email_kind:kind,...(query.company?{company:query.company}:{})});
+  const stages=[{kind:"online_assessment",label:"Assessment invitation emails",count:categories.online_assessment},{kind:"interview",label:"Interview invitation emails",count:categories.interview},{kind:"offer",label:"Offer emails",count:categories.offer}];
+  const other=[{kind:"recruiter_reply",label:"Recruiter reply emails"},{kind:"action_required",label:"Other action instructions"},{kind:"application_confirmation",label:"Acknowledgements"}] as const;
+  const updates=[{kind:"assessment_completed",label:"Assessment completed"},{kind:"assessment_cancelled",label:"Assessment cancelled"},{kind:"interview_cancelled",label:"Interview cancelled"},{kind:"status_update",label:"Routine updates"}] as const;
+  const partition=[evidence.linked_messages,evidence.unlinked_messages,evidence.company_messages].every(value=>value!==undefined);
+  return <Panel className="an-classified-email-evidence" title="Recognized hiring progress" subtitle="Effective Inbox email classifications, separate from verified application stages.">
     {d.evidence_scope&&<p className="an-foot" aria-label="Email history period"><strong>Email history: {inboxHistoryLabel(d.evidence_scope)}</strong> · {d.evidence_scope.timezone}. Application submission dates and confirmed stage history remain separate.</p>}
     <p className="an-foot">Email receipt dates: {evidence.start??fallbackStart} through {evidence.end??d.end} · {d.timezone}. {n(evidence.total)} classified emails in this scope.</p>
+    {partition&&<p className="an-foot">{n(evidence.linked_messages!)} with a verified application link · {n(evidence.company_messages!)} company-only · {n(evidence.unlinked_messages!)} without a verified application link. Email categories do not authorize application status changes.</p>}
     {Boolean(evidence.unverified_source_messages)&&<p className="an-foot" role="note" aria-label="Unverified email sources">{n(evidence.unverified_source_messages??0)} classified {evidence.unverified_source_messages===1?"email has an unverified sender":"emails have unverified senders"}. These record message meaning only; no employer or application outcome is verified.</p>}
     <h3>Assessments, interviews and offers</h3>
-    <div className="an-review-list">{stages.map(row=><Link key={row.filter} href={`${INBOX}?decision=${row.filter}`}><i style={{background:CHART_COLORS[3]}}/><div><strong>{row.label}</strong><span>Classified and filed; application linkage is optional</span></div><b>{n(row.count)}</b><NavIcon name="right" size="sm"/></Link>)}</div>
-    <p className="an-foot">Recruiter reply emails: {n(categories.recruiter_reply)} · Other action instructions: {n(categories.action_required)}. <Link href={`${INBOX}?decision=classified_action`}>Open filed action emails</Link></p>
+    <div className="an-review-list">{stages.map(row=><Link key={row.kind} href={href(row.kind)}><i style={{background:CHART_COLORS[3]}}/><div><strong>{row.label}</strong><span>Recognized message meaning; application linkage is shown separately</span></div><b>{n(row.count)}</b><NavIcon name="right" size="sm"/></Link>)}</div>
+    <p className="an-foot">{other.filter(row=>categories[row.kind]!==undefined).map((row,index)=><span key={row.kind}>{index>0?" · ":""}<Link href={href(row.kind)}>{row.label}: {n(categories[row.kind]??0)}</Link></span>)}. Acknowledgements do not count as meaningful replies.</p>
     <h3>Rejection correspondence</h3>
-    <div className="an-review-list"><Link href={`${INBOX}?decision=classified_rejection`}><i style={{background:CHART_COLORS[4]}}/><div><strong>Rejection emails classified and filed</strong><span>Employer or application identity is not verified for a status change</span></div><b>{n(categories.rejection)}</b><NavIcon name="right" size="sm"/></Link></div>
-    <p className="an-foot">A later rejection does not erase an earlier assessment or interview. These are email counts, not additional applications or confirmed stage totals. No application status changed from this filing. Check received dates and newer messages before acting; historical invitations may already be completed or cancelled. Category links open the corresponding Inbox email history.</p>
+    <div className="an-review-list"><Link href={href("rejection")}><i style={{background:CHART_COLORS[4]}}/><div><strong>Rejection emails</strong><span>Application-linked, company-only and unlinked correspondence</span></div><b>{n(categories.rejection)}</b><NavIcon name="right" size="sm"/></Link></div>
+    {updates.some(row=>(categories[row.kind]??0)>0)&&<p className="an-foot">{updates.map((row,index)=><span key={row.kind}>{index>0?" · ":""}<Link href={href(row.kind)}>{row.label}: {n(categories[row.kind]??0)}</Link></span>)}. Completion, cancellation and routine updates are separate from invitations.</p>}
+    <p className="an-foot">A later rejection does not erase an earlier assessment or interview. These are email counts, not additional applications or confirmed stage totals. Check received dates and newer messages before acting; historical invitations may already be completed or cancelled. Category links use these receipt dates and filters.</p>
     {evidence.family_excluded_messages>0&&<p className="an-foot">{n(evidence.family_excluded_messages)} classified emails lack a verified role family and are excluded from this family selection.</p>}
     {evidence.company_excluded_messages>0&&<p className="an-foot">{n(evidence.company_excluded_messages)} classified emails lack a verified company and are excluded from this company selection.</p>}
   </Panel>;
@@ -95,7 +101,7 @@ function CompanyRejectionEvidence({d,query}:{d:AnalyticsData;query:Record<string
   const rows=d.company_rejections??[];
   const day=(iso:string)=>new Date(iso).toLocaleDateString("en-US",{timeZone:d.timezone,month:"short",day:"numeric",year:"numeric"});
   const allRoles=new URLSearchParams(query);allRoles.delete("family");allRoles.set("tab","companies");
-  return <Panel className="an-rejections an-company-rejection-evidence" title="Company rejection evidence" subtitle="Employer identified; the individual application or role is not assigned." action={<Jump href={`${INBOX}?decision=company_rejection`}>View company rejection emails</Jump>}>
+  return <Panel className="an-rejections an-company-rejection-evidence" title="Company rejection evidence" subtitle="Employer identified; the individual application or role is not assigned." action={<Jump href={emailRecordsHref(d,{email_kind:"rejection",email_scope:"company",...(query.company?{company:query.company}:{})})}>View company rejection emails</Jump>}>
     {d.evidence_scope&&<p className="an-foot">Email history: {inboxHistoryLabel(d.evidence_scope)} · {d.evidence_scope.timezone}.</p>}
     <p className="an-foot">Email outcome dates: {summary.start??"All dates"} through {summary.end} · {d.timezone}. Filtered by when the email arrived, separately from application submission dates.</p>
     {d.family?<Unavailable>{n(summary.family_excluded_messages)} company rejection {summary.family_excluded_messages===1?"email is":"emails are"} excluded from this role family selection because the role is not verified. <Link href={`/app/analytics?${allRoles}`}>View all role families</Link></Unavailable>:<>
@@ -122,7 +128,7 @@ export function AnalyticsView({ d, connection, tab, query, supplement }: { d:Ana
     <nav className="an-tabs" aria-label="Analytics views">{tabs.map(([key,label])=>{const q=new URLSearchParams(query);q.set("tab",key);return <Link key={key} href={`/app/analytics?${q}`} aria-current={tab===key?"page":undefined} scroll={false}>{label}</Link>;})}</nav>
     {d.undated>0&&<p className="an-date-note">{n(d.undated)} applications have no submission date{d.days==="all"?" and are included in all-time totals, outside the timeline":" and are excluded from this date selection"}.</p>}
     {tab==="overview"?<Overview d={d} supplement={supplement}/>:tab==="outcomes"?<Outcomes d={d}/>:tab==="role-resume"?<RoleResume d={d}/>:<Companies d={d} query={query}/>}
-    {(tab==="overview"||tab==="outcomes")&&<RecognizedEmailProgress d={d}/>}
+    {(tab==="overview"||tab==="outcomes")&&<RecognizedEmailProgress d={d} query={query}/>}
     <AnalyticsEvidenceNote d={d} connection={connection}/>
     <div className="an-bottom-links"><span>Submission dates · {d.start} to {d.end} · {d.timezone}</span><a href="/api/applications/export.csv" download>Export applications CSV</a><Link href={APPS}>All application records <NavIcon name="right" size="sm"/></Link></div>
   </div>;

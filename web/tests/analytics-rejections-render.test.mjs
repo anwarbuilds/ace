@@ -25,6 +25,7 @@ function loadSource(filename) {
   const sourceRequire = (name) => {
     // The filters need Next's app router; this test is about the panels.
     if (name === "./AnalyticsFilters") return { AnalyticsFilters: () => null, AnalyticsCompanySelect: () => null, AnalyticsChartInterval: () => null, AnalyticsWeekPicker: () => null };
+    if (name === "next/form") return function FormFixture(props){return React.createElement("form",props);};
     if (name.startsWith(".")) {
       // A sibling component, or data such as the logo provenance JSON.
       const near = path.resolve(path.dirname(filename), name);
@@ -42,6 +43,12 @@ function loadSource(filename) {
 }
 
 const { AnalyticsView } = loadSource(path.join(sourceRoot, "components/analytics/AnalyticsView.tsx"));
+const { CorrespondenceRecords } = loadSource(path.join(sourceRoot, "components/analytics/CorrespondenceRecords.tsx"));
+const { emailRecordsHref } = loadSource(path.join(sourceRoot, "lib/analytics.ts"));
+const emailLink=(panel,kind,scope)=>[...panel.querySelectorAll("a")].find(link=>{
+  const url=new URL(link.getAttribute("href"),"https://fixture.example");
+  return url.searchParams.get("emails")==="1"&&url.searchParams.get("email_kind")===kind&&(!scope||url.searchParams.get("email_scope")===scope);
+});
 const zero = { submitted: 0, eligible: 0, responses: 0, rejections: 0, assessments: 0, interviews: 0, rate: null };
 const base = {
   as_of: "2026-10-26T18:00:00Z", timezone: "America/Los_Angeles", start: "2026-09-27", end: "2026-10-26", days: "30", family: null,
@@ -124,7 +131,10 @@ test("company rejection emails have their own date scope and links without chang
   for(const id of [901,902,903]){
     assert.ok(panel.querySelector(`a[href="/app/applications/inbox?decision=company_rejection&message=${id}"]`),`email ${id} remains inspectable`);
   }
-  assert.ok(panel.querySelector('a[href="/app/applications/inbox?decision=company_rejection"]'));
+  const category=new URL(emailLink(panel,"rejection","company").getAttribute("href"),"https://fixture.example");
+  assert.equal(category.pathname,"/app/applications/analytics");
+  assert.equal(category.searchParams.get("start"),base.start);
+  assert.equal(category.searchParams.get("end"),base.end);
   assert.equal(panel.querySelectorAll(".an-rejected-list li").length,2);
   assert.equal(panel.querySelector(".an-rejected-list b").textContent,"2 emails");
   assert.doesNotMatch(panel.innerHTML,/evidence=rejection|2 of 6/);
@@ -238,13 +248,14 @@ for(const tab of ["overview","outcomes"]){
     assert.match(panel.textContent,/19 classified emails in this scope/);
     assert.match(panel.textContent,/A later rejection does not erase an earlier assessment or interview/);
     assert.match(panel.textContent,/email counts, not additional applications or confirmed stage totals/);
-    for(const [filter,label,count] of [["assessments","Assessment emails",7],["interviews","Interview emails",3],["offers","Offer emails",1],["classified_rejection","Rejection emails classified and filed",6]]){
-      const link=panel.querySelector(`a[href="/app/applications/inbox?decision=${filter}"]`);
+    for(const [kind,label,count] of [["online_assessment","Assessment invitation emails",7],["interview","Interview invitation emails",3],["offer","Offer emails",1],["rejection","Rejection emails",6]]){
+      const link=emailLink(panel,kind);
       assert.equal(link.querySelector("strong").textContent,label);
       assert.equal(link.querySelector("b").textContent,String(count));
     }
     assert.match(panel.textContent,/Recruiter reply emails: 1.*Other action instructions: 1/);
-    assert.ok(panel.querySelector('a[href="/app/applications/inbox?decision=classified_action"]'));
+    assert.ok(emailLink(panel,"recruiter_reply"));
+    assert.ok(emailLink(panel,"action_required"));
     const metrics=[...document.querySelectorAll(".an-metric")];
     const metric=label=>metrics.find(node=>node.querySelector(".an-metric-label").textContent===label);
     assert.equal(metric("Applications sent").querySelector("strong").textContent,"9");
@@ -286,7 +297,7 @@ test("unverified source counts describe message meaning without confirming emplo
     assert.match(note.textContent,/message meaning only; no employer or application outcome is verified/);
     assert.match(panel.textContent,/19 classified emails in this scope/);
     assert.equal(document.querySelector(".an-metric strong").textContent,"9");
-    assert.equal(panel.querySelector('a[href="/app/applications/inbox?decision=classified_rejection"] b').textContent,"6");
+    assert.equal(emailLink(panel,"rejection").querySelector("b").textContent,"6");
   }
   const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d:{...base,classified_email_evidence:{...classifiedEvidence,unverified_source_messages:0}},connection:null,tab:"overview",query:{}})));
   assert.equal(document.querySelector('[aria-label="Unverified email sources"]'),null);
@@ -304,5 +315,97 @@ test("recognized progress uses effective email dates while application cohorts k
     assert.equal(document.querySelector(".an-metric strong").textContent,"9");
     assert.match(document.querySelector(".an-bottom-links").textContent,new RegExp(`Submission dates.*${start}`));
     assert.doesNotMatch(panel.textContent,/Email receipt dates: All dates/);
+  }
+});
+
+test("effective acknowledgements and lifecycle updates retain email counts without becoming invitations",()=>{
+  const categories={...classifiedEvidence.categories,application_confirmation:4,assessment_completed:2,assessment_cancelled:1,interview_cancelled:1,status_update:3};
+  const d={...base,classified_email_evidence:{...classifiedEvidence,total:30,categories,linked_messages:8,company_messages:6,unlinked_messages:16}};
+  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"overview",query:{}})));
+  const panel=document.querySelector(".an-classified-email-evidence");
+  assert.match(panel.textContent,/30 classified emails in this scope/);
+  assert.match(panel.textContent,/8 with a verified application link.*6 company-only.*16 without a verified application link/);
+  assert.match(panel.textContent,/Acknowledgements: 4.*Acknowledgements do not count as meaningful replies/);
+  assert.match(panel.textContent,/Completion, cancellation and routine updates are separate from invitations/);
+  assert.equal(emailLink(panel,"online_assessment").querySelector("b").textContent,"7");
+  assert.equal(emailLink(panel,"interview").querySelector("b").textContent,"3");
+  for(const kind of ["application_confirmation","assessment_completed","assessment_cancelled","interview_cancelled","status_update"])assert.ok(emailLink(panel,kind));
+  assert.doesNotMatch(panel.textContent,/No application status changed from this filing/);
+  const metrics=[...document.querySelectorAll(".an-metric")];
+  assert.equal(metrics.find(node=>node.querySelector(".an-metric-label").textContent==="Meaningful replies").querySelector("strong").textContent,"0");
+});
+
+test("email drilldowns preserve original report dates while the shared projection applies receipt scope",()=>{
+  for(const days of ["14","30","90","all","custom"]){
+    const d={...base,days,start:"2026-05-01",family:"ML_ENGINEERING",classified_email_evidence:{...classifiedEvidence,start:"2026-07-01",end:"2026-10-26"}};
+    const destination=new URL(emailRecordsHref(d,{email_kind:"interview",company:"Silverpine & Rose"}),"https://fixture.example");
+    assert.equal(destination.pathname,"/app/applications/analytics");
+    for(const [key,value] of Object.entries({emails:"1",email_kind:"interview",days,tz:"America/Los_Angeles",family:"ML_ENGINEERING",company:"Silverpine & Rose"}))assert.equal(destination.searchParams.get(key),value,key);
+    assert.equal(destination.searchParams.get("start"),days==="all"?null:"2026-05-01");
+    assert.equal(destination.searchParams.get("end"),days==="all"?null:d.end);
+    assert.equal(destination.searchParams.has("evidence"),false,"recognized meaning never requests an application-stage filter");
+  }
+});
+
+test("older Analytics replies do not invent an acknowledgement count",()=>{
+  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d:{...base,classified_email_evidence:classifiedEvidence},connection:null,tab:"overview",query:{}})));
+  const panel=document.querySelector(".an-classified-email-evidence");
+  assert.equal(emailLink(panel,"application_confirmation"),undefined);
+  assert.doesNotMatch(panel.textContent,/Acknowledgements: 0/);
+});
+
+test("email records distinguish verified links, company evidence and recognized unlinked history",()=>{
+  const d={...base,classified_email_evidence:{...classifiedEvidence,start:"2026-07-01",end:"2026-10-26"},email_total:3,email_offset:0,email_limit:25,email_records:[
+    {id:701,classification:"interview",decision:"classified_action",received_at:"2026-09-12T06:30:00Z",application_key:null,company:null,subject:"A conversation about the engineering role"},
+    {id:702,classification:"rejection",decision:"company_rejection",received_at:"2026-10-01T17:00:00Z",application_key:null,company:"Silverpine Labs",subject:"Application update"},
+    {id:703,classification:"online_assessment",decision:"manual",received_at:"2026-10-02T17:00:00Z",application_key:"job:803",company:"Silverpine Labs",subject:"Your assessment invitation"},
+  ]};
+  const {document}=parseHTML(renderToStaticMarkup(React.createElement(CorrespondenceRecords,{d,query:{emails:"1",days:"all",tz:base.timezone}})));
+  const rows=[...document.querySelectorAll(".an-record-row")];
+  assert.equal(rows.length,3);
+  assert.match(rows[0].textContent,/Interview.*Sep 11, 2026.*No verified application link/);
+  assert.match(rows[1].textContent,/Silverpine Labs.*Company evidence; role not assigned/);
+  assert.match(rows[2].textContent,/Verified application link/);
+  assert.equal(rows[0].querySelector('a[href^="/app/jobs/"]'),null);
+  assert.equal(rows[1].querySelector('a[href^="/app/jobs/"]'),null);
+  assert.ok(rows[2].querySelector('a[href="/app/jobs/803"]'));
+  for(const id of [701,702,703])assert.ok(document.querySelector(`a[href="/app/applications/inbox?message=${id}"]`));
+  assert.match(document.querySelector("h1").nextElementSibling.textContent,/3 distinct effective emails.*Receipt dates 2026-07-01 to 2026-10-26/);
+  assert.match(document.querySelector(".an-foot").textContent,/later rejection preserves earlier valid assessment and interview history/);
+  assert.equal(document.querySelector('th[data-label="Current status"]'),null);
+});
+
+test("email pagination and search preserve classification and receipt-date filters",()=>{
+  const query={emails:"1",email_kind:"rejection",email_scope:"company",days:"custom",start:"2026-09-01",end:"2026-09-30",tz:base.timezone,company:"Silverpine Labs",q:"application update",limit:"25"};
+  const d={...base,email_total:31,email_offset:0,email_limit:25,email_records:[],classified_email_evidence:{...classifiedEvidence,start:query.start,end:query.end}};
+  const {document}=parseHTML(renderToStaticMarkup(React.createElement(CorrespondenceRecords,{d,query})));
+  const next=[...document.querySelectorAll("a")].find(link=>link.textContent==="Next emails");
+  const destination=new URL(next.getAttribute("href"),"https://fixture.example");
+  for(const [key,value] of Object.entries({...query,offset:"25"}))assert.equal(destination.searchParams.get(key),value,key);
+  const form=document.querySelector('form[role="search"]');
+  for(const key of ["emails","email_kind","email_scope","start","end","tz","company"])assert.equal(form.querySelector(`input[name="${key}"]`).getAttribute("value"),query[key]);
+  assert.equal(form.querySelector('input[name="q"]').getAttribute("value"),query.q);
+  assert.equal(form.querySelector('input[name="offset"]'),null,"search restarts pagination");
+  const allTime=[...document.querySelectorAll("a")].find(link=>link.textContent==="All time");
+  const allUrl=new URL(allTime.getAttribute("href"),"https://fixture.example");
+  assert.equal(allUrl.searchParams.get("days"),"all");
+  assert.equal(allUrl.searchParams.has("start"),false);
+  assert.equal(allUrl.searchParams.has("end"),false);
+  assert.equal(allUrl.searchParams.get("email_kind"),"rejection");
+  assert.equal(allUrl.searchParams.get("email_scope"),"company");
+});
+
+test("returning from email evidence retains the application cohort instead of its July receipt floor",()=>{
+  for(const query of [{emails:"1",email_kind:"interview",days:"all",tz:base.timezone},{emails:"1",email_kind:"interview",days:"custom",start:"2026-05-01",end:"2026-10-26",tz:base.timezone}]){
+    const d={...base,email_total:0,email_offset:0,email_limit:50,email_records:[],classified_email_evidence:{...classifiedEvidence,start:"2026-07-01",end:"2026-10-26"}};
+    const {document}=parseHTML(renderToStaticMarkup(React.createElement(CorrespondenceRecords,{d,query})));
+    const back=[...document.querySelectorAll("a")].find(link=>link.textContent==="Back to Analytics");
+    const destination=new URL(back.getAttribute("href"),"https://fixture.example");
+    assert.equal(destination.searchParams.get("days"),query.days);
+    assert.equal(destination.searchParams.get("start"),query.start??null);
+    assert.equal(destination.searchParams.get("end"),query.end??null);
+    assert.equal(destination.searchParams.has("email_kind"),false);
+    assert.match(document.querySelector("h1").nextElementSibling.textContent,/Receipt dates 2026-07-01 to 2026-10-26/);
+    assert.match(document.querySelector(".an-record-pagination").textContent,/0 emails/);
   }
 });

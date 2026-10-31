@@ -4,7 +4,7 @@ from datetime import date, timedelta
 import pytest
 from sqlalchemy import select
 
-from backend.app.api.routers.analytics import analytics_read
+from backend.app.api.routers.analytics import EMAIL_KINDS, analytics_read
 from backend.app.db.models import ApplicationEventRecord as Event, GmailConnectionRecord, GmailMessageRecord as Mail, JobMarkRecord
 from backend.app.inbox.filed_evidence import ACTION_PREFIX, REJECTION_PREFIX, UNVERIFIED_NOTE
 from backend.tests.test_analytics_read import NOW, app, db, outcome
@@ -40,10 +40,11 @@ def test_all_recognized_categories_are_visible_without_changing_confirmed_applic
         filed(db, index, kind)
     result = read(db, records=True)
     assert result['classified_email_evidence'] == {
-        'total': 6, 'categories': dict.fromkeys(kinds, 1), 'date_basis': 'email_received',
+        'total': 6, 'categories': {kind: int(kind in kinds) for kind in EMAIL_KINDS}, 'date_basis': 'email_received',
         'application_status_changed': False, 'start': '2026-07-01', 'end': '2026-10-25',
         'family_excluded_messages': 0, 'company_excluded_messages': 0,
         'unverified_source_messages': 0,
+        'linked_messages': 0, 'unlinked_messages': 6, 'company_messages': 0,
     }
     for field in ('total_submitted', 'submitted', 'statuses', 'positive', 'assessments', 'interviews',
                   'cohort', 'roles', 'timing', 'median_days', 'timing_sample', 'records', 'rejected_companies'):

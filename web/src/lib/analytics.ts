@@ -4,6 +4,18 @@ export const CHART_COLORS = ["var(--accent)", "#dd7b9e", "#b7a3cc", "#329477", "
 export interface AnalyticsGroup { submitted: number; eligible: number; responses: number; rejections: number; assessments: number; interviews: number; rate: number | null }
 export interface AnalyticsCompany extends AnalyticsGroup { name: string; latest: string; latest_at: string | null }
 export interface PetitionReport { entity: string; period: string; source: string; url: string; metric: string; version: string; checked_at: string; approvals: number | null; denials: number | null; rate: number | null }
+export type RecruitingEmailKind = "application_confirmation" | "rejection" | "online_assessment" | "interview" | "offer" | "recruiter_reply" | "action_required" | "assessment_completed" | "assessment_cancelled" | "interview_cancelled" | "status_update";
+export interface ClassifiedEmailEvidence {
+  total:number;
+  categories:Record<"rejection"|"online_assessment"|"interview"|"offer"|"recruiter_reply"|"action_required",number> & Partial<Record<RecruitingEmailKind,number>>;
+  date_basis:"email_received";
+  /** Reading this projection never changes an application status. */
+  application_status_changed:false;
+  start?:string|null; end?:string;
+  family_excluded_messages:number; company_excluded_messages:number;
+  unverified_source_messages?:number;
+  linked_messages?:number; unlinked_messages?:number; company_messages?:number;
+}
 export interface AnalyticsData {
   evidence_scope?:InboxEvidenceScope;
   as_of: string; timezone: string; start: string; end: string; days: string; family: string | null;
@@ -23,7 +35,7 @@ export interface AnalyticsData {
   rejection_summary: { applications: number; companies: number; dated: number; latest_at: string | null };
   company_rejections?: {company:string;messages:number;latest_at:string;message_ids:number[]}[];
   company_rejection_summary?: {companies:number;messages:number;latest_at:string|null;date_basis:"email_received";start:string|null;end:string;family_excluded_messages:number};
-  classified_email_evidence?: {total:number;categories:Record<"rejection"|"online_assessment"|"interview"|"offer"|"recruiter_reply"|"action_required",number>;date_basis:"email_received";application_status_changed:false;start?:string|null;end?:string;family_excluded_messages:number;company_excluded_messages:number;unverified_source_messages?:number};
+  classified_email_evidence?: ClassifiedEmailEvidence;
   verified_companies: (AnalyticsGroup & { name: string; reports: number })[];
   reports: PetitionReport[]; annual: { period: string; approvals: number; denials: number; rate: number | null }[];
 }
@@ -41,6 +53,19 @@ export function applicationRecordsHref(data: Pick<AnalyticsData,"days"|"start"|"
   if(data.family)query.set("family",data.family);
   for(const [key,value] of Object.entries(filters)) query.set(key,value);
   return `/app/applications/analytics?${query}`;
+}
+
+/** Keep the report selection; the shared email projection applies its receipt floor. */
+export function emailRecordsHref(data: Pick<AnalyticsData,"days"|"start"|"end"|"family"|"timezone">, filters: Record<string,string> = {}) {
+  return applicationRecordsHref(data, {emails:"1", ...filters});
+}
+
+export interface AnalyticsEmailRecord {
+  id:number; classification:RecruitingEmailKind; decision:string; received_at:string;
+  application_key:string|null; company:string|null; subject:string;
+}
+export interface ApplicationAnalyticsEmailRecords extends AnalyticsData {
+  email_records:AnalyticsEmailRecord[]; email_total:number; email_offset:number; email_limit:number;
 }
 export interface ApplicationAnalyticsRecord {
   key:string; company:string; title:string; requisition_id:string|null; family:string; submitted_at:string|null;
