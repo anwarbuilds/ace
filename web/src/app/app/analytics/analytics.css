@@ -69,6 +69,8 @@
 .an-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--an-gap); margin-bottom: var(--an-gap); align-items: stretch; }
 .an-overview-top { grid-template-columns: 1.63fr 1fr; }
 .an-overview-bottom { grid-template-columns: .95fr 1fr; }
+.an-overview-charts { display: grid; gap: var(--an-gap); }
+.an-overview-charts>.an-grid { margin-bottom: 0; }
 .an-tab-overview .an-overview-bottom>.an-panel { min-height: 242px; }
 .an-role-top { grid-template-columns: 1.33fr 1fr; }
 .an-role-bottom { grid-template-columns: .96fr 1fr; }
@@ -241,7 +243,6 @@
 .an-date-note { font-size: var(--text-small); color: var(--text-secondary); margin: 0 0 10px; }
 @media(min-width:1450px) { .an-filters { position: absolute; right: 0; top: 0; } }
 @media(min-width:1450px) and (max-width:1599px) {
-  .an-tab-overview { padding-inline: 36px; }
   .an-tab-overview .an-filters>select { width: 180px; }
   .an-tab-overview .an-ranges button { padding-inline: 8px; }
   .an-tab-overview .an-hero { margin-bottom: 4px; }
@@ -255,7 +256,6 @@
   .an-tab-overview .an-overview-top>.an-panel { min-height: 241px; }
 }
 @media(min-width:1600px) {
-  .an-tab-overview { padding-right: 67px; }
   .an-tab-overview .an-filters>select { width: 210px; }
   .an-tab-overview .an-ranges button { padding-inline: 9px; }
 }
@@ -288,6 +288,16 @@
   .an-history-table>a,.an-history-head { grid-template-columns: minmax(75px,1fr) minmax(65px,1fr) repeat(4,22px); gap: 4px; }
   .an-partition-key { grid-template-columns: 1fr 1fr; }
   .an-chart-actions { flex-wrap: wrap; gap: 10px; }
+}
+@media(min-width:1101px) {
+  .an-tab-overview { max-width: none; min-height: calc(100dvh - var(--site-h)); padding: 16px 28px 24px; display: flex; flex-direction: column; }
+  .an-tab-overview> :not(.an-overview-charts) { flex-shrink: 0; }
+  .an-overview-charts { flex: 1; grid-template-rows: minmax(244px,1fr) minmax(242px,1fr); }
+  .an-overview-charts .an-panel { display: flex; flex-direction: column; }
+  .an-overview-charts .an-line-chart { margin-block: auto; }
+  .an-overview-charts .an-weekly { margin-block: auto; }
+  .an-overview-charts .an-statuses { flex: 1; align-content: center; }
+  .an-overview-charts .an-donut-layout { flex: 1; }
 }
 @media(max-width:650px) {
   .an-page,.an-tab-companies { --an-pad: 14px; padding: 20px 16px 100px; }
