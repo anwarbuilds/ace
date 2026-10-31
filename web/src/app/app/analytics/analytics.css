@@ -69,6 +69,7 @@
 .an-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--an-gap); margin-bottom: var(--an-gap); align-items: stretch; }
 .an-overview-top { grid-template-columns: 1.63fr 1fr; }
 .an-overview-bottom { grid-template-columns: .95fr 1fr; }
+.an-tab-overview .an-overview-bottom>.an-panel { min-height: 242px; }
 .an-role-top { grid-template-columns: 1.33fr 1fr; }
 .an-role-bottom { grid-template-columns: .96fr 1fr; }
 .an-outcomes { grid-template-columns: 1.62fr 1fr; }
