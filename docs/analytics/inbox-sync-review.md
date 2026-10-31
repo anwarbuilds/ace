@@ -1,8 +1,12 @@
 # Inbox to Analytics integration review
 
-Candidate based on canonical `main` at `3bb2a9623c43cdb7c489da8f180aa08b900687d8`.
-This work is not deployed. The production API remains parser 15 at `b03d251`,
-web `4116aa0`, scheduler source `fca4673`, schema `0050`.
+Based on canonical `main` at `3bb2a9623c43cdb7c489da8f180aa08b900687d8`.
+Owner-approved exact tested source **`a48d71be3a33a6188e8fa96f748b4b78ecd19ef0`**
+is **LIVE for API/web** at https://ace.opik.net, activated
+2026-10-31T04:31:22Z–04:31:35Z (October 30, 21:31 Pacific).
+[PR #20](https://github.com/anwarbuilds/ace/pull/20) merged into canonical main
+as `1a91c7021c5186412bbb64cc2c54a7ab23b741e2`. Parser 15, scheduler source
+`fca4673`, schema 0050 and the approved design are preserved.
 
 ## Consistency contract
 
@@ -114,7 +118,7 @@ the JSON reports. Zero Gmail calls, message bodies, sessions or writes were
 needed; arithmetic does not certify semantic classification accuracy or coverage.
 
 Final tested source `a48d71be3a33a6188e8fa96f748b4b78ecd19ef0` is in
-[draft PR #20](https://github.com/anwarbuilds/ace/pull/20). Local final checks pass:
+[merged PR #20](https://github.com/anwarbuilds/ace/pull/20). Local final checks pass:
 2,497 backend tests (two PostgreSQL-only checks use the hosted service), 115
 DOM/calculation cases, 267 extension matcher cases,
 Memory safety, JavaScript syntax, route generation, TypeScript, full lint,
@@ -169,7 +173,46 @@ is run under the existing laptop cooling restriction. Current failures were
 checked explicitly against the historical baseline; earlier counts do not
 substitute for a fresh result.
 
-## Release and rollback plan (requires explicit owner approval)
+## Completed owner-approved release and retained rollback
+
+The owner separately approved deployment after reviewing the final candidate.
+Production main was fast-forwarded to exact tested `a48d71b`, after verifying its
+ancestry in canonical main and unchanged mounted configuration. Only API/web were
+built and activated with `--no-build --no-deps --wait`; no migration ran.
+
+Fresh private backup:
+`/opt/ace/private-backups/analytics-inbox-sync-20261031T0421Z/database.dump.gz`
+(565,200,680 bytes). Gzip, archive catalog and full expansion pass; no restore
+drill or retention pruning ran. A first catalog pipe ended with SIGPIPE when the
+catalog reader closed early; its original log/exit are preserved. Regular-file
+input then passed catalog and full expansion before activation.
+
+All 371 backend/four script hashes match installed source. Healthy API/web,
+exact public frontend SHA/header, 15 bundle/font and 85 logo hashes, plus ten
+anonymous API/page auth probes pass. Installed primary, independent Inbox and
+expanded read-only audits reconcile 14/30/90/all and exact email drilldowns.
+They make zero Gmail calls/body reads/writes. Nineteen protected tables have
+zero added/removed/changed rows across preparation-to-cutover and
+cutover-to-post-startup; Gmail grants and owner controls match. Scheduler,
+PostgreSQL, Caddy and exited migrate retain IDs/images/start times/mounts.
+`.env`, Compose and Caddyfile retain hashes/modes/inodes.
+
+The first post-health snapshot saw zero monitor leases during its documented
+15-second startup delay. Preserve that failed readiness result; the subsequent
+snapshot passes with exactly one lease, successful normal sync advancement and
+no connection errors. No service was restarted to obtain that result. Global
+historical rechecks remain false and parser 7 remains stopped. Startup logs have
+no traceback, error line or HTTP 5xx. No signed-in production browser ran.
+
+The private folder retains actual preceding image tags
+`oracle-api:before-analytics-sync-20261031T0421Z` (`b03d251`) and
+`oracle-web:before-analytics-sync-20261031T0421Z` (`4116aa0`). Its guarded
+`rollback.sh` replaces only API/web and rejects unexpected current/tagged images.
+No database restoration or data compensation is part of this image rollback.
+Ignored local `artifacts/analytics-inbox-sync-20261030/release/` also holds
+aggregate audit, source, public asset, service and private HMAC preservation proofs.
+
+### Procedure for a future separately approved release
 
 After the exact tested source is approved, verify current running source/images
 and protected data, take and validate a fresh private production backup, retain

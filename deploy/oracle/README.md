@@ -20,9 +20,11 @@ Only the current Caddyfile is bind-mounted from the checkout. Preserve its conte
 
 ## Source and running revisions
 
-The 2026-10-30 branch alignment retained checkout commit `fca4673033dc92833bbf217182738026f414bf3d`, renamed its branch to `main` and set tracking to `origin/main`. The checkout is deliberately behind current main. No checkout file or running service needed replacement.
+The owner-approved Inbox-to-Analytics release activated API/web at **`a48d71be3a33a6188e8fa96f748b4b78ecd19ef0`** on October 30, 2026 at 21:31 Pacific. Production main tracks origin/main and deliberately uses that exact tested source, an ancestor of merged PR #20. Later continuity documentation is not a new deployment.
 
-The API runs `b03d251047f531ba60a75812d9c088b395a6d943` (Inbox parser 15); web runs `4116aa01dd5cdd3a6ea3d707017a7d9f7fad5bd7`. Scheduler source and exact image identities are recorded in the consolidation verification. Schema is 0050. These are dated verified observations, not instructions to rebuild services until all version labels agree. `/healthz`'s frontend SHA identifies web, not API or scheduler.
+API remains Inbox parser 15 and schema remains 0050. Scheduler source is still `fca4673033dc92833bbf217182738026f414bf3d`; scheduler, PostgreSQL, Caddy and exited migrate container identities were preserved. Full source, protected-row, public asset/auth and four-range read-only Analytics checks pass. These are dated verified observations, not instructions to rebuild services until version labels agree. `/healthz`'s frontend SHA identifies web, not API or scheduler. See [the completed release](../../docs/analytics/inbox-sync-review.md).
+
+Private backup/rollback entry: `/opt/ace/private-backups/analytics-inbox-sync-20261031T0421Z/`. Its fresh backup passes gzip, catalog and full expansion without a restore drill. Actual prior API/web images are retained under `before-analytics-sync-20261031T0421Z` tags with a guarded image-only rollback. Do not restore database data as image rollback. The Gmail monitor waits 15 seconds after API startup; container health alone can precede its lease. Verify its later single lease and normal sync progress without starting a manual or historical check.
 
 ## Release procedure
 

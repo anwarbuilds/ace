@@ -8,6 +8,38 @@
 > Read this when: you deploy, restart, debug the scheduler, or write browser tests.
 
 
+## Inbox-to-Analytics API/web release LIVE (2026-10-30 Pacific)
+
+Owner-approved exact tested `a48d71b` activated only API/web at
+2026-10-31T04:31:22Z–04:31:35Z (21:31 Pacific October 30). PR #20 is merged on
+canonical main. Production checkout deliberately uses the tested ancestor;
+documentation follow-ups do not authorize another rebuild. Parser 15/schema
+0050 and scheduler `fca4673` remain. All 371 backend/four script hashes, public
+frontend SHA, 15 bundles/fonts, 85 logos and ten auth-boundary probes pass.
+Installed primary/independent/expanded Analytics audits pass all four ranges and
+exact email drilldowns without Gmail calls, bodies or writes. Nineteen protected
+table row sets match exactly across preparation/cutover/post-startup; unrelated
+service identities, mounted/private configuration hashes/modes/inodes match.
+
+Fresh backup under `private-backups/analytics-inbox-sync-20261031T0421Z/` passes
+gzip, catalog and full expansion, with no restore drill or retention pruning.
+Retained actual prior API/web tags and guarded rollback replace images only;
+never restore a database over later owner work. Two operational observations
+matter for future releases: a `pg_restore --list` reader can stop after the TOC,
+giving upstream gzip SIGPIPE under pipefail; use private regular-file input and
+still verify complete gzip integrity and full expansion. Also API health can
+precede the Gmail monitor's documented 15-second startup delay. Preserve that
+early zero-lease observation, then verify one lease and actual sync advancement
+after startup. This release did so without another service restart/manual sync.
+Original diagnostics and successful final proofs are private and retained.
+
+Exact-source hosted review passes 2,499 backend/PostgreSQL and 53 Inbox/Analytics
+browser cases, with web checks/build. Full CI keeps the disclosed 25/22 extension
+baseline; no new/resolved failed names. No local Chrome or signed-in production
+browser ran. Historical rechecks remain false and parser 7 stays stopped. No
+migration, scheduler operation, extension publication or historical replay ran.
+See [contracts, live verification and rollback](../analytics/inbox-sync-review.md).
+
 ## Inbox parser 14 corrective release LIVE — 2026-10-29 Pacific
 
 Owner-approved API/frontend source **`4116aa01dd5cdd3a6ea3d707017a7d9f7fad5bd7`**

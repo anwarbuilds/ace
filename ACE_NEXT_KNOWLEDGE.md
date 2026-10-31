@@ -1,8 +1,78 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-30 Pacific, Inbox-to-Analytics integration candidate and read-only reconciliation; no deployment.
+Last updated: 2026-10-30 Pacific, owner-approved Inbox-to-Analytics API/web release LIVE and production reconciliation verified.
 
-## Inbox-to-Analytics synchronization candidate, 2026-10-30 Pacific
+## Inbox-to-Analytics synchronization LIVE, 2026-10-30 Pacific
+
+The owner explicitly approved deployment after the final review. Exact tested
+source **`a48d71be3a33a6188e8fa96f748b4b78ecd19ef0`** is now live for **API and
+web** at https://ace.opik.net. Activation ran **2026-10-31T04:31:22Z–04:31:35Z**
+(October 30, 21:31 Pacific). [PR #20](https://github.com/anwarbuilds/ace/pull/20)
+merged into canonical main as `1a91c7021c5186412bbb64cc2c54a7ab23b741e2`.
+Production main checkout deliberately uses the exact tested `a48d71b`, an ancestor
+of that merge; subsequent review/continuity documentation is not a new build.
+
+Analytics reads effective Inbox classifications/decisions and valid historical
+application events from one PostgreSQL READ ONLY, REPEATABLE READ snapshot.
+Recognized message counts and exact email drilldowns stay separate from verified
+application stages. Both Analytics routes refresh on committed evidence signals,
+return/focus/online and a two-minute visible-page check, retaining the mounted
+selection's last successful output during failed/delayed reads. The July Pacific
+email floor, owner decisions/Undo, application cohorts and approved four-tab
+Wine and Rose design remain. The completed review below describes the contracts.
+
+Fresh private backup:
+`/opt/ace/private-backups/analytics-inbox-sync-20261031T0421Z/database.dump.gz`,
+**565,200,680 bytes**. Gzip integrity, PostgreSQL catalog and full archive expansion
+pass; no restore drill ran and no retention pruning occurred. The initial catalog
+pipeline ended with upstream SIGPIPE because the catalog reader stops after the
+TOC. Its original log/exit are retained; regular-file input then passed catalog
+and full expansion before any image activation.
+
+Prepared/running source matches all **371 backend and four script hashes**.
+API/web are healthy; HTTPS health and frontend header report the exact approved
+SHA. Public hashes match **15 Analytics/shared bundles and fonts plus 85 logos**;
+ten anonymous API/page probes preserve 401/307 auth boundaries. The primary,
+independent Inbox and expanded reconciliation pass **14/30/90/all** against the
+installed implementation, including exact email categories/drilldowns, unique
+applications, historical stages, status/cohort partitions and timing. These
+checks use enforced read-only snapshots, zero Gmail calls/body reads/writes.
+
+Private HMAC snapshots preserve every existing row in **19 protected tables**,
+including mail, application events, marks, answers, Memory, resumes, users/auth
+and official evidence. Preparation-to-cutover and cutover-to-post-startup have
+zero protected additions, removals or changes; Gmail grants/owner controls match.
+The first healthy-container snapshot preceded the monitor's normal 15-second
+startup delay and saw zero leases. That failed readiness observation is retained;
+the subsequent snapshot verifies exactly one lease, successful ordinary sync
+advancement and no connection errors. No historical operator or manual sync ran.
+
+Scheduler, PostgreSQL, Caddy and the exited migrate container retain their exact
+IDs/images/start times/mounts. `.env`, Compose and the bind-mounted Caddyfile
+retain hashes, modes and inodes. Schema remains **0050**, parser remains **15**,
+global historical rechecks remain false, and parser 7 remains stopped. There was
+no migration, scheduler operation, extension publication, Gmail replay, legacy
+restart or destructive data operation. Startup log checks find no traceback,
+error line or HTTP 5xx. No local Chrome or signed-in production browser ran.
+
+Rollback retains actual preceding images under
+`oracle-api:before-analytics-sync-20261031T0421Z` (parser-15 source `b03d251`) and
+`oracle-web:before-analytics-sync-20261031T0421Z` (source `4116aa0`). The private
+folder's guarded `rollback.sh` replaces only API/web and refuses unexpected image
+identities. Never restore a database over later owner activity as image rollback.
+Live/source/asset/audit/HMAC proofs are also copied to ignored
+`artifacts/analytics-inbox-sync-20261030/release/`; actual owner totals stay private.
+
+Exact-source hosted validation remains **2,499 backend/PostgreSQL and 53
+Inbox/Analytics browser cases**, with web checks/build passing. Wider CI retains
+the previously disclosed **25 pass / 22 fail** extension-browser baseline and is
+not green. Population classification accuracy, complete mailbox observation,
+submitted-file/channel attribution and response-effectiveness rates remain
+unestablished; arithmetic verification does not certify them. Hard document
+replacement cannot retain an in-memory stale report. No new status authority is
+granted by recognized correspondence.
+
+## Inbox-to-Analytics synchronization review, 2026-10-30 Pacific
 
 The owner requested engineering integration and automatic freshness, preserving
 parser 15 and the approved Analytics design. Work starts from standalone canonical
@@ -10,8 +80,8 @@ parser 15 and the approved Analytics design. Work starts from standalone canonic
 main and current remote heads verified. Runtime/test source
 `5c399bb6ac05daa5bd61bdf3b1c62ef529cc4592` is on
 `analytics-rebuild-inbox-sync-20261030` in
-[draft PR #20](https://github.com/anwarbuilds/ace/pull/20). Main is not merged or
-deployed by this work. Final review/result record:
+[PR #20](https://github.com/anwarbuilds/ace/pull/20). The final owner-approved
+release is recorded above; this section preserves its engineering review. Record:
 `docs/analytics/inbox-sync-review.md`; metric definitions are updated in
 `docs/analytics/metric-sources.md`.
 
@@ -92,7 +162,7 @@ The final primary, independent and expanded audits pass 14/30/90/all, exact emai
 drilldowns, unique applications, historical stages, status/cohort partitions and
 timing; source hash matches the candidate. Report reads measured about 180 to
 208 ms with 17 SELECTs, zero Gmail calls, body reads or writes. Actual counts stay
-in ignored `artifacts/analytics-inbox-sync-20261030/`, never public Git. Native
+in ignored `artifacts/analytics-inbox-sync-20261030/`, never public Git. Pre-release
 service checks match the pre-work API/web/scheduler/PostgreSQL/Caddy container,
 image and start identities exactly. No source was installed in production.
 Deployed/candidate calculations were also compared in one read-only snapshot:
@@ -106,15 +176,10 @@ fresh Gmail authentication. Population recognition accuracy and complete mailbox
 coverage remain unmeasured, as do historical submitted-file/channel attribution
 and response-effectiveness rates. No new status authorization is granted.
 
-**Deployment remains unapproved and unperformed.** API remains parser 15 at
-`b03d251`, web `4116aa0`, scheduler source `fca4673`, schema `0050`. No migration,
-Gmail replay, recheck activation, scheduler operation, auth/discovery/Studio/
-extension change, legacy restart or destructive data action occurred. A future
-API/web-only release needs explicit exact-source owner approval, a fresh verified
-backup, retained actual running images, guarded rollback and post-release
-reconciliation/preservation checks. Rollback replaces API/web images only and
-never restores the database over later owner work. The read-only audit approval
-does not authorize deployment.
+The read-only candidate audit did not itself authorize deployment. The owner's
+later explicit deployment approval and completed API/web-only release are
+recorded in the LIVE section above. No migration, historical replay, scheduler,
+extension, auth or discovery change is part of this integration.
 
 ## Current platform consolidation completed, 2026-10-30 Pacific
 
