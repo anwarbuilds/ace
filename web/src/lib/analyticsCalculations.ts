@@ -10,7 +10,9 @@ export interface AnalyticsSupplement {
   timeline: ChartPoint[]; interval: Interval; week: ChartPoint[];
   weekStart: string; weekEnd: string; currentWeek: boolean;
   submissionTrend: SubmissionTrend | null; weekTrend: SubmissionTrend | null;
+  currentWeekTotal: number;
 }
+export const ANALYTICS_WEEK_TIMEZONE = "America/Los_Angeles";
 const DAY = 86_400_000;
 const dateFormats = new Map<string, Intl.DateTimeFormat>();
 const clockFormats = new Map<string, Intl.DateTimeFormat>();
@@ -22,6 +24,19 @@ export function shiftDate(day: string, amount: number): string {
 }
 export function mondayOf(day: string): string {
   return shiftDate(day, -((new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7));
+}
+export function calendarWeek(today: string, requested?: string) {
+  const valid = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) && !Number.isNaN(Date.parse(`${requested}T00:00:00Z`))
+    && new Date(`${requested}T00:00:00Z`).toISOString().slice(0, 10) === requested && requested <= today;
+  const start = valid ? mondayOf(requested) : mondayOf(today);
+  return { start, end: shiftDate(start, 6), current: start === mondayOf(today) };
+}
+/** Separate range mark lets the existing punctuation guard retain date ranges. */
+export function weekDateLabels(start: string, end: string) {
+  const format = (day: string, year: boolean) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", {
+    month: "short", day: "numeric", ...(year ? { year: "numeric" } : {}), timeZone: "UTC",
+  });
+  return { start: format(start, start.slice(0, 4) !== end.slice(0, 4)), end: format(end, true) };
 }
 export function localDate(stamp: string, timezone: string): string {
   let formatter = dateFormats.get(timezone);
@@ -67,13 +82,12 @@ export function compareCounts(current: number, previous: number, description: st
  * the primary projection. Outcome trends require observation coverage the
  * existing API cannot attest; no outcome comparison is manufactured here.
  */
-export function calculateSupplement(d: AnalyticsData, identities: SubmissionIdentity[], interval: Interval, askedWeek?: string): AnalyticsSupplement | null {
+export function calculateSupplement(d: AnalyticsData, identities: SubmissionIdentity[], interval: Interval, askedWeek?: string, weeklyReport: AnalyticsData = d): AnalyticsSupplement | null {
   if (new Set(identities.map(row => row.key)).size !== identities.length) return null;
-  const today = localDate(d.as_of, d.timezone), currentMonday = mondayOf(today);
-  const validWeek = askedWeek && /^\d{4}-\d{2}-\d{2}$/.test(askedWeek) && !Number.isNaN(Date.parse(`${askedWeek}T00:00:00Z`))
-    && new Date(`${askedWeek}T00:00:00Z`).toISOString().slice(0, 10) === askedWeek && askedWeek <= today;
-  const weekStart = validWeek ? mondayOf(askedWeek) : currentMonday, weekEnd = shiftDate(weekStart, 6);
-  const daily = new Map<string, number>(), instants: number[] = [];
+  if (weeklyReport.timezone !== ANALYTICS_WEEK_TIMEZONE) return null;
+  const today = localDate(weeklyReport.as_of, ANALYTICS_WEEK_TIMEZONE), currentMonday = mondayOf(today);
+  const window = calendarWeek(today, askedWeek), weekStart = window.start, weekEnd = window.end;
+  const daily = new Map<string, number>(), weeklyDaily = new Map<string, number>(), instants: number[] = [], weeklyInstants: number[] = [];
   let selected = 0;
   for (const row of identities) {
     if (!row.applied_at) { if (d.days === "all") selected++; continue; }
@@ -81,6 +95,11 @@ export function calculateSupplement(d: AnalyticsData, identities: SubmissionIden
     const day = localDate(row.applied_at, d.timezone);
     daily.set(day, (daily.get(day) ?? 0) + 1);
     instants.push(civilTime(row.applied_at, d.timezone));
+    if (Date.parse(utcStamp(row.applied_at)) <= Date.parse(utcStamp(weeklyReport.as_of))) {
+      const weekDay = localDate(row.applied_at, ANALYTICS_WEEK_TIMEZONE);
+      weeklyDaily.set(weekDay, (weeklyDaily.get(weekDay) ?? 0) + 1);
+      weeklyInstants.push(civilTime(row.applied_at, ANALYTICS_WEEK_TIMEZONE));
+    }
     if (day >= d.start && day <= d.end) selected++;
   }
   if (selected !== d.submitted) return null;
@@ -93,12 +112,16 @@ export function calculateSupplement(d: AnalyticsData, identities: SubmissionIden
   const currentEnd = Math.min(now + 1, end), current = count(start, currentEnd);
   const submissionTrend = d.days === "all" || current !== d.submitted ? null : compareCounts(current, count(start - span, currentEnd - span),
     `Compared with ${shiftDate(d.start, -span / DAY)} through ${shiftDate(d.end, -span / DAY)} in ${d.timezone}, using the same local time on the final day. Submission counts, not response effectiveness.`);
-  const weekCurrent = count(midnight(currentMonday), now + 1);
+  const weekNow = civilTime(weeklyReport.as_of, ANALYTICS_WEEK_TIMEZONE);
+  const weekCount = (start: number, end: number) => weeklyInstants.filter(stamp => stamp >= start && stamp < end).length;
+  const weekCurrent = weekCount(midnight(currentMonday), weekNow + 1);
+  if (weekCurrent !== weeklyReport.week_total || weeklyReport.week?.some(row => (weeklyDaily.get(row.date) ?? 0) !== row.count)) return null;
   return {
     timeline: groupSubmissions(series, interval, d.start, d.end), interval,
-    week: Array.from({ length: 7 }, (_, i) => { const date = shiftDate(weekStart, i); return { date, end: date, count: date > today ? 0 : daily.get(date) ?? 0 }; }),
+    week: Array.from({ length: 7 }, (_, i) => { const date = shiftDate(weekStart, i); return { date, end: date, count: date > today ? 0 : weeklyDaily.get(date) ?? 0 }; }),
     weekStart, weekEnd, currentWeek: weekStart === currentMonday, submissionTrend,
-    weekTrend: weekCurrent === d.week_total ? compareCounts(weekCurrent, count(midnight(shiftDate(currentMonday, -7)), now + 1 - 7 * DAY),
-      `Current Monday through the report's local weekday and time, compared with the same elapsed part of the preceding week in ${d.timezone}.`) : null,
+    currentWeekTotal: weekCurrent,
+    weekTrend: compareCounts(weekCurrent, weekCount(midnight(shiftDate(currentMonday, -7)), weekNow + 1 - 7 * DAY),
+      `Current Monday through the report's local weekday and time, compared with the same elapsed part of the preceding week in ${ANALYTICS_WEEK_TIMEZONE}.`),
   };
 }

@@ -1,5 +1,29 @@
 # Analytics metric and source audit
 
+## Overview weekly navigation, 2026-10-31 candidate
+
+The weekly card selects one Monday-to-Sunday calendar week in
+America/Los_Angeles. Current week is titled “This week” with its date range;
+historical headings show the selected range, including both years when needed.
+Arrows move seven calendar dates, forward stops at the current week, and the
+small reset returns there. Only the page-level Choose dates retains a calendar
+icon and date inputs. Period, role and chart-interval selections are preserved.
+
+The existing server-only supplemental reader uses unique application identities
+and their submission timestamps, never email receipt dates. It reconciles the
+current week's total and daily buckets against the existing Analytics projection
+before returning aggregate chart points. If the report uses another timezone,
+one existing read-only Analytics request supplies the Pacific week projection.
+Role-filtered identities still come from exact paginated Analytics records.
+Historical daily links use their own dates rather than the reporting-period
+bounds. Missing historical data shows Unavailable; it never substitutes current
+bars. Future current-week days have no completed-zero label or records link.
+
+The five KPI definitions and receipt-date invitation binding remain intact.
+Coverage stays Unavailable because no existing field certifies complete
+comparable observation for the selected period. No backend, migration, Gmail,
+application-state or scheduler change is part of this frontend candidate.
+
 ## Inbox synchronization integration, 2026-10-30
 
 The [integration review](inbox-sync-review.md) documents the current candidate

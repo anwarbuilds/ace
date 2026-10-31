@@ -2,7 +2,7 @@ import Link from "next/link";
 import { coverageText } from "@/lib/inboxSync";
 import { NavIcon } from "@/components/shell/NavIcon";
 import { applicationRecordsHref, emailRecordsHref, type AnalyticsData, type InboxConnection } from "@/lib/analytics";
-import { localDate, type AnalyticsSupplement, type SubmissionTrend } from "@/lib/analyticsCalculations";
+import { ANALYTICS_WEEK_TIMEZONE, localDate, mondayOf, type AnalyticsSupplement, type SubmissionTrend } from "@/lib/analyticsCalculations";
 
 const INBOX = "/app/applications/inbox";
 const number = (value: number) => value.toLocaleString("en-US");
@@ -14,14 +14,15 @@ function Trend({ value, reason }: { value?: SubmissionTrend | null; reason: stri
   return <span className={`an-trend ${value.percent !== null && value.percent < 0 ? "an-trend-down" : ""}`} title={`${value.description} Current ${value.current}; previous ${value.previous}.`}><span aria-hidden="true">{value.percent !== null ? value.percent < 0 ? "↓" : value.percent > 0 ? "↑" : "" : ""}</span>{value.label}</span>;
 }
 export function currentWeekHref(d: AnalyticsData) {
-  return applicationRecordsHref({ ...d, days: "custom", start: d.week[0].date, end: localDate(d.as_of, d.timezone) });
+  const today = localDate(d.as_of, ANALYTICS_WEEK_TIMEZONE);
+  return applicationRecordsHref({ ...d, timezone: ANALYTICS_WEEK_TIMEZONE, days: "custom", start: mondayOf(today), end: today });
 }
 export function ApplicationMetrics({ d, supplement, company }: { d: AnalyticsData; supplement?: AnalyticsSupplement | null; company?: string }) {
   const outcomeCount = (value: number) => value || d.has_outcome_evidence ? value : null;
   const comparisonMissing = "Comparison unavailable: complete, comparable outcome observation is not recorded.";
   const rows = [
     { icon: "send", label: "Applications sent", value: d.submitted, foot: "Unique submissions", href: applicationRecordsHref(d), trend: supplement?.submissionTrend, reason: d.days === "all" ? "All time has no preceding equivalent interval." : "Submission comparison could not be verified." },
-    { icon: "calendar", label: "This week", value: d.week_total, foot: "Current calendar week", href: currentWeekHref(d), trend: supplement?.weekTrend, reason: "Week comparison could not be verified." },
+    { icon: "calendar", label: "This week", value: supplement?.currentWeekTotal ?? (d.timezone === ANALYTICS_WEEK_TIMEZONE ? d.week_total : null), foot: "Current calendar week", href: currentWeekHref(d), trend: supplement?.weekTrend, reason: "Week comparison could not be verified." },
     { icon: "reply", label: "Meaningful replies", value: outcomeCount(d.positive), foot: "Recorded positive employer responses", href: applicationRecordsHref(d, { evidence: "positive" }), reason: comparisonMissing },
     { icon: "file", label: "Online assessments", value: outcomeCount(d.assessments), foot: "Recorded stages reached, including later rejections", href: applicationRecordsHref(d, { evidence: "online_assessment" }), reason: comparisonMissing },
     { icon: "people", label: "Interview invitations", value: d.classified_email_evidence?.categories.interview ?? null, foot: "Invitation emails by receipt date", href: emailRecordsHref(d, { email_kind: "interview", ...(company ? { company } : {}) }), reason: "Comparison unavailable: comparable interview email observation is not recorded." },
@@ -40,7 +41,7 @@ export function InboxBand({ d, connection, expanded }: { d: AnalyticsData; conne
       { label: "Verify", detail: d.has_outcome_evidence ? "Evidence recorded" : "Not recorded", done: d.has_outcome_evidence },
       { label: "Identity", detail: "Application records", done: false },
     ].map(step => <span key={step.label} title={step.label === "Sync" ? "A check timestamp does not certify complete mailbox coverage." : step.label === "Verify" ? "Individual recorded outcomes do not establish complete response coverage." : step.detail}><i className={step.done ? "an-step-recorded" : ""} aria-hidden="true">{step.done ? "✓" : "·"}</i><span><strong>{step.label}</strong><small>{step.detail}</small></span></span>)}</div>}
-    <Link className="an-band-cta" href={INBOX}>{!connection?.connected && connection?.available ? "Connect Gmail" : "Open Inbox Intelligence"}<NavIcon name="right" size="sm" /></Link></section>;
+    {expanded ? <Link className="an-band-coverage" href={INBOX} title="Complete comparable email observation coverage is not recorded. Open Inbox Intelligence."><span>Coverage ({d.days === "all" ? "All time" : d.days === "custom" ? "selected dates" : `${d.days} days`})</span><strong>Unavailable <NavIcon name="info" size="sm"/></strong><small>{!connection?.connected && connection?.available ? "Connect Gmail" : "View Inbox Intelligence"}</small></Link> : <Link className="an-band-cta" href={INBOX}>{!connection?.connected && connection?.available ? "Connect Gmail" : "Open Inbox Intelligence"}<NavIcon name="right" size="sm" /></Link>}</section>;
 }
 export function AnalyticsEvidenceNote({ d, connection }: { d: AnalyticsData; connection?: InboxConnection | null }) {
   const excluded = Object.values(d.inbox_audit?.excluded_events ?? {}).reduce((sum, value) => sum + value, 0);

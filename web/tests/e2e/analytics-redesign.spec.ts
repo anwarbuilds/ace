@@ -54,6 +54,11 @@ for (const theme of ["light","dark"] as const) {
       await expect(page.locator('.an-tabs a[aria-current="page"]')).toHaveCount(1);
       await page.screenshot({path:path.join(root,`${theme}-${tab}.png`)});
       await page.screenshot({path:path.join(root,`${theme}-${tab}-full.png`),fullPage:true});
+      if(tab==="overview"){
+        await page.setViewportSize(theme==="dark"?{width:1536,height:1024}:{width:1672,height:941});
+        await page.screenshot({path:path.join(root,`${theme}-overview-reference.png`)});
+        await page.setViewportSize({width:1672,height:941});
+      }
     }
     expect((await(await page.request.get("/api/marks")).json()).applications_total).toBe(before.applications_total);
     expect(errors).toEqual([]);
@@ -71,6 +76,8 @@ test("role, time and custom date filters are bookmarkable and keep lifetime coun
   await page.getByRole("button",{name:"14 days",exact:true}).click();
   await expect(page).toHaveURL(/days=14/);
   await page.getByRole("button",{name:"Choose dates"}).click();
+  await expect(page.locator('.an-date-toggle svg rect')).toHaveAttribute("width","18");
+  await expect(page.locator('.an-date-toggle svg path')).toHaveAttribute("d","M7 2v6M17 2v6M3 11h18");
   await page.getByLabel("From",{exact:true}).fill("2026-01-01");
   await page.getByLabel("Through",{exact:true}).fill("2026-01-31");
   await page.getByRole("button",{name:"Apply dates",exact:true}).click();
@@ -282,13 +289,57 @@ test("Rejected companies opens rejected applications that can be searched and pa
 
 
 test("calendar aggregation and historical weeks preserve headline scope",async({page})=>{
+  test.setTimeout(90_000);
   await page.goto("/app/analytics?days=30");
   const headline=await page.locator(".an-metric-value").nth(1).innerText();
-  const current=await page.getByLabel("Week containing date").inputValue();
+  const panel=page.locator(".an-week-card");
+  const current=await panel.locator("time").first().getAttribute("datetime");
+  await expect(panel.locator("h2")).toHaveText("This week");
+  await expect(panel.getByRole("button",{name:"Next week",exact:true})).toBeDisabled();
+  await expect(panel.locator('input[type="date"]')).toHaveCount(0);
   await page.getByRole("button",{name:"Previous week",exact:true}).click();
   await expect(page).toHaveURL(/week=/);
-  await expect(page.getByLabel("Week containing date")).not.toHaveValue(current);
+  await expect(panel.locator("time").first()).not.toHaveAttribute("datetime",current!);
+  await expect(panel.locator("h2")).not.toHaveText("This week");
+  await expect(panel.locator(".an-column")).toHaveCount(7);
   await expect(page.locator(".an-metric-value").nth(1)).toHaveText(headline);
+  const week=new URL(page.url()).searchParams.get("week")!;
+  const verifyWeek=async(family="")=>{
+    const end=new Date(Date.parse(`${week}T12:00:00Z`)+6*86400000).toISOString().slice(0,10);
+    await expect(panel.locator("h2 time").first()).toHaveAttribute("datetime",week);
+    await expect(panel.locator("h2 time").last()).toHaveAttribute("datetime",end);
+    const params=new URLSearchParams({days:"custom",start:week,end,tz:"America/Los_Angeles",records:"1",limit:"100",...(family?{family}:{})});
+    const data=await(await page.request.get(`/api/analytics?${params}`)).json();
+    const records=[...data.records];
+    for(let offset=100;offset<data.record_total;offset+=100){params.set("offset",String(offset));records.push(...(await(await page.request.get(`/api/analytics?${params}`)).json()).records);}
+    expect(new Set(records.map((r:{key:string})=>r.key)).size).toBe(data.record_total);
+    await expect(panel.locator(".an-foot")).toContainText(`${data.record_total} unique submissions in this week`);
+    const bars=panel.locator(".an-column");
+    for(let index=0;index<7;index++){
+      const date=new Date(Date.parse(`${week}T12:00:00Z`)+index*86400000).toISOString().slice(0,10);
+      const count=records.filter((row:{submitted_at:string})=>new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(row.submitted_at)?row.submitted_at:row.submitted_at+"Z").toLocaleDateString("en-CA",{timeZone:"America/Los_Angeles"})===date).length;
+      await expect(bars.nth(index).locator(".an-column-plot span")).toHaveText(String(count));
+      const href=new URL((await bars.nth(index).getAttribute("href"))!,"https://fixture.test");
+      expect(href.searchParams.get("start")).toBe(date);expect(href.searchParams.get("end")).toBe(date);
+    }
+  };
+  await verifyWeek();
+  for(const days of ["14 days","90 days","All time","30 days"]){
+    await page.getByRole("button",{name:days,exact:true}).click();
+    await expect(panel.locator("time").first()).toHaveAttribute("datetime",week);
+    await verifyWeek();
+  }
+  await page.getByLabel("Application role family").selectOption("SOFTWARE_ENGINEERING");
+  await expect(page).toHaveURL(/family=SOFTWARE_ENGINEERING/);
+  await verifyWeek("SOFTWARE_ENGINEERING");
+  await panel.getByRole("button",{name:"Next week",exact:true}).click();
+  await expect(panel.locator("h2")).toHaveText("This week");
+  await expect(panel.getByRole("button",{name:"Next week",exact:true})).toBeDisabled();
+  await expect(page).not.toHaveURL(/week=/);
+  await panel.getByRole("button",{name:"Previous week",exact:true}).click();
+  await panel.getByRole("button",{name:"This week",exact:true}).click();
+  await expect(panel.locator("h2")).toHaveText("This week");
+  await expect(page).not.toHaveURL(/week=/);
   await page.getByLabel("Chart interval").selectOption("monthly");
   await expect(page.getByRole("img",{name:/Unique submissions by calendar month/})).toBeVisible();
   await page.getByLabel("Chart interval").selectOption("daily");
@@ -298,6 +349,28 @@ test("calendar aggregation and historical weeks preserve headline scope",async({
   await page.locator(".an-chart-details tbody a").first().click();
   await expect(page).toHaveURL(/days=custom/);
   await expect(page.locator(".an-hero p")).toContainText(start);
+});
+
+test("historical arrows cross calendar years and reset without a weekly date picker",async({page})=>{
+  await page.goto("/app/analytics?days=14&week=2025-12-29");
+  const panel=page.locator(".an-week-card");
+  await expect(panel.locator("h2")).toHaveText(`Dec 29, 2025${String.fromCharCode(0x2013)}Jan 4, 2026`);
+  await expect(panel.locator(".an-column")).toHaveCount(7);
+  await panel.getByRole("button",{name:"Previous week",exact:true}).click();
+  await expect(panel.locator("h2")).toHaveText(`Dec 22${String.fromCharCode(0x2013)}Dec 28, 2025`);
+  await expect(page).toHaveURL(/week=2025-12-22/);
+  await panel.getByRole("button",{name:"Next week",exact:true}).click();
+  await expect(page).toHaveURL(/week=2025-12-29/);
+  await panel.getByRole("button",{name:"This week",exact:true}).click();
+  await expect(panel.locator("h2")).toHaveText("This week");
+  await expect(panel.getByRole("button",{name:"Next week",exact:true})).toBeDisabled();
+  await expect(panel.locator("input")).toHaveCount(0);
+  await expect(page.getByRole("button",{name:"14 days",exact:true})).toHaveAttribute("aria-pressed","true");
+  for(const future of await panel.locator(".an-column[data-future]").all()){
+    await expect(future).toHaveAttribute("aria-label",/future day/);
+    await expect(future.locator(".an-column-plot span")).toHaveText("");
+    await expect(future).not.toHaveAttribute("href");
+  }
 });
 
 test("reference desktop keeps five aligned KPIs and the six company modules in order",async({page})=>{

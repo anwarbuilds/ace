@@ -1,7 +1,7 @@
 import "server-only";
 import { apiGetOr } from "./api";
 import type { AnalyticsData, ApplicationAnalyticsRecords } from "./analytics";
-import { calculateSupplement, type Interval, type SubmissionIdentity } from "./analyticsCalculations";
+import { ANALYTICS_WEEK_TIMEZONE, calculateSupplement, type Interval, type SubmissionIdentity } from "./analyticsCalculations";
 
 // Existing, authenticated GETs only. The compact identity ledger stays on the
 // server. No mail bodies, syncs, new backend operation or application writes.
@@ -26,5 +26,8 @@ export async function readAnalyticsSupplement(d: AnalyticsData, interval: Interv
     if (records.length !== first.record_total) return null;
     identities = records.map(row => ({ key: row.key, applied_at: row.submitted_at }));
   }
-  return calculateSupplement(d, identities, interval, week);
+  const weeklyReport = d.timezone === ANALYTICS_WEEK_TIMEZONE ? d : await apiGetOr<AnalyticsData | null>("/api/analytics", null, {
+    days: "all", tz: ANALYTICS_WEEK_TIMEZONE, ...(d.family ? { family: d.family } : {}),
+  });
+  return weeklyReport ? calculateSupplement(d, identities, interval, week, weeklyReport) : null;
 }
