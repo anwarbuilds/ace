@@ -448,7 +448,8 @@ test("July email floor excludes the older offer while preserving application met
 for(const route of ["/app/analytics?days=all&tab=outcomes&interval=weekly","/app/applications/analytics?days=all&limit=25&q=Engineer"]){
   test(`failed server refresh retains the verified selection and Retry recovers: ${route}`,async({page})=>{
     await page.goto(route);
-    const report=page.locator(".an-page");
+    const report=page.locator("div.an-page");
+    await expect(report).toHaveCount(1);
     await expect(report).toBeVisible();
     const original=await report.innerText();
     const asOf=await page.locator(".an-freshness").getAttribute("data-analytics-as-of");
@@ -546,7 +547,8 @@ test("owner receipt feedback supersedes a stale offer reading in API categories 
 
 // Mutates only the disposable Analytics fixture, after its read-only assertions.
 test("a committed Inbox acknowledgement correction updates open Analytics without reloading",async({page,context})=>{
-  const messageRead=await page.request.get("/api/inbox/messages?decision=all&q=Fictional%20offer%20email%20history");
+  const messageRead=await page.request.get("/api/inbox/messages?q=Fictional%20offer%20email%20history");
+  expect(messageRead.ok(),await messageRead.text()).toBe(true);
   const messages=await messageRead.json();
   const message=messages.items.find((row:{subject:string})=>row.subject==="Fictional offer email history");
   expect(message,"the dedicated fictional Analytics seed must be present").toBeTruthy();
