@@ -1,41 +1,82 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-31 Pacific, Overview weekly-navigation candidate; existing invitation correction and automatic Inbox/Analytics synchronization remain LIVE.
+Last updated: 2026-10-31 Pacific, approved Analytics Overview web-only release LIVE; invitation correction and automatic Inbox/Analytics synchronization remain intact.
 
-## Analytics Overview weekly navigation candidate, 2026-10-31 Pacific
+## Analytics Overview weekly navigation LIVE, 2026-10-31 Pacific
 
-The owner's new request is the two attached Day/Night Overview references and
-exact historical-week behavior. Work is on standalone main-based
-`analytics-rebuild-overview-week-20261031`; it is not deployed. Preserve the live
-API/web revisions recorded below. The backend, extension, auth, application
-identities, Inbox decisions/Undo, scheduler and database remain unchanged.
+The owner explicitly approved encrypted actual-data visual capture and deployment
+if verification passed. Both are complete. This LIVE record supersedes the older
+candidate/pending instructions and dated continuation checkpoints below; do not
+replay a release, migrate, or run a historical Gmail operator from those records.
+
+Exact tested web **`d26bfac1c64eaa5a8a479c89d5099b6474f67a4e`** is LIVE at
+https://ace.opik.net. [PR #22](https://github.com/anwarbuilds/ace/pull/22) merged
+as `68f1763d1615db03c77b991433d96d8ed099f3b7`. Web alone activated during
+**2026-10-31T16:12:34Z–16:12:41Z (09:12 Pacific)**; final release verification
+completed at 16:13:06Z. Production `/opt/ace` main tracks origin/main but
+intentionally uses exact tested `d26bfac`; later continuity documentation is not
+a new deployed build. API remains `a48d71be3a33a6188e8fa96f748b4b78ecd19ef0`,
+scheduler remains `fca4673033dc92833bbf217182738026f414bf3d`, schema 0050,
+Inbox parser 15. The standalone local checkout is on canonical main.
 
 Weekly arrows select Monday-to-Sunday America/Los_Angeles weeks independently
-of the reporting period, retaining role selection. Current heading is “This
-week” with the actual range; historical heading is that week's range. Forward
-stops at current; historical reset returns there. The weekly date input is
-removed; page-level Choose dates keeps native date inputs and the outlined
-calendar icon. Historical bar links use exact daily dates, fixing invalid
-clipping to the page period. The server-only identity read verifies current
-weekly total/daily buckets before returning aggregates; missing historical
-detail is Unavailable and future days are not labeled completed zeros.
+of reporting period, retaining role selection. Current heading is “This week”
+with the actual range; historical heading is that week's range, including both
+years across a year boundary. Forward stops at current; historical reset returns
+there. The weekly date input is removed; page-level Choose dates retains native
+inputs and its outlined calendar. Historical daily links use their own dates.
+The server-only identity read reconciles current total/daily buckets before
+returning aggregates. Missing detail is Unavailable; future days are not completed
+zeros. KPI week remains current even while navigating a historical chart.
 
-The existing Wine/Rose and Inter tokens, sidebar/navigation and all other tabs
-are retained. Inbox's reference coverage position honestly says Unavailable;
-neither a connected grant nor a sync timestamp certifies the selected period.
-Invitation-email and verified application-stage counts remain separate. See
-`docs/analytics/metric-sources.md` for the date and source contract. Local
-Chrome cooling remains unresolved. The owner asked to check before capturing:
-startup reached 88 C and was stopped by an 85 C guard; a second attempt in a
-temporary 10-percent-CPU scope reached 87 C and was stopped by its 80 C guard.
-Neither attempt completed captures. No repair was established; do not repeat
-local Chrome work from this candidate. The first hosted source passed 2,499
-backend/PostgreSQL and 54 Inbox/Analytics browser cases. Actual read-only
-reconciliation passed 44 period/role selections and 2,376 weekly windows; actual
-counts and timestamps stay private. Private real-data review HTML is prepared
-locally. Hosted fixture captures and production arithmetic are separate evidence.
-Export of that private HTML to hosted capture was rejected by automatic approval
-review; explicit owner approval is pending. No deployment is authorized.
+Existing Wine/Rose/Inter tokens, shell, navigation, Inbox decisions/Undo, evidence
+definitions and invitation receipt-date binding are retained. Coverage stays
+Unavailable without complete observation evidence. The rendered comparisons are
+not pixel-perfect: the retained shell is 246/64 px rather than the references'
+roughly 220/55 px; the existing real undated-record notice adds a row before the
+charts. Actual statuses/evidence and unavailable states differ truthfully from
+sample data. No screenshot values or production fixtures were introduced.
+
+Exact-source [review 41216154070](https://github.com/anwarbuilds/ace/actions/runs/41216154070)
+passes **2,499 backend/PostgreSQL**, **54 Inbox/Analytics browser** and **127 unique
+DOM/calculation** cases, route types, TypeScript, full lint and production build.
+Four recipient-encrypted actual-data captures (Day/Night current/historical) were
+decrypted and inspected at both native reference sizes, with fonts loaded and
+no horizontal overflow. The owner-approved temporary hosted secret was deleted
+and absence verified; actual records, screenshots and the recipient private key
+remain outside public Git. These are read-only snapshot renders, not signed-in
+production browser tests. Hosted interaction tests use isolated fictional data.
+Local cooling is still unresolved: guarded Chrome attempts reached 88 C and
+87 C and stopped without captures; do not run local Chrome until repaired.
+
+Pre-release independent calendar checks cover 2,376 windows / 16,632 daily
+buckets across 44 role/period scopes. A fresh post-release production read-only
+snapshot plus exact deployed calculations passes 132 current/previous/cross-year
+weeks / 924 daily buckets across the same 44 scopes. Installed primary,
+independent and expanded Analytics audits and four-range invitation drilldowns
+pass. All audits enforce READ ONLY/REPEATABLE READ with no Gmail calls, body reads,
+auth session creation or writes. Actual counts remain private.
+
+Public health/header match exact web SHA, 15 served bundle/font hashes and 85
+logo hashes pass, and authentication boundaries hold. All 375 checked backend/
+audit-source files match. Preparation-to-cutover and cutover-to-postactivation
+HMAC comparisons preserve every row across 19 protected tables. API, scheduler,
+PostgreSQL, Caddy and exited migrate identities/images/starts/mounts are unchanged;
+.env/Caddy/Compose hashes, modes and inodes match. Schema/parser, one monitor
+lease, background sync and disabled historical rechecks are preserved. No backend
+business logic, migration, scheduler, extension publication or legacy operation ran.
+
+Fresh private backup `/opt/ace/private-backups/overview-week-20261031T1600Z/`
+passes gzip, catalog and full expansion (566,697,872 bytes; no restore drill or
+pruning). Actual prior `1eb2808` web image is retained under
+`oracle-web:before-overview-week-20261031T1600Z` with guarded web-only `rollback.sh`.
+Never restore old SQL data as image rollback. Private local evidence is ignored
+`artifacts/analytics-overview-week-20261031/`, including REVIEW.md, actual PNGs,
+reference comparisons and release proofs. [Metric contract](docs/analytics/metric-sources.md)
+describes all sources. [Wider PR CI 41217636237](https://github.com/anwarbuilds/ace/actions/runs/41217636237)
+passes backend/web but retains the exact 25 pass / 22 fail extension-browser
+baseline, with zero new/resolved failed names. Overall CI is not green; no tests
+were skipped or weakened to hide that baseline.
 
 ## Next-chat continuation checkpoint, 2026-10-31 Pacific
 

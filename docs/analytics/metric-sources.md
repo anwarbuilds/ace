@@ -1,6 +1,6 @@
 # Analytics metric and source audit
 
-## Overview weekly navigation, 2026-10-31 candidate
+## Overview weekly navigation LIVE, 2026-10-31
 
 The weekly card selects one Monday-to-Sunday calendar week in
 America/Los_Angeles. Current week is titled “This week” with its date range;
@@ -22,7 +22,18 @@ bars. Future current-week days have no completed-zero label or records link.
 The five KPI definitions and receipt-date invitation binding remain intact.
 Coverage stays Unavailable because no existing field certifies complete
 comparable observation for the selected period. No backend, migration, Gmail,
-application-state or scheduler change is part of this frontend candidate.
+application-state or scheduler change is part of this frontend release.
+
+Owner-approved exact tested `d26bfac1c64eaa5a8a479c89d5099b6474f67a4e`
+activated web only at 2026-10-31T16:12:34Z–16:12:41Z. Exact-source hosted checks
+pass 2,499 backend/PostgreSQL, 54 Inbox/Analytics browser and 127 unique DOM/
+calculation cases, TypeScript, lint and build. A fresh post-release read-only
+snapshot reconciles 132 weeks / 924 buckets across 44 role/period scopes against
+independent Python Pacific-calendar expectations. Actual Day/Night snapshot
+renders and comparisons stay private; existing shell dimensions, data-dependent
+notices and truthful evidence states differ from sample images. This is not a
+pixel-perfect or signed-in production-browser claim. No mock production response
+or screenshot count was used.
 
 ## Inbox synchronization integration, 2026-10-30
 
@@ -90,7 +101,7 @@ never discovery date, email receipt date or current-status date.
 | Visible measure | Definition and API fields | Denominator / comparison | Drilldown and missing state |
 | --- | --- | --- | --- |
 | Applications sent | Unique identities in local submission dates; `submitted` | Prior equal local calendar interval through the same final-day clock time. All time has no prior interval | Exact selected application records. A missing supplemental ledger removes the trend only |
-| This week KPI | `week_total`, current local Monday through report time, with role selection | Same elapsed weekday/time in prior week, rather than the entire prior week | Current Monday through today; independent of historical chart week |
+| This week KPI | Reconciled Pacific `week_total`, current America/Los_Angeles Monday through report time, with role selection | Same elapsed weekday/time in prior week, rather than the entire prior week | Current Monday through today; independent of historical chart week |
 | Meaningful replies | `positive`: distinct selected applications with a positive recorded employer outcome or supported recorded stage; no receipts | No effectiveness trend without comparable observation coverage | `evidence=positive`. No evidence is unavailable, recorded zero remains zero |
 | Online assessments | `assessments`: distinct applications with recorded assessment evidence | No inferred prior evidence percentage | `evidence=online_assessment` |
 | Interview invitations | `classified_email_evidence.categories.interview`: distinct effective invitation emails, including unlinked evidence; receipt dates and July Pacific floor | No inferred prior observation percentage. Email counts do not assign an application stage | Exact `emails=1&email_kind=interview` records. Missing projection is unavailable; recognized zero stays zero |
@@ -119,8 +130,9 @@ never discovery date, email receipt date or current-status date.
 
 ## Reporting and evidence limits
 
-All new calendar arithmetic uses the projection's IANA zone. America/Los_Angeles
-is used for owner production verification. Original Inter, Wine and Rose themes,
+Reporting-period arithmetic uses the projection's IANA zone. Weekly chart/KPI
+arithmetic always uses America/Los_Angeles, including when the reporting
+projection uses a different zone. Original Inter, Wine and Rose themes,
 shell dimensions and global type tokens are retained. Sidebar lifetime Applied
 continues to use the existing shell ledger, independent of the chosen date range.
 

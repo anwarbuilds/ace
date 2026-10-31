@@ -1,6 +1,6 @@
 # ACE current handoff
 
-Updated 2026-10-31 Pacific after the approved invitation-headline web release. This is
+Updated 2026-10-31 Pacific after the approved Analytics Overview web-only release. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
@@ -14,7 +14,7 @@ before changes. Dated pending instructions are not current authorization.
   `9c884dc880e9f4419602a4ab5faec536e171ac6a`. No history flattening or force-push.
 - `/home/ubuntu/Documents/ace-next` is a fresh standalone main clone. Its `.git`
   is a directory, common dir is `.git`, and it has no object alternates or
-  dependency on the former `~/Documents/ace/.git`. Only main is a live local branch.
+  dependency on the former `~/Documents/ace/.git`. Main is canonical; merged task branches may remain as review history.
 - The original eleven registered worktree locations and 29 local branch tips
   are privately preserved. Those registrations/branches and the live stash were
   removed after verified independent recovery. Original folders are inert private
@@ -27,7 +27,28 @@ before changes. Dated pending instructions are not current authorization.
 - Fetch main before future changes and push only the reviewed source. Private
   `recovery-20261030/*` tags are local recovery material; **do not push all tags**.
 
-## Interview invitation headline correction LIVE
+## Analytics Overview weekly navigation LIVE
+
+Owner-approved exact tested **`d26bfac1c64eaa5a8a479c89d5099b6474f67a4e`**,
+[PR #22](https://github.com/anwarbuilds/ace/pull/22), activated web only during
+2026-10-31T16:12:34Z–16:12:41Z (09:12 Pacific); final checks completed 16:13:06Z.
+Current chart is “This week” plus its actual Pacific Monday-to-Sunday range;
+historical headings show their range. Arrows move one week, stop forward at
+current, and preserve role/period selections; weekly data is period-independent.
+The reset returns to current. Weekly date input is gone; page-level Choose dates
+retains its outlined calendar and native inputs. Future days are not completed
+zeros. Existing identity, evidence, invitation-email and refresh contracts remain.
+
+Exact-source [review 41216154070](https://github.com/anwarbuilds/ace/actions/runs/41216154070)
+passes 2,499 backend/PostgreSQL, 54 Inbox/Analytics browser and 127 unique
+DOM/calculation checks, TypeScript, lint and build. Actual read-only Day/Night
+current/historical renders were inspected against both native references; the
+approved temporary hosted secret was deleted. Existing shell dimensions and the
+real undated-record notice differ from the samples; no pixel-perfect claim is
+made. Actual source data stays private. The root LIVE record includes precise
+comparison, audit and cooling limits. Do not run local Chrome until repaired.
+
+## Interview invitation headline correction retained (previous release)
 
 The owner identified that the live “Interview invitations” headline still reads
 verified application stages rather than recognized invitation emails. Fresh
@@ -50,39 +71,39 @@ four-range invitation/drilldown, full installed audit and preservation checks pa
 ## Production: current verified sources
 
 Website: **https://ace.opik.net**. Web is exact approved/tested
-**`1eb28086ab30f87dc6fd320190d3e3cc7afe3957`**, activated as above. API remains
-`a48d71b` from the October 30 coordinated Inbox/Analytics release. PR #21 merged
-as `75296621d04161143cf5220bd530fefb6cd93411`. Production `/opt/ace` main tracks
-origin/main but deliberately uses exact tested `1eb2808`; later continuity
-documentation does not authorize another rebuild.
+**`d26bfac1c64eaa5a8a479c89d5099b6474f67a4e`**, merged by PR #22 as
+`68f1763d1615db03c77b991433d96d8ed099f3b7`. Production `/opt/ace` main tracks
+origin/main but intentionally remains at exact tested `d26bfac`. Later continuity
+documentation is not another deployed build.
 
 | Running surface | Verified source revision |
 | --- | --- |
 | API, Inbox parser 15 | `a48d71be3a33a6188e8fa96f748b4b78ecd19ef0` |
-| Web | `1eb28086ab30f87dc6fd320190d3e3cc7afe3957` |
-| Discovery scheduler | `fca4673033dc92833bbf217182738026f414bf3d` (181 tracked runtime file hashes matched) |
+| Web | `d26bfac1c64eaa5a8a479c89d5099b6474f67a4e` |
+| Discovery scheduler | `fca4673033dc92833bbf217182738026f414bf3d` |
 | Database schema | `0050` |
 
-Only web was replaced in this latest release. All 371 backend/four script source hashes match;
-health, exact frontend SHA, 15 bundles/fonts, 85 logo hashes and auth boundaries
-pass. Installed primary/independent/expanded Analytics audits pass all four ranges
-and exact email drilldowns. HMAC snapshots preserve all rows across 19 protected
-tables, both preparation-to-cutover and cutover-to-postactivation. API, scheduler,
-PostgreSQL, Caddy and exited migrate identities/images/starts/mounts stay intact;
-Caddy/.env/Compose hashes, modes and inodes match. Schema 0050/parser 15 remain.
-Exactly one monitor lease remains without an API restart. Historical rechecks
-remain false; parser 7 stays stopped. Web startup logs contain no error/traceback/5xx.
+Only web changed. Public health/exact SHA, auth boundaries, 15 bundle/font hashes,
+85 logos, installed primary/independent/expanded Analytics audits and four-range
+invitation drilldowns pass. A fresh post-release snapshot reconciles 132 weeks /
+924 daily buckets across all 44 role/period scopes against independent Python
+Pacific-calendar expectations. Pre-release broader week reconciliation is also
+preserved privately. None of these is signed-in production browser verification.
 
-Fresh private backup under
-`/opt/ace/private-backups/invitation-card-20261031T1400Z/` passes gzip,
-catalog and full expansion (566,591,840 bytes; no restore drill or pruning).
-It retains actual prior web image `a48d71b` under
-`oracle-web:before-invitation-card-20261031T1400Z` and guarded web-only
-`rollback.sh`; never restore a database over later owner activity as image rollback.
-Earlier API/web backups and images remain retained. Private proofs are copied to
-ignored `artifacts/analytics-invitation-card-20261031/release/`.
-No migration, scheduler operation, extension publication, Gmail replay or legacy
-restart ran. See [release and contracts](analytics/inbox-sync-review.md).
+All 375 backend/audit-source hashes match; both HMAC comparisons preserve all
+rows across 19 protected tables. API, scheduler, PostgreSQL, Caddy and exited
+migrate identities/images/starts/mounts stay intact. .env/Caddy/Compose hashes,
+modes and inodes match. Schema 0050/parser 15, one monitor lease and background
+sync remain; historical rechecks stay disabled and parser 7 stays stopped.
+
+Fresh backup `/opt/ace/private-backups/overview-week-20261031T1600Z/` passes
+gzip, catalog and full expansion (566,697,872 bytes, no restore drill/pruning).
+Actual prior `1eb2808` web image is retained as
+`oracle-web:before-overview-week-20261031T1600Z` with guarded web-only rollback.
+Never restore old database data as image rollback. Local private proof is ignored
+`artifacts/analytics-overview-week-20261031/release/`. Earlier images/backups remain.
+No backend change, migration, scheduler operation, extension publication, Gmail
+replay, application/status write or legacy restart ran.
 
 ## Legacy retirement and recovery
 
@@ -130,7 +151,12 @@ changed. Resume tailoring/export and offsite backup remain limitations.
 
 ## Validation and CI
 
-Exact-source [Analytics review 41167247224](https://github.com/anwarbuilds/ace/actions/runs/41167247224)
+Latest Overview verification is recorded above. Wider PR CI 41217636237 passes
+backend/web and retains the exact 25 pass / 22 fail extension-browser baseline
+with zero new/resolved failed names; dedicated Analytics browser checks pass.
+Overall CI remains red. No assertion was disabled or weakened.
+
+Earlier synchronization-source [Analytics review 41167247224](https://github.com/anwarbuilds/ace/actions/runs/41167247224)
 passes 2,499 backend/PostgreSQL cases, 53 hosted Inbox/Analytics browser cases,
 DOM/calculation checks, TypeScript, full lint and build. Production read-only
 reconciliation/source/HTTP/asset checks pass separately; no signed-in production
