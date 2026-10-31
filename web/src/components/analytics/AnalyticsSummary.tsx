@@ -13,8 +13,8 @@ function Trend({ value, reason }: { value?: SubmissionTrend | null; reason: stri
   if (!value) return <span className="an-trend-missing" title={reason} aria-label={reason}>ⓘ</span>;
   return <span className={`an-trend ${value.percent !== null && value.percent < 0 ? "an-trend-down" : ""}`} title={`${value.description} Current ${value.current}; previous ${value.previous}.`}><span aria-hidden="true">{value.percent !== null ? value.percent < 0 ? "↓" : value.percent > 0 ? "↑" : "" : ""}</span>{value.label}</span>;
 }
-export function currentWeekHref(d: AnalyticsData) {
-  const today = localDate(d.as_of, ANALYTICS_WEEK_TIMEZONE);
+export function currentWeekHref(d: AnalyticsData, supplement?: AnalyticsSupplement | null) {
+  const today = supplement?.weekToday ?? localDate(d.as_of, ANALYTICS_WEEK_TIMEZONE);
   return applicationRecordsHref({ ...d, timezone: ANALYTICS_WEEK_TIMEZONE, days: "custom", start: mondayOf(today), end: today });
 }
 export function ApplicationMetrics({ d, supplement, company }: { d: AnalyticsData; supplement?: AnalyticsSupplement | null; company?: string }) {
@@ -22,7 +22,7 @@ export function ApplicationMetrics({ d, supplement, company }: { d: AnalyticsDat
   const comparisonMissing = "Comparison unavailable: complete, comparable outcome observation is not recorded.";
   const rows = [
     { icon: "send", label: "Applications sent", value: d.submitted, foot: "Unique submissions", href: applicationRecordsHref(d), trend: supplement?.submissionTrend, reason: d.days === "all" ? "All time has no preceding equivalent interval." : "Submission comparison could not be verified." },
-    { icon: "calendar", label: "This week", value: supplement?.currentWeekTotal ?? (d.timezone === ANALYTICS_WEEK_TIMEZONE ? d.week_total : null), foot: "Current calendar week", href: currentWeekHref(d), trend: supplement?.weekTrend, reason: "Week comparison could not be verified." },
+    { icon: "calendar", label: "This week", value: supplement?.currentWeekTotal ?? (d.timezone === ANALYTICS_WEEK_TIMEZONE ? d.week_total : null), foot: "Current calendar week", href: currentWeekHref(d, supplement), trend: supplement?.weekTrend, reason: "Week comparison could not be verified." },
     { icon: "reply", label: "Meaningful replies", value: outcomeCount(d.positive), foot: "Recorded positive employer responses", href: applicationRecordsHref(d, { evidence: "positive" }), reason: comparisonMissing },
     { icon: "file", label: "Online assessments", value: outcomeCount(d.assessments), foot: "Recorded stages reached, including later rejections", href: applicationRecordsHref(d, { evidence: "online_assessment" }), reason: comparisonMissing },
     { icon: "people", label: "Interview invitations", value: d.classified_email_evidence?.categories.interview ?? null, foot: "Invitation emails by receipt date", href: emailRecordsHref(d, { email_kind: "interview", ...(company ? { company } : {}) }), reason: "Comparison unavailable: comparable interview email observation is not recorded." },

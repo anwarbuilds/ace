@@ -89,6 +89,8 @@
 .an-page svg text { fill: var(--text-secondary); font-size: var(--text-tick); font-family: var(--font-ui); }
 .an-chart-details { font-size: var(--text-tick); color: var(--text-secondary); text-align: right; }
 .an-chart-details summary { cursor: pointer; display: list-item; margin-left: auto; width: fit-content; }
+.an-tab-overview .an-line-chart { position: relative; }
+.an-tab-overview .an-chart-details:not([open]) { position: absolute; right: 0; bottom: -6px; }
 .an-data-scroll { max-height: 260px; overflow: auto; margin-top: 8px; text-align: left; }
 .an-week-picker { display: flex; align-items: center; border: 1px solid var(--border); border-radius: var(--r-sm); flex: none; overflow: hidden; }
 .an-week-picker button { display: inline-flex; align-items: center; justify-content: center; width: 28px; min-height: 29px; }
@@ -99,6 +101,7 @@
 .an-week-separator { margin-inline: .3em; }
 .an-column[data-future] { color: var(--text-muted); }
 .an-foot { font-size: var(--text-small); color: var(--text-secondary); margin: 9px 0 0; line-height: var(--leading-nav); }
+.an-week-card>.an-foot { margin-top: 0; }
 .an-columns { display: flex; gap: 26px; align-items: stretch; height: 180px; padding: 0 12px; margin-top: 20px; }
 .an-weekly { height: 98px; gap: 22px; margin-top: 26px; }
 .an-column { display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: center; gap: 5px; font-size: var(--text-small); color: var(--text-secondary); text-align: center; }
@@ -235,7 +238,16 @@
 .an-bottom-links>a { display: inline-flex; gap: 6px; align-items: center; color: var(--accent-text); }
 .an-date-note { font-size: var(--text-small); color: var(--text-secondary); margin: 0 0 10px; }
 @media(min-width:1450px) { .an-filters { position: absolute; right: 0; top: 0; } }
-@media(min-width:1450px) and (max-width:1599px) { .an-tab-overview { padding-inline: 36px; } }
+@media(min-width:1450px) and (max-width:1599px) {
+  .an-tab-overview { padding-inline: 36px; }
+  .an-tab-overview .an-hero { margin-bottom: 4px; }
+  .an-tab-overview .an-inbox-band { margin-bottom: 15px; }
+  .an-tab-overview .an-metric { min-height: 124px; }
+  .an-tab-overview .an-tabs { margin-bottom: 12px; }
+  .an-tab-overview .an-overview-top { grid-template-columns: 1.65fr 1fr; gap: 10px; }
+  .an-tab-overview .an-overview-bottom { grid-template-columns: .925fr 1fr; gap: 10px; }
+  .an-tab-overview .an-overview-top>.an-panel { min-height: 241px; }
+}
 @media(min-width:1600px) { .an-tab-overview { padding-right: 67px; } }
 @media(max-width:1449px) {
   .an-page { padding-left: 28px; padding-right: 28px; }

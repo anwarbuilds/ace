@@ -33,12 +33,12 @@ function WeekRange({start,end}:{start:string;end:string}) {
 }
 function Overview({d,supplement,askedWeek}:{d:AnalyticsData;supplement?:AnalyticsSupplement|null;askedWeek?:string}) {
   const evidence = [{label:"Positive replies",count:d.evidence.positive},{label:"Confirmed rejections",count:d.evidence.rejected}];
-  const today=localDate(d.as_of,ANALYTICS_WEEK_TIMEZONE);
+  const today=supplement?.weekToday ?? localDate(d.as_of,ANALYTICS_WEEK_TIMEZONE);
   const mode=supplement?.interval ?? (d.granularity === "monthly" ? "monthly" : "daily");
   const fallback=d.granularity === "monthly" ? d.daily.map(row=>({date:`${row.date}-01`,end:new Date(Date.UTC(+row.date.slice(0,4),+row.date.slice(5,7),0)).toISOString().slice(0,10),count:row.count})) : groupSubmissions(d.daily,"daily",d.start,d.end);
   const points=supplement?.timeline ?? fallback;
   const pointHref=(point:ChartPoint)=>applicationRecordsHref({...d,days:"custom",start:point.date<d.start?d.start:point.date,end:point.end>d.end?d.end:point.end});
-  const window=calendarWeek(today,askedWeek);
+  const window=supplement?{start:supplement.weekStart,end:supplement.weekEnd,current:supplement.currentWeek}:calendarWeek(today,askedWeek);
   const historical=!window.current;
   const week=supplement?.week ?? (!historical && d.timezone===ANALYTICS_WEEK_TIMEZONE ? d.week.map(row=>({...row,end:row.date})) : null);
   const weekHref=(point:ChartPoint)=>applicationRecordsHref({...d,timezone:ANALYTICS_WEEK_TIMEZONE,days:"custom",start:point.date,end:point.date});

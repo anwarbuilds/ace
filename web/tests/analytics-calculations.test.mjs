@@ -119,3 +119,13 @@ test("weekly Pacific boundaries stay separate from another reporting timezone", 
   assert.equal(result.currentWeekTotal,1);
   assert.deepEqual(result.week.map(day=>day.count),[1,0,0,0,0,0,0]);
 });
+test("a Pacific week rollover between reads keeps the weekly clock with its own projection",()=>{
+  const rows=[row(1,"2026-11-02T07:59:59Z")];
+  const primary=report({timezone:"UTC",as_of:"2026-11-02T07:59:59Z",start:"2026-11-01",end:"2026-11-02",submitted:1,week_total:1});
+  const weekly=report({as_of:"2026-11-02T08:00:01Z",week_total:0});
+  const result=calculateSupplement(primary,rows,"daily",undefined,weekly);
+  assert.equal(result.weekToday,"2026-11-02");
+  assert.equal(result.weekStart,"2026-11-02");
+  assert.equal(result.currentWeek,true);
+  assert.equal(result.week.reduce((sum,day)=>sum+day.count,0),0);
+});

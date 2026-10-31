@@ -78,6 +78,19 @@ jobs:
             artifacts/inbox-intelligence-validation/*.png
             web/test-results/
           retention-days: 14
+      - name: Optional encrypted owner-private Overview capture
+        if: github.ref == 'refs/heads/analytics-rebuild-overview-week-20261031'
+        env:
+          ACE_PRIVATE_ANALYTICS_CAPTURE: ${{ secrets.ACE_ANALYTICS_CAPTURE_20261031_C510 }}
+        run: node .github/scripts/capture-private-analytics.mjs
+      - name: Retain recipient-encrypted private capture
+        if: github.ref == 'refs/heads/analytics-rebuild-overview-week-20261031'
+        uses: actions/upload-artifact@v4
+        with:
+          name: analytics-private-encrypted
+          path: artifacts/analytics-private-capture.enc
+          if-no-files-found: ignore
+          retention-days: 1
       - name: Fictional service errors
         if: failure()
         run: tail -n 60 /tmp/analytics-api.log /tmp/analytics-web.log || true
