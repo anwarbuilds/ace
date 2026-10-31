@@ -99,19 +99,75 @@ Private evidence is under ignored `artifacts/analytics-inbox-sync-20261030/`.
 The original production arithmetic audit passes its narrower projection. The
 expanded independent `scripts/audit_analytics_inbox_sync.py` detects missing
 effective message categories in all four ranges before the integration.
-Candidate source is evaluated only in the memory of a separate Python process
-against enforced read-only production snapshots; no deployed source is replaced.
-It reconciles category totals, exact message drilldowns, unique applications,
-historical stages, latest statuses, age-qualified partitions and timing. Actual
-measurements stay private. No Gmail calls, message bodies, sessions or writes are
+The owner explicitly approved final candidate execution in the memory of a
+separate Python process against enforced read-only production snapshots; no
+deployed source was replaced. Primary, independent and expanded checks pass all
+four ranges, reconciling category totals, exact message drilldowns, unique
+applications, historical stages, latest statuses, age-qualified partitions and
+timing. Candidate source hash matches the reviewed file. A further comparison of
+deployed and candidate calculations in the same snapshot preserves every
+submission/status/timeline/attribution/official-series source and the existing
+confirmed outcome values; the recognized email omissions are corrected.
+Report reads measured 180 to 208 ms and 17 SELECTs. Actual counts and the requested
+source/date/verification metric table stay in private `RECONCILIATION.md` beside
+the JSON reports. Zero Gmail calls, message bodies, sessions or writes were
 needed; arithmetic does not certify semantic classification accuracy or coverage.
 
-Validation results, tested source and screenshot comparison are recorded here
-after final checks. The dedicated Analytics workflow includes the full backend
+Final tested source `a48d71be3a33a6188e8fa96f748b4b78ecd19ef0` is in
+[draft PR #20](https://github.com/anwarbuilds/ace/pull/20). Local final checks pass:
+2,497 backend tests (two PostgreSQL-only checks use the hosted service), 115
+DOM/calculation cases, 267 extension matcher cases,
+Memory safety, JavaScript syntax, route generation, TypeScript, full lint,
+production web build, zero forbidden UI dashes and clean whitespace. One initial
+test fixture lacked a React display name; it was named and full lint then passed.
+An initial restricted-sandbox backend run stalled in TestClient and was stopped;
+the completed full runs used the normal isolated fictional fixtures outside that
+restriction. Earlier intermediate source passed 2,495 cases; it is not substituted
+for the final result.
+
+The passing [dedicated Analytics review](https://github.com/anwarbuilds/ace/actions/runs/41167247224)
+verifies that exact source: **2,499 backend tests including the real PostgreSQL
+snapshot/read-only tests, 53 hosted Inbox/Analytics browser cases, DOM/calculation
+checks, TypeScript, full lint and production build pass**. The runtime files are
+identical to `5c399bb`; its follow-up changed only the two browser fixtures.
+The browser checks prove a committed Inbox acknowledgement correction updates
+open Analytics, both report routes retain the exact selection/results across a
+failed refresh and recover on Retry, delayed requests avoid overlapping refreshes,
+and offline pages recover automatically online. Date filters, aggregation,
+historical weeks, role filters, July boundaries, exact email drilldowns and
+application preservation also pass.
+
+Wider [final-source CI](https://github.com/anwarbuilds/ace/actions/runs/41167251270)
+passes backend/web; extension browsers have **25 pass / 22 fail**. Exact
+traceback-name comparison with main's consolidation run finds zero new or resolved
+failed names. Extension runtime and its browser fixtures are unchanged. Later
+broad app-browser steps are skipped, so overall CI is not green.
+The first dedicated run passed all 2,499 backend cases including PostgreSQL,
+web checks/build, and 51 browser cases. Its two new fixture failures were an
+overbroad records-page selector that also matched page-number controls, and an
+unsupported `decision=all` API query (the actual Inbox omits that parameter).
+Both tests were corrected without runtime changes in `a48d71b`; no assertion was
+removed. The earlier [full run](https://github.com/anwarbuilds/ace/actions/runs/41166658152)
+passed backend/web and retained 25 passing / 22 failing extension-browser cases;
+exact traceback-name comparison with main's consolidation run found no new or
+resolved failed names. Later broad app-browser steps were skipped. Overall CI is
+not green; dedicated Inbox/Analytics verification is separate.
+
+All eight final desktop captures are 1672 x 941. Four Day reference comparisons
+and four Night views were inspected, along with the compact recognized-evidence
+captures and responsive checks. Original shell dimensions, Inter and four-tab
+composition remain; counts/chart shapes and unavailable states follow the
+fictional persisted fixture. The compact evidence wording and freshness line
+are intentional accuracy changes. No pixel-perfect claim or signed-in production
+browser verification is made. Captures, comparisons, mobile views and traces are
+private in `hosted-final/` under the owner evidence directory. The passing run's
+`analytics-review` artifact contains the source captures, retained for 14 days.
+The dedicated Analytics workflow includes the full backend
 suite, guarded fictional PostgreSQL isolation tests, Node DOM/calculation checks,
 TypeScript/lint/build, and hosted Inbox/Analytics browser tests. No local Chrome
-is run under the existing laptop cooling restriction. Earlier main CI's 22
-extension-browser failures are historical baseline, not a result for this source.
+is run under the existing laptop cooling restriction. Current failures were
+checked explicitly against the historical baseline; earlier counts do not
+substitute for a fresh result.
 
 ## Release and rollback plan (requires explicit owner approval)
 
@@ -128,3 +184,37 @@ retained originals. This feature makes no data writes, so no data compensation
 or database restore belongs to its rollback. Never restore a database over later
 owner activity. No earlier deployment, merge or historical correction approval
 authorizes this operation.
+
+## Changed-file inventory
+
+Relative to canonical `3bb2a96`, including the final continuity record:
+
+```text
+ACE_NEXT_KNOWLEDGE.md
+.github/workflows/analytics-review.yml
+backend/app/api/routers/analytics.py
+backend/scripts/inbox_analytics_audit.py
+backend/tests/test_analytics_filed_evidence.py
+backend/tests/test_analytics_inbox_sync.py
+backend/tests/test_analytics_snapshot_postgres.py
+backend/tests/test_analytics_sync_audit.py
+backend/tests/test_inbox_evidence_scope.py
+docs/analytics/inbox-sync-review.md
+docs/analytics/metric-sources.md
+docs/analytics/review.md
+scripts/audit_analytics_inbox_sync.py
+web/package.json
+web/src/app/app/analytics/analytics.css
+web/src/app/app/analytics/page.tsx
+web/src/app/app/applications/analytics/page.tsx
+web/src/components/analytics/AnalyticsFreshness.tsx
+web/src/components/analytics/AnalyticsRefresh.tsx
+web/src/components/analytics/AnalyticsView.tsx
+web/src/components/analytics/CorrespondenceRecords.tsx
+web/src/components/shell/AppProvider.tsx
+web/src/lib/analytics.ts
+web/tests/analytics-freshness-dom.test.mjs
+web/tests/analytics-rejections-render.test.mjs
+web/tests/e2e/analytics-redesign.spec.ts
+web/tests/inbox-reliability-dom.test.mjs
+```

@@ -1,6 +1,120 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-30 Pacific, owner-authorized main promotion, local legacy retirement, standalone workspace and README consolidation.
+Last updated: 2026-10-30 Pacific, Inbox-to-Analytics integration candidate and read-only reconciliation; no deployment.
+
+## Inbox-to-Analytics synchronization candidate, 2026-10-30 Pacific
+
+The owner requested engineering integration and automatic freshness, preserving
+parser 15 and the approved Analytics design. Work starts from standalone canonical
+`main` at `3bb2a9623c43cdb7c489da8f180aa08b900687d8`, with clean status, fetched
+main and current remote heads verified. Runtime/test source
+`5c399bb6ac05daa5bd61bdf3b1c62ef529cc4592` is on
+`analytics-rebuild-inbox-sync-20261030` in
+[draft PR #20](https://github.com/anwarbuilds/ace/pull/20). Main is not merged or
+deployed by this work. Final review/result record:
+`docs/analytics/inbox-sync-review.md`; metric definitions are updated in
+`docs/analytics/metric-sources.md`.
+
+Final tested head is **`a48d71be3a33a6188e8fa96f748b4b78ecd19ef0`**. Its only
+change after runtime source `5c399bb` fixes two new browser fixtures: records-page
+root selection must exclude page-number controls, and the Inbox API all-mail
+query omits `decision` (the UI's `all` value is not an API filter). All assertions
+remain. Subsequent continuity documentation changes no runtime or test bytes.
+
+`backend/app/api/routers/analytics.py` now consumes shared effective Inbox meaning
+and decision projections, not raw compatibility categories. Its separate
+PostgreSQL session enforces READ ONLY and REPEATABLE READ before the first report
+SELECT; auth keeps its existing writable heartbeat session. Each report observes
+one committed snapshot, with no counters, materialized cache, classifier, worker
+or transfer job. A subsequent request sees already committed Inbox changes.
+
+Recognized correspondence now includes effective acknowledgements, linked and
+unlinked invitations/offers/recruiter actions, validated company-only and unlinked
+rejections, with separate completion/cancellation/update categories. Counts are
+distinct messages with supported linked/company-only/unlinked partition. Receipt
+targets alone do not establish verified identity. Application stages remain
+distinct eligible applications by type; effective target, actor, current meaning,
+decision, active Undo and chronology guards apply. Preserve the existing optional
+`kind` owner-review contract: an active explicit owner manual stage is authority
+even when older raw email meaning differs. Invalidated email transitions cannot
+return through undated current-stage fallback or control cohort polarity. Valid
+historical assessments/interviews survive a later rejection. Owner receipt
+overrides retain raw machine meaning/audit while projecting an acknowledgement.
+
+`GET /api/analytics?emails=1` adds paginated exact receipt-date records and
+`email_kind`, `email_scope=linked|company|unlinked`, search and safe identity
+filters. `/app/applications/analytics?emails=1` uses the existing records table
+styling and links each email to Inbox. Date/family/company/search/pagination and
+return context stay intact. Email receipt dates retain the July 1 Pacific floor;
+submission cohorts, current statuses, historical event clocks and official
+petition reporting remain separate. No resume/channel/rate data is invented.
+
+The persistent `AnalyticsRefresh` in the app layout owns two-minute visible-page
+polling and marks/return/focus/visibility/online signals on both Analytics routes.
+It coalesces bursts, prevents overlapping coordinator reads and queues one follow-up
+for evidence committed during an in-flight request, without hydration refresh or
+page-mount feedback. The shell skips only its competing refresh on those routes;
+Pulls announcements retain their path. New `AnalyticsFreshness` retains only a
+mounted selection's last verified server-rendered output, rejects older responses,
+shows stale/unavailable/delayed/offline states and retries normally. It stores no
+browser ledger or persistent owner data. A full document replacement cannot keep
+that in-memory snapshot; it must show unavailable rather than fabricate totals.
+
+Three fictional review reproductions caught and fixed unsafe receipt attribution,
+loss of optional-kind owner interview history after later rejection, and invalid
+rejection status timestamps controlling a confirmed cohort. Local final source
+passes 2,497 backend tests (two PostgreSQL-only tests use the hosted service),
+115 DOM/calculation checks, matcher/Memory/syntax, TypeScript, lint, web build,
+zero forbidden UI dashes and whitespace. Dedicated hosted PostgreSQL snapshot
+checks also pass. Exact-source hosted
+[review 41167247224](https://github.com/anwarbuilds/ace/actions/runs/41167247224)
+passes **2,499 backend cases including PostgreSQL, 53 Inbox/Analytics browser
+cases**, Node checks, TypeScript, lint and build. Actual browser correction,
+failed-refresh retention on both report routes, Retry, delayed transport, offline
+recovery, filters and exact email drilldowns pass. Eight desktop Day/Night captures,
+four approved-reference comparisons, mobile and recognized-evidence captures are
+inspected; the approved composition/Inter remain. No local Chrome or signed-in
+production browser is claimed. An initial dedicated run had 51 pass / 2 failed
+new fixtures, fixed as described above. Final-source
+[full CI 41167251270](https://github.com/anwarbuilds/ace/actions/runs/41167251270)
+passes backend/web but has **25 pass / 22 fail** in extension browsers. Exact
+traceback-name comparison with main's consolidation run finds zero new or resolved
+failed names; extension/browser fixture source is unchanged. Overall CI is not
+green and later broad app-browser steps are skipped; dedicated verification is
+separate. Historical counts below are not substituted for this source.
+
+The original narrow production arithmetic audit passes but misses the integration
+gap. New `scripts/audit_analytics_inbox_sync.py` independently detects omitted
+effective categories in all four ranges before the change. The owner specifically
+approved final candidate execution in the production API environment: source ran
+only in process memory against enforced read-only SQL, saving private aggregates.
+The final primary, independent and expanded audits pass 14/30/90/all, exact email
+drilldowns, unique applications, historical stages, status/cohort partitions and
+timing; source hash matches the candidate. Report reads measured about 180 to
+208 ms with 17 SELECTs, zero Gmail calls, body reads or writes. Actual counts stay
+in ignored `artifacts/analytics-inbox-sync-20261030/`, never public Git. Native
+service checks match the pre-work API/web/scheduler/PostgreSQL/Caddy container,
+image and start identities exactly. No source was installed in production.
+Deployed/candidate calculations were also compared in one read-only snapshot:
+submission sources, statuses, timelines, attribution, official series and existing
+confirmed outcomes remain identical while recognized-email omissions are fixed.
+
+Schema 0050 has no generic durable authentication-version or inactive flag.
+Analytics honors committed classifications/decisions/links, the active ledger and
+existing explicit unverified-source markers; a historical verified actor is not
+fresh Gmail authentication. Population recognition accuracy and complete mailbox
+coverage remain unmeasured, as do historical submitted-file/channel attribution
+and response-effectiveness rates. No new status authorization is granted.
+
+**Deployment remains unapproved and unperformed.** API remains parser 15 at
+`b03d251`, web `4116aa0`, scheduler source `fca4673`, schema `0050`. No migration,
+Gmail replay, recheck activation, scheduler operation, auth/discovery/Studio/
+extension change, legacy restart or destructive data action occurred. A future
+API/web-only release needs explicit exact-source owner approval, a fresh verified
+backup, retained actual running images, guarded rollback and post-release
+reconciliation/preservation checks. Rollback replaces API/web images only and
+never restores the database over later owner work. The read-only audit approval
+does not authorize deployment.
 
 ## Current platform consolidation completed, 2026-10-30 Pacific
 
