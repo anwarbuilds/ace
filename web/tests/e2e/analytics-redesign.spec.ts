@@ -58,6 +58,8 @@ for (const theme of ["light","dark"] as const) {
         await page.setViewportSize(theme==="dark"?{width:1536,height:1024}:{width:1672,height:941});
         await page.screenshot({path:path.join(root,`${theme}-overview-reference.png`)});
         const geometry=await page.evaluate(()=>Object.fromEntries([".sb",".tb",".an-hero",".an-filters",".an-inbox-band",".an-inbox-workflow",".an-band-coverage",".an-metric",".an-tabs",".an-overview-top>.an-panel",".an-overview-bottom>.an-panel",".an-date-toggle svg",".an-week-picker .nic",".an-weekly",".an-donut"].map(selector=>[selector,[...document.querySelectorAll(selector)].map(element=>{const box=element.getBoundingClientRect(),style=getComputedStyle(element);return {x:box.x,y:box.y,width:box.width,height:box.height,font:style.fontFamily,fontSize:style.fontSize,weight:style.fontWeight,lineHeight:style.lineHeight,letterSpacing:style.letterSpacing};})])));
+        expect(Math.abs(geometry[".an-inbox-band"][0].height-96)).toBeLessThan(2);
+        expect(Math.abs(geometry[".an-overview-top>.an-panel"][0].y-(theme==="dark"?469:471))).toBeLessThan(3);
         fs.mkdirSync(path.resolve("test-results"),{recursive:true});
         fs.writeFileSync(path.resolve("test-results",`overview-${theme}-geometry.json`),JSON.stringify(geometry,null,2));
         await page.setViewportSize({width:1672,height:941});

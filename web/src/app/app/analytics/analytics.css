@@ -38,6 +38,7 @@
 .an-band-cta { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-md); font-weight: var(--weight-semibold); font-size: var(--text-small); white-space: nowrap; }
 .an-band-coverage { display: flex; flex-direction: column; justify-content: center; gap: 4px; border-left: 1px solid var(--border); padding-left: 20px; width: 128px; margin-left: 10px; flex: none; color: var(--text-secondary); font-size: var(--text-tick); }
 .an-band-coverage strong { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: var(--text-nav); font-weight: var(--weight-heading); }
+.an-band-coverage>span { white-space: nowrap; }
 .an-band-coverage small { font-size: var(--text-tick); }
 .an-inbox-workflow { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; width: 554px; max-width: 46%; flex: none; }
 .an-inbox-workflow>span { display: flex; align-items: center; gap: 7px; padding: 8px; border: 1px solid var(--border-subtle); border-radius: var(--r-md); min-width: 0; }
