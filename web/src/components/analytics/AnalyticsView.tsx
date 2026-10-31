@@ -42,13 +42,13 @@ function Overview({d,supplement,askedWeek}:{d:AnalyticsData;supplement?:Analytic
   const historical=!window.current;
   const week=supplement?.week ?? (!historical && d.timezone===ANALYTICS_WEEK_TIMEZONE ? d.week.map(row=>({...row,end:row.date})) : null);
   const weekHref=(point:ChartPoint)=>applicationRecordsHref({...d,timezone:ANALYTICS_WEEK_TIMEZONE,days:"custom",start:point.date,end:point.date});
-  return <><div className="an-grid an-overview-top">
+  return <div className="an-overview-charts"><div className="an-grid an-overview-top">
     <Panel title="Applications over time" subtitle="Unique submissions in your selected period." action={<div className="an-chart-actions"><AnalyticsChartInterval interval={mode} monthly={d.granularity==="monthly"} detailed={Boolean(supplement)}/><Jump href={applicationRecordsHref(d)}>View application records</Jump></div>}><LineChart points={points} interval={mode} href={pointHref}/>{!supplement&&<p className="an-foot">Detailed ledger unavailable. Showing the recorded {mode} projection.</p>}</Panel>
     <Panel className="an-week-card" title={historical?<WeekRange start={window.start} end={window.end}/>:"This week"} subtitle={historical?"Application activity for this Monday to Sunday week.":<WeekRange start={window.start} end={window.end}/>} action={<AnalyticsWeekPicker start={window.start} today={today}/>}>{week?<><ColumnChart weekly label={`Calendar week submissions, ${window.start} through ${window.end}, ${ANALYTICS_WEEK_TIMEZONE}`} rows={week.map(row=>({label:new Date(`${row.date}T12:00:00Z`).toLocaleDateString("en-US",{weekday:"short",timeZone:"UTC"}),detail:row.date,count:row.count,future:row.date>today,href:weekHref(row)}))}/><p className="an-foot">{n(week.reduce((sum,row)=>sum+row.count,0))} unique submissions {historical?"in this week":"this week"}. {historical?"Monday to Sunday, America/Los_Angeles.":"Future days have not happened yet."}</p></>:<Unavailable>Submissions for this week could not be verified. Return to this week or retry the report.</Unavailable>}</Panel>
   </div><div className="an-grid an-overview-bottom">
     <Panel title="Current application statuses" subtitle="Latest known stage for each application."><div className="an-statuses">{Object.entries(d.statuses).sort(([a],[b])=>STATUS_ORDER.indexOf(a)-STATUS_ORDER.indexOf(b)).map(([status,count])=><Link href={applicationRecordsHref(d,{status})} key={status}><i style={{background:CHART_COLORS[STATUS_COLORS[status]??5]}}/><span>{STATUS_LABEL[status as ApplicationStatus]??clean(status)}</span><MiniBar value={count} max={d.submitted} color={CHART_COLORS[STATUS_COLORS[status]??5]}/><strong>{n(count)}</strong><span>{d.submitted?Math.round(count/d.submitted*100):0}%</span></Link>)}{!d.submitted&&<p>No submissions in this selection.</p>}</div><p className="an-foot">No reply remains pending. Silence is never a rejection.</p></Panel>
     <Panel title="Outcome evidence" subtitle="Distinct application and outcome-type pairs."><div className="an-donut-layout"><Donut rows={evidence} label="outcome pairs"/><div><Legend rows={evidence} total={d.evidence.positive+d.evidence.rejected}/><p className="an-foot">An application can have both a positive response and a later rejection. These are outcome pairs, not separate applications.</p><div className="an-evidence-links"><Jump href={applicationRecordsHref(d,{evidence:"positive"})}>Positive replies</Jump><Jump href={applicationRecordsHref(d,{evidence:"rejection"})}>Rejections</Jump></div></div></div></Panel>
-  </div></>;
+  </div></div>;
 }
 function RecognizedEmailProgress({d,query}:{d:AnalyticsData;query:Record<string,string>}) {
   const evidence=d.classified_email_evidence;
@@ -134,8 +134,8 @@ export function AnalyticsView({ d, connection, tab, query, supplement }: { d:Ana
     <nav className="an-tabs" aria-label="Analytics views">{tabs.map(([key,label])=>{const q=new URLSearchParams(query);q.set("tab",key);return <Link key={key} href={`/app/analytics?${q}`} aria-current={tab===key?"page":undefined} scroll={false}>{label}</Link>;})}</nav>
     {d.undated>0&&<p className="an-date-note">{n(d.undated)} applications have no submission date{d.days==="all"?" and are included in all-time totals, outside the timeline":" and are excluded from this date selection"}.</p>}
     {tab==="overview"?<Overview d={d} supplement={supplement} askedWeek={query.week}/>:tab==="outcomes"?<Outcomes d={d}/>:tab==="role-resume"?<RoleResume d={d}/>:<Companies d={d} query={query}/>}
-    {(tab==="overview"||tab==="outcomes")&&<RecognizedEmailProgress d={d} query={query}/>}
-    <AnalyticsEvidenceNote d={d} connection={connection}/>
-    <div className="an-bottom-links"><span>Submission dates · {d.start} to {d.end} · {d.timezone}</span><a href="/api/applications/export.csv" download>Export applications CSV</a><Link href={APPS}>All application records <NavIcon name="right" size="sm"/></Link></div>
+    {tab==="outcomes"&&<RecognizedEmailProgress d={d} query={query}/>}
+    {tab!=="overview"&&<><AnalyticsEvidenceNote d={d} connection={connection}/>
+    <div className="an-bottom-links"><span>Submission dates · {d.start} to {d.end} · {d.timezone}</span><a href="/api/applications/export.csv" download>Export applications CSV</a><Link href={APPS}>All application records <NavIcon name="right" size="sm"/></Link></div></>}
   </div>;
 }

@@ -273,10 +273,20 @@ test("an empty cohort has no invented zero-denominator percentage",()=>{
 
 const classifiedEvidence={total:19,categories:{rejection:6,online_assessment:7,interview:3,offer:1,recruiter_reply:1,action_required:1},date_basis:"email_received",application_status_changed:false,family_excluded_messages:0,company_excluded_messages:0};
 for(const tab of ["overview","outcomes"]){
-  test(`${tab}: recognized hiring progress survives later rejection while application metrics retain their own scope`,()=>{
+  test(tab==="overview" ? "Overview ends at the four chart cards even with recognized email evidence" : "Outcomes retains recognized hiring progress and its independent receipt scope",()=>{
     const d={...base,days:"all",positive:2,assessments:1,interviews:1,statuses:{applied:6,rejected:3},classified_email_evidence:classifiedEvidence};
     const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab,query:{tab}})));
     const panel=document.querySelector(".an-classified-email-evidence");
+    if(tab==="overview"){
+      assert.equal(panel,null);
+      assert.equal(document.querySelector(".an-audit-note"),null);
+      assert.equal(document.querySelector(".an-bottom-links"),null);
+      assert.equal(document.querySelector('a[href="/api/applications/export.csv"]'),null);
+      assert.equal(document.querySelectorAll(".an-metric").length,5);
+      assert.equal(document.querySelectorAll(".an-overview-charts>.an-grid>.an-panel").length,4);
+      assert.equal(document.querySelector(".an-page").lastElementChild.className,"an-overview-charts");
+      return;
+    }
     assert.ok(panel);
     assert.match(panel.textContent,/Email receipt dates: All dates through 2026-10-26.*America\/Los_Angeles/);
     assert.match(panel.textContent,/19 classified emails in this scope/);
@@ -303,18 +313,21 @@ for(const tab of ["overview","outcomes"]){
 }
 
 test("interview headline counts recognized invitation emails even with zero verified application stages",()=>{
-  for(const [invites,stages] of [[1,0],[0,2],[3,1]]){
+  for(const [invites,stages] of [[1,0],[0,2],[3,1]])for(const tab of ["overview","outcomes"]){
     const d={...base,days:"custom",start:"2026-10-01",end:"2026-10-26",family:"ML_ENGINEERING",interviews:stages,
       classified_email_evidence:{...classifiedEvidence,categories:{...classifiedEvidence.categories,interview:invites}}};
-    const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"overview",query:{company:"Wayfern"}})));
+    const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab,query:{company:"Wayfern"}})));
     const card=[...document.querySelectorAll(".an-metric")].find(node=>node.querySelector(".an-metric-label").textContent==="Interview invitations");
     assert.equal(card.querySelector("strong").textContent,String(invites));
     assert.equal(card.querySelector("p").textContent,"Invitation emails by receipt date");
     const target=new URL(card.getAttribute("href"),"https://fixture.test");
     assert.equal(target.pathname,"/app/applications/analytics");
     assert.deepEqual(Object.fromEntries(target.searchParams),{days:"custom",tz:"America/Los_Angeles",start:"2026-10-01",end:"2026-10-26",family:"ML_ENGINEERING",emails:"1",email_kind:"interview",company:"Wayfern"});
-    assert.match(document.querySelector(".an-audit-note").textContent,new RegExp(`Verified application interview stages: ${stages}`));
-    assert.match(document.querySelector(".an-audit-note").textContent,/including emails without a verified application link/);
+    const note=document.querySelector(".an-audit-note");
+    if(tab==="outcomes"){
+      assert.match(note.textContent,new RegExp(`Verified application interview stages: ${stages}`));
+      assert.match(note.textContent,/including emails without a verified application link/);
+    }else assert.equal(note,null);
   }
 });
 
@@ -348,7 +361,7 @@ test("missing or empty classified evidence does not add a fabricated progress pa
 test("unverified source counts describe message meaning without confirming employer outcomes",()=>{
   for(const count of [1,3]){
     const d={...base,classified_email_evidence:{...classifiedEvidence,unverified_source_messages:count}};
-    const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"overview",query:{}})));
+    const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"outcomes",query:{}})));
     const panel=document.querySelector(".an-classified-email-evidence");
     const note=panel.querySelector('[role="note"][aria-label="Unverified email sources"]');
     assert.ok(note);
@@ -358,7 +371,7 @@ test("unverified source counts describe message meaning without confirming emplo
     assert.equal(document.querySelector(".an-metric strong").textContent,"9");
     assert.equal(emailLink(panel,"rejection").querySelector("b").textContent,"6");
   }
-  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d:{...base,classified_email_evidence:{...classifiedEvidence,unverified_source_messages:0}},connection:null,tab:"overview",query:{}})));
+  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d:{...base,classified_email_evidence:{...classifiedEvidence,unverified_source_messages:0}},connection:null,tab:"outcomes",query:{}})));
   assert.equal(document.querySelector('[aria-label="Unverified email sources"]'),null);
 });
 
@@ -380,7 +393,7 @@ test("recognized progress uses effective email dates while application cohorts k
 test("effective acknowledgements and lifecycle updates retain email counts without becoming invitations",()=>{
   const categories={...classifiedEvidence.categories,application_confirmation:4,assessment_completed:2,assessment_cancelled:1,interview_cancelled:1,status_update:3};
   const d={...base,classified_email_evidence:{...classifiedEvidence,total:30,categories,linked_messages:8,company_messages:6,unlinked_messages:16}};
-  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"overview",query:{}})));
+  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"outcomes",query:{}})));
   const panel=document.querySelector(".an-classified-email-evidence");
   assert.match(panel.textContent,/30 classified emails in this scope/);
   assert.match(panel.textContent,/8 with a verified application link.*6 company-only.*16 without a verified application link/);
@@ -407,7 +420,7 @@ test("email drilldowns preserve original report dates while the shared projectio
 });
 
 test("older Analytics replies do not invent an acknowledgement count",()=>{
-  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d:{...base,classified_email_evidence:classifiedEvidence},connection:null,tab:"overview",query:{}})));
+  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d:{...base,classified_email_evidence:classifiedEvidence},connection:null,tab:"outcomes",query:{}})));
   const panel=document.querySelector(".an-classified-email-evidence");
   assert.equal(emailLink(panel,"application_confirmation"),undefined);
   assert.doesNotMatch(panel.textContent,/Acknowledgements: 0/);
