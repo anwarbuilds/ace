@@ -44,7 +44,7 @@
 .an-inbox-workflow>span>span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .an-inbox-workflow i { display: grid; place-items: center; flex: none; width: 23px; height: 23px; border-radius: 50%; background: var(--surface-2); color: var(--text-secondary); font-style: normal; }
 .an-inbox-workflow .an-step-recorded { background: var(--match-soft); color: var(--success); }
-.an-inbox-workflow strong { font-size: var(--text-small); font-weight: var(--weight-semibold); }
+.an-inbox-workflow strong { font-size: var(--text-small); font-weight: var(--weight-semibold); line-height: var(--leading-compact); }
 .an-inbox-workflow small { font-size: var(--text-tick); color: var(--text-secondary); line-height: var(--leading-compact); }
 .an-icon-tile { width: 42px; height: 42px; border-radius: 11px; color: var(--accent-text); background: var(--accent-soft); display: flex; align-items: center; justify-content: center; flex: none; }
 .an-icon-tile svg { width: 25px; height: 25px; }
@@ -240,6 +240,8 @@
 @media(min-width:1450px) { .an-filters { position: absolute; right: 0; top: 0; } }
 @media(min-width:1450px) and (max-width:1599px) {
   .an-tab-overview { padding-inline: 36px; }
+  .an-tab-overview .an-filters>select { width: 180px; }
+  .an-tab-overview .an-ranges button { padding-inline: 8px; }
   .an-tab-overview .an-hero { margin-bottom: 4px; }
   .an-tab-overview .an-inbox-band { margin-bottom: 15px; }
   .an-tab-overview .an-inbox-workflow { width: 541px; }
@@ -250,7 +252,11 @@
   .an-tab-overview .an-overview-bottom { grid-template-columns: .925fr 1fr; gap: 10px; }
   .an-tab-overview .an-overview-top>.an-panel { min-height: 241px; }
 }
-@media(min-width:1600px) { .an-tab-overview { padding-right: 67px; } }
+@media(min-width:1600px) {
+  .an-tab-overview { padding-right: 67px; }
+  .an-tab-overview .an-filters>select { width: 210px; }
+  .an-tab-overview .an-ranges button { padding-inline: 9px; }
+}
 @media(max-width:1449px) {
   .an-page { padding-left: 28px; padding-right: 28px; }
   .an-hero { flex-wrap: wrap; }
