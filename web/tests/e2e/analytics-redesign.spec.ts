@@ -3,6 +3,28 @@ import path from "node:path";
 import { expect } from "@playwright/test";
 import { DRAWN_SCAN, TEXT_SCAN, setThemeCookies, test, watchErrors } from "./helpers";
 
+/** Model the failed API branch in the actual Flight response. The browser must
+ * retain the previous server children, not render this failed-read placeholder. */
+function failedAnalyticsPayload(body:string) {
+  let changed=false;
+  const visit=(value:unknown):void=>{
+    if(Array.isArray(value)){value.forEach(visit);return;}
+    if(!value||typeof value!=="object")return;
+    const row=value as Record<string,unknown>;
+    if(typeof row.scope==="string"&&"attemptedAt" in row&&row.success===true){
+      row.success=false;row.asOf=null;
+      row.children=["$","p",null,{children:"Fictional failed server read"}];changed=true;
+    }
+    Object.values(row).forEach(visit);
+  };
+  const result=body.split("\n").map(line=>{
+    const colon=line.indexOf(":");if(colon<0)return line;
+    try{const value=JSON.parse(line.slice(colon+1));visit(value);return line.slice(0,colon+1)+JSON.stringify(value);}catch{return line;}
+  }).join("\n");
+  expect(changed,"the fixture must replace the real Analytics freshness props").toBe(true);
+  return result;
+}
+
 test.use({timezoneId:"America/Los_Angeles"});
 
 const tabs = [["overview","Applications over time"],["outcomes","Applications old enough to evaluate"],["role-resume","Application outcomes by role"],["companies","Top companies in your pipeline"]] as const;
@@ -353,19 +375,33 @@ for(const theme of ["light","dark"] as const){
     const errors=watchErrors(page);
     const before=await(await page.request.get("/api/analytics?days=all&tz=America%2FLos_Angeles")).json();
     const progress=before.classified_email_evidence;
-    expect(progress.total).toBe(3);
+    expect(progress.total).toBe(4);
+    expect(progress.categories).toMatchObject({online_assessment:1,interview:1,offer:1,application_confirmation:1,rejection:0});
+    expect(progress.linked_messages+progress.company_messages+progress.unlinked_messages).toBe(4);
     expect(progress.application_status_changed).toBe(false);
     expect(progress.date_basis).toBe("email_received");
     await page.goto("/app/analytics?days=all&tab=outcomes");
     const panel=page.locator(".an-classified-email-evidence");
     await expect(panel.getByRole("heading",{name:"Recognized hiring progress",exact:true})).toBeVisible();
-    await expect(panel).toContainText("3 classified emails in this scope.");
+    await expect(panel).toContainText("4 classified emails in this scope.");
     await expect(panel).toContainText("A later rejection does not erase an earlier assessment or interview.");
-    for(const [filter,label] of [["assessments","Assessment emails"],["interviews","Interview emails"],["offers","Offer emails"]]){
+    for(const [kind,label] of [["online_assessment","Assessment invitation emails"],["interview","Interview invitation emails"],["offer","Offer emails"]]){
       const link=panel.getByRole("link",{name:new RegExp(`^${label}`)});
-      await expect(link).toHaveAttribute("href",`/app/applications/inbox?decision=${filter}`);
       await expect(link.locator("b")).toHaveText("1");
+      const href=await link.getAttribute("href");
+      const exact=new URL(href!,"https://fixture.test");
+      expect(exact.pathname).toBe("/app/applications/analytics");
+      expect(Object.fromEntries(exact.searchParams)).toMatchObject({days:"all",tz:"America/Los_Angeles",emails:"1",email_kind:kind});
+      const records=await(await page.request.get(`/api/analytics?${exact.searchParams}`)).json();
+      expect(records.email_total).toBe(1);expect(records.email_records).toHaveLength(1);
+      expect(records.email_records[0].classification).toBe(kind);
+      await link.click();
+      await expect(page.getByRole("heading",{name:"Recruiting email evidence",exact:true})).toBeVisible();
+      await expect(page.locator(".an-record-row")).toHaveCount(1);
+      await expect(page.getByRole("link",{name:"View email",exact:true})).toHaveAttribute("href",`/app/applications/inbox?message=${records.email_records[0].id}`);
+      await page.goto("/app/analytics?days=all&tab=outcomes");
     }
+    await expect(panel).toContainText("Acknowledgements: 1");
     await expect(panel).toContainText("email counts, not additional applications or confirmed stage totals");
     await expect(page.locator(".an-metric").nth(0).locator("strong")).toHaveText(String(before.submitted));
     await expect(page.locator(".an-metric").nth(3).locator("strong")).toHaveText(String(before.assessments));
@@ -387,7 +423,8 @@ for(const theme of ["light","dark"] as const){
 test("July email floor excludes the older offer while preserving application metrics and boundary evidence",async({page})=>{
   const before=await(await page.request.get("/api/analytics?days=all&tz=America%2FLos_Angeles")).json();
   expect(before.evidence_scope).toMatchObject({start:"2026-07-01",timezone:"America/Los_Angeles",start_at:"2026-07-01T07:00:00Z",application_cohort_unchanged:true});
-  expect(before.classified_email_evidence.total).toBe(3);
+  expect(before.classified_email_evidence.total).toBe(4);
+  expect(before.classified_email_evidence.categories.application_confirmation).toBe(1);
   expect(before.classified_email_evidence.categories.offer).toBe(1);
   expect(before.classified_email_evidence.start).toBe("2026-07-01");
   const older=await(await page.request.get("/api/inbox/messages?decision=offers&q=Fictional%20pre-July")).json();
@@ -406,6 +443,80 @@ test("July email floor excludes the older offer while preserving application met
   await expect(page.locator(".an-metric").first().locator("strong")).toHaveText(String(before.submitted));
   const after=await(await page.request.get("/api/analytics?days=all&tz=America%2FLos_Angeles")).json();
   for(const key of ["submitted","statuses","positive","assessments","interviews","classified_email_evidence"])expect(after[key]).toEqual(before[key]);
+});
+
+for(const route of ["/app/analytics?days=all&tab=outcomes&interval=weekly","/app/applications/analytics?days=all&limit=25&q=Engineer"]){
+  test(`failed server refresh retains the verified selection and Retry recovers: ${route}`,async({page})=>{
+    await page.goto(route);
+    const report=page.locator("div.an-page");
+    await expect(report).toHaveCount(1);
+    await expect(report).toBeVisible();
+    const original=await report.innerText();
+    const asOf=await page.locator(".an-freshness").getAttribute("data-analytics-as-of");
+    let fail=true;
+    await page.route(url=>url.pathname===new URL(route,"https://fixture.test").pathname,async request=>{
+      if(request.request().headers().rsc!=="1"||request.request().headers()["next-router-prefetch"]||!fail)return request.continue();
+      const response=await request.fetch();
+      await request.fulfill({response,body:failedAnalyticsPayload(await response.text())});
+    });
+    await page.evaluate(()=>window.dispatchEvent(new Event("ace-analytics-refresh")));
+    await expect(page.locator('.an-freshness[data-state="stale"]')).toContainText("Refresh failed. Showing the last verified results");
+    expect(await report.innerText()).toBe(original);
+    expect(await page.locator(".an-freshness").getAttribute("data-analytics-as-of")).toBe(asOf);
+    await expect(page.getByText("Fictional failed server read",{exact:true})).toHaveCount(0);
+    expect(new URL(page.url()).search).toBe(new URL(route,"https://fixture.test").search);
+    fail=false;
+    await page.getByRole("button",{name:"Retry refresh",exact:true}).click();
+    await expect(page.locator('.an-freshness[data-state="fresh"]')).toContainText("Updated");
+    await expect(page.getByRole("button",{name:"Retry refresh",exact:true})).toHaveCount(0);
+    expect(new URL(page.url()).search).toBe(new URL(route,"https://fixture.test").search);
+  });
+}
+
+test("a delayed RSC transport preserves the last verified report and completes without overlapping refreshes",async({page})=>{
+  await page.clock.install();
+  await page.goto("/app/analytics?days=all&tab=outcomes");
+  await expect(page.locator('.an-freshness[data-state="fresh"]')).toBeVisible();
+  const original=await page.locator(".an-metric-value").first().innerText();
+  const asOf=await page.locator(".an-freshness").getAttribute("data-analytics-as-of");
+  let release!:()=>void,reads=0,held=true;
+  const waiting=new Promise<void>(resolve=>{release=resolve;});
+  await page.route(url=>url.pathname==="/app/analytics",async route=>{
+    if(route.request().headers().rsc!=="1"||route.request().headers()["next-router-prefetch"])return route.continue();
+    reads++;
+    if(held){const response=await route.fetch();await waiting;held=false;await route.fulfill({response});}
+    else await route.continue();
+  });
+  await page.evaluate(()=>window.dispatchEvent(new Event("ace-analytics-refresh")));
+  await expect(page.locator('.an-freshness[data-state="refreshing"]')).toBeVisible();
+  await page.clock.fastForward(31_000);
+  await expect(page.locator('.an-freshness[data-state="stale"]')).toContainText("Refresh is delayed");
+  expect(await page.locator(".an-metric-value").first().innerText()).toBe(original);
+  expect(await page.locator(".an-freshness").getAttribute("data-analytics-as-of")).toBe(asOf);
+  await page.evaluate(()=>{window.dispatchEvent(new Event("focus"));const channel=new BroadcastChannel("ace-marks");channel.postMessage("changed");channel.close();});
+  expect(reads).toBe(1);
+  release();
+  await expect(page.locator('.an-freshness[data-state="fresh"]')).toBeVisible();
+  await page.clock.fastForward(500);
+  await expect(page.locator('.an-freshness[data-state="fresh"]')).toBeVisible();
+  expect(reads).toBeLessThanOrEqual(2);
+  await expect(page).toHaveURL(/days=all&tab=outcomes/);
+});
+
+test("offline Analytics keeps verified results and checks automatically when the network returns",async({page,context})=>{
+  await page.goto("/app/analytics?days=all&tab=role-resume");
+  await expect(page.locator('.an-freshness[data-state="fresh"]')).toBeVisible();
+  const original=await page.locator(".an-metric-value").first().innerText();
+  const asOf=await page.locator(".an-freshness").getAttribute("data-analytics-as-of");
+  try{
+    await context.setOffline(true);
+    await expect(page.locator('.an-freshness[data-state="stale"]')).toContainText("last verified results");
+    await page.getByRole("button",{name:"Retry refresh",exact:true}).click();
+    expect(await page.locator(".an-metric-value").first().innerText()).toBe(original);
+    expect(await page.locator(".an-freshness").getAttribute("data-analytics-as-of")).toBe(asOf);
+  }finally{await context.setOffline(false);}
+  await expect(page.locator('.an-freshness[data-state="fresh"]')).toBeVisible();
+  await expect(page).toHaveURL(/days=all&tab=role-resume/);
 });
 
 test("owner receipt feedback supersedes a stale offer reading in API categories and the Inbox",async({page})=>{
@@ -432,4 +543,32 @@ test("owner receipt feedback supersedes a stale offer reading in API categories 
   expect(writes).toEqual([]);
   const after=await(await page.request.get("/api/analytics?days=all&tz=America%2FLos_Angeles")).json();
   for(const key of ["submitted","statuses","positive","assessments","interviews","classified_email_evidence"])expect(after[key]).toEqual(before[key]);
+});
+
+// Mutates only the disposable Analytics fixture, after its read-only assertions.
+test("a committed Inbox acknowledgement correction updates open Analytics without reloading",async({page,context})=>{
+  const messageRead=await page.request.get("/api/inbox/messages?q=Fictional%20offer%20email%20history");
+  expect(messageRead.ok(),await messageRead.text()).toBe(true);
+  const messages=await messageRead.json();
+  const message=messages.items.find((row:{subject:string})=>row.subject==="Fictional offer email history");
+  expect(message,"the dedicated fictional Analytics seed must be present").toBeTruthy();
+  await page.goto("/app/analytics?days=all&tab=outcomes");
+  const offer=page.locator('.an-classified-email-evidence a').filter({has:page.getByText("Offer emails",{exact:true})}).locator("b");
+  const before=Number((await offer.innerText()).replaceAll(",",""));
+  const applications=await page.locator(".an-metric-value").first().innerText();
+  const editor=await context.newPage();
+  await editor.goto(`/app/applications/inbox?decision=all&message=${message.id}`);
+  await expect(editor.locator(".inbox-inspector h2")).toHaveText(message.subject);
+  await editor.getByRole("button",{name:"Link or correct this email",exact:true}).click();
+  const saved=editor.waitForResponse(response=>response.url().includes(`/api/inbox/messages/${message.id}/decision`)&&response.request().method()==="PATCH");
+  await editor.getByRole("group",{name:"What is this email?",exact:true}).getByRole("button",{name:/^Acknowledgement/}).click();
+  expect((await saved).ok()).toBe(true);
+  const committed=await(await editor.request.get(`/api/inbox/messages/${message.id}`)).json();
+  expect(committed.decision).toBe("receipt");expect(committed.classification).toBe("application_confirmation");
+  await page.bringToFront();
+  await expect(offer).toHaveText(String(before-1));
+  await expect(page.locator(".an-metric-value").first()).toHaveText(applications);
+  await expect(page.locator('.an-classified-email-evidence')).toContainText("Acknowledgements:");
+  await expect(page.locator('.an-freshness[data-state="fresh"]')).toBeVisible();
+  await editor.close();
 });

@@ -8,6 +8,7 @@ changing any durable business logic.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Iterator
 from datetime import date, datetime, timedelta, timezone
 from statistics import median
 from typing import Annotated
@@ -22,17 +23,35 @@ from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
 from backend.app.api.routers.inbox import _identities, _eligible_stale_query, PENDING
-from backend.app.inbox.queue import decision_expression, projected_classification
+from backend.app.inbox.queue import decision_expression, projected_classification, projected_decision
 from backend.app.inbox import evidence_scope
 from backend.app.inbox.filed_evidence import ACTION_PREFIX, DECISIONS as FILED_DECISIONS, REJECTION_PREFIX, UNVERIFIED_NOTE
 from backend.app.db.models import ApplicationEventRecord, CompanyPetitionReportRecord, GmailMessageRecord, JobEvaluationRecord, GmailConnectionRecord
 from backend.app.inbox.reconcile import _MARKING_GRACE
+from backend.app.inbox.reconcile import CLASSIFICATION_REASONS
 from backend.app.inbox.company_outcomes import COMPANY_REASON, KIND as COMPANY_REJECTION, event_company
 
 router = APIRouter()
 POSITIVE = {"recruiter_reply", "online_assessment", "screening", "interview", "interviewing", "offer", "accepted"}
 STAGE_KIND = {"screening": "recruiter_reply", "interviewing": "interview", "offer": "offer", "accepted": "accepted", "rejected": "rejection"}
 IN_PROGRESS = {"applied", "screening", "interviewing", "offer"}
+EMAIL_KINDS = ("application_confirmation", "rejection", "online_assessment", "interview", "offer",
+               "recruiter_reply", "action_required", "assessment_completed", "assessment_cancelled",
+               "interview_cancelled", "status_update")
+PASSIVE_EMAIL_KINDS = {"assessment_completed", "assessment_cancelled", "interview_cancelled", "status_update"}
+
+
+def analytics_session(session: Session = Depends(get_session, use_cache=False)) -> Iterator[Session]:
+    """Use one committed snapshot across the report's dependent SELECTs.
+
+    A separate session keeps authentication's heartbeat writes outside this
+    snapshot. The dependency has not queried this session yet. SQLite supplies
+    fictional/demo reads; PostgreSQL enforces both isolation and read-only mode.
+    Nothing changes the isolation of Inbox writers or other routes.
+    """
+    if session.get_bind().dialect.name == "postgresql":
+        session.connection(execution_options={"isolation_level": "REPEATABLE READ", "postgresql_readonly": True})
+    yield session
 
 
 def _latest_first(stamp: datetime | None) -> tuple[bool, float]:
@@ -109,41 +128,74 @@ def _company_rejection_evidence(session: Session, *, start: date, end: date, zon
 
 def _classified_email_evidence(session: Session, *, start: date, end: date, zone: ZoneInfo,
                                now: datetime, all_dates: bool, company: str | None,
-                               family: str | None) -> dict:
+                               family: str | None, identities: dict, roles: dict,
+                               verified_links: dict[int, str], company_messages: dict[int, str]) -> tuple[dict, list[dict]]:
     """Recognized message history, with no guessed application/company attribution.
 
     These receipt-date counts are separate from confirmed application-stage
     counts. A later rejected application cannot erase a filed earlier invitation.
     """
-    categories = {kind: 0 for kind in ("rejection", "online_assessment", "interview", "offer", "recruiter_reply", "action_required")}
+    categories = dict.fromkeys(EMAIL_KINDS, 0)
     query = select(GmailMessageRecord).where(
-        decision_expression().in_(FILED_DECISIONS),
-        evidence_scope.mail_clause(),
-        GmailMessageRecord.selected_application_key.is_(None))
-    count = 0
+        decision_expression().in_((*FILED_DECISIONS, "receipt", "manual", "automatic", "unlinked", COMPANY_REJECTION, "update")),
+        evidence_scope.mail_clause())
     unverified = 0
+    family_excluded = company_excluded = 0
+    partition: Counter = Counter()
+    rows = []
     for message in session.scalars(query):
         stamp = aware(message.received_at)
         day = stamp.astimezone(zone).date()
         if stamp > now or day > end or (not all_dates and day < start):
             continue
-        count += 1
-        if not family and not company:
-            categories[message.classification] += 1
-            unverified += int(message.decision_reason.startswith((REJECTION_PREFIX + UNVERIFIED_NOTE, ACTION_PREFIX + UNVERIFIED_NOTE)))
+        kind = projected_classification(message)
+        decision = projected_decision(message)
+        if kind not in categories:
+            continue
+        if decision == "receipt" and kind != "application_confirmation":
+            continue
+        if decision in {"manual", "automatic"} and message.selected_application_key is None:
+            continue
+        if decision == "update" and (kind not in PASSIVE_EMAIL_KINDS
+                or message.decision_reason != CLASSIFICATION_REASONS[kind]):
+            continue
+        if decision == COMPANY_REJECTION and message.id not in company_messages:
+            continue
+        # Recognition and application attribution are different decisions. Only
+        # a currently valid, confirmed outcome link may carry a role/company
+        # filter. Receipt matches can precede authentication; neither their
+        # retained selected key nor candidate lists establish that authority.
+        key = verified_links.get(message.id)
+        app = identities.get(key)
+        employer = app.company if app else company_messages.get(message.id)
+        missing_family = bool(family and (not app or roles[key] != family))
+        missing_company = bool(company and (not employer or employer.strip().casefold() != company.strip().casefold()))
+        family_excluded += int(bool(family) and not app)
+        company_excluded += int(bool(company) and not employer)
+        if missing_family or missing_company:
+            continue
+        categories[kind] += 1
+        unverified += int((message.decision_reason or "").startswith((REJECTION_PREFIX + UNVERIFIED_NOTE, ACTION_PREFIX + UNVERIFIED_NOTE)))
+        partition["linked_messages" if app else "company_messages" if employer else "unlinked_messages"] += 1
+        rows.append({"id": message.id, "classification": kind, "decision": decision,
+                     "received_at": stamp.isoformat(), "application_key": key if app else None,
+                     "company": employer, "subject": message.subject})
+    rows.sort(key=lambda row: (datetime.fromisoformat(row["received_at"]).timestamp(), row["id"]), reverse=True)
     return {"total": sum(categories.values()), "categories": categories,
             "date_basis": "email_received", "application_status_changed": False,
             "unverified_source_messages": unverified,
             "start": evidence_scope.effective_calendar_start(start, zone, all_dates=all_dates).isoformat(), "end": end.isoformat(),
-            "family_excluded_messages": count if family else 0,
-            "company_excluded_messages": count if company else 0}
+            "family_excluded_messages": family_excluded,
+            "company_excluded_messages": company_excluded,
+            **{key: partition[key] for key in ("linked_messages", "unlinked_messages", "company_messages")}}, rows
 
 
 def analytics_read(session: Session, *, days: str = "all", family: str | None = None,
                    start: date | None = None, end: date | None = None, tz: str = "UTC",
                    company: str | None = None, now: datetime | None = None, records: bool = False,
                    status: str | None = None, evidence: str | None = None, eligible: bool = False,
-                   timed: bool = False, offset: int = 0, limit: int = 50, q: str | None = None) -> dict:
+                   timed: bool = False, offset: int = 0, limit: int = 50, q: str | None = None,
+                   emails: bool = False, email_kind: str | None = None, email_scope: str | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     explicit_dates = start is not None or end is not None
     include_undated = days == "all" and not explicit_dates
@@ -162,21 +214,33 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
     end = end or today
     if start > end or end > today or (end - start).days > 36600:
         raise HTTPException(422, "Choose a valid date range ending today or earlier, up to 100 years.")
-    company_rejections, company_rejection_summary = _company_rejection_evidence(
+    all_company_rejections, all_company_summary = _company_rejection_evidence(
         session, start=start, end=end, zone=zone, now=now, all_dates=include_undated,
-        company=company, family=family)
-    classified_email_evidence = _classified_email_evidence(
-        session, start=start, end=end, zone=zone, now=now, all_dates=include_undated,
-        company=company, family=family)
+        company=None, family=None)
+    company_rejections = [row for row in all_company_rejections if not company
+                          or row["company"].strip().casefold() == company.strip().casefold()]
+    excluded_company_family = sum(row["messages"] for row in company_rejections) if family else 0
+    if family:
+        company_rejections = []
+    company_rejection_summary = {**all_company_summary, "companies": len(company_rejections),
+                                 "messages": sum(row["messages"] for row in company_rejections),
+                                 "latest_at": company_rejections[0]["latest_at"] if company_rejections else None,
+                                 "family_excluded_messages": excluded_company_family}
     eligible_family = [a for a in identities if not family or role[a.key] == family]
     selected = [a for a in eligible_family if a.key in dated and start <= dated[a.key] <= end]
     # All-time keeps undated external history visible; it never invents a chart date.
     if include_undated:
         selected += [a for a in eligible_family if a.key not in dated]
     keys = {a.key for a in selected}
-    # Restrict event reads to selected application keys, including corresponding undos.
-    raw_events = session.scalars(select(ApplicationEventRecord).where(ApplicationEventRecord.application_key.in_(keys))).all() if keys else []
-    undone = {e.undo_of_id for e in raw_events if e.undo_of_id}
+    # Receipt-date correspondence may refer to an older submission outside this
+    # cohort. Validate its identity against the same ledger without letting the
+    # email's date move that application into the submission selection.
+    identities_by_key = {a.key: a for a in identities}
+    raw_events = session.scalars(select(ApplicationEventRecord).where(
+        ApplicationEventRecord.application_key.in_(identities_by_key))).all() if identities else []
+    event_ids = {e.id for e in raw_events}
+    undone = set(session.scalars(select(ApplicationEventRecord.undo_of_id).where(
+        ApplicationEventRecord.undo_of_id.in_(event_ids)))) if event_ids else set()
     message_ids = {e.gmail_message_id for e in raw_events if e.gmail_message_id}
     messages = {m.id: m for m in session.scalars(select(GmailMessageRecord).where(GmailMessageRecord.id.in_(message_ids)))} if message_ids else {}
     # One message can substantiate only one identity. Exclude conflicts even
@@ -189,7 +253,9 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
         linked_ids = {e.id for e in linked_events}
         linked_undos = set(session.scalars(select(ApplicationEventRecord.undo_of_id).where(ApplicationEventRecord.undo_of_id.in_(linked_ids))))
         for linked in linked_events:
-            if linked.id not in linked_undos and linked.kind != "undo" and linked.application_key.startswith(("job:", "external:")):
+            if (linked.id not in linked_undos and linked.actor in {"owner", "verified_automation"}
+                    and linked.kind in POSITIVE | {"rejection", "manual_correction"}
+                    and linked.application_key.startswith(("job:", "external:"))):
                 message_targets[linked.gmail_message_id].add(linked.application_key)
     # First outcomes drive response timing; latest outcomes drive company
     # recency, evidence links and the current cohort partition.
@@ -198,18 +264,31 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
     excluded: Counter = Counter()
     excluded_by_key: dict[str, list[dict]] = defaultdict(list)
     pre_mark = 0
+    verified_links: dict[int, str] = {}
+    invalid_status_keys = set()
 
     def exclude(e, reason: str) -> None:
+        app = identities_by_key[e.application_key]
+        # Do not resurrect an invalidated email transition as undated owner
+        # evidence. A genuinely later status edit still remains authoritative.
+        if (e.new_status == app.current_status and e.previous_status != e.new_status
+                and (not app.status_changed_at or aware(app.status_changed_at) <= max(
+                    aware(e.recorded_at), aware(e.occurred_at) if e.occurred_at else aware(e.recorded_at)))):
+            invalid_status_keys.add(e.application_key)
+        if e.application_key not in keys:
+            return
         excluded[reason] += 1
         if e.gmail_message_id:
             excluded_by_key[e.application_key].append({"message_id": e.gmail_message_id, "reason": reason})
 
     # The email behind each counted event, so a record can open it in Inbox.
-    emails: dict[str, dict[str, int]] = defaultdict(dict)
+    event_emails: dict[str, dict[str, int]] = defaultdict(dict)
     actors: dict[str, set[str]] = defaultdict(set)
-    selected_by_key = {a.key: a for a in selected}
     for e in raw_events:
-        if e.id in undone or e.kind == "undo":
+        if e.id in undone:
+            exclude(e, "undone_event")
+            continue
+        if e.kind == "undo":
             continue
         kind = e.kind
         message = messages.get(e.gmail_message_id)
@@ -232,7 +311,19 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
             if message.selected_application_key != e.application_key or message.decision not in {"manual", "automatic"}:
                 exclude(e, "email_not_confirmed_for_application")
                 continue
-        app = selected_by_key[e.application_key]
+            classification = projected_classification(message)
+            expected = {"interviewing": "interview", "screening": "recruiter_reply", "accepted": "offer"}.get(kind, kind)
+            # The original review API permits an explicit owner stage without
+            # replacing the saved email meaning (kind is optional). Keep that
+            # authorized stage history while the manual link remains active.
+            owner_stage = e.actor == "owner" and e.kind == "manual_correction" and message.decision == "manual"
+            if classification != expected and not owner_stage:
+                exclude(e, "email_meaning_changed")
+                continue
+            if e.actor == "verified_automation" and UNVERIFIED_NOTE in (message.decision_reason or ""):
+                exclude(e, "unverified_email_source")
+                continue
+        app = identities_by_key[e.application_key]
         stamp = aware(e.occurred_at) if e.occurred_at else None
         if stamp and stamp > now:
             exclude(e, "future_timestamp")
@@ -243,7 +334,11 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
             if not message or aware(app.submitted_at) - stamp > _MARKING_GRACE:
                 exclude(e, "before_application_window")
                 continue
-            pre_mark += 1
+            pre_mark += int(e.application_key in keys)
+        if e.gmail_message_id:
+            verified_links[e.gmail_message_id] = e.application_key
+        if e.application_key not in keys:
+            continue
         previous = events[e.application_key].get(kind)
         if kind not in events[e.application_key] or (stamp and (previous is None or stamp < previous)):
             events[e.application_key][kind] = stamp
@@ -251,13 +346,15 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
         if kind not in latest_events[e.application_key] or (stamp and (latest is None or stamp >= latest)):
             latest_events[e.application_key][kind] = stamp
             if e.gmail_message_id:
-                emails[e.application_key][kind] = e.gmail_message_id
+                event_emails[e.application_key][kind] = e.gmail_message_id
             else:
-                emails[e.application_key].pop(kind, None)
+                event_emails[e.application_key].pop(kind, None)
         actors[e.application_key].add(e.actor)
     # Existing explicit owner stages remain useful even before the event ledger.
     # They are counted once per application and never given an invented timestamp.
     for a in selected:
+        if a.key in invalid_status_keys:
+            continue
         kind = STAGE_KIND.get(a.current_status)
         if a.current_status == "screening":
             # A recorded assessment already explains the screening stage; it
@@ -269,6 +366,11 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
             events[a.key][kind] = None
             latest_events[a.key][kind] = None
             actors[a.key].add("recorded_status")
+    company_messages = {message_id: row["company"] for row in all_company_rejections for message_id in row["message_ids"]}
+    classified_email_evidence, email_rows = _classified_email_evidence(
+        session, start=start, end=end, zone=zone, now=now, all_dates=include_undated,
+        company=company, family=family, identities=identities_by_key, roles=role,
+        verified_links=verified_links, company_messages=company_messages)
     positive = {key for key, kinds in events.items() if POSITIVE.intersection(kinds)}
     rejected = {key for key, kinds in events.items() if "rejection" in kinds}
     assessed = {key for key, kinds in events.items() if "online_assessment" in kinds}
@@ -282,8 +384,12 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
             return None
         dated_outcomes = [(stamp, kind == "rejection", kind) for kind, stamp in latest_events[a.key].items() if stamp]
         latest = max(dated_outcomes, default=None)
-        stage = STAGE_KIND.get(a.current_status)
-        status_kind = "screening" if a.current_status == "screening" and "screening" in kinds else stage
+        # A tracking status left by invalidated evidence cannot determine the
+        # cohort's polarity. Valid older events still describe real progress.
+        stage = STAGE_KIND.get(a.current_status) if a.key not in invalid_status_keys else None
+        status_kind = stage
+        if a.key not in invalid_status_keys and a.current_status == "screening" and "screening" in kinds:
+            status_kind = "screening"
         # An undated current stage remains authoritative without inventing
         # when it happened or letting an older dated event erase it.
         if status_kind in kinds and latest_events[a.key].get(status_kind) is None:
@@ -429,6 +535,22 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
             "reports": sorted(report_items, key=lambda r: r["period"], reverse=True),
             "annual": [{"period": period, **counts, "rate": counts["approvals"] / sum(counts.values()) if sum(counts.values()) else None} for period, counts in sorted(annual.items())]}
 
+    if emails:
+        if email_kind and email_kind not in EMAIL_KINDS:
+            raise HTTPException(422, "Choose a supported email evidence type.")
+        if email_scope and email_scope not in {"company", "linked", "unlinked"}:
+            raise HTTPException(422, "Choose a supported email evidence scope.")
+        words = (q or "").casefold().split()[:8]
+        matching_mail = [row for row in email_rows
+                         if (not email_kind or row["classification"] == email_kind)
+                         and (not email_scope or (row["id"] in company_messages if email_scope == "company"
+                              else bool(row["application_key"]) if email_scope == "linked"
+                              else row["application_key"] is None and row["id"] not in company_messages))
+                         and all(word in f'{row["subject"]} {row["company"] or ""}'.casefold() for word in words)]
+        result.update({"email_total": len(matching_mail), "email_offset": offset, "email_limit": limit,
+                       "email_kind": email_kind, "email_scope": email_scope,
+                       "email_records": matching_mail[offset:offset + limit]})
+
 
     if records:
         from backend.app.api.marks import APPLICATION_STATUSES
@@ -463,7 +585,7 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
                                "family": role[a.key], "submitted_at": aware(a.submitted_at).isoformat() if a.submitted_at else None,
                                "status": a.current_status, "event_types": sorted(events.get(a.key, {})),
                                "evidence": [{"kind": kind, "at": stamp.isoformat() if stamp else None,
-                                             "message_id": emails.get(a.key, {}).get(kind),
+                                             "message_id": event_emails.get(a.key, {}).get(kind),
                                              **({"predates_mark": True} if stamp and a.submitted_at and stamp < aware(a.submitted_at) else {})}
                                             for kind, stamp in sorted(latest_events.get(a.key, {}).items())],
                                "excluded_evidence": excluded_by_key.get(a.key, [])[:25],
@@ -500,7 +622,8 @@ def analytics(days: str = Query("all", pattern="^(14|30|90|all|custom)$"), famil
               records: bool = False, status: str | None = None, evidence: str | None = None,
               eligible: bool = False, timed: bool = False, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100),
               q: Annotated[str | None, Query(max_length=100)] = None,
-              session: Session = Depends(get_session)) -> dict:
+              emails: bool = False, email_kind: str | None = None, email_scope: str | None = None,
+              session: Session = Depends(analytics_session)) -> dict:
     if days == "custom" and (start is None or end is None):
         raise HTTPException(422, "Choose both dates.")
-    return analytics_read(session, days=days, family=family, start=start, end=end, tz=tz, company=company, records=records, status=status, evidence=evidence, eligible=eligible, timed=timed, offset=offset, limit=limit, q=q)
+    return analytics_read(session, days=days, family=family, start=start, end=end, tz=tz, company=company, records=records, status=status, evidence=evidence, eligible=eligible, timed=timed, offset=offset, limit=limit, q=q, emails=emails, email_kind=email_kind, email_scope=email_scope)

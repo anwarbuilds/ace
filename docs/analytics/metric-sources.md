@@ -1,5 +1,49 @@
 # Analytics metric and source audit
 
+## Inbox synchronization integration, 2026-10-30
+
+The [integration review](inbox-sync-review.md) documents the current candidate
+and deployment state. Analytics uses the shared effective Inbox classifications,
+including owner receipt overrides and compatibility markers. Its API reads one
+PostgreSQL READ ONLY, REPEATABLE READ snapshot, with no cached counters.
+
+`classified_email_evidence` counts distinct effective messages by receipt date,
+independently of the application submission cohort. It includes acknowledgements,
+assessment/interview invitations, offers, recruiter replies, action requests and
+rejections; completion, cancellation and routine progress remain separate
+categories. Acknowledgements never enter meaningful replies. Its linked/company/
+unlinked partition describes supported identity, not authorization to promote a
+stage. A retained receipt target alone is not verified identity.
+
+The email floor is July 1, 2026 midnight America/Los_Angeles
+(`2026-07-01T07:00:00Z`), with older evidence preserved. Finite/custom selections
+use local receipt dates; All time includes in-scope email even before the first
+recorded application. Application `applied_at`, event dates and official-source
+reporting dates remain separate clocks.
+
+Every recognized-email category opens exact paginated records from
+`GET /api/analytics?emails=1&email_kind=...`. Optional
+`email_scope=linked|company|unlinked`, company and family filters require supported
+identity. These links preserve the original reporting selection when returning
+to application Analytics. The Companies email link uses company-only rejection
+scope and never includes its messages in application-specific rejection totals.
+
+Current effective meaning/target/decision, active event/Undo, actor and chronology
+control confirmed application evidence. Explicit active owner manual stage
+corrections retain the existing optional-kind contract. Invalidated email stages
+cannot be resurrected through current-status fallback or cohort polarity.
+Historical assessments/interviews and later rejections remain distinct valid
+events, deduplicated by application and kind.
+
+Open Analytics and records pages revalidate on evidence notifications, return,
+focus/visibility, online recovery and a two-minute visible-page interval. Query
+filters remain unchanged. Failed refreshes retain only the mounted selection's
+last verified rendered report with a freshness/error indication; no counts are
+invented and older responses cannot replace newer results.
+
+The remaining source table below still defines submission and official metrics;
+its original narrower email-history implementation is superseded above.
+
 The screenshots specify layout only. The production UI reads authenticated,
 no-store ACE APIs. No image numbers, fictional employers, random series or
 browser-local analytics database enter the dashboard.

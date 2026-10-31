@@ -1,5 +1,10 @@
 # Analytics implementation review, 2026-10-27
 
+Current follow-up: [Inbox synchronization integration review, 2026-10-30](inbox-sync-review.md).
+That source candidate changes read projections and freshness only and is not
+deployed. The dated release below remains historical evidence for the approved
+design and its original verification.
+
 Status: owner-approved and deployed; [PR #10](https://github.com/anwarbuilds/ace/pull/10) is merged.
 Tested runtime source: `1376b68333311df006adacccc999c5d68850ed0d`.
 Exact deployed web source: `70d95a9b17a81cf475f58a7c67b19ac3ad74e31e`, with only

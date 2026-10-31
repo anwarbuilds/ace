@@ -19,9 +19,11 @@ from backend.app.api.routers.inbox import PENDING, _identities
 from backend.app.config import get_settings
 from backend.app.db.models import ApplicationEventRecord, GmailMessageRecord, JobMarkRecord, ExternalApplicationRecord
 from backend.app.inbox.reconcile import PARSER_VERSION
-from backend.app.inbox.queue import projected_decision
+from backend.app.inbox.queue import projected_classification, projected_decision
 from backend.app.inbox import evidence_scope
 from backend.app.inbox.filed_evidence import DECISIONS as FILED_DECISIONS
+from backend.app.inbox.reconcile import CLASSIFICATION_REASONS, PASSIVE_KINDS
+from backend.app.inbox.company_outcomes import KIND as COMPANY_REJECTION, event_company
 
 
 def audit(db: Session, *, now: datetime | None = None) -> dict:
@@ -121,9 +123,32 @@ def audit(db: Session, *, now: datetime | None = None) -> dict:
         "analytics_messages": d.get("company_rejection_summary", {}).get("messages", 0),
     }
     output["company_evidence"]["agrees"] = output["company_evidence"]["inbox_messages"] == output["company_evidence"]["analytics_messages"]
+    company_claims = defaultdict(set)
+    for event in active:
+        employer = event_company(event) if event.kind == COMPANY_REJECTION else None
+        if (employer and event.previous_status is None and event.new_status is None
+                and (not event.occurred_at or aware(event.occurred_at) <= now)):
+            company_claims[event.gmail_message_id].add(employer.strip().casefold())
+    email_kinds = set(CLASSIFICATION_REASONS) - {"possible_rejection", "unclear", "unknown"}
+    recognized = []
+    for message in scoped_messages:
+        if aware(message.received_at) > now:
+            continue
+        decision, kind = projected_decision(message), projected_classification(message)
+        if kind not in email_kinds:
+            continue
+        if (decision in FILED_DECISIONS
+                or decision in {"manual", "automatic"} and message.selected_application_key is not None
+                or decision == "receipt" and kind == "application_confirmation"
+                or decision == "unlinked" and kind == "rejection"
+                or decision == COMPANY_REJECTION and len(company_claims[message.id]) == 1
+                or decision == "update" and kind in PASSIVE_KINDS
+                    and message.decision_reason == CLASSIFICATION_REASONS[kind]):
+            recognized.append(message)
     output["classified_email_evidence"] = {
-        "inbox_messages": sum(projected_decision(m) in FILED_DECISIONS and aware(m.received_at) <= now for m in scoped_messages),
+        "inbox_messages": len(recognized),
         "analytics_messages": d.get("classified_email_evidence", {}).get("total", 0),
+        "categories": dict(Counter(projected_classification(m) for m in recognized)),
     }
     output["classified_email_evidence"]["agrees"] = output["classified_email_evidence"]["inbox_messages"] == output["classified_email_evidence"]["analytics_messages"]
     output["projection_checks_pass"] = (all(all(r["checks"].values()) for r in ranges.values())

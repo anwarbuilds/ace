@@ -325,6 +325,11 @@
 
 .an-company-select{display:inline-flex;align-items:center;gap:6px;min-width:0}
 
+/* Successful checks stay below the report so the approved chart geometry holds. */
+.an-freshness{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:8px 38px 18px;font-size:var(--text-small);color:var(--text-secondary)}
+.an-freshness[data-state="stale"],.an-freshness[data-state="unavailable"]{padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface-1);color:var(--text)}
+@media(max-width:650px){.an-freshness{margin-right:16px;margin-left:16px}}
+
 /* Keep native inspection controls compact at the approved desktop geometry. */
 @media(min-width:1101px) {
   .an-role-top>.an-panel:first-child { position: relative; }

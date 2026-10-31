@@ -11,9 +11,21 @@ jobs:
   review:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fictional_ci
+          POSTGRES_PASSWORD: fictional_ci_only
+          POSTGRES_DB: ace_analytics_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U fictional_ci -d ace_analytics_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       DATABASE_URL: sqlite:////tmp/ace-analytics-fictional.db
       ACE_DEMO_COMPANIES: '1'
+      ANALYTICS_TEST_POSTGRES_URL: postgresql+psycopg://fictional_ci:fictional_ci_only@127.0.0.1:5432/ace_analytics_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,8 +46,8 @@ jobs:
         run: |
           node --max-old-space-size=256 --test tests/analytics-calculations.test.mjs tests/analytics-rejections-render.test.mjs
           npm run test:inbox
-      - name: Existing backend application and evidence regressions
-        run: python -m pytest -q backend/tests/test_analytics_read.py backend/tests/test_inbox_reconciliation.py backend/tests/test_inbox_persistence.py backend/tests/test_petition_reports.py backend/tests/test_job_marks.py backend/tests/test_auth.py
+      - name: Complete backend and PostgreSQL snapshot regressions
+        run: python -m pytest backend/tests -q --ignore=backend/tests/browser
       - name: TypeScript, full lint and production build
         working-directory: web
         run: |
@@ -55,7 +67,7 @@ jobs:
         working-directory: web
         run: |
           npx playwright install --with-deps chromium
-          npx playwright test tests/e2e/analytics-redesign.spec.ts
+          npx playwright test tests/e2e/inbox-review.spec.ts tests/e2e/analytics-redesign.spec.ts
       - name: Retain fictional screenshots and test evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -63,6 +75,7 @@ jobs:
           name: analytics-review
           path: |
             artifacts/analytics-validation/*.png
+            artifacts/inbox-intelligence-validation/*.png
             web/test-results/
           retention-days: 14
       - name: Fictional service errors

@@ -11,7 +11,7 @@
     "check:dashes": "python3 ../scripts/no_user_facing_dashes.py",
     "test:extension-dom": "node tests/extension-review.test.mjs",
     "test:company-logos": "node tests/company-logos.test.mjs",
-    "test:inbox": "node --max-old-space-size=256 --test --test-concurrency=1 tests/inbox-review-render.test.mjs tests/inbox-reliability-dom.test.mjs tests/analytics-rejections-render.test.mjs"
+    "test:inbox": "node --max-old-space-size=256 --test --test-concurrency=1 tests/inbox-review-render.test.mjs tests/inbox-reliability-dom.test.mjs tests/analytics-rejections-render.test.mjs tests/analytics-freshness-dom.test.mjs"
   },
   "dependencies": {
     "next": "16.4.2",
