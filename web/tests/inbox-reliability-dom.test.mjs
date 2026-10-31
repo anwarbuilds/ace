@@ -458,6 +458,67 @@ test("Analytics role detail reads every page and refuses changed or duplicated s
   assert.equal(await readAnalyticsSupplement(d,"weekly"),null);
 });
 
+test("weekly arrows cross years, preserve filters and stop at the current Monday week",async()=>{
+  const {AnalyticsWeekPicker}=load(path.join(sourceRoot,"components/analytics/AnalyticsFilters.tsx"));
+  const beforePush=router.push;
+  const beforeParams=params.toString();
+  const destinations=[];
+  params.set("days","14");params.set("family","SOFTWARE_ENGINEERING");params.set("interval","monthly");
+  router.push=(href,options)=>{destinations.push({href,options});params.delete("week");new URL(href,"https://fixture.test").searchParams.forEach((value,key)=>params.set(key,value));};
+  try{
+    await mounted(React.createElement(AnalyticsWeekPicker,{start:"2026-12-28",today:"2027-01-01"}),async(container,window,root)=>{
+      const button=name=>container.querySelector(`button[aria-label="${name}"]`);
+      const click=async name=>act(async()=>button(name).dispatchEvent(new window.Event("click",{bubbles:true})));
+      assert.equal(button("Next week").disabled,true);
+      assert.equal(container.querySelector("input"),null);
+      assert.equal(button("Previous week").querySelectorAll("svg.nic-sm").length,1);
+      await click("Previous week");
+      assert.equal(params.get("week"),"2026-12-21");
+      for(const [key,value] of [["days","14"],["family","SOFTWARE_ENGINEERING"],["interval","monthly"]])assert.equal(params.get(key),value);
+      await act(async()=>root.render(React.createElement(AnalyticsWeekPicker,{start:"2026-12-21",today:"2027-01-01"})));
+      assert.equal(button("Next week").disabled,false);
+      assert.equal(container.querySelector(".an-week-reset").textContent,"This week");
+      await click("Next week");
+      assert.equal(params.has("week"),false);
+      await act(async()=>root.render(React.createElement(AnalyticsWeekPicker,{start:"2026-12-28",today:"2027-01-01"})));
+      assert.equal(button("Next week").disabled,true);
+      const count=destinations.length;
+      await click("Next week");
+      assert.equal(destinations.length,count);
+      await click("Previous week");
+      await act(async()=>root.render(React.createElement(AnalyticsWeekPicker,{start:"2026-12-21",today:"2027-01-01"})));
+      await act(async()=>container.querySelector(".an-week-reset").dispatchEvent(new window.Event("click",{bubbles:true})));
+      assert.equal(params.has("week"),false);
+      assert.ok(destinations.every(({options})=>options.scroll===false));
+    });
+  }finally{
+    router.push=beforePush;
+    [...params.keys()].forEach(key=>params.delete(key));new URLSearchParams(beforeParams).forEach((value,key)=>params.set(key,value));
+  }
+});
+test("Choose dates retains the outlined calendar and real page-level date inputs",async()=>{
+  const {AnalyticsFilters}=load(path.join(sourceRoot,"components/analytics/AnalyticsFilters.tsx"));
+  await mounted(React.createElement(AnalyticsFilters,{families:["SOFTWARE_ENGINEERING"],today:"2026-10-31"}),async(container,window)=>{
+    const toggle=container.querySelector(".an-date-toggle");
+    assert.equal(toggle.querySelector("svg").getAttribute("viewBox"),"0 0 24 24");
+    assert.equal(toggle.querySelector("rect").getAttribute("width"),"18");
+    assert.equal(toggle.querySelector("path").getAttribute("d"),"M7 2v6M17 2v6M3 11h18");
+    await act(async()=>toggle.dispatchEvent(new window.Event("click",{bubbles:true})));
+    assert.equal(toggle.getAttribute("aria-expanded"),"true");
+    assert.equal(container.querySelectorAll('.an-date-popover input[type="date"]').length,2);
+    for(const input of container.querySelectorAll(".an-date-popover input"))assert.equal(input.getAttribute("max"),"2026-10-31");
+  });
+});
+test("weekly reads in another reporting zone reuse the existing Pacific projection",async()=>{
+  const {readAnalyticsSupplement}=load(path.join(sourceRoot,"lib/analyticsRead.ts"));
+  const d={as_of:"2026-10-27T19:00:00Z",timezone:"UTC",start:"2026-10-26",end:"2026-10-27",days:"custom",family:null,total_submitted:2,submitted:2,week_total:2};
+  const calls=[];
+  serverRead=async(route,fallback,query)=>{calls.push({route,query});return route==="/api/inbox/applications"?{items:[{key:"job:1",applied_at:"2026-10-26T06:59:59Z"},{key:"job:2",applied_at:"2026-10-26T07:00:00Z"}]}:{...d,timezone:"America/Los_Angeles",week_total:1};};
+  const result=await readAnalyticsSupplement(d,"daily");
+  assert.equal(result.currentWeekTotal,1);
+  assert.deepEqual(calls[1],{route:"/api/analytics",query:{days:"all",tz:"America/Los_Angeles"}});
+});
+
 for(const [classification,decision] of [["rejection","classified_rejection"],["online_assessment","classified_action"],["interview","classified_action"],["offer","classified_action"]]){
   test(`${classification}: viewing classified email needs no owner decision and correction stays deliberate`,async()=>{
     const id={rejection:70001,online_assessment:70002,interview:70003,offer:70004}[classification];

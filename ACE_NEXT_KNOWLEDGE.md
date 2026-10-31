@@ -1,6 +1,41 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-31 Pacific, complete next-chat continuation checkpoint; invitation correction and automatic Inbox/Analytics synchronization are LIVE.
+Last updated: 2026-10-31 Pacific, Overview weekly-navigation candidate; existing invitation correction and automatic Inbox/Analytics synchronization remain LIVE.
+
+## Analytics Overview weekly navigation candidate, 2026-10-31 Pacific
+
+The owner's new request is the two attached Day/Night Overview references and
+exact historical-week behavior. Work is on standalone main-based
+`analytics-rebuild-overview-week-20261031`; it is not deployed. Preserve the live
+API/web revisions recorded below. The backend, extension, auth, application
+identities, Inbox decisions/Undo, scheduler and database remain unchanged.
+
+Weekly arrows select Monday-to-Sunday America/Los_Angeles weeks independently
+of the reporting period, retaining role selection. Current heading is “This
+week” with the actual range; historical heading is that week's range. Forward
+stops at current; historical reset returns there. The weekly date input is
+removed; page-level Choose dates keeps native date inputs and the outlined
+calendar icon. Historical bar links use exact daily dates, fixing invalid
+clipping to the page period. The server-only identity read verifies current
+weekly total/daily buckets before returning aggregates; missing historical
+detail is Unavailable and future days are not labeled completed zeros.
+
+The existing Wine/Rose and Inter tokens, sidebar/navigation and all other tabs
+are retained. Inbox's reference coverage position honestly says Unavailable;
+neither a connected grant nor a sync timestamp certifies the selected period.
+Invitation-email and verified application-stage counts remain separate. See
+`docs/analytics/metric-sources.md` for the date and source contract. Local
+Chrome cooling remains unresolved. The owner asked to check before capturing:
+startup reached 88 C and was stopped by an 85 C guard; a second attempt in a
+temporary 10-percent-CPU scope reached 87 C and was stopped by its 80 C guard.
+Neither attempt completed captures. No repair was established; do not repeat
+local Chrome work from this candidate. The first hosted source passed 2,499
+backend/PostgreSQL and 54 Inbox/Analytics browser cases. Actual read-only
+reconciliation passed 44 period/role selections and 2,376 weekly windows; actual
+counts and timestamps stay private. Private real-data review HTML is prepared
+locally. Hosted fixture captures and production arithmetic are separate evidence.
+Export of that private HTML to hosted capture was rejected by automatic approval
+review; explicit owner approval is pending. No deployment is authorized.
 
 ## Next-chat continuation checkpoint, 2026-10-31 Pacific
 

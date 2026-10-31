@@ -69,6 +69,39 @@ const base = {
 };
 const render = (d) => renderToStaticMarkup(React.createElement(AnalyticsView, { d, connection: null, tab: "companies", query: { tab: "companies" } }));
 
+test("Overview headings, seven bars and exact historical links share the selected week",()=>{
+  const renderOverview=(supplement,week)=>parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d:base,connection:null,tab:"overview",query:{days:"30",week},supplement}))).document;
+  const dates=["2026-10-19","2026-10-20","2026-10-21","2026-10-22","2026-10-23","2026-10-24","2026-10-25"];
+  const supplement={timeline:[],interval:"daily",weekStart:dates[0],weekEnd:dates[6],currentWeek:false,currentWeekTotal:1,
+    week:dates.map((date,index)=>({date,end:date,count:index===2?2:0})),submissionTrend:null,weekTrend:null};
+  const document=renderOverview(supplement,"2026-10-19");
+  const panel=document.querySelector(".an-week-card");
+  assert.equal(panel.querySelector("h2").textContent,`Oct 19${String.fromCharCode(0x2013)}Oct 25, 2026`);
+  assert.deepEqual([...panel.querySelectorAll(".an-column>span")].map(node=>node.textContent),["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]);
+  assert.match(panel.querySelector(".an-foot").textContent,/2 unique submissions in this week/);
+  for(const [index,link] of [...panel.querySelectorAll(".an-column")].entries()){
+    const url=new URL(link.getAttribute("href"),"https://fixture.test");
+    assert.equal(url.searchParams.get("start"),dates[index]);
+    assert.equal(url.searchParams.get("end"),dates[index]);
+    assert.equal(url.searchParams.get("days"),"custom");
+    assert.equal(url.searchParams.get("tz"),"America/Los_Angeles");
+  }
+  const currentWeek=Array.from({length:7},(_,index)=>{const date=new Date(Date.UTC(2026,9,26+index)).toISOString().slice(0,10);return {date,end:date,count:index===0?1:0};});
+  const current=renderOverview({...supplement,week:currentWeek,weekStart:"2026-10-26",weekEnd:"2026-11-01",currentWeek:true},undefined).querySelector(".an-week-card");
+  assert.equal(current.querySelector("h2").textContent,"This week");
+  assert.equal(current.querySelector(".an-panel-head p").textContent,`Oct 26${String.fromCharCode(0x2013)}Nov 1, 2026`);
+  assert.equal(current.querySelectorAll(".an-column[data-future]").length,6);
+  assert.equal(current.querySelectorAll("a.an-column").length,1);
+  for(const future of current.querySelectorAll(".an-column[data-future]")){
+    assert.match(future.getAttribute("aria-label"),/future day/);
+    assert.equal(future.querySelector(".an-column-plot span").textContent,"");
+  }
+  const unavailable=renderOverview(null,"2026-10-19").querySelector(".an-week-card");
+  assert.match(unavailable.querySelector("h2").textContent,/Oct 19/);
+  assert.match(unavailable.textContent,/could not be verified/);
+  assert.equal(unavailable.querySelectorAll(".an-column").length,0,"a failed historical read must not substitute current bars");
+});
+
 test("Rejected companies keeps the card grid, newest first, with no table or paging here", () => {
   const html = render(base);
   assert.match(html, /<h2>Rejected companies<\/h2>/);

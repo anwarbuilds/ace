@@ -32,7 +32,7 @@ export function ColumnChart({ rows, label, weekly = false, percentages = false }
     {rows.map((r, i) => {
       const body = <><div className="an-column-plot"><i style={{ height: `${r.count / max * 100}%`, background: weekly ? `linear-gradient(180deg, ${CHART_COLORS[0]}, ${CHART_COLORS[1]})` : CHART_COLORS[i % CHART_COLORS.length] }}><span>{r.future ? "" : r.count}</span></i></div><span>{r.label}</span>{percentages && <strong>{total ? `${Math.round(r.count / total * 100)}%` : "No sample"}</strong>}</>;
       const description = `${r.detail ?? r.label}: ${r.future ? "future day" : `${r.count} applications`}`;
-      return r.href && !r.future ? <Link className="an-column" key={r.label} href={r.href} aria-label={description}>{body}</Link> : <div className="an-column" key={r.label} tabIndex={0} aria-label={description}>{body}</div>;
+      return r.href && !r.future ? <Link className="an-column" key={r.label} href={r.href} aria-label={description}>{body}</Link> : <div className="an-column" key={r.label} data-future={r.future || undefined} tabIndex={0} title={r.future ? "Future day; activity is not yet known" : undefined} aria-label={description}>{body}</div>;
     })}
   </div>;
 }

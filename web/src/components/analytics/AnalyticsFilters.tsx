@@ -9,6 +9,7 @@ const serverReady = () => false;
 function useReady() { return useSyncExternalStore(subscribe, clientReady, serverReady); }
 import { familyLabel } from "@/lib/format";
 import { CompanyLogo } from "@/components/CompanyLogo";
+import { NavIcon } from "@/components/shell/NavIcon";
 import { mondayOf, shiftDate } from "@/lib/analyticsCalculations";
 
 export function AnalyticsFilters({ families, today }: { families: string[]; today: string }) {
@@ -29,7 +30,7 @@ export function AnalyticsFilters({ families, today }: { families: string[]; toda
       <option value="">All roles</option>{families.map(f => <option value={f} key={f}>{familyLabel(f)}</option>)}
     </select>
     <div className="an-ranges" aria-label="Submission date range" role="group">{[["14", "14 days"], ["30", "30 days"], ["90", "90 days"], ["all", "All time"]].map(([value, label]) => <button disabled={!ready} type="button" key={value} aria-pressed={(params.get("days") ?? (params.get("start") || params.get("end") ? "custom" : "all")) === value} onClick={() => {setDates(false);change("days", value);}}>{label}</button>)}</div>
-    <button disabled={!ready} className="an-date-toggle" aria-expanded={dates} onClick={() => setDates(!dates)}><span aria-hidden="true">▦</span> Choose dates</button>
+    <button disabled={!ready} className="an-date-toggle" aria-expanded={dates} onClick={() => setDates(!dates)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6M17 2v6M3 11h18"/></svg> Choose dates</button>
     {dates && <form className="an-date-popover" onSubmit={e => {
       e.preventDefault();
       const form = new FormData(e.currentTarget);
@@ -59,6 +60,7 @@ export function AnalyticsChartInterval({monthly, interval, detailed = true}: {mo
 
 export function AnalyticsWeekPicker({ start, today }: { start: string; today: string }) {
   const ready = useReady(), router = useRouter(), params = useSearchParams();
-  const change = (day: string) => { const next = new URLSearchParams(params); const monday = mondayOf(day); if (monday === mondayOf(today)) next.delete("week"); else next.set("week", monday); router.push(`/app/analytics?${next}`, { scroll: false }); };
-  return <div className="an-week-picker" role="group" aria-label="Displayed calendar week"><button disabled={!ready} aria-label="Previous week" onClick={()=>change(shiftDate(start,-7))}>‹</button><label><span className="sr">Week containing date</span><input type="date" max={today} value={start} autoComplete="off" disabled={!ready} onChange={e=>{if(e.target.value)change(e.target.value);}} /></label><button disabled={!ready || start >= mondayOf(today)} aria-label="Next week" onClick={()=>change(shiftDate(start,7))}>›</button></div>;
+  const current = mondayOf(today);
+  const change = (day: string) => { const next = new URLSearchParams(params); const monday = mondayOf(day) > current ? current : mondayOf(day); if (monday === current) next.delete("week"); else next.set("week", monday); router.push(`/app/analytics?${next}`, { scroll: false }); };
+  return <div className="an-week-picker" role="group" aria-label="Displayed calendar week">{start < current && <button className="an-week-reset" disabled={!ready} onClick={()=>change(current)}>This week</button>}<button disabled={!ready} aria-label="Previous week" onClick={()=>change(shiftDate(start,-7))}><NavIcon name="left" size="sm"/></button><button disabled={!ready || start >= current} aria-label="Next week" onClick={()=>change(shiftDate(start,7))}><NavIcon name="right" size="sm"/></button></div>;
 }
