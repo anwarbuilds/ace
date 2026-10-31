@@ -1,6 +1,181 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-31 Pacific, owner-approved invitation headline correction LIVE at web `1eb2808`; API remains `a48d71b`.
+Last updated: 2026-10-31 Pacific, complete next-chat continuation checkpoint; invitation correction and automatic Inbox/Analytics synchronization are LIVE.
+
+## Next-chat continuation checkpoint, 2026-10-31 Pacific
+
+The owner explicitly asked to save this conversation in **this file,
+`ACE_NEXT_KNOWLEDGE.md`**, so a new chat can continue without reconstructing the
+work. This checkpoint and the two LIVE release records immediately below control
+older candidate/pending instructions. Both approved releases are complete.
+The latest request is documentation only; do not replay a release or historical
+Gmail operator, or infer authorization for another production operation.
+
+### Canonical workspace and exact live state
+
+- Canonical/default branch is `main` in `anwarbuilds/ace`. The working directory
+  is standalone `/home/ubuntu/Documents/ace-next`, with its own `.git` and no
+  dependency on retired `~/Documents/ace`. Legacy services/comparison are retired;
+  recovery material, retained images and the old database volume stay preserved.
+- Before this documentation checkpoint, local and remote main were clean and
+  equal at `d861c14c2a5e8ce5d6d7852b297893a38329b2b9`, the completed release
+  handoff. Fetch and inspect current refs/status in the next chat rather than
+  treating that documentation SHA as a deployment target.
+- Production is https://ace.opik.net, checkout `/opt/ace`, Compose project
+  `oracle`. Production main tracks origin/main but deliberately remains at exact
+  tested `1eb2808`; newer documentation/merge commits are not deployed builds.
+
+| Surface | Current verified source |
+| --- | --- |
+| Web, including corrected invitation headline | `1eb28086ab30f87dc6fd320190d3e3cc7afe3957` |
+| API, Inbox parser 15 and shared Analytics projection | `a48d71be3a33a6188e8fa96f748b4b78ecd19ef0` |
+| Discovery scheduler, intentionally unchanged | `fca4673033dc92833bbf217182738026f414bf3d` |
+| Database schema | `0050` |
+
+The last additional read-only status check at **2026-10-31T14:39:23Z** confirmed
+healthy web/API containers at those exact revisions and public `/healthz` status
+`ok`. This is HTTP/source verification, not a signed-in production browser test.
+PR #20 and PR #21 are merged. The coordinated API/web release completed October
+30 at 21:31 Pacific; the subsequent web-only correction completed October 31 at
+07:09 Pacific. Exact UTC intervals, merge SHAs and rollback records follow below.
+
+### Automatic synchronization: confirmed behavior and timing
+
+The owner asked whether Analytics now stays automatically synchronized with
+Inbox Intelligence. **Yes, after Inbox processing commits the effective data.**
+No separate Analytics import, CSV, manual transfer, batch projection job, second
+classifier or duplicate browser ledger is needed.
+
+- Backend: the next authoritative Analytics request reads committed effective
+  Inbox meaning/decisions, links and active application history in one separate
+  PostgreSQL READ ONLY, REPEATABLE READ snapshot. Ordinary authentication
+  heartbeat writes retain their existing session. There are no independently
+  maintained Analytics counters to drift.
+- Frontend: the persistent layout coordinator covers `/app/analytics` and
+  `/app/applications/analytics`. Known Inbox decisions/corrections/Undo signals
+  use the existing `ace-marks` channel; return navigation, focus, visibility and
+  online recovery trigger revalidation. It also checks every **120 seconds while
+  visible**. A new visit makes a fresh no-store server read. Background Inbox
+  commits are picked up on the next check/visit, not promised as instant push.
+- Date, tab, role/company and drilldown selections stay selected. Bursts are
+  coalesced, overlapping refreshes are avoided, and evidence arriving during an
+  in-flight read queues a follow-up. Older `as_of` results cannot replace newer
+  results. The shell skips its competing timer on the two Analytics routes.
+- Failed/delayed reads retain the mounted selection's last successful rendered
+  report with an honest notice and Retry; normal online/focus/periodic checks
+  recover automatically. There is no persisted browser copy. A hard document
+  replacement cannot preserve that in-memory report; unavailable data must not
+  become invented zeros or a false success state.
+- Gmail ingestion has its own existing cadence: ready/authorized connections
+  are normally checked on a **180-second** monitor interval, with a 15-second
+  API startup delay and provider/quota backoff. This is separate from the
+  120-second Analytics refresh. Pause, grant failures, network failures or
+  provider backoff can delay processing; dashboard polling does not bypass them.
+
+### Metric semantics and the invitation-card correction
+
+The owner caught a real UI binding error after the first release: “Interview
+invitations” still used the verified application-stage counter. The correction
+changed only `AnalyticsSummary.tsx` and its `AnalyticsView.tsx` caller. The
+headline now reads **`classified_email_evidence.categories.interview`**, names
+its receipt-date basis and opens `emails=1&email_kind=interview` records with the
+same date/timezone/family/company filters. The metric explanation keeps the
+verified `interviews` application count and its stage drilldown separate.
+
+Do not hardcode a previously observed invitation total, or assume every date
+selection has the same total. Actual owner range/linkage counts remain only in
+ignored private reports. The distinction is structural: a recognized invitation
+can count as an email without a verified application match or authorized stage
+change. Missing email projection is Unavailable, not a stage fallback or a
+fabricated zero. Other headline metrics retain their documented application
+definitions: Meaningful replies uses `positive`; Online assessments uses
+`assessments`. Neither automatically becomes an unlinked-email total.
+
+Application stages count distinct eligible identities, emails count distinct
+effective messages, and current statuses remain a separate projection. A later
+rejection preserves earlier valid assessment/interview history. Owner corrections,
+receipt overrides, Undo and exact-link/status authorization remain authoritative.
+Receipts alone do not establish a verified application link. Do not solve a
+display discrepancy by inventing a match, changing a protected status or
+weakening sender/identity safeguards. Completion/cancellation/routine-update
+categories remain separate from invitations; acknowledgements do not inflate
+meaningful replies. Email receipt dates use the July 1, 2026 Pacific floor
+(`2026-07-01T07:00:00Z`), independently of submission cohorts and official reports.
+
+### Implementation and verification entry points
+
+- Backend projection: `backend/app/api/routers/analytics.py`; shared Inbox
+  projections remain the only recruiting-email classification authority.
+- Refresh/failure handling: `web/src/components/analytics/AnalyticsRefresh.tsx`,
+  `AnalyticsFreshness.tsx`, both Analytics page routes and the app layout.
+- Headline/panels/records: `AnalyticsSummary.tsx`, `AnalyticsView.tsx`,
+  `CorrespondenceRecords.tsx` and `web/src/lib/analytics.ts`.
+- Definitions/review: `docs/analytics/metric-sources.md`,
+  `docs/analytics/inbox-sync-review.md`, `docs/HANDOFF.md` and knowledge topics
+  04/05/08. Use the approved Wine and Rose/Analytics design and Inter; no redesign
+  was made. Preserve Focus Mode V5.1 and its employer-motivation exception.
+- Read-only audit sources: `backend/scripts/inbox_analytics_audit.py`,
+  `scripts/audit_analytics_dashboard.py`, `scripts/audit_analytics_inbox_sync.py`.
+  Fictional regressions cover shared meaning, owner corrections/Undo, unlinked
+  invitations, history after rejection, date boundaries, exact drilldowns,
+  PostgreSQL snapshots and actual browser refresh/failure/recovery behavior.
+
+Exact deployed web source passed **117 local DOM/calculation checks**, routes,
+TypeScript, full lint, text/whitespace checks, and hosted
+[review 41206845680](https://github.com/anwarbuilds/ace/actions/runs/41206845680):
+**2,499 backend/PostgreSQL cases and 53 Inbox/Analytics browser cases**, including
+web production build. Day/Night headline and mobile captures were inspected.
+[Wider CI 41206848793](https://github.com/anwarbuilds/ace/actions/runs/41206848793)
+passed backend/web but retained **25 pass / 22 fail** extension-browser cases;
+exact failure-name comparison with canonical consolidation found zero new or
+resolved names. Later broad app browsers were skipped. Overall CI is not green.
+Do not substitute older counts or silently weaken assertions. No local Chrome
+ran; the owner's cooling restriction remains in force.
+
+### Private proofs, rollback and continuation limits
+
+Latest owner-private package:
+`artifacts/analytics-invitation-card-20261031/`, especially `REVIEW.md`,
+`production-invitation-check.json`, `ci-failure-comparison.json` and
+`release/RELEASE.md`, `release-summary.json`, `invitation-audit.json`,
+`live-audit.json`, `service-verification.json` and preservation reports.
+Prior integration proof is `artifacts/analytics-inbox-sync-20261030/`, including
+`RECONCILIATION.md`, same-snapshot comparisons, screenshots and its `release/`.
+Keep real mail, owner totals, records, answers, resumes, screenshots and secrets
+out of public Git; private reports are referenced rather than copied here.
+
+The latest live release verified the compiled invitation binding and prepared/
+running page hash, frontend SHA, 15 bundle/font and 85 logo hashes, ten anonymous
+auth boundaries, all four invitation/drilldown/full audit ranges, all 371 backend/
+four script hashes and all 19 protected table row sets. Only web was replaced.
+API/scheduler/PostgreSQL/Caddy/exited migrate identities and private/mounted
+configuration hashes/modes/inodes matched. Parser15/schema0050, one monitor lease,
+disabled global historical rechecks and stopped parser7 remain. No API restart,
+migration, scheduler operation, extension publication, replay or destructive data
+operation belongs to this completed web correction.
+
+Latest private backup/rollback root:
+`/opt/ace/private-backups/invitation-card-20261031T1400Z/`. Its **566,591,840-byte**
+dump passed gzip/catalog/full expansion; no restore drill or pruning ran.
+Actual previous web `a48d71b` is retained under
+`oracle-web:before-invitation-card-20261031T1400Z` with guarded web-only rollback.
+Older API/web backups/images remain retained. Never restore SQL over later owner
+activity as image rollback. Preserve the bind-mounted Caddyfile inode/content
+and private `.env`; never print credentials or expanded Compose configuration.
+
+Remaining limits are unchanged: arithmetic/source checks do not certify
+population classification accuracy or complete mailbox observation. Historical
+sender actors are not fresh Gmail authentication. Submitted-resume/channel
+attribution and response-effectiveness rates remain unsupported; offsite backup
+and Resume Studio limitations remain. No signed-in production browser test is
+claimed. ACE never submits employer applications or marks them Applied after fill.
+
+The next chat should read this entire knowledge file, current `AGENTS.md`,
+`docs/HANDOFF.md` and the relevant topic, then inspect fresh refs/status and actual
+running state before editing. There is **no pending deployment or historical
+correction from this conversation**. New deployments, migrations, scheduler
+operations, extension publication or destructive data changes require the owner's
+explicit approval for that operation. Continue only the owner's next task.
 
 ## Interview invitation headline correction LIVE, 2026-10-31 Pacific
 
