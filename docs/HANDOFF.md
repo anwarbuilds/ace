@@ -1,6 +1,6 @@
 # ACE current handoff
 
-Updated 2026-10-30 Pacific after the owner-approved Inbox-to-Analytics release. This is
+Updated 2026-10-31 Pacific with an invitation-headline correction pending after the approved release. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
@@ -26,6 +26,19 @@ before changes. Dated pending instructions are not current authorization.
   is ignored/inactive `.env.legacy-retired`, mode 600. Do not source it as setup.
 - Fetch main before future changes and push only the reviewed source. Private
   `recovery-20261030/*` tags are local recovery material; **do not push all tags**.
+
+## Pending interview invitation headline correction
+
+The owner identified that the live “Interview invitations” headline still reads
+verified application stages rather than recognized invitation emails. Fresh
+read-only checks confirm the distinction; do not fabricate a match/status event.
+The isolated `analytics-rebuild-invitation-card-20261031` candidate binds that
+card to the existing effective interview-email count and exact receipt-date
+drilldown, preserving filters, missing-data honesty and the separate stage
+explanation. Only two Analytics frontend components change runtime behavior;
+backend/source/classifier/data remain unchanged. See the newest root knowledge
+checkpoint for validation and approval state. It is not deployed; the following
+production record remains current.
 
 ## Production: Inbox-to-Analytics release LIVE
 

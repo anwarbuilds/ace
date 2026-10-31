@@ -1,6 +1,32 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-30 Pacific, owner-approved Inbox-to-Analytics API/web release LIVE and production reconciliation verified.
+Last updated: 2026-10-31 Pacific, interview invitation headline correction prepared; live API/web remain approved source `a48d71b`.
+
+## Interview invitation headline correction, 2026-10-31 Pacific, not deployed
+
+After viewing the release, the owner reported that “Interview invitations” still
+showed zero despite recognized interview correspondence. Fresh enforced read-only
+production checks confirm a UI binding mismatch: recognized invitation emails
+and verified application-stage counts are separate, and the headline used the
+latter. Actual private range/linkage totals are not public documentation. Do not
+invent an application match or status event to force a headline value.
+
+The isolated `analytics-rebuild-invitation-card-20261031` follow-up starts from
+canonical main `60aa137`, which records the completed release below. Only
+`AnalyticsSummary.tsx` and its `AnalyticsView.tsx` caller change runtime behavior:
+the invitation headline uses `classified_email_evidence.categories.interview`,
+labels its receipt-date basis, and opens exact `emails=1&email_kind=interview`
+records with date/timezone/family/company filters preserved. Missing email
+projection shows Unavailable rather than a stage fallback or fabricated zero.
+The existing metric explanation keeps verified interview-stage counts/link
+separate; other application metrics and backend event/status authority remain.
+
+Fictional regressions cover an unlinked invitation with zero application stages,
+recognized zero despite existing stages, missing projection, exact filter
+preservation and Day/Night browser drilldowns. Source/test/review evidence will
+be recorded before requesting a separate web-only deployment approval. No new
+source is deployed by this follow-up, no production data is changed, and the
+approved API/web `a48d71b`, parser 15/schema 0050 remain live.
 
 ## Inbox-to-Analytics synchronization LIVE, 2026-10-30 Pacific
 

@@ -405,7 +405,14 @@ for(const theme of ["light","dark"] as const){
     await expect(panel).toContainText("email counts, not additional applications or confirmed stage totals");
     await expect(page.locator(".an-metric").nth(0).locator("strong")).toHaveText(String(before.submitted));
     await expect(page.locator(".an-metric").nth(3).locator("strong")).toHaveText(String(before.assessments));
-    await expect(page.locator(".an-metric").nth(4).locator("strong")).toHaveText(String(before.interviews));
+    const invitationCard=page.locator(".an-metric").nth(4);
+    await expect(invitationCard.locator("strong")).toHaveText(String(progress.categories.interview));
+    await expect(invitationCard).toContainText("Invitation emails by receipt date");
+    await invitationCard.click();
+    await expect(page.getByRole("heading",{name:"Recruiting email evidence",exact:true})).toBeVisible();
+    await expect(page.locator(".an-record-row")).toHaveCount(progress.categories.interview);
+    await expect(page.locator(".an-record-row").first()).toContainText("Interview");
+    await page.goto("/app/analytics?days=all&tab=outcomes");
     expect(await page.evaluate(TEXT_SCAN)).toEqual([]);
     expect(await page.evaluate(DRAWN_SCAN)).toEqual([]);
     const directory=path.resolve("../artifacts/inbox-intelligence-validation");
