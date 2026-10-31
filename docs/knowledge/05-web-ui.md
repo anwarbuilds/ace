@@ -1129,3 +1129,23 @@ pages pass live signed-in HTTP checks. The first check found private-umask
 permissions. Final totals stayed 936, schema/environment/protected container
 IDs held. No browser visual claim; see the architecture note for backup,
 rollback, concurrent mark-count change and verification limits.
+
+## Interview invitation headline source correction (2026-10-31, not deployed)
+
+The owner found that the Analytics headline “Interview invitations” showed the
+verified application-stage count while Inbox had recognized invitation emails.
+Those sources answer different questions; fix the UI binding rather than invent
+an application match or write a stage event. Exact tested candidate `1eb2808`
+(draft PR #21) uses the shared effective interview-email count and receipt-date
+drilldown, preserving date/timezone/family/company filters. Its footnote names
+email receipt dates, missing evidence is Unavailable, and the existing metric
+explanation separately links verified application interview stages.
+
+Only AnalyticsSummary/AnalyticsView runtime changes. The five-card arrangement,
+themes, Inter and application history remain. Fictional 117 DOM/calculation,
+routes/TypeScript/lint and hosted 2,499 backend/PostgreSQL plus 53 Inbox/Analytics
+browser checks pass; Day/Night headline and mobile captures are inspected. Wider
+CI retains the same 25/22 extension-browser failed names with no new/resolved
+names, so overall CI is not green. No local Chrome ran. Candidate is not deployed;
+API/web remain approved `a48d71b`. A separate web-only release needs owner approval,
+a fresh verified backup, retained actual web image and scoped live verification.

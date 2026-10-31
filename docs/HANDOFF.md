@@ -36,9 +36,15 @@ The isolated `analytics-rebuild-invitation-card-20261031` candidate binds that
 card to the existing effective interview-email count and exact receipt-date
 drilldown, preserving filters, missing-data honesty and the separate stage
 explanation. Only two Analytics frontend components change runtime behavior;
-backend/source/classifier/data remain unchanged. See the newest root knowledge
-checkpoint for validation and approval state. It is not deployed; the following
-production record remains current.
+backend/classifier/data remain unchanged. Exact tested source `1eb2808`,
+[draft PR #21](https://github.com/anwarbuilds/ace/pull/21), passes 117 local
+DOM/calculation checks, route types/TypeScript/lint and hosted review
+[41206845680](https://github.com/anwarbuilds/ace/actions/runs/41206845680): 2,499
+backend/PostgreSQL and 53 Inbox/Analytics browser cases plus web build. Day/Night
+headline and mobile captures are inspected; no local Chrome ran. It is not
+deployed and needs separate web-only release approval. Wider CI passes backend/web
+and retains the same 25/22 extension-browser baseline, with zero new/resolved
+failed names; overall CI is not green. The following production record remains current.
 
 ## Production: Inbox-to-Analytics release LIVE
 
