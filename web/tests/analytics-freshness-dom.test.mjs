@@ -21,6 +21,7 @@ function load(filename){
   const output=ts.transpileModule(fs.readFileSync(filename,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,esModuleInterop:true,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2020}}).outputText;
   const sourceRequire=name=>{
     if(name==="next/navigation")return {usePathname:()=>pathname,useRouter:()=>({refresh,replace})};
+    if(name.startsWith("@/"))return load(path.join(sourceRoot,name.slice(2)+".ts"));
     if(name.startsWith("."))return load(path.resolve(path.dirname(filename),name+".tsx"));
     return require(name);
   };
@@ -32,7 +33,7 @@ const {AnalyticsFreshness}=load(path.join(sourceRoot,"components/analytics/Analy
 
 async function mounted(element,run){
   const {window}=parseHTML("<html><body><div id='root'></div></body></html>");
-  const keys=["window","document","HTMLElement","Node","Event","IS_REACT_ACT_ENVIRONMENT","BroadcastChannel","setTimeout","clearTimeout","setInterval","clearInterval"];
+  const keys=["window","document","HTMLElement","Node","Event","IS_REACT_ACT_ENVIRONMENT","BroadcastChannel","setTimeout","clearTimeout","setInterval","clearInterval","fetch"];
   const original=new Map(keys.map(key=>[key,globalThis[key]]));
   const previousNow=Date.now;
   const channels=[],timers=new Map();let id=0,now=1_000_000;
@@ -70,18 +71,30 @@ test("one persistent coordinator uses the initial server read and refreshes once
   });
 });
 
-test("polls are bounded to two minutes while visible and wake signals coalesce",async()=>{
-  let calls=0;refresh=()=>{calls++;};
-  await mounted(React.createElement(AnalyticsRefresh),async({window,dispatch,tick})=>{
-    await tick(119_999);assert.equal(calls,0);
-    await tick(1);assert.equal(calls,1);
-    await dispatch(window,"focus");await dispatch(window.document,"visibilitychange");assert.equal(calls,1);
+test("quiet checks are bounded, ignore timestamps and refresh only changed data",async()=>{
+  let calls=0,checks=0;refresh=()=>{calls++;};
+  const first={submitted:4,as_of:"2026-10-30T01:00:00Z",evidence:{positive:1}};
+  const {analyticsFingerprint}=load(path.join(sourceRoot,"lib/analyticsFingerprint.ts"));
+  const version=await analyticsFingerprint(first);
+  await mounted(React.createElement(React.Fragment,null,React.createElement(AnalyticsRefresh),React.createElement("div",{"data-analytics-check-url":"/api/analytics?days=30","data-analytics-version":version})),async({window,dispatch,tick})=>{
+    globalThis.fetch=async(url,options)=>{checks++;assert.equal(url,"/api/analytics?days=30");assert.equal(options.cache,"no-store");return {ok:true,json:async()=>({...first,as_of:"2026-10-30T01:02:00Z"})};};
+    await tick(119_999);assert.equal(checks,0);
+    await tick(1);assert.equal(checks,1);assert.equal(calls,0,"unchanged evidence does not replace the page");
+    await dispatch(window,"focus");await dispatch(window.document,"visibilitychange");assert.equal(checks,1);
     window.document.visibilityState="hidden";
-    await tick(120_000);await dispatch(window,"focus");assert.equal(calls,1);
+    await tick(120_000);await dispatch(window,"focus");assert.equal(checks,1);
     window.document.visibilityState="visible";
-    await dispatch(window.document,"visibilitychange");await dispatch(window,"focus");assert.equal(calls,2);
-    await tick(120_000);assert.equal(calls,3);
+    await dispatch(window.document,"visibilitychange");await analyticsFingerprint(first);assert.equal(checks,2);assert.equal(calls,0);
+    globalThis.fetch=async()=>{checks++;return {ok:true,json:async()=>({...first,submitted:5})};};
+    await tick(120_000);assert.equal(checks,3);assert.equal(calls,1,"changed authoritative data triggers one projection read");
   });
+});
+
+test("fingerprints retain metrics and identity partitions while ignoring read timestamps",async()=>{
+  const {analyticsFingerprint:hash}=load(path.join(sourceRoot,"lib/analyticsFingerprint.ts"));
+  const a={as_of:"a",submitted:3,evidence:{positive:1},classified_email_evidence:{linked_messages:2}};
+  assert.equal(await hash(a),await hash({classified_email_evidence:{linked_messages:2},evidence:{positive:1},submitted:3,as_of:"b"}));
+  for(const changed of [{...a,submitted:4},{...a,evidence:{positive:2}},{...a,classified_email_evidence:{linked_messages:3}}])assert.notEqual(await hash(a),await hash(changed));
 });
 
 test("a decision during an in-flight response queues one follow-up without overlapping reads",async()=>{
@@ -122,10 +135,11 @@ for(const scope of ["/app/analytics?days=all&tab=outcomes&family=ML_ENGINEERING"
 }
 
 test("older successes and late failures cannot overwrite newer verified data",async()=>{
-  const props={scope:"same",attemptedAt:20,asOf:"2026-10-30T01:10:00Z",timezone:"America/Los_Angeles",success:true};
+  const props={scope:"same",attemptedAt:20,asOf:"2026-10-30T01:10:00Z",checkUrl:"/api/analytics?days=30",fingerprint:"new",timezone:"America/Los_Angeles",success:true};
   const response=(extra,text)=>React.createElement(AnalyticsFreshness,{...props,...extra},React.createElement("p",{"data-report":true},text));
   await mounted(response({},"New"),async({container,render})=>{
-    await render(response({attemptedAt:21,asOf:"2026-10-30T01:00:00Z"},"Old"));
+    await render(response({attemptedAt:21,asOf:"2026-10-30T01:00:00Z",fingerprint:"old"},"Old"));
+    assert.equal(container.querySelector("[role=status]").dataset.analyticsVersion,"new");
     assert.equal(container.querySelector("[data-report]").textContent,"New");
     await render(response({attemptedAt:22,asOf:"2026-10-30T01:12:00Z"},"Newest"));
     await render(response({attemptedAt:19,asOf:null,success:false},"Old failure"));
@@ -152,7 +166,7 @@ test("a settled refresh without an RSC response shows stale data and a successfu
     return React.createElement(React.Fragment,null,React.createElement(AnalyticsRefresh),React.createElement(AnalyticsFreshness,{scope:"same",attemptedAt:version,asOf:version===1?"2026-10-30T01:00:00Z":"2026-10-30T01:02:00Z",timezone:"America/Los_Angeles",success:true},React.createElement("p",{"data-report":true},`Verified ${version}`)));
   }
   await mounted(React.createElement(Fixture),async({container,window,dispatch,tick})=>{
-    await dispatch(window,"focus");
+    await dispatch(window,ANALYTICS_REFRESH_REQUEST);
     assert.equal(calls,1);assert.equal(container.querySelector("[role=status]").dataset.state,"stale");
     assert.match(container.textContent,/Refresh failed.*last verified results/);assert.equal(container.querySelector("[data-report]").textContent,"Verified 1");
     await tick(500);await act(async()=>container.querySelector("button").click());
@@ -191,4 +205,17 @@ test("offline checks keep the last response and reconnecting requests one fresh 
       assert.equal(calls,1);assert.match(container.textContent,/Version 2/);assert.equal(container.querySelector("[role=status]").dataset.state,"fresh");
     });
   }finally{if(descriptor)Object.defineProperty(globalThis.navigator,"onLine",descriptor);else delete globalThis.navigator.onLine;}
+});
+
+
+test("a failed quiet check retains results and a later successful check recovers",async()=>{
+  const {analyticsFingerprint}=load(path.join(sourceRoot,"lib/analyticsFingerprint.ts"));
+  const data={submitted:4},fingerprint=await analyticsFingerprint(data);let calls=0;
+  function Fixture(){const[version,setVersion]=useState(1);refresh=()=>{calls++;setVersion(version+1);};return React.createElement(React.Fragment,null,React.createElement(AnalyticsRefresh),React.createElement(AnalyticsFreshness,{scope:"same",attemptedAt:version,asOf:"2026-10-30T01:00:00Z",timezone:"America/Los_Angeles",success:true,checkUrl:"/api/analytics?days=30",fingerprint},"Verified 4"));}
+  await mounted(React.createElement(Fixture),async({container,tick})=>{
+    globalThis.fetch=async()=>{throw new Error("Fictional network failure");};
+    await tick(120_000);assert.equal(calls,0);assert.match(container.textContent,/Verified 4/);assert.equal(container.querySelector("[role=status]").dataset.state,"stale");
+    globalThis.fetch=async()=>({ok:true,json:async()=>data});
+    await tick(120_000);assert.equal(calls,1);assert.equal(container.querySelector("[role=status]").dataset.state,"fresh");assert.match(container.textContent,/Verified 4/);
+  });
 });

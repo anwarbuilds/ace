@@ -142,7 +142,9 @@ test("chart controls, data table and keyboard navigation work",async({page})=>{
   await page.getByLabel("Chart interval").selectOption("weekly");
   await expect(page.getByRole("img",{name:/Unique submissions by calendar week/})).toBeVisible();
   await page.getByText("View chart data",{exact:true}).click();
-  await expect(page.locator(".an-chart-details[open]")).toBeVisible();
+  await expect(page.getByRole("dialog",{name:"Application submissions",exact:true})).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button",{name:"View chart data",exact:true})).toBeFocused();
   await page.locator(".an-tabs a").nth(1).focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/tab=outcomes/);
@@ -321,7 +323,7 @@ test("calendar aggregation and historical weeks preserve headline scope",async({
     const records=[...data.records];
     for(let offset=100;offset<data.record_total;offset+=100){params.set("offset",String(offset));records.push(...(await(await page.request.get(`/api/analytics?${params}`)).json()).records);}
     expect(new Set(records.map((r:{key:string})=>r.key)).size).toBe(data.record_total);
-    await expect(panel.locator(".an-foot")).toContainText(`${data.record_total} unique submissions in this week`);
+    await expect(panel.locator(".an-foot")).toContainText(`${data.record_total} applications in this week`);
     const bars=panel.locator(".an-column");
     for(let index=0;index<7;index++){
       const date=new Date(Date.parse(`${week}T12:00:00Z`)+index*86400000).toISOString().slice(0,10);
@@ -352,9 +354,9 @@ test("calendar aggregation and historical weeks preserve headline scope",async({
   await expect(page.getByRole("img",{name:/Unique submissions by calendar month/})).toBeVisible();
   await page.getByLabel("Chart interval").selectOption("daily");
   await page.getByText("View chart data",{exact:true}).click();
-  const href=await page.locator(".an-chart-details tbody a").first().getAttribute("href");
+  const href=await page.locator(".an-chart-dialog tbody a").first().getAttribute("href");
   const start=new URL(href!,"http://fixture.test").searchParams.get("start")!;
-  await page.locator(".an-chart-details tbody a").first().click();
+  await page.locator(".an-chart-dialog tbody a").first().click();
   await expect(page).toHaveURL(/days=custom/);
   await expect(page.locator(".an-hero p")).toContainText(start);
 });
@@ -675,4 +677,74 @@ test("a committed Inbox acknowledgement correction updates open Analytics withou
   await expect(page.locator('.an-classified-email-evidence')).toContainText("Acknowledgements:");
   await expect(page.locator('.an-freshness[data-state="fresh"]')).toBeVisible();
   await editor.close();
+});
+
+test("week arrows update locally, keep browser history and never request a new report",async({page})=>{
+  await page.goto("/app/analytics?days=30&family=SOFTWARE_ENGINEERING");
+  const panel=page.locator(".an-week-card");
+  await expect(panel.locator("h2")).toHaveText("This week");
+  await page.evaluate(()=>document.fonts.ready);
+  await page.waitForTimeout(700);
+  const requests:string[]=[];
+  await page.route(/\/app\/analytics(?:\?|$)/,route=>{
+    if(route.request().headers().rsc==="1"){requests.push(route.request().url());return route.abort();}
+    return route.continue();
+  });
+  await panel.getByRole("button",{name:"Previous week",exact:true}).click();
+  await expect(panel.locator("h2")).not.toHaveText("This week");
+  const previous=await panel.getAttribute("data-week-start");
+  await panel.getByRole("button",{name:"Previous week",exact:true}).click();
+  await expect(panel).not.toHaveAttribute("data-week-start",previous!);
+  await page.goBack();
+  await expect(panel).toHaveAttribute("data-week-start",previous!);
+  await page.goForward();
+  await expect(panel).not.toHaveAttribute("data-week-start",previous!);
+  await panel.getByRole("button",{name:"This week",exact:true}).click();
+  await expect(panel.locator("h2")).toHaveText("This week");
+  await expect(panel.getByRole("button",{name:"Next week",exact:true})).toBeDisabled();
+  await expect(page).toHaveURL(/days=30&family=SOFTWARE_ENGINEERING$/);
+  expect(requests,"week changes must work with every report request blocked").toEqual([]);
+});
+
+test("unchanged automatic checks preserve the page, chart state and scroll",async({page})=>{
+  // Install before mount so the coordinator interval belongs to the controlled clock.
+  await page.clock.install();
+  await page.goto("/app/analytics?days=30");
+  await expect(page.locator('.an-freshness[data-state="fresh"][data-analytics-version]')).toHaveCount(1);
+  await page.waitForTimeout(700);
+  const requests:string[]=[],checks:string[]=[];
+  page.on("request",request=>{
+    const url=new URL(request.url());
+    if(url.pathname==="/app/analytics"&&request.headers().rsc==="1"&&!request.headers()["next-router-prefetch"])requests.push(url.href);
+    if(url.pathname==="/api/analytics")checks.push(url.href);
+  });
+  await page.getByRole("button",{name:"Previous week",exact:true}).click();
+  const week=await page.locator(".an-week-card").getAttribute("data-week-start");
+  await page.getByRole("button",{name:"View chart data",exact:true}).click();
+  const checked=checks.length;
+  await page.clock.runFor(121_000);
+  await expect.poll(()=>checks.length).toBeGreaterThan(checked);
+  await page.waitForTimeout(1000);
+  expect(requests,"an unchanged poll must not replace the rendered report").toEqual([]);
+  await expect(page.getByRole("dialog",{name:"Application submissions",exact:true})).toBeVisible();
+  await expect(page.locator(".an-week-card")).toHaveAttribute("data-week-start",week!);
+});
+
+test("the timeline fills its card and the chart data dialog leaves all four card bounds stable",async({page})=>{
+  await page.setViewportSize({width:1920,height:1080});
+  await page.goto("/app/analytics?days=30");
+  const svg=page.locator(".an-line-chart>svg"),cards=page.locator(".an-overview-charts>.an-grid>.an-panel");
+  await expect(svg.locator("polyline")).toHaveCount(1);
+  await page.evaluate(()=>document.fonts.ready);
+  const bounds=await cards.evaluateAll(nodes=>nodes.map(node=>{const b=node.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height};}));
+  const plot=await svg.evaluate(node=>{const line=node.querySelector("polyline")!;const b=line.getBoundingClientRect(),frame=node.getBoundingClientRect();return {width:b.width,frame:frame.width};});
+  expect(plot.width/plot.frame).toBeGreaterThan(.9);
+  const icon=(await page.locator(".an-chart-data-action svg").boundingBox())!;
+  expect(icon.width).toBeLessThan(20);expect(icon.height).toBeLessThan(20);
+  await page.getByRole("button",{name:"View chart data",exact:true}).click();
+  await expect(page.getByRole("dialog",{name:"Application submissions",exact:true})).toBeVisible();
+  expect(await cards.evaluateAll(nodes=>nodes.map(node=>{const b=node.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height};}))).toEqual(bounds);
+  await page.screenshot({path:path.join(root,"overview-chart-data-dialog.png")});
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button",{name:"View chart data",exact:true})).toBeFocused();
 });

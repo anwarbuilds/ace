@@ -4,6 +4,7 @@ import { CompanyLogo } from "@/components/CompanyLogo";
 import { AnalyticsFreshness } from "@/components/analytics/AnalyticsFreshness";
 import { CorrespondenceRecords } from "@/components/analytics/CorrespondenceRecords";
 import { ScrollArea } from "@/components/shell/ScrollArea";
+import { analyticsFingerprint } from "@/lib/analyticsFingerprint";
 import { apiGetOr } from "@/lib/api";
 import type { ApplicationAnalyticsEmailRecords, ApplicationAnalyticsRecords } from "@/lib/analytics";
 import { clean, familyLabel, STATUS_LABEL } from "@/lib/format";
@@ -36,7 +37,8 @@ export default async function ApplicationAnalyticsRecordsPage({searchParams}:{se
   const scope=`/app/applications/analytics?${new URLSearchParams(query)}`;
   const data=await apiGetOr<ApplicationAnalyticsRecords|ApplicationAnalyticsEmailRecords|null>("/api/analytics",null,query);
   if(!data)return <ScrollArea list><AnalyticsFreshness scope={scope} attemptedAt={attemptedAt} asOf={null} timezone={query.tz} success={false}><div className="pg"><h1>Application records</h1><p>This selection could not be loaded. Check the filters or return to Analytics.</p><Link className="btn" href="/app/analytics">Back to Analytics</Link></div></AnalyticsFreshness></ScrollArea>;
-  if("email_records" in data)return <ScrollArea list><AnalyticsFreshness scope={scope} attemptedAt={attemptedAt} asOf={data.as_of} timezone={data.timezone} success><CorrespondenceRecords d={data} query={query}/></AnalyticsFreshness></ScrollArea>;
+  const fingerprint=await analyticsFingerprint(data),checkUrl=`/api/analytics?${new URLSearchParams(query)}`;
+  if("email_records" in data)return <ScrollArea list><AnalyticsFreshness scope={scope} attemptedAt={attemptedAt} asOf={data.as_of} timezone={data.timezone} checkUrl={checkUrl} fingerprint={fingerprint} success><CorrespondenceRecords d={data} query={query}/></AnalyticsFreshness></ScrollArea>;
   const analyticsQuery=new URLSearchParams();
   for(const key of ["days","start","end","family"])if(query[key])analyticsQuery.set(key,query[key]);
   // Rejected companies live on the Companies tab; return there from them.
@@ -53,7 +55,7 @@ export default async function ApplicationAnalyticsRecordsPage({searchParams}:{se
   const kept=Object.entries(query).filter(([key])=>!["records","q","offset"].includes(key));
   const shownFrom=data.record_total?data.record_offset+1:0;
   const shownTo=Math.min(data.record_total,data.record_offset+data.records.length);
-  return <ScrollArea list><AnalyticsFreshness scope={scope} attemptedAt={attemptedAt} asOf={data.as_of} timezone={data.timezone} success><div className="an-page an-records-page">
+  return <ScrollArea list><AnalyticsFreshness scope={scope} attemptedAt={attemptedAt} asOf={data.as_of} timezone={data.timezone} checkUrl={checkUrl} fingerprint={fingerprint} success><div className="an-page an-records-page">
     <div className="an-hero"><div><div className="an-eyebrow">Applications / Analytics selection</div><h1>{rejected?"Rejected applications":"Application records"}</h1><p>{data.record_total.toLocaleString("en-US")} unique {data.record_total===1?"application":"applications"} ·{data.days==="all"?"All time":`${data.start} to ${data.end}`} · {data.timezone}</p></div></div>
     <div className="an-record-links"><Link className="btn" href={href({days:"all",start:null,end:null,offset:null})}>All time</Link><Link className="btn" href={`/app/analytics?${analyticsQuery}`}>Back to Analytics</Link><Link className="btn" href="/app/applications">All applications and controls</Link><a className="btn" href="/api/applications/export.csv" download>Export full application history</a></div>
     {selected.length>0&&<p className="an-record-selection">{selected.join(" · ")}</p>}

@@ -12,6 +12,8 @@ export interface AnalyticsSupplement {
   submissionTrend: SubmissionTrend | null; weekTrend: SubmissionTrend | null;
   currentWeekTotal: number;
   weekToday: string;
+  /** Complete, reconciled daily aggregates only; application identities stay server-side. */
+  weeklyCounts?: Record<string, number>;
 }
 export const ANALYTICS_WEEK_TIMEZONE = "America/Los_Angeles";
 const DAY = 86_400_000;
@@ -123,6 +125,7 @@ export function calculateSupplement(d: AnalyticsData, identities: SubmissionIden
     weekStart, weekEnd, currentWeek: weekStart === currentMonday, submissionTrend,
     currentWeekTotal: weekCurrent,
     weekToday: today,
+    weeklyCounts: Object.fromEntries(weeklyDaily),
     weekTrend: compareCounts(weekCurrent, weekCount(midnight(shiftDate(currentMonday, -7)), weekNow + 1 - 7 * DAY),
       `Current Monday through the report's local weekday and time, compared with the same elapsed part of the preceding week in ${ANALYTICS_WEEK_TIMEZONE}.`),
   };
