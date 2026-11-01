@@ -707,6 +707,8 @@ test("week arrows update locally, keep browser history and never request a new r
 });
 
 test("unchanged automatic checks preserve the page, chart state and scroll",async({page})=>{
+  // Install before mount so the coordinator interval belongs to the controlled clock.
+  await page.clock.install();
   await page.goto("/app/analytics?days=30");
   await expect(page.locator('.an-freshness[data-state="fresh"][data-analytics-version]')).toHaveCount(1);
   await page.waitForTimeout(700);
@@ -716,12 +718,12 @@ test("unchanged automatic checks preserve the page, chart state and scroll",asyn
     if(url.pathname==="/app/analytics"&&request.headers().rsc==="1"&&!request.headers()["next-router-prefetch"])requests.push(url.href);
     if(url.pathname==="/api/analytics")checks.push(url.href);
   });
-  await page.clock.install();
   await page.getByRole("button",{name:"Previous week",exact:true}).click();
   const week=await page.locator(".an-week-card").getAttribute("data-week-start");
   await page.getByRole("button",{name:"View chart data",exact:true}).click();
+  const checked=checks.length;
   await page.clock.runFor(121_000);
-  await expect.poll(()=>checks.length).toBeGreaterThan(0);
+  await expect.poll(()=>checks.length).toBeGreaterThan(checked);
   await page.waitForTimeout(1000);
   expect(requests,"an unchanged poll must not replace the rendered report").toEqual([]);
   await expect(page.getByRole("dialog",{name:"Application submissions",exact:true})).toBeVisible();
@@ -737,6 +739,8 @@ test("the timeline fills its card and the chart data dialog leaves all four card
   const bounds=await cards.evaluateAll(nodes=>nodes.map(node=>{const b=node.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height};}));
   const plot=await svg.evaluate(node=>{const line=node.querySelector("polyline")!;const b=line.getBoundingClientRect(),frame=node.getBoundingClientRect();return {width:b.width,frame:frame.width};});
   expect(plot.width/plot.frame).toBeGreaterThan(.9);
+  const icon=(await page.locator(".an-chart-data-action svg").boundingBox())!;
+  expect(icon.width).toBeLessThan(20);expect(icon.height).toBeLessThan(20);
   await page.getByRole("button",{name:"View chart data",exact:true}).click();
   await expect(page.getByRole("dialog",{name:"Application submissions",exact:true})).toBeVisible();
   expect(await cards.evaluateAll(nodes=>nodes.map(node=>{const b=node.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height};}))).toEqual(bounds);

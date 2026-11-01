@@ -37,7 +37,7 @@
 .an-disconnected { color: var(--warning); background: var(--warning-soft); }
 .an-band-cta { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-md); font-weight: var(--weight-semibold); font-size: var(--text-small); white-space: nowrap; }
 .an-band-coverage { display: flex; flex-direction: column; justify-content: center; gap: 4px; border-left: 1px solid var(--border); padding-left: 20px; width: 128px; margin-left: 10px; flex: none; color: var(--text-secondary); font-size: var(--text-tick); }
-.an-band-coverage strong { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: var(--text-nav); font-weight: var(--weight-heading); }
+.an-band-coverage strong { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: var(--text-label); font-weight: var(--weight-heading); white-space: nowrap; }
 .an-band-coverage>span { white-space: nowrap; }
 .an-band-coverage small { font-size: var(--text-tick); }
 .an-inbox-workflow { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; width: 554px; max-width: 46%; flex: none; }
@@ -90,7 +90,7 @@
 .an-chart-mode select { min-height: 31px; padding: 5px 8px; width: 92px; font-size: var(--text-small); }
 .an-overview-top>.an-panel { min-height: 244px; }
 .an-overview-top .an-panel-head { margin-bottom: 6px; }
-.an-line-chart svg { display: block; width: 100%; height: 150px; overflow: visible; }
+.an-line-chart>svg { display: block; width: 100%; height: 150px; overflow: visible; }
 .an-page svg text { fill: var(--text-secondary); font-size: var(--text-tick); font-family: var(--font-ui); }
 .an-line-chart { position: relative; --an-chart-line: var(--accent); }
 .an-chart-data-action { display: flex; justify-content: flex-end; margin-top: 4px; }
@@ -349,7 +349,7 @@
   .an-panel h2 { font-size: var(--text-emphasis); }
   .an-panel-head p { font-size: var(--text-small); }
   .an-jump { white-space: normal; }
-  .an-line-chart svg { height: auto; min-height: 120px; }
+  .an-line-chart>svg { height: auto; min-height: 120px; }
   .an-line-chart svg text { font-size: var(--text-tick); }
   .an-cohort-metrics { grid-template-columns: 1fr; gap: 7px; }
   .an-cohort-metrics>div { min-height: 90px; }
