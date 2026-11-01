@@ -1,8 +1,71 @@
 # ACE Next knowledge
 
-Last updated: 2026-10-31 Pacific, approved Analytics Overview web-only release LIVE; invitation correction and automatic Inbox/Analytics synchronization remain intact.
+Last updated: 2026-11-01 Pacific, Analytics Overview workspace follow-up LIVE; underlying weekly navigation, real-data and Inbox contracts remain intact.
+
+## Analytics Overview workspace follow-up LIVE, 2026-11-01 Pacific
+
+The owner's follow-up removes **Recognized hiring progress**, **About these
+metrics and evidence**, and the footer/export links from **Overview**. It ends
+at the four chart cards. Those existing evidence/export views remain on other
+Analytics tabs; the CSV API and all metric meanings remain unchanged. This
+request supersedes the earlier fixed Overview reference frame bounds.
+
+Exact tested web **`5c36ea98b967e3d8c851a73509d113975f4e5a78`** is LIVE at
+https://ace.opik.net. [PR #23](https://github.com/anwarbuilds/ace/pull/23) merged
+as `43bea3c200b82b6ead2f99d3897bfab15a9c7564`. Web alone activated during
+**2026-11-01T20:35:28Z–2026-11-01T20:35:34Z (12:35 PST)**;
+release verification completed 2026-11-01T20:35:58Z. Production main tracks origin/main
+but intentionally remains on exact tested `5c36ea9`; later continuity documents
+are not another deployed build. API remains `a48d71b`, scheduler `fca4673`,
+schema 0050 and parser 15. The local standalone checkout remains canonical main.
+
+The Overview has no desktop width cap, uses matching 28 px content gutters,
+and lets its two rows share the remaining viewport height. Each row retains
+its own content minimum, so longer status lists do not force equal fractional
+rows to overflow. Small viewports/mobile scroll naturally. Existing Inter,
+Wine/Rose tokens, sidebar/header, five KPIs, four tabs, calendars, weekly
+navigation, role filters, evidence definitions and data readers are retained.
+Only AnalyticsView and Analytics CSS change production behavior.
+
+Exact-source [review 41346576773](https://github.com/anwarbuilds/ace/actions/runs/41346576773)
+passes 2,499 backend/PostgreSQL, 54 Inbox/Analytics browser and 127 unique DOM/
+calculation cases, TypeScript, full lint and build. Day/Night native and
+1920x1080, 1920x1440, 2560x1440 captures were inspected. The previously failing
+height assertion was fixed in CSS; the same strict assertion now passes.
+Hosted screenshots use isolated fictional records. Actual production projections
+were checked separately in enforced read-only snapshots; 132 current/previous/
+cross-year weeks and 924 buckets reconcile across all 44 role/period scopes.
+Installed primary/independent/expanded Analytics and invitation audits pass.
+No signed-in production browser test is claimed. Local Chrome remains restricted.
+The modified private HTML export was rejected by automatic approval review as
+a new payload; it stayed local, no new secret was created, and safe fictional
+hosted captures completed the visual review. Do not retry that export without
+new explicit approval. No owner data or screenshots entered public Git.
+
+Only web changed. Public SHA/auth, 15 bundles/fonts and 85 logos pass; all 375
+protected backend/audit-source hashes match. Both HMAC comparisons preserve
+every preexisting row across 19 protected tables. API, scheduler, PostgreSQL,
+Caddy and exited migrate identities/images/starts/mounts and .env/Caddy/Compose
+hashes/modes/inodes remain unchanged. Schema/parser, one Gmail monitor lease,
+background sync and disabled historical rechecks remain. Web logs have no
+error/traceback. No backend, migration, scheduler, extension, legacy operation,
+manual Gmail check, application/status mutation or auth session creation ran.
+
+Fresh backup `/opt/ace/private-backups/overview-fullscreen-20261101T2023Z/`
+passes gzip, catalog and full expansion (555,516,812 bytes; no restore drill or
+pruning). Actual prior `d26bfac` image is retained under
+`oracle-web:before-overview-fullscreen-20261101T2023Z` with guarded web-only
+rollback. Never restore old SQL data as image rollback. Private local evidence:
+`artifacts/analytics-overview-fullscreen-20261031/`, including REVIEW.md and
+`release-20261101/`. Older preparation evidence remains historical. Wider
+[CI 41346580469](https://github.com/anwarbuilds/ace/actions/runs/41346580469)
+passes backend/web and retains exactly 25 pass / 22 fail in extension browsers,
+with zero new/resolved failed names. Overall CI is not green; no assertions were
+skipped or weakened. See the current handoff and metric source contract.
 
 ## Analytics Overview weekly navigation LIVE, 2026-10-31 Pacific
+
+> Status: prior web release, superseded by the workspace follow-up above. Weekly/data contracts remain current.
 
 The owner explicitly approved encrypted actual-data visual capture and deployment
 if verification passed. Both are complete. This LIVE record supersedes the older

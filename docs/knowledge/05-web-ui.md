@@ -1152,3 +1152,27 @@ service identities and protected row sets/configuration match. Fresh backup,
 retained actual prior web image, compiled binding/public assets/auth and four-range
 invitation/drilldown checks pass. No signed-in production browser ran. See the
 newest root LIVE record for the exact private backup and web-only rollback.
+
+## Overview fills the workspace and ends at four chart cards LIVE (2026-11-01)
+
+The owner removed recognized hiring progress, About these metrics and evidence,
+and footer/export links from Overview. Existing evidence/export views remain
+on other Analytics tabs. The two chart rows use full desktop workspace width
+with 28 px gutters and share remaining height. Mobile/short viewports retain
+normal scrolling; sidebar, tokens, typography and data sources are unchanged.
+
+An equal-fraction grid forced both rows to the longer status list's minimum and
+overshot the viewport. Using each row's own content basis and sharing spare
+height fixes it without relaxing the strict height assertion. Browser checks
+also pin full width, matching row edges, taller-viewport growth, removed sections,
+weekly controls, date picker, other tabs and mobile overflow.
+
+Exact tested `5c36ea98b967e3d8c851a73509d113975f4e5a78` is live after owner-approved
+web-only activation 2026-11-01T20:35:28Z–2026-11-01T20:35:34Z. PR #23 is merged.
+Review 41346576773 passes 2,499 backend/PostgreSQL, 54 browser and 127 unique
+DOM/calculation cases, TypeScript/lint/build. Day/Night and wide captures are
+inspected using fictional hosted data; real records are independently reconciled
+in read-only production snapshots. Backup/rollback and preservation details are
+in the root LIVE record. Broader CI retains the exact known 22 extension-browser
+failures, with no new names. No backend, migration, scheduler, extension or
+legacy operation ran. Local Chrome remains restricted.

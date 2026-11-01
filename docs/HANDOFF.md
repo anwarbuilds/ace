@@ -1,6 +1,6 @@
 # ACE current handoff
 
-Updated 2026-10-31 Pacific after the approved Analytics Overview web-only release. This is
+Updated 2026-11-01 Pacific after the approved Analytics Overview workspace follow-up. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
@@ -27,26 +27,29 @@ before changes. Dated pending instructions are not current authorization.
 - Fetch main before future changes and push only the reviewed source. Private
   `recovery-20261030/*` tags are local recovery material; **do not push all tags**.
 
-## Analytics Overview weekly navigation LIVE
+## Analytics Overview workspace LIVE
 
-Owner-approved exact tested **`d26bfac1c64eaa5a8a479c89d5099b6474f67a4e`**,
-[PR #22](https://github.com/anwarbuilds/ace/pull/22), activated web only during
-2026-10-31T16:12:34Z–16:12:41Z (09:12 Pacific); final checks completed 16:13:06Z.
-Current chart is “This week” plus its actual Pacific Monday-to-Sunday range;
-historical headings show their range. Arrows move one week, stop forward at
-current, and preserve role/period selections; weekly data is period-independent.
-The reset returns to current. Weekly date input is gone; page-level Choose dates
-retains its outlined calendar and native inputs. Future days are not completed
-zeros. Existing identity, evidence, invitation-email and refresh contracts remain.
+Owner-approved exact tested **`5c36ea98b967e3d8c851a73509d113975f4e5a78`**,
+[PR #23](https://github.com/anwarbuilds/ace/pull/23), activated web only during
+2026-11-01T20:35:28Z–2026-11-01T20:35:34Z (12:35 PST); release checks completed
+2026-11-01T20:35:58Z. Overview now ends at its four chart cards: recognized hiring
+progress, the evidence disclosure and footer/export links are removed there.
+Those existing views remain on other tabs; CSV and metric APIs are unchanged.
 
-Exact-source [review 41216154070](https://github.com/anwarbuilds/ace/actions/runs/41216154070)
-passes 2,499 backend/PostgreSQL, 54 Inbox/Analytics browser and 127 unique
-DOM/calculation checks, TypeScript, lint and build. Actual read-only Day/Night
-current/historical renders were inspected against both native references; the
-approved temporary hosted secret was deleted. Existing shell dimensions and the
-real undated-record notice differ from the samples; no pixel-perfect claim is
-made. Actual source data stays private. The root LIVE record includes precise
-comparison, audit and cooling limits. Do not run local Chrome until repaired.
+The desktop Overview fills workspace width with 28 px gutters. Its two rows
+share remaining height after respecting their own content minima; mobile/short
+viewports scroll naturally. This owner request supersedes the earlier fixed
+Overview frame bounds. Sidebar, Inter/Wine/Rose tokens and other tabs remain.
+Current/historical Pacific-week headings, arrows/reset/forward bound, independent
+week data, role/period controls and page-level Choose dates remain unchanged.
+
+Exact-source [review 41346576773](https://github.com/anwarbuilds/ace/actions/runs/41346576773)
+passes 2,499 backend/PostgreSQL, 54 Inbox/Analytics browser and 127 unique DOM/
+calculation cases, TypeScript, lint and build. Day/Night native and 1920/2560
+captures were inspected; strict width/height/absence assertions pass. Hosted
+images use fictional data. Separate actual read-only production checks reconcile
+132 weeks / 924 buckets across all 44 role/period scopes. No signed-in production
+browser or new private hosted capture is claimed. Local Chrome stays restricted.
 
 ## Interview invitation headline correction retained (previous release)
 
@@ -71,15 +74,15 @@ four-range invitation/drilldown, full installed audit and preservation checks pa
 ## Production: current verified sources
 
 Website: **https://ace.opik.net**. Web is exact approved/tested
-**`d26bfac1c64eaa5a8a479c89d5099b6474f67a4e`**, merged by PR #22 as
-`68f1763d1615db03c77b991433d96d8ed099f3b7`. Production `/opt/ace` main tracks
-origin/main but intentionally remains at exact tested `d26bfac`. Later continuity
+**`5c36ea98b967e3d8c851a73509d113975f4e5a78`**, merged by PR #23 as
+`43bea3c200b82b6ead2f99d3897bfab15a9c7564`. Production `/opt/ace` main tracks
+origin/main but intentionally remains at exact tested `5c36ea9`. Later continuity
 documentation is not another deployed build.
 
 | Running surface | Verified source revision |
 | --- | --- |
 | API, Inbox parser 15 | `a48d71be3a33a6188e8fa96f748b4b78ecd19ef0` |
-| Web | `d26bfac1c64eaa5a8a479c89d5099b6474f67a4e` |
+| Web | `5c36ea98b967e3d8c851a73509d113975f4e5a78` |
 | Discovery scheduler | `fca4673033dc92833bbf217182738026f414bf3d` |
 | Database schema | `0050` |
 
@@ -96,12 +99,12 @@ migrate identities/images/starts/mounts stay intact. .env/Caddy/Compose hashes,
 modes and inodes match. Schema 0050/parser 15, one monitor lease and background
 sync remain; historical rechecks stay disabled and parser 7 stays stopped.
 
-Fresh backup `/opt/ace/private-backups/overview-week-20261031T1600Z/` passes
-gzip, catalog and full expansion (566,697,872 bytes, no restore drill/pruning).
-Actual prior `1eb2808` web image is retained as
-`oracle-web:before-overview-week-20261031T1600Z` with guarded web-only rollback.
+Fresh backup `/opt/ace/private-backups/overview-fullscreen-20261101T2023Z/` passes
+gzip, catalog and full expansion (555,516,812 bytes, no restore drill/pruning).
+Actual prior `d26bfac` web image is retained as
+`oracle-web:before-overview-fullscreen-20261101T2023Z` with guarded web-only rollback.
 Never restore old database data as image rollback. Local private proof is ignored
-`artifacts/analytics-overview-week-20261031/release/`. Earlier images/backups remain.
+`artifacts/analytics-overview-fullscreen-20261031/release-20261101/`. Earlier images/backups remain.
 No backend change, migration, scheduler operation, extension publication, Gmail
 replay, application/status write or legacy restart ran.
 
@@ -151,7 +154,7 @@ changed. Resume tailoring/export and offsite backup remain limitations.
 
 ## Validation and CI
 
-Latest Overview verification is recorded above. Wider PR CI 41217636237 passes
+Latest Overview verification is recorded above. Wider PR CI 41346580469 passes
 backend/web and retains the exact 25 pass / 22 fail extension-browser baseline
 with zero new/resolved failed names; dedicated Analytics browser checks pass.
 Overall CI remains red. No assertion was disabled or weakened.

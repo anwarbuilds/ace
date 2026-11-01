@@ -1,5 +1,19 @@
 # Analytics metric and source audit
 
+## Overview workspace follow-up LIVE, 2026-11-01
+
+The owner removed Recognized hiring progress, About these metrics and evidence,
+and footer/export links from Overview. It now ends after the four chart cards,
+which expand through desktop workspace width and remaining height. Other tabs,
+CSV APIs, all metric/date definitions and weekly behavior remain unchanged.
+Exact tested web `5c36ea98b967e3d8c851a73509d113975f4e5a78` activated at
+2026-11-01T20:35:28Z–2026-11-01T20:35:34Z; [PR #23](https://github.com/anwarbuilds/ace/pull/23).
+The same strict height assertion passes after fixing equal-row overflow with
+longer status lists. Day/Night and 1920/2560 layout captures use fictional hosted
+records; current actual production data is separately verified read-only across
+44 role/period scopes and 132 weeks / 924 daily buckets. No backend change,
+production fixture, migration, private hosted export or production browser test.
+
 ## Overview weekly navigation LIVE, 2026-10-31
 
 The weekly card selects one Monday-to-Sunday calendar week in
@@ -24,7 +38,7 @@ Coverage stays Unavailable because no existing field certifies complete
 comparable observation for the selected period. No backend, migration, Gmail,
 application-state or scheduler change is part of this frontend release.
 
-Owner-approved exact tested `d26bfac1c64eaa5a8a479c89d5099b6474f67a4e`
+The previous weekly-navigation release, exact tested `d26bfac1c64eaa5a8a479c89d5099b6474f67a4e`,
 activated web only at 2026-10-31T16:12:34Z–16:12:41Z. Exact-source hosted checks
 pass 2,499 backend/PostgreSQL, 54 Inbox/Analytics browser and 127 unique DOM/
 calculation cases, TypeScript, lint and build. A fresh post-release read-only
