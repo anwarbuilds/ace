@@ -1,6 +1,51 @@
 # Analytics metric and source audit
 
-## Overview workspace follow-up LIVE, 2026-11-01
+## Chart/interaction release LIVE, 2026-11-01
+
+Exact tested web `3d578e5058fa0efd79e16741d0eda9760e1ac2ca`, merged PR #24,
+activated web only at 21:37:36Z–21:37:43Z (13:37 PST). See the current handoff
+for release preservation/rollback and private proof. The 57 dedicated browser,
+132 unique DOM/calculation and 2,499 backend/PostgreSQL checks pass, plus types,
+lint and build. Native Day/Night and wider responsive captures use fictional
+test data; fresh actual read-only reconciliation separately covers 44 scopes,
+132 weeks, 924 buckets and all cached daily aggregates. No production fixture,
+mailbox completeness or signed-in production browser claim.
+
+The reconciled server supplement now returns a Pacific date/count map containing
+aggregates only. Client week arrows read this verified map with no report fetch;
+identities stay server-side. Week headings, seven bars, role filter, independent
+reporting period, native history/back/forward, current bound/reset and exact
+record links retain their contracts. The footer compares real counts: equal
+elapsed local weekday/time for current, complete weeks for historical, no
+percentage with zero prior activity, and the genuine peak day when unique.
+
+The full-width timeline preserves line, markers, fill, axes and unscaled Inter
+text while measuring its actual card width. Its exact data/drilldowns are in an
+accessible dialog; opening it does not change the four-card geometry. The prior
+full-workspace layout and removal of Overview lower sections remain.
+
+Sync requires a ready connected account and real sync timestamp. Match and
+Identity use `classified_email_evidence.linked_messages`, excluding company-only
+and unlinked correspondence. Verify requires recorded manual/automatic confirmed
+evidence, rather than claiming all messages verified. Green describes supported
+evidence, not completeness. Coverage uses only existing complete, consistent
+`job_mail` Gmail check metadata, with its actual window/check timestamp and
+email numerator/denominator. It is separate from application filters and employer
+response coverage; an absent/invalid check is Not verified with Check in Inbox.
+No Gmail verification or backend change ran. Response-effectiveness rates remain
+unavailable without their separate observation contract.
+
+Visible-page timer/focus checks quietly GET the same authenticated no-store
+projection and hash every returned field except read timestamps. Unchanged data
+never replaces the page or interrupts scroll/dialog/week state. Changed data,
+evidence notifications, return, retry and recovery still read a fresh server
+projection. Failure retains only this mounted selection's verified output;
+older/failed responses cannot replace its snapshot or fingerprint.
+
+## Previous Overview workspace release, 2026-11-01
+
+> The chart/interaction release above supersedes its web image and refresh/coverage presentation. The layout/removal and underlying metric contracts remain current.
+
 
 The owner removed Recognized hiring progress, About these metrics and evidence,
 and footer/export links from Overview. It now ends after the four chart cards,
@@ -85,7 +130,9 @@ Historical assessments/interviews and later rejections remain distinct valid
 events, deduplicated by application and kind.
 
 Open Analytics and records pages revalidate on evidence notifications, return,
-focus/visibility, online recovery and a two-minute visible-page interval. Query
+retry and online recovery. Two-minute visible-page and focus/visibility checks
+compare the authoritative projection quietly; unchanged data does not replace
+the page, and changed data requests a fresh server projection. Query
 filters remain unchanged. Failed refreshes retain only the mounted selection's
 last verified rendered report with a freshness/error indication; no counts are
 invented and older responses cannot replace newer results.

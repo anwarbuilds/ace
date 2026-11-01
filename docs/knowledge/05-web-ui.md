@@ -8,6 +8,36 @@
 > Read this when: you change the old single-file UI or build its Next.js replacement; it records what each screen is for and what went wrong.
 
 
+## Analytics chart/interaction release LIVE, 2026-11-01 Pacific
+
+The owner's requested fixes are live in exact tested web `3d578e5`, PR #24,
+activated web only at 13:37 PST. Week arrows use reconciled Pacific aggregates
+locally, preserving URL/history, role/period independence and current bounds.
+Real current/historical comparisons and peak-day context are included. The
+reference-style timeline fills its card without stretching text; chart data
+opens in an accessible dialog without resizing cards. Quiet timer/focus checks
+refresh only changed projections. Evidence updates, retained failure output,
+retry and recovery remain. Scope refresh guards/fingerprints to the retained
+verified selection. Keep chart-only SVG sizing scoped to the direct chart so
+small nested action/dialog icons retain their shared dimensions.
+
+Match/Identity now use supported application links and Verify uses confirmed
+evidence. Gmail coverage is an independently checked email-search snapshot,
+never a demo percentage or employer response-completeness attestation. The
+existing shell/tokens, page calendar, full-workspace layout and removed lower
+Overview sections remain. Backend, schema, scheduler, Inbox/Undo, extension and
+auth are unchanged. See current handoff/metric source contract for exact sources.
+
+Exact-source review 41351759860 passes 2,499 backend/PostgreSQL, 57 browser,
+132 unique DOM/calculation cases, types/lint/build and strict native Day/Night,
+wider/mobile bounds. Screenshots use fictional records. Separate actual
+read-only checks reconcile 44 scopes, 132 weeks, 924 buckets and every cached
+aggregate. No signed-in production browser/pixel-perfect claim; local Chrome
+remains restricted. Broader CI retains exactly the known 25/22 extension
+baseline, with no new failed names. Live SHA/auth/assets and source/data/service
+preservation pass. Private review is ignored
+`artifacts/analytics-overview-interactions-20261101/REVIEW.md`.
+
 ## Inbox parser 14 corrective release LIVE — 2026-10-29 Pacific
 
 Owner-approved API/frontend source **`4116aa01dd5cdd3a6ea3d707017a7d9f7fad5bd7`**

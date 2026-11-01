@@ -1,6 +1,6 @@
 # ACE current handoff
 
-Updated 2026-11-01 Pacific after the approved Analytics Overview workspace follow-up. This is
+Updated 2026-11-01 Pacific after the approved Analytics chart/interaction release. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
@@ -27,7 +27,84 @@ before changes. Dated pending instructions are not current authorization.
 - Fetch main before future changes and push only the reviewed source. Private
   `recovery-20261030/*` tags are local recovery material; **do not push all tags**.
 
-## Analytics Overview workspace LIVE
+## Analytics chart/interaction release LIVE
+
+The owner requested the Inbox workflow fix, reference-style timeline, actual
+weekly comparison/peak text, usable chart data, no unchanged idle reloads and
+fast week arrows, then explicitly approved deployment. Exact tested web
+**`3d578e5058fa0efd79e16741d0eda9760e1ac2ca`** is LIVE at https://ace.opik.net.
+[PR #24](https://github.com/anwarbuilds/ace/pull/24) merged as
+`68e2d194141145d1e0e90bdba532426e75838cf4`. Web alone activated during
+**2026-11-01T21:37:36Z–21:37:43Z (13:37 PST)**; release verification completed
+21:38:08Z. Production main deliberately stays on exact tested `3d578e5`;
+later continuity documentation is not another deployed build. This current
+record supersedes previous web-release instructions; do not replay operators.
+
+Match and Identity were permanently neutral. They now use existing verified
+application links; Verify uses confirmed evidence and Sync requires an active
+connection with a real sync timestamp. Complete Gmail search coverage is a
+separate fact: only a valid, completed existing job-mail check yields a
+percentage, explicitly counting emails. Missing coverage says Not verified
+with Check in Inbox. No Gmail check was run and no demo coverage was invented.
+This does not unlock employer response-effectiveness rates.
+
+The timeline measures its card width and retains legible Inter ticks, line,
+markers, grid and area fill. View chart data opens an accessible native dialog
+with exact counts/drilldowns, Escape/focus return and no card resizing. Week
+arrows use reconciled Pacific daily aggregates already loaded with the report,
+with no report request. Native history preserves filters and back/forward.
+Current weeks compare the same elapsed weekday/time; historical weeks compare
+complete weeks. The real peak day is included, with no zero-base percentage.
+Quiet no-store checks on focus/timer refresh only changed authoritative data,
+ignoring read timestamps; evidence notifications, retry and recovery remain.
+Failures retain only this mounted selection's last verified output. No local
+metrics ledger or browser persistence was added.
+
+The full-workspace/flexible-height Overview and removal of its lower evidence/
+export sections remain as requested. Existing shell, Wine/Rose/Inter tokens,
+page-level Choose dates calendar, roles, reporting periods, four tabs and
+receipt-date interview invitation binding remain. Only Analytics frontend
+runtime/test files change behavior; backend and shared shell are untouched.
+
+Exact-source [review 41351759860](https://github.com/anwarbuilds/ace/actions/runs/41351759860)
+passes **2,499 backend/PostgreSQL**, **57 Inbox/Analytics browser** and **132
+unique DOM/calculation** cases, TypeScript, full lint and build. Both native
+Day/Night captures, wider desktop and responsive layouts were inspected. The
+first rendered candidate exposed oversized action SVGs and a wrapping label;
+CSS was corrected without loosening the original bounds assertions. Tests
+prove local week navigation with report requests blocked, actual timer-driven
+quiet checks, dialog/card bounds, role/period independence and cross-year weeks.
+Hosted captures use isolated fictional data. Actual read-only production
+snapshots separately reconcile 132 current/previous/cross-year windows, 924
+daily buckets and every cached aggregate across all 44 role/period scopes.
+No signed-in production browser or pixel-perfect claim. Local Chrome remains
+restricted. Private review/comparisons: ignored
+`artifacts/analytics-overview-interactions-20261101/REVIEW.md`.
+
+Live exact SHA, auth, 15 bundle/font hashes, 85 logos, compiled behavior,
+installed primary/independent/expanded Analytics and invitation audits pass.
+All 375 backend/audit-source hashes match. Both HMAC comparisons preserve
+preexisting rows across 19 protected tables. API, scheduler, PostgreSQL, Caddy
+and exited migrate identities/images/starts/mounts, .env/Caddy/Compose hashes,
+modes and inodes remain unchanged. Schema 0050/parser 15, one monitor lease,
+background sync and disabled historical rechecks remain. Web logs have no
+error/traceback. No backend, migration, scheduler, extension, legacy, manual
+Gmail, application/status mutation or auth session creation ran.
+
+Fresh backup `/opt/ace/private-backups/overview-interactions-20261101T2117Z/`
+passes gzip, catalog and full expansion (556,039,613 bytes; no restore drill or
+pruning). Actual prior `5c36ea9` web image is retained as
+`oracle-web:before-overview-interactions-20261101T2117Z` with guarded web-only
+rollback. Never restore old SQL data as an image rollback. API remains
+`a48d71be3a33a6188e8fa96f748b4b78ecd19ef0`, scheduler `fca4673`.
+Wider [CI 41351764471](https://github.com/anwarbuilds/ace/actions/runs/41351764471)
+passes backend/web and retains exactly 25 pass / 22 fail in extension browsers,
+with zero new/resolved failed names. Overall CI is not green. No assertions
+were skipped or weakened.
+
+## Previous Overview workspace release
+
+> Superseded web image; its full-workspace layout and lower-section removal remain current.
 
 Owner-approved exact tested **`5c36ea98b967e3d8c851a73509d113975f4e5a78`**,
 [PR #23](https://github.com/anwarbuilds/ace/pull/23), activated web only during
@@ -74,39 +151,22 @@ four-range invitation/drilldown, full installed audit and preservation checks pa
 ## Production: current verified sources
 
 Website: **https://ace.opik.net**. Web is exact approved/tested
-**`5c36ea98b967e3d8c851a73509d113975f4e5a78`**, merged by PR #23 as
-`43bea3c200b82b6ead2f99d3897bfab15a9c7564`. Production `/opt/ace` main tracks
-origin/main but intentionally remains at exact tested `5c36ea9`. Later continuity
+**`3d578e5058fa0efd79e16741d0eda9760e1ac2ca`**, merged by PR #24 as
+`68e2d194141145d1e0e90bdba532426e75838cf4`. Production `/opt/ace` main tracks
+origin/main but intentionally stays at exact tested `3d578e5`. Later continuity
 documentation is not another deployed build.
 
 | Running surface | Verified source revision |
 | --- | --- |
 | API, Inbox parser 15 | `a48d71be3a33a6188e8fa96f748b4b78ecd19ef0` |
-| Web | `5c36ea98b967e3d8c851a73509d113975f4e5a78` |
+| Web | `3d578e5058fa0efd79e16741d0eda9760e1ac2ca` |
 | Discovery scheduler | `fca4673033dc92833bbf217182738026f414bf3d` |
 | Database schema | `0050` |
 
-Only web changed. Public health/exact SHA, auth boundaries, 15 bundle/font hashes,
-85 logos, installed primary/independent/expanded Analytics audits and four-range
-invitation drilldowns pass. A fresh post-release snapshot reconciles 132 weeks /
-924 daily buckets across all 44 role/period scopes against independent Python
-Pacific-calendar expectations. Pre-release broader week reconciliation is also
-preserved privately. None of these is signed-in production browser verification.
-
-All 375 backend/audit-source hashes match; both HMAC comparisons preserve all
-rows across 19 protected tables. API, scheduler, PostgreSQL, Caddy and exited
-migrate identities/images/starts/mounts stay intact. .env/Caddy/Compose hashes,
-modes and inodes match. Schema 0050/parser 15, one monitor lease and background
-sync remain; historical rechecks stay disabled and parser 7 stays stopped.
-
-Fresh backup `/opt/ace/private-backups/overview-fullscreen-20261101T2023Z/` passes
-gzip, catalog and full expansion (555,516,812 bytes, no restore drill/pruning).
-Actual prior `d26bfac` web image is retained as
-`oracle-web:before-overview-fullscreen-20261101T2023Z` with guarded web-only rollback.
-Never restore old database data as image rollback. Local private proof is ignored
-`artifacts/analytics-overview-fullscreen-20261031/release-20261101/`. Earlier images/backups remain.
-No backend change, migration, scheduler operation, extension publication, Gmail
-replay, application/status write or legacy restart ran.
+Only web changed. Current live verification, fresh backup/rollback and private
+proof are described in the first LIVE section above. Preserve those exact
+service/data/configuration boundaries; never restore old SQL data as an image
+rollback. No signed-in production browser verification is claimed.
 
 ## Legacy retirement and recovery
 
@@ -154,7 +214,7 @@ changed. Resume tailoring/export and offsite backup remain limitations.
 
 ## Validation and CI
 
-Latest Overview verification is recorded above. Wider PR CI 41346580469 passes
+Latest chart/interaction verification is recorded above. Wider PR CI 41351764471 passes
 backend/web and retains the exact 25 pass / 22 fail extension-browser baseline
 with zero new/resolved failed names; dedicated Analytics browser checks pass.
 Overall CI remains red. No assertion was disabled or weakened.
