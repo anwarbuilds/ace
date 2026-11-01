@@ -292,7 +292,8 @@
 @media(min-width:1101px) {
   .an-tab-overview { max-width: none; min-height: calc(100dvh - var(--site-h)); padding: 16px 28px 24px; display: flex; flex-direction: column; }
   .an-tab-overview> :not(.an-overview-charts) { flex-shrink: 0; }
-  .an-overview-charts { flex: 1; grid-template-rows: minmax(244px,1fr) minmax(242px,1fr); }
+  .an-overview-charts { flex: 1; display: flex; flex-direction: column; }
+  .an-overview-charts>.an-grid { flex: 1 0 auto; min-height: 244px; }
   .an-overview-charts .an-panel { display: flex; flex-direction: column; }
   .an-overview-charts .an-line-chart { margin-block: auto; }
   .an-overview-charts .an-weekly { margin-block: auto; }
