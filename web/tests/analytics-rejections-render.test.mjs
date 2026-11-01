@@ -218,22 +218,21 @@ for(const tab of ["overview","outcomes","role-resume","companies"]) {
   });
 }
 
-test("Analytics exposes incomplete Gmail coverage even on the Companies tab",()=>{
+test("Companies removes the evidence disclosure without inventing a response rate",()=>{
   const connection={connected:true,state:"ready",available:true,last_synced_at:"2026-10-26T18:00:00Z",coverage:{days:30,gmail:949,in_ace:516,missing:433,complete:true,checked_at:"2026-10-26T18:00:00Z"}};
   const html=renderToStaticMarkup(React.createElement(AnalyticsView,{d:base,connection,tab:"companies",query:{}}));
-  assert.match(html,/Gmail has 949 emails from the last 30 days. 433 are not in ACE yet/);
-  assert.doesNotMatch(html,/All are in ACE/);
+  assert.doesNotMatch(html,/About these metrics|949 emails|All are in ACE|applications\/export/);
+  assert.match(html,/an-rate-na[^>]*>Unavailable/);
 });
 
 test("Analytics shows selected-scope evidence exclusions and total pending mail including deferred",()=>{
   const d={...base,review:{needs_review:2,exact_preview:1,ambiguous:1,deferred:4},inbox_audit:{stored_messages:30,pending_messages:7,stale_messages:5,excluded_events:{before_application_window:2}}};
   const html=renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:{connected:true,state:"ready",last_synced_at:"2026-10-26T18:00:00Z"},tab:"outcomes",query:{}}));
   assert.match(html,/7 messages await review/);
-  assert.match(html,/30 emails imported in total; 7 await your decision; 5 need a re-read/);
-  assert.match(html,/2 outcome events in this selection are.*excluded from verified email evidence/);
+  assert.doesNotMatch(html,/About these metrics and evidence|an-audit-note/);
   assert.match(html,/decision=deferred/);
   assert.match(html,/Decide later/);
-  assert.match(html,/has not been verified/);
+  assert.match(html,/Application decisions held for confirmation/);
 });
 
 test("recognized unlinked outcomes have an evidence link without inflating review or confirmed outcomes",()=>{
@@ -250,7 +249,7 @@ test("recognized unlinked outcomes have an evidence link without inflating revie
   assert.equal(evidence.querySelector("b").textContent,"6");
   assert.match(evidence.textContent,/Recognized evidence without an eligible application; excluded from outcome totals/);
   assert.match(document.querySelector(".an-inbox-copy").textContent,/7 messages await review/);
-  assert.match(document.querySelector(".an-audit-note").textContent,/30 emails imported in total; 7 await your decision/);
+  assert.equal(document.querySelector(".an-audit-note"),null);
   assert.equal(document.querySelector(".an-cohort-strip").getAttribute("aria-label"),"Confirmed positive replies: 2; Confirmed rejections: 3; Still pending: 4; Other or unknown evidence: 0");
   const review=document.querySelector('.an-review-list a[href="/app/applications/inbox?decision=review"]');
   assert.equal(review.querySelector("b").textContent,"2");
@@ -272,43 +271,17 @@ test("an empty cohort has no invented zero-denominator percentage",()=>{
 });
 
 const classifiedEvidence={total:19,categories:{rejection:6,online_assessment:7,interview:3,offer:1,recruiter_reply:1,action_required:1},date_basis:"email_received",application_status_changed:false,family_excluded_messages:0,company_excluded_messages:0};
-for(const tab of ["overview","outcomes"]){
-  test(tab==="overview" ? "Overview ends at the four chart cards even with recognized email evidence" : "Outcomes retains recognized hiring progress and its independent receipt scope",()=>{
-    const d={...base,days:"all",positive:2,assessments:1,interviews:1,statuses:{applied:6,rejected:3},classified_email_evidence:classifiedEvidence};
+for(const tab of ["overview","outcomes","role-resume","companies"]){
+  test(`${tab}: no removed evidence disclosure, application export or recognized progress returns`,()=>{
+    const d={...base,days:"all",positive:2,assessments:1,interviews:1,classified_email_evidence:classifiedEvidence};
     const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab,query:{tab}})));
-    const panel=document.querySelector(".an-classified-email-evidence");
-    if(tab==="overview"){
-      assert.equal(panel,null);
-      assert.equal(document.querySelector(".an-audit-note"),null);
-      assert.equal(document.querySelector(".an-bottom-links"),null);
-      assert.equal(document.querySelector('a[href="/api/applications/export.csv"]'),null);
-      assert.equal(document.querySelectorAll(".an-metric").length,5);
-      assert.equal(document.querySelectorAll(".an-overview-charts>.an-grid>.an-panel").length,4);
-      assert.equal(document.querySelector(".an-page").lastElementChild.className,"an-overview-charts");
-      return;
-    }
-    assert.ok(panel);
-    assert.match(panel.textContent,/Email receipt dates: All dates through 2026-10-26.*America\/Los_Angeles/);
-    assert.match(panel.textContent,/19 classified emails in this scope/);
-    assert.match(panel.textContent,/A later rejection does not erase an earlier assessment or interview/);
-    assert.match(panel.textContent,/email counts, not additional applications or confirmed stage totals/);
-    for(const [kind,label,count] of [["online_assessment","Assessment invitation emails",7],["interview","Interview invitation emails",3],["offer","Offer emails",1],["rejection","Rejection emails",6]]){
-      const link=emailLink(panel,kind);
-      assert.equal(link.querySelector("strong").textContent,label);
-      assert.equal(link.querySelector("b").textContent,String(count));
-    }
-    assert.match(panel.textContent,/Recruiter reply emails: 1.*Other action instructions: 1/);
-    assert.ok(emailLink(panel,"recruiter_reply"));
-    assert.ok(emailLink(panel,"action_required"));
-    const metrics=[...document.querySelectorAll(".an-metric")];
-    const metric=label=>metrics.find(node=>node.querySelector(".an-metric-label").textContent===label);
-    assert.equal(metric("Applications sent").querySelector("strong").textContent,"9");
-    assert.equal(metric("Meaningful replies").querySelector("strong").textContent,"2");
-    assert.equal(metric("Online assessments").querySelector("strong").textContent,"1");
-    assert.equal(metric("Interview invitations").querySelector("strong").textContent,"3");
-    assert.match(metric("Online assessments").textContent,/including later rejections/);
-    assert.match(panel.textContent,/historical invitations may already be completed or cancelled/);
-    assert.doesNotMatch(panel.innerHTML,/evidence=online_assessment|evidence=interview|evidence=rejection/);
+    assert.equal(document.querySelector(".an-classified-email-evidence,.an-audit-note,.an-bottom-links"),null);
+    assert.equal(document.querySelector('a[href="/api/applications/export.csv"]'),null);
+    assert.equal(document.querySelectorAll(".an-metric").length,5);
+    if(tab==="overview")assert.equal(document.querySelectorAll(".an-overview-charts>.an-grid>.an-panel").length,4);
+    if(tab==="outcomes")assert.equal(document.querySelectorAll(".an-outcomes>.an-column-stack>.an-panel").length,4);
+    const card=[...document.querySelectorAll(".an-metric")].find(node=>node.querySelector(".an-metric-label").textContent==="Interview invitations");
+    assert.equal(card.querySelector("strong").textContent,"3");
   });
 }
 
@@ -323,11 +296,9 @@ test("interview headline counts recognized invitation emails even with zero veri
     const target=new URL(card.getAttribute("href"),"https://fixture.test");
     assert.equal(target.pathname,"/app/applications/analytics");
     assert.deepEqual(Object.fromEntries(target.searchParams),{days:"custom",tz:"America/Los_Angeles",start:"2026-10-01",end:"2026-10-26",family:"ML_ENGINEERING",emails:"1",email_kind:"interview",company:"Wayfern"});
-    const note=document.querySelector(".an-audit-note");
-    if(tab==="outcomes"){
-      assert.match(note.textContent,new RegExp(`Verified application interview stages: ${stages}`));
-      assert.match(note.textContent,/including emails without a verified application link/);
-    }else assert.equal(note,null);
+    assert.equal(document.querySelector(".an-audit-note"),null);
+    assert.match(card.querySelector(".an-trend-missing").title,new RegExp(`Verified application interview stages: ${stages}`));
+    assert.match(card.querySelector(".an-trend-missing").title,/Invitation emails use receipt dates and do not assign an application stage/);
   }
 });
 
@@ -340,71 +311,15 @@ test("missing interview email projection is unavailable rather than a fabricated
   }
 });
 
-test("recognized email progress explains unknown company and role exclusions in scoped views",()=>{
-  const d={...base,family:"ML_ENGINEERING",classified_email_evidence:{...classifiedEvidence,total:0,categories:{rejection:0,online_assessment:0,interview:0,offer:0,recruiter_reply:0,action_required:0},family_excluded_messages:13,company_excluded_messages:6}};
-  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"outcomes",query:{family:"ML_ENGINEERING",company:"Wayfern"}})));
-  const panel=document.querySelector(".an-classified-email-evidence");
-  assert.ok(panel);
-  assert.match(panel.textContent,/13 classified emails lack a verified role family and are excluded from this family selection/);
-  assert.match(panel.textContent,/6 classified emails lack a verified company and are excluded from this company selection/);
-  assert.match(panel.textContent,/0 classified emails in this scope/);
-  assert.equal(document.querySelectorAll(".an-cohort-strip span").length,0,"unattributed emails cannot create application cohort outcomes");
-});
-
-test("missing or empty classified evidence does not add a fabricated progress panel",()=>{
-  for(const evidence of [undefined,{...classifiedEvidence,total:0,categories:{rejection:0,online_assessment:0,interview:0,offer:0,recruiter_reply:0,action_required:0}}]){
-    const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d:{...base,classified_email_evidence:evidence},connection:null,tab:"overview",query:{}})));
+test("unlinked, unverified and lifecycle email categories cannot inflate the 30-day outcome groups",()=>{
+  for(const evidence of [classifiedEvidence,{...classifiedEvidence,unverified_source_messages:3,linked_messages:0,company_messages:19,unlinked_messages:0},{...classifiedEvidence,categories:{...classifiedEvidence.categories,application_confirmation:4,assessment_completed:2,interview_cancelled:1,status_update:3}}]){
+    const d={...base,cohort:{...base.cohort,eligible:11,positive:2,rejected:3,pending:4,unknown:2},classified_email_evidence:evidence};
+    const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"outcomes",query:{}})));
+    assert.deepEqual([...document.querySelectorAll(".an-cohort-metrics strong")].map(node=>node.textContent),["11","5","4"]);
+    assert.equal(document.querySelector(".an-donut strong").textContent,"11");
     assert.equal(document.querySelector(".an-classified-email-evidence"),null);
+    assert.doesNotMatch(document.querySelector(".an-cohort-metrics").textContent,/response rate|47%/);
   }
-});
-
-test("unverified source counts describe message meaning without confirming employer outcomes",()=>{
-  for(const count of [1,3]){
-    const d={...base,classified_email_evidence:{...classifiedEvidence,unverified_source_messages:count}};
-    const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"outcomes",query:{}})));
-    const panel=document.querySelector(".an-classified-email-evidence");
-    const note=panel.querySelector('[role="note"][aria-label="Unverified email sources"]');
-    assert.ok(note);
-    assert.match(note.textContent,new RegExp(`^${count} classified ${count===1?"email has an unverified sender":"emails have unverified senders"}`));
-    assert.match(note.textContent,/message meaning only; no employer or application outcome is verified/);
-    assert.match(panel.textContent,/19 classified emails in this scope/);
-    assert.equal(document.querySelector(".an-metric strong").textContent,"9");
-    assert.equal(emailLink(panel,"rejection").querySelector("b").textContent,"6");
-  }
-  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d:{...base,classified_email_evidence:{...classifiedEvidence,unverified_source_messages:0}},connection:null,tab:"outcomes",query:{}})));
-  assert.equal(document.querySelector('[aria-label="Unverified email sources"]'),null);
-});
-
-test("recognized progress uses effective email dates while application cohorts keep their own selection",()=>{
-  const evidence_scope={start:"2026-07-01",timezone:"America/Los_Angeles",start_at:"2026-07-01T07:00:00Z",application_cohort_unchanged:true};
-  for(const [days,start,effective] of [["all","2025-01-01","2026-07-01"],["custom","2026-09-01","2026-09-01"]]){
-    const d={...base,days,start,evidence_scope,classified_email_evidence:{...classifiedEvidence,start:effective,end:"2026-10-26"}};
-    const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"outcomes",query:{}})));
-    const panel=document.querySelector(".an-classified-email-evidence");
-    assert.match(panel.querySelector('[aria-label="Email history period"]').textContent,/Since July 1, 2026/);
-    assert.match(panel.textContent,new RegExp(`Email receipt dates: ${effective} through 2026-10-26`));
-    assert.match(panel.textContent,/Application submission dates and confirmed stage history remain separate/);
-    assert.equal(document.querySelector(".an-metric strong").textContent,"9");
-    assert.match(document.querySelector(".an-bottom-links").textContent,new RegExp(`Submission dates.*${start}`));
-    assert.doesNotMatch(panel.textContent,/Email receipt dates: All dates/);
-  }
-});
-
-test("effective acknowledgements and lifecycle updates retain email counts without becoming invitations",()=>{
-  const categories={...classifiedEvidence.categories,application_confirmation:4,assessment_completed:2,assessment_cancelled:1,interview_cancelled:1,status_update:3};
-  const d={...base,classified_email_evidence:{...classifiedEvidence,total:30,categories,linked_messages:8,company_messages:6,unlinked_messages:16}};
-  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"outcomes",query:{}})));
-  const panel=document.querySelector(".an-classified-email-evidence");
-  assert.match(panel.textContent,/30 classified emails in this scope/);
-  assert.match(panel.textContent,/8 with a verified application link.*6 company-only.*16 without a verified application link/);
-  assert.match(panel.textContent,/Acknowledgements: 4.*Acknowledgements do not count as meaningful replies/);
-  assert.match(panel.textContent,/Completion, cancellation and routine updates are separate from invitations/);
-  assert.equal(emailLink(panel,"online_assessment").querySelector("b").textContent,"7");
-  assert.equal(emailLink(panel,"interview").querySelector("b").textContent,"3");
-  for(const kind of ["application_confirmation","assessment_completed","assessment_cancelled","interview_cancelled","status_update"])assert.ok(emailLink(panel,kind));
-  assert.doesNotMatch(panel.textContent,/No application status changed from this filing/);
-  const metrics=[...document.querySelectorAll(".an-metric")];
-  assert.equal(metrics.find(node=>node.querySelector(".an-metric-label").textContent==="Meaningful replies").querySelector("strong").textContent,"0");
 });
 
 test("email drilldowns preserve original report dates while the shared projection applies receipt scope",()=>{
@@ -417,13 +332,6 @@ test("email drilldowns preserve original report dates while the shared projectio
     assert.equal(destination.searchParams.get("end"),days==="all"?null:d.end);
     assert.equal(destination.searchParams.has("evidence"),false,"recognized meaning never requests an application-stage filter");
   }
-});
-
-test("older Analytics replies do not invent an acknowledgement count",()=>{
-  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d:{...base,classified_email_evidence:classifiedEvidence},connection:null,tab:"outcomes",query:{}})));
-  const panel=document.querySelector(".an-classified-email-evidence");
-  assert.equal(emailLink(panel,"application_confirmation"),undefined);
-  assert.doesNotMatch(panel.textContent,/Acknowledgements: 0/);
 });
 
 test("email records distinguish verified links, company evidence and recognized unlinked history",()=>{
@@ -511,4 +419,28 @@ test("weekly context uses real comparisons and the peak day without inventing a 
   assert.match(renderWeek(counts),/3 applications in this week, a 200% increase from the previous week. Most active on Monday, with 2 submissions/);
   assert.match(renderWeek({"2026-10-19":2}),/No prior-week activity to compare/);
   assert.doesNotMatch(renderWeek({"2026-10-19":2}),/%/);
+});
+
+
+test("the 30-day partition, meaningful metric cards and donut use the same exact denominator",()=>{
+  const d={...base,cohort:{...base.cohort,eligible:11,positive:3,rejected:2,pending:4,unknown:2}};
+  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"outcomes",query:{}})));
+  assert.deepEqual([...document.querySelectorAll(".an-cohort-metrics strong")].map(node=>node.textContent),["11","5","4"]);
+  assert.deepEqual([...document.querySelectorAll(".an-partition-key span")].map(node=>node.textContent),["3 (27%)","2 (18%)","4 (36%)","2 (18%)"]);
+  assert.equal(document.querySelector(".an-donut strong").textContent,"11");
+  assert.match(document.querySelector(".an-donut").getAttribute("style"),/#aaa2b0/);
+  assert.match(document.querySelector(".an-window").textContent,/30-day observation window/);
+  assert.match(document.querySelector(".an-cohort-panel .an-info").getAttribute("aria-label"),/selected period and role.*Undated applications are excluded/);
+  const underlying=new URL(document.querySelector(".an-outcome-evidence .an-jump").getAttribute("href"),"https://fixture.test");
+  assert.equal(underlying.searchParams.get("eligible"),"1");
+});
+
+test("an empty age-qualified selection is explained while timing retains its separate real sample",()=>{
+  const d={...base,median_days:2.5,timing_sample:4,timing:[{label:"0 to 7 days",count:4},{label:"8 to 14 days",count:0},{label:"15 to 30 days",count:0},{label:"30+ days",count:0}]};
+  const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab:"outcomes",query:{}})));
+  assert.match(document.querySelector(".an-cohort-empty").textContent,/No applications in this selection are 30 days old yet/);
+  assert.equal(document.querySelector(".an-cohort-strip"),null);
+  assert.match(document.querySelector(".an-timing-context").textContent,/Median 2.5 days.*4 dated applications/);
+  assert.equal(document.querySelectorAll(".an-timing-panel .an-column").length,4);
+  assert.match(document.querySelector(".an-timing-panel .an-info").getAttribute("aria-label"),/including those under 30 days old/);
 });

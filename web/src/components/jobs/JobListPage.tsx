@@ -3,7 +3,6 @@ import Link from "next/link";
 
 import { ApplicationCount, ApplicationStageCount } from "@/components/applications/ApplicationCount";
 import { EmptyBox, StatusBadge } from "@/components/bits";
-import { Icon } from "@/components/Icon";
 import { Kpi } from "@/components/page/PageParts";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGet, apiGetOr } from "@/lib/api";
@@ -122,17 +121,6 @@ export async function JobListPage({ page, searchParams }: { page: ListPage; sear
           <h1 className="h1">{TITLES[page]}</h1>
           <span className="h1-count">{page === "applied" ? <ApplicationCount /> : jobs.total.toLocaleString("en-US")}</span>
           <span className="spacer" />
-          {page === "applied" ? (
-            <a
-              className="btn btn-secondary btn-sm"
-              href="/api/applications/export.csv"
-              download
-              title="Every application ace holds, as a spreadsheet"
-            >
-              <Icon name="download" size={14} />
-              Export CSV
-            </a>
-          ) : null}
           {page === "queue" && newSince && prevVisit ? (
             <Link className="since-btn" href={href({ view: "all", sorts: ["newest"] })}>
               {newSince} new since {clock(prevVisit, tz)}

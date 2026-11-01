@@ -78,8 +78,6 @@
 .an-outcomes { grid-template-columns: 1.62fr 1fr; }
 .an-column-stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .an-panel { min-width: 0; border: 1px solid var(--border); border-radius: var(--an-radius); padding: 15px var(--an-pad); background: var(--surface-1); }
-.an-classified-email-evidence { margin-bottom: var(--an-gap); }
-.an-classified-email-evidence h3 { margin: 16px 0 8px; font-size: var(--text-label); font-weight: var(--weight-semibold); }
 .an-panel-head { margin-bottom: 12px; }
 .an-panel-title { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .an-panel h2 { font-size: var(--text-section); letter-spacing: var(--tracking-section); font-weight: var(--weight-heading); line-height: var(--leading-heading); margin: 0 0 2px; }
@@ -160,16 +158,29 @@
 .an-cohort-metrics>div { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 11px; padding: 11px 16px; min-height: 100px; background: color-mix(in srgb,var(--surface-1) 75%,var(--canvas)); }
 .an-cohort-metrics span,.an-cohort-metrics small { font-size: var(--text-small); color: var(--text-secondary); line-height: var(--leading-nav); }
 .an-cohort-metrics strong { font-size: var(--text-metric); font-weight: var(--weight-title); letter-spacing: var(--tracking-metric); line-height: var(--leading-tight); margin: 4px 0; }
-.an-cohort-metrics .an-rate-value { font-size: var(--text-section); letter-spacing: var(--tracking-section); margin: 12px 0 8px; }
 .an-cohort-strip { height: 33px; display: flex; overflow: hidden; border-radius: 8px; background: var(--surface-2); }
 .an-cohort-strip span { display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--surface-1); font-weight: var(--weight-semibold); font-size: var(--text-label); color: var(--on-accent); min-width: 0; }
 .an-partition-key { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; margin-top: 13px; font-size: var(--text-tick); }
 .an-partition-key>div { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .an-partition-key strong { font-weight: var(--weight-semibold); }
 .an-partition-key span { margin-left: auto; }
-.an-outcomes .an-donut-layout { margin: 8px 0 16px; }
-.an-outcomes .an-donut { width: 144px; height: 144px; }
-.an-outcomes .an-donut>div { width: 103px; height: 103px; }
+.an-outcomes .an-panel-head { margin-bottom: 10px; }
+.an-cohort-panel .an-panel-title { justify-content: flex-start; align-items: center; gap: 14px; }
+.an-outcomes .an-cohort-metrics { gap: 16px; margin-top: 12px; }
+.an-outcomes .an-cohort-metrics>div { min-height: 100px; padding: 10px 16px; }
+.an-outcomes .an-partition-key>div { display: grid; grid-template-columns: 10px minmax(0,1fr) auto; column-gap: 6px; row-gap: 4px; align-content: start; }
+.an-outcomes .an-partition-key strong { font-size: var(--text-tick); }
+.an-outcomes .an-partition-key span { grid-column: 3; margin-left: 0; font-weight: var(--weight-semibold); }
+.an-outcomes .an-partition-key small { grid-column: 2 / -1; color: var(--text-secondary); font-size: var(--text-tick); line-height: var(--leading-compact); }
+.an-cohort-empty { min-height: 33px; display: flex; align-items: center; padding: 6px 10px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--text-secondary); font-size: var(--text-small); }
+.an-outcomes .an-donut-layout { grid-template-columns: 38% minmax(0,1fr); margin: 4px 0 8px; }
+.an-outcomes .an-legend { gap: 8px; }
+.an-timing-panel .an-columns { height: 142px; margin-top: 14px; gap: 22px; padding-inline: 0; }
+.an-timing-panel .an-column-plot { height: 100px; }
+.an-timing-context { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-top: 8px; }
+.an-timing-context .an-foot { margin: 0; font-size: var(--text-tick); }
+.an-timing-context .an-jump { font-size: var(--text-tick); }
+.an-review-panel .an-review-list>a { min-height: 40px; padding: 5px 12px; gap: 10px; }
 .an-review-list { display: grid; gap: 6px; }
 .an-review-list>a { display: flex; align-items: center; gap: 14px; border: 1px solid var(--border); border-radius: 11px; padding: 6px 14px; min-height: 44px; }
 .an-review-list>a:hover { background: var(--hover); }
@@ -255,12 +266,6 @@
 .an-evidence-timeline>div>div { display: flex; flex-direction: column; flex: 1; gap: 3px; }
 .an-evidence-timeline span { color: var(--text-secondary); }
 .an-evidence-timeline a { color: var(--accent-text); font-weight: var(--weight-semibold); max-width: 150px; display: inline-flex; gap: 5px; align-items: center; }
-.an-audit-note { margin-top: 16px; padding: 12px 0; font-size: var(--text-small); color: var(--text-secondary); border-top: 1px solid var(--border-subtle); }
-.an-audit-note summary { cursor: pointer; width: fit-content; }
-.an-audit-note p { max-width: 1000px; }
-.an-audit-note a { color: var(--accent-text); display: inline-flex; gap: 8px; align-items: center; }
-.an-bottom-links { display: flex; gap: 16px; justify-content: space-between; flex-wrap: wrap; margin-top: 12px; font-size: var(--text-small); color: var(--text-secondary); }
-.an-bottom-links>a { display: inline-flex; gap: 6px; align-items: center; color: var(--accent-text); }
 .an-date-note { font-size: var(--text-small); color: var(--text-secondary); margin: 0 0 10px; }
 @media(min-width:1450px) { .an-filters { position: absolute; right: 0; top: 0; } }
 @media(min-width:1450px) and (max-width:1599px) {
@@ -351,6 +356,8 @@
   .an-jump { white-space: normal; }
   .an-line-chart>svg { height: auto; min-height: 120px; }
   .an-line-chart svg text { font-size: var(--text-tick); }
+  .an-outcomes .an-donut-layout { grid-template-columns: 1fr; }
+  .an-outcomes .an-legend>div { grid-template-columns: 12px minmax(0,1fr) 32px 36px; }
   .an-cohort-metrics { grid-template-columns: 1fr; gap: 7px; }
   .an-cohort-metrics>div { min-height: 90px; }
   .an-partition-key { grid-template-columns: 1fr; }
@@ -407,3 +414,5 @@
   .an-company-mid>.an-panel:nth-child(2) { position: relative; }
   .an-company-mid>.an-panel:nth-child(2)>.an-chart-key { position: absolute; right: 16px; top: 12px; margin: 0; gap: 8px; }
 }
+
+.an-panel-heading { display: flex; align-items: center; gap: 6px; min-width: 0; }

@@ -468,7 +468,7 @@ for (const route of ["/app/analytics?days=all", "/app/applications/analytics?day
 }
 
 for(const theme of ["light","dark"] as const){
-  test(`${theme}: classified hiring progress is visible separately from confirmed application stages`,async({page,context,baseURL})=>{
+  test(`${theme}: clean Outcomes keeps the verified email record projections separate`,async({page,context,baseURL})=>{
     await setThemeCookies(context,baseURL!,theme);
     await page.setViewportSize({width:1672,height:941});
     const errors=watchErrors(page);
@@ -477,31 +477,19 @@ for(const theme of ["light","dark"] as const){
     expect(progress.total).toBe(4);
     expect(progress.categories).toMatchObject({online_assessment:1,interview:1,offer:1,application_confirmation:1,rejection:0});
     expect(progress.linked_messages+progress.company_messages+progress.unlinked_messages).toBe(4);
-    expect(progress.application_status_changed).toBe(false);
-    expect(progress.date_basis).toBe("email_received");
-    await page.goto("/app/analytics?days=all&tab=outcomes");
-    const panel=page.locator(".an-classified-email-evidence");
-    await expect(panel.getByRole("heading",{name:"Recognized hiring progress",exact:true})).toBeVisible();
-    await expect(panel).toContainText("4 classified emails in this scope.");
-    await expect(panel).toContainText("A later rejection does not erase an earlier assessment or interview.");
-    for(const [kind,label] of [["online_assessment","Assessment invitation emails"],["interview","Interview invitation emails"],["offer","Offer emails"]]){
-      const link=panel.getByRole("link",{name:new RegExp(`^${label}`)});
-      await expect(link.locator("b")).toHaveText("1");
-      const href=await link.getAttribute("href");
-      const exact=new URL(href!,"https://fixture.test");
-      expect(exact.pathname).toBe("/app/applications/analytics");
-      expect(Object.fromEntries(exact.searchParams)).toMatchObject({days:"all",tz:"America/Los_Angeles",emails:"1",email_kind:kind});
-      const records=await(await page.request.get(`/api/analytics?${exact.searchParams}`)).json();
+    expect(progress.application_status_changed).toBe(false);expect(progress.date_basis).toBe("email_received");
+    for(const kind of ["online_assessment","interview","offer"]){
+      const exact=new URLSearchParams({days:"all",tz:"America/Los_Angeles",emails:"1",email_kind:kind});
+      const records=await(await page.request.get(`/api/analytics?${exact}`)).json();
       expect(records.email_total).toBe(1);expect(records.email_records).toHaveLength(1);
       expect(records.email_records[0].classification).toBe(kind);
-      await link.click();
+      await page.goto(`/app/applications/analytics?${exact}`);
       await expect(page.getByRole("heading",{name:"Recruiting email evidence",exact:true})).toBeVisible();
       await expect(page.locator(".an-record-row")).toHaveCount(1);
       await expect(page.getByRole("link",{name:"View email",exact:true})).toHaveAttribute("href",`/app/applications/inbox?message=${records.email_records[0].id}`);
-      await page.goto("/app/analytics?days=all&tab=outcomes");
     }
-    await expect(panel).toContainText("Acknowledgements: 1");
-    await expect(panel).toContainText("email counts, not additional applications or confirmed stage totals");
+    await page.goto("/app/analytics?days=all&tab=outcomes");
+    await expect(page.locator(".an-classified-email-evidence,.an-audit-note,.an-bottom-links")).toHaveCount(0);
     await expect(page.locator(".an-metric").nth(0).locator("strong")).toHaveText(String(before.submitted));
     await expect(page.locator(".an-metric").nth(3).locator("strong")).toHaveText(String(before.assessments));
     const invitationCard=page.locator(".an-metric").nth(4);
@@ -512,14 +500,15 @@ for(const theme of ["light","dark"] as const){
     await expect(page.locator(".an-record-row")).toHaveCount(progress.categories.interview);
     await expect(page.locator(".an-record-row").first()).toContainText("Interview");
     await page.goto("/app/analytics?days=all&tab=outcomes");
-    expect(await page.evaluate(TEXT_SCAN)).toEqual([]);
-    expect(await page.evaluate(DRAWN_SCAN)).toEqual([]);
-    const directory=path.resolve("../artifacts/inbox-intelligence-validation");
-    fs.mkdirSync(directory,{recursive:true});
-    await panel.screenshot({path:path.join(directory,`${theme}-analytics-classified-progress.png`)});
+    await page.evaluate(()=>document.fonts.ready);
+    expect(await page.evaluate(TEXT_SCAN)).toEqual([]);expect(await page.evaluate(DRAWN_SCAN)).toEqual([]);
+    await page.screenshot({path:path.join(root,`${theme}-outcomes-reference.png`)});
+    await page.screenshot({path:path.join(root,`${theme}-outcomes-reference-full.png`),fullPage:true});
+    const geometry=await page.locator(".an-outcomes .an-panel").evaluateAll(nodes=>nodes.map(node=>{const b=node.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height};}));
+    fs.mkdirSync(path.resolve("test-results"),{recursive:true});fs.writeFileSync(path.resolve("test-results",`outcomes-${theme}-geometry.json`),JSON.stringify(geometry,null,2));
     await page.setViewportSize({width:390,height:844});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
-    await panel.screenshot({path:path.join(directory,`${theme}-analytics-classified-progress-mobile.png`)});
+    await page.screenshot({path:path.join(root,`${theme}-outcomes-mobile.png`),fullPage:true});
     const after=await(await page.request.get("/api/analytics?days=all&tz=America%2FLos_Angeles")).json();
     for(const key of ["submitted","statuses","positive","assessments","interviews","classified_email_evidence"])expect(after[key]).toEqual(before[key]);
     expect(errors).toEqual([]);
@@ -542,11 +531,11 @@ test("July email floor excludes the older offer while preserving application met
   expect(boundary).toBeTruthy();
   expect(Date.parse(boundary.received_at)).toBe(Date.parse("2026-07-01T07:00:00Z"));
   await page.goto("/app/analytics?days=all&tab=outcomes");
-  const panel=page.locator(".an-classified-email-evidence");
-  await expect(panel.getByLabel("Email history period")).toContainText("Since July 1, 2026");
-  await expect(panel).toContainText("Email receipt dates: 2026-07-01");
-  await expect(panel).not.toContainText("Email receipt dates: All dates");
+  await expect(page.locator(".an-classified-email-evidence")).toHaveCount(0);
   await expect(page.locator(".an-metric").first().locator("strong")).toHaveText(String(before.submitted));
+  await page.goto("/app/applications/analytics?days=all&emails=1&email_kind=online_assessment&tz=America%2FLos_Angeles");
+  await expect(page.locator(".an-hero p")).toContainText("Receipt dates 2026-07-01");
+  await expect(page.locator(".an-record-row")).toHaveCount(1);
   const after=await(await page.request.get("/api/analytics?days=all&tz=America%2FLos_Angeles")).json();
   for(const key of ["submitted","statuses","positive","assessments","interviews","classified_email_evidence"])expect(after[key]).toEqual(before[key]);
 });
@@ -659,8 +648,8 @@ test("a committed Inbox acknowledgement correction updates open Analytics withou
   const message=messages.items.find((row:{subject:string})=>row.subject==="Fictional offer email history");
   expect(message,"the dedicated fictional Analytics seed must be present").toBeTruthy();
   await page.goto("/app/analytics?days=all&tab=outcomes");
-  const offer=page.locator('.an-classified-email-evidence a').filter({has:page.getByText("Offer emails",{exact:true})}).locator("b");
-  const before=Number((await offer.innerText()).replaceAll(",",""));
+  const before=await(await page.request.get("/api/analytics?days=all&tz=America%2FLos_Angeles")).json();
+  const version=await page.locator(".an-freshness").getAttribute("data-analytics-version");
   const applications=await page.locator(".an-metric-value").first().innerText();
   const editor=await context.newPage();
   await editor.goto(`/app/applications/inbox?decision=all&message=${message.id}`);
@@ -672,10 +661,14 @@ test("a committed Inbox acknowledgement correction updates open Analytics withou
   const committed=await(await editor.request.get(`/api/inbox/messages/${message.id}`)).json();
   expect(committed.decision).toBe("receipt");expect(committed.classification).toBe("application_confirmation");
   await page.bringToFront();
-  await expect(offer).toHaveText(String(before-1));
+  await expect(page.locator(".an-freshness")).not.toHaveAttribute("data-analytics-version",version!);
   await expect(page.locator(".an-metric-value").first()).toHaveText(applications);
-  await expect(page.locator('.an-classified-email-evidence')).toContainText("Acknowledgements:");
+  await expect(page.locator(".an-classified-email-evidence,.an-audit-note,.an-bottom-links")).toHaveCount(0);
   await expect(page.locator('.an-freshness[data-state="fresh"]')).toBeVisible();
+  const after=await(await page.request.get("/api/analytics?days=all&tz=America%2FLos_Angeles")).json();
+  expect(after.classified_email_evidence.categories.offer).toBe(before.classified_email_evidence.categories.offer-1);
+  expect(after.classified_email_evidence.categories.application_confirmation).toBe(before.classified_email_evidence.categories.application_confirmation+1);
+  expect(after.submitted).toBe(before.submitted);
   await editor.close();
 });
 
@@ -747,4 +740,55 @@ test("the timeline fills its card and the chart data dialog leaves all four card
   await page.screenshot({path:path.join(root,"overview-chart-data-dialog.png")});
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button",{name:"View chart data",exact:true})).toBeFocused();
+});
+
+
+test("Outcomes shows one clear 30-day denominator, real timing and exactly four cards",async({page})=>{
+  await page.setViewportSize({width:1672,height:941});
+  await page.goto("/app/analytics?days=all&tab=outcomes");
+  const verify=async(days:string,family="")=>{
+    const params=new URLSearchParams({days,tz:"America/Los_Angeles",...(family?{family}:{})});
+    const data=await(await page.request.get(`/api/analytics?${params}`)).json(),c=data.cohort;
+    await expect(page.locator(".an-cohort-metrics>div>strong")).toHaveText([c.eligible,c.positive+c.rejected,c.pending].map(n=>n.toLocaleString("en-US")));
+    expect(c.positive+c.rejected+c.pending+c.unknown).toBe(c.eligible);
+    await expect(page.locator(".an-outcomes .an-panel")).toHaveCount(4);
+    await expect(page.locator(".an-cohort-panel")).toContainText("30-day observation window");
+    await expect(page.locator(".an-cohort-metrics")).not.toContainText("Employer response rate");
+    await expect(page.locator(".an-outcome-evidence .an-donut strong")).toHaveText(String(c.eligible));
+    if(c.eligible){
+      const values=[c.positive,c.rejected,c.pending,c.unknown];
+      await expect(page.locator(".an-partition-key>div>span")).toHaveText(values.map(n=>`${n.toLocaleString("en-US")} (${Math.round(n/c.eligible*100)}%)`));
+      const exact=await(await page.request.get(`/api/analytics?${params}&records=1&eligible=1`)).json();expect(exact.record_total).toBe(c.eligible);
+    }else{
+      await expect(page.locator(".an-cohort-empty")).toContainText("No applications in this selection are 30 days old yet");
+      await expect(page.locator(".an-cohort-strip")).toHaveCount(0);
+    }
+    if(data.timing_sample){
+      await expect(page.locator(".an-timing-panel .an-column-plot span")).toHaveText(data.timing.map((r:{count:number})=>String(r.count)));
+      await expect(page.locator(".an-timing-context")).toContainText(`Median ${data.median_days.toFixed(1)} days`);
+      expect(data.timing.reduce((n:number,row:{count:number})=>n+row.count,0)).toBe(data.timing_sample);
+    }
+  };
+  await verify("all");
+  const cards=await page.locator(".an-outcomes .an-panel").evaluateAll(nodes=>nodes.map(node=>{const b=node.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height};}));
+  expect(Math.abs(cards[0].x-cards[1].x)).toBeLessThan(1);expect(Math.abs(cards[0].width-cards[1].width)).toBeLessThan(1);
+  expect(Math.abs(cards[2].x-cards[3].x)).toBeLessThan(1);expect(Math.abs(cards[2].width-cards[3].width)).toBeLessThan(1);
+  expect(Math.abs(cards[0].y-cards[2].y)).toBeLessThan(1);expect(cards[0].width/cards[2].width).toBeGreaterThan(1.55);
+  await page.getByRole("button",{name:"14 days",exact:true}).click();await verify("14");
+  await page.getByLabel("Application role family").selectOption("SOFTWARE_ENGINEERING");await verify("14","SOFTWARE_ENGINEERING");
+});
+
+test("application CSV and the removed evidence disclosure are absent throughout the site",async({page})=>{
+  for(const tab of ["overview","outcomes","role-resume","companies"]){
+    await page.goto(`/app/analytics?days=all&tab=${tab}`);
+    await expect(page.locator(".an-tabs [aria-current='page']")).toHaveCount(1);
+    await expect(page.getByText("About these metrics and evidence",{exact:true})).toHaveCount(0);
+    await expect(page.locator('a[href="/api/applications/export.csv"]')).toHaveCount(0);
+    await expect(page.locator(".an-audit-note,.an-bottom-links")).toHaveCount(0);
+  }
+  for(const [route,title] of [["/app/applications","Applications"],["/app/applications/analytics?days=all","Application records"],["/app/settings","Settings"]]){
+    await page.goto(route);await expect(page.getByRole("heading",{name:title,exact:true})).toBeVisible();
+    await expect(page.locator('a[href="/api/applications/export.csv"]')).toHaveCount(0);
+  }
+  await expect(page.getByRole("link",{name:"Download everything (JSON)",exact:true})).toBeVisible();
 });
