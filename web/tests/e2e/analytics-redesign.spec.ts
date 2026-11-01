@@ -57,9 +57,12 @@ for (const theme of ["light","dark"] as const) {
       if(tab==="overview"){
         await page.setViewportSize(theme==="dark"?{width:1536,height:1024}:{width:1672,height:941});
         await page.screenshot({path:path.join(root,`${theme}-overview-reference.png`)});
-        const geometry=await page.evaluate(()=>Object.fromEntries([".sb",".tb",".an-hero",".an-filters",".an-inbox-band",".an-inbox-workflow",".an-band-coverage",".an-metric",".an-tabs",".an-overview-top>.an-panel",".an-overview-bottom>.an-panel",".an-date-toggle svg",".an-week-picker .nic",".an-weekly",".an-donut"].map(selector=>[selector,[...document.querySelectorAll(selector)].map(element=>{const box=element.getBoundingClientRect(),style=getComputedStyle(element);return {x:box.x,y:box.y,width:box.width,height:box.height,font:style.fontFamily,fontSize:style.fontSize,weight:style.fontWeight,lineHeight:style.lineHeight,letterSpacing:style.letterSpacing};})])));
+        const geometry=await page.evaluate(()=>Object.fromEntries([".sb",".tb",".an-page",".an-hero",".an-filters",".an-inbox-band",".an-inbox-workflow",".an-band-coverage",".an-metric",".an-tabs",".an-overview-top>.an-panel",".an-overview-bottom>.an-panel",".an-date-toggle svg",".an-week-picker .nic",".an-weekly",".an-donut"].map(selector=>[selector,[...document.querySelectorAll(selector)].map(element=>{const box=element.getBoundingClientRect(),style=getComputedStyle(element);return {x:box.x,y:box.y,width:box.width,height:box.height,font:style.fontFamily,fontSize:style.fontSize,weight:style.fontWeight,lineHeight:style.lineHeight,letterSpacing:style.letterSpacing};})])));
         expect(Math.abs(geometry[".an-inbox-band"][0].height-96)).toBeLessThan(2);
-        expect(Math.abs(geometry[".an-overview-top>.an-panel"][0].y-(theme==="dark"?469:471))).toBeLessThan(3);
+        expect(Math.abs(geometry[".an-overview-top>.an-panel"][0].x-geometry[".sb"][0].width-28)).toBeLessThan(1);
+        const right=geometry[".an-overview-top>.an-panel"][1];
+        expect(Math.abs(right.x+right.width-(theme==="dark"?1536:1672)+28)).toBeLessThan(1);
+        await expect(page.locator(".an-classified-email-evidence,.an-audit-note,.an-bottom-links")).toHaveCount(0);
         fs.mkdirSync(path.resolve("test-results"),{recursive:true});
         fs.writeFileSync(path.resolve("test-results",`overview-${theme}-geometry.json`),JSON.stringify(geometry,null,2));
         await page.setViewportSize({width:1672,height:941});
@@ -378,7 +381,7 @@ test("historical arrows cross calendar years and reset without a weekly date pic
   }
 });
 
-test("reference desktop keeps five aligned KPIs and the six company modules in order",async({page})=>{
+test("Overview fills the desktop content area and keeps the six company modules in order",async({page})=>{
   await page.setViewportSize({width:1672,height:941});
   await page.goto("/app/analytics?days=30");
   await expect(page.getByRole("heading",{name:"Applications over time",exact:true})).toBeVisible();
@@ -388,10 +391,26 @@ test("reference desktop keeps five aligned KPIs and the six company modules in o
   expect(cards).toHaveLength(5);
   expect(new Set(cards.map(b=>b.y)).size).toBe(1);
   expect(Math.max(...cards.map(b=>b.height))-Math.min(...cards.map(b=>b.height))).toBeLessThan(1);
-  const left=(await page.locator(".an-overview-top .an-panel").first().boundingBox())!;
-  expect(Math.abs(left.x-299)).toBeLessThan(8);
-  expect(Math.abs(left.y-471)).toBeLessThan(25);
-  expect(Math.abs(left.width-800)).toBeLessThan(20);
+  await expect(page.locator(".an-overview-charts>.an-grid>.an-panel")).toHaveCount(4);
+  await expect(page.getByRole("heading",{name:"Recognized hiring progress",exact:true})).toHaveCount(0);
+  await expect(page.getByText("About these metrics and evidence",{exact:true})).toHaveCount(0);
+  await expect(page.getByRole("link",{name:"Export applications CSV",exact:true})).toHaveCount(0);
+  let previousHeight=0;
+  for(const viewport of [{width:1920,height:1080},{width:1920,height:1440},{width:2560,height:1440}]){
+    await page.setViewportSize(viewport);
+    const shell=(await page.locator(".shell-main").boundingBox())!;
+    const top=(await page.locator(".an-overview-top").boundingBox())!;
+    const bottom=(await page.locator(".an-overview-bottom").boundingBox())!;
+    expect(Math.abs(top.x-shell.x-28)).toBeLessThan(1);
+    expect(Math.abs(top.x+top.width-viewport.width+28)).toBeLessThan(1);
+    expect(Math.abs(bottom.x-top.x)).toBeLessThan(1);
+    expect(Math.abs(bottom.width-top.width)).toBeLessThan(1);
+    expect(Math.abs(bottom.y+bottom.height-viewport.height+24)).toBeLessThan(2);
+    if(previousHeight&&viewport.width===1920)expect(top.height).toBeGreaterThan(previousHeight+100);
+    previousHeight=top.height;
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
+    await page.screenshot({path:path.join(root,`expanded-overview-${viewport.width}x${viewport.height}.png`)});
+  }
   await page.goto("/app/analytics?tab=companies&days=30");
   const panels=await page.locator(".an-grid .an-panel h2").allTextContents();
   expect(panels).toEqual(["Top companies in your pipeline","Companies with verified sponsorship evidence","Historical H-1B petition outcomes","Employer outcome history","Historical petition activity","Sponsorship evidence"]);
