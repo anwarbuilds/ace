@@ -175,7 +175,7 @@
 .an-cohort-empty { min-height: 33px; display: flex; align-items: center; padding: 6px 10px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--text-secondary); font-size: var(--text-small); }
 .an-outcomes .an-donut-layout { grid-template-columns: 38% minmax(0,1fr); margin: 4px 0 8px; }
 .an-outcomes .an-legend { gap: 8px; }
-.an-timing-panel .an-columns { height: 142px; margin-top: 14px; gap: 22px; padding-inline: 0; }
+.an-timing-panel .an-columns { height: 142px; margin-top: 20px; gap: 22px; padding-inline: 0; }
 .an-timing-panel .an-column-plot { height: 100px; }
 .an-timing-context { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-top: 8px; }
 .an-timing-context .an-foot { margin: 0; font-size: var(--text-tick); }

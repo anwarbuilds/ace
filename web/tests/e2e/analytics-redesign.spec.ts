@@ -500,6 +500,10 @@ for(const theme of ["light","dark"] as const){
     await expect(page.locator(".an-record-row")).toHaveCount(progress.categories.interview);
     await expect(page.locator(".an-record-row").first()).toContainText("Interview");
     await page.goto("/app/analytics?days=all&tab=outcomes");
+    await expect(page.getByRole("heading",{name:"Applications old enough to evaluate",exact:true})).toBeVisible();
+    await expect(page.locator(".an-outcomes .an-panel")).toHaveCount(4);
+    await expect(page.locator(".an-outcome-evidence .an-donut")).toBeVisible();
+    await expect(page.locator(".an-cohort-metrics>div>strong").first()).toHaveText(String(before.cohort.eligible));
     await page.evaluate(()=>document.fonts.ready);
     expect(await page.evaluate(TEXT_SCAN)).toEqual([]);expect(await page.evaluate(DRAWN_SCAN)).toEqual([]);
     await page.screenshot({path:path.join(root,`${theme}-outcomes-reference.png`)});
@@ -727,11 +731,12 @@ test("the timeline fills its card and the chart data dialog leaves all four card
   await page.setViewportSize({width:1920,height:1080});
   await page.goto("/app/analytics?days=30");
   const svg=page.locator(".an-line-chart>svg"),cards=page.locator(".an-overview-charts>.an-grid>.an-panel");
+  await expect(svg).toBeVisible();
+  await expect(cards.first()).toBeVisible();
   await expect(svg.locator("polyline")).toHaveCount(1);
   await page.evaluate(()=>document.fonts.ready);
   const bounds=await cards.evaluateAll(nodes=>nodes.map(node=>{const b=node.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height};}));
-  const plot=await svg.evaluate(node=>{const line=node.querySelector("polyline")!;const b=line.getBoundingClientRect(),frame=node.getBoundingClientRect();return {width:b.width,frame:frame.width};});
-  expect(plot.width/plot.frame).toBeGreaterThan(.9);
+  await expect.poll(()=>svg.evaluate(node=>{const line=node.querySelector("polyline")!;return line.getBoundingClientRect().width/node.getBoundingClientRect().width;})).toBeGreaterThan(.9);
   const icon=(await page.locator(".an-chart-data-action svg").boundingBox())!;
   expect(icon.width).toBeLessThan(20);expect(icon.height).toBeLessThan(20);
   await page.getByRole("button",{name:"View chart data",exact:true}).click();
