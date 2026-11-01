@@ -206,3 +206,16 @@ test("offline checks keep the last response and reconnecting requests one fresh 
     });
   }finally{if(descriptor)Object.defineProperty(globalThis.navigator,"onLine",descriptor);else delete globalThis.navigator.onLine;}
 });
+
+
+test("a failed quiet check retains results and a later successful check recovers",async()=>{
+  const {analyticsFingerprint}=load(path.join(sourceRoot,"lib/analyticsFingerprint.ts"));
+  const data={submitted:4},fingerprint=await analyticsFingerprint(data);let calls=0;
+  function Fixture(){const[version,setVersion]=useState(1);refresh=()=>{calls++;setVersion(version+1);};return React.createElement(React.Fragment,null,React.createElement(AnalyticsRefresh),React.createElement(AnalyticsFreshness,{scope:"same",attemptedAt:version,asOf:"2026-10-30T01:00:00Z",timezone:"America/Los_Angeles",success:true,checkUrl:"/api/analytics?days=30",fingerprint},"Verified 4"));}
+  await mounted(React.createElement(Fixture),async({container,tick})=>{
+    globalThis.fetch=async()=>{throw new Error("Fictional network failure");};
+    await tick(120_000);assert.equal(calls,0);assert.match(container.textContent,/Verified 4/);assert.equal(container.querySelector("[role=status]").dataset.state,"stale");
+    globalThis.fetch=async()=>({ok:true,json:async()=>data});
+    await tick(120_000);assert.equal(calls,1);assert.equal(container.querySelector("[role=status]").dataset.state,"fresh");assert.match(container.textContent,/Verified 4/);
+  });
+});

@@ -39,7 +39,7 @@ export function InboxBand({ d, connection, expanded }: { d: AnalyticsData; conne
   const coverage = connection?.coverage;
   // This is the existing Gmail search snapshot, not application/response coverage.
   const checked = !!coverage && Number.isFinite(Date.parse(coverage.checked_at)) && Date.parse(coverage.checked_at) <= Date.parse(d.as_of);
-  const validCoverage = checked && coverage.scope === "job_mail" && coverage.complete && coverage.days >= 0 &&
+  const validCoverage = checked && coverage.scope === "job_mail" && coverage.complete && Number.isInteger(coverage.days) && coverage.days >= 0 &&
     [coverage.gmail,coverage.in_ace,coverage.missing].every(value=>Number.isInteger(value)&&value>=0) && coverage.in_ace + coverage.missing === coverage.gmail;
   const coverageLabel = validCoverage ? coverage.days === 0 ? "All dates" : `${coverage.days} days` : d.days === "all" ? "All time" : d.days === "custom" ? "custom" : `${d.days} days`;
   const coverageTitle = validCoverage ? `${coverageText(coverage)} Checked ${new Date(coverage.checked_at).toLocaleString("en-US",{timeZone:d.timezone})}. Email search coverage is separate from application filters and employer response coverage.` : "Gmail search coverage has not been verified. A sync timestamp or linked application does not establish complete coverage. Open Inbox Intelligence to check Gmail.";

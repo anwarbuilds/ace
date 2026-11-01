@@ -75,7 +75,7 @@ export function AnalyticsRefresh() {
       const response=await fetch(url,{cache:"no-store",credentials:"same-origin",signal:controller.signal});
       if(!response.ok)throw new Error("Analytics check failed");
       const next=await analyticsFingerprint(await response.json());
-      if(!controller.signal.aborted&&node.isConnected&&node.dataset.analyticsVersion===version&&node.dataset.analyticsCheckUrl===url&&next!==version)request(reason);
+      if(!controller.signal.aborted&&node.isConnected&&node.dataset.analyticsVersion===version&&node.dataset.analyticsCheckUrl===url&&(next!==version||node.dataset.state==="stale"))request(reason);
     }catch{
       if(!controller.signal.aborted||timedOut)window.dispatchEvent(new window.CustomEvent(ANALYTICS_REFRESH_STATE,{detail:{phase:"offline",id:++generation.current}}));
     }finally{clearTimeout(timeout);if(probe.current===controller){probe.current=null;checking.current=false;}}
