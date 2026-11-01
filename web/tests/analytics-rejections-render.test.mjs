@@ -44,7 +44,7 @@ function loadSource(filename) {
 
 const { AnalyticsView } = loadSource(path.join(sourceRoot, "components/analytics/AnalyticsView.tsx"));
 const { CorrespondenceRecords } = loadSource(path.join(sourceRoot, "components/analytics/CorrespondenceRecords.tsx"));
-const { ApplicationMetrics } = loadSource(path.join(sourceRoot, "components/analytics/AnalyticsSummary.tsx"));
+const { ApplicationMetrics, InboxBand } = loadSource(path.join(sourceRoot, "components/analytics/AnalyticsSummary.tsx"));
 const { emailRecordsHref } = loadSource(path.join(sourceRoot, "lib/analytics.ts"));
 const emailLink=(panel,kind,scope)=>[...panel.querySelectorAll("a")].find(link=>{
   const url=new URL(link.getAttribute("href"),"https://fixture.example");
@@ -78,7 +78,7 @@ test("Overview headings, seven bars and exact historical links share the selecte
   const panel=document.querySelector(".an-week-card");
   assert.equal(panel.querySelector("h2").textContent,`Oct 19${String.fromCharCode(0x2013)}Oct 25, 2026`);
   assert.deepEqual([...panel.querySelectorAll(".an-column>span")].map(node=>node.textContent),["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]);
-  assert.match(panel.querySelector(".an-foot").textContent,/2 unique submissions in this week/);
+  assert.match(panel.querySelector(".an-foot").textContent,/2 applications in this week/);
   for(const [index,link] of [...panel.querySelectorAll(".an-column")].entries()){
     const url=new URL(link.getAttribute("href"),"https://fixture.test");
     assert.equal(url.searchParams.get("start"),dates[index]);
@@ -480,4 +480,35 @@ test("returning from email evidence retains the application cohort instead of it
     assert.match(document.querySelector("h1").nextElementSibling.textContent,/Receipt dates 2026-07-01 to 2026-10-26/);
     assert.match(document.querySelector(".an-record-pagination").textContent,/0 emails/);
   }
+});
+
+
+test("Inbox workflow uses verified links and confirmed evidence, never company-only identity",()=>{
+  const connected={connected:true,state:"ready",available:true,last_synced_at:"2026-10-26T17:00:00Z"};
+  const renderBand=d=>parseHTML(renderToStaticMarkup(React.createElement(InboxBand,{d,connection:connected,expanded:true}))).document;
+  const linked=renderBand({...base,classified_email_evidence:{linked_messages:2}});
+  assert.equal(linked.querySelectorAll(".an-step-recorded").length,4);
+  assert.match(linked.querySelector(".an-inbox-workflow").textContent,/Finds applications.*Confirms responses.*Links to your records/);
+  const unlinked=renderBand({...base,evidence:{manual:0,automatic:0},classified_email_evidence:{linked_messages:0,company_messages:4}});
+  assert.equal(unlinked.querySelectorAll(".an-step-recorded").length,1);
+  assert.match(unlinked.querySelector(".an-inbox-workflow").textContent,/No verified matches.*Not recorded.*No verified links/);
+  assert.match(unlinked.querySelector(".an-band-coverage").textContent,/Not verified.*Check in Inbox/);
+});
+
+test("Gmail coverage displays only checked consistent job-mail evidence and labels emails",()=>{
+  const coverage={days:30,scope:"job_mail",gmail:40,in_ace:36,missing:4,complete:true,checked_at:"2026-10-26T17:00:00Z"};
+  const band=extra=>parseHTML(renderToStaticMarkup(React.createElement(InboxBand,{d:base,connection:{connected:true,state:"ready",available:true,last_synced_at:coverage.checked_at,coverage:{...coverage,...extra}},expanded:true}))).document.querySelector(".an-band-coverage");
+  assert.match(band({}).textContent,/90%.*36 of 40 emails/);
+  assert.match(band({}).title,/separate from application filters/);
+  assert.doesNotMatch(band({}).textContent,/applications/);
+  for(const extra of [{complete:false},{scope:"all"},{checked_at:"invalid"},{checked_at:"2026-10-27T18:00:00Z"},{in_ace:41},{missing:3},{gmail:-1}])assert.match(band(extra).textContent,/Not verified/);
+  assert.match(band({gmail:0,in_ace:0,missing:0}).textContent,/No emails.*0 of 0 emails/);
+});
+
+test("weekly context uses real comparisons and the peak day without inventing a zero-base percentage",()=>{
+  const counts={"2026-10-12":1,"2026-10-19":2,"2026-10-21":1};
+  const renderWeek=weeklyCounts=>parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d:base,connection:null,tab:"overview",query:{week:"2026-10-19"},supplement:{weeklyCounts,timeline:[],interval:"daily",weekToday:"2026-10-26",weekStart:"2026-10-19",week:[],weekTrend:null}}))).document.querySelector(".an-week-context").textContent;
+  assert.match(renderWeek(counts),/3 applications in this week, a 200% increase from the previous week. Most active on Monday, with 2 submissions/);
+  assert.match(renderWeek({"2026-10-19":2}),/No prior-week activity to compare/);
+  assert.doesNotMatch(renderWeek({"2026-10-19":2}),/%/);
 });

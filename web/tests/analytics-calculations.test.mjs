@@ -97,6 +97,7 @@ test("seven Pacific daily buckets reconcile unique identities across Sunday midn
   assert.deepEqual(selected.week.map(day=>day.count),[1,0,0,0,0,0,3]);
   assert.equal(selected.week.reduce((sum,day)=>sum+day.count,0),4);
   assert.equal(selected.currentWeekTotal,1);
+  assert.deepEqual(selected.weeklyCounts,{"2026-10-25":1,"2026-10-26":1,"2026-11-01":3,"2026-11-02":1});
 });
 test("weekly data is independent of 14, 30, 90 and all-time cohorts", () => {
   const rows=[row(1,"2026-10-27T18:00:00Z"),row(2,"2026-10-05T18:00:00Z"),row(3,"2026-09-05T18:00:00Z"),row(4,"2026-08-05T18:00:00Z")];

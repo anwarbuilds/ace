@@ -10,24 +10,26 @@ interface Props {
   timezone: string;
   success: boolean;
   children: ReactNode;
+  checkUrl?: string;
+  fingerprint?: string;
 }
-interface Snapshot { asOf: string | null; children: ReactNode }
+interface Snapshot { asOf: string | null; children: ReactNode; checkUrl?: string; fingerprint?: string }
 
 /** Retain only this mounted selection's last successful server-rendered result.
  * Nothing is persisted to browser storage or shared with another route/session. */
-export function AnalyticsFreshness({ scope, attemptedAt, asOf, timezone, success, children }: Props) {
+export function AnalyticsFreshness({ scope, attemptedAt, asOf, timezone, success, children, checkUrl, fingerprint }: Props) {
   const [request, setRequest] = useState<{ id: number; previousAttempt: number; pending: boolean; failed: boolean } | null>(null);
   const [state, setState] = useState(() => ({
     scope, attemptedAt, failed: !success,
-    snapshot: success ? { asOf, children } as Snapshot : null,
+    snapshot: success ? { asOf, children, checkUrl, fingerprint } as Snapshot : null,
   }));
   if (scope !== state.scope) {
     if (request) setRequest(null);
-    setState({ scope, attemptedAt, failed: !success, snapshot: success ? { asOf, children } : null });
+    setState({ scope, attemptedAt, failed: !success, snapshot: success ? { asOf, children, checkUrl, fingerprint } : null });
   } else if (attemptedAt > state.attemptedAt) {
     const older = success && asOf && state.snapshot?.asOf && Date.parse(asOf) < Date.parse(state.snapshot.asOf);
     setState({ scope, attemptedAt, failed: !success || !!older,
-      snapshot: success && !older ? { asOf, children } : state.snapshot });
+      snapshot: success && !older ? { asOf, children, checkUrl, fingerprint } : state.snapshot });
   }
   const snapshot = state.snapshot;
   const response = useEffectEvent((event: Event) => {
@@ -52,10 +54,10 @@ export function AnalyticsFreshness({ scope, attemptedAt, asOf, timezone, success
   const checked = snapshot?.asOf && Number.isFinite(Date.parse(snapshot.asOf))
     ? new Date(snapshot.asOf).toLocaleString("en-US", { timeZone: timezone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })
     : null;
-  const notice = <div className="an-freshness" role="status" aria-live="polite" aria-busy={pending} data-state={delayed ? "stale" : pending ? "refreshing" : failed ? snapshot ? "stale" : "unavailable" : "fresh"} data-analytics-as-of={snapshot?.asOf ?? undefined}>
+  const notice = <div className="an-freshness" role="status" aria-live="polite" aria-busy={pending} data-state={delayed ? "stale" : pending ? "refreshing" : failed ? snapshot ? "stale" : "unavailable" : "fresh"} data-analytics-as-of={snapshot?.asOf ?? undefined} data-analytics-check-url={snapshot?.checkUrl} data-analytics-version={snapshot?.fingerprint}>
       <span>{delayed ? `Refresh is delayed. Showing the last verified results${checked ? ` from ${checked}` : ""}.` : pending ? "Checking for updates. The last verified results remain visible." : failed
         ? snapshot ? `Refresh failed. Showing the last verified results${checked ? ` from ${checked}` : ""}.` : "Analytics is unavailable. Retry to check this selection again."
-        : checked ? `Updated ${checked}. Checks automatically while this page is visible.` : "Checks automatically while this page is visible."}</span>
+        : checked ? `Updated ${checked}. Checks for changed data while this page is visible.` : "Checks for changed data while this page is visible."}</span>
       {failed && <button className="btn" type="button" disabled={pending} onClick={() => window.dispatchEvent(new Event(ANALYTICS_REFRESH_REQUEST))}>Retry refresh</button>}
     </div>;
   return <>

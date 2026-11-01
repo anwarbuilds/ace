@@ -1,30 +1,15 @@
 import Link from "next/link";
 import { CHART_COLORS } from "@/lib/analytics";
+import { AnalyticsTimeline } from "./AnalyticsTimeline";
 import type { ChartPoint, Interval } from "@/lib/analyticsCalculations";
 
 export function MiniBar({ value, max, color = CHART_COLORS[0] }: { value: number; max: number; color?: string }) {
   return <span className="an-mini-track" aria-hidden="true"><span style={{ width: `${max ? Math.min(100, value / max * 100) : 0}%`, background: color }} /></span>;
 }
 export function LineChart({ points, interval, href }: { points: ChartPoint[]; interval: Interval; href: (point: ChartPoint) => string }) {
-  const id = `submissions-${interval}`;
-  const maximum = Math.max(1, ...points.map(p => p.count));
-  const step = Math.max(1, Math.ceil(maximum / 4));
-  const top = step * 4;
-  const plotted = points.map((point, i) => ({ ...point, x: 38 + i / Math.max(1, points.length - 1) * 704, y: 116 - point.count / top * 100 }));
-  const line = plotted.map(p => `${p.x},${p.y}`).join(" ");
-  const tick = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", ...(interval === "monthly" ? { year: "2-digit" } : { day: "numeric" }), timeZone: "UTC" });
-  return <div className="an-line-chart">
-    <svg viewBox="0 0 760 150" role="img" aria-label={`Unique submissions by ${interval === "weekly" ? "calendar week" : interval === "monthly" ? "calendar month" : "submission date"}`}>
-      <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--accent)" stopOpacity=".16" /><stop offset="100%" stopColor="var(--accent)" stopOpacity=".03" /></linearGradient></defs>
-      {[0, 1, 2, 3, 4].map(i => <g key={i}><line x1="38" x2="748" y1={116 - i * 25} y2={116 - i * 25} stroke="var(--border-subtle)" /><text x="23" y={120 - i * 25} textAnchor="end">{step * i}</text></g>)}
-      {plotted.length > 0 && <><polygon points={`38,116 ${line} ${plotted.at(-1)!.x},116`} fill={`url(#${id})`} /><polyline points={line} fill="none" stroke="var(--accent)" strokeWidth="2.3" />{plotted.map((p, i) => <g key={p.date}>
-        {plotted.length <= 100 && <a href={href(p)} aria-label={`${p.date}${p.end !== p.date ? ` through ${p.end}` : ""}: ${p.count} submissions. Open applications.`}><circle cx={p.x} cy={p.y} r="4" fill="var(--accent)" stroke="var(--surface-1)" strokeWidth="1.5"><title>{`${p.date}: ${p.count} submissions`}</title></circle></a>}
-        {(i === plotted.length - 1 || (i % Math.max(1, Math.ceil(plotted.length / 8)) === 0 && plotted.length - 1 - i >= Math.max(1, Math.ceil(plotted.length / 8)) * .7)) && <text className="an-x-tick" x={p.x} y="141" textAnchor="middle">{tick(p.date)}</text>}
-      </g>)}</>}
-    </svg>
-    <details className="an-chart-details"><summary>View chart data</summary><div className="an-data-scroll"><table className="an-table"><thead><tr><th>Submission dates</th><th>Applications</th><th>Records</th></tr></thead><tbody>{points.map(p => <tr key={p.date}><th>{p.date}{p.end !== p.date && ` to ${p.end}`}</th><td>{p.count}</td><td><Link href={href(p)}>View applications</Link></td></tr>)}</tbody></table></div></details>
-  </div>;
+  return <AnalyticsTimeline points={points.map(point=>({...point,href:href(point)}))} interval={interval}/>;
 }
+
 export function ColumnChart({ rows, label, weekly = false, percentages = false }: { rows: { label: string; count: number; detail?: string; href?: string; future?: boolean }[]; label: string; weekly?: boolean; percentages?: boolean }) {
   const max = Math.max(1, ...rows.map(r => r.count));
   const total = rows.reduce((sum, r) => sum + r.count, 0);
@@ -32,7 +17,7 @@ export function ColumnChart({ rows, label, weekly = false, percentages = false }
     {rows.map((r, i) => {
       const body = <><div className="an-column-plot"><i style={{ height: `${r.count / max * 100}%`, background: weekly ? `linear-gradient(180deg, ${CHART_COLORS[0]}, ${CHART_COLORS[1]})` : CHART_COLORS[i % CHART_COLORS.length] }}><span>{r.future ? "" : r.count}</span></i></div><span>{r.label}</span>{percentages && <strong>{total ? `${Math.round(r.count / total * 100)}%` : "No sample"}</strong>}</>;
       const description = `${r.detail ?? r.label}: ${r.future ? "future day" : `${r.count} applications`}`;
-      return r.href && !r.future ? <Link className="an-column" key={r.label} href={r.href} aria-label={description}>{body}</Link> : <div className="an-column" key={r.label} data-future={r.future || undefined} tabIndex={0} title={r.future ? "Future day; activity is not yet known" : undefined} aria-label={description}>{body}</div>;
+      return r.href && !r.future ? <Link prefetch={false} className="an-column" key={r.label} href={r.href} aria-label={description}>{body}</Link> : <div className="an-column" key={r.label} data-future={r.future || undefined} tabIndex={0} title={r.future ? "Future day; activity is not yet known" : undefined} aria-label={description}>{body}</div>;
     })}
   </div>;
 }

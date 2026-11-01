@@ -58,9 +58,9 @@ export function AnalyticsChartInterval({monthly, interval, detailed = true}: {mo
   return <label className="an-chart-mode"><span className="sr">Chart interval</span><select disabled={!ready} value={interval ?? (monthly ? "monthly" : params.get("interval") ?? "daily")} onChange={event=>{const next=new URLSearchParams(params);next.set("interval",event.target.value);router.push(`/app/analytics?${next}`,{scroll:false});}}><option value="daily" disabled={!detailed && monthly}>Daily</option><option value="weekly" disabled={!detailed && monthly}>Weekly</option><option value="monthly">Monthly</option></select></label>;
 }
 
-export function AnalyticsWeekPicker({ start, today }: { start: string; today: string }) {
+export function AnalyticsWeekPicker({ start, today, onChange }: { start: string; today: string; onChange?: (week: string) => void }) {
   const ready = useReady(), router = useRouter(), params = useSearchParams();
   const current = mondayOf(today);
-  const change = (day: string) => { const next = new URLSearchParams(params); const monday = mondayOf(day) > current ? current : mondayOf(day); if (monday === current) next.delete("week"); else next.set("week", monday); router.push(`/app/analytics?${next}`, { scroll: false }); };
+  const change = (day: string) => { const monday = mondayOf(day) > current ? current : mondayOf(day); if(onChange){onChange(monday);return;} const next = new URLSearchParams(params); if (monday === current) next.delete("week"); else next.set("week", monday); router.push(`/app/analytics?${next}`, { scroll: false }); };
   return <div className="an-week-picker" role="group" aria-label="Displayed calendar week">{start < current && <button className="an-week-reset" disabled={!ready} onClick={()=>change(current)}>This week</button>}<button disabled={!ready} aria-label="Previous week" onClick={()=>change(shiftDate(start,-7))}><NavIcon name="left" size="sm"/></button><button disabled={!ready || start >= current} aria-label="Next week" onClick={()=>change(shiftDate(start,7))}><NavIcon name="right" size="sm"/></button></div>;
 }

@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGetOr } from "@/lib/api";
 import { getPrefs } from "@/lib/prefs";
 import type { AnalyticsData, InboxConnection } from "@/lib/analytics";
+import { analyticsFingerprint } from "@/lib/analyticsFingerprint";
 import { readAnalyticsSupplement } from "@/lib/analyticsRead";
 import "./analytics.css";
 
@@ -32,5 +33,5 @@ export default async function AnalyticsPage({ searchParams }: PageProps<"/app/an
   const tab = ["overview","outcomes","role-resume","companies"].includes(query.tab) ? query.tab : "overview";
   const interval = query.interval === "weekly" || query.interval === "monthly" ? query.interval : query.interval === "daily" ? "daily" : d.granularity === "monthly" ? "monthly" : "daily";
   const supplement = await readAnalyticsSupplement(d, interval, query.week);
-  return <ScrollArea><AnalyticsFreshness scope={scope} attemptedAt={attemptedAt} asOf={d.as_of} timezone={d.timezone} success><AnalyticsView d={d} connection={connection} tab={tab} query={query} supplement={supplement}/></AnalyticsFreshness></ScrollArea>;
+  return <ScrollArea><AnalyticsFreshness scope={scope} attemptedAt={attemptedAt} asOf={d.as_of} timezone={d.timezone} checkUrl={`/api/analytics?${new URLSearchParams(params)}`} fingerprint={await analyticsFingerprint(d)} success><AnalyticsView d={d} connection={connection} tab={tab} query={query} supplement={supplement}/></AnalyticsFreshness></ScrollArea>;
 }

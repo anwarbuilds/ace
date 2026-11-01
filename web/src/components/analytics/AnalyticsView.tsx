@@ -6,10 +6,11 @@ import { NavIcon } from "@/components/shell/NavIcon";
 import { clean, familyLabel, STATUS_LABEL } from "@/lib/format";
 import type { ApplicationStatus } from "@/lib/types";
 import { applicationRecordsHref, emailRecordsHref, CHART_COLORS, type AnalyticsData, type InboxConnection } from "@/lib/analytics";
-import { AnalyticsChartInterval, AnalyticsCompanySelect, AnalyticsFilters, AnalyticsWeekPicker } from "./AnalyticsFilters";
+import { AnalyticsChartInterval, AnalyticsCompanySelect, AnalyticsFilters } from "./AnalyticsFilters";
 import { ColumnChart, Donut, LineChart, MiniBar, PetitionChart } from "./AnalyticsCharts";
 import { ApplicationMetrics, InboxBand, AnalyticsEvidenceNote } from "./AnalyticsSummary";
-import { ANALYTICS_WEEK_TIMEZONE, calendarWeek, groupSubmissions, localDate, weekDateLabels, type AnalyticsSupplement, type ChartPoint } from "@/lib/analyticsCalculations";
+import { groupSubmissions, type AnalyticsSupplement, type ChartPoint } from "@/lib/analyticsCalculations";
+import { AnalyticsWeeklyChart } from "./AnalyticsWeeklyChart";
 import { inboxHistoryLabel } from "@/lib/inboxScope";
 
 const INBOX = "/app/applications/inbox";
@@ -27,24 +28,15 @@ function Rate() {return <span className="an-rate-na" title="A complete observati
 function Legend({ rows, total }: { rows:{label:string; count:number}[]; total:number }) {
   return <div className="an-legend">{rows.map((r,i)=><div key={r.label}><i style={{background:CHART_COLORS[i%CHART_COLORS.length]}}/><span>{r.label}</span><strong>{n(r.count)}</strong><span>{total ? `${Math.round(r.count/total*100)}%` : "n/a"}</span></div>)}</div>;
 }
-function WeekRange({start,end}:{start:string;end:string}) {
-  const labels=weekDateLabels(start,end);
-  return <span className="an-week-range"><time dateTime={start}>{labels.start}</time><span className="an-week-separator">{String.fromCharCode(0x2013)}</span><time dateTime={end}>{labels.end}</time></span>;
-}
 function Overview({d,supplement,askedWeek}:{d:AnalyticsData;supplement?:AnalyticsSupplement|null;askedWeek?:string}) {
   const evidence = [{label:"Positive replies",count:d.evidence.positive},{label:"Confirmed rejections",count:d.evidence.rejected}];
-  const today=supplement?.weekToday ?? localDate(d.as_of,ANALYTICS_WEEK_TIMEZONE);
   const mode=supplement?.interval ?? (d.granularity === "monthly" ? "monthly" : "daily");
   const fallback=d.granularity === "monthly" ? d.daily.map(row=>({date:`${row.date}-01`,end:new Date(Date.UTC(+row.date.slice(0,4),+row.date.slice(5,7),0)).toISOString().slice(0,10),count:row.count})) : groupSubmissions(d.daily,"daily",d.start,d.end);
   const points=supplement?.timeline ?? fallback;
   const pointHref=(point:ChartPoint)=>applicationRecordsHref({...d,days:"custom",start:point.date<d.start?d.start:point.date,end:point.end>d.end?d.end:point.end});
-  const window=supplement?{start:supplement.weekStart,end:supplement.weekEnd,current:supplement.currentWeek}:calendarWeek(today,askedWeek);
-  const historical=!window.current;
-  const week=supplement?.week ?? (!historical && d.timezone===ANALYTICS_WEEK_TIMEZONE ? d.week.map(row=>({...row,end:row.date})) : null);
-  const weekHref=(point:ChartPoint)=>applicationRecordsHref({...d,timezone:ANALYTICS_WEEK_TIMEZONE,days:"custom",start:point.date,end:point.date});
   return <div className="an-overview-charts"><div className="an-grid an-overview-top">
     <Panel title="Applications over time" subtitle="Unique submissions in your selected period." action={<div className="an-chart-actions"><AnalyticsChartInterval interval={mode} monthly={d.granularity==="monthly"} detailed={Boolean(supplement)}/><Jump href={applicationRecordsHref(d)}>View application records</Jump></div>}><LineChart points={points} interval={mode} href={pointHref}/>{!supplement&&<p className="an-foot">Detailed ledger unavailable. Showing the recorded {mode} projection.</p>}</Panel>
-    <Panel className="an-week-card" title={historical?<WeekRange start={window.start} end={window.end}/>:"This week"} subtitle={historical?"Application activity for this Monday to Sunday week.":<WeekRange start={window.start} end={window.end}/>} action={<AnalyticsWeekPicker start={window.start} today={today}/>}>{week?<><ColumnChart weekly label={`Calendar week submissions, ${window.start} through ${window.end}, ${ANALYTICS_WEEK_TIMEZONE}`} rows={week.map(row=>({label:new Date(`${row.date}T12:00:00Z`).toLocaleDateString("en-US",{weekday:"short",timeZone:"UTC"}),detail:row.date,count:row.count,future:row.date>today,href:weekHref(row)}))}/><p className="an-foot">{n(week.reduce((sum,row)=>sum+row.count,0))} unique submissions {historical?"in this week":"this week"}. {historical?"Monday to Sunday, America/Los_Angeles.":"Future days have not happened yet."}</p></>:<Unavailable>Submissions for this week could not be verified. Return to this week or retry the report.</Unavailable>}</Panel>
+    <AnalyticsWeeklyChart d={{as_of:d.as_of,timezone:d.timezone,week:d.week,days:d.days,start:d.start,end:d.end,family:d.family}} supplement={supplement?{weekToday:supplement.weekToday,weeklyCounts:supplement.weeklyCounts,weekStart:supplement.weekStart,week:supplement.week,weekTrend:supplement.weekTrend}:null} initialWeek={askedWeek}/>
   </div><div className="an-grid an-overview-bottom">
     <Panel title="Current application statuses" subtitle="Latest known stage for each application."><div className="an-statuses">{Object.entries(d.statuses).sort(([a],[b])=>STATUS_ORDER.indexOf(a)-STATUS_ORDER.indexOf(b)).map(([status,count])=><Link href={applicationRecordsHref(d,{status})} key={status}><i style={{background:CHART_COLORS[STATUS_COLORS[status]??5]}}/><span>{STATUS_LABEL[status as ApplicationStatus]??clean(status)}</span><MiniBar value={count} max={d.submitted} color={CHART_COLORS[STATUS_COLORS[status]??5]}/><strong>{n(count)}</strong><span>{d.submitted?Math.round(count/d.submitted*100):0}%</span></Link>)}{!d.submitted&&<p>No submissions in this selection.</p>}</div><p className="an-foot">No reply remains pending. Silence is never a rejection.</p></Panel>
     <Panel title="Outcome evidence" subtitle="Distinct application and outcome-type pairs."><div className="an-donut-layout"><Donut rows={evidence} label="outcome pairs"/><div><Legend rows={evidence} total={d.evidence.positive+d.evidence.rejected}/><p className="an-foot">An application can have both a positive response and a later rejection. These are outcome pairs, not separate applications.</p><div className="an-evidence-links"><Jump href={applicationRecordsHref(d,{evidence:"positive"})}>Positive replies</Jump><Jump href={applicationRecordsHref(d,{evidence:"rejection"})}>Rejections</Jump></div></div></div></Panel>

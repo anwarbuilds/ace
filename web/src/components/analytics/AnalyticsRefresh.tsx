@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import { analyticsFingerprint } from "@/lib/analyticsFingerprint";
 import { useEffect, useEffectEvent, useRef, useTransition } from "react";
 
 export const ANALYTICS_REFRESH_REQUEST = "ace-analytics-refresh";
@@ -23,6 +24,9 @@ export function AnalyticsRefresh() {
   const deferred = useRef<ReturnType<typeof setTimeout> | null>(null);
   const generation = useRef(0);
   const inFlight = useRef<number | null>(null);
+  const checking = useRef(false);
+  const probe = useRef<AbortController|null>(null);
+  const lastProbe = useRef(-Infinity);
   const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Effect events keep the contextual router current without replacing listeners
@@ -54,6 +58,27 @@ export function AnalyticsRefresh() {
       window.dispatchEvent(new window.CustomEvent(ANALYTICS_REFRESH_STATE, { detail: { phase: "delayed", id: inFlight.current } }));
     }, 30_000);
     startTransition(() => refresh());
+  });
+
+  // A quiet GET detects changed authoritative data. Identical results never
+  // replace the page or interrupt chart state, scroll position or focus.
+  const check = useEffectEvent(async (reason: "wake"|"poll") => {
+    if(!active||document.visibilityState!=="visible"||checking.current||busy.current||Date.now()-lastProbe.current<COALESCE_MS)return;
+    const node=document.querySelector<HTMLElement>("[data-analytics-check-url][data-analytics-version]");
+    const url=node?.dataset.analyticsCheckUrl,version=node?.dataset.analyticsVersion;
+    if(!url||!version)return;
+    checking.current=true;lastProbe.current=Date.now();
+    const controller=new AbortController();probe.current=controller;
+    let timedOut=false;
+    const timeout=setTimeout(()=>{timedOut=true;controller.abort();},15_000);
+    try{
+      const response=await fetch(url,{cache:"no-store",credentials:"same-origin",signal:controller.signal});
+      if(!response.ok)throw new Error("Analytics check failed");
+      const next=await analyticsFingerprint(await response.json());
+      if(!controller.signal.aborted&&node.isConnected&&node.dataset.analyticsVersion===version&&node.dataset.analyticsCheckUrl===url&&next!==version)request(reason);
+    }catch{
+      if(!controller.signal.aborted||timedOut)window.dispatchEvent(new window.CustomEvent(ANALYTICS_REFRESH_STATE,{detail:{phase:"offline",id:++generation.current}}));
+    }finally{clearTimeout(timeout);if(probe.current===controller){probe.current=null;checking.current=false;}}
   });
 
   useEffect(() => {
@@ -90,10 +115,10 @@ export function AnalyticsRefresh() {
     if (!active) return;
     const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel("ace-marks") : null;
     if (channel) channel.onmessage = () => request("evidence");
-    const wake = () => request("wake");
+    const wake = () => { void check("wake"); };
     const retry = () => request("retry");
     const offline = () => window.dispatchEvent(new window.CustomEvent(ANALYTICS_REFRESH_STATE, { detail: { phase: "offline", id: ++generation.current } }));
-    const timer = setInterval(() => request("poll"), POLL_MS);
+    const timer = setInterval(() => check("poll"), POLL_MS);
     window.addEventListener("focus", wake);
     window.addEventListener("online", retry);
     window.addEventListener("offline", offline);
@@ -101,6 +126,7 @@ export function AnalyticsRefresh() {
     window.addEventListener(ANALYTICS_REFRESH_REQUEST, retry);
     return () => {
       clearInterval(timer);
+      probe.current?.abort();probe.current=null;checking.current=false;
       if (slowTimer.current) clearTimeout(slowTimer.current);
       slowTimer.current = null;
       if (deferred.current) clearTimeout(deferred.current);
