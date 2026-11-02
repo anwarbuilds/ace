@@ -175,9 +175,6 @@ export default async function SettingsPage() {
                 <a className="btn btn-secondary btn-sm" href="/api/export.json" download>
                   Download everything (JSON)
                 </a>
-                <a className="btn btn-secondary btn-sm" href="/api/applications/export.csv" download>
-                  Applications (CSV)
-                </a>
               </div>
             </div>
           </div>

@@ -10,21 +10,21 @@ export function LineChart({ points, interval, href }: { points: ChartPoint[]; in
   return <AnalyticsTimeline points={points.map(point=>({...point,href:href(point)}))} interval={interval}/>;
 }
 
-export function ColumnChart({ rows, label, weekly = false, percentages = false }: { rows: { label: string; count: number; detail?: string; href?: string; future?: boolean }[]; label: string; weekly?: boolean; percentages?: boolean }) {
+export function ColumnChart({ rows, label, weekly = false, percentages = false }: { rows: { label: string; count: number; detail?: string; href?: string; future?: boolean; color?: string }[]; label: string; weekly?: boolean; percentages?: boolean }) {
   const max = Math.max(1, ...rows.map(r => r.count));
   const total = rows.reduce((sum, r) => sum + r.count, 0);
   return <div className={`an-columns${weekly ? " an-weekly" : ""}`} aria-label={label}>
     {rows.map((r, i) => {
-      const body = <><div className="an-column-plot"><i style={{ height: `${r.count / max * 100}%`, background: weekly ? `linear-gradient(180deg, ${CHART_COLORS[0]}, ${CHART_COLORS[1]})` : CHART_COLORS[i % CHART_COLORS.length] }}><span>{r.future ? "" : r.count}</span></i></div><span>{r.label}</span>{percentages && <strong>{total ? `${Math.round(r.count / total * 100)}%` : "No sample"}</strong>}</>;
+      const body = <><div className="an-column-plot"><i style={{ height: `${r.count / max * 100}%`, background: weekly ? `linear-gradient(180deg, ${CHART_COLORS[0]}, ${CHART_COLORS[1]})` : r.color ?? CHART_COLORS[i % CHART_COLORS.length] }}><span>{r.future ? "" : r.count}</span></i></div><span>{r.label}</span>{percentages && <strong>{total ? `${Math.round(r.count / total * 100)}%` : "No sample"}</strong>}</>;
       const description = `${r.detail ?? r.label}: ${r.future ? "future day" : `${r.count} applications`}`;
       return r.href && !r.future ? <Link prefetch={false} className="an-column" key={r.label} href={r.href} aria-label={description}>{body}</Link> : <div className="an-column" key={r.label} data-future={r.future || undefined} tabIndex={0} title={r.future ? "Future day; activity is not yet known" : undefined} aria-label={description}>{body}</div>;
     })}
   </div>;
 }
-export function Donut({ rows, label }: { rows: { label: string; count: number }[]; label: string }) {
+export function Donut({ rows, label }: { rows: { label: string; count: number; color?: string }[]; label: string }) {
   const total = rows.reduce((sum, r) => sum + r.count, 0);
   let current = 0;
-  const stops = rows.map((r, i) => { const start = current; current += total ? r.count / total * 100 : 0; return `${CHART_COLORS[i % CHART_COLORS.length]} ${start}% ${current}%`; });
+  const stops = rows.map((r, i) => { const start = current; current += total ? r.count / total * 100 : 0; return `${r.color ?? CHART_COLORS[i % CHART_COLORS.length]} ${start}% ${current}%`; });
   return <div className="an-donut" role="img" aria-label={`${label}. ${rows.map(r => `${r.label}: ${r.count}`).join("; ")}`} style={{ background: total ? `conic-gradient(${stops.join(",")})` : "var(--surface-2)" }}><div><strong>{total.toLocaleString("en-US")}</strong><span>{label}</span></div></div>;
 }
 export function PetitionChart({ rows }: { rows: { period: string; approvals: number; denials: number; rate: number | null }[] }) {
