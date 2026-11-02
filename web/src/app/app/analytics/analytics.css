@@ -316,8 +316,14 @@
   .an-chart-actions { flex-wrap: wrap; gap: 10px; }
 }
 @media(min-width:1101px) {
-  .an-tab-overview { max-width: none; min-height: calc(100dvh - var(--site-h)); padding: 16px 28px 24px; display: flex; flex-direction: column; }
+  .an-tab-overview,.an-tab-outcomes,.an-tab-role-resume { max-width: none; min-height: calc(100dvh - var(--site-h)); padding: 16px 28px 24px; display: flex; flex-direction: column; }
   .an-tab-overview> :not(.an-overview-charts) { flex-shrink: 0; }
+  .an-tab-outcomes> :not(.an-outcomes),.an-tab-role-resume> :not(.an-role-top,.an-role-bottom) { flex-shrink: 0; }
+  .an-tab-outcomes>.an-outcomes,.an-tab-role-resume>.an-grid { flex: 1 0 auto; }
+  .an-tab-outcomes>.an-outcomes,.an-tab-role-resume>.an-role-bottom { margin-bottom: 0; }
+  .an-outcomes>.an-column-stack>.an-panel:last-child { flex: 1; display: flex; flex-direction: column; }
+  .an-outcomes .an-donut-layout { flex: 1; }
+  .an-outcomes .an-review-list { flex: 1; align-content: center; }
   .an-overview-charts { flex: 1; display: flex; flex-direction: column; }
   .an-overview-charts>.an-grid { flex: 1 0 auto; min-height: 244px; }
   .an-overview-charts .an-panel { display: flex; flex-direction: column; }

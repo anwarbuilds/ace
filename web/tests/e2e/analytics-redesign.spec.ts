@@ -383,7 +383,8 @@ test("historical arrows cross calendar years and reset without a weekly date pic
   }
 });
 
-test("Overview fills the desktop content area and keeps the six company modules in order",async({page})=>{
+test("Overview, Outcomes and Role and resume fill the desktop workspace without lower gaps",async({page})=>{
+  test.setTimeout(120_000);
   await page.setViewportSize({width:1672,height:941});
   await page.goto("/app/analytics?days=30");
   await expect(page.getByRole("heading",{name:"Applications over time",exact:true})).toBeVisible();
@@ -412,6 +413,33 @@ test("Overview fills the desktop content area and keeps the six company modules 
     previousHeight=top.height;
     expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
     await page.screenshot({path:path.join(root,`expanded-overview-${viewport.width}x${viewport.height}.png`)});
+  }
+  for(const theme of ["light","dark"] as const){
+    await setThemeCookies(page.context(),new URL(page.url()).origin,theme);
+    for(const [tab,title] of tabs.filter(([tab])=>tab==="outcomes"||tab==="role-resume")){
+      await page.goto(`/app/analytics?tab=${tab}&days=all`);
+      await expect(page.getByRole("heading",{name:title,exact:true})).toBeVisible();
+      const selector=tab==="outcomes"?".an-outcomes":".an-role-bottom";
+      await expect(page.locator(selector)).toBeVisible();
+      for(const viewport of [{width:1672,height:941},{width:1920,height:1440},{width:2560,height:1440}]){
+        await page.setViewportSize(viewport);
+        await page.evaluate(()=>document.fonts.ready);
+        const geometry=await page.evaluate(selector=>{
+          const box=(node:Element)=>{const b=node.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height,bottom:b.bottom};};
+          const report=document.querySelector(".an-page")!;
+          return {shell:box(document.querySelector(".shell-main")!),report:box(report),grid:box(document.querySelector(selector)!),paddingBottom:parseFloat(getComputedStyle(report).paddingBottom),lastCards:[...document.querySelectorAll(selector+" > .an-column-stack > .an-panel:last-child,"+selector+" > .an-panel")].map(box)};
+        },selector);
+        expect(Math.abs(geometry.grid.x-geometry.shell.x-28)).toBeLessThan(1);
+        expect(Math.abs(geometry.grid.x+geometry.grid.width-viewport.width+28)).toBeLessThan(1);
+        expect(geometry.paddingBottom).toBe(24);
+        expect(Math.abs(geometry.report.bottom-geometry.grid.bottom-24)).toBeLessThan(2);
+        expect(geometry.report.bottom).toBeGreaterThanOrEqual(viewport.height-1);
+        expect(geometry.lastCards).toHaveLength(2);
+        for(const card of geometry.lastCards)expect(Math.abs(card.bottom-geometry.grid.bottom)).toBeLessThan(1);
+        expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
+        await page.screenshot({path:path.join(root,`expanded-${tab}-${theme}-${viewport.width}x${viewport.height}.png`)});
+      }
+    }
   }
   await page.goto("/app/analytics?tab=companies&days=30");
   const panels=await page.locator(".an-grid .an-panel h2").allTextContents();
