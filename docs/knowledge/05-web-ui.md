@@ -8,7 +8,38 @@
 > Read this when: you change the old single-file UI or build its Next.js replacement; it records what each screen is for and what went wrong.
 
 
+## Outcomes reference and global UI removal LIVE, 2026-11-01 Pacific
+
+Exact tested web `5244b5c` (PR #25) is live after web-only activation at
+16:12 PST. Outcomes retains the reference four-card columns and 30-day window.
+Eligible applications, confirmed responses (`cohort.positive + cohort.rejected`)
+and Still pending (`cohort.pending`) are actual counts. Strip/donut share the
+eligible denominator and four disjoint groups. The unsupported effectiveness-rate
+tile is replaced by a supported count; `cohort.rate` remains unestablished.
+Response timing retains its separate dated sample/median and exact evidence
+drilldown. Existing shared shell/tokens, filters, calendar, KPIs, evidence/Undo
+and prior Overview interactions remain. No backend metric definition changed.
+
+Recognized hiring progress is removed from Outcomes. About these metrics and
+evidence and the footer/export row are removed from every Analytics tab,
+including Role and resume and Companies. Application CSV controls are also gone
+from records, Applications and Settings. JSON/resume exports and backend APIs
+remain. This latest owner request supersedes older removal scope.
+
+Review 41364764823 passes 59 browser, 2,499 backend/PostgreSQL, 131 unique local
+DOM/calculation cases and types/lint/build. Native Day/Night and full/mobile
+captures were inspected against the reference. Await visible committed charts
+before measuring/capturing: streamed hidden content can have zero geometry.
+Keep the original strict bounds assertions. Hosted records are fictional;
+actual read-only cohort/timing audits pass 44 scopes, and weekly checks pass
+132 windows/924 buckets. Broader CI retains the exact known 25/22 extension
+baseline. No pixel-perfect or signed-in production browser claim. Full release
+preservation/rollback is in the current handoff. Private review/comparison/file
+inventory: `artifacts/analytics-outcomes-20261101/REVIEW.md`.
+
 ## Analytics chart/interaction release LIVE, 2026-11-01 Pacific
+
+> Status: prior web image; Overview behavior remains. Newer global removal scope above controls.
 
 The owner's requested fixes are live in exact tested web `3d578e5`, PR #24,
 activated web only at 13:37 PST. Week arrows use reconciled Pacific aggregates

@@ -1,6 +1,6 @@
 # ACE current handoff
 
-Updated 2026-11-01 Pacific after the approved Analytics chart/interaction release. This is
+Updated 2026-11-01 Pacific after the approved Outcomes/global UI removal release. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
@@ -27,7 +27,65 @@ before changes. Dated pending instructions are not current authorization.
 - Fetch main before future changes and push only the reviewed source. Private
   `recovery-20261030/*` tags are local recovery material; **do not push all tags**.
 
+## Outcomes reference and global UI removal LIVE, 2026-11-01 Pacific
+
+The owner approved deployment of the reference four-card Outcomes page,
+clearer metrics with the 30-day observation window retained, and global removal
+of About these metrics and evidence and application CSV controls, including
+Role and resume and Companies. Exact tested web **`5244b5c979f325d16142f4db8ba553006f4bffca`** is LIVE at
+https://ace.opik.net. [PR #25](https://github.com/anwarbuilds/ace/pull/25) merged
+as `2a6f8e505bff6334e70527355be56aca8f031173`. Web alone activated **2026-11-02T00:12:27Z–2026-11-02T00:12:33Z
+(16:12 PST)**; verification completed 2026-11-02T00:13:18Z. Production main intentionally
+stays at exact tested `5244b5c`; later continuity documents are not another
+deployed build. This record supersedes older removal scope and web images.
+Never replay completed operators.
+
+The three age-qualified metrics show actual eligible applications, confirmed
+responses and Still pending. The unsupported effectiveness-rate card is replaced
+by a supported count. Strip/donut/legend share the same four disjoint API groups
+and eligible denominator. Empty cohorts have an honest state. Response timing
+retains its separate dated sample, median and exact evidence links. Compact
+information icons explain those distinctions; Inbox review/Undo remains.
+Outcomes ends at its four cards, with recognized hiring progress removed.
+The common disclosure/footer is removed from all Analytics tabs; application
+CSV controls are also removed from records, Applications and Settings. Existing
+JSON/resume exports and protected backend APIs are unchanged. The shared shell,
+Inter/Wine/Rose tokens, filters, calendar, KPIs and prior Overview week/chart/
+quiet-refresh behavior remain.
+
+Exact-source [review 41364764823](https://github.com/anwarbuilds/ace/actions/runs/41364764823)
+passes **59 Inbox/Analytics browser**, **2,499 backend/PostgreSQL**, **131 unique
+local DOM/calculation** cases, types, full lint and build. Native Day/Night and
+full/mobile captures were inspected against the Outcomes reference. Existing
+shell geometry and real-data text differ; no pixel-perfect claim. Streamed
+charts must be visible before measuring/capturing; waits were corrected without
+weakening bounds assertions. Hosted records are fictional. Separate actual
+read-only production audits reconcile cohort partitions/timing across **44
+role/period scopes**, plus **132 weekly windows / 924 daily buckets**. No
+signed-in production browser or new private hosted export; local Chrome remains
+restricted. Private proof: `artifacts/analytics-outcomes-20261101/REVIEW.md`.
+
+Live exact SHA, auth, 15 bundle/font hashes, 85 logos, compiled UI and installed
+Analytics/invitation audits pass. All 375 backend/audit-source hashes match.
+Both HMAC comparisons preserve preexisting rows across 19 protected tables.
+Unrelated service identities/images/starts/mounts and .env/Caddy/Compose hashes,
+modes and inodes remain unchanged. Schema 0050/parser 15, one Gmail monitor
+lease, background sync and disabled historical rechecks remain. No backend,
+migration, scheduler, extension, legacy, manual Gmail, application mutation or
+auth-session creation ran. Web logs contain no error/traceback.
+
+Fresh backup `/opt/ace/private-backups/outcomes-20261101T2351Z/` passes gzip,
+catalog and full expansion (**557,199,963 bytes**; no restore drill/pruning).
+Actual prior `3d578e5` web image is retained as
+`oracle-web:before-outcomes-20261101T2351Z` with guarded web-only rollback.
+Never restore old SQL as an image rollback. API remains `a48d71b`, scheduler
+`fca4673`. [Broader CI 41364768975](https://github.com/anwarbuilds/ace/actions/runs/41364768975)
+passes backend/web and retains exactly **25 pass / 22 fail** extension browsers,
+with zero new/resolved failed names. Overall CI remains red.
+
 ## Analytics chart/interaction release LIVE
+
+> Status: prior web image. Overview interactions remain; newer global removal scope above controls.
 
 The owner requested the Inbox workflow fix, reference-style timeline, actual
 weekly comparison/peak text, usable chart data, no unchanged idle reloads and
@@ -151,15 +209,15 @@ four-range invitation/drilldown, full installed audit and preservation checks pa
 ## Production: current verified sources
 
 Website: **https://ace.opik.net**. Web is exact approved/tested
-**`3d578e5058fa0efd79e16741d0eda9760e1ac2ca`**, merged by PR #24 as
-`68e2d194141145d1e0e90bdba532426e75838cf4`. Production `/opt/ace` main tracks
-origin/main but intentionally stays at exact tested `3d578e5`. Later continuity
+**`5244b5c979f325d16142f4db8ba553006f4bffca`**, merged by PR #25 as
+`2a6f8e505bff6334e70527355be56aca8f031173`. Production `/opt/ace` main tracks
+origin/main but intentionally stays at exact tested `5244b5c`. Later continuity
 documentation is not another deployed build.
 
 | Running surface | Verified source revision |
 | --- | --- |
 | API, Inbox parser 15 | `a48d71be3a33a6188e8fa96f748b4b78ecd19ef0` |
-| Web | `3d578e5058fa0efd79e16741d0eda9760e1ac2ca` |
+| Web | `5244b5c979f325d16142f4db8ba553006f4bffca` |
 | Discovery scheduler | `fca4673033dc92833bbf217182738026f414bf3d` |
 | Database schema | `0050` |
 
@@ -214,7 +272,7 @@ changed. Resume tailoring/export and offsite backup remain limitations.
 
 ## Validation and CI
 
-Latest chart/interaction verification is recorded above. Wider PR CI 41351764471 passes
+Latest Outcomes/global-removal verification is recorded above. Wider PR CI 41364768975 passes
 backend/web and retains the exact 25 pass / 22 fail extension-browser baseline
 with zero new/resolved failed names; dedicated Analytics browser checks pass.
 Overall CI remains red. No assertion was disabled or weakened.

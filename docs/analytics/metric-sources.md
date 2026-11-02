@@ -1,6 +1,37 @@
 # Analytics metric and source audit
 
+## Outcomes reference and global UI removal LIVE, 2026-11-01 Pacific
+
+Exact tested web `5244b5c` (PR #25) is live after web-only activation at
+16:12 PST. Outcomes retains the reference four-card columns and 30-day window.
+Eligible applications, confirmed responses (`cohort.positive + cohort.rejected`)
+and Still pending (`cohort.pending`) are actual counts. Strip/donut share the
+eligible denominator and four disjoint groups. The unsupported effectiveness-rate
+tile is replaced by a supported count; `cohort.rate` remains unestablished.
+Response timing retains its separate dated sample/median and exact evidence
+drilldown. Existing shared shell/tokens, filters, calendar, KPIs, evidence/Undo
+and prior Overview interactions remain. No backend metric definition changed.
+
+Recognized hiring progress is removed from Outcomes. About these metrics and
+evidence and the footer/export row are removed from every Analytics tab,
+including Role and resume and Companies. Application CSV controls are also gone
+from records, Applications and Settings. JSON/resume exports and backend APIs
+remain. This latest owner request supersedes older removal scope.
+
+Review 41364764823 passes 59 browser, 2,499 backend/PostgreSQL, 131 unique local
+DOM/calculation cases and types/lint/build. Native Day/Night and full/mobile
+captures were inspected against the reference. Await visible committed charts
+before measuring/capturing: streamed hidden content can have zero geometry.
+Keep the original strict bounds assertions. Hosted records are fictional;
+actual read-only cohort/timing audits pass 44 scopes, and weekly checks pass
+132 windows/924 buckets. Broader CI retains the exact known 25/22 extension
+baseline. No pixel-perfect or signed-in production browser claim. Full release
+preservation/rollback is in the current handoff. Private review/comparison/file
+inventory: `artifacts/analytics-outcomes-20261101/REVIEW.md`.
+
 ## Chart/interaction release LIVE, 2026-11-01
+
+> Status: prior web image; Overview behavior remains. Newer global removal scope above controls.
 
 Exact tested web `3d578e5058fa0efd79e16741d0eda9760e1ac2ca`, merged PR #24,
 activated web only at 21:37:36Z–21:37:43Z (13:37 PST). See the current handoff
@@ -174,7 +205,7 @@ never discovery date, email receipt date or current-status date.
 | Age-qualified applications | `cohort.eligible`, submission at least 30 elapsed days before `as_of` | This is an observation threshold, not a rejection rule | `eligible=1`; undated records excluded |
 | Confirmed responses | `cohort.positive + cohort.rejected` | Disjoint latest cohort polarity from existing API | Eligible evidence records; no invented response date |
 | Confirmed/pending/unknown partition | `cohort.positive/rejected/pending/unknown` | Denominator `cohort.eligible`; legend percentages use that denominator | Underlying eligible applications. Unknown/withdrawn remain distinct from pending |
-| Employer response rate | `cohort.rate` / per-group `rate` | Coverage attestation missing | Unavailable with explanation; connected Gmail does not unlock a rate |
+| Employer response rate | `cohort.rate` / per-group `rate` | Coverage attestation missing | Outcomes shows the actual Still pending count instead; other rates remain unavailable. Connected Gmail does not unlock a rate |
 | Response timing | `timing`, `timing_sample`, `median_days` from first reliable dated outcome after submission | Bucket shares divide by timing sample, not submissions | Dated evidence records; missing timestamps excluded, no-sample state distinct from zero |
 | Inbox review | `review.needs_review/exact_preview/ambiguous` | Message counts, not application counts. Ambiguity overlaps review | Existing Inbox decision filters; no matching/triage changes |
 | Role table | `roles[].family/submitted/eligible/responses` | Exact recorded evaluation family; five-row summary and expandable full list, with no title-based family inference | Family-filtered records; Unknown retained |
