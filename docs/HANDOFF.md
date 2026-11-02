@@ -1,6 +1,6 @@
 # ACE current handoff
 
-Updated 2026-11-01 Pacific after the approved Outcomes/global UI removal release. This is
+Updated 2026-11-01 Pacific after the approved Outcomes/Role workspace spacing correction. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
@@ -27,7 +27,56 @@ before changes. Dated pending instructions are not current authorization.
 - Fetch main before future changes and push only the reviewed source. Private
   `recovery-20261030/*` tags are local recovery material; **do not push all tags**.
 
+## Outcomes and Role and resume workspace spacing LIVE, 2026-11-01 Pacific
+
+The owner's gap correction includes both Outcomes and Role and resume.
+Their old 1460 px centered cap and 64 px bottom padding differed from Overview.
+Both now share its full desktop workspace width, 28 px side gutters, 24 px bottom
+gutter and minimum viewport height. Their grids fill spare height without
+shrinking content; the lower Outcomes cards share a bottom edge. Mobile layout,
+metrics, filters, calendar, shell, Inter/Wine/Rose tokens and earlier removals
+are unchanged. Only Analytics CSS changes runtime behavior.
+
+Owner-approved exact tested web **`8ec89cd3ff7da0e02950fcaf1e841d45bcb519c1`**, [PR #26](https://github.com/anwarbuilds/ace/pull/26),
+merged as `df3d83325e3691a9466313ef1f4f321397e33257`, is LIVE. Web alone activated
+2026-11-02T00:55:07Z–2026-11-02T00:55:16Z (16:55 PST); verification completed
+2026-11-02T00:56:00Z. Production stays on exact tested `8ec89cd`; later documentation
+is not another deployed build. This request supersedes older fixed Outcomes/
+Role outer bounds. Never replay completed release operators.
+
+Exact-source review 41368020088 passes 59 Inbox/Analytics browser cases, 2,499
+backend/PostgreSQL cases, DOM/calculation checks, types, lint and build. Existing
+desktop checks now verify both tabs/themes at 1672×941, 1920×1440 and 2560×1440,
+including gutters, card bottoms, minimum height and overflow. Rendered captures
+were inspected; hosted records are fictional. Separate actual read-only audits
+pass all 44 cohort/timing scopes and 132 weekly windows/924 buckets. No signed-in
+production browser claim; local Chrome remains restricted.
+
+Public exact SHA/auth/assets, compiled UI, installed Analytics/invitation audits,
+all 375 backend/audit-source hashes, both 19-table protected-row comparisons and
+unrelated service/configuration preservation pass. API `a48d71b`, scheduler
+`fca4673`, schema 0050/parser 15 and one Gmail monitor lease remain. No backend,
+data mutation, manual Gmail, migration, scheduler, auth-session creation,
+extension or legacy operation ran. Web logs have no error/traceback.
+
+Fresh backup `/opt/ace/private-backups/workspace-spacing-20261102T0038Z/`
+(557,701,497 bytes) passes gzip/catalog/full expansion without a
+restore drill/pruning. Actual prior `5244b5c` is retained as
+`oracle-web:before-workspace-spacing-20261102T0038Z` with guarded web-only
+rollback; never restore old SQL as image rollback. Wider CI 41368120779 retains
+exactly the known 25 pass / 22 fail extension names, with no new/resolved failures.
+Overall CI remains red. The initial cutover stopped before activation when the
+existing Gmail connection changed ready to error during preparation. Exact
+HMAC variant checks prove no other grant/control field changed; all 19 protected
+table snapshots were identical. Original failure/snapshot are retained. A fresh
+checkpoint captured the error state, with the same strict checks passing before
+and after web cutover. No Gmail state/grant/settings edit, Gmail call or backend
+fix ran; the pre-deployment connection error is a separate issue. Private proof:
+`artifacts/analytics-workspace-spacing-20261101/REVIEW.md`.
+
 ## Outcomes reference and global UI removal LIVE, 2026-11-01 Pacific
+
+> Status: prior web image; its content/removal contracts remain current.
 
 The owner approved deployment of the reference four-card Outcomes page,
 clearer metrics with the 30-day observation window retained, and global removal
@@ -209,15 +258,15 @@ four-range invitation/drilldown, full installed audit and preservation checks pa
 ## Production: current verified sources
 
 Website: **https://ace.opik.net**. Web is exact approved/tested
-**`5244b5c979f325d16142f4db8ba553006f4bffca`**, merged by PR #25 as
-`2a6f8e505bff6334e70527355be56aca8f031173`. Production `/opt/ace` main tracks
-origin/main but intentionally stays at exact tested `5244b5c`. Later continuity
+**`8ec89cd3ff7da0e02950fcaf1e841d45bcb519c1`**, merged by PR #26 as
+`df3d83325e3691a9466313ef1f4f321397e33257`. Production `/opt/ace` main tracks
+origin/main but intentionally stays at exact tested `8ec89cd`. Later continuity
 documentation is not another deployed build.
 
 | Running surface | Verified source revision |
 | --- | --- |
 | API, Inbox parser 15 | `a48d71be3a33a6188e8fa96f748b4b78ecd19ef0` |
-| Web | `5244b5c979f325d16142f4db8ba553006f4bffca` |
+| Web | `8ec89cd3ff7da0e02950fcaf1e841d45bcb519c1` |
 | Discovery scheduler | `fca4673033dc92833bbf217182738026f414bf3d` |
 | Database schema | `0050` |
 
@@ -272,7 +321,7 @@ changed. Resume tailoring/export and offsite backup remain limitations.
 
 ## Validation and CI
 
-Latest Outcomes/global-removal verification is recorded above. Wider PR CI 41364768975 passes
+Latest Outcomes/Role spacing verification is recorded above. Wider PR CI 41368120779 passes
 backend/web and retains the exact 25 pass / 22 fail extension-browser baseline
 with zero new/resolved failed names; dedicated Analytics browser checks pass.
 Overall CI remains red. No assertion was disabled or weakened.

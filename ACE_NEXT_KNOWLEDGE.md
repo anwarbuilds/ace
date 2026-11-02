@@ -1,8 +1,57 @@
 # ACE Next knowledge
 
-Last updated: 2026-11-01 Pacific, Outcomes/reference and global UI removal LIVE; real-data, Inbox and backend contracts remain intact.
+Last updated: 2026-11-01 Pacific, Outcomes and Role workspace spacing LIVE; real-data, Inbox and backend contracts remain intact.
+
+## Outcomes and Role and resume workspace spacing LIVE, 2026-11-01 Pacific
+
+The owner's gap correction includes both Outcomes and Role and resume.
+Their old 1460 px centered cap and 64 px bottom padding differed from Overview.
+Both now share its full desktop workspace width, 28 px side gutters, 24 px bottom
+gutter and minimum viewport height. Their grids fill spare height without
+shrinking content; the lower Outcomes cards share a bottom edge. Mobile layout,
+metrics, filters, calendar, shell, Inter/Wine/Rose tokens and earlier removals
+are unchanged. Only Analytics CSS changes runtime behavior.
+
+Owner-approved exact tested web **`8ec89cd3ff7da0e02950fcaf1e841d45bcb519c1`**, [PR #26](https://github.com/anwarbuilds/ace/pull/26),
+merged as `df3d83325e3691a9466313ef1f4f321397e33257`, is LIVE. Web alone activated
+2026-11-02T00:55:07Z–2026-11-02T00:55:16Z (16:55 PST); verification completed
+2026-11-02T00:56:00Z. Production stays on exact tested `8ec89cd`; later documentation
+is not another deployed build. This request supersedes older fixed Outcomes/
+Role outer bounds. Never replay completed release operators.
+
+Exact-source review 41368020088 passes 59 Inbox/Analytics browser cases, 2,499
+backend/PostgreSQL cases, DOM/calculation checks, types, lint and build. Existing
+desktop checks now verify both tabs/themes at 1672×941, 1920×1440 and 2560×1440,
+including gutters, card bottoms, minimum height and overflow. Rendered captures
+were inspected; hosted records are fictional. Separate actual read-only audits
+pass all 44 cohort/timing scopes and 132 weekly windows/924 buckets. No signed-in
+production browser claim; local Chrome remains restricted.
+
+Public exact SHA/auth/assets, compiled UI, installed Analytics/invitation audits,
+all 375 backend/audit-source hashes, both 19-table protected-row comparisons and
+unrelated service/configuration preservation pass. API `a48d71b`, scheduler
+`fca4673`, schema 0050/parser 15 and one Gmail monitor lease remain. No backend,
+data mutation, manual Gmail, migration, scheduler, auth-session creation,
+extension or legacy operation ran. Web logs have no error/traceback.
+
+Fresh backup `/opt/ace/private-backups/workspace-spacing-20261102T0038Z/`
+(557,701,497 bytes) passes gzip/catalog/full expansion without a
+restore drill/pruning. Actual prior `5244b5c` is retained as
+`oracle-web:before-workspace-spacing-20261102T0038Z` with guarded web-only
+rollback; never restore old SQL as image rollback. Wider CI 41368120779 retains
+exactly the known 25 pass / 22 fail extension names, with no new/resolved failures.
+Overall CI remains red. The initial cutover stopped before activation when the
+existing Gmail connection changed ready to error during preparation. Exact
+HMAC variant checks prove no other grant/control field changed; all 19 protected
+table snapshots were identical. Original failure/snapshot are retained. A fresh
+checkpoint captured the error state, with the same strict checks passing before
+and after web cutover. No Gmail state/grant/settings edit, Gmail call or backend
+fix ran; the pre-deployment connection error is a separate issue. Private proof:
+`artifacts/analytics-workspace-spacing-20261101/REVIEW.md`.
 
 ## Outcomes reference and global UI removal LIVE, 2026-11-01 Pacific
+
+> Status: prior web image. Its content/removal contracts remain; newer workspace spacing above controls.
 
 The owner approved deployment of the reference four-card Outcomes page,
 clearer metrics with the 30-day observation window retained, and global removal

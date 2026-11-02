@@ -1,6 +1,26 @@
 # Analytics metric and source audit
 
+## Outcomes and Role and resume workspace spacing LIVE, 2026-11-01 Pacific
+
+Exact tested web `8ec89cd`, PR #26, is live after web-only activation at
+16:55 PST. Outcomes and Role and resume now share Overview's full desktop width,
+28 px side gutters, 24 px bottom gutter and minimum viewport height. Card groups
+fill available height, with aligned lower Outcomes edges and readable content.
+Mobile and all metrics/evidence/Inbox/Undo/filter/calendar contracts below remain.
+The owner explicitly requested both tabs. Older fixed outer bounds are superseded.
+
+Only Analytics CSS changes runtime behavior. Review 41368020088 passes 59 browser,
+2,499 backend/PostgreSQL, DOM/calculation checks, types/lint/build. Existing desktop
+assertions cover both tabs/themes at native and large widths, with rendered
+captures inspected. Fixtures are fictional; separate actual read-only cohort/
+timing checks pass 44 scopes and weeks pass 132 windows/924 buckets. No signed-in
+production browser claim. Public source/assets/auth and data/service preservation
+pass. Broader CI retains the exact known 25/22 extension baseline. See current
+handoff for source/rollback and ignored private spacing review for screenshots.
+
 ## Outcomes reference and global UI removal LIVE, 2026-11-01 Pacific
+
+> Status: previous web image; its metric/content/removal definitions remain current.
 
 Exact tested web `5244b5c` (PR #25) is live after web-only activation at
 16:12 PST. Outcomes retains the reference four-card columns and 30-day window.
