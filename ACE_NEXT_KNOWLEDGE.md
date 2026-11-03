@@ -1,6 +1,33 @@
 # ACE Next knowledge
 
-Last updated: 2026-11-01 Pacific, Outcomes and Role workspace spacing LIVE; real-data, Inbox and backend contracts remain intact.
+Last updated: 2026-11-03 Pacific, assessment invitation headline correction under review; production remains the verified November 1 release.
+
+## Assessment invitation headline correction, 2026-11-03 Pacific — NOT DEPLOYED
+
+The owner reported an assessment email missing from Analytics. A fresh enforced
+read-only, repeatable-read production snapshot proves the exact reported email
+was already imported by parser 15, correctly classified `online_assessment`, and
+included in the effective assessment email totals and matching email records.
+Its application identity remains unverified. The headline incorrectly used
+`assessments`, which counts verified application stages in the submission cohort.
+Recognition and identity are separate; do not promote application status to make
+an email appear in Analytics. Gmail is currently ready and syncing, with one
+monitor lease and no saved error. The earlier November 1 connection error does
+not explain this report. No Gmail calls or production writes ran during this audit.
+
+Branch `analytics-rebuild-assessment-card-20261103` changes only the web headline:
+Online assessments uses `classified_email_evidence.categories.online_assessment`
+and opens exact `emails=1&email_kind=online_assessment` evidence, preserving date,
+role, timezone and company selection. Its subtitle says invitation emails by
+receipt date, consistent with Interview invitations. Missing projection stays
+Unavailable; recognized zero stays zero. Application-stage counts, identity,
+outcomes, lifecycle categories, Inbox/parser and all current UI removals/layouts
+are preserved. Regression coverage includes unlinked invitations with zero
+stages, independent stage totals, exact links and quiet refresh when only new
+assessment evidence changes. Hosted review and specific deployment approval
+are still pending. Current production remains web `8ec89cd`, API `a48d71b`,
+scheduler `fca4673`, schema 0050/parser 15; historical rechecks remain disabled.
+Private proof: `artifacts/inbox-assessment-investigation-20261103/`.
 
 ## Outcomes and Role and resume workspace spacing LIVE, 2026-11-01 Pacific
 

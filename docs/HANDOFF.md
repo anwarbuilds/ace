@@ -1,10 +1,25 @@
 # ACE current handoff
 
-Updated 2026-11-01 Pacific after the approved Outcomes/Role workspace spacing correction. This is
+Updated 2026-11-03 Pacific during assessment headline correction review. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
 before changes. Dated pending instructions are not current authorization.
+
+## Current assessment headline correction — NOT DEPLOYED
+
+The exact owner-reported assessment email is already imported, correctly
+classified and included in effective Analytics email records. A read-only
+production snapshot confirms Gmail is currently ready and syncing; the earlier
+connection error is not the cause. The Online assessments headline incorrectly
+counts verified application stages, excluding recognized unlinked invitations.
+The reviewed candidate branch `analytics-rebuild-assessment-card-20261103`
+switches that card and its drilldown to effective assessment invitation emails,
+matching Interview invitations. Identity and application statuses are unchanged.
+See the newest entry in `ACE_NEXT_KNOWLEDGE.md` and `docs/analytics/metric-sources.md`.
+Hosted review and new deployment approval are pending. Production remains
+web `8ec89cd`, API `a48d71b`, scheduler `fca4673`, schema 0050/parser 15.
+Private investigation evidence is in `artifacts/inbox-assessment-investigation-20261103/`.
 
 ## Canonical source and workspace
 

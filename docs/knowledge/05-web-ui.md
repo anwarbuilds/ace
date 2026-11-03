@@ -8,6 +8,19 @@
 > Read this when: you change the old single-file UI or build its Next.js replacement; it records what each screen is for and what went wrong.
 
 
+## Assessment invitation headline correction under review, 2026-11-03 Pacific
+
+The reported assessment email was imported and correctly recognized, but the
+headline used the verified application-stage count. An unlinked invitation
+therefore appeared in Inbox/email records without changing the headline. The
+candidate binds Online assessments to effective `online_assessment` email totals
+and the matching receipt-date drilldown, following the Interview invitations
+contract. Preserve date/role/timezone/company filters, unavailable versus zero,
+separate lifecycle categories, and all application-stage/cohort calculations.
+New evidence alone triggers the existing quiet refresh; no second metrics ledger
+or classifier change is needed. Source is under review, not deployed. See the
+newest root knowledge/handoff entry for proof and approval status.
+
 ## Outcomes and Role and resume workspace spacing LIVE, 2026-11-01 Pacific
 
 Exact tested web `8ec89cd`, PR #26, is live after web-only activation at
