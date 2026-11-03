@@ -1,9 +1,17 @@
+{
+  servers {
+    protocols h1 h2
+  }
+}
+
 {$ACE_DOMAIN} {
   encode zstd gzip
   reverse_proxy web:3000
+  header Alt-Svc "clear"
   header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 }
 
 ace.161-153-89-170.sslip.io {
+  header Alt-Svc "clear"
   redir https://{$ACE_DOMAIN}{uri} permanent
 }
