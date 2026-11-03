@@ -1,0 +1,47 @@
+name: site-transport-check
+on:
+  push:
+    branches: ['ops-https-check-20261103']
+permissions:
+  contents: read
+jobs:
+  public-https:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check public HTTPS from an independent network
+        run: |
+          set -eu
+          for protocol in http1.1 http2; do
+            curl --"$protocol" --connect-timeout 10 --max-time 25 --fail --silent --show-error \
+              --output /dev/null --write-out "$protocol status=%{http_code} negotiated=%{http_version} tls=%{ssl_verify_result}\n" \
+              https://ace.opik.net/login
+          done
+          curl --connect-timeout 10 --max-time 25 --fail --silent --show-error \
+            https://ace.opik.net/healthz > /tmp/ace-public-health.json
+          python3 - <<'PY'
+          import json
+          with open('/tmp/ace-public-health.json') as handle:
+              data=json.load(handle)
+          assert data['status']==data['api']['status']=='ok'
+          print('Public web/API health: ok')
+          PY
+      - name: Verify a fresh anonymous Chrome login page
+        if: always()
+        run: |
+          set -eu
+          command -v google-chrome
+          google-chrome --headless=new --no-sandbox --disable-gpu --no-first-run \
+            --user-data-dir=/tmp/ace-public-chrome --timeout=25000 --dump-dom \
+            https://ace.opik.net/login > /tmp/ace-login.html 2> /tmp/ace-chrome.log
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html=Path('/tmp/ace-login.html').read_text()
+          title=re.search(r'<title>(.*?)</title>',html,re.S)
+          print('Browser title:',title.group(1) if title else 'missing')
+          errors=sorted(set(re.findall(r'ERR_[A-Z_]+',html)))
+          print('Browser network errors:',errors)
+          assert title and 'Sign in' in title.group(1) and not errors
+          print('Fresh anonymous Chrome login page: ok')
+          PY
