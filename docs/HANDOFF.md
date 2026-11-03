@@ -1,10 +1,25 @@
 # ACE current handoff
 
-Updated 2026-11-01 Pacific after the approved Outcomes/Role workspace spacing correction. This is
+Updated 2026-11-03 Pacific after the owner-requested QUIC transport repair. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
 before changes. Dated pending instructions are not current authorization.
+
+## QUIC transport repair LIVE — browser confirmation pending
+
+For the reported `ERR_QUIC_PROTOCOL_ERROR`, Caddy now serves h1/h2 and sends
+`Alt-Svc: clear` on both existing sites. The validated graceful proxy reload
+activated 2026-11-03T20:42:36Z. Pure Caddyfile PR #27 merged as `e36b61e`.
+Runtime/no UDP QUIC listener, eight h1/h2 login/health/auth probes and service/
+private-configuration preservation checks pass. Backend/web CI pass; wider
+browsers were still running when documented. No application deployment or data/
+Gmail/DNS/firewall change ran. Browser recovery remains unconfirmed.
+
+Production stays on checkout `8ec89cd` with the intended mounted Caddyfile edit.
+Preserve this file and its inode during future checkouts/releases; never restore
+older HTTP/3-advertising source incidentally. Fresh private proxy backup/guarded
+rollback and proof: `artifacts/site-reachability-20261103/REVIEW.md`.
 
 ## Canonical source and workspace
 

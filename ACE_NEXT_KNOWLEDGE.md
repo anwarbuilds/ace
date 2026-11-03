@@ -1,6 +1,29 @@
 # ACE Next knowledge
 
-Last updated: 2026-11-01 Pacific, Outcomes and Role workspace spacing LIVE; real-data, Inbox and backend contracts remain intact.
+Last updated: 2026-11-03 Pacific, QUIC transport compatibility repair LIVE; application images remain the verified November 1 release.
+
+## QUIC transport repair LIVE, 2026-11-03 Pacific
+
+Chrome reported `ERR_QUIC_PROTOCOL_ERROR` at the canonical ACE address while
+host-side HTTP/2 requests succeeded. The owner requested a site repair. Caddy
+now explicitly serves HTTP/1.1 and HTTP/2 and sends `Alt-Svc: clear` on both
+existing sites. Only a validated graceful proxy reload ran at 20:42:36 UTC.
+Source [PR #27](https://github.com/anwarbuilds/ace/pull/27) is merged as `e36b61e`.
+Installed Caddy validation, runtime protocols/no QUIC UDP socket and eight
+h1/h2 login/health/auth checks pass. Backend/web CI subsequently pass; the wider
+browser suite was still running when this note was written, so overall CI is
+not claimed green. User browser recovery remains unconfirmed; host checks are
+not a signed-in production browser test.
+
+All service IDs/images/start times/mounts and unrelated private configuration
+remain intact, as do the edited Caddyfile's mode and mounted inode. No application
+deployment, data/Gmail/DNS/firewall operation or container recreation ran. A fresh
+private proxy configuration/runtime backup and guarded rollback are retained.
+Production checkout remains `8ec89cd` with only the intended Caddyfile edit;
+do not discard it as unexplained drift. Preserve this transport configuration
+and its mounted inode during any future source checkout or application release.
+Older application source contains the pre-repair file. Private proof and limits:
+`artifacts/site-reachability-20261103/REVIEW.md`.
 
 ## Outcomes and Role and resume workspace spacing LIVE, 2026-11-01 Pacific
 
