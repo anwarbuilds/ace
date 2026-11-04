@@ -90,6 +90,19 @@ test("quiet checks are bounded, ignore timestamps and refresh only changed data"
   });
 });
 
+test("a new unlinked assessment triggers the quiet refresh even when application stages are unchanged",async()=>{
+  let calls=0;refresh=()=>{calls++;};
+  const first={submitted:4,assessments:0,classified_email_evidence:{categories:{online_assessment:0},unlinked_messages:0}};
+  const {analyticsFingerprint}=load(path.join(sourceRoot,"lib/analyticsFingerprint.ts"));
+  const version=await analyticsFingerprint(first);
+  await mounted(React.createElement(React.Fragment,null,React.createElement(AnalyticsRefresh),React.createElement("div",{"data-analytics-check-url":"/api/analytics?days=all","data-analytics-version":version})),async({tick})=>{
+    globalThis.fetch=async()=>({ok:true,json:async()=>first});
+    await tick(120_000);assert.equal(calls,0);
+    globalThis.fetch=async()=>({ok:true,json:async()=>({...first,classified_email_evidence:{categories:{online_assessment:1},unlinked_messages:1}})});
+    await tick(120_000);assert.equal(calls,1);
+  });
+});
+
 test("fingerprints retain metrics and identity partitions while ignoring read timestamps",async()=>{
   const {analyticsFingerprint:hash}=load(path.join(sourceRoot,"lib/analyticsFingerprint.ts"));
   const a={as_of:"a",submitted:3,evidence:{positive:1},classified_email_evidence:{linked_messages:2}};

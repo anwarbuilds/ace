@@ -249,7 +249,7 @@ test("200-percent equivalent viewport reflow and keyboard theme control",async({
   await page.screenshot({path:path.join(root,"reflow-836-theme-keyboard.png"),fullPage:true});
 });
 
-test("date, status and evidence drilldowns show the exact Applications selection",async({page})=>{
+test("date, status and assessment drilldowns show their exact application or email selection",async({page})=>{
   const errors=watchErrors(page);
   await page.goto("/app/analytics?days=90");
   const expected=await page.locator(".an-metric-value").first().innerText();
@@ -262,9 +262,10 @@ test("date, status and evidence drilldowns show the exact Applications selection
   await page.locator(".an-statuses a").first().click();
   await expect(page).toHaveURL(/status=applied/);
   expect(await page.locator(".an-record-row").evaluateAll(rows=>rows.every(row=>row.getAttribute("data-status")==="applied"))).toBe(true);
-  await page.goto("/app/analytics?days=90");
+  await page.goto("/app/analytics?days=all");
   await page.getByRole("link",{name:/Online assessments/}).click();
-  await expect(page).toHaveURL(/evidence=online_assessment/);
+  await expect(page).toHaveURL(/emails=1&email_kind=online_assessment/);
+  await expect(page.getByRole("heading",{name:"Recruiting email evidence",exact:true})).toBeVisible();
   await expect(page.locator(".an-record-row").first()).toContainText(/online assessment/i);
   await page.screenshot({path:path.join(root,"application-drilldown.png"),fullPage:true});
   await page.setViewportSize({width:390,height:941});
@@ -519,7 +520,17 @@ for(const theme of ["light","dark"] as const){
     await page.goto("/app/analytics?days=all&tab=outcomes");
     await expect(page.locator(".an-classified-email-evidence,.an-audit-note,.an-bottom-links")).toHaveCount(0);
     await expect(page.locator(".an-metric").nth(0).locator("strong")).toHaveText(String(before.submitted));
-    await expect(page.locator(".an-metric").nth(3).locator("strong")).toHaveText(String(before.assessments));
+    const assessmentCard=page.locator(".an-metric").nth(3);
+    expect(before.assessments,"fixture must distinguish application stages from invitation emails").not.toBe(progress.categories.online_assessment);
+    await expect(assessmentCard.locator("strong")).toHaveText(String(progress.categories.online_assessment));
+    await expect(assessmentCard).toContainText("Invitation emails by receipt date");
+    await assessmentCard.click();
+    await expect(page).toHaveURL(/emails=1&email_kind=online_assessment/);
+    await expect(page.getByRole("heading",{name:"Recruiting email evidence",exact:true})).toBeVisible();
+    await expect(page.locator(".an-record-row")).toHaveCount(progress.categories.online_assessment);
+    await expect(page.locator(".an-record-row").first()).toContainText("Fictional online assessment email history");
+    await expect(page.locator(".an-record-row").first()).toContainText("No verified application link");
+    await page.goto("/app/analytics?days=all&tab=outcomes");
     const invitationCard=page.locator(".an-metric").nth(4);
     await expect(invitationCard.locator("strong")).toHaveText(String(progress.categories.interview));
     await expect(invitationCard).toContainText("Invitation emails by receipt date");
