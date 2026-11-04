@@ -6,14 +6,16 @@ is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNO
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
 before changes. Dated pending instructions are not current authorization.
 
-## Extension 1.31.4 on main, owner reload pending
+## Extension 1.31.5 on main, owner reload pending
 
 Workday dropdown questions were read as per-application generated IDs
 (a hidden companion input made each question block look like two), so no
 saved or Answers-page answer matched. Fixed with harness regressions; the
 card theme now follows the ACE website's Day/Night/System choice. Extension
 only; owner must Reload ACE and refresh the tab. SmartRecruiters shadow-root
-forms remain unsupported. See the newest root knowledge entry.
+forms remain unsupported. 1.31.5 adds richer diagnostics; Workday disability
+boxes and some self-identification dates still need the owner's diagnostics paste.
+See the newest root knowledge entries.
 
 ## QUIC transport repair LIVE — browser confirmation pending
 

@@ -1682,3 +1682,22 @@ test('a Workday disability box chosen once is ticked on the next application', a
   later.click('fill');
   assert.deepEqual(choices.map((_, at) => later.document.getElementById(`d-${at}`).checked), [false, true, false]);
 });
+
+test('a Workday prompt printed as plain text names its checkbox group, and diagnostics list every box and date section', async t => {
+  const memoryStore = [];
+  const answerItems = [{ label: 'Full name', value: 'Example Applicant' }];
+  const choices = ['Yes, I have a disability, or have had one in the past', 'No, I do not have a disability and have not had one in the past', 'I do not want to answer'];
+  const page = run => `<label for="when">Date</label><input id="when"><div data-automation-id="formField-disabilityStatus"><div data-automation-id="richText"><p>Please check one of the boxes below:</p></div><div role="row">${choices.map((label, at) => `<div role="cell"><input type="checkbox" id="d-${at}" name="${run}9f8e7d6c5b${at}"><label for="d-${at}">${label}</label></div>`).join('')}</div></div>` +
+    sectionDate('signed', 'Signature date', ['Month', 'Day', 'Year']);
+  const url = 'https://fictionalco.wd1.myworkdayjobs.com/en-US/Careers/job/Engineer_R1/apply/applyManually';
+  const first = fixture(page('a'), { memoryStore, answerItems, autoLearn: true, url }); t.after(first.dispose);
+  assert.equal(first.context.aceQuestionFor(first.document.getElementById('d-1')), 'please check one of the boxes below');
+  const text = first.internals.diagnostics();
+  assert.match(text, /Choice boxes \(3\):/); assert.match(text, /listed: yes, block: formField-disabilityStatus/);
+  assert.match(text, /Date sections \(3\):/); assert.ok(!/Example Applicant/.test(text), 'no answer value enters diagnostics');
+  const box = first.document.getElementById('d-1'); box.checked = true; ownerEvent(first, box, 'change');
+  await until(() => first.saved.length === 1, 'the choice is saved');
+  const later = fixture(page('b'), { memoryStore, answerItems, url: url.replace('fictionalco', 'otherco') }); t.after(later.dispose);
+  later.click('fill');
+  assert.deepEqual(choices.map((_, at) => later.document.getElementById(`d-${at}`).checked), [false, true, false]);
+});

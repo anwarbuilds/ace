@@ -3533,6 +3533,35 @@
       lines.push(line);
     });
 
+    // Every choice box and Workday date section on the page, read or not,
+    // with what ACE makes of it. A box ACE never lists is the one this
+    // report is opened for. No answer is included.
+    var boxes = Array.prototype.filter.call(document.querySelectorAll('input[type=checkbox],input[type=radio],[role=checkbox],[role=radio]'), function (box) {
+      return !(box.closest && box.closest('.ace-root'));
+    });
+    if (boxes.length) {
+      lines.push("", "Choice boxes (" + boxes.length + "):");
+      boxes.slice(0, 20).forEach(function (box) {
+        var block = box.closest && box.closest('[data-automation-id^="formField-"]');
+        lines.push("- " + tidy(aceOptionRaw(box)).slice(0, 50) + "\n    " + box.tagName.toLowerCase() + " " + fieldSignature(box) +
+          ", visible: " + (box.offsetParent ? "yes" : "no") + ", listed: " + (fillable().indexOf(box) >= 0 ? "yes" : "no") +
+          ", block: " + (block ? block.getAttribute("data-automation-id") : "none") +
+          "\n    question: " + (aceQuestionFor(box).slice(0, 80) || "none") + ", matched: " + (answerNameFor(aceQuestionFor(box), kindOf(box), box) || "nothing"));
+      });
+    }
+    var sections = Array.prototype.filter.call(document.querySelectorAll('input'), isDateSection);
+    if (sections.length) {
+      lines.push("", "Date sections (" + sections.length + "):");
+      sections.forEach(function (section) {
+        var scope = section.closest('[data-automation-id^="formField-"]');
+        lines.push("- " + fieldSignature(section) + ", box " + (section.value ? "shows a value" : "empty") +
+          ", aria-valuenow " + (section.hasAttribute("aria-valuenow") ? "set" : "absent") +
+          ", aria-valuetext " + (/^(mm|dd|yy|yyyy)$/i.test(String(section.getAttribute("aria-valuetext") || "").trim()) ? "placeholder" : section.hasAttribute("aria-valuetext") ? "set" : "absent") +
+          ", invalid " + (section.getAttribute("aria-invalid") || "no") +
+          ", error shown " + (scope && /must have a value|invalid date/i.test(scope.textContent || "") ? "yes" : "no"));
+      });
+    }
+
     if (unnamed.length) {
       lines.push(
         "",

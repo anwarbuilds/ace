@@ -1,6 +1,18 @@
 # ACE Next knowledge
 
-Last updated: 2026-11-03 Pacific, extension 1.31.4 (Workday question reading, ACE-website theme) pushed to main; extension only, no deployment.
+Last updated: 2026-11-03 Pacific, extension 1.31.5 (Workday question reading, ACE-website theme, richer diagnostics) pushed to main; extension only, no deployment.
+
+## Extension 1.31.5 follow-up, 2026-11-03 Pacific
+
+The owner confirmed 1.31.4 fills the Workday dropdown questions. Still open on
+some Workday tenants: the disability checkboxes stay unanswered and the
+self-identification Date shows today's digits while Workday reports it
+required. A group prompt printed as plain text (Workday `richText`, not a
+label) now names its checkbox group. Copy field diagnostics now also lists
+every choice box (visible, listed, block, question, match) and every date
+section's state (box value, aria-valuenow/valuetext, error), without answer
+values. Next step: the owner's diagnostics paste from such a page, and whether
+Save and Continue accepts the date. 110 DOM contracts pass.
 
 ## Extension 1.31.4: Workday questions and ACE theme, 2026-11-03 Pacific
 

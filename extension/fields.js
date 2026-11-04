@@ -902,6 +902,8 @@ function aceGroupQuestionLabel(field) {
     if (own && own.length <= ACE_MAX_QUESTION) return own;
     var named = aceHeadingIn(declared, field, true);
     if (named) return named;
+    var prompt = aceGroupPromptText(declared, field);
+    if (prompt) return prompt;
   }
 
   // Lever declares no group, so the question is whatever heading sits
@@ -915,6 +917,25 @@ function aceGroupQuestionLabel(field) {
   }
 
   return "";
+}
+
+/* A group's prompt printed as plain text rather than a label or legend,
+   as Workday prints "Please check one of the boxes below" over the
+   disability statements: the group's own words with its options taken out. */
+function aceGroupPromptText(block, field) {
+  var text = aceTextWithoutControls(block);
+  aceChoiceMembersIn(block, field).forEach(function (member) {
+    var option = String(aceOptionRaw(member) || "").trim();
+    if (option) text = text.split(option).join(" ");
+  });
+  text = text.replace(/\s+/g, " ").replace(/^[\s*]+|[\s*]+$/g, "").trim();
+  return /[a-z]{3}/i.test(text) && text.length <= ACE_MAX_QUESTION ? text : "";
+}
+
+function aceChoiceMembersIn(block, field) {
+  return Array.prototype.filter.call(block.querySelectorAll('input[type="' + field.type + '"]'), function (input) {
+    return aceIsQuestionControl(input);
+  });
 }
 
 /* Real questions run long. Dell's consent and trade-embargo questions
