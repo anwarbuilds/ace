@@ -311,6 +311,32 @@ test("missing interview email projection is unavailable rather than a fabricated
   }
 });
 
+test("assessment headline includes unlinked invitations and opens exactly the selected email evidence",()=>{
+  for(const [invites,stages] of [[1,0],[0,2],[9,1]])for(const tab of ["overview","outcomes","role-resume","companies"]){
+    const d={...base,days:"custom",start:"2026-10-01",end:"2026-10-26",family:"ML_ENGINEERING",assessments:stages,
+      classified_email_evidence:{...classifiedEvidence,linked_messages:0,unlinked_messages:invites,
+        categories:{...classifiedEvidence.categories,online_assessment:invites,assessment_completed:4,assessment_cancelled:2,action_required:3}}};
+    const {document}=parseHTML(renderToStaticMarkup(React.createElement(AnalyticsView,{d,connection:null,tab,query:{company:"Wayfern"}})));
+    const card=[...document.querySelectorAll(".an-metric")].find(node=>node.querySelector(".an-metric-label").textContent==="Online assessments");
+    assert.equal(card.querySelector("strong").textContent,String(invites));
+    assert.equal(card.querySelector("p").textContent,"Invitation emails by receipt date");
+    const target=new URL(card.getAttribute("href"),"https://fixture.test");
+    assert.equal(target.pathname,"/app/applications/analytics");
+    assert.deepEqual(Object.fromEntries(target.searchParams),{days:"custom",tz:"America/Los_Angeles",start:"2026-10-01",end:"2026-10-26",family:"ML_ENGINEERING",emails:"1",email_kind:"online_assessment",company:"Wayfern"});
+    assert.match(card.querySelector(".an-trend-missing").title,new RegExp(`Verified application assessment stages: ${stages}`));
+    assert.match(card.querySelector(".an-trend-missing").title,/Invitation emails use receipt dates and do not assign an application stage/);
+  }
+});
+
+test("missing assessment email projection is unavailable without falling back to application stages",()=>{
+  for(const evidence of [undefined,{...classifiedEvidence,categories:{interview:1}}]){
+    const {document}=parseHTML(renderToStaticMarkup(React.createElement(ApplicationMetrics,{d:{...base,assessments:2,classified_email_evidence:evidence}})));
+    const card=[...document.querySelectorAll(".an-metric")].find(node=>node.querySelector(".an-metric-label").textContent==="Online assessments");
+    assert.equal(card.querySelector("strong").textContent,"Unavailable");
+    assert.equal(new URL(card.getAttribute("href"),"https://fixture.test").searchParams.get("email_kind"),"online_assessment");
+  }
+});
+
 test("unlinked, unverified and lifecycle email categories cannot inflate the 30-day outcome groups",()=>{
   for(const evidence of [classifiedEvidence,{...classifiedEvidence,unverified_source_messages:3,linked_messages:0,company_messages:19,unlinked_messages:0},{...classifiedEvidence,categories:{...classifiedEvidence.categories,application_confirmation:4,assessment_completed:2,interview_cancelled:1,status_update:3}}]){
     const d={...base,cohort:{...base.cohort,eligible:11,positive:2,rejected:3,pending:4,unknown:2},classified_email_evidence:evidence};
