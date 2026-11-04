@@ -1,6 +1,41 @@
 # ACE Next knowledge
 
-Last updated: 2026-11-03 Pacific, extension 1.31.5 (Workday question reading, ACE-website theme, richer diagnostics) pushed to main; extension only, no deployment.
+Last updated: 2026-11-03 Pacific, assessment invitation headline correction LIVE in web 1e39263; extension 1.31.5 preserved. Production checkout and mounted proxy repair intentionally remain unchanged.
+
+## Assessment invitation headline LIVE, 2026-11-03 Pacific
+
+Owner-approved exact tested web **`1e392636d1995533b7aa619340935f7ff5124842`**,
+[PR #28](https://github.com/anwarbuilds/ace/pull/28), is LIVE. Canonical merge is
+`733b3b82bd6238f626cf09392624161001daa2c8`. Web alone activated
+**2026-11-04T01:26:18Z–01:26:25Z (November 3, 17:26 Pacific)**; verified 01:26:52Z.
+Online assessments counts effective invitation emails, including unlinked evidence,
+and opens the exact matching email records. Receipt-date filters and independent
+application-stage counts remain; no application identity/status is promoted.
+
+Fresh exact-source [review 41752426083](https://github.com/anwarbuilds/ace/actions/runs/41752426083)
+passes 59 Inbox/Analytics browsers, 2,499 backend/PostgreSQL cases, render/refresh,
+types/lint/build. Fictional captures were inspected. Wider CI 41752474870 retains
+the exact known 22 extension-browser failures of 41715557266, zero new/resolved;
+overall CI is red. No local Chrome or signed-in owner production browser claim.
+
+Installed read-only invitation/drilldown and independent Analytics audits pass.
+Compiled bindings, public SHA/health/auth, 15 bundle/font hashes and 85 logos pass.
+Both 19-table preservation comparisons, 375 API/audit hashes, unrelated services
+and configuration hashes/modes/inodes pass. API `a48d71b`, scheduler `fca4673`,
+schema 0050/parser 15, one monitor and disabled historical rechecks remain.
+No database write, manual Gmail call, auth-session creation or extension change ran.
+
+The image was built from an isolated exact-commit web archive. Production checkout
+deliberately stays `8ec89cd` with its existing Caddyfile edit and mounted inode.
+Preserve proxy SHA256 `0445b6da406ffb6cb860f5b7a05ca8c30757c47fe9633db7dddb911f591bff15`.
+Fresh 588,173,913-byte backup passes gzip/catalog/full expansion, no restore drill
+or pruning. Prior web `8ec89cd` is retained as
+`oracle-web:before-assessment-headline-20261104T0115Z` with guarded unexecuted
+web-only rollback. Server proof: `/opt/ace/private-backups/assessment-headline-20261104T0115Z/`.
+Owner-local current counts, complete proof and backup-validator correction:
+`artifacts/assessment-release-20261104/REVIEW.md`. Earlier assessment and network
+investigations remain in their private artifact folders; do not publish those
+records, restore SQL as an image rollback or replay completed operators.
 
 ## Extension 1.31.5 follow-up, 2026-11-03 Pacific
 

@@ -8,6 +8,17 @@
 > Read this when: you change the old single-file UI or build its Next.js replacement; it records what each screen is for and what went wrong.
 
 
+## Assessment invitation headline LIVE, 2026-11-03 Pacific
+
+Exact tested web `1e39263`, PR #28, activated web-only at 17:26 Pacific. The card
+now counts effective assessment invitation emails and opens exact receipt-date
+email records. Application stages remain separate; existing layout, spacing and
+Interview invitations remain. Fresh review passes 59 browser/2,499 backend cases
+and render/refresh/types/lint/build. Installed read-only and compiled/public
+checks pass, with no signed-in production browser claim. Wider CI retains the
+known 22 extension failures. Production checkout and mounted proxy file remain
+unchanged. See newest root record and private `artifacts/assessment-release-20261104/REVIEW.md`.
+
 ## Outcomes and Role and resume workspace spacing LIVE, 2026-11-01 Pacific
 
 Exact tested web `8ec89cd`, PR #26, is live after web-only activation at

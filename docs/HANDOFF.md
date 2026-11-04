@@ -1,10 +1,26 @@
 # ACE current handoff
 
-Updated 2026-11-03 Pacific after the owner-requested QUIC transport repair. This is
+Updated 2026-11-03 Pacific after the assessment invitation web release. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
 before changes. Dated pending instructions are not current authorization.
+
+## Assessment invitation headline LIVE
+
+Owner-approved exact tested web `1e392636d1995533b7aa619340935f7ff5124842`, PR #28,
+is live after web-only activation at 2026-11-04T01:26:18Z–01:26:25Z (November 3,
+17:26 Pacific), verified 01:26:52Z. Canonical merge is `733b3b8`. The card counts
+assessment invitation emails and opens exact email records; stages stay separate.
+Fresh hosted review passes 59 browser/2,499 backend cases plus types/lint/build.
+Wider CI retains the known 22 extension-browser failures; overall CI is red.
+Actual read-only audits, compiled/public proof, protected rows and unrelated
+services/configuration preservation pass. No signed-in production browser claim.
+API `a48d71b`, extension 1.31.5 and scheduler/Gmail controls remain. Production
+checkout stays `8ec89cd` with the intended mounted Caddy edit; web was built from
+an isolated exact-source archive. Preserve its mount/inode. Fresh backup and
+guarded unexecuted web rollback: `/opt/ace/private-backups/assessment-headline-20261104T0115Z/`.
+Current owner-local proof/counts: `artifacts/assessment-release-20261104/REVIEW.md`.
 
 ## Extension 1.31.5 on main, owner reload pending
 
@@ -17,7 +33,7 @@ forms remain unsupported. 1.31.5 adds richer diagnostics; Workday disability
 boxes and some self-identification dates still need the owner's diagnostics paste.
 See the newest root knowledge entries.
 
-## QUIC transport repair LIVE — browser confirmation pending
+## QUIC transport repair LIVE — preserved during the web release
 
 For the reported `ERR_QUIC_PROTOCOL_ERROR`, Caddy now serves h1/h2 and sends
 `Alt-Svc: clear` on both existing sites. The validated graceful proxy reload
@@ -25,7 +41,9 @@ activated 2026-11-03T20:42:36Z. Pure Caddyfile PR #27 merged as `e36b61e`.
 Runtime/no UDP QUIC listener, eight h1/h2 login/health/auth probes and service/
 private-configuration preservation checks pass. Backend/web CI pass; wider
 browsers were still running when documented. No application deployment or data/
-Gmail/DNS/firewall change ran. Browser recovery remains unconfirmed.
+Gmail/DNS/firewall change ran. Later client/network findings and owner access
+confirmation are retained in the private reachability review; transport probes
+alone do not prove a user's browser recovery.
 
 Production stays on checkout `8ec89cd` with the intended mounted Caddyfile edit.
 Preserve this file and its inode during future checkouts/releases; never restore
