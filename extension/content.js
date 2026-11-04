@@ -748,6 +748,8 @@
       function (field) {
         if (field.disabled || (field.readOnly && !aceIsAutocomplete(field))) return false;
         if (field.type === "hidden" || field.type === "file") return false;
+        // Workday's hidden companion input beside each dropdown is not a question.
+        if (field.offsetParent && !aceIsQuestionControl(field)) return false;
         if (field.type === "submit" || field.type === "button") return false;
         if (!field.offsetParent && field.type !== "radio") return false;
         if (aceShouldSkip(field) || aceMemory.isEmployerMotivation(aceQuestionFor(field))) return false;
@@ -2790,31 +2792,20 @@
     }
   }
 
-  // Automatic means matching the website the card sits on: a light employer
-  // page gets the Day card and a dark one the Night card, whatever the
-  // computer's setting. A page without a background of its own shows the
-  // browser's light canvas unless it declares a dark color scheme.
-  function pageTheme() {
-    try {
-      var nodes = [document.body, document.documentElement];
-      for (var i = 0; i < nodes.length; i++) {
-        if (!nodes[i]) continue;
-        var paint = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s\/]+([\d.]+)(%?))?\s*\)/.exec(window.getComputedStyle(nodes[i]).backgroundColor || '');
-        if (!paint || paint[4] !== undefined && parseFloat(paint[4]) / (paint[5] ? 100 : 1) < 0.5) continue;
-        return (0.2126 * paint[1] + 0.7152 * paint[2] + 0.0722 * paint[3]) / 255 < 0.45 ? 'night' : 'day';
-      }
-      var scheme = String(window.getComputedStyle(document.documentElement).colorScheme || '');
-      if (/^dark$/.test(scheme.trim()) || /dark/.test(scheme) && systemTheme() === 'night') return 'night';
-    } catch (error) { /* the light canvas */ }
-    return 'day';
+  // Automatic means the ACE website's own theme: its Day or Night choice,
+  // or the computer's Day or Night setting while the website follows
+  // System. The website's choice is read whenever the owner opens ACE.
+  var siteTheme = "system";
+  function autoTheme() {
+    return siteTheme === "light" ? "day" : siteTheme === "dark" ? "night" : systemTheme();
   }
   function applyThemeMode(mode) {
     studioThemeMode = mode === "day" || mode === "night" ? mode : "system";
-    studioTheme = studioThemeMode === "system" ? pageTheme() : studioThemeMode;
+    studioTheme = studioThemeMode === "system" ? autoTheme() : studioThemeMode;
   }
 
-  // While ACE matches the website, a Day or Night change on the computer can
-  // repaint the page, so the open card is matched again at once.
+  // While the ACE website follows System, a Day or Night change on the
+  // computer changes the card at once.
   try {
     var colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
     var followSystemTheme = function () {
@@ -3402,8 +3393,7 @@
   function renderStudio(host) {
     var previous = host.querySelector(".studio-scroll");
     var scroll = previous ? previous.scrollTop : 0;
-    // Matching the website follows the page if its colours change.
-    if (studioThemeMode === "system") studioTheme = pageTheme();
+    if (studioThemeMode === "system") studioTheme = autoTheme();
     var fields = collectStudioFields();
     var open = fields.filter(function (field) { return needsStudioReview(field) || skippedQuestions.has(field.key); }).length;
     var titleParts = document.title.split(/\s[|·]\s/);
@@ -3415,7 +3405,7 @@
     host.className = 'ace-panel focus-panel focus-' + focusMode + (studioTheme === 'night' ? ' night' : '');
     var legacyStatus = lastResult ? 'Filled ' + lastResult.filled.length + ' fields' : 'Fill ' + (pending ? pending.willFill.length : 0) + ' fields';
     var themeLabel = studioTheme === "day" ? "Switch to Night theme" : "Switch to Day theme";
-    var themeTitle = themeLabel + (studioThemeMode === "system" ? ". Now matching this website" : ". Switch again to match this website");
+    var themeTitle = themeLabel + (studioThemeMode === "system" ? ". Now matching your ACE theme" : ". Switch again to match your ACE theme");
     var closeIcon = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>';
     var themeSvg = studioTheme === "day" ? '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"/></svg>' : '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>';
     if (focusMode === 'dock') {
@@ -3853,8 +3843,9 @@
         }
       }
       if (!(chrome.storage && chrome.storage.local)) autoLearn = false;
-      if (chrome.storage && chrome.storage.local) chrome.storage.local.get({ aceStudioThemeMode: "system", aceAutoLearnRoutine: true, aceStudioActivity: [], aceFocusPosition: null }, function (prefs) {
-        applyThemeMode(prefs.aceStudioThemeMode);
+      if (chrome.storage && chrome.storage.local) chrome.storage.local.get({ aceSiteTheme: "system", aceAutoLearnRoutine: true, aceStudioActivity: [], aceFocusPosition: null }, function (prefs) {
+        siteTheme = prefs.aceSiteTheme;
+        applyThemeMode("system");
         autoLearn = !!prefs.aceAutoLearnRoutine;
         activity = Array.isArray(prefs.aceStudioActivity) ? prefs.aceStudioActivity.slice(0, 35) : [];
         focusPosition = prefs.aceFocusPosition && typeof prefs.aceFocusPosition.x === 'number' && typeof prefs.aceFocusPosition.y === 'number'
@@ -4081,9 +4072,9 @@
 
     if (action === "theme") {
       var nextTheme = studioTheme === "day" ? "night" : "day";
-      // Choosing the theme the website already has goes back to matching it.
-      applyThemeMode(nextTheme === pageTheme() ? "system" : nextTheme);
-      if (chrome.storage && chrome.storage.local) chrome.storage.local.set({ aceStudioThemeMode: studioThemeMode });
+      // A choice here holds for this page only; every new page matches the
+      // ACE theme again, so a Night choice made once never sticks.
+      applyThemeMode(nextTheme === autoTheme() ? "system" : nextTheme);
       renderStudio(panel());
       return;
     }
@@ -4496,6 +4487,31 @@
       });
     }
   );
+
+  // On the ACE website itself, remember its Day, Night or System choice so
+  // the card on employer forms matches it.
+  (function recordSiteTheme() {
+    if (!(chrome.storage && chrome.storage.local) || window.top !== window) return;
+    chrome.storage.local.get({ base: "" }, function (config) {
+      var here, ace;
+      try { here = new URL(location.href).origin; ace = new URL(config.base).origin; } catch (error) { return; }
+      if (!config.base || here !== ace) return;
+      function record() {
+        var theme = document.documentElement.getAttribute("data-theme");
+        chrome.storage.local.set({ aceSiteTheme: theme === "light" || theme === "dark" ? theme : "system" });
+      }
+      record();
+      new MutationObserver(record).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    });
+  })();
+  if (chrome.storage && chrome.storage.onChanged) chrome.storage.onChanged.addListener(function (changes, area) {
+    if (area !== "local" || !changes.aceSiteTheme) return;
+    siteTheme = changes.aceSiteTheme.newValue || "system";
+    if (studioThemeMode !== "system") return;
+    applyThemeMode("system");
+    var existing = ownHost();
+    if (existing && existing.shadowRoot && !dismissed) renderStudio(existing.shadowRoot.querySelector(".ace-panel"));
+  });
 
   (function boot() {
     if (!document.body) {

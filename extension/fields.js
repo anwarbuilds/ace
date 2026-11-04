@@ -682,12 +682,40 @@ function aceIsAutocomplete(field) {
   );
 }
 
+/* A control a person answers. Workday renders a hidden companion input
+   beside every dropdown in the same question block, and counting it made
+   the block look like two questions: the question then fell back to the
+   dropdown's generated name, a different ID on every application, so no
+   saved answer ever matched it again. */
+function aceIsQuestionControl(control) {
+  if (!control || control.type === "hidden") return false;
+  if (/^(radio|checkbox)$/.test(control.type || "")) return true;
+  if (control.closest && control.closest('[aria-hidden="true"]')) return false;
+  if (control.tagName === "INPUT" && control.getAttribute("tabindex") === "-1") {
+    var block = control.closest && control.closest('[data-automation-id^="formField-"]');
+    if (block && block.querySelector('[aria-haspopup="listbox"]')) return false;
+  }
+  return !!control.offsetParent;
+}
+
+/* A generated identifier, never a question: Workday's per-application
+   question IDs and similar machine names. */
+function aceIsOpaqueName(text) {
+  var value = String(text || "");
+  if (/--|\d{5,}/.test(value)) return true;
+  return (value.match(/[0-9a-f]{8,}/gi) || []).some(function (run) {
+    return /[a-f]/i.test(run) && (run.match(/\d/g) || []).length >= 2;
+  });
+}
+
 /* Some ATSs put role=combobox on a wrapper instead of the actual input.
    Only a wrapper owning one visible input can name that input's control. */
 function aceComboboxScope(field) {
   var scope = field.closest('[role="combobox"]');
   if (!scope || scope === field) return scope;
-  var inputs = scope.querySelectorAll('input:not([type=hidden])');
+  var inputs = Array.prototype.filter.call(scope.querySelectorAll('input:not([type=hidden])'), function (input) {
+    return input === field || aceIsQuestionControl(input);
+  });
   return inputs.length === 1 && inputs[0] === field ? scope : null;
 }
 
@@ -838,7 +866,7 @@ function aceChoiceScope(field) {
   if (declared) return declared;
   var node = field.parentElement;
   for (var depth = 0; node && node.tagName !== 'FORM' && depth < 8; depth++, node = node.parentElement) {
-    var controls = node.querySelectorAll('input:not([type=hidden]),select,textarea,button');
+    var controls = Array.prototype.filter.call(node.querySelectorAll('input:not([type=hidden]),select,textarea,button'), aceIsQuestionControl);
     if (controls.length > 1 && Array.prototype.every.call(controls, aceIsChoiceControl) && aceHeadingIn(node, field, true)) return node;
   }
   return null;
@@ -1103,8 +1131,8 @@ function aceQuestionLabelFor(field) {
   if (group) sources.push(aceTextWithoutControls(group));
 
   sources.push(field.getAttribute("placeholder"));
-  sources.push(field.getAttribute("name"));
-  sources.push(field.id);
+  if (!aceIsOpaqueName(field.getAttribute("name"))) sources.push(field.getAttribute("name"));
+  if (!aceIsOpaqueName(field.id)) sources.push(field.id);
 
   for (var i = 0; i < sources.length; i++) {
     var text = String(sources[i] || "").replace(/\s+/g, " ").trim();
@@ -1133,7 +1161,7 @@ function aceOwnGroup(field) {
   for (var depth = 0; node && depth < 6; depth++) {
     var controls = Array.from(node.querySelectorAll(
       'input:not([type=hidden]),select,textarea,button[aria-haspopup="listbox"],[role="combobox"]'
-    )).filter(function (control) { return control === field || !control.contains(field); });
+    )).filter(function (control) { return control === field || !control.contains(field) && aceIsQuestionControl(control); });
 
     if (controls.length > 1) break;
 

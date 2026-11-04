@@ -22,7 +22,7 @@ async function until(check, message) {
 }
 
 function fixture(body, config = {}) {
-  const { window } = parseHTML(`<html><head><title>Engineer | Fictional employer</title></head><body><form>${config.topOnly ? "" : base}${body}<button type="submit">Submit application</button></form></body></html>`);
+  const { window } = parseHTML(`<html${config.theme ? ` data-theme="${config.theme}"` : ''}><head><title>Engineer | Fictional employer</title></head><body><form>${config.topOnly ? "" : base}${body}<button type="submit">Submit application</button></form></body></html>`);
   delete window.__aceLoaded;
   window.top = config.embedded ? {} : window;
   const { document, HTMLElement, HTMLInputElement, HTMLSelectElement, HTMLOptionElement } = window;
@@ -30,6 +30,8 @@ function fixture(body, config = {}) {
   const listeners = [];
   const saved = [];
   const memoryStore = config.memoryStore || [];
+  const storedPrefs = {};
+  const storageListeners = [];
   let submissions = 0;
   let active = document.body;
   Object.defineProperty(document, 'activeElement', { get: () => active });
@@ -71,9 +73,10 @@ function fixture(body, config = {}) {
     setTimeout(fn, ms) { const id = setTimeout(() => { timers.delete(id); fn(); }, ms); timers.add(id); return id; },
     clearTimeout(id) { clearTimeout(id); timers.delete(id); },
     MutationObserver: config.observeDOM ? window.MutationObserver : class { observe() {} disconnect() {} },
-    chrome: { ...(config.autoKnown || config.autoLearn !== undefined ? { storage: { local: {
-      get(defaults, reply) { reply({ ...defaults, aceAutoKnown: !!config.autoKnown, aceAutoLearnRoutine: !!config.autoLearn }); }, set() {}, remove() {},
-    } } } : {}), runtime: { id: 'fixture-extension', lastError: null, onMessage: { addListener(listener) { listeners.push(listener); } }, getURL: value => value, getManifest: () => ({ version: 'test' }),
+    chrome: { ...(config.autoKnown || config.autoLearn !== undefined || config.prefs ? { storage: { local: {
+      get(defaults, reply) { reply({ ...defaults, aceAutoKnown: !!config.autoKnown, aceAutoLearnRoutine: !!config.autoLearn, ...(config.prefs || {}) }); },
+      set(values) { Object.assign(storedPrefs, values); }, remove() {},
+    }, onChanged: { addListener(listener) { storageListeners.push(listener); } } } } : {}), runtime: { id: 'fixture-extension', lastError: null, onMessage: { addListener(listener) { listeners.push(listener); } }, getURL: value => value, getManifest: () => ({ version: 'test' }),
       sendMessage(message, reply) {
         if (config.onSend?.(message, reply)) return;
         if (message.type === 'aceFocusRoute') { reply({ ok: false }); return; }
@@ -100,7 +103,8 @@ function fixture(body, config = {}) {
     const button = Array.from(panel().querySelectorAll('[data-ace^="question:"]')).find(button => button.textContent.includes(question));
     assert.ok(button, `Missing review prompt ${question}`); button.click();
   }
-  return { window, document, context, internals: window.__aceInternals, panel, click, review, saved,
+  return { window, document, context, internals: window.__aceInternals, panel, click, review, saved, storedPrefs,
+    storageChange(changes) { storageListeners.forEach(listener => listener(changes, 'local')); },
     deliver(message, sender = { id: 'fixture-extension' }) {
       let response;
       for (const listener of listeners) listener(message, sender, value => { response = value; });
@@ -1602,13 +1606,79 @@ test('the disability statement boxes are answered from the saved disability stat
   assert.deepEqual(choices.map((_, at) => f.document.getElementById(`d-${at}`).checked), [false, true, false]);
 });
 
-test('the card matches the website, not the computer, until the owner picks a theme', t => {
-  const f = fixture(routine); t.after(f.dispose);
-  let background = 'rgb(255, 255, 255)';
-  f.window.getComputedStyle = node => ({ backgroundColor: node === f.document.body ? background : 'rgba(0, 0, 0, 0)', colorScheme: 'normal' });
-  f.click('scan'); assert.ok(!f.panel().classList.contains('night'), 'a light page gets the Day card');
-  background = 'rgb(18, 18, 22)'; f.click('scan'); assert.ok(f.panel().classList.contains('night'), 'a dark page gets the Night card');
-  f.click('theme'); assert.ok(!f.panel().classList.contains('night'), 'an explicit Day choice holds');
-  background = 'rgb(255, 255, 255)'; f.click('scan'); assert.ok(!f.panel().classList.contains('night'));
-  f.click('theme'); assert.ok(f.panel().classList.contains('night'), 'an explicit Night choice holds on a light page');
+test('the card follows the ACE website theme, System follows the computer, and a toggle lasts for this page only', t => {
+  let dark = false;
+  const scheme = { addEventListener(type, listener) { scheme.listener = listener; } };
+  const f = fixture(routine, { prefs: { aceSiteTheme: 'light', aceStudioThemeMode: 'night' } }); t.after(f.dispose);
+  f.window.matchMedia = () => Object.assign(scheme, { matches: dark });
+  f.click('scan'); assert.ok(!f.panel().classList.contains('night'), 'a Day ACE website gives the Day card; an old stored Night choice is ignored');
+  f.storageChange({ aceSiteTheme: { newValue: 'dark' } }); assert.ok(f.panel().classList.contains('night'), 'switching ACE to Night switches the card');
+  f.storageChange({ aceSiteTheme: { newValue: 'system' } }); assert.ok(!f.panel().classList.contains('night'), 'System follows the computer');
+  dark = true; f.click('scan'); assert.ok(f.panel().classList.contains('night'), 'a Night computer gives the Night card');
+  f.click('theme'); assert.ok(!f.panel().classList.contains('night'), 'a toggle holds on this page');
+  assert.equal(f.storedPrefs.aceStudioThemeMode, undefined, 'the toggle is never saved for other pages');
+});
+
+test('opening the ACE website records its theme choice for the card', t => {
+  const f = fixture('', { topOnly: true, url: 'https://ace.example/app/pulls', prefs: { base: 'https://ace.example' } }); t.after(f.dispose);
+  assert.equal(f.storedPrefs.aceSiteTheme, 'system');
+  const other = fixture('', { topOnly: true, url: 'https://ace.example/app/pulls', prefs: { base: 'https://ace.example' }, theme: 'light' }); t.after(other.dispose);
+  assert.equal(other.storedPrefs.aceSiteTheme, 'light');
+  const employer = fixture(routine, { prefs: { base: 'https://ace.example' } }); t.after(employer.dispose);
+  assert.equal(employer.storedPrefs.aceSiteTheme, undefined, 'an employer page never records a theme');
+});
+
+// Workday as it renders: each dropdown has a hidden companion input in its
+// question block, and every control carries a per-application generated ID.
+const workdayDropdown = (id, question, run) => `<div data-automation-id="formField-${id}"><label>${question}<abbr title="required">*</abbr></label><div><button type="button" id="${id}" name="primaryQuestionnaire--${run}a1b2c3d4${id}" aria-haspopup="listbox" aria-label="Select One Required">Select One</button><input type="text" tabindex="-1" aria-hidden="true" value=""></div></div>`;
+const workdayQuestions = [
+  ['age', 'Are you at least 18 years of age?'],
+  ['family', 'Do you have family members who are currently employed with any Fictional Foods, Inc. company?'],
+  ['relocate', 'Are you willing to relocate if required by the position?'],
+  ['agree', 'If I click disagree my application will be not submitted for consideration or otherwise saved for a Fictional Foods representative to review.'],
+];
+
+test('Workday dropdowns read their real question past the hidden companion input, never a generated ID', async t => {
+  const answerItems = [{ label: 'Full name', value: 'Example Applicant' }, { label: 'At least 18 years old', value: 'Yes' }, { label: 'Willing to relocate', value: 'Yes' }];
+  const f = fixture(workdayQuestions.map(([id, q]) => workdayDropdown(id, q, 'run1')).join(''), { answerItems, url: 'https://fictionalfoods.wd1.myworkdayjobs.com/en-US/Careers/job/Engineer_R1/apply/applyManually' }); t.after(f.dispose);
+  for (const [id, q] of workdayQuestions) assert.equal(f.context.aceQuestionFor(f.document.getElementById(id)), f.context.aceNormalise(q + '*'));
+  assert.equal(f.context.aceIsQuestionControl(f.document.querySelector('[aria-hidden=true]')), false);
+  await until(() => countOf(f, 'known') === '2', 'the two Answers page rows are known');
+  assert.equal(countOf(f, 'unknown'), '2');
+  for (const [id] of workdayQuestions) wireListbox(f, id, id === 'agree' ? ['I agree', 'I disagree'] : ['Yes', 'No']);
+  f.click('fill');
+  await until(() => f.document.getElementById('age').textContent === 'Yes' && f.document.getElementById('relocate').textContent === 'Yes', 'known answers fill');
+  assert.equal(f.submissions(), 0);
+});
+
+test('Workday answers given on one application fill the next application whose generated IDs differ', async t => {
+  const memoryStore = [];
+  const answerItems = [{ label: 'Full name', value: 'Example Applicant' }];
+  const first = fixture(workdayQuestions.map(([id, q]) => workdayDropdown(id, q, 'run1')).join(''), { memoryStore, answerItems, autoLearn: true, url: 'https://fictionalfoods.wd1.myworkdayjobs.com/en-US/Careers/job/Engineer_R1/apply/applyManually' }); t.after(first.dispose);
+  for (const [id] of workdayQuestions) wireListbox(first, id, id === 'agree' ? ['I agree', 'I disagree'] : ['Yes', 'No']);
+  await ownerPicks(first, 'age', 'Yes'); await ownerPicks(first, 'family', 'No'); await ownerPicks(first, 'relocate', 'Yes'); await ownerPicks(first, 'agree', 'I agree');
+  await until(() => first.saved.length === 4, 'every answer is saved');
+  assert.ok(first.saved.every(item => !/a1b2c3d4|questionnaire/i.test(item.question + item.concept)), 'no generated ID becomes a question or key');
+  const later = fixture(workdayQuestions.map(([id, q]) => workdayDropdown(id, q, 'run2')).join(''), { memoryStore, answerItems, url: 'https://fictionalfoods.wd1.myworkdayjobs.com/en-US/Careers/job/Analyst_R7/apply/applyManually' }); t.after(later.dispose);
+  for (const [id] of workdayQuestions) wireListbox(later, id, id === 'agree' ? ['I agree', 'I disagree'] : ['Yes', 'No']);
+  await until(() => countOf(later, 'known') === '4', 'all four are known on the next application');
+  later.click('fill');
+  await until(() => workdayQuestions.every(([id]) => later.document.getElementById(id).textContent !== 'Select One'), 'every question fills');
+  assert.deepEqual(workdayQuestions.map(([id]) => later.document.getElementById(id).textContent), ['Yes', 'No', 'Yes', 'I agree']);
+  assert.equal(later.saved.length, 0);
+  assert.equal(first.submissions() + later.submissions(), 0);
+});
+
+test('a Workday disability box chosen once is ticked on the next application', async t => {
+  const memoryStore = [];
+  const answerItems = [{ label: 'Full name', value: 'Example Applicant' }];
+  const choices = ['Yes, I have a disability, or have had one in the past', 'No, I do not have a disability and have not had one in the past', 'I do not want to answer'];
+  const page = run => `<div data-automation-id="formField-disability"><label>Please check one of the boxes below:<abbr>*</abbr></label><div role="row">${choices.map((label, at) => `<div role="cell"><input type="checkbox" id="d-${at}" name="${run}9f8e7d6c5b${at}" aria-checked="false"><label for="d-${at}">${label}</label></div>`).join('')}</div></div>`;
+  const url = 'https://fictionalfoods.wd1.myworkdayjobs.com/en-US/Careers/job/Engineer_R1/apply/applyManually';
+  const first = fixture(page('a'), { memoryStore, answerItems, autoLearn: true, url }); t.after(first.dispose);
+  const box = first.document.getElementById('d-1'); box.checked = true; ownerEvent(first, box, 'change');
+  await until(() => first.saved.length === 1, 'the choice is saved');
+  const later = fixture(page('b'), { memoryStore, answerItems, url: url.replace('R1', 'R9') }); t.after(later.dispose);
+  later.click('fill');
+  assert.deepEqual(choices.map((_, at) => later.document.getElementById(`d-${at}`).checked), [false, true, false]);
 });

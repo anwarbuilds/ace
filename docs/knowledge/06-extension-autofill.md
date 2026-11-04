@@ -4,6 +4,18 @@
 >
 > Read this when: you change the autofill matcher, the panel, the answer bank or anything that touches a live application form.
 
+## Hidden Workday companion inputs hid every question (2026-11-03)
+
+Workday puts a hidden `tabindex=-1` input beside each dropdown in the same
+`formField-` block. Counting it as a control made the block look like two
+questions, so the question became the dropdown's generated name, different
+on every application: no rule or saved answer could ever match. Count only
+controls a person answers (`aceIsQuestionControl`) and never use generated
+names or ids as questions (`aceIsOpaqueName`). Lesson: model the harness on
+the ATS's real markup, companion elements included; a clean fixture passed
+for weeks while the live form failed. Copy field diagnostics shows the
+question ACE read and is the fastest way to see this class of failure.
+
 ## Safety rules had stopped the extension filling or learning common answers (2026-10-28)
 
 Problem: a Workday From date always failed "Invalid Date: 01/", and voluntary disclosures,

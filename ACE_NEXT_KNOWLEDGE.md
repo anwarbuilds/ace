@@ -1,6 +1,40 @@
 # ACE Next knowledge
 
-Last updated: 2026-11-03 Pacific, QUIC transport compatibility repair LIVE; application images remain the verified November 1 release.
+Last updated: 2026-11-03 Pacific, extension 1.31.4 (Workday question reading, ACE-website theme) pushed to main; extension only, no deployment.
+
+## Extension 1.31.4: Workday questions and ACE theme, 2026-11-03 Pacific
+
+The owner reported that a Workday employer's application questions, answered
+and saved on one application, were never filled on the next one; the card
+showed every question Unknown, even rows the Answers page holds. Cause,
+reproduced in the DOM harness: Workday renders a hidden companion input
+(`tabindex=-1`, `aria-hidden`) beside each dropdown inside the same
+`formField-` block. `aceOwnGroup` counted it as a second question, so the
+question fell back to the dropdown's generated `name`, an ID that changes on
+every application. Answers-page rules could not match that text, and answers
+were saved under keys that never recur. `aceIsQuestionControl` now ignores
+hidden, aria-hidden and Workday companion inputs when sizing a question block
+and in `fillable()`. `aceIsOpaqueName` keeps generated names and ids out of
+the question fallback. Saved answers under earlier generated keys stay in
+Memory but cannot match; each such question is learned again once.
+
+Theme (owner request): Automatic now follows the ACE website's Day, Night or
+System choice, recorded from `html[data-theme]` whenever the owner opens ACE
+(`aceSiteTheme` in extension storage; System follows the computer, live). The
+card toggle lasts for the current page only; the old stored
+`aceStudioThemeMode` is no longer read. Page-background matching (1.31.3) is
+removed.
+
+Validation: 109 DOM contracts (three new Workday reuse cases fail on 1.31.3
+and pass now; two theme cases), 267 rule cases, Memory checks, syntax,
+TypeScript, ESLint, dash and whitespace checks. The browser theme spec was
+updated; no local Chrome ran. Not verified on a live Workday page; if a
+question still shows Unknown, Settings & activity, Copy field diagnostics
+gives the question ACE read with no answer values. Extension only: no server
+change or deployment. Reload ACE at chrome://extensions and refresh the tab.
+The SmartRecruiters one-click form (`spl-*` web components in open shadow
+roots, card showed 0 of 0) remains unsupported: fields inside shadow roots
+are not scanned yet.
 
 ## QUIC transport repair LIVE, 2026-11-03 Pacific
 

@@ -3,8 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 const extensionRoot = path.resolve(process.cwd(), "../extension");
 
-// The V5.1 card follows the computer's Day or Night setting until the owner
-// picks one, and can be closed from the card or the minimized dock. Closing
+// The V5.1 card follows the ACE website's theme (System follows the
+// computer); a toggle lasts for the page, and can be closed from the card or the minimized dock. Closing
 // lasts on that page until the toolbar's Fill wakes ACE again.
 async function mount(page: Page, storage: Record<string, unknown> = {}) {
   await page.goto("data:text/html,<html><body></body></html>");
@@ -55,38 +55,23 @@ async function mount(page: Page, storage: Record<string, unknown> = {}) {
   return panel;
 }
 
-const stored = (page: Page) =>
-  page.evaluate(() => (window as typeof window & { __storage: Record<string, unknown> }).__storage.aceStudioThemeMode);
-
-test("the card matches the website, not the computer, until the owner picks one", async ({ page }) => {
+test("the card follows the ACE website theme, and System follows the computer", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
-  const panel = await mount(page);
-  // A light page gets the Day card even while the computer is dark.
-  await expect(panel).not.toHaveClass(/night/);
-
-  // A dark page gets the Night card.
-  await page.evaluate(() => { document.body.style.background = "rgb(18, 18, 22)"; });
-  await panel.getByRole("button", { name: /Scan fields/ }).click();
-  await expect(panel).toHaveClass(/night/);
-
-  // An explicit Day choice holds on the dark page.
-  await panel.getByRole("button", { name: "Switch to Day theme" }).click();
-  await expect(panel).not.toHaveClass(/night/);
-  expect(await stored(page)).toBe("day");
-
-  // Choosing the website's own theme returns to matching it.
-  await panel.getByRole("button", { name: "Switch to Night theme" }).click();
-  await expect(panel).toHaveClass(/night/);
-  expect(await stored(page)).toBe("system");
-  await page.evaluate(() => { document.body.style.background = "rgb(255, 255, 255)"; });
-  await panel.getByRole("button", { name: /Scan fields/ }).click();
-  await expect(panel).not.toHaveClass(/night/);
+  // The ACE website set to Day gives the Day card on a dark computer.
+  await expect(await mount(page, { aceSiteTheme: "light" })).not.toHaveClass(/night/);
+  // Set to System, the card follows the computer.
+  await expect(await mount(page, { aceSiteTheme: "system" })).toHaveClass(/night/);
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator(".ace-root .ace-panel")).not.toHaveClass(/night/);
 });
 
-test("a saved Night choice is restored, and the old Day/Night key is ignored", async ({ page }) => {
+test("a toggle lasts for this page only, and an old saved Night choice is ignored", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
-  const panel = await mount(page, { aceStudioThemeMode: "night", aceStudioTheme: "day" });
+  const panel = await mount(page, { aceStudioThemeMode: "night", aceStudioTheme: "night" });
+  await expect(panel).not.toHaveClass(/night/);
+  await panel.getByRole("button", { name: "Switch to Night theme" }).click();
   await expect(panel).toHaveClass(/night/);
+  expect(await page.evaluate(() => Object.keys((window as typeof window & { __storage: Record<string, unknown> }).__storage))).not.toContain("aceSiteTheme");
 });
 
 test("Close removes the card from the header and the dock; the toolbar wakes it", async ({ page }) => {
