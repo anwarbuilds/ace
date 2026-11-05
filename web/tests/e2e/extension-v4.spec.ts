@@ -130,6 +130,7 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
     form.append(label, textarea);
   });
   await panel.getByRole("button", { name: /^(Answer remaining questions|Check answers|Review$)/ }).click();
+  await openQuestion(panel, /Describe how you debug a production incident/);
   await expect(panel.locator(".studio-question").getByText("Describe how you debug a production incident")).toBeVisible();
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __applied: number }).__applied)).toBe(0);
