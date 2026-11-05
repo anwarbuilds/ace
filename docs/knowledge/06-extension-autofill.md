@@ -1260,3 +1260,10 @@ or fresh live check. Supporting summary pointers were aligned. Old rejected
 saves still need entering once; owner Reload and real-form confirmation remain
 outstanding. Historical evidence and the unimplemented reliable-Inbox plan are
 retained separately from the current live state.
+
+## Double-clicking the grip never reset the card (2026-11-05, 1.31.6)
+
+The grip's tooltip promised "Double-click to reset position", and it did nothing: the drag code takes pointer capture on
+the card, so the click and double-click are sent to the card and `closest('[data-focus-grip]')` never matched. The press
+now remembers it began on the grip. Found only when the browser tests finally ran again
+(`docs/knowledge/08-operations-and-testing.md`). Owner action: Reload ACE at `chrome://extensions` and refresh employer tabs.
