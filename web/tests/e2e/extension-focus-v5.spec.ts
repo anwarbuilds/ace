@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import { openQuestion } from "./helpers";
 import { expect, test } from "@playwright/test";
 
 const extensionRoot = path.resolve(process.cwd(), "../extension");
@@ -113,9 +114,11 @@ test("Focus Mode V5.1 mirrors choices, protects motivation, stays open and never
   await expect(panel.getByText("Historical private motivation")).toHaveCount(0);
   await panel.screenshot({ path: path.join(captures, "workspace-memory-day.png") });
   await panel.getByRole("button", { name: "Review", exact: true }).click();
-  await expect.poll(() => page.evaluate(() => (window as typeof window & { __memory: unknown[] }).__memory.length)).toBe(3);
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __memory: unknown[] }).__memory.length)).toBe(4);
   const stored = await page.evaluate(() => (window as typeof window & { __memory: Array<{ question: string; answer: string }> }).__memory);
   expect(stored.filter(item => /motivation|why do you want to work/i.test(item.question))).toHaveLength(1);
+  // Owner decision 2026-10-28: finished answers are learned, sponsorship included.
+  expect(stored.some(item => item.answer === "Yes")).toBe(true);
   expect(stored.some(item => item.answer === "My own specific reason for applying.")).toBe(false);
   expect(stored.some(item => item.answer === "Cobalt Systems website")).toBe(true);
   await panel.getByRole("button", { name: "Switch to Night theme" }).click();
@@ -229,7 +232,7 @@ test("Focus Mode mirrors an opened employer listbox without inventing options", 
   for (const file of ["fields.js", "memory.js", "content.js"]) await page.addScriptTag({ path: path.join(extensionRoot, file) });
   const panel = page.locator(".ace-root .ace-panel");
   await panel.getByRole("button", { name: /^(Answer remaining questions|Check answers|Review$)/ }).click();
-  await panel.getByRole("button", { name: /How did you hear/ }).click();
+  await openQuestion(panel, /How did you hear/);
   await expect(panel.getByRole("button", { name: "Load employer options" })).toBeVisible();
   await page.locator("#source").click();
   await expect(panel.getByRole("combobox", { name: "Exact employer options" })).toBeVisible();
@@ -238,7 +241,7 @@ test("Focus Mode mirrors an opened employer listbox without inventing options", 
   await panel.getByRole("button", { name: "Fill answer" }).click();
   await expect(page.locator("#source")).toHaveText("Friend referral");
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __memory: unknown[] }).__memory.length)).toBe(1);
-  await panel.getByRole("button", { name: /Which technical tools/ }).click();
+  await openQuestion(panel, /Which technical tools/);
   await panel.locator("#studio-answer").selectOption(["python", "sql"]);
   const skills = await page.locator("#skills").evaluate(select => Array.from((select as HTMLSelectElement).selectedOptions).map(option => option.value));
   expect(skills).toEqual([]);

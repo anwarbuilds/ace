@@ -78,7 +78,7 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
   await panel.screenshot({ path: path.join(captures, "v4-overview-day.png") });
   await page.screenshot({ path: path.join(captures, "v4-full-page-day.png") });
   await panel.getByRole("button", { name: /^(Answer remaining questions|Check answers|Review$)/ }).click();
-  await expect(panel.getByText("Explain a distributed systems design tradeoff you faced")).toBeVisible();
+  await expect(panel.locator(".studio-question").getByText("Explain a distributed systems design tradeoff you faced")).toBeVisible();
   await panel.screenshot({ path: path.join(captures, "v4-review-day.png") });
   await panel.getByRole("textbox", { name: "Your answer" }).fill("Synthetic approved architecture answer.");
   await panel.getByRole("button", { name: "Fill answer" }).click();
@@ -87,7 +87,8 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
   await panel.getByRole("combobox", { name: "Exact employer options" }).selectOption("Yes");
   await panel.getByRole("button", { name: "Fill answer" }).click();
   await expect(page.locator("#sponsor")).toHaveValue("Yes");
-  await expect.poll(() => page.evaluate(() => (window as typeof window & { __memory: unknown[] }).__memory.length)).toBe(1);
+  // Owner decision 2026-10-28: finished answers are learned, sponsorship included.
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __memory: unknown[] }).__memory.length)).toBe(2);
   await page.locator("form").evaluate(form => {
     const label = document.createElement("label");
     label.htmlFor = "sponsor-again";
@@ -128,7 +129,7 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
     form.append(label, textarea);
   });
   await panel.getByRole("button", { name: /^(Answer remaining questions|Check answers|Review$)/ }).click();
-  await expect(panel.getByText("Describe how you debug a production incident")).toBeVisible();
+  await expect(panel.locator(".studio-question").getByText("Describe how you debug a production incident")).toBeVisible();
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __applied: number }).__applied)).toBe(0);
   await panel.getByRole("button", { name: /^(Back to fill|Overview)$/ }).click();
@@ -172,8 +173,9 @@ test("Memory explains an outdated server and reconnects without a page reload", 
   await panel.getByRole("button", { name: /^(Answer remaining questions|Check answers|Review$)/ }).click();
   await panel.getByRole("textbox", { name: "Your answer" }).fill("Synthetic answer that cannot be saved yet");
   await panel.getByRole("button", { name: "Fill answer" }).click();
-  await expect(page.locator("#question")).toHaveValue("");
-  await expect(panel.getByText(/field remains for review because its answer was not saved/)).toBeVisible();
+  // Filling follows the form; saving is background work, and its failure is reported.
+  await expect(page.locator("#question")).toHaveValue("Synthetic answer that cannot be saved yet");
+  await expect(panel.getByText(/Saving for future applications failed; retry in Settings/)).toBeVisible();
   await panel.getByRole("button", { name: "Settings & activity" }).click();
   await panel.getByRole("button", { name: "Memory", exact: true }).click();
   await expect(panel.getByText("Unavailable", { exact: true })).toBeVisible();
