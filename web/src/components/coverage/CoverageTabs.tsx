@@ -114,7 +114,7 @@ function Finder({ tab, query, kept, label }: { tab: string; query?: string; kept
       <label className="sr-only" htmlFor={`cov-find-${tab}`}>
         {label}
       </label>
-      <input id={`cov-find-${tab}`} type="search" name="q" defaultValue={query} placeholder={label} />
+      <input id={`cov-find-${tab}`} type="search" name="q" autoComplete="off" defaultValue={query} placeholder={label} />
       <button className="btn btn-secondary" type="submit">
         Find
       </button>
