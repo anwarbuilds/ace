@@ -43,6 +43,10 @@ from backend.app.coverage.companies import (
     TARGET_COMPANIES,
     registration_interval,
 )
+from backend.app.coverage.host_policy import (
+    read_targets,
+    refused_hosts,
+)
 from backend.app.coverage.probing import (
     BoardCandidate,
     BoardRef,
@@ -352,6 +356,30 @@ def add_source(
                 "there. It may be self-hosted, on "
                 "Workday, or behind a page that "
                 "builds itself in the browser."
+            ),
+        )
+
+    refused = refused_hosts(
+        session
+    )
+
+    if any(
+        target.host in refused
+        for target in read_targets(
+            candidate.source_type,
+            candidate.source_account,
+            candidate.source_host,
+        )
+    ):
+        return AddResult(
+            status="refused",
+            company=candidate.company,
+            source_type=candidate.source_type,
+            source_account=candidate.source_account,
+            detail=(
+                "This site asks automated readers to stay "
+                "off these pages. ACE respects that and "
+                "will not try another route."
             ),
         )
 

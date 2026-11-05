@@ -149,6 +149,14 @@ class Settings(BaseSettings):
     # New grants remain paused; the owner can pause/disconnect at any time.
     gmail_background_sync_enabled: bool = True
 
+    # The scheduler's maintenance keeps the lead ledger and host verdicts
+    # current. It only ever reads and records; it never registers a board.
+    lead_ledger_enabled: bool = True
+    # False reports a refused host and keeps polling what already polls,
+    # so the owner sees the first report before anything stops. New boards
+    # and lead checks obey a refusal either way.
+    host_policy_enforce: bool = False
+
     # The interactive API docs list every route. Off unless asked for.
     api_docs: bool = False
 

@@ -20,7 +20,8 @@ import time
 from collections.abc import (
     Sequence,
 )
-from datetime import datetime
+from datetime import datetime, timezone
+from functools import partial
 
 import httpx
 from sqlalchemy import select
@@ -30,6 +31,21 @@ from backend.app.config import (
 )
 from backend.app.coverage.cadence import (
     promote_productive_sources,
+)
+from backend.app.coverage.diagnosis import (
+    diagnose,
+)
+from backend.app.coverage.host_policy import (
+    PoliteReader,
+    check_due_hosts,
+    read_targets,
+    refused_hosts,
+    sync_hosts,
+    without_refused_hosts,
+)
+from backend.app.coverage.leads import (
+    check_due_leads,
+    sync_leads,
 )
 from backend.app.coverage.recovery import (
     recover_dark_sources,
@@ -68,6 +84,11 @@ from backend.app.persistence.sessions import (
     record_attempts,
     record_check,
     record_discoveries,
+)
+from backend.scripts.register_network_boards import (
+    Candidate,
+    assess,
+    declared_name,
 )
 from backend.app.scheduling import (
     SchedulerRuntime,
@@ -297,8 +318,31 @@ def main(
     settings = get_settings()
 
 
+    def respecting_refusals(
+        loaded: SourceRegistry,
+    ) -> SourceRegistry:
+        """Take refused hosts out of polling, once the owner has turned
+        that on. Off, a refused host is reported and still polled."""
+
+        if not settings.host_policy_enforce:
+            return loaded
+
+        with SessionLocal() as session:
+            refused = refused_hosts(
+                session
+            )
+
+        return SourceRegistry(
+            tuple(
+                without_refused_hosts(
+                    loaded.enabled_sources,
+                    refused,
+                )
+            )
+        )
+
     with SessionLocal() as session:
-        registry = (
+        registry = respecting_refusals(
             load_source_registry(
                 session
             )
@@ -469,8 +513,10 @@ def main(
 
         with SessionLocal() as session:
             return select_source_registry(
-                load_source_registry(
-                    session
+                respecting_refusals(
+                    load_source_registry(
+                        session
+                    )
                 ),
                 source_type=(
                     args.source_type
@@ -610,6 +656,11 @@ def main(
         # the rest of the run; its boards are read on a later one.
         throttled: set[str] = set()
 
+        with SessionLocal() as session:
+            refused = refused_hosts(
+                session
+            )
+
         # One board at a time, each saved as soon as it is read: a run
         # through a backlog of 170 boards takes the better part of an
         # hour, and a restart must not throw away what it had done.
@@ -617,6 +668,23 @@ def main(
             provider = board.detected.source_type.value
 
             if provider in throttled:
+                continue
+
+            # A refused host is never read for a new board.
+            if any(
+                target.host in refused
+                for target in read_targets(
+                    provider,
+                    board.detected.source_account,
+                    board.detected.source_host,
+                )
+            ):
+                LOGGER.info(
+                    "feed_board_on_refused_host source=%s/%s",
+                    provider,
+                    board.detected.source_account,
+                )
+
                 continue
 
             [outcome] = read_boards(
@@ -672,6 +740,97 @@ def main(
                     outcome.error,
                 )
 
+    def now_utc() -> datetime:
+        return datetime.now(
+            timezone.utc
+        )
+
+    def keep_lead_ledger() -> None:
+        """Keep the lead ledger and host verdicts current.
+
+        Only ever reads and records; nothing here registers a board. Runs
+        on its own terms so a failure cannot cost the dark-board recovery.
+        """
+
+        if not settings.lead_ledger_enabled:
+            return
+
+        with SessionLocal.begin() as session:
+            new_hosts = sync_hosts(
+                session,
+                now=now_utc(),
+            )
+
+        with SessionLocal.begin() as session:
+            synced = sync_leads(
+                session,
+                now=now_utc(),
+            )
+
+        hosts_checked = check_due_hosts(
+            SessionLocal,
+            now=now_utc,
+        )
+
+        with SessionLocal() as session:
+            reader = PoliteReader(
+                refused_hosts(
+                    session
+                )
+            )
+
+        def assess_board(
+            board: dict,
+            company: str,
+        ):
+            return assess(
+                Candidate(
+                    source_type=board["source_type"],
+                    source_account=board["source_account"],
+                    company=company,
+                    source_host=board.get("source_host"),
+                ),
+                lambda definition: dispatcher.fetch(
+                    definition
+                ).jobs,
+                partial(
+                    declared_name,
+                    fetch=reader.fetch,
+                    fetch_text=reader.fetch_text,
+                ),
+            )
+
+        checked = check_due_leads(
+            SessionLocal,
+            now=now_utc,
+            assess_board=assess_board,
+            diagnose_name=lambda company: diagnose(
+                company,
+                fetch=reader.fetch,
+                fetch_text=reader.fetch_text,
+                post=reader.post,
+                refuses=reader.refuses,
+            ),
+        )
+
+        LOGGER.info(
+            (
+                "lead_ledger_updated "
+                "leads=%d leads_new=%d hosts_new=%d hosts_checked=%d "
+                "boards_read=%d names_searched=%d refused=%d deferred=%d "
+                "states=%s"
+            ),
+            synced.total,
+            synced.created,
+            new_hosts,
+            hosts_checked,
+            checked.boards,
+            checked.names,
+            checked.refused,
+            checked.deferred,
+            checked.states,
+        )
+
     # When dark boards were last diagnosed. That reads companies'
     # websites, so it keeps its six-hour rhythm while the rest of the
     # maintenance runs every half hour.
@@ -709,6 +868,14 @@ def main(
                 promotion.passing_roles,
                 promotion.old_interval,
                 promotion.new_interval,
+            )
+
+        try:
+            keep_lead_ledger()
+
+        except Exception:
+            LOGGER.exception(
+                "lead_ledger_failed"
             )
 
         if time.monotonic() - dark_checked[0] < DARK_CHECK_SECONDS:

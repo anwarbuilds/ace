@@ -163,6 +163,7 @@ def diagnose(
     fetch=_fetch_json,
     fetch_text=_fetch_text,
     post=_post_json,
+    refuses=refuses_automation,
 ) -> Diagnosis:
     """Find this company's board, or say what stopped it.
 
@@ -480,7 +481,7 @@ def diagnose(
         (
             host
             for host in tried_hosts
-            if refuses_automation(
+            if refuses(
                 f"https://{host}"
             )
         ),
