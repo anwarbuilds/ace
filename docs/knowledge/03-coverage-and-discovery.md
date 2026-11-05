@@ -987,9 +987,12 @@ check, and `host_policies` gives every host ACE reads a dated robots verdict. Co
   counts: polling is decided from the boards on the lead, not from the name. Better identity is DIS-16.
 - **A verdict is judged on the paths ACE reads**, because a robots file usually opens one route and closes another. Shared
   hosts use a stand-in board name. `read_targets` must know every `SourceType`; a test fails otherwise.
-- **A failed read decides nothing.** It keeps the last verdict and reports the failed recheck. 401, 403 and 405 on the
-  robots file count as refusal; 429 is "not now". Rules that have never been read close the host for anything new (RFC
-  9309) without stopping what already polls.
+- **A failed read decides nothing.** It keeps the last verdict and reports the failed recheck; 429 is "not now". Rules that
+  have never been read close the host for anything new (RFC 9309) without stopping what already polls.
+- **A 401 or 403 on the robots address is not a refusal.** The first version said it was, and a preview caught it: Ashby's
+  and Gem's API hosts answer that way because the address does not exist for them, which would have called 1,250 working
+  boards refused. RFC 9309 reads a client error as "no rules", and `coverage/probing.py` already did. A site that really
+  turns ACE away does so on the pages it asks for, where refusal backoff answers it.
 - **Report first.** `HOST_POLICY_ENFORCE` is off, so a refused host is listed and existing boards keep polling until the
   owner decides. New boards, hand-added boards and lead checks obey a refusal regardless.
 - **The company search asks robots now.** `find_board` and `diagnose` were only ever run by hand and read guessed careers

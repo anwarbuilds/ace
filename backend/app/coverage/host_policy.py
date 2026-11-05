@@ -62,11 +62,6 @@ RETRY_AFTER = timedelta(days=1)
 HOSTS_PER_RUN = 60
 SECONDS_PER_RUN = 180.0
 
-# ACE's wider rule: these answers are a refusal, whatever RFC 9309 says
-# about client errors. 429 is left out on purpose. It says "not now", and is
-# reported as a failed read until the host answers.
-REFUSING_STATUSES = frozenset({401, 403, 405})
-
 EMPLOYER_PAGE = "employer_page"
 
 PLATFORM_LABELS = {
@@ -353,17 +348,20 @@ def judge(
     if status is None:
         return Reading(None, "Nothing answered for its robots file.")
 
-    if status in REFUSING_STATUSES:
-        return Reading(REFUSED, f"Answers its robots file with {status}, which ACE treats as a refusal.")
-
     if status == 200:
         closed = [path for path in paths if not robots_allows(text, f"https://{host}{path}")]
         if closed:
             return Reading(REFUSED, "Robots file disallows " + ", ".join(sorted(closed)) + ".")
         return Reading(ALLOWED, "Robots file allows the pages ACE reads.")
 
+    # RFC 9309: a client error means there are no rules to follow, the reading
+    # coverage/probing.py already uses. API-only hosts answer 401 or 403 here
+    # because the address does not exist for them, not to refuse anyone: Ashby's
+    # documented job board API does. A site that really turns ACE away does so on
+    # the pages it asks for, and the scheduler's refusal backoff answers that.
+    # 429 says "not now", so it decides nothing.
     if 400 <= status < 500 and status != 429:
-        return Reading(ALLOWED, f"No robots file ({status}), so it sets no rules.")
+        return Reading(ALLOWED, f"Publishes no robots rules (it answered {status}).")
 
     return Reading(None, f"Its robots file answered {status}.")
 

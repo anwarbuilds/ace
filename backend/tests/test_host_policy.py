@@ -109,13 +109,13 @@ def test_the_verdict_comes_from_the_paths_ace_reads_and_longest_match_wins() -> 
     assert "/api/jobs" not in closed.detail
 
 
-@pytest.mark.parametrize("status", [401, 403, 405])
-def test_a_refusing_answer_to_the_robots_file_is_a_refusal(status) -> None:
-    assert judge("h.example", ["/"], status, "").verdict == REFUSED
+@pytest.mark.parametrize("status", [401, 403, 404, 405, 410])
+def test_a_client_error_on_the_robots_file_sets_no_rules(status) -> None:
+    """RFC 9309. An API-only host answering 401 here refuses nobody."""
 
-
-def test_no_robots_file_sets_no_rules() -> None:
-    assert judge("h.example", ["/jobs"], 404, "").verdict == ALLOWED
+    reading = judge("h.example", ["/jobs"], status, "")
+    assert reading.verdict == ALLOWED
+    assert str(status) in reading.detail
 
 
 @pytest.mark.parametrize("status", [None, 429, 500, 503, 202])
