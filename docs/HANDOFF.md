@@ -21,7 +21,7 @@ Chat 1 is open on branch `requirements-chat-1-20261104`, draft PR #29, not merge
 green there. The backend (migration 0051, lead ledger, host verdicts in scheduler maintenance, two read
 routes) is prepared on the VM at tested commit `26fd506`, with backup, restore drill, image and rollback.
 Activation waits: the agent's permission check refused it after the owner approved, and it must not be
-worked around. The Coverage interface waits for the owner's decision on the two chat 1 canvas boards.
+worked around. The Coverage interface waits for the owner's decision on the three chat 1 canvas boards.
 Exact pickup steps: "Chat 1 state to pick up" in section 13.5 of the requirements file. Production and
 `main` are unchanged by all of this.
 
