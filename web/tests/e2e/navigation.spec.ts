@@ -67,8 +67,12 @@ test("numbered pages move through the list and Back returns", async ({ page }) =
 
 test("search is debounced into the URL and narrows the list", async ({ page }) => {
   await page.goto("/app/opportunities");
-  await page.keyboard.press("/");
-  await expect(page.locator("#q")).toBeFocused();
+  // Asked again until it answers: a key pressed before the page has loaded
+  // its scripts goes nowhere.
+  await expect(async () => {
+    await page.keyboard.press("/");
+    await expect(page.locator("#q")).toBeFocused({ timeout: 500 });
+  }).toPass();
   await page.keyboard.type("Quorvane");
   await expect(page).toHaveURL(/q=Quorvane/);
   for (const name of await page.locator(".co-name").allTextContents()) expect(name).toBe("Quorvane");
