@@ -41,7 +41,7 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
     HTMLFormElement.prototype.submit = function () { w.__submits++; };
     HTMLFormElement.prototype.requestSubmit = function () { w.__submits++; };
     document.getElementById("employer-submit")!.addEventListener("click", () => { w.__submits++; });
-    w.chrome = { runtime: {
+    w.chrome = { runtime: { id: "fixture-extension",
       onMessage: { addListener() {} },
       getURL: (value: string) => value,
       getManifest: () => ({ version: "1.26.0" }),
@@ -153,7 +153,7 @@ test("Memory explains an outdated server and reconnects without a page reload", 
   await page.evaluate(() => {
     const w = window as typeof window & { chrome: unknown; __memoryOffline: boolean };
     w.__memoryOffline = true;
-    w.chrome = { runtime: {
+    w.chrome = { runtime: { id: "fixture-extension",
       onMessage: { addListener() {} },
       getURL: (value: string) => value,
       getManifest: () => ({ version: "1.26.0" }),

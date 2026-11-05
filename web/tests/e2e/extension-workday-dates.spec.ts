@@ -56,7 +56,7 @@ test("Workday month inputs receive the right dates for each saved job", async ({
       input.addEventListener("blur", () => { input.value = committed; });
     });
     (window as typeof window & { chrome: unknown }).chrome = {
-      runtime: {
+      runtime: { id: "fixture-extension",
         onMessage: { addListener() {} },
         getURL: (value: string) => value,
         getManifest: () => ({ version: "test" }),

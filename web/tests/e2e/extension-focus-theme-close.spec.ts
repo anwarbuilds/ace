@@ -32,7 +32,7 @@ async function mount(page: Page, storage: Record<string, unknown> = {}) {
         set: (values: Record<string, unknown>) => Object.assign(w.__storage, values),
         remove: (key: string) => { delete w.__storage[key]; },
       } },
-      runtime: {
+      runtime: { id: "fixture-extension",
         lastError: null,
         onMessage: { addListener(listener: typeof w.__wake) { w.__wake = listener; } },
         getURL: (value: string) => value,

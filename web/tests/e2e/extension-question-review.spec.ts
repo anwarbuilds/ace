@@ -12,7 +12,7 @@ async function load(page: Page, body: string, memory: Array<Record<string, unkno
     const w = window as typeof window & { chrome: unknown; __saved: Array<Record<string, unknown>>; __memory: Array<Record<string, unknown>>; __submits: number };
     w.__saved = []; w.__memory = memory; w.__submits = 0;
     document.querySelector('form')!.addEventListener('submit', event => { event.preventDefault(); w.__submits++; });
-    w.chrome = { storage: { local: { get: (defaults: Record<string, unknown>, reply: (data: unknown) => void) => reply({ ...defaults, aceAutoKnown: autoKnown, aceAutoLearnRoutine: autoLearn }), set() {}, remove() {} } }, runtime: { lastError: null, onMessage: { addListener() {} }, getURL: (value: string) => value, getManifest: () => ({ version: 'test' }),
+    w.chrome = { storage: { local: { get: (defaults: Record<string, unknown>, reply: (data: unknown) => void) => reply({ ...defaults, aceAutoKnown: autoKnown, aceAutoLearnRoutine: autoLearn }), set() {}, remove() {} } }, runtime: { id: "fixture-extension", lastError: null, onMessage: { addListener() {} }, getURL: (value: string) => value, getManifest: () => ({ version: 'test' }),
       sendMessage(message: { type: string; item: Record<string, unknown> }, reply: (data: unknown) => void) {
         if (message.type === 'answers') reply({ ok: true, items: [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Email', value: 'applicant@example.test' }, { label: 'Phone', value: '5550100100' }, { label: 'Current role', value: 'Engineer' }] });
         else if (message.type === 'memory') reply({ ok: true, items: w.__memory });

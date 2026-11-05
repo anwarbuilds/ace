@@ -62,6 +62,7 @@ def fixture_filler(
     # below that is real here, not the messaging.
     browser.eval(
         "window.chrome={runtime:{"
+        "id:'fixture-extension',"
         "onMessage:{addListener:function(){}},"
         "sendMessage:function(){},"
         "getURL:function(p){return p;}}};1"
@@ -493,6 +494,7 @@ def _boot_form(
 
     page.eval(
         """window.chrome={runtime:{
+          id:'fixture-extension',
           onMessage:{addListener:function(){}},
           getURL:function(p){return p;},
           getManifest:function(){return{version:'test'};},
