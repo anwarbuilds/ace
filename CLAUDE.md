@@ -4,7 +4,8 @@
 @docs/HANDOFF.md
 
 Read the complete global continuity, current handoff and relevant knowledge topic
-before changes. Follow `AGENTS.md`. The newest applicable record and owner request
+before changes. The dated history is in `docs/archive/ACE_NEXT_KNOWLEDGE-history.md`:
+search it when a task needs it and never load it whole. Follow `AGENTS.md`. The newest applicable record and owner request
 supersede historical pending lists; never replay completed releases or operators.
 
 `main` is the canonical Wine and Rose platform branch. `ace-next` is a standalone
@@ -21,7 +22,9 @@ Keep real data and credentials out of this public repository. Fixtures are
 fictional. Respect robots and refusals. No user-facing em dashes. Commit with
 the owner's configured identity, without co-author trailers. Keep replies short.
 
-Record results in global continuity, the handoff and relevant topic. Source
+Record results in global continuity, the handoff and relevant topic. New work follows
+the requirements file `docs/requirements/2026-11-04-ace-requirements.md`: start at its
+section 13 and update its tracker and chat log before each chat ends. Source
 pushes do not deploy. Deployment, publication, migration, scheduler changes and
 destructive data work need explicit approval for that operation. See the current
 handoff for exact runtime and CI limitations before making production claims.

@@ -1,10 +1,21 @@
 # ACE current handoff
 
-Updated 2026-11-03 Pacific after the assessment invitation web release. This is
+Updated 2026-11-04 Pacific after the requirements programme was recorded; the latest
+release is still the assessment invitation web release. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
 before changes. Dated pending instructions are not current authorization.
+
+## Requirements programme: start here for new work
+
+New work follows `docs/requirements/2026-11-04-ace-requirements.md`, starting at its section 13:
+working method, eleven-chat P0 plan, P0 in simple words and tracker. That file stays out of Git by owner
+decision, because this repo is public. `ACE_NEXT_KNOWLEDGE.md` now holds current state, rules and an index;
+its full history moved word for word to `docs/archive/ACE_NEXT_KNOWLEDGE-history.md`.
+Designs are on a private canvas linked from the top of `ACE_NEXT_KNOWLEDGE.md`. Each chat explains its
+items in simple words, agrees any interface change with the owner, builds item and interface together,
+and saves progress before it ends. Nothing is built or deployed yet. Next is chat 1.
 
 ## Assessment invitation headline LIVE
 

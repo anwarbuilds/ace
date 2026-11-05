@@ -951,3 +951,24 @@ with several companies' roles should be rejected regardless of what the network 
 ## A Greenhouse posted date can predate the listing by days (2026-10-21)
 
 Consolidated from legacy main notes `a7b42bb` and its corrected timeline `a3c9449`. Greenhouse `first_published` can survive a takedown and later relisting. The audited posting was absent from complete reads before reappearing; its older publish date did not prove ACE had been six days late. Early scheduler startup gaps also limit what can be inferred before the first continuous board read. Compare first observation with complete neighboring board snapshots and an independent feed, starting no earlier than the board's first read. Never measure discovery lateness from `posted_at` alone. Dated benchmark results remain in `legacy-main-final`; they are not permanent recall percentages.
+
+## Measuring coverage against an outside index (2026-11-04)
+
+The owner asked how ACE compares with the best job sources, so coverage was measured read-only against
+FreeHire's public API and public new grad lists. Figures stay in the private requirements file. The method
+errors are the lessons:
+
+- A report cut off at 400 rows produced a confident, wrong count of missing boards. Check that a list is
+  complete before counting it.
+- A list ACE ingests cannot measure recall. Simplify looked like near-perfect coverage only because ACE
+  reads it. Recall needs lists ACE never reads, and a test should enforce that.
+- Different host formats made Eightfold boards look missing. Normalize identity before calling a gap real.
+- Many list and Workday times are dates without a real time of day, so speed comparisons built on them are
+  only indicative.
+- A complete feed is not complete coverage. Half of the sampled Workable listings on public lists were not
+  in Workable's own feed, so it can add roles but must never close them.
+- `curl --max-time 30` silently truncated an 865 MB feed. Check that a download ends where the format says.
+- A first harvest of 32 chosen sources looked like the whole market. Count every source before calling a list complete.
+- Python's `urllib.robotparser` ignores wildcards and takes the first match, so it misjudged robots files in both directions, and Paycom and Pinpoint were wrongly called off limits. Read the rules and use the longest-match evaluator in `coverage/probing.py`.
+
+The resulting plan is in section 13 of `docs/requirements/2026-11-04-ace-requirements.md`.

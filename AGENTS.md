@@ -1,7 +1,8 @@
 # ACE agent continuity
 
 Before changing this repository, read `ACE_NEXT_KNOWLEDGE.md` completely, then
-`docs/HANDOFF.md` and the relevant topic in `docs/knowledge/`. Inspect status,
+`docs/HANDOFF.md` and the relevant topic in `docs/knowledge/`. The dated history is in
+`docs/archive/ACE_NEXT_KNOWLEDGE-history.md`: search it when needed, never load it whole. Inspect status,
 branch history and current remote refs before editing.
 
 `main` in `anwarbuilds/ace` is canonical. `/home/ubuntu/Documents/ace-next` is a
@@ -18,6 +19,9 @@ extension, backend, data, auth, discovery and application tracking.
 
 ACE never submits employer applications or marks them Applied after filling.
 Keep real answers, resumes, mail, screenshots and credentials out of public Git.
+New work follows `docs/requirements/2026-11-04-ace-requirements.md`: start at its
+section 13 and update its tracker and chat log before each chat ends. It stays out
+of Git by owner decision, because this repo is public.
 Do not claim a local test is production verification. Deployment, extension
 publication, migration, scheduler changes and destructive data operations need
 the owner's explicit approval for that operation. Do not restart legacy
