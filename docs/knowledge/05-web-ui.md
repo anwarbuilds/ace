@@ -1268,3 +1268,18 @@ in read-only production snapshots. Backup/rollback and preservation details are
 in the root LIVE record. Broader CI retains the exact known 22 extension-browser
 failures, with no new names. No backend, migration, scheduler, extension or
 legacy operation ran. Local Chrome remains restricted.
+
+## Coverage became three plain tabs (2026-11-05)
+
+The owner read the first design and asked what Scoreboard, Leads and Sources even meant. So each tab now answers one question
+in its first sentence (How well is ace doing? Which companies does ace know about? Which job boards does ace really read?), the
+Scoreboard shows the three steps from lead to source to job, and labels say what they mean ("ace reads it", "Can't read yet",
+"Site says no"), with "What do these statuses mean?" under the ledger. Lesson: a design can be approved on the canvas and still
+be jargon. Test the words on the person, and name things by the question they answer.
+
+- `?tab=` on `/app/coverage`, server rendered, filters and paging in the URL (`state`, `show`, `q`, `offset`). No Needs you tab
+  until it has real content (chat 6), and the Scoreboard's recall score comes in chat 5: no empty or demo tabs.
+- The add box is `components/coverage/AddCompany.tsx` and always answers on screen. "Notified" means this answer and the Added by
+  you list; email and phone stay with alert work, which the owner placed last.
+- `a.btn{color:inherit}` beats a one-class rule on a link. A button-styled link needs `btn-primary` (`a.btn-primary` restores the
+  text colour), or its text goes dark on wine in Day. Only a Day screenshot showed it, because inherited text is light at Night.

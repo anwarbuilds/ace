@@ -1002,6 +1002,13 @@ check, and `host_policies` gives every host ACE reads a dated robots verdict. Co
   "Not read", never allowed. Workday's site terms bar scraping its own sites and APIs and do not mention customers' career
   sites; that is recorded as restricted for the owner to weigh.
 
+**Adding by hand (DIS-15, moved up from chat 2 at the owner's request).** `add_source` always ends in an answer: added, already
+reading (with the pasted job when ACE holds it, matched by the last path segment on that board), switched off, or saved with what
+is in the way. Everything is kept as a lead with `owner_added_at`, so a name handed over is never forgotten. Every read asks robots
+first, because pasting a link is no way around a refusal. A board switched off earlier stays off: an agency is not turned back on
+by a paste. Undo switches the board off as `added_by_hand undone`, which is never proposed again, and closes its postings without
+touching marks.
+
 Lesson: run new code on the real shape before trusting a budget. A due window of the oldest 400 leads passed every
 fictional test, and a dry run showed 689 old name-only leads would have kept about 900 one-request boards waiting for days.
 Name searches and board reads have separate budgets, so they must not share a window.
