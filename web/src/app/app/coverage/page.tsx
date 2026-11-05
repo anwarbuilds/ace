@@ -42,7 +42,7 @@ export default async function CoveragePage({ searchParams }: PageProps<"/app/cov
         <div className="head-row">
           <h1 className="h1">Coverage</h1>
           <span className="spacer" />
-          <Link className="btn cov-add-link" href="/app/coverage?tab=leads#cov-input">
+          <Link className="btn btn-primary cov-add-link" href="/app/coverage?tab=leads#cov-input">
             <Icon name="plus" size={16} /> Add a job or company
           </Link>
         </div>

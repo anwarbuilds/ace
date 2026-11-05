@@ -5,8 +5,7 @@
 .cov-tabs a:hover { background: var(--hover); color: var(--text); }
 .cov-tabs a[aria-current="page"] { background: var(--selected); border-color: var(--border); color: var(--text); font-weight: var(--weight-semibold); }
 .cov-tabs a span { padding: 1px 7px; border-radius: 999px; background: var(--hover); font-size: var(--text-small); font-variant-numeric: tabular-nums; color: var(--text-secondary); }
-.cov-add-link { background: var(--accent); color: var(--on-accent); }
-.cov-add-link:hover { background: var(--accent-hover); color: var(--on-accent); }
+.cov-add-link { height: 36px; font-size: var(--text-button); }
 
 .cov-page { display: flex; flex-direction: column; gap: 22px; }
 .cov-lead { max-width: 74ch; margin: 0; }
