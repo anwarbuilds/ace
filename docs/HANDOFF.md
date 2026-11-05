@@ -1,7 +1,6 @@
 # ACE current handoff
 
-Updated 2026-11-05 Pacific during requirements chat 1; the latest release is still the
-assessment invitation web release. This is
+Updated 2026-11-05 Pacific after the requirements chat 1 release. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
@@ -17,15 +16,17 @@ Designs are on a private canvas linked from the top of `ACE_NEXT_KNOWLEDGE.md`. 
 items in very simple words, one item and one question at a time, agrees any interface change with the
 owner, builds item and interface together, and saves progress before it ends.
 
-Chat 1 is open on branch `requirements-chat-1-20261104`, draft PR #29, not merged, not live. Full CI is
-green there. The backend (migration 0051, lead ledger, host verdicts in scheduler maintenance, two read
-routes) is prepared on the VM at tested commit `26fd506`, with backup, restore drill, image and rollback.
-Activation waits: the agent's permission check refused it after the owner approved, and it must not be
-worked around. The Coverage interface waits for the owner's decision on the three chat 1 canvas boards.
-Exact pickup steps: "Chat 1 state to pick up" in section 13.5 of the requirements file. Production and
-`main` are unchanged by all of this.
+## Requirements chat 1 LIVE, 2026-11-05
 
-## Assessment invitation headline LIVE
+Owner-approved exact tested `1a08549550b765f40acc047dd0a82f684c3af58a` is live since 2026-11-05T22:18Z (14:18 Pacific): migration 0051, API,
+scheduler and web. Coverage is now three tabs in plain words, paste a job to add it and get an answer on screen,
+a lead ledger and dated host verdicts. Branch `requirements-chat-1-20261104`, draft PR #29, **not merged**: a release
+built from `main` would lose this until it merges. Full CI is green on the PR (run 42118383973), for the first time in
+the 97 retained runs. Fresh backup and a real restore drill passed, and 19 protected tables are preserved across the
+cutover. No signed-in production browser check by the agent. Pickup steps, proof and rollback: "Chat 1 state to pick up" in
+section 13.5 of the requirements file. Open with the owner, one at a time: merging, then SmartRecruiters' robots file.
+
+## Assessment invitation headline (previous release)
 
 Owner-approved exact tested web `1e392636d1995533b7aa619340935f7ff5124842`, PR #28,
 is live after web-only activation at 2026-11-04T01:26:18Z–01:26:25Z (November 3,

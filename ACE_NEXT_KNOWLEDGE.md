@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-11-05 Pacific. Requirements chat 1 built on a branch with CI green; its release is prepared but not live; nothing new deployed.
+Last updated: 2026-11-05 Pacific. Requirements chat 1 LIVE: Coverage tabs, lead ledger, host verdicts, schema 0051; not yet merged to `main`.
 
 **This is ACE's global memory. It loads in every chat, so it holds only current state, rules and an index.** The complete dated history, word for word, is in `docs/archive/ACE_NEXT_KNOWLEDGE-history.md` (about 130,000 tokens).
 
@@ -10,7 +10,7 @@ Last updated: 2026-11-05 Pacific. Requirements chat 1 built on a branch with CI 
 
 ## Requirements programme and working method, 2026-11-04 Pacific
 
-> **Start here for new work.** Chat 1 is open: read "Chat 1 state to pick up" in section 13.5 of the requirements file first. Running state is in the next section.
+> **Start here for new work.** Read "Chat 1 state to pick up" in section 13.5 of the requirements file first. Running state is in the next section.
 
 The owner's goal: ACE finds every eligible role as soon as it is posted, with the employer's own link, and becomes the strongest tool for this search without rebuilding the architecture. A long research chat produced a master requirements file and interface designs. All new work follows them.
 
@@ -29,29 +29,29 @@ The owner's goal: ACE finds every eligible role as soon as it is posted, with th
 5. An item closes only with its acceptance evidence. Merge, deployment, migration, scheduler change and each source registration batch need the owner's approval for that operation.
 6. **Before every chat ends or runs low on room:** update the tracker and chat log in section 13, this file, `docs/HANDOFF.md` and the relevant `docs/knowledge/` topic, then give the owner the prompt for the next chat. The owner requires that each new chat has all prior knowledge.
 
-**Plan.** P0 is 37 items in eleven proposed chats (section 13.2). Chat 1 (ARCH-01, ARCH-02, OPS-01, DIS-14, FRS-05) is built on branch `requirements-chat-1-20261104`, draft PR #29, not merged. Its full CI is green (first time in the 97 retained runs). Its backend release, tested commit `26fd506`, is prepared on the VM (backup, restore drill, image, rollback), and activation waits because the agent's permission check refused it after the owner approved. Its interface waits for the owner's decision on the three chat 1 boards on the canvas (redesigned 2026-11-05 around a paste, confirm and see-it-in-Sources flow). P1 and later use the same method and the same starting prompt (section 13.4); their chats get planned when P0 is done.
+**Plan.** P0 is 37 items in eleven proposed chats (section 13.2). Chat 1 (ARCH-01, ARCH-02, OPS-01, DIS-14, FRS-05, plus DIS-15 moved up) is LIVE from branch `requirements-chat-1-20261104`, draft PR #29, not merged. Its full CI is green (first time in the 97 retained runs). Next: the owner's yes on merging, then read the first sweep's results, then chat 2 (DIS-16). P1 and later use the same method and the same starting prompt (section 13.4); their chats get planned when P0 is done.
 
 **Owner decisions, 2026-11-04.** Full-time roles only. Breadth first: finding and adding companies moved up into P0. $5 a month approved for LLM use. Phone push is design only for now. All alert work goes last, even though production email alerts are currently off. Add to the existing interface with no new sidebar items and no fifth Analytics tab. Registrations are approved batch by batch.
 
-**Open with the owner** (sections 10 and 13.5 of the requirements file): the chat 1 design, allowing the release, SmartRecruiters' robots file (it says `Disallow: /` to all but LinkedIn's bot, and ACE reads 155 boards through that API), Workday's site terms, borderline role families, the DOL LCA file for DIS-10, whether to use FreeHire's UKG links as pointers, labelling time, tailoring and options.
+**Open with the owner** (sections 10 and 13.5 of the requirements file), one at a time: merging PR #29, SmartRecruiters' robots file (it says `Disallow: /` to all but LinkedIn's bot, and ACE reads 155 boards through that API), Workday's site terms, borderline role families, the DOL LCA file for DIS-10, whether to use FreeHire's UKG links as pointers, labelling time, tailoring and options.
 
 ## Current running state
 
-Last verified 2026-11-04T01:26Z through public HTTP, source hashes and read-only audits. No release has been checked in a signed-in production browser. Check again before claiming anything is running.
+Last verified 2026-11-05T22:21Z through public HTTP, container identity and read-only audits. No release has been checked in a signed-in production browser by the agent. Check again before claiming anything is running.
 
 | Surface | Current |
 | --- | --- |
 | Website | https://ace.opik.net |
-| Web | `1e392636d1995533b7aa619340935f7ff5124842`, PR #28 |
-| API | `a48d71be3a33a6188e8fa96f748b4b78ecd19ef0`, Inbox parser 15 |
-| Scheduler | `fca4673033dc92833bbf217182738026f414bf3d`, gate `2026-10-29-v56`, 8 workers |
-| Schema | `0050` |
+| Web | `1a08549550b765f40acc047dd0a82f684c3af58a`, branch of PR #29 |
+| API | `1a08549550b765f40acc047dd0a82f684c3af58a`, Inbox parser 15 |
+| Scheduler | `1a08549550b765f40acc047dd0a82f684c3af58a`, gate `2026-10-29-v56`, 8 workers, lead ledger on, `HOST_POLICY_ENFORCE` off |
+| Schema | `0051` |
 | Extension | Source 1.31.5 on `main`, 1.31.6 on the chat 1 branch; unpacked from `extension/`, never published to the Web Store |
 | Production checkout | `/opt/ace`, Compose project `oracle`, stays at `8ec89cd` with the intended Caddyfile edit |
 | Source | `main` in `anwarbuilds/ace`, public; local standalone clone at `/home/ubuntu/Documents/ace-next` |
 
-- Services run different commits on purpose, and only the web reports its build. Source pushes do not deploy. The latest web image was built from an isolated exact-commit archive.
-- Latest proof and rollback: `/opt/ace/private-backups/assessment-headline-20261104T0115Z/`, image `oracle-web:before-assessment-headline-20261104T0115Z`, guarded web-only rollback, owner-local `artifacts/assessment-release-20261104/REVIEW.md`. Never restore old SQL as an image rollback.
+- Services now run one commit, and only the web reports its build. Source pushes do not deploy. Images were built from an isolated exact-commit archive: `ace-chat1-backend:1a08549` (migrate, API, scheduler) and `ace-chat1-web:1a08549`.
+- Latest proof and rollback: `/opt/ace/private-backups/chat1-release-20261105T2137Z/`, images `oracle-api:before-chat1-20261105T2137Z`, `oracle-scheduler:before-chat1-20261105T2137Z`, `oracle-web:before-chat1-20261105T2137Z`, guarded rollback in section 13.5 of the requirements file, owner-local `artifacts/requirements-chat-1-20261105/`. Migration 0051 is additive and stays through a rollback. Never restore old SQL as an image rollback.
 - Caddy: since 2026-11-03 it serves HTTP/1.1 and HTTP/2 with `Alt-Svc: clear`, after a QUIC error in Chrome. The edited file is bind-mounted: preserve its content (SHA256 `0445b6da406ffb6cb860f5b7a05ca8c30757c47fe9633db7dddb911f591bff15`) and inode through any checkout or release. Older source holds the pre-repair file. Proof: `artifacts/site-reachability-20261103/REVIEW.md`.
 - Gmail: the API runs one monitor with a PostgreSQL lease about every 180 seconds (`GMAIL_BACKGROUND_SYNC_ENABLED`). `GMAIL_HISTORICAL_RECHECKS_ENABLED` stays false. The parser-7 operator stays stopped: never restart it. The connection was seen going from ready to error around 2026-11-01; recheck it (INB-02).
 - Alerts: production email alerts are off, with the alert address and mail key unset on the scheduler. Deferred to the end by owner decision.
@@ -59,6 +59,7 @@ Last verified 2026-11-04T01:26Z through public HTTP, source hashes and read-only
 - Backups: private, on the VM, unencrypted, no offsite copy yet (OPS-02).
 - Legacy: retired. Recovery material stays until the owner decides: volume `ace_ace_postgres_data`, recovery images, `/home/ubuntu/ace-private-backups/consolidation-20261030T170532Z/`, public tag `legacy-main-final`, private local `recovery-20261030/*` tags (never push all tags). Do not restart legacy services, comparison or replication.
 - Open extension issues: on some Workday tenants the disability checkboxes stay unanswered and the self-identification Date shows digits while Workday reports it required; waiting for the owner's Copy field diagnostics paste. SmartRecruiters one-click forms in shadow roots are unsupported (APP-02). ACE cannot attach files.
+- Coverage: three tabs at `/app/coverage` (Scoreboard, Leads, Sources). Scheduler maintenance keeps `employer_leads` and `host_policies` current in small budgets and never registers a board; first sweep runs for about 3 days. A refused host keeps polling until the owner decides (`HOST_POLICY_ENFORCE`).
 - Open source issue: Pear VC's shared Ashby board was registered under the firm's name. Owner decision pending; the check gets fixed with a fictional regression (DIS-16).
 
 ## Rules
@@ -89,6 +90,8 @@ Last verified 2026-11-04T01:26Z through public HTTP, source hashes and read-only
 **Extension.** Manifest V3, approved Focus Mode V5.1 card (`design/ace-focus-v5.1/`): compact, draggable across the full viewport, dock, Close, and a theme that follows the website's Day, Night or System choice. Fill runs only from Fill, toolbar Fill or Alt+A; opening, hovering, focusing, typing and late responses stay passive. Finished owner answers save under the `learned` Memory policy, except motivation, signatures, passwords, history-owned fields, date sections and native multi-selects. Reuse goes exact fact, then answer-bank rule, then topic similarity with equal negation, timeframe, numbers and country. Work history dates belong to their matched entry. After a change, Reload at `chrome://extensions` and refresh employer tabs. Details: `docs/knowledge/06-extension-autofill.md`.
 
 **Eligibility gate.** Deterministic and versioned, PASS or REJECT, never reading clock or network. Passes US full-time software, ML and forward deployed roles at 0 to 3 years. Rejects open-ended 3+ and above, senior and management titles, internships, contract work, infrastructure, platform, cloud, DevOps, SRE and mobile families (but "Software Engineer, Infrastructure" stays), data roles, explicit no-sponsorship, ITAR and citizenship requirements. Silence is unknown, not rejection. Every change needs a version bump, tests, a corpus dry run (`scripts/gate_dry_run.py`) and a stale-row backfill. Details: `docs/knowledge/01-gate-and-roles.md`.
+
+**Coverage.** Each tab says in plain words what it is. Adding by hand always answers on screen, keeps a lead whatever happens, and asks robots first; a board switched off earlier stays off. Lead checks only record: a board that qualifies waits for the owner. Details: `docs/knowledge/03-coverage-and-discovery.md`, `05-web-ui.md`.
 
 **Discovery.** One adapter per platform. Job identity is (source, source_account, external_id); numeric IDs are internal. Only a complete snapshot can close jobs; a partial, empty, refused or non-authoritative read never does (`close_missing=False`). Conditional HTTP, bounded jittered retries, refusal backoff up to six hours, restarts resume persisted schedules. Eight workers; maintenance every 30 minutes. New boards go through `scripts/register_network_boards.py`, a dry run by default: it reads each board once and adds it only if it reads, is not an agency or shared board, and has a US software or ML role. A board with a passing role polls every 15 minutes, others hourly. Workable refuses the VM with 429s. The employer's own posting is the apply link; RippleMatch is the one exception. Details: `docs/knowledge/02-sources-and-scheduler.md`, `03-coverage-and-discovery.md`.
 
