@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-11-04 Pacific. Global memory split into current state plus archive; requirements programme recorded; nothing new built or deployed.
+Last updated: 2026-11-05 Pacific. Requirements chat 1 built on a branch with CI green; its release is prepared but not live; nothing new deployed.
 
 **This is ACE's global memory. It loads in every chat, so it holds only current state, rules and an index.** The complete dated history, word for word, is in `docs/archive/ACE_NEXT_KNOWLEDGE-history.md` (about 130,000 tokens).
 
@@ -10,7 +10,7 @@ Last updated: 2026-11-04 Pacific. Global memory split into current state plus ar
 
 ## Requirements programme and working method, 2026-11-04 Pacific
 
-> **Start here for new work.** No item has started. Running state is in the next section.
+> **Start here for new work.** Chat 1 is open: read "Chat 1 state to pick up" in section 13.5 of the requirements file first. Running state is in the next section.
 
 The owner's goal: ACE finds every eligible role as soon as it is posted, with the employer's own link, and becomes the strongest tool for this search without rebuilding the architecture. A long research chat produced a master requirements file and interface designs. All new work follows them.
 
@@ -23,17 +23,17 @@ The owner's goal: ACE finds every eligible role as soon as it is posted, with th
 **How every chat works (owner's method)**
 
 1. Read section 13, the chat's row in section 8.9 and only its items' rows.
-2. Explain each item in simple words. The owner confirms or changes it before any code.
+2. Explain each item in very simple words with a small example, one item and one question at a time, never a list of decisions together. The owner confirms or changes it before any code.
 3. Say which items have an interface part and show the design. The owner decides what changes. An item and its interface are built together in the same chat; no interface is built before its design is approved.
 4. Build on one branch per chat from current `main`, with fictional fixtures. One chat runs at a time unless the owner asks otherwise.
 5. An item closes only with its acceptance evidence. Merge, deployment, migration, scheduler change and each source registration batch need the owner's approval for that operation.
 6. **Before every chat ends or runs low on room:** update the tracker and chat log in section 13, this file, `docs/HANDOFF.md` and the relevant `docs/knowledge/` topic, then give the owner the prompt for the next chat. The owner requires that each new chat has all prior knowledge.
 
-**Plan.** P0 is 37 items in eleven proposed chats (section 13.2). The next is chat 1: ARCH-01, ARCH-02, OPS-01, DIS-14, FRS-05. No P0 item has started. P1 and later use the same method and the same starting prompt (section 13.4); their chats get planned when P0 is done.
+**Plan.** P0 is 37 items in eleven proposed chats (section 13.2). Chat 1 (ARCH-01, ARCH-02, OPS-01, DIS-14, FRS-05) is built on branch `requirements-chat-1-20261104`, draft PR #29, not merged. Its full CI is green (first time in the 97 retained runs). Its backend release, tested commit `26fd506`, is prepared on the VM (backup, restore drill, image, rollback), and activation waits because the agent's permission check refused it after the owner approved. Its interface waits for the owner's decision on the two chat 1 boards on the canvas. P1 and later use the same method and the same starting prompt (section 13.4); their chats get planned when P0 is done.
 
 **Owner decisions, 2026-11-04.** Full-time roles only. Breadth first: finding and adding companies moved up into P0. $5 a month approved for LLM use. Phone push is design only for now. All alert work goes last, even though production email alerts are currently off. Add to the existing interface with no new sidebar items and no fifth Analytics tab. Registrations are approved batch by batch.
 
-**Open with the owner** (section 10 of the requirements file): design feedback, borderline role families, permission to push a P0 branch, the DOL LCA file for DIS-10, whether to use FreeHire's UKG links as pointers, labelling time, tailoring and options.
+**Open with the owner** (sections 10 and 13.5 of the requirements file): the chat 1 design, allowing the release, SmartRecruiters' robots file (it says `Disallow: /` to all but LinkedIn's bot, and ACE reads 155 boards through that API), Workday's site terms, borderline role families, the DOL LCA file for DIS-10, whether to use FreeHire's UKG links as pointers, labelling time, tailoring and options.
 
 ## Current running state
 
@@ -46,7 +46,7 @@ Last verified 2026-11-04T01:26Z through public HTTP, source hashes and read-only
 | API | `a48d71be3a33a6188e8fa96f748b4b78ecd19ef0`, Inbox parser 15 |
 | Scheduler | `fca4673033dc92833bbf217182738026f414bf3d`, gate `2026-10-29-v56`, 8 workers |
 | Schema | `0050` |
-| Extension | Source 1.31.5, unpacked from `extension/`, never published to the Web Store |
+| Extension | Source 1.31.5 on `main`, 1.31.6 on the chat 1 branch; unpacked from `extension/`, never published to the Web Store |
 | Production checkout | `/opt/ace`, Compose project `oracle`, stays at `8ec89cd` with the intended Caddyfile edit |
 | Source | `main` in `anwarbuilds/ace`, public; local standalone clone at `/home/ubuntu/Documents/ace-next` |
 
@@ -55,7 +55,7 @@ Last verified 2026-11-04T01:26Z through public HTTP, source hashes and read-only
 - Caddy: since 2026-11-03 it serves HTTP/1.1 and HTTP/2 with `Alt-Svc: clear`, after a QUIC error in Chrome. The edited file is bind-mounted: preserve its content (SHA256 `0445b6da406ffb6cb860f5b7a05ca8c30757c47fe9633db7dddb911f591bff15`) and inode through any checkout or release. Older source holds the pre-repair file. Proof: `artifacts/site-reachability-20261103/REVIEW.md`.
 - Gmail: the API runs one monitor with a PostgreSQL lease about every 180 seconds (`GMAIL_BACKGROUND_SYNC_ENABLED`). `GMAIL_HISTORICAL_RECHECKS_ENABLED` stays false. The parser-7 operator stays stopped: never restart it. The connection was seen going from ready to error around 2026-11-01; recheck it (INB-02).
 - Alerts: production email alerts are off, with the alert address and mail key unset on the scheduler. Deferred to the end by owner decision.
-- CI: overall red. Backend and web pass; extension browsers stay at 25 pass, 22 fail, and those failures stop the later browser steps (OPS-01). Compare failures by exact name. The dedicated Inbox and Analytics review workflow passes (59 browser, 2,499 backend/PostgreSQL cases).
+- CI: red on `main` until PR #29 merges; green on the PR (run 42097842455: backend, web, 47 extension, 59 Inbox and Analytics and all remaining browser cases). Each browser step stops the next, so treat any failure as new. Before changing a failing test, check it against the newest owner decision (`docs/knowledge/08-operations-and-testing.md`).
 - Backups: private, on the VM, unencrypted, no offsite copy yet (OPS-02).
 - Legacy: retired. Recovery material stays until the owner decides: volume `ace_ace_postgres_data`, recovery images, `/home/ubuntu/ace-private-backups/consolidation-20261030T170532Z/`, public tag `legacy-main-final`, private local `recovery-20261030/*` tags (never push all tags). Do not restart legacy services, comparison or replication.
 - Open extension issues: on some Workday tenants the disability checkboxes stay unanswered and the self-identification Date shows digits while Workday reports it required; waiting for the owner's Copy field diagnostics paste. SmartRecruiters one-click forms in shadow roots are unsupported (APP-02). ACE cannot attach files.

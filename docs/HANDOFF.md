@@ -1,7 +1,7 @@
 # ACE current handoff
 
-Updated 2026-11-04 Pacific after the requirements programme was recorded; the latest
-release is still the assessment invitation web release. This is
+Updated 2026-11-05 Pacific during requirements chat 1; the latest release is still the
+assessment invitation web release. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
@@ -14,8 +14,16 @@ working method, eleven-chat P0 plan, P0 in simple words and tracker. That file s
 decision, because this repo is public. `ACE_NEXT_KNOWLEDGE.md` now holds current state, rules and an index;
 its full history moved word for word to `docs/archive/ACE_NEXT_KNOWLEDGE-history.md`.
 Designs are on a private canvas linked from the top of `ACE_NEXT_KNOWLEDGE.md`. Each chat explains its
-items in simple words, agrees any interface change with the owner, builds item and interface together,
-and saves progress before it ends. Nothing is built or deployed yet. Next is chat 1.
+items in very simple words, one item and one question at a time, agrees any interface change with the
+owner, builds item and interface together, and saves progress before it ends.
+
+Chat 1 is open on branch `requirements-chat-1-20261104`, draft PR #29, not merged, not live. Full CI is
+green there. The backend (migration 0051, lead ledger, host verdicts in scheduler maintenance, two read
+routes) is prepared on the VM at tested commit `26fd506`, with backup, restore drill, image and rollback.
+Activation waits: the agent's permission check refused it after the owner approved, and it must not be
+worked around. The Coverage interface waits for the owner's decision on the two chat 1 canvas boards.
+Exact pickup steps: "Chat 1 state to pick up" in section 13.5 of the requirements file. Production and
+`main` are unchanged by all of this.
 
 ## Assessment invitation headline LIVE
 
