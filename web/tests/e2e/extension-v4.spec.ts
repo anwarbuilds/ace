@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import { openQuestion } from "./helpers";
 import { expect, test } from "@playwright/test";
 
 const extensionRoot = path.resolve(process.cwd(), "../extension");
@@ -107,12 +108,12 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
     document.title = "Backend Engineer | Cedarcloud Labs";
     const label = document.createElement("label");
     label.setAttribute("for", "equivalent");
-    label.textContent = "Describe a difficult distributed architecture tradeoff you handled";
+    label.textContent = "Please explain a distributed systems design tradeoff you have faced";
     const textarea = document.createElement("textarea");
     textarea.id = "equivalent";
     form.append(label, textarea);
   });
-  await expect.poll(() => page.evaluate(() => (window as typeof window & { __aceInternals: { formSignature: () => string } }).__aceInternals.formSignature().includes("describe a difficult distributed"))).toBe(true);
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __aceInternals: { formSignature: () => string } }).__aceInternals.formSignature().includes("please explain a distributed"))).toBe(true);
   await panel.getByRole("button", { name: "Fill all known answers" }).click();
   await expect(page.locator("#equivalent")).toHaveValue("Synthetic approved architecture answer.");
   await expect(panel.getByText(/Cedarcloud Labs/).first()).toBeVisible();
@@ -171,6 +172,7 @@ test("Memory explains an outdated server and reconnects without a page reload", 
   const panel = page.locator(".ace-root .ace-panel");
   await expect(panel.getByText("Answer Memory needs the ACE server V4 update. Existing answers are safe.")).toBeVisible();
   await panel.getByRole("button", { name: /^(Answer remaining questions|Check answers|Review$)/ }).click();
+  await openQuestion(panel, /Explain a distributed systems design/);
   await panel.getByRole("textbox", { name: "Your answer" }).fill("Synthetic answer that cannot be saved yet");
   await panel.getByRole("button", { name: "Fill answer" }).click();
   // Filling follows the form; saving is background work, and its failure is reported.

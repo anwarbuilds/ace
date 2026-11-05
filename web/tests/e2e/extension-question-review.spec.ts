@@ -118,24 +118,24 @@ test('native option codes remain drafts until approval and reverted writes are n
   expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
 });
 
-test('a pre-existing form answer is confirmed once without another employer write and reused later', async ({ page }) => {
+test('a pre-existing form answer is saved once on request, without another employer write, and reused later', async ({ page }) => {
   const answer = 'I test API boundaries with isolated fixtures and deterministic assertions.';
   const panel = await load(page, `<label for="testing">Describe your experience writing integration tests</label><textarea id="testing">${answer}</textarea>`);
-  await openQuestion(panel, /Describe your experience/);
-  await expect(panel.getByText('Answer detected on form', { exact: true })).toBeVisible();
-  await expect(panel.locator('.focus-detected')).toContainText(answer);
-  await expect(panel.getByRole('textbox', { name: 'Your answer' })).toHaveCount(0);
+  // ACE did not see this answer being given, so nothing saves it silently.
   expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(0);
   await page.locator('#testing').evaluate(field => {
     field.addEventListener('input', () => field.setAttribute('data-extra-input', 'true'));
     field.addEventListener('change', () => field.setAttribute('data-extra-change', 'true'));
   });
-  await panel.getByRole('button', { name: 'Use answer', exact: true }).click();
+  await panel.getByRole('button', { name: 'Back to fill', exact: true }).click();
+  await panel.getByRole('button', { name: /See every answer/ }).click();
+  await panel.locator('.focus-known-row').filter({ hasText: 'integration tests' }).getByRole('button', { name: 'Save', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(1);
   expect(await page.locator('#testing').getAttribute('data-extra-input')).toBeNull();
   expect(await page.locator('#testing').getAttribute('data-extra-change')).toBeNull();
   const memory = await page.evaluate(() => (window as typeof window & { __memory: Array<Record<string, unknown>> }).__memory);
-  await load(page, '<label for="testing">Please tell us about your experience writing integration tests.</label><textarea id="testing"></textarea>', memory, true);
+  const next = await load(page, '<label for="testing">Please tell us about your experience writing integration tests.</label><textarea id="testing"></textarea>', memory, true);
+  await next.getByRole('button', { name: 'Fill all known answers', exact: true }).click();
   await expect(page.locator('#testing')).toHaveValue(answer);
   expect(await page.evaluate(() => (window as typeof window & { __saved: unknown[] }).__saved.length)).toBe(0);
   expect(await page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
@@ -173,7 +173,8 @@ test('Review mirrors a text input and textarea instead of making every answer mu
   await panel.locator('#studio-answer').fill('Fictional short answer');
   await panel.getByRole('button', { name: 'Fill answer' }).click();
   await expect(page.locator('#short')).toHaveValue('Fictional short answer');
-  await openQuestion(panel, /Additional detailed screening/);
+  // The card moves on to the next open question by itself.
+  await expect(panel.locator('.studio-question').filter({ hasText: 'Additional detailed screening' })).toBeVisible();
   await expect(panel.locator('textarea#studio-answer')).toBeVisible();
 });
 
