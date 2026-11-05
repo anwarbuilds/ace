@@ -24,6 +24,7 @@ recognises, which is harder to notice than a gap.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 import sqlalchemy as sa
@@ -43,9 +44,28 @@ from backend.app.coverage.companies import (
     TARGET_COMPANIES,
     registration_interval,
 )
+from backend.app.coverage.diagnosis import (
+    BLOCKED,
+    OTHER_ATS,
+    diagnose,
+    foreign_ats_in,
+)
 from backend.app.coverage.host_policy import (
+    PoliteReader,
+    read_robots,
     read_targets,
+    refusal_for,
     refused_hosts,
+)
+from backend.app.coverage.leads import (
+    DORMANT,
+    NOREADER,
+    POLLING,
+    REFUSED,
+    UNDONE,
+    forget_added,
+    remember_added,
+    voice,
 )
 from backend.app.coverage.probing import (
     BoardCandidate,
@@ -55,8 +75,10 @@ from backend.app.coverage.probing import (
     careers_page_token,
     find_board,
     find_board_via_careers_page,
+    refuses_automation,
     workday_belongs_to,
     _fetch_json,
+    _fetch_robots,
     _fetch_text,
     _post_json,
 )
@@ -71,6 +93,7 @@ from backend.app.db.models import (
     JobRecord,
     JobSourceRecord,
     SourceProbeRecord,
+    SourceState,
 )
 
 
@@ -91,6 +114,18 @@ class AddResult:
     evidence: str = ""
 
     detail: str = ""
+
+    # The stored posting a pasted link names, when ACE holds it.
+    job: dict | None = None
+
+    # Whether the owner pasted a link, so the answer can speak of their job.
+    linked: bool = False
+
+    last_read_at: str | None = None
+
+    next_check_at: str | None = None
+
+    first_read_seconds: int | None = None
 
 
 def _name_from_url(
@@ -331,6 +366,203 @@ def resolve(
     )
 
 
+def _link_tail(
+    url: str,
+) -> str:
+    """The part of a posting's address that names the posting.
+
+    Boards serve one posting under several hosts and locales, and an apply
+    page sits under the posting's own address.
+    """
+
+    parts = [
+        part
+        for part in urlsplit(
+            url
+        ).path.lower().split(
+            "/"
+        )
+        if part
+    ]
+
+    if parts and parts[-1] in ("apply", "application"):
+        parts = parts[:-1]
+
+    return parts[-1] if parts else ""
+
+
+def job_from_link(
+    session: Session,
+    link: str,
+    source_type: str,
+    source_account: str,
+) -> dict | None:
+    """The stored posting a pasted link names, on the board it belongs to."""
+
+    tail = _link_tail(
+        link
+    )
+
+    if not tail:
+        return None
+
+    for job_id, title, location, url, active, status in session.execute(
+        sa.select(
+            JobRecord.id,
+            JobRecord.title,
+            JobRecord.location,
+            JobRecord.official_url,
+            JobRecord.is_active,
+            JobEvaluationRecord.eligibility_status,
+        )
+        .outerjoin(
+            JobEvaluationRecord,
+            JobEvaluationRecord.job_id == JobRecord.id,
+        )
+        .where(
+            JobRecord.source == source_type,
+            JobRecord.source_account == source_account,
+        )
+    ):
+        if _link_tail(url or "") == tail:
+            return {
+                "id": job_id,
+                "title": title,
+                "location": location,
+                "active": bool(active),
+                "passes": status == "PASS",
+            }
+
+    return None
+
+
+def _display_name(
+    text: str,
+) -> str:
+    if not text.startswith(
+        "http"
+    ):
+        return text
+
+    return _name_from_url(
+        text
+    ).replace(
+        "-",
+        " ",
+    ).title()
+
+
+def _saved(
+    session: Session,
+    *,
+    status: str,
+    company: str,
+    state: str,
+    detail: str,
+    now: datetime,
+    candidate: BoardCandidate | None = None,
+) -> AddResult:
+    """Keep what the owner handed over, and say what is in the way."""
+
+    row = remember_added(
+        session,
+        company=company,
+        state=state,
+        reason=detail,
+        now=now,
+        board=(
+            {
+                "source_type": candidate.source_type,
+                "source_account": candidate.source_account,
+                "source_host": candidate.source_host,
+            }
+            if candidate is not None
+            else None
+        ),
+    )
+
+    session.commit()
+
+    return AddResult(
+        status=status,
+        company=company,
+        source_type=candidate.source_type if candidate is not None else "",
+        source_account=candidate.source_account if candidate is not None else "",
+        job_count=candidate.job_count if candidate is not None else 0,
+        detail=voice(detail),
+        next_check_at=(
+            row.next_check_at.isoformat()
+            if row is not None
+            else None
+        ),
+    )
+
+
+def _saved_without_a_board(
+    session: Session,
+    *,
+    text: str,
+    reader: PoliteReader,
+    now: datetime,
+) -> AddResult:
+    """A link that named no readable board: say what is in the way."""
+
+    company = _display_name(
+        text
+    )
+
+    if not reader.allows(
+        text
+    ) or reader.refuses(
+        text
+    ):
+        return _saved(
+            session,
+            status="saved_refused",
+            company=company,
+            state=REFUSED,
+            detail=(
+                "Its rules ask automated readers to stay off "
+                "this page. ace respects that and will not try "
+                "another way. Check it by hand."
+            ),
+            now=now,
+        )
+
+    foreign = foreign_ats_in(
+        text
+    ) or foreign_ats_in(
+        reader.fetch_text(
+            text
+        )
+    )
+
+    if foreign:
+        return _saved(
+            session,
+            status="saved_no_reader",
+            company=company,
+            state=NOREADER,
+            detail=(
+                f"It hires through {foreign}, and ace has no "
+                "reader for that site yet."
+            ),
+            now=now,
+        )
+
+    return _saved(
+        session,
+        status="saved_looking",
+        company=company,
+        state=DORMANT,
+        detail=(
+            "ace found no job board there yet. It may build "
+            "itself in the browser."
+        ),
+        now=now,
+    )
+
+
 def add_source(
     session: Session,
     *,
@@ -338,50 +570,83 @@ def add_source(
     fetch=_fetch_json,
     fetch_text=_fetch_text,
     post=_post_json,
+    robots=_fetch_robots,
+    refuses=refuses_automation,
+    fetch_robots=read_robots,
+    now: datetime | None = None,
 ) -> AddResult:
-    """Register the board a URL or name refers to."""
+    """Do what the owner asked, and always say what happened.
 
-    candidate = resolve(
-        text,
+    A board that belongs to the company starts polling at once, because the
+    owner asked for it. Anything else is kept as a lead, so a name handed over
+    is never forgotten, and the answer says what is in the way. Every read
+    here asks robots first: pasting a link is no way around a refusal.
+    """
+
+    text = text.strip()
+
+    moment = now or datetime.now(
+        timezone.utc
+    )
+
+    reader = PoliteReader(
+        refused_hosts(
+            session
+        ),
         fetch=fetch,
         fetch_text=fetch_text,
         post=post,
+        robots=robots,
+        refuses=refuses,
     )
 
-    if candidate is None:
-        return AddResult(
-            status="not_found",
-            detail=(
-                "No board ACE can read was found "
-                "there. It may be self-hosted, on "
-                "Workday, or behind a page that "
-                "builds itself in the browser."
-            ),
-        )
-
-    refused = refused_hosts(
-        session
+    is_link = text.startswith(
+        "http"
     )
 
-    if any(
-        target.host in refused
-        for target in read_targets(
-            candidate.source_type,
-            candidate.source_account,
-            candidate.source_host,
+    if is_link:
+        candidate = resolve(
+            text,
+            fetch=reader.fetch,
+            fetch_text=reader.fetch_text,
+            post=reader.post,
         )
-    ):
-        return AddResult(
-            status="refused",
-            company=candidate.company,
-            source_type=candidate.source_type,
-            source_account=candidate.source_account,
-            detail=(
-                "This site asks automated readers to stay "
-                "off these pages. ACE respects that and "
-                "will not try another route."
-            ),
+
+        if candidate is None:
+            return _saved_without_a_board(
+                session,
+                text=text,
+                reader=reader,
+                now=moment,
+            )
+    else:
+        diagnosis = diagnose(
+            text,
+            fetch=reader.fetch,
+            fetch_text=reader.fetch_text,
+            post=reader.post,
+            refuses=reader.refuses,
         )
+
+        candidate = diagnosis.candidate
+
+        if candidate is None:
+            status, state = {
+                OTHER_ATS: ("saved_no_reader", NOREADER),
+                BLOCKED: ("saved_refused", REFUSED),
+            }.get(
+                diagnosis.outcome,
+                ("saved_looking", DORMANT),
+            )
+
+            return _saved(
+                session,
+                status=status,
+                company=text,
+                state=state,
+                detail=diagnosis.detail,
+                now=moment,
+            )
 
     existing = existing_board(
         session,
@@ -389,17 +654,79 @@ def add_source(
         candidate.source_account,
     )
 
-    if existing is not None:
+    if existing is not None and existing.enabled:
         return AddResult(
             status="already_known",
             company=existing.company_name,
-            source_type=candidate.source_type,
-            source_account=(
-                candidate.source_account
-            ),
+            source_type=existing.source_type,
+            source_account=existing.source_account,
             job_count=candidate.job_count,
-            evidence=candidate.evidence,
+            evidence=voice(
+                candidate.evidence
+            ),
+            job=(
+                job_from_link(
+                    session,
+                    text,
+                    existing.source_type,
+                    existing.source_account,
+                )
+                if is_link
+                else None
+            ),
+            linked=is_link,
+            last_read_at=_last_read(
+                session,
+                existing,
+            ),
         )
+
+    # A board switched off earlier stays a decision somebody made. An agency,
+    # or a duplicate, is not turned back on by pasting a link.
+    if existing is not None:
+        return AddResult(
+            status="known_off",
+            company=existing.company_name,
+            source_type=existing.source_type,
+            source_account=existing.source_account,
+            job_count=candidate.job_count,
+            detail=_switched_off_reason(
+                existing
+            ),
+        )
+
+    for target in read_targets(
+        candidate.source_type,
+        candidate.source_account,
+        candidate.source_host
+        or SOURCE_HOSTS.get(
+            candidate.source_type
+        ),
+    ):
+        why = refusal_for(
+            session,
+            target,
+            now=moment,
+            fetch_robots=fetch_robots,
+        )
+
+        if why:
+            return _saved(
+                session,
+                status="saved_refused",
+                company=candidate.company,
+                state=REFUSED,
+                detail=why,
+                now=moment,
+                candidate=candidate,
+            )
+
+    source_host = (
+        candidate.source_host
+        or SOURCE_HOSTS.get(
+            candidate.source_type
+        )
+    )
 
     session.add(
         JobSourceRecord(
@@ -412,12 +739,7 @@ def add_source(
             company_name=(
                 candidate.company
             ),
-            source_host=(
-                candidate.source_host
-                or SOURCE_HOSTS.get(
-                    candidate.source_type
-                )
-            ),
+            source_host=source_host,
             enabled=True,
             poll_interval_seconds=(
                 registration_interval(
@@ -426,6 +748,19 @@ def add_source(
             ),
             discovery_source="added_by_hand",
         )
+    )
+
+    remember_added(
+        session,
+        company=candidate.company,
+        state=POLLING,
+        reason="Added by you. ace reads it next.",
+        now=moment,
+        board={
+            "source_type": candidate.source_type,
+            "source_account": candidate.source_account,
+            "source_host": source_host,
+        },
     )
 
     session.commit()
@@ -438,8 +773,120 @@ def add_source(
             candidate.source_account
         ),
         job_count=candidate.job_count,
-        evidence=candidate.evidence,
+        evidence=voice(
+            candidate.evidence
+        ),
+        linked=is_link,
+        first_read_seconds=registration_interval(
+            candidate.source_type
+        ),
     )
+
+
+def _last_read(
+    session: Session,
+    source: JobSourceRecord,
+) -> str | None:
+    state = session.get(
+        SourceState,
+        (
+            source.source_type,
+            source.source_account,
+        ),
+    )
+
+    return (
+        state.last_success_at.isoformat()
+        if state is not None and state.last_success_at
+        else None
+    )
+
+
+def _switched_off_reason(
+    source: JobSourceRecord,
+) -> str:
+    kind = (
+        source.discovery_source or ""
+    ).lower()
+
+    if "staffing" in kind:
+        return (
+            "ace knows this board and left it out, because it "
+            "looks like a staffing agency, not an employer."
+        )
+
+    if kind == UNDONE:
+        return (
+            "You took this board back earlier, so ace left it "
+            "off. Ask me to turn it back on if that changed."
+        )
+
+    return (
+        "ace knows this board and has it switched off."
+    )
+
+
+def undo_added(
+    session: Session,
+    *,
+    source_type: str,
+    source_account: str,
+    now: datetime | None = None,
+) -> bool:
+    """Take back a board the owner just added.
+
+    Only one they added by hand. The board stays on record, switched off, so it
+    is never proposed again, and postings it brought in are closed. Marks and
+    applications on them are untouched.
+    """
+
+    row = session.scalar(
+        sa.select(
+            JobSourceRecord
+        ).where(
+            JobSourceRecord.source_type == source_type,
+            JobSourceRecord.source_account == source_account,
+        )
+    )
+
+    if (
+        row is None
+        or not row.enabled
+        or row.discovery_source != "added_by_hand"
+    ):
+        return False
+
+    moment = now or datetime.now(
+        timezone.utc
+    )
+
+    row.enabled = False
+
+    row.discovery_source = UNDONE
+
+    session.execute(
+        sa.update(
+            JobRecord
+        )
+        .where(
+            JobRecord.source == source_type,
+            JobRecord.source_account == source_account,
+            JobRecord.is_active.is_(True),
+        )
+        .values(
+            is_active=False,
+            closed_at=moment,
+        )
+    )
+
+    forget_added(
+        session,
+        company=row.company_name,
+    )
+
+    session.commit()
+
+    return True
 
 
 # An employer that will not sponsor is not a gap in what ACE can see;

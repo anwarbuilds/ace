@@ -17,6 +17,8 @@ export const ROUTES = [
   "/app/insights/skills",
   "/app/answers",
   "/app/coverage",
+  "/app/coverage?tab=leads",
+  "/app/coverage?tab=sources",
   "/app/settings",
 ];
 

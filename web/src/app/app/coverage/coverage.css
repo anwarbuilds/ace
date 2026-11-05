@@ -1,0 +1,96 @@
+/* Coverage: three tabs, each saying in plain words what it is. */
+.cov-page .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.cov-tabs { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+.cov-tabs a { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border: 1px solid transparent; border-radius: 9px; font-size: var(--text-button); font-weight: var(--weight-medium); color: var(--text-secondary); }
+.cov-tabs a:hover { background: var(--hover); color: var(--text); }
+.cov-tabs a[aria-current="page"] { background: var(--selected); border-color: var(--border); color: var(--text); font-weight: var(--weight-semibold); }
+.cov-tabs a span { padding: 1px 7px; border-radius: 999px; background: var(--hover); font-size: var(--text-small); font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.cov-add-link { background: var(--accent); color: var(--on-accent); }
+.cov-add-link:hover { background: var(--accent-hover); color: var(--on-accent); }
+
+.cov-page { display: flex; flex-direction: column; gap: 22px; }
+.cov-lead { max-width: 74ch; margin: 0; }
+.cov-card { padding: 18px 20px; border: 1px solid var(--border-subtle); border-radius: var(--r-lg); background: var(--surface-1); }
+.cov-card h2, .cov-section h2 { margin: 0; font-size: var(--text-section); font-weight: var(--weight-heading); letter-spacing: -.02em; color: var(--text); }
+.cov-card .why { margin: 6px 0 0; max-width: 74ch; }
+.cov-section { display: flex; flex-direction: column; gap: 10px; }
+.cov-section .why { margin: 0; max-width: 74ch; }
+.cov-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+
+.cov-how { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 12px; margin-top: 14px; }
+.cov-how a { display: flex; flex-direction: column; gap: 4px; padding: 14px; border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--surface-2); }
+.cov-how a:hover { border-color: var(--border-strong); }
+.cov-how small { font-size: var(--text-small); color: var(--text-secondary); }
+.cov-how strong { font-size: var(--text-button); font-weight: var(--weight-heading); color: var(--text); }
+.cov-how span { font-size: var(--text-nav); line-height: var(--leading-relaxed); color: var(--text-secondary); }
+
+.cov-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); gap: 12px; }
+.cov-stat { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--surface-1); }
+a.cov-stat:hover { border-color: var(--border-strong); }
+.cov-stat strong { font-size: var(--text-metric); font-weight: 680; letter-spacing: -.04em; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--text); }
+.cov-stat span { margin-top: 6px; font-size: var(--text-label); color: var(--text); }
+.cov-stat small { margin-top: 4px; font-size: var(--text-small); color: var(--text-secondary); }
+
+.cov-add { max-width: none; margin: 14px 0 0; }
+.cov-note { margin: 10px 0 0; font-size: var(--text-label); color: var(--text-secondary); }
+.cov-answer { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 14px; padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--surface-2); }
+.cov-answer h3 { margin: 0; font-size: var(--text-card); font-weight: var(--weight-heading); color: var(--text); }
+.cov-answer p { margin: 0; font-size: var(--text-nav); line-height: var(--leading-relaxed); color: var(--text-secondary); }
+.cov-answer b { color: var(--text); font-weight: var(--weight-strong); }
+.cov-answer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.cov-steps { display: grid; width: 100%; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 12px; margin: 4px 0 0; padding: 0; list-style: none; }
+.cov-steps li { display: flex; align-items: flex-start; gap: 8px; }
+.cov-steps li > span { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid var(--border); border-radius: 50%; color: var(--success); }
+.cov-steps li.done > span { border-color: transparent; background: var(--match-soft); }
+.cov-steps div { display: flex; flex-direction: column; }
+.cov-steps strong { font-size: var(--text-label); font-weight: var(--weight-semibold); color: var(--text); }
+.cov-steps small { font-size: var(--text-small); color: var(--text-secondary); }
+
+.badge.cov-good { background: var(--match-soft); color: var(--success); }
+.badge.cov-warn { background: var(--warning-soft); color: var(--warning); }
+.badge.cov-bad { background: var(--danger-soft); color: var(--danger); }
+.badge.cov-plain { background: var(--hover); color: var(--text-secondary); }
+
+.cov-find { display: flex; flex: 0 1 360px; gap: 8px; min-width: 220px; }
+.cov-find input { flex: 1; min-width: 0; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-1); color: var(--text); font: inherit; font-size: var(--text-nav); }
+.cov-find input:focus { outline: none; border-color: var(--border-strong); box-shadow: 0 0 0 4px var(--hover); }
+.cov-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.cov-chips a { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px solid var(--border-subtle); border-radius: 999px; background: var(--surface-1); font-size: var(--text-label); color: var(--text-secondary); }
+.cov-chips a:hover { border-color: var(--border-strong); color: var(--text); }
+.cov-chips a[aria-current="true"] { background: var(--selected); border-color: var(--border); color: var(--text); font-weight: var(--weight-semibold); }
+.cov-chips a span { font-variant-numeric: tabular-nums; }
+
+.cov-table { overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--surface-1); }
+.cov-table-narrow { max-width: 640px; }
+.cov-table table { width: 100%; min-width: 680px; border-collapse: collapse; font-size: var(--text-label); }
+.cov-table-narrow table { min-width: 0; }
+.cov-table th, .cov-table td { padding: 10px 14px; border-bottom: 1px solid var(--border-subtle); text-align: left; vertical-align: middle; color: var(--text-secondary); line-height: 1.45; }
+.cov-table thead th { font-size: var(--text-meta); font-weight: var(--weight-semibold); white-space: nowrap; }
+.cov-table tbody th { font-weight: var(--weight-medium); color: var(--text); }
+.cov-table tbody th small { display: block; margin-top: 2px; font-size: var(--text-small); font-weight: 400; color: var(--text-secondary); }
+.cov-table tbody tr:last-child th, .cov-table tbody tr:last-child td { border-bottom: 0; }
+.cov-table tbody tr:hover { background: var(--surface-2); }
+.cov-table .badge { white-space: nowrap; }
+.cov-right { text-align: right !important; }
+.cov-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cov-company { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.cov-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--text-small); color: var(--text-secondary); }
+.cov-pager span { margin-right: auto; }
+.cov-details summary { cursor: pointer; font-size: var(--text-label); color: var(--text-secondary); }
+.cov-details summary:hover { color: var(--text); }
+.cov-details dl { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 0; }
+.cov-details dl div { display: flex; flex-wrap: wrap; gap: 6px; font-size: var(--text-nav); line-height: var(--leading-relaxed); }
+.cov-details dt { font-weight: var(--weight-strong); color: var(--text); }
+.cov-details dt::after { content: ":"; }
+.cov-details dd { margin: 0; color: var(--text-secondary); }
+.cov-info { margin: 0; padding: 10px 14px; border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--surface-1); font-size: var(--text-label); color: var(--text-secondary); }
+.cov-section .cov-grid { margin: 0; }
+.cov-section .cov-group { margin-top: 0; }
+.cov-section .cov-group .why { margin: 0 0 8px; }
+
+@media (max-width: 640px) {
+  .cov-add { flex-wrap: wrap; }
+  .cov-add input, .cov-add button { flex: 1 1 100%; }
+  .cov-find { flex: 1 1 100%; }
+}

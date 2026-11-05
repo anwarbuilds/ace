@@ -30,6 +30,7 @@ def upgrade() -> None:
         sa.Column("boards", sa.JSON(), nullable=False),
         sa.Column("first_seen_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("last_checked_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("owner_added_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("next_check_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("check_failures", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),

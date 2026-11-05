@@ -1390,6 +1390,13 @@ class EmployerLead(Base):
         nullable=True,
     )
 
+    # When the owner pasted this in. Set for what they added themselves, so
+    # "Added by you" lists only that, whatever else ACE also heard.
+    owner_added_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     next_check_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

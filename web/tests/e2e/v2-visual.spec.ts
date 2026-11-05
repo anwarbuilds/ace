@@ -20,6 +20,8 @@ const PRIVATE_ROUTES = [
   ["autofill-extension", "/app/extension"],
   ["archive", "/app/archive"],
   ["coverage", "/app/coverage"],
+  ["coverage-leads", "/app/coverage?tab=leads"],
+  ["coverage-sources", "/app/coverage?tab=sources"],
   ["settings", "/app/settings"],
 ] as const;
 

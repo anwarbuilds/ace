@@ -55,8 +55,11 @@ from backend.app.answers.catalogue import (
     options_for,
 )
 from backend.app.api.marks import set_mark
+from backend.app.coverage.host_policy import sync_hosts
 from backend.app.db.base import Base
 from backend.app.db.models import (
+    EmployerLead,
+    HostPolicyRecord,
     ApplicationAnswerRecord,
     ExternalApplicationRecord,
     HistoryEntryRecord,
@@ -1162,6 +1165,205 @@ def _store_studio(session, *, now: datetime) -> None:
     session.flush()
 
 
+def _store_coverage(
+    session,
+    *,
+    now: datetime,
+) -> None:
+    """Fictional leads, boards and host verdicts for the Coverage tabs."""
+
+    session.add_all(
+        [
+            JobSourceRecord(
+                source_type="ashby",
+                source_account="lumora-pay",
+                company_name="Lumora Pay",
+                enabled=True,
+                poll_interval_seconds=900,
+                discovery_source="added_by_hand",
+                first_discovered_at=now - timedelta(hours=2),
+                created_at=now - timedelta(hours=2),
+                updated_at=now,
+            ),
+            SourceState(
+                source="ashby",
+                source_account="lumora-pay",
+                initialized_at=now - timedelta(hours=2),
+                last_success_at=now - timedelta(minutes=9),
+                last_job_count=14,
+            ),
+            JobSourceRecord(
+                source_type="greenhouse",
+                source_account="oakline-freight",
+                company_name="Oakline Freight",
+                enabled=True,
+                poll_interval_seconds=900,
+                discovery_source="demo",
+                first_discovered_at=now - timedelta(days=40),
+                created_at=now - timedelta(days=40),
+                updated_at=now,
+            ),
+            SourceState(
+                source="greenhouse",
+                source_account="oakline-freight",
+                initialized_at=now - timedelta(days=40),
+                last_success_at=now - timedelta(days=4),
+                last_job_count=31,
+            ),
+        ]
+    )
+
+    session.flush()
+
+    sync_hosts(
+        session,
+        now=now,
+    )
+
+    for row in session.scalars(
+        select(
+            HostPolicyRecord
+        )
+    ):
+        row.robots_verdict = "allowed"
+        row.robots_detail = "Robots file allows the pages ACE reads."
+        row.checked_at = now - timedelta(days=1)
+        row.next_check_at = now + timedelta(days=29)
+
+    session.add_all(
+        [
+            HostPolicyRecord(
+                host="careers.oakhollow.example",
+                platform="employer_site",
+                paths=["/careers/search"],
+                robots_verdict="refused",
+                robots_detail="Robots file disallows /careers/search.",
+                checked_at=now - timedelta(days=1),
+                next_check_at=now + timedelta(days=29),
+                first_seen_at=now - timedelta(days=9),
+                updated_at=now,
+            ),
+            HostPolicyRecord(
+                host="careers.notyet.example",
+                platform="eightfold",
+                paths=["/api/pcsx/search"],
+                next_check_at=now,
+                first_seen_at=now,
+                updated_at=now,
+            ),
+        ]
+    )
+
+    def lead(
+        company,
+        origin,
+        state,
+        reason,
+        *,
+        checked=None,
+        next_days=7,
+        added=None,
+        boards=(),
+    ):
+        session.add(
+            EmployerLead(
+                company_key=company.lower(),
+                company_name=company,
+                origin=origin,
+                origin_details=[origin],
+                state=state,
+                reason=reason,
+                boards=list(boards),
+                first_seen_at=now - timedelta(days=9),
+                last_checked_at=checked,
+                owner_added_at=added,
+                next_check_at=now + timedelta(days=next_days),
+                updated_at=now,
+            )
+        )
+
+    day = timedelta(days=1)
+
+    lead(
+        "Lumora Pay",
+        "owner",
+        "polling",
+        "Reads its Ashby board.",
+        checked=now - timedelta(minutes=9),
+        next_days=1,
+        added=now - timedelta(hours=2),
+        boards=[
+            {
+                "source_type": "ashby",
+                "source_account": "lumora-pay",
+                "source_host": "jobs.ashbyhq.com",
+            }
+        ],
+    )
+    lead(
+        "Quillfeather",
+        "owner",
+        "noreader",
+        "It hires through Teamtailor, and ace has no reader for that site yet.",
+        checked=now - 2 * day,
+        next_days=28,
+        added=now - 2 * day,
+    )
+    lead(
+        "Marlowe Robotics",
+        "network",
+        "waiting",
+        "Ashby board reads, with 4 US software roles today, 1 passing your filters. Waiting for your approval.",
+        checked=now,
+    )
+    lead(
+        "Oakhollow",
+        "feed",
+        "refused",
+        "Robots file disallows /careers/search.",
+        checked=now - day,
+        next_days=29,
+    )
+    lead(
+        "Brightmoor Health",
+        "search",
+        "noreader",
+        "Hires through Phenom, which ACE has no adapter for yet.",
+        checked=now - 3 * day,
+        next_days=27,
+    )
+    lead(
+        "Fernhollow",
+        "network",
+        "checking",
+        "Has a board ACE has not read yet.",
+        next_days=0,
+    )
+    lead(
+        "Tessellate",
+        "network",
+        "dormant",
+        "Greenhouse board read, no US software role today.",
+        checked=now,
+    )
+    lead(
+        "Wrenfield Talent",
+        "feed",
+        "agency",
+        "Staffing firm: contract templates in 3 of 5 described postings.",
+        checked=now - 8 * day,
+        next_days=82,
+    )
+    lead(
+        "Kestrel Grid Labs",
+        "curated",
+        "polling",
+        "Reads its Greenhouse board.",
+        checked=now - timedelta(minutes=6),
+        next_days=1,
+    )
+
+
 def seed(
     database_url: str,
     *,
@@ -1265,6 +1467,11 @@ def seed(
 
     with factory.begin() as session:
         _store_studio(session, now=now)
+
+        _store_coverage(
+            session,
+            now=now,
+        )
 
     # A fictional owner, so the demo runs with sign-in on, exactly as the
     # real app does. The password is public on purpose: it opens only

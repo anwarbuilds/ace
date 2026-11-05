@@ -42,6 +42,7 @@ from backend.app.coverage.host_policy import (
 from backend.app.coverage.recovery import dark_sources
 from backend.app.db.models import (
     EmployerLead,
+    JobEvaluationRecord,
     JobRecord,
     JobSourceRecord,
     SourceProbeRecord,
@@ -63,13 +64,24 @@ AGENCY = "agency"
 STATES = (POLLING, WAITING, CHECKING, DORMANT, NOREADER, REFUSED, AGENCY)
 
 STATE_LABELS = {
-    POLLING: "Polling",
+    POLLING: "ace reads it",
     WAITING: "Waiting for you",
-    CHECKING: "Checking",
-    DORMANT: "No US software role",
-    NOREADER: "No reader yet",
-    REFUSED: "Refused",
-    AGENCY: "Agency, left out",
+    CHECKING: "Being checked",
+    DORMANT: "No US software jobs",
+    NOREADER: "Can't read yet",
+    REFUSED: "Site says no",
+    AGENCY: "Staffing agency",
+}
+
+# Said once on the page, for anyone wondering what a status means.
+STATE_MEANINGS = {
+    POLLING: "ace reads this company all day. You will find it under Sources.",
+    WAITING: "ace found a good board, and adding it needs your approval.",
+    CHECKING: "ace has not looked yet, or will try again soon.",
+    DORMANT: "The board reads fine, with no US software jobs today. ace looks again every week.",
+    NOREADER: "They use a site ace has no reader for, or no board was found. ace looks again every month.",
+    REFUSED: "The site asks automated readers to stay off. ace respects that. Check it by hand.",
+    AGENCY: "Not an employer, so ace leaves it out.",
 }
 
 # How long a state lasts before ACE looks again. New grad roles open in
@@ -95,19 +107,19 @@ SEARCH = "search"
 ORIGINS = (OWNER, CURATED, NETWORK, FEED, SEARCH)
 
 ORIGIN_LABELS = {
-    OWNER: "Added by hand",
+    OWNER: "Added by you",
     CURATED: "Your list",
-    NETWORK: "City and VC network",
-    FEED: "New grad feed",
-    SEARCH: "ACE search",
+    NETWORK: "City network",
+    FEED: "New grad list",
+    SEARCH: "ace search",
 }
 
 ORIGIN_NOTES = {
-    OWNER: "Boards added by hand",
+    OWNER: "Links and names you added",
     CURATED: "The companies you chose",
-    NETWORK: "Startup networks, collected once",
-    FEED: "Names in the public feeds ACE reads",
-    SEARCH: "Found by ACE's earlier company searches",
+    NETWORK: "Lists of startups, collected once",
+    FEED: "Names in the public lists ace reads",
+    SEARCH: "Found by ace's earlier company searches",
 }
 
 DEFAULT_NETWORK_FILE = Path(__file__).resolve().parents[1] / "discovery" / "network_boards.json"
@@ -124,6 +136,9 @@ BOARDS_PER_LEAD = 3
 MAX_ORIGIN_DETAILS = 12
 
 PAGED_PROVIDERS = frozenset({"workday", "oracle_recruiting"})
+
+# The discovery_source of a board the owner added and then took back.
+UNDONE = "added_by_hand undone"
 
 _STAFFING = re.compile(r"rejected: staffing(?: agency)?:?\s*(.*)", re.IGNORECASE | re.DOTALL)
 
@@ -143,6 +158,12 @@ _PROBE_STATES = {
 
 def _clean(text: str | None) -> str:
     return _DASHES.sub(", ", (text or "").strip())
+
+
+# The interface's own voice: the wordmark is lowercase, and probe details and
+# stored reasons were written with the name in capitals.
+def voice(text: str | None) -> str:
+    return re.sub(r"\bACE\b", "ace", text or "")
 
 
 def _aware(value: datetime | None) -> datetime | None:
@@ -204,6 +225,7 @@ class Evidence:
     boards: dict[tuple[str, str], dict] = field(default_factory=dict)
     agency: str = ""
     probe: SourceProbeRecord | None = None
+    owner_added: datetime | None = None
 
     def named(self, name: str, rank: int) -> None:
         if rank < self.name_rank and name.strip():
@@ -246,14 +268,17 @@ def gather_evidence(
             JobSourceRecord.company_name,
             JobSourceRecord.enabled,
             JobSourceRecord.discovery_source,
+            JobSourceRecord.first_discovered_at,
         )
     ):
         # A feed is where names come from, not an employer.
         if row.source_type in MULTI_EMPLOYER_SOURCES:
             continue
 
-        # A retired copy of a board that has its own row.
-        if (row.discovery_source or "").lower().startswith("duplicate of"):
+        # A retired copy of a board that has its own row, or a board the
+        # owner took back: neither is evidence, and neither comes back.
+        kind = (row.discovery_source or "").lower()
+        if kind.startswith("duplicate of") or kind == UNDONE:
             continue
 
         found = entry(row.company_name)
@@ -263,6 +288,9 @@ def gather_evidence(
         lead = found[1]
         lead.named(row.company_name, 1 if row.enabled else 3)
         lead.details.add(_origin_of(row.discovery_source))
+
+        if kind.startswith(("added_by_hand", "user_reported")):
+            lead.owner_added = _aware(row.first_discovered_at)
 
         staffing = _STAFFING.search(row.discovery_source or "")
         if staffing and not row.enabled:
@@ -427,6 +455,7 @@ def sync_leads(
                 boards=list(lead.boards.values()),
                 first_seen_at=now,
                 last_checked_at=checked,
+                owner_added_at=lead.owner_added,
                 next_check_at=next_check,
                 updated_at=now,
             )
@@ -447,6 +476,9 @@ def sync_leads(
             added = {k: b for k, b in lead.boards.items() if k not in known}
             if added:
                 row.boards = list(known.values()) + list(added.values())
+
+            if lead.owner_added is not None and row.owner_added_at is None:
+                row.owner_added_at = lead.owner_added
 
             if tuple(before) != (row.origin, list(row.origin_details or []), row.state, row.reason):
                 changed += 1
@@ -832,6 +864,93 @@ def _check_name(
         probe.checked_at = moment
 
 
+def remember_added(
+    session: Session,
+    *,
+    company: str,
+    state: str,
+    reason: str,
+    now: datetime,
+    board: dict | None = None,
+) -> EmployerLead | None:
+    """Record what the owner just added, whatever became of it.
+
+    The caller commits. A name that reduces to nothing has no lead.
+    """
+
+    key = normalise_company(company)[:255]
+
+    if not key:
+        return None
+
+    row = session.scalar(sa.select(EmployerLead).where(EmployerLead.company_key == key))
+
+    if row is None:
+        row = EmployerLead(
+            company_key=key,
+            company_name=company.strip()[:255],
+            origin=OWNER,
+            origin_details=[OWNER],
+            state=state,
+            reason=reason,
+            boards=[],
+            first_seen_at=now,
+            next_check_at=now,
+            updated_at=now,
+        )
+        session.add(row)
+    else:
+        row.origin = OWNER
+        row.origin_details = sorted(set(row.origin_details or []) | {OWNER})[:MAX_ORIGIN_DETAILS]
+
+    if board is not None:
+        known = {board_key(b["source_type"], b["source_account"]) for b in row.boards or []}
+        if board_key(board["source_type"], board["source_account"]) not in known:
+            row.boards = list(row.boards or []) + [board]
+
+    row.owner_added_at = now
+    row.state = state
+    row.reason = reason
+    row.check_failures = 0
+    row.last_checked_at = now
+    row.next_check_at = now + RECHECK_AFTER[state]
+
+    session.flush()
+
+    return row
+
+
+def forget_added(session: Session, *, company: str) -> None:
+    """Take back what ``remember_added`` wrote. The caller commits.
+
+    A lead ACE also heard of elsewhere stays, as it was going to anyway.
+    """
+
+    key = normalise_company(company)[:255]
+
+    row = session.scalar(sa.select(EmployerLead).where(EmployerLead.company_key == key))
+
+    if row is None:
+        return
+
+    others = [detail for detail in row.origin_details or [] if detail != OWNER]
+
+    if not others:
+        session.delete(row)
+        return
+
+    row.owner_added_at = None
+    row.origin_details = others
+    row.origin = next(
+        (origin for origin in ORIGINS if any(detail.split(":", 1)[0] == origin for detail in others)),
+        SEARCH,
+    )
+    row.state = CHECKING
+    row.reason = "You took this board back, so ace only keeps the company on record."
+    row.boards = []
+    row.next_check_at = row.next_check_at
+
+
 _LIST_ORDER = sa.case(
     {WAITING: 0, REFUSED: 1, NOREADER: 2, CHECKING: 3, DORMANT: 4, AGENCY: 5, POLLING: 6},
     value=EmployerLead.state,
@@ -842,6 +961,63 @@ _LIST_ORDER = sa.case(
 def _like(text: str) -> str:
     escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return f"%{escaped}%"
+
+
+def added_report(session: Session, *, limit: int = 25) -> list[dict]:
+    """What the owner added, newest first, and where each one is now."""
+
+    rows = list(
+        session.scalars(
+            sa.select(EmployerLead)
+            .where(EmployerLead.owner_added_at.is_not(None))
+            .order_by(EmployerLead.owner_added_at.desc(), EmployerLead.id.desc())
+            .limit(limit)
+        )
+    )
+
+    out = []
+
+    for row in rows:
+        boards = [(b["source_type"], b["source_account"]) for b in row.boards or []]
+
+        last_read = None
+        jobs = 0
+        passing = 0
+
+        if row.state == POLLING and boards:
+            for source_type, account in boards:
+                state = session.get(SourceState, (source_type, account))
+                if state is not None:
+                    seen = _aware(state.last_success_at)
+                    last_read = max(last_read, seen) if last_read else seen
+                    jobs += state.last_job_count or 0
+                passing += session.scalar(
+                    sa.select(sa.func.count())
+                    .select_from(JobRecord)
+                    .join(JobEvaluationRecord, JobEvaluationRecord.job_id == JobRecord.id)
+                    .where(
+                        JobRecord.source == source_type,
+                        JobRecord.source_account == account,
+                        JobRecord.is_active.is_(True),
+                        JobEvaluationRecord.eligibility_status == "PASS",
+                    )
+                ) or 0
+
+        out.append(
+            {
+                "company": row.company_name,
+                "added_at": _aware(row.owner_added_at).isoformat(),
+                "state": row.state,
+                "state_label": STATE_LABELS.get(row.state, row.state),
+                "reason": voice(row.reason),
+                "last_read_at": last_read.isoformat() if last_read else None,
+                "jobs": jobs,
+                "passing": passing,
+                "next_check_at": _aware(row.next_check_at).isoformat(),
+            }
+        )
+
+    return out
 
 
 def leads_report(
@@ -947,7 +1123,7 @@ def leads_report(
             "origin_label": ORIGIN_LABELS.get(row.origin, row.origin),
             "state": row.state,
             "state_label": STATE_LABELS.get(row.state, row.state),
-            "reason": row.reason,
+            "reason": voice(row.reason),
             "last_checked_at": last.isoformat() if last else None,
             "next_check_at": _aware(row.next_check_at).isoformat(),
             "poll_interval_seconds": interval,
@@ -960,9 +1136,15 @@ def leads_report(
         "limit": limit,
         "offset": offset,
         "states": [
-            {"state": key, "label": STATE_LABELS[key], "leads": counts.get(key, 0)}
+            {
+                "state": key,
+                "label": STATE_LABELS[key],
+                "meaning": STATE_MEANINGS[key],
+                "leads": counts.get(key, 0),
+            }
             for key in STATES
         ],
+        "added": added_report(session),
         "origins": [
             {
                 "origin": key,

@@ -238,13 +238,120 @@ export interface Coverage {
 }
 
 export interface SourceResult {
-  status: string;
+  status: "added" | "already_known" | "known_off" | "saved_no_reader" | "saved_refused" | "saved_looking";
   company: string | null;
   source_type: string | null;
   source_account: string | null;
   job_count: number | null;
   evidence: string | null;
   detail: string | null;
+  job: { id: number; title: string; location: string | null; active: boolean; passes: boolean } | null;
+  linked: boolean;
+  last_read_at: string | null;
+  next_check_at: string | null;
+  first_read_seconds: number | null;
+}
+
+export type LeadState = "polling" | "waiting" | "checking" | "dormant" | "noreader" | "refused" | "agency";
+
+export interface CoverageSummary {
+  leads: number;
+  polling: number;
+  sources: number;
+}
+
+export interface LeadRow {
+  company: string;
+  origin: string;
+  origin_label: string;
+  state: LeadState;
+  state_label: string;
+  reason: string;
+  last_checked_at: string | null;
+  next_check_at: string;
+  poll_interval_seconds: number | null;
+}
+
+export interface LeadsReport {
+  total: number;
+  polling: number;
+  matched: number;
+  limit: number;
+  offset: number;
+  states: { state: LeadState; label: string; meaning: string; leads: number }[];
+  added: {
+    company: string;
+    added_at: string;
+    state: LeadState;
+    state_label: string;
+    reason: string;
+    last_read_at: string | null;
+    jobs: number;
+    passing: number;
+    next_check_at: string;
+  }[];
+  origins: { origin: string; label: string; note: string; leads: number; polling: number }[];
+  rows: LeadRow[];
+}
+
+export interface SourceRow {
+  company: string;
+  site: string;
+  source_type: string;
+  source_account: string;
+  last_read_at: string | null;
+  poll_interval_seconds: number;
+  jobs: number | null;
+  status: "working" | "first_read" | "dark" | "says_no";
+  status_label: string;
+  added_by_you: boolean;
+  added_at: string | null;
+}
+
+export interface SourcesReport {
+  counts: { total: number; working: number; first_read: number; dark: number; says_no: number; mine: number };
+  matched: number;
+  limit: number;
+  offset: number;
+  rows: SourceRow[];
+  dark: {
+    company: string;
+    site: string;
+    source_type: string;
+    source_account: string;
+    last_success_at: string | null;
+    dark_since: string;
+  }[];
+}
+
+export interface HostsReport {
+  enforcing: boolean;
+  total: number;
+  allowed: number;
+  refused: number;
+  unknown: number;
+  groups: {
+    platform: string;
+    label: string;
+    hosts: number;
+    allowed: number;
+    refused: number;
+    unknown: number;
+    sources: number;
+    example_host: string;
+    oldest_checked_at: string | null;
+    next_check_at: string | null;
+    terms: { verdict: "allowed" | "restricted" | "unclear" | "not_read"; note: string; url: string | null; reviewed_on: string | null; recheck_on: string | null };
+  }[];
+  refused_hosts: {
+    host: string;
+    platform: string;
+    detail: string;
+    last_error: string;
+    sources: number;
+    checked_at: string | null;
+    next_check_at: string | null;
+  }[];
 }
 
 export interface SystemStatus {
