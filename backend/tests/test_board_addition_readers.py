@@ -63,6 +63,8 @@ def fetchers(reader, employers=()):
         return {'results': rows, 'jobPostings': rows}
 
     def page(url, **kwargs):
+        if reader == 'workable':
+            return '<title>Birch Labs - Current Openings</title><h1>Open roles</h1>'
         if reader in ('ashby', 'lever', 'gem', 'workable'):
             return '<title>Birch Labs Jobs</title><h1>Open roles</h1>'
         # A readable board can omit a separate owner name.

@@ -247,6 +247,7 @@ def read_board_evidence(source_type: str, account: str, *, source_host=None, fet
             match = re.search(r'<title[^>]*>([^<]{1,160})', page, re.I)
             owner = html.unescape(match.group(1)).strip() if match else ''
             owner = re.sub(r'\s*[|\-]\s*(?:Workable|Gem)\s*$', '', owner, flags=re.I)
+            owner = re.sub(r'\s*[-|]\s*current\s+openings\s*$', '', owner, flags=re.I)
             owner = re.sub(r'^(?:Careers?|Jobs?)\s+(?:at|with)\s+', '', owner, flags=re.I)
             owner = re.sub(r'\b(?:jobs?|careers?|openings?|open roles)\b', ' ', owner, flags=re.I).strip()
             if owner.casefold() in ('', 'workable', 'gem'):
