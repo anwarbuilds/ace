@@ -206,6 +206,38 @@ def test_new_shared_board_caught_from_its_own_page_without_a_reviewed_entry(db):
     assert db.scalar(select(EmployerLead)).state == AGENCY
 
 
+def test_a_customer_mention_cannot_turn_a_pasted_token_into_an_employer(db):
+    result = hand_add(db, "https://jobs.ashbyhq.com/fictional/job-1",
+        fetch=lambda url: {"jobs": [{"title": "Software Engineer", "descriptionPlain": "Fictional is our customer, not our employer."}]})
+    assert result.status == "saved_looking"
+    assert db.scalar(select(JobSourceRecord)) is None
+    assert db.scalar(select(EmployerLead)).state == CHECKING
+
+
+def test_a_name_search_with_only_a_prose_mention_remains_a_lead(db, monkeypatch):
+    from types import SimpleNamespace
+    from backend.app.coverage.probing import BoardCandidate
+    monkeypatch.setattr("backend.app.coverage.service.diagnose", lambda *args, **kwargs: SimpleNamespace(
+        candidate=BoardCandidate(company="Fictional Target", source_type="ashby", source_account="fictional", job_count=1,
+            evidence="company named in posting descriptionPlain")))
+    result = add_source(db, text="Fictional Target", fetch=lambda url: None,
+        fetch_text=lambda url: "", post=lambda *args: None, robots=lambda host: "",
+        fetch_robots=lambda host: (404, ""), refuses=lambda url: False, now=NOW)
+    assert result.status == "saved_looking" and "mentions" in result.detail
+    assert db.scalar(select(JobSourceRecord)) is None
+
+
+def test_an_exact_tenant_cannot_rescue_conflicting_structured_employers(monkeypatch):
+    from backend.app.coverage.service import _verify
+    monkeypatch.setattr("backend.app.coverage.service.board_jobs", lambda *args, **kwargs: [
+        {"title": "Software Engineer", "hiringOrganization": {"name": "Fictional Acorn"}},
+        {"title": "Software Engineer", "hiringOrganization": {"name": "Fictional Birch"}},
+    ])
+    found = _verify(BoardRef("workday", "fictional/External", "fictional.wd5.myworkdayjobs.example"), "Fictional",
+        fetch=lambda url: None, fetch_text=lambda url: "", post=lambda *args: None, default_evidence="pasted board")
+    assert found.evidence.startswith("shared:")
+
+
 def test_a_switched_off_shared_board_stays_off(db, reviewed):
     db.add(JobSourceRecord(source_type="ashby", source_account="fictional-vc", company_name="Fictional VC",
         enabled=False, poll_interval_seconds=900, discovery_source="owner decision"))

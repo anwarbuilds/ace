@@ -253,9 +253,10 @@ def _verify(
         company, identity_evidence, source_type=ref.source_type, account=ref.token,
         titles=[job.get("title") or job.get("name") or "" for job in jobs],
     )
-    if identity.company is None and evidence and not identity_evidence.owner and not identity_evidence.employers and not identity_evidence.shared:
-        # Preserve the existing strict posting-prose and Workday proofs.
-        # A URL token alone (default_evidence) never proves an employer.
+    if (identity.company is None and evidence and ref.source_type == "workday"
+            and not (identity_evidence.owner or identity_evidence.employers or identity_evidence.shared)):
+        # Preserve the exact tenant binding. A prose mention can be a
+        # customer or partner and cannot confirm the board's employer.
         identity = resolve_employer(company, company)
     if identity.company is None:
         prefix = "shared" if identity.state == "shared" else "identity"
@@ -755,6 +756,11 @@ def add_source(
                 now=moment,
                 candidate=candidate,
             )
+
+    if candidate.evidence.startswith("company named in posting"):
+        return _saved(session, status="saved_looking", company=candidate.company,
+            state=CHECKING, detail="The posting mentions this company, but ACE could not confirm it owns the board.",
+            now=moment, candidate=candidate)
 
     if candidate.evidence.startswith("identity:"):
         return _saved(session, status="saved_looking", company=candidate.company,
