@@ -26,7 +26,8 @@ from backend.app.api.routers.inbox import _identities, _eligible_stale_query, PE
 from backend.app.inbox.queue import decision_expression, projected_classification, projected_decision
 from backend.app.inbox import evidence_scope
 from backend.app.inbox.filed_evidence import ACTION_PREFIX, DECISIONS as FILED_DECISIONS, REJECTION_PREFIX, UNVERIFIED_NOTE
-from backend.app.db.models import ApplicationEventRecord, CompanyPetitionReportRecord, GmailMessageRecord, JobEvaluationRecord, GmailConnectionRecord
+from backend.app.db.models import ApplicationEventRecord, GmailMessageRecord, JobEvaluationRecord, GmailConnectionRecord
+from backend.app.coverage.petition_identity import petition_reports_for
 from backend.app.inbox.reconcile import _MARKING_GRACE
 from backend.app.inbox.reconcile import CLASSIFICATION_REASONS
 from backend.app.inbox.company_outcomes import COMPANY_REASON, KIND as COMPANY_REJECTION, event_company
@@ -465,7 +466,7 @@ def analytics_read(session: Session, *, days: str = "all", family: str | None = 
                 for connection in session.scalars(select(GmailConnectionRecord)))
     ambiguous = sum(len(candidate_keys or []) > 1 for candidate_keys in session.scalars(
         select(GmailMessageRecord.candidate_keys).where(queue_decision == "review", evidence_scope.mail_clause())))
-    reports = session.scalars(select(CompanyPetitionReportRecord).where(CompanyPetitionReportRecord.ace_company.in_(employers), CompanyPetitionReportRecord.entity_verified.is_(True))).all() if employers else []
+    reports = petition_reports_for(session, employers)
     # Exact entity + metric + year reconciliation; newer revisions replace old
     # releases instead of adding duplicate totals. DOL stays a separate metric.
     latest_reports = {}

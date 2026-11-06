@@ -53,7 +53,7 @@ def add(session, text, *, fetch=board_fetch, fetch_text=None, robots=None, fetch
         session,
         text=text,
         fetch=fetch,
-        fetch_text=fetch_text or (lambda url, **kwargs: ""),
+        fetch_text=fetch_text or (lambda url, **kwargs: "<title>Lumora Pay Jobs</title>"),
         post=lambda url, payload, **kwargs: None,
         robots=robots or (lambda host: ""),
         refuses=refuses or (lambda url: False),

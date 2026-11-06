@@ -171,6 +171,7 @@ def test_only_a_board_that_reads_and_holds_postings_is_confirmed() -> None:
         for outcome in read_boards(
             boards,
             read_board,
+            lambda board: board.company_name,
         )
     }
 
@@ -195,6 +196,7 @@ def test_a_confirmed_board_is_registered_to_be_polled(
             [CHEWY]
         ),
         lambda _definition: postings(268),
+        lambda board: board.company_name,
     )
 
     [added] = register_confirmed_boards(
@@ -448,6 +450,7 @@ def test_an_employer_on_smartrecruiters_is_registered() -> None:
                 "built on trust. " * 10
             ),
         ),
+        lambda board: board.company_name,
     )
 
     assert outcome.registered
@@ -602,6 +605,7 @@ def test_a_large_employer_on_smartrecruiters_is_not_taken_for_an_agency() -> Non
                 "technologies and services that spark enthusiasm. " * 5
             ),
         ),
+        lambda board: board.company_name,
     )
 
     assert outcome.registered

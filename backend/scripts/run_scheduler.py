@@ -35,6 +35,7 @@ from backend.app.coverage.cadence import (
 from backend.app.coverage.diagnosis import (
     diagnose,
 )
+from backend.app.coverage.identity import read_board_evidence
 from backend.app.coverage.host_policy import (
     PoliteReader,
     check_due_hosts,
@@ -687,11 +688,17 @@ def main(
 
                 continue
 
+            reader = PoliteReader(refused)
             [outcome] = read_boards(
                 [board],
                 lambda definition: dispatcher.fetch(
                     definition
                 ).jobs,
+                lambda board: read_board_evidence(
+                    board.detected.source_type.value, board.detected.source_account,
+                    source_host=board.detected.source_host,
+                    fetch=reader.fetch, fetch_text=reader.fetch_text,
+                ),
             )
 
             with SessionLocal.begin() as session:

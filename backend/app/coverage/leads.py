@@ -29,6 +29,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from backend.app.coverage.benchmark import normalise_company
+from backend.app.coverage.identity import name_keys, portfolio_name_hints, same_employer, shared_board_reason
 from backend.app.coverage.companies import (
     MULTI_EMPLOYER_SOURCES,
     TARGET_COMPANIES,
@@ -247,9 +248,18 @@ def gather_evidence(
     """Every employer ACE knows of, from what it already holds."""
 
     evidence: dict[str, Evidence] = {}
+    previous_hints = session.scalars(sa.select(EmployerLead).where(EmployerLead.company_key.like("identity:%"))).all()
 
-    def entry(name: str | None) -> tuple[str, Evidence] | None:
+    def entry(name: str | None, *, identity_hint: bool = False) -> tuple[str, Evidence] | None:
         key = normalise_company(name)[:255]
+        if identity_hint:
+            keys = name_keys(name)
+            if key not in evidence or not same_employer(evidence[key].name, name):
+                key = "identity:" + max(keys, key=len) if keys else ""
+        else:
+            matching = [row for row in previous_hints if same_employer(row.company_name, name)]
+            if len(matching) == 1:
+                key = matching[0].company_key
         if not key:
             return None
         return key, evidence.setdefault(key, Evidence())
@@ -288,6 +298,8 @@ def gather_evidence(
         lead = found[1]
         lead.named(row.company_name, 1 if row.enabled else 3)
         lead.details.add(_origin_of(row.discovery_source))
+        if shared_board_reason(row.source_type, row.source_account):
+            lead.agency = "A shared portfolio board, not one employer. Company names are kept as unverified leads."
 
         if kind.startswith(("added_by_hand", "user_reported")):
             lead.owner_added = _aware(row.first_discovered_at)
@@ -354,6 +366,22 @@ def gather_evidence(
         if found:
             found[1].named(company, 5)
             found[1].details.add(f"{FEED}:{source}")
+
+    # Shared boards are pointers, never employers. Existing stored public
+    # titles supply unverified names without requesting the board again.
+    for source_type, account, owner in session.execute(sa.select(
+        JobSourceRecord.source_type, JobSourceRecord.source_account, JobSourceRecord.company_name,
+    )):
+        if not shared_board_reason(source_type, account):
+            continue
+        titles = session.scalars(sa.select(JobRecord.title).where(
+            JobRecord.source == source_type, JobRecord.source_account == account,
+        )).all()
+        for name in portfolio_name_hints(titles, owner):
+            found = entry(name, identity_hint=True)
+            if found:
+                found[1].named(name, 10)
+                found[1].details.add(f"{NETWORK}:Unverified name on a shared portfolio board")
 
     return evidence
 
@@ -424,7 +452,7 @@ def sync_leads(
         )
     }
 
-    enabled = {key for key, row in catalog.items() if row.enabled and key[0] not in MULTI_EMPLOYER_SOURCES}
+    enabled = {key for key, row in catalog.items() if row.enabled and key[0] not in MULTI_EMPLOYER_SOURCES and not shared_board_reason(*key)}
 
     last_success: dict[tuple[str, str], datetime] = {}
 
@@ -571,6 +599,9 @@ def finding_from(outcome, board: dict) -> Finding:
 
     if reason.startswith("shared:"):
         return Finding(AGENCY, "A firm's shared portfolio board, not one employer.")
+
+    if reason.startswith("identity:"):
+        return Finding(CHECKING, _clean(reason.split(":", 1)[1]))
 
     if outcome.transient:
         return Finding(CHECKING, f"Could not read its {platform} board today. Will try again.", transient=True)

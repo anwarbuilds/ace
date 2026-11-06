@@ -24,6 +24,7 @@ recognises, which is harder to notice than a gap.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
@@ -57,7 +58,10 @@ from backend.app.coverage.host_policy import (
     refusal_for,
     refused_hosts,
 )
+from backend.app.coverage.identity import read_board_evidence, resolve_employer, shared_board_reason
 from backend.app.coverage.leads import (
+    AGENCY,
+    CHECKING,
     DORMANT,
     NOREADER,
     POLLING,
@@ -209,6 +213,14 @@ def _verify(
     and the board is somebody else's.
     """
 
+    shared = shared_board_reason(ref.source_type, ref.token)
+    if shared:
+        return BoardCandidate(company=company, source_type=ref.source_type,
+            source_account=ref.token, job_count=0, evidence=f"shared: {shared}", source_host=ref.source_host)
+
+    # Verification and the identity decision share responses, not requests.
+    fetch = lru_cache(maxsize=8)(fetch)
+    fetch_text = lru_cache(maxsize=8)(fetch_text)
     jobs = board_jobs(
         ref,
         fetch=fetch,
@@ -229,15 +241,33 @@ def _verify(
             source_type=ref.source_type,
             token=ref.token,
             jobs=jobs,
+            source_host=ref.source_host,
             fetch=fetch,
             fetch_text=fetch_text,
         )
 
+    identity_evidence = read_board_evidence(
+        ref.source_type, ref.token, source_host=ref.source_host, fetch=fetch, fetch_text=fetch_text, jobs=jobs,
+    )
+    identity = resolve_employer(
+        company, identity_evidence, source_type=ref.source_type, account=ref.token,
+        titles=[job.get("title") or job.get("name") or "" for job in jobs],
+    )
+    if (identity.company is None and evidence and ref.source_type == "workday"
+            and not (identity_evidence.owner or identity_evidence.employers or identity_evidence.shared)):
+        # Preserve the exact tenant binding. A prose mention can be a
+        # customer or partner and cannot confirm the board's employer.
+        identity = resolve_employer(company, company)
+    if identity.company is None:
+        prefix = "shared" if identity.state == "shared" else "identity"
+        return BoardCandidate(company=company, source_type=ref.source_type,
+            source_account=ref.token, job_count=len(jobs),
+            evidence=f"{prefix}: {identity.reason}", source_host=ref.source_host)
     if evidence is None and not default_evidence:
         return None
 
     return BoardCandidate(
-        company=company,
+        company=identity.company,
         source_type=ref.source_type,
         source_account=ref.token,
         job_count=len(
@@ -280,9 +310,8 @@ def _from_board_url(
         fetch=fetch,
         fetch_text=fetch_text,
         post=post,
-        # The user handed over this exact board. Confirming whose it
-        # is stays worth doing and is reported when it succeeds, but a
-        # board that names nobody is still the one that was asked for.
+        # The exact link identifies a board, not its employer. Missing
+        # owner evidence is kept as a lead rather than a guessed name.
         default_evidence=(
             "named directly by the link given"
         ),
@@ -654,6 +683,13 @@ def add_source(
         candidate.source_account,
     )
 
+    if (existing is None or existing.enabled) and candidate.evidence.startswith("shared:"):
+        return _saved(
+            session, status="saved_looking", company=candidate.company,
+            state=AGENCY if candidate.evidence.startswith("shared:") else CHECKING,
+            detail=candidate.evidence.split(":", 1)[1].strip(), now=moment, candidate=candidate,
+        )
+
     if existing is not None and existing.enabled:
         return AddResult(
             status="already_known",
@@ -720,6 +756,16 @@ def add_source(
                 now=moment,
                 candidate=candidate,
             )
+
+    if candidate.evidence.startswith("company named in posting"):
+        return _saved(session, status="saved_looking", company=candidate.company,
+            state=CHECKING, detail="The posting mentions this company, but ACE could not confirm it owns the board.",
+            now=moment, candidate=candidate)
+
+    if candidate.evidence.startswith("identity:"):
+        return _saved(session, status="saved_looking", company=candidate.company,
+            state=CHECKING, detail=candidate.evidence.split(":", 1)[1].strip(),
+            now=moment, candidate=candidate)
 
     source_host = (
         candidate.source_host

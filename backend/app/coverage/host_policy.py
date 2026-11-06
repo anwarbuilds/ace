@@ -113,14 +113,21 @@ def read_targets(
     host = _host_of(source_host or "")
 
     if source_type == "greenhouse":
-        return (HostTarget("boards-api.greenhouse.io", "greenhouse", ("/v1/boards/example/jobs",)),)
+        return (HostTarget("boards-api.greenhouse.io", "greenhouse", ("/v1/boards/example/jobs", "/v1/boards/example")),)
 
     if source_type == "ashby":
-        return (HostTarget("api.ashbyhq.com", "ashby", ("/posting-api/job-board/example",)),)
+        return (
+            HostTarget("api.ashbyhq.com", "ashby", ("/posting-api/job-board/example",)),
+            HostTarget("jobs.ashbyhq.com", "ashby", ("/example",)),
+        )
 
     if source_type == "lever":
         api_host = LEVER_API_HOST_BY_JOB_HOST.get(host, "api.lever.co")
-        return (HostTarget(api_host, "lever", ("/v0/postings/example",)),)
+        page_host = "jobs.eu.lever.co" if api_host == "api.eu.lever.co" else "jobs.lever.co"
+        return (
+            HostTarget(api_host, "lever", ("/v0/postings/example",)),
+            HostTarget(page_host, "lever", ("/example",)),
+        )
 
     if source_type == "smartrecruiters":
         return (HostTarget("api.smartrecruiters.com", "smartrecruiters", ("/v1/companies/example/postings",)),)

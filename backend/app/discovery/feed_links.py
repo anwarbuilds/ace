@@ -24,7 +24,7 @@ by hand stays set.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import (
     datetime,
     timezone,
@@ -36,6 +36,7 @@ import httpx
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from backend.app.coverage.identity import BoardEvidence, resolve_employer, shared_board_reason
 from backend.app.coverage.companies import (
     MULTI_EMPLOYER_SOURCES,
     SOURCE_HOSTS,
@@ -243,6 +244,8 @@ class NamedBoard:
 
     company_name: str
 
+    listed_names: tuple[str, ...] = ()
+
     @property
     def key(
         self,
@@ -279,7 +282,7 @@ def boards_named_in(
 ) -> list[NamedBoard]:
     """The distinct readable boards among (url, company) pairs.
 
-    First company name wins, in the order given.
+    Keep the feed's labels as claims; only owner evidence settles display.
     """
 
     boards: dict[tuple[str, str], NamedBoard] = {}
@@ -300,10 +303,9 @@ def boards_named_in(
             or detected.source_account,
         )
 
-        boards.setdefault(
-            board.key,
-            board,
-        )
+        previous = boards.get(board.key)
+        names = tuple(dict.fromkeys((*previous.listed_names, previous.company_name, board.company_name))) if previous else (board.company_name,)
+        boards[board.key] = replace(previous or board, listed_names=names)
 
     return list(
         boards.values()
@@ -449,6 +451,7 @@ def is_transient(
 def read_boards(
     boards: Sequence[NamedBoard],
     read_board: Callable[[SourceDefinition], Sequence],
+    identity_evidence: Callable[[NamedBoard], BoardEvidence | str | None] | None = None,
 ) -> list[BoardOutcome]:
     """Read each candidate once through the normal adapter.
 
@@ -460,6 +463,10 @@ def read_boards(
     outcomes: list[BoardOutcome] = []
 
     for board in boards:
+        shared = shared_board_reason(board.detected.source_type.value, board.detected.source_account)
+        if shared:
+            outcomes.append(BoardOutcome(board=board, registered=False, error=f"shared: {shared}"))
+            continue
         try:
             jobs = list(
                 read_board(
@@ -513,6 +520,22 @@ def read_boards(
 
             continue
 
+        try:
+            evidence = identity_evidence(board) if identity_evidence else None
+        except Exception:
+            evidence = None
+        identity = resolve_employer(
+            board.company_name, evidence,
+            source_type=board.detected.source_type.value, account=board.detected.source_account,
+            titles=[getattr(job, "title", "") for job in jobs],
+        )
+        if identity.company is None:
+            prefix = "shared" if identity.state == "shared" else "identity"
+            outcomes.append(BoardOutcome(board=board, registered=False, job_count=len(jobs), error=f"{prefix}: {identity.reason}"))
+            continue
+        # Conflicting feed labels are not aliases. An authoritative owner can
+        # settle the board's display name, never merge the legal employers.
+        board = replace(board, company_name=identity.company)
         outcomes.append(
             BoardOutcome(
                 board=board,
