@@ -13,6 +13,11 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     baseURL: process.env.WEB_URL ?? "http://localhost:3000",
+    // The same zone the signed-in fixtures' cookie names. A browser elsewhere
+    // makes the app correct the cookie and refresh every page 400 ms after it
+    // loads, and from 00:00 to 08:00 UTC that refresh also moves Pulls to
+    // another day, so tests failed only at certain hours.
+    timezoneId: "America/Los_Angeles",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     launchOptions: process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : undefined,

@@ -7,7 +7,7 @@ Everything learned building ace, from the first week to now, split by topic so a
 Start with `../../ACE_NEXT_KNOWLEDGE.md` (current verified state) and `../HANDOFF.md` (rules and plan; both load through the root `CLAUDE.md`), then open
 a topic file when you work in that area. Reading all of it is about 53k tokens; do not.
 
-The root knowledge file holds only current state, rules and an index, because it loads in every chat. Its full dated
+New work follows `../requirements/2026-11-04-ace-requirements.md`, starting at its section 13 (kept out of Git, on this checkout only). The root knowledge file holds only current state, rules and an index, because it loads in every chat. Its full dated
 history is in `../archive/ACE_NEXT_KNOWLEDGE-history.md`: search it when needed and never load it whole.
 
 | File | Covers | Read when | Size |

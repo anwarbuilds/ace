@@ -138,6 +138,9 @@ test("promoting an application changes its stage without changing its total", as
   await interviewing.click();
   await expect(interviewing).toHaveClass(/\bon\b/);
   await expectGlobalTotal(page, before + 1);
+  // One change at a time per job, so nothing can double count: a click during
+  // a save is ignored on purpose. The toast says that save has finished.
+  await expect(page.locator(".toast").last()).toContainText("Interviewing recorded");
 
   await page.locator('.status-grid button[data-mark="applied"]').click();
   await expect.poll(() => applicationTotal(request)).toBe(before);
