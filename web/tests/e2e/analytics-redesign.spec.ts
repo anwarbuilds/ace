@@ -814,6 +814,8 @@ test("Outcomes shows one clear 30-day denominator, real timing and exactly four 
     }
   };
   await verify("all");
+  // Text assertions also read a streamed page that is still hidden, where every width is 0.
+  await expect(page.locator(".an-outcomes .an-panel").last()).toBeVisible();
   const cards=await page.locator(".an-outcomes .an-panel").evaluateAll(nodes=>nodes.map(node=>{const b=node.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height};}));
   expect(Math.abs(cards[0].x-cards[1].x)).toBeLessThan(1);expect(Math.abs(cards[0].width-cards[1].width)).toBeLessThan(1);
   expect(Math.abs(cards[2].x-cards[3].x)).toBeLessThan(1);expect(Math.abs(cards[2].width-cards[3].width)).toBeLessThan(1);
