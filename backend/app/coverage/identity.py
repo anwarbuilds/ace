@@ -25,6 +25,13 @@ REVIEWED_SHARED_BOARDS = {
     ),
 }
 
+UNVERIFIED_SOURCE_MARKER = 'identity_unverified'
+
+
+def registration_origin(origin: str, identity_state: str) -> str:
+    """Retain uncertainty across processes without creating a legal alias."""
+    return f'{origin} {UNVERIFIED_SOURCE_MARKER}' if identity_state == 'unverified' else origin
+
 _LEGAL_SUFFIX = re.compile(r"(?:\s+(?:inc|incorporated|llc|ltd|limited|corp|corporation|pbc))+$")
 _TLD = re.compile(r"\.(?:com|ai|io|co|dev|org|net|app|tech|xyz)$", re.I)
 _FIRM = re.compile(r"\b(?:vc|ventures?|capital|partners|portfolio|talent\s+network)\b", re.I)

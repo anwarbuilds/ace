@@ -58,7 +58,7 @@ from backend.app.coverage.host_policy import (
     refusal_for,
     refused_hosts,
 )
-from backend.app.coverage.identity import read_board_evidence, registration_identity, shared_board_reason
+from backend.app.coverage.identity import read_board_evidence, registration_identity, registration_origin, shared_board_reason
 from backend.app.discovery.detector import detect_source_from_url
 from backend.app.coverage.leads import (
     AGENCY,
@@ -275,6 +275,7 @@ def _verify(
             identity.reason if identity.state == 'unverified' else evidence or default_evidence
         ),
         source_host=ref.source_host,
+        identity_state=identity.state,
     )
 
 
@@ -788,7 +789,7 @@ def add_source(
                     candidate.source_type
                 )
             ),
-            discovery_source="added_by_hand",
+            discovery_source=registration_origin('added_by_hand', candidate.identity_state),
         )
     )
 
@@ -894,7 +895,7 @@ def undo_added(
     if (
         row is None
         or not row.enabled
-        or row.discovery_source != "added_by_hand"
+        or row.discovery_source not in ('added_by_hand', registration_origin('added_by_hand', 'unverified'))
     ):
         return False
 

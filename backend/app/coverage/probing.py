@@ -86,6 +86,8 @@ class BoardCandidate:
     # start without it, so discovery has to carry it.
     source_host: str = ""
 
+    identity_state: str = ''
+
 
 @dataclass(
     frozen=True,

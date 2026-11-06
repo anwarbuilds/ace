@@ -41,7 +41,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from backend.app.coverage.identity import (
-    BoardEvidence, read_board_evidence, registration_identity, resolve_employer, shared_board_reason,
+    BoardEvidence, read_board_evidence, registration_identity, registration_origin, resolve_employer, shared_board_reason,
 )
 from backend.app.coverage.companies import (
     NETWORK_DISCOVERY_SOURCE,
@@ -199,6 +199,8 @@ class Outcome:
 
     # A 429, a 5xx or a timeout says nothing about the board.
     transient: bool = False
+
+    identity_state: str = ''
 
 
 def load_candidates(
@@ -385,6 +387,7 @@ def assess(
         jobs=len(jobs),
         us_engineering=us_engineering,
         passing=passing,
+        identity_state=identity.state,
     )
 
 
@@ -423,7 +426,7 @@ def register(
                     NETWORK_POLL_INTERVAL_SECONDS,
                 )
             ),
-            discovery_source=DISCOVERY_SOURCE,
+            discovery_source=registration_origin(DISCOVERY_SOURCE, outcome.identity_state),
             last_verified_at=now,
         )
     )

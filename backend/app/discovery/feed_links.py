@@ -36,7 +36,7 @@ import httpx
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
-from backend.app.coverage.identity import BoardEvidence, registration_identity, shared_board_reason
+from backend.app.coverage.identity import BoardEvidence, registration_identity, registration_origin, shared_board_reason
 from backend.app.coverage.companies import (
     MULTI_EMPLOYER_SOURCES,
     SOURCE_HOSTS,
@@ -275,6 +275,8 @@ class BoardOutcome:
     # not the board at fault. Nothing is recorded, so a later run reads
     # it again.
     transient: bool = False
+
+    identity_state: str = ''
 
 
 def boards_named_in(
@@ -542,6 +544,7 @@ def read_boards(
                 board=board,
                 registered=True,
                 job_count=len(jobs),
+                identity_state=identity.state,
             )
         )
 
@@ -595,7 +598,7 @@ def register_confirmed_boards(
                     definition.poll_interval_seconds
                 ),
                 discovery_source=(
-                    DISCOVERY_SOURCE
+                    registration_origin(DISCOVERY_SOURCE, outcome.identity_state)
                     if outcome.registered
                     # The column holds 100 characters.
                     else (

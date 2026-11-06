@@ -2,7 +2,7 @@
 
 from sqlalchemy import select
 
-from backend.app.coverage.identity import shared_board_reason
+from backend.app.coverage.identity import UNVERIFIED_SOURCE_MARKER, shared_board_reason
 from backend.app.db.models import CompanyPetitionReportRecord, JobSourceRecord
 
 
@@ -20,6 +20,7 @@ def petition_reports_for(session, names):
     blocked = {
         row.company_name for row in sources
         if shared_board_reason(row.source_type, row.source_account)
+        or UNVERIFIED_SOURCE_MARKER in (row.discovery_source or '').split()
         or (row.discovery_source or "").startswith((
             "feed_link rejected: identity:", "feed_link rejected: shared:",
         ))

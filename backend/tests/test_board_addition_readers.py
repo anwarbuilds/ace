@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 
 from backend.app.coverage import identity
 from backend.app.coverage.identity import BoardEvidence, read_board_evidence, registration_identity
-from backend.app.coverage.service import add_source
+from backend.app.coverage.service import add_source, undo_added
 from backend.app.db.base import Base
-from backend.app.db.models import JobSourceRecord, SourceState
+from backend.app.db.models import CompanyPetitionReportRecord, JobSourceRecord, SourceState
 from backend.app.discovery.detector import detect_source_from_url
 from backend.app.discovery.feed_links import BoardOutcome, NamedBoard, boards_named_in, read_boards, register_confirmed_boards
 from backend.app.discovery.detector import DetectedSourceIdentity
@@ -116,6 +116,18 @@ def test_normal_board_can_be_added_through_each_path(db, reader, path, owner_sta
     assert source.enabled
     assert source.source_type == reader and source.source_account == ref.source_account
     assert source.company_name.casefold().replace(' ', '') == 'birchlabs' or reader == 'oracle_recruiting'
+    unverified = reader == 'oracle_recruiting' or not owner_stated
+    assert ('identity_unverified' in source.discovery_source.split()) == unverified
+    # A reviewed legal report alone cannot establish that this board belongs
+    # to that employer. The uncertainty must survive registration and reload.
+    db.add(CompanyPetitionReportRecord(ace_company=source.company_name, legal_entity='Birch Labs Inc',
+        source_name='Fictional official report', source_uri='https://reports.example/birch-labs',
+        metric_definition='Fictional petition decisions', period='FY 2030', report_version='fictional',
+        entity_verified=True, petition_approvals=3, petition_denials=1, first_seen_at=NOW, last_checked_at=NOW))
+    db.commit()
+    db.expire_all()
+    from backend.app.coverage.petition_identity import petition_reports_for
+    assert bool(petition_reports_for(db, [source.company_name])) == (not unverified)
 
 
 def test_matrix_covers_all_current_board_detectors():
@@ -295,3 +307,32 @@ def test_other_existing_url_forms_keep_the_board_and_region(db, url, reader, acc
     assert (source.source_account, source.source_host) == (account, host)
     if reader == 'lever':
         assert requested and all('api.eu.lever.co' in url for url in requested)
+
+
+def test_unverified_manual_board_keeps_owner_origin_and_undo(db):
+    from backend.app.coverage.leads import added_report
+    from backend.app.coverage.sources_view import sources_report
+    reader = 'oracle_recruiting'
+    fetch, post, page = fetchers(reader)
+    result = add_source(db, text=BOARDS[reader], fetch=fetch, post=post, fetch_text=page,
+        robots=lambda host: '', fetch_robots=lambda host: (404, ''), now=NOW)
+    assert result.status == 'added'
+    source = db.scalar(select(JobSourceRecord))
+    assert source.discovery_source == 'added_by_hand identity_unverified'
+    assert added_report(db)[0]['state'] == 'polling'
+    assert sources_report(db, now=NOW, show='mine')['rows'][0]['added_by_you']
+    assert undo_added(db, source_type=reader, source_account=source.source_account, now=NOW)
+    assert not source.enabled and source.discovery_source == 'added_by_hand undone'
+
+
+def test_unverified_network_origin_keeps_the_existing_nonproductive_cadence(db):
+    from backend.app.coverage.cadence import promote_productive_sources
+    outcome = Outcome(Candidate('gem', 'birchlabs', 'Birch Labs'), True,
+        'Readable board', jobs=1, us_engineering=1, passing=0, identity_state='unverified')
+    assert register(db, outcome, now=NOW)
+    db.commit()
+    source = db.scalar(select(JobSourceRecord))
+    assert source.discovery_source == 'talent_network identity_unverified'
+    assert source.poll_interval_seconds == 3600
+    assert promote_productive_sources(db) == []
+    assert source.poll_interval_seconds == 3600
