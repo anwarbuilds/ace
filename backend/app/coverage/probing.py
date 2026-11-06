@@ -1102,7 +1102,7 @@ _BOARD_PATTERNS = (
     (
         "smartrecruiters",
         r"(?:careers|jobs)\.smartrecruiters\.com/"
-        r"(?:[A-Za-z0-9_-]+/)?([A-Za-z0-9_-]+)",
+        r"([A-Za-z0-9_-]+)",
     ),
     (
         "greenhouse",
@@ -1385,6 +1385,12 @@ def board_jobs(
     post=_post_json,
 ) -> list[dict]:
     """Return a sample of a board's postings, whatever ATS it is on."""
+
+    if ref.source_type == 'gem':
+        return _jobs_from(fetch(f'https://api.gem.com/job_board/v0/{ref.token}/job_posts/'))
+
+    if ref.source_type == 'lever' and ref.source_host == 'jobs.eu.lever.co':
+        return _jobs_from(fetch(f'https://api.eu.lever.co/v0/postings/{ref.token}?mode=json'))
 
     if ref.source_type == "oracle_recruiting":
         host, _, site = ref.token.partition(

@@ -8,7 +8,7 @@ petition mappings remain exact and separate from these display decisions.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import html
 import json
 import re
@@ -83,6 +83,7 @@ class BoardEvidence:
     employers: tuple[str, ...] = ()
     shared: bool = False
     basis: str = ""
+    unavailable: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,11 +93,13 @@ class EmployerIdentity:
     reason: str
 
 
-def posting_employers(jobs: Iterable[dict]) -> tuple[str, ...]:
+def posting_employers(jobs: Iterable) -> tuple[str, ...]:
     """Only structured employer fields, never description mentions or titles."""
     names = []
     for job in jobs:
         if not isinstance(job, dict):
+            names.extend(name.strip() for name in getattr(job, 'hiring_organizations', ())
+                         if isinstance(name, str) and name.strip())
             continue
         for field in ("hiringOrganization", "company"):
             organization = job.get(field)
@@ -150,6 +153,8 @@ def resolve_employer(
         evidence = BoardEvidence(owner=evidence)
     if evidence.shared:
         return EmployerIdentity(None, "shared", "The board lists portfolio companies' jobs, not one employer.")
+    if evidence.unavailable:
+        return EmployerIdentity(None, "unknown", "ACE could not read the evidence to confirm this board's owner. Kept as a lead.")
     employers: list[str] = []
     for name in evidence.employers:
         if name_keys(name) and not any(same_employer(name, known) for known in employers):
@@ -174,6 +179,51 @@ def resolve_employer(
     return EmployerIdentity(company, "confirmed", evidence.basis or "The board names its owner.")
 
 
+def registration_identity(listed, evidence, *, source_type, account, jobs=(),
+                          source_host=None, direct=False, listed_names=()):
+    """A readable exact board can be monitored without inventing its owner.
+
+    Name guessing remains strict. This is only for boards already named by
+    a feed, a collected link, or a pasted board URL. Contradictory evidence,
+    reviewed/shared findings and failed identity reads always stop additions.
+    Silence on a provider with no owner metadata is not a permanent refusal.
+    """
+    from backend.app.coverage.companies import MULTI_EMPLOYER_SOURCES
+    if source_type in MULTI_EMPLOYER_SOURCES:
+        return EmployerIdentity(None, 'shared', 'This is a multi-employer feed, not one employer board.')
+    if not isinstance(evidence, BoardEvidence):
+        evidence = BoardEvidence(owner=evidence)
+    evidence = replace(evidence, employers=tuple(dict.fromkeys(
+        (*evidence.employers, *posting_employers(jobs)))))
+    titles = [job.get('title') or job.get('name') or '' if isinstance(job, dict)
+              else getattr(job, 'title', '') for job in jobs]
+    result = resolve_employer(listed, evidence, source_type=source_type,
+                              account=account, titles=titles)
+    if result.company is not None:
+        # A pasted board token is an address, not a competing employer claim.
+        if not direct and any(not same_employer(name, result.company)
+                              for name in (listed_names or (listed,))):
+            return EmployerIdentity(None, 'unknown', 'The listed company and board owner disagree. Kept as a lead.')
+        return result
+    if (evidence.owner or evidence.employers or evidence.shared or evidence.unavailable
+            or shared_board_reason(source_type, account)):
+        return result
+    if any(not same_employer(listed, name) for name in listed_names):
+        return EmployerIdentity(None, 'unknown', 'The feed names different employers for this board. Kept as a lead.')
+    if source_type == 'workday':
+        from backend.app.coverage.probing import workday_belongs_to
+        binding = workday_belongs_to(company=listed, token=account)
+        if binding:
+            return EmployerIdentity(listed, 'confirmed', binding)
+        return result
+    if source_type in ('greenhouse', 'ashby', 'lever'):
+        # These providers publish owner metadata; do not rescue a failed
+        # name search or customer mention with the token it started from.
+        return result
+    return EmployerIdentity(listed, 'unverified',
+        'The link names a readable board. Its employer name is not independently confirmed.')
+
+
 def read_board_evidence(source_type: str, account: str, *, source_host=None, fetch=None, fetch_text=None, jobs=()) -> BoardEvidence:
     """Use the existing reader addresses; callers provide polite fetchers."""
     from backend.app.coverage.probing import (
@@ -184,11 +234,24 @@ def read_board_evidence(source_type: str, account: str, *, source_host=None, fet
     if source_type == "greenhouse":
         owner = board_metadata_name(source_type=source_type, token=account, fetch=fetch or _fetch_json)
         return BoardEvidence(owner=owner, employers=posting_employers(jobs), basis="The board's own metadata.")
-    if source_type in BOARD_PAGE_URLS:
-        template = BOARD_PAGE_URLS[source_type]
+    pages = {**BOARD_PAGE_URLS, 'workable': 'https://apply.workable.com/{token}/',
+             'gem': 'https://jobs.gem.com/{token}'}
+    if source_type in pages:
+        template = pages[source_type]
         if source_type == "lever" and source_host == "jobs.eu.lever.co":
             template = "https://jobs.eu.lever.co/{token}"
         page = (fetch_text or _fetch_text)(template.format(token=account))
-        owner = board_page_name(source_type=source_type, token=account, fetch_text=lambda url: page)
-        return page_evidence(page, owner, basis="The board's own page.")
+        if source_type in BOARD_PAGE_URLS:
+            owner = board_page_name(source_type=source_type, token=account, fetch_text=lambda url: page)
+        else:
+            match = re.search(r'<title[^>]*>([^<]{1,160})', page, re.I)
+            owner = html.unescape(match.group(1)).strip() if match else ''
+            owner = re.sub(r'\s*[|\-]\s*(?:Workable|Gem)\s*$', '', owner, flags=re.I)
+            owner = re.sub(r'^(?:Careers?|Jobs?)\s+(?:at|with)\s+', '', owner, flags=re.I)
+            owner = re.sub(r'\b(?:jobs?|careers?|openings?|open roles)\b', ' ', owner, flags=re.I).strip()
+            if owner.casefold() in ('', 'workable', 'gem'):
+                owner = None
+        found = page_evidence(page, owner, basis="The board's own page.")
+        return replace(found, employers=tuple(dict.fromkeys((*found.employers, *posting_employers(jobs)))),
+                       unavailable=not bool(page))
     return BoardEvidence(employers=posting_employers(jobs), basis="The postings' structured hiring employer.")

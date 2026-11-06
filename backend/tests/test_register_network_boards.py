@@ -95,7 +95,7 @@ def test_a_board_hiring_us_engineers_is_registered(
             job("Software Engineer, New Grad"),
             job("Account Executive"),
         ],
-        lambda candidate: "Fictional AI",
+        lambda candidate, jobs: "Fictional AI",
     )
 
     assert outcome.added
@@ -144,7 +144,7 @@ def test_a_senior_only_board_still_counts_as_hiring_us_engineers() -> None:
         lambda definition: [
             job("Senior Software Engineer"),
         ],
-        lambda candidate: "Fictional AI",
+        lambda candidate, jobs: "Fictional AI",
     )
 
     assert outcome.added
@@ -159,7 +159,7 @@ def test_a_board_without_a_passing_role_starts_hourly(
         lambda definition: [
             job("Senior Software Engineer"),
         ],
-        lambda candidate: "Fictional AI",
+        lambda candidate, jobs: "Fictional AI",
     )
 
     with session_factory.begin() as session:
@@ -407,7 +407,7 @@ def test_a_firms_shared_portfolio_board_is_left_out() -> None:
         lambda definition: [
             job("Software Engineer, New Grad"),
         ],
-        lambda candidate: BoardEvidence(owner="Fictional VC", shared=True),
+        lambda candidate, jobs: BoardEvidence(owner="Fictional VC", shared=True),
     )
 
     assert not outcome.added
@@ -420,7 +420,7 @@ def test_a_firms_shared_portfolio_board_is_left_out() -> None:
     ) == ("Fictional Capital", None)
 
 
-def test_a_renamed_board_registers_under_its_own_name(
+def test_a_conflicting_listed_name_requires_review_before_registration(
     session_factory,
 ) -> None:
     outcome = assess(
@@ -428,22 +428,19 @@ def test_a_renamed_board_registers_under_its_own_name(
         lambda definition: [
             job("Software Engineer"),
         ],
-        lambda candidate: "Fictional Tower",
+        lambda candidate, jobs: "Fictional Tower",
     )
 
     with session_factory.begin() as session:
-        assert register(
+        assert not register(
             session,
             outcome,
             now=NOW,
         )
 
     with session_factory() as session:
-        assert session.scalars(
-            sa.select(
-                JobSourceRecord.company_name
-            )
-        ).one() == "Fictional Tower"
+        assert not outcome.added and 'disagree' in outcome.reason
+        assert session.scalar(sa.select(JobSourceRecord)) is None
 
 
 def test_the_collected_list_can_be_read_as_it_stands() -> None:

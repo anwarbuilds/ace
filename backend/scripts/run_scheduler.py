@@ -694,10 +694,11 @@ def main(
                 lambda definition: dispatcher.fetch(
                     definition
                 ).jobs,
-                lambda board: read_board_evidence(
+                lambda board, jobs: read_board_evidence(
                     board.detected.source_type.value, board.detected.source_account,
                     source_host=board.detected.source_host,
                     fetch=reader.fetch, fetch_text=reader.fetch_text,
+                    jobs=jobs,
                 ),
             )
 

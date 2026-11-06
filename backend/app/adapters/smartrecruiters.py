@@ -522,6 +522,12 @@ def _canonical_job_from_posting(
     return CanonicalJob(
         source="smartrecruiters",
         company=company_name,
+        hiring_organizations=tuple(dict.fromkeys(
+            organization['name'].strip()
+            for posting in (detail, summary)
+            if isinstance(organization := posting.get('company'), dict)
+            and isinstance(organization.get('name'), str) and organization['name'].strip()
+        )),
         external_id=external_id,
         requisition_id=requisition_id,
         title=title,

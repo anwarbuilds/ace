@@ -41,7 +41,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from backend.app.coverage.identity import (
-    BoardEvidence, read_board_evidence, resolve_employer, shared_board_reason,
+    BoardEvidence, read_board_evidence, registration_identity, resolve_employer, shared_board_reason,
 )
 from backend.app.coverage.companies import (
     NETWORK_DISCOVERY_SOURCE,
@@ -255,8 +255,8 @@ def known_boards(
 def assess(
     candidate: Candidate,
     read_board: Callable[[SourceDefinition], Sequence],
-    declared_name: Callable[[Candidate], str | BoardEvidence | None] = (
-        lambda candidate: None
+    declared_name: Callable[[Candidate, Sequence], str | BoardEvidence | None] = (
+        lambda candidate, jobs: None
     ),
 ) -> Outcome:
     """Read one board and decide whether it earns a place."""
@@ -355,27 +355,26 @@ def assess(
             jobs=len(jobs),
         )
 
-    name, shared = settle_name(
-        candidate.company,
-        declared_name(candidate),
-        source_type=candidate.source_type,
-        account=candidate.source_account,
-        titles=[job.title for job in jobs],
-    )
-
-    if shared is not None:
+    try:
+        evidence = declared_name(candidate, jobs)
+    except Exception:
+        evidence = BoardEvidence(unavailable=True)
+    identity = registration_identity(candidate.company, evidence,
+        source_type=candidate.source_type, account=candidate.source_account,
+        source_host=candidate.source_host, jobs=jobs)
+    if identity.company is None:
         return Outcome(
             candidate=candidate,
             added=False,
-            reason=shared,
+            reason=f"{'shared' if identity.state == 'shared' else 'identity'}: {identity.reason}",
             jobs=len(jobs),
         )
 
-    if name != candidate.company:
+    if identity.company != candidate.company:
         candidate = Candidate(
             source_type=candidate.source_type,
             source_account=candidate.source_account,
-            company=name,
+            company=identity.company,
             source_host=candidate.source_host,
         )
 
@@ -436,6 +435,7 @@ def register(
 
 def declared_name(
     candidate: Candidate,
+    jobs: Sequence = (),
     *,
     fetch=None,
     fetch_text=None,
@@ -445,10 +445,11 @@ def declared_name(
         return read_board_evidence(
             candidate.source_type, candidate.source_account,
             source_host=candidate.source_host, fetch=fetch, fetch_text=fetch_text,
+            jobs=jobs,
         )
     except Exception:
         # Failure is no evidence. The lead remains unconfirmed, never gone.
-        return BoardEvidence()
+        return BoardEvidence(unavailable=True)
 
 
 def main(
@@ -505,6 +506,8 @@ def main(
         known = known_boards(
             session
         )
+        from backend.app.coverage.host_policy import PoliteReader, read_targets, refused_hosts
+        reader = PoliteReader(refused_hosts(session))
 
     new = [
         candidate
@@ -550,12 +553,20 @@ def main(
         if candidate.source_type in throttled:
             continue
 
+        if any(not reader.allows(f'https://{target.host}{path}')
+               for target in read_targets(candidate.source_type, candidate.source_account,
+                                          candidate.definition().source_host)
+               for path in target.paths):
+            print(f'  skip {candidate.company}: website permission is unavailable or refused', flush=True)
+            continue
+
         outcome = assess(
             candidate,
             lambda definition: dispatcher.fetch(
                 definition
             ).jobs,
-            declared_name,
+            lambda candidate, jobs: declared_name(candidate, jobs,
+                fetch=reader.fetch, fetch_text=reader.fetch_text),
         )
 
         if outcome.transient:
