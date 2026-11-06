@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import { openQuestion } from "./helpers";
 import { expect, test } from "@playwright/test";
 
 const extensionRoot = path.resolve(process.cwd(), "../extension");
@@ -36,7 +37,7 @@ test("Focus Mode V5.1 mirrors choices, protects motivation, stays open and never
         set: (values: Record<string, unknown>) => Object.assign(w.__storage, values),
         remove: (key: string) => { delete w.__storage[key]; },
       } },
-      runtime: {
+      runtime: { id: "fixture-extension",
         lastError: null,
         onMessage: { addListener() {} },
         getURL: (value: string) => value,
@@ -113,9 +114,11 @@ test("Focus Mode V5.1 mirrors choices, protects motivation, stays open and never
   await expect(panel.getByText("Historical private motivation")).toHaveCount(0);
   await panel.screenshot({ path: path.join(captures, "workspace-memory-day.png") });
   await panel.getByRole("button", { name: "Review", exact: true }).click();
-  await expect.poll(() => page.evaluate(() => (window as typeof window & { __memory: unknown[] }).__memory.length)).toBe(3);
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __memory: unknown[] }).__memory.length)).toBe(4);
   const stored = await page.evaluate(() => (window as typeof window & { __memory: Array<{ question: string; answer: string }> }).__memory);
   expect(stored.filter(item => /motivation|why do you want to work/i.test(item.question))).toHaveLength(1);
+  // Owner decision 2026-10-28: finished answers are learned, sponsorship included.
+  expect(stored.some(item => item.answer === "Yes")).toBe(true);
   expect(stored.some(item => item.answer === "My own specific reason for applying.")).toBe(false);
   expect(stored.some(item => item.answer === "Cobalt Systems website")).toBe(true);
   await panel.getByRole("button", { name: "Switch to Night theme" }).click();
@@ -188,7 +191,7 @@ test("Focus Mode remains usable in a narrow viewport", async ({ page }) => {
   await page.setContent(`<form><label for="name">Full name</label><input id="name"><label for="email">Email address</label><input id="email"><label for="role">Current role</label><input id="role"><label for="source">How did you hear about this position?</label><select id="source"><option value="">Select one</option><option>Website</option></select><label for="motivation">What interests you about joining us?</label><textarea id="motivation"></textarea></form>`);
   await page.evaluate(() => {
     const w = window as typeof window & { chrome: unknown };
-    w.chrome = { runtime: { lastError: null, onMessage: { addListener() {} }, getURL: (v: string) => v, getManifest: () => ({ version: "1.26.0" }), sendMessage: (m: { type: string }, cb: (v: unknown) => void) => cb(m.type === "answers" ? { ok: true, items: [] } : m.type === "history" ? { ok: true, work: [], education: [] } : { ok: true, items: [] }) } };
+    w.chrome = { runtime: { id: "fixture-extension", lastError: null, onMessage: { addListener() {} }, getURL: (v: string) => v, getManifest: () => ({ version: "1.26.0" }), sendMessage: (m: { type: string }, cb: (v: unknown) => void) => cb(m.type === "answers" ? { ok: true, items: [] } : m.type === "history" ? { ok: true, work: [], education: [] } : { ok: true, items: [] }) } };
   });
   for (const file of ["fields.js", "memory.js", "content.js"]) await page.addScriptTag({ path: path.join(extensionRoot, file) });
   const panel = page.locator(".ace-root .ace-panel");
@@ -218,7 +221,7 @@ test("Focus Mode mirrors an opened employer listbox without inventing options", 
     trigger.addEventListener("click", () => { menu.hidden = !menu.hidden; });
     menu.querySelectorAll("[role=option]").forEach(option => option.addEventListener("click", () => { trigger.textContent = option.textContent; menu.hidden = true; }));
     document.querySelector("form")!.addEventListener("submit", event => { event.preventDefault(); w.__submits++; });
-    w.chrome = { runtime: { lastError: null, onMessage: { addListener() {} }, getURL: (v: string) => v, getManifest: () => ({ version: "1.26.0" }), sendMessage: (m: { type: string; item?: Record<string, unknown> }, cb: (v: unknown) => void) => {
+    w.chrome = { runtime: { id: "fixture-extension", lastError: null, onMessage: { addListener() {} }, getURL: (v: string) => v, getManifest: () => ({ version: "1.26.0" }), sendMessage: (m: { type: string; item?: Record<string, unknown> }, cb: (v: unknown) => void) => {
       if (m.type === "answers") cb({ ok: true, items: [] });
       else if (m.type === "history") cb({ ok: true, work: [], education: [] });
       else if (m.type === "memory") cb({ ok: true, items: w.__memory });
@@ -229,7 +232,7 @@ test("Focus Mode mirrors an opened employer listbox without inventing options", 
   for (const file of ["fields.js", "memory.js", "content.js"]) await page.addScriptTag({ path: path.join(extensionRoot, file) });
   const panel = page.locator(".ace-root .ace-panel");
   await panel.getByRole("button", { name: /^(Answer remaining questions|Check answers|Review$)/ }).click();
-  await panel.getByRole("button", { name: /How did you hear/ }).click();
+  await openQuestion(panel, /How did you hear/);
   await expect(panel.getByRole("button", { name: "Load employer options" })).toBeVisible();
   await page.locator("#source").click();
   await expect(panel.getByRole("combobox", { name: "Exact employer options" })).toBeVisible();
@@ -238,7 +241,7 @@ test("Focus Mode mirrors an opened employer listbox without inventing options", 
   await panel.getByRole("button", { name: "Fill answer" }).click();
   await expect(page.locator("#source")).toHaveText("Friend referral");
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __memory: unknown[] }).__memory.length)).toBe(1);
-  await panel.getByRole("button", { name: /Which technical tools/ }).click();
+  await openQuestion(panel, /Which technical tools/);
   await panel.locator("#studio-answer").selectOption(["python", "sql"]);
   const skills = await page.locator("#skills").evaluate(select => Array.from((select as HTMLSelectElement).selectedOptions).map(option => option.value));
   expect(skills).toEqual([]);
@@ -262,7 +265,7 @@ test("Employer motivation text is never read by ACE during Fill, Scan or rerende
       get() { w.__reads++; w.__readStacks.push(new Error().stack || ""); return descriptor.get!.call(this); },
       set(value: string) { descriptor.set!.call(this, value); },
     });
-    w.chrome = { runtime: { lastError: null, onMessage: { addListener() {} }, getURL: (v: string) => v, getManifest: () => ({ version: "1.27.0" }), sendMessage: (m: { type: string }, cb: (v: unknown) => void) => cb(m.type === "answers" ? { ok: true, items: [{ label: "Full name", value: "Example Applicant", aliases: [] }] } : m.type === "history" ? { ok: true, work: [], education: [] } : { ok: true, items: [] }) } };
+    w.chrome = { runtime: { id: "fixture-extension", lastError: null, onMessage: { addListener() {} }, getURL: (v: string) => v, getManifest: () => ({ version: "1.27.0" }), sendMessage: (m: { type: string }, cb: (v: unknown) => void) => cb(m.type === "answers" ? { ok: true, items: [{ label: "Full name", value: "Example Applicant", aliases: [] }] } : m.type === "history" ? { ok: true, work: [], education: [] } : { ok: true, items: [] }) } };
   });
   for (const file of ["fields.js", "memory.js", "content.js"]) await page.addScriptTag({ path: path.join(extensionRoot, file) });
   const panel = page.locator(".ace-root .ace-panel");
@@ -291,7 +294,7 @@ test("Workday search listings do not show an application Review card", async ({ 
   </form></main>`);
   await page.evaluate(() => {
     const w = window as typeof window & { chrome: unknown; __aceWake?: (message: { type: string }, sender: unknown, respond: (reply: unknown) => void) => void };
-    w.chrome = { runtime: { lastError: null, onMessage: { addListener(handler: typeof w.__aceWake) { w.__aceWake = handler; } }, getURL: (v: string) => v, getManifest: () => ({ version: "1.27.0" }), sendMessage: (m: { type: string }, cb: (v: unknown) => void) => cb(m.type === "answers" ? { ok: true, items: [] } : m.type === "history" ? { ok: true, work: [], education: [] } : { ok: true, items: [] }) } };
+    w.chrome = { runtime: { id: "fixture-extension", lastError: null, onMessage: { addListener(handler: typeof w.__aceWake) { w.__aceWake = handler; } }, getURL: (v: string) => v, getManifest: () => ({ version: "1.27.0" }), sendMessage: (m: { type: string }, cb: (v: unknown) => void) => cb(m.type === "answers" ? { ok: true, items: [] } : m.type === "history" ? { ok: true, work: [], education: [] } : { ok: true, items: [] }) } };
   });
   for (const file of ["fields.js", "memory.js", "content.js"]) await page.addScriptTag({ path: path.join(extensionRoot, file) });
   await expect(page.locator(".ace-root")).toHaveCount(0);

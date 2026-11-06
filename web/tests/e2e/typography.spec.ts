@@ -13,6 +13,8 @@ const ROUTES = [
   "/app/analytics",
   "/app/resume-studio",
   "/app/coverage",
+  "/app/coverage?tab=leads",
+  "/app/coverage?tab=sources",
   "/app/settings",
 ];
 

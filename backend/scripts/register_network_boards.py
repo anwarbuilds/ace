@@ -529,10 +529,18 @@ def register(
 
 def declared_name(
     candidate: Candidate,
+    *,
+    fetch=None,
+    fetch_text=None,
 ) -> str | None:
-    """The employer a board names itself, where its provider says."""
+    """The employer a board names itself, where its provider says.
+
+    A scheduled caller passes fetchers that ask robots first.
+    """
 
     from backend.app.coverage.probing import (
+        _fetch_json,
+        _fetch_text,
         board_metadata_name,
         board_page_name,
     )
@@ -542,12 +550,14 @@ def declared_name(
             return board_metadata_name(
                 source_type="greenhouse",
                 token=candidate.source_account,
+                fetch=fetch or _fetch_json,
             )
 
         if candidate.source_type in ("ashby", "lever"):
             return board_page_name(
                 source_type=candidate.source_type,
                 token=candidate.source_account,
+                fetch_text=fetch_text or _fetch_text,
             )
 
     except Exception:

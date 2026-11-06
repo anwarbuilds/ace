@@ -7,7 +7,7 @@ const extensionRoot = path.resolve(process.cwd(), "../extension");
 async function loadExtension(page: Page, items: { label: string; value: string; aliases?: string[] }[]) {
   await page.evaluate((bank) => {
     (window as typeof window & { chrome: unknown }).chrome = {
-      runtime: {
+      runtime: { id: "fixture-extension",
         onMessage: { addListener() {} },
         getURL: (value: string) => value,
         getManifest: () => ({ version: "test" }),

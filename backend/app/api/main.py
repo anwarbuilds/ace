@@ -1964,6 +1964,13 @@ def create_app() -> FastAPI:
             ),
             "evidence": result.evidence,
             "detail": result.detail,
+            "job": result.job,
+            "linked": result.linked,
+            "last_read_at": result.last_read_at,
+            "next_check_at": result.next_check_at,
+            "first_read_seconds": (
+                result.first_read_seconds
+            ),
         }
 
     @app.get(
@@ -2423,6 +2430,7 @@ def create_app() -> FastAPI:
         analytics,
         auth,
         companies,
+        coverage as coverage_routes,
         dashboard,
         export,
         inbox,
@@ -2435,6 +2443,7 @@ def create_app() -> FastAPI:
         analytics,
         auth,
         companies,
+        coverage_routes,
         dashboard,
         inbox,
         system,

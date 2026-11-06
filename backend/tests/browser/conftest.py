@@ -398,7 +398,7 @@ def browser():
     connection = None
 
     try:
-        deadline = time.time() + 25
+        deadline = time.time() + 45
 
         target = None
 
@@ -429,6 +429,13 @@ def browser():
                 )
 
         if target is None:
+            # On CI this suite must really run: a skip here once turned 46
+            # tests into a green step. Away from CI, no Chrome is fine.
+            if os.environ.get("CI"):
+                pytest.fail(
+                    "Chrome did not expose a debugging target"
+                )
+
             pytest.skip(
                 "Chrome did not expose a debugging target"
             )

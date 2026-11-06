@@ -3331,11 +3331,15 @@
 
   function installFocusDrag(root) {
     var gesture = null;
+    // Pointer capture sends the click and double-click to the card, not the
+    // grip, so where the press began is remembered here.
+    var gripPressed = false;
     root.addEventListener('pointerdown', function (event) {
       var host = root.querySelector('.ace-panel.focus-panel');
       if (!host || !host.contains(event.target) || event.button !== 0) return;
       var grip = event.target.closest('[data-focus-grip]');
       if (!grip && (event.target.closest('button,input,textarea,select,a,label,summary,[contenteditable]') || event.pointerType === 'touch' && !event.target.closest('.studio-head,.focus-dock-body'))) return;
+      gripPressed = !!grip;
       gesture = { id: event.pointerId, x: event.clientX, y: event.clientY,
         left: host.offsetLeft, top: host.offsetTop, moved: false };
       if (host.setPointerCapture) host.setPointerCapture(event.pointerId);
@@ -3369,7 +3373,7 @@
     root.addEventListener('pointerup', finish);
     root.addEventListener('pointercancel', finish);
     root.addEventListener('dblclick', function (event) {
-      if (!event.target.closest('[data-focus-grip]')) return;
+      if (!gripPressed && !event.target.closest('[data-focus-grip]')) return;
       focusPosition = null;
       if (chrome.storage && chrome.storage.local) chrome.storage.local.remove('aceFocusPosition');
       positionFocus(root.querySelector('.ace-panel.focus-panel'));

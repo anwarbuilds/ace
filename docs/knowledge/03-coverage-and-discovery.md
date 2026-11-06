@@ -951,3 +951,64 @@ with several companies' roles should be rejected regardless of what the network 
 ## A Greenhouse posted date can predate the listing by days (2026-10-21)
 
 Consolidated from legacy main notes `a7b42bb` and its corrected timeline `a3c9449`. Greenhouse `first_published` can survive a takedown and later relisting. The audited posting was absent from complete reads before reappearing; its older publish date did not prove ACE had been six days late. Early scheduler startup gaps also limit what can be inferred before the first continuous board read. Compare first observation with complete neighboring board snapshots and an independent feed, starting no earlier than the board's first read. Never measure discovery lateness from `posted_at` alone. Dated benchmark results remain in `legacy-main-final`; they are not permanent recall percentages.
+
+## Measuring coverage against an outside index (2026-11-04)
+
+The owner asked how ACE compares with the best job sources, so coverage was measured read-only against
+FreeHire's public API and public new grad lists. Figures stay in the private requirements file. The method
+errors are the lessons:
+
+- A report cut off at 400 rows produced a confident, wrong count of missing boards. Check that a list is
+  complete before counting it.
+- A list ACE ingests cannot measure recall. Simplify looked like near-perfect coverage only because ACE
+  reads it. Recall needs lists ACE never reads, and a test should enforce that.
+- Different host formats made Eightfold boards look missing. Normalize identity before calling a gap real.
+- Many list and Workday times are dates without a real time of day, so speed comparisons built on them are
+  only indicative.
+- A complete feed is not complete coverage. Half of the sampled Workable listings on public lists were not
+  in Workable's own feed, so it can add roles but must never close them.
+- `curl --max-time 30` silently truncated an 865 MB feed. Check that a download ends where the format says.
+- A first harvest of 32 chosen sources looked like the whole market. Count every source before calling a list complete.
+- Python's `urllib.robotparser` ignores wildcards and takes the first match, so it misjudged robots files in both directions, and Paycom and Pinpoint were wrongly called off limits. Read the rules and use the longest-match evaluator in `coverage/probing.py`.
+
+The resulting plan is in section 13 of `docs/requirements/2026-11-04-ace-requirements.md`.
+
+## Lead ledger and host verdicts (2026-11-05)
+
+ACE kept only the boards it registered. A startup network's board with no US software role on the day it was read was
+dropped, and `source_probes` held one overwritten answer per company with nothing due to look again (its newest row was
+a month old). `employer_leads` now gives every employer ACE hears of a state, a reason, the last check and the next
+check, and `host_policies` gives every host ACE reads a dated robots verdict. Code: `coverage/leads.py`,
+`coverage/host_policy.py`, `coverage/host_terms.py`; the scheduler's 30-minute maintenance runs them.
+
+- **Evidence only.** A check never registers a board. A board hiring US engineers becomes "Waiting for you". Keep it that
+  way: source registration is approved by the owner batch by batch.
+- **Identity.** A lead is `normalise_company`, the key `source_probes` uses. A board registered under another name still
+  counts: polling is decided from the boards on the lead, not from the name. Better identity is DIS-16.
+- **A verdict is judged on the paths ACE reads**, because a robots file usually opens one route and closes another. Shared
+  hosts use a stand-in board name. `read_targets` must know every `SourceType`; a test fails otherwise.
+- **A failed read decides nothing.** It keeps the last verdict and reports the failed recheck; 429 is "not now". Rules that
+  have never been read close the host for anything new (RFC 9309) without stopping what already polls.
+- **A 401 or 403 on the robots address is not a refusal.** The first version said it was, and a preview caught it: Ashby's
+  and Gem's API hosts answer that way because the address does not exist for them, which would have called 1,250 working
+  boards refused. RFC 9309 reads a client error as "no rules", and `coverage/probing.py` already did. A site that really
+  turns ACE away does so on the pages it asks for, where refusal backoff answers it.
+- **Report first.** `HOST_POLICY_ENFORCE` is off, so a refused host is listed and existing boards keep polling until the
+  owner decides. New boards, hand-added boards and lead checks obey a refusal regardless.
+- **The company search asks robots now.** `find_board` and `diagnose` were only ever run by hand and read guessed careers
+  pages without asking. `PoliteReader` wraps their fetchers for the scheduled run, including the one direct request in
+  `diagnose` (`refuses=`).
+- **Terms are a person's note, per platform, not legal advice**, and only robots can stop a read. Platforms nobody read show
+  "Not read", never allowed. Workday's site terms bar scraping its own sites and APIs and do not mention customers' career
+  sites; that is recorded as restricted for the owner to weigh.
+
+**Adding by hand (DIS-15, moved up from chat 2 at the owner's request).** `add_source` always ends in an answer: added, already
+reading (with the pasted job when ACE holds it, matched by the last path segment on that board), switched off, or saved with what
+is in the way. Everything is kept as a lead with `owner_added_at`, so a name handed over is never forgotten. Every read asks robots
+first, because pasting a link is no way around a refusal. A board switched off earlier stays off: an agency is not turned back on
+by a paste. Undo switches the board off as `added_by_hand undone`, which is never proposed again, and closes its postings without
+touching marks.
+
+Lesson: run new code on the real shape before trusting a budget. A due window of the oldest 400 leads passed every
+fictional test, and a dry run showed 689 old name-only leads would have kept about 900 one-request boards waiting for days.
+Name searches and board reads have separate budgets, so they must not share a window.

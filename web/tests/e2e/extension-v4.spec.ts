@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import { openQuestion } from "./helpers";
 import { expect, test } from "@playwright/test";
 
 const extensionRoot = path.resolve(process.cwd(), "../extension");
@@ -41,7 +42,7 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
     HTMLFormElement.prototype.submit = function () { w.__submits++; };
     HTMLFormElement.prototype.requestSubmit = function () { w.__submits++; };
     document.getElementById("employer-submit")!.addEventListener("click", () => { w.__submits++; });
-    w.chrome = { runtime: {
+    w.chrome = { runtime: { id: "fixture-extension",
       onMessage: { addListener() {} },
       getURL: (value: string) => value,
       getManifest: () => ({ version: "1.26.0" }),
@@ -78,7 +79,7 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
   await panel.screenshot({ path: path.join(captures, "v4-overview-day.png") });
   await page.screenshot({ path: path.join(captures, "v4-full-page-day.png") });
   await panel.getByRole("button", { name: /^(Answer remaining questions|Check answers|Review$)/ }).click();
-  await expect(panel.getByText("Explain a distributed systems design tradeoff you faced")).toBeVisible();
+  await expect(panel.locator(".studio-question").getByText("Explain a distributed systems design tradeoff you faced")).toBeVisible();
   await panel.screenshot({ path: path.join(captures, "v4-review-day.png") });
   await panel.getByRole("textbox", { name: "Your answer" }).fill("Synthetic approved architecture answer.");
   await panel.getByRole("button", { name: "Fill answer" }).click();
@@ -87,7 +88,8 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
   await panel.getByRole("combobox", { name: "Exact employer options" }).selectOption("Yes");
   await panel.getByRole("button", { name: "Fill answer" }).click();
   await expect(page.locator("#sponsor")).toHaveValue("Yes");
-  await expect.poll(() => page.evaluate(() => (window as typeof window & { __memory: unknown[] }).__memory.length)).toBe(1);
+  // Owner decision 2026-10-28: finished answers are learned, sponsorship included.
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __memory: unknown[] }).__memory.length)).toBe(2);
   await page.locator("form").evaluate(form => {
     const label = document.createElement("label");
     label.htmlFor = "sponsor-again";
@@ -106,12 +108,12 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
     document.title = "Backend Engineer | Cedarcloud Labs";
     const label = document.createElement("label");
     label.setAttribute("for", "equivalent");
-    label.textContent = "Describe a difficult distributed architecture tradeoff you handled";
+    label.textContent = "Please explain a distributed systems design tradeoff you have faced";
     const textarea = document.createElement("textarea");
     textarea.id = "equivalent";
     form.append(label, textarea);
   });
-  await expect.poll(() => page.evaluate(() => (window as typeof window & { __aceInternals: { formSignature: () => string } }).__aceInternals.formSignature().includes("describe a difficult distributed"))).toBe(true);
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __aceInternals: { formSignature: () => string } }).__aceInternals.formSignature().includes("please explain a distributed"))).toBe(true);
   await panel.getByRole("button", { name: "Fill all known answers" }).click();
   await expect(page.locator("#equivalent")).toHaveValue("Synthetic approved architecture answer.");
   await expect(panel.getByText(/Cedarcloud Labs/).first()).toBeVisible();
@@ -128,7 +130,8 @@ test("V4 reviews unknown fields, learns safely, detects new fields and never sub
     form.append(label, textarea);
   });
   await panel.getByRole("button", { name: /^(Answer remaining questions|Check answers|Review$)/ }).click();
-  await expect(panel.getByText("Describe how you debug a production incident")).toBeVisible();
+  await openQuestion(panel, /Describe how you debug a production incident/);
+  await expect(panel.locator(".studio-question").getByText("Describe how you debug a production incident")).toBeVisible();
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __submits: number }).__submits)).toBe(0);
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __applied: number }).__applied)).toBe(0);
   await panel.getByRole("button", { name: /^(Back to fill|Overview)$/ }).click();
@@ -153,7 +156,7 @@ test("Memory explains an outdated server and reconnects without a page reload", 
   await page.evaluate(() => {
     const w = window as typeof window & { chrome: unknown; __memoryOffline: boolean };
     w.__memoryOffline = true;
-    w.chrome = { runtime: {
+    w.chrome = { runtime: { id: "fixture-extension",
       onMessage: { addListener() {} },
       getURL: (value: string) => value,
       getManifest: () => ({ version: "1.26.0" }),
@@ -170,10 +173,12 @@ test("Memory explains an outdated server and reconnects without a page reload", 
   const panel = page.locator(".ace-root .ace-panel");
   await expect(panel.getByText("Answer Memory needs the ACE server V4 update. Existing answers are safe.")).toBeVisible();
   await panel.getByRole("button", { name: /^(Answer remaining questions|Check answers|Review$)/ }).click();
+  await openQuestion(panel, /Explain a distributed systems design/);
   await panel.getByRole("textbox", { name: "Your answer" }).fill("Synthetic answer that cannot be saved yet");
   await panel.getByRole("button", { name: "Fill answer" }).click();
-  await expect(page.locator("#question")).toHaveValue("");
-  await expect(panel.getByText(/field remains for review because its answer was not saved/)).toBeVisible();
+  // Filling follows the form; saving is background work, and its failure is reported.
+  await expect(page.locator("#question")).toHaveValue("Synthetic answer that cannot be saved yet");
+  await expect(panel.getByText(/Saving for future applications failed; retry in Settings/)).toBeVisible();
   await panel.getByRole("button", { name: "Settings & activity" }).click();
   await panel.getByRole("button", { name: "Memory", exact: true }).click();
   await expect(panel.getByText("Unavailable", { exact: true })).toBeVisible();

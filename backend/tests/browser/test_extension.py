@@ -62,6 +62,7 @@ def fixture_filler(
     # below that is real here, not the messaging.
     browser.eval(
         "window.chrome={runtime:{"
+        "id:'fixture-extension',"
         "onMessage:{addListener:function(){}},"
         "sendMessage:function(){},"
         "getURL:function(p){return p;}}};1"
@@ -493,6 +494,7 @@ def _boot_form(
 
     page.eval(
         """window.chrome={runtime:{
+          id:'fixture-extension',
           onMessage:{addListener:function(){}},
           getURL:function(p){return p;},
           getManifest:function(){return{version:'test'};},
@@ -2042,10 +2044,11 @@ def test_named_employer_and_narrow_government_questions_do_not_borrow_answers(pa
     _fill_and_wait(page)
 
     assert page.eval("document.getElementById('school').value") == "Example University"
-    # A legacy answer-bank label is not approved scoped Memory. In particular,
-    # "previously" does not establish the broader "ever" relationship. School
-    # above is the positive control; protected fields must remain untouched.
-    for field_id in ("employer", "pwc", "federal", "conflict", "signature", "privacy"):
+    # Owner decision 2026-10-28: the owner's own Answers row fills again, and
+    # this row names this employer. The rest stay untouched: another employer,
+    # a narrower timeframe, a conflict question, a signature and a declaration.
+    assert page.eval("document.getElementById('employer').value") == "No"
+    for field_id in ("pwc", "federal", "conflict", "signature", "privacy"):
         assert page.eval(
             f"document.getElementById('{field_id}').value"
             if field_id != "privacy" else

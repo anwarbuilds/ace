@@ -15,7 +15,7 @@ async function fillFixture(page: Page, fields: [string, string, string[]?][], an
   </form>`);
   await page.evaluate(({ fields, answers }) => {
     (window as typeof window & { chrome: unknown }).chrome = {
-      runtime: {
+      runtime: { id: "fixture-extension",
         onMessage: { addListener() {} },
         getURL: (value: string) => value,
         getManifest: () => ({ version: "test" }),

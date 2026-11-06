@@ -106,23 +106,6 @@ test("an opened Pull stays open after job navigation and reload until closed", a
   await expect(page.locator(`#${id} .pull-summary`)).toHaveAttribute("aria-expanded", "false");
 });
 
-test("analytics groups roles by tier and family, and a row opens them", async ({ page }) => {
-  await page.goto("/app/analytics");
-  await expect(page.locator("h1")).toHaveText("Analytics");
-  await page.locator(".db-tr .db-name", { hasText: /^Big tech$/ }).click();
-  await expect(page).toHaveURL(/\/app\/opportunities\?tier=BIG_TECH/);
-});
-
-test("analytics trend and role filters live in the URL", async ({ page }) => {
-  await page.goto("/app/analytics");
-  await page.getByLabel("Trend range").selectOption("30");
-  await page.getByLabel("Discovery role family").selectOption("AI_ML_ENGINEERING");
-  await page.getByRole("button", { name: "Apply filters" }).click();
-  await expect(page).toHaveURL(/days=30.*family=AI_ML_ENGINEERING/);
-  await expect(page.getByText("Applied, last 30 days")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Clear" })).toBeVisible();
-});
-
 test("there is no command palette and no search-or-jump box", async ({ page }) => {
   await page.goto("/app/pulls");
   await expect(page.getByText("Search or jump to")).toHaveCount(0);
@@ -132,8 +115,11 @@ test("there is no command palette and no search-or-jump box", async ({ page }) =
 
 test("the whole page scrolls under a fixed header and sidebar", async ({ page }) => {
   await page.goto("/app/opportunities");
-  await page.evaluate(() => window.scrollTo(0, 1200));
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  // Asked again each time: the list streams in, and a scroll sent before it
+  // arrives has nowhere to go.
+  await expect
+    .poll(() => page.evaluate(() => { window.scrollTo(0, 1200); return window.scrollY; }))
+    .toBeGreaterThan(0);
   await expect(page.locator(".tb")).toBeInViewport();
   await expect(page.locator(".sb-brand")).toBeInViewport();
 });

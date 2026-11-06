@@ -1,12 +1,32 @@
 # ACE current handoff
 
-Updated 2026-11-03 Pacific after the assessment invitation web release. This is
+Updated 2026-11-05 Pacific after the requirements chat 1 release. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
 before changes. Dated pending instructions are not current authorization.
 
-## Assessment invitation headline LIVE
+## Requirements programme: start here for new work
+
+New work follows `docs/requirements/2026-11-04-ace-requirements.md`, starting at its section 13:
+working method, eleven-chat P0 plan, P0 in simple words and tracker. That file stays out of Git by owner
+decision, because this repo is public. `ACE_NEXT_KNOWLEDGE.md` now holds current state, rules and an index;
+its full history moved word for word to `docs/archive/ACE_NEXT_KNOWLEDGE-history.md`.
+Designs are on a private canvas linked from the top of `ACE_NEXT_KNOWLEDGE.md`. Each chat explains its
+items in very simple words, one item and one question at a time, agrees any interface change with the
+owner, builds item and interface together, and saves progress before it ends.
+
+## Requirements chat 1 LIVE, 2026-11-05
+
+Owner-approved exact tested `1a08549550b765f40acc047dd0a82f684c3af58a` is live since 2026-11-05T22:18Z (14:18 Pacific): migration 0051, API,
+scheduler and web. Coverage is now three tabs in plain words, paste a job to add it and get an answer on screen,
+a lead ledger and dated host verdicts. Branch `requirements-chat-1-20261104`, draft PR #29, **not merged**: a release
+built from `main` would lose this until it merges. Full CI is green on the PR (run 42118383973), for the first time in
+the 97 retained runs. Fresh backup and a real restore drill passed, and 19 protected tables are preserved across the
+cutover. No signed-in production browser check by the agent. Pickup steps, proof and rollback: "Chat 1 state to pick up" in
+section 13.5 of the requirements file. Open with the owner, one at a time: merging, then SmartRecruiters' robots file.
+
+## Assessment invitation headline (previous release)
 
 Owner-approved exact tested web `1e392636d1995533b7aa619340935f7ff5124842`, PR #28,
 is live after web-only activation at 2026-11-04T01:26:18Z–01:26:25Z (November 3,

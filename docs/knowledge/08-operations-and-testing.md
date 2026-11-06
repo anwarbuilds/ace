@@ -550,3 +550,22 @@ cooling restriction still applies.
 ## Legacy scheduler exit 137 (2026-10-19, archived lesson)
 
 Legacy main commit `99987b6` recorded a scheduler ending with exit 137 while the web service continued. Neither Docker nor the kernel recorded an OOM kill, and the evidence suggested an external stop rather than proving a crash cause. Process/web health alone did not prove discovery freshness; inspect successful source reads. The historical direct-container recovery avoided an incompatible migration dependency. The local legacy stack is now retired: this is not an instruction to start it again.
+
+## Red CI hid what was behind it (2026-11-05)
+
+Full CI had not passed in any of the 97 runs GitHub kept, back to 2026-10-15. Each browser step stops the next, so 22
+extension failures hid the rest, and the same "known baseline" was compared by name for weeks. Cause of the 22: the
+fake Chrome in the tests had no `chrome.runtime.id`, which the extension has required since 1.31.2, so the card never
+mounted. One line fixed 21. The 22nd, and the 16 behind them, were mostly tests that had fallen behind owner decisions:
+the collapsed "Choose another question" picker (2026-10-26) and learned answers (2026-10-28).
+
+- **Check a failing test against the newest owner decision before calling it a bug, or stale.** The 22nd looked like a real
+  catch (a saved answer filling an "ever worked" question) until the record showed the owner reversed that block on
+  2026-10-28. `git log -S` on the assertion and on the code tells the order of events.
+- **A red baseline still hides real bugs.** Behind it was one: double-clicking the card's grip never reset its position,
+  because pointer capture sends the double-click to the card (fixed in 1.31.6).
+- **Failing tests rot quietly.** A step that never runs cannot show it fell behind. Fix red early; comparing failures by
+  name only proves nothing new broke.
+- **To try browser specs fast:** tests here run hosted only, and a full run takes about 20 minutes. Push the commit plus a
+  temporary workflow to a throwaway branch (`ci-quick-tmp`, `on: push`) to run one spec family in about two minutes, and
+  delete the branch afterwards. Nothing about it reaches the pull request.

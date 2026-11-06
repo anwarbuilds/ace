@@ -24,7 +24,7 @@ test("screening autofill uses only saved matching answers", async ({ page }) => 
       { label: "Full name", value: "Example Person", aliases: [] },
     ];
     (window as typeof window & { chrome: unknown }).chrome = {
-      runtime: {
+      runtime: { id: "fixture-extension",
         onMessage: { addListener() {} },
         getURL: (value: string) => value,
         getManifest: () => ({ version: "test" }),

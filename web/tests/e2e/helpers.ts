@@ -1,4 +1,4 @@
-import type { BrowserContext, Page } from "@playwright/test";
+import type { BrowserContext, Locator, Page } from "@playwright/test";
 
 export const ROUTES = [
   "/app/pulls",
@@ -17,6 +17,8 @@ export const ROUTES = [
   "/app/insights/skills",
   "/app/answers",
   "/app/coverage",
+  "/app/coverage?tab=leads",
+  "/app/coverage?tab=sources",
   "/app/settings",
 ];
 
@@ -120,3 +122,10 @@ export const test = base.extend({
     await run(request);
   },
 });
+
+/** Other questions sit behind the card's collapsed "Choose another question"
+ *  picker, so opening one takes a click on the picker first. */
+export async function openQuestion(panel: Locator, name: RegExp) {
+  await panel.locator(".focus-question-picker summary").click();
+  await panel.getByRole("button", { name }).click();
+}

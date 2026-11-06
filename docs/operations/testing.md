@@ -54,4 +54,6 @@ Do not run Chrome here until cooling is repaired. Earlier single-worker runs sti
 
 ## CI interpretation
 
-Read the current run's jobs and failed test names. The pre-consolidation PR #19 full run passed backend/web but had 22 extension-browser failures, with later app-browser steps skipped; the dedicated Inbox run passed. Compare exact failures to that baseline and report any additional failure. Green arithmetic, source hashes and health checks do not certify semantic email accuracy, complete source/mailbox observation or signed-in production visuals.
+Read the current run's jobs and failed test names. Since requirements chat 1 (2026-11-05) the full browser sequence is expected to pass, so any failure is a new failure, not a baseline: each browser step stops the next, so one failure hides everything after it. Before changing a failing test, check it against the newest owner decision (`git log -S` on the assertion and the code). A test that fell behind a decision is updated and listed for the owner; a test is never skipped or weakened to get green. Green arithmetic, source hashes and health checks do not certify semantic email accuracy, complete source/mailbox observation or signed-in production visuals.
+
+To try browser specs quickly, push the commit with a temporary workflow to a throwaway `ci-quick-tmp` branch, and delete the branch afterwards.

@@ -1297,6 +1297,214 @@ class SourceProbeRecord(Base):
     )
 
 
+class EmployerLead(Base):
+    """One employer ACE has heard of, and what happened about it.
+
+    A lead used to be a one-time result: a network's board with no US
+    software role on the day it was read was dropped, and a company a
+    probe could not reach kept that answer with nothing due to look
+    again. Each row keeps where the lead came from, its state, why, and
+    when ACE checks next. Evidence only: a row never registers a board.
+    """
+
+    __tablename__ = "employer_leads"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "company_key",
+            name="uq_employer_leads_company_key",
+        ),
+        CheckConstraint(
+            "state IN ('polling', 'waiting', 'checking', 'dormant', "
+            "'noreader', 'refused', 'agency')",
+            name="ck_employer_leads_state",
+        ),
+        Index(
+            "ix_employer_leads_state",
+            "state",
+        ),
+        Index(
+            "ix_employer_leads_next_check_at",
+            "next_check_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BIGINT_ID,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    # normalise_company(), the key source_probes already uses.
+    company_key: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    company_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    # The strongest origin, for "Lead from". Every origin is in the list.
+    origin: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+    )
+
+    origin_details: Mapped[list] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+
+    state: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+    )
+
+    # The sentence a person reads.
+    reason: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default="",
+    )
+
+    # Every board known for this employer, read or not: source_type,
+    # source_account, source_host and, once read, what it held.
+    boards: Mapped[list] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    # None until something has actually looked.
+    last_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    # When the owner pasted this in. Set for what they added themselves, so
+    # "Added by you" lists only that, whatever else ACE also heard.
+    owner_added_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    next_check_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    # Failed reads in a row, which stretch the wait before the next try.
+    check_failures: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="0",
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class HostPolicyRecord(Base):
+    """What one host's robots.txt says about the pages ACE reads there.
+
+    Dated and rechecked, so a host that starts refusing is noticed. The
+    terms side is a person's dated reading, per platform, kept in
+    coverage/host_terms.py because no program can judge it.
+    """
+
+    __tablename__ = "host_policies"
+
+    __table_args__ = (
+        CheckConstraint(
+            "robots_verdict IN ('unknown', 'allowed', 'refused')",
+            name="ck_host_policies_robots_verdict",
+        ),
+        Index(
+            "ix_host_policies_next_check_at",
+            "next_check_at",
+        ),
+    )
+
+    host: Mapped[str] = mapped_column(
+        String(255),
+        primary_key=True,
+    )
+
+    platform: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+    )
+
+    # 'unknown' until the file has been read once. A failed read keeps
+    # an earlier verdict and is reported through last_error.
+    robots_verdict: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        server_default="unknown",
+    )
+
+    robots_detail: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default="",
+    )
+
+    robots_status: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    # The paths the verdict was judged on: the ones ACE really reads.
+    paths: Mapped[list] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+
+    last_error: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default="",
+    )
+
+    # When the file was last read successfully.
+    checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    next_check_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class EmployerPageReading(Base):
     """What one employer posting page said, when ACE last read it.
 
