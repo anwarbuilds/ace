@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-11-05 Pacific (chat 2 checkpoint). Chat 1 main CI verified green and owner confirmed real-job add. Chat 2 built locally on its main-based branch; acceptance and hosted CI pending, nothing new live.
+Last updated: November 6 Pacific. Chat 2 repair backend b70ebf9 is live and verified; web stays 1a08549, schema 0051. PR #33 contains source and continuity. Preserve existing polling and Pear protection; see the plan below before chat 3.
 
 **This is ACE's global memory. It loads in every chat, so it holds only current state, rules and an index.** The complete dated history, word for word, is in `docs/archive/ACE_NEXT_KNOWLEDGE-history.md` (about 130,000 tokens).
 
@@ -26,35 +26,40 @@ The owner's goal: ACE finds every eligible role as soon as it is posted, with th
 2. Explain each item in very simple words with a small example, one item and one question at a time, never a list of decisions together. The owner confirms or changes it before any code.
 3. Say which items have an interface part and show the design. The owner decides what changes. An item and its interface are built together in the same chat; no interface is built before its design is approved.
 4. Build on one branch per chat from current `main`, with fictional fixtures. One chat runs at a time unless the owner asks otherwise.
-5. An item closes only with its acceptance evidence. Merge, deployment, migration, scheduler change and each source registration batch need the owner's approval for that operation.
+5. An item closes only with its acceptance evidence. Follow the latest authorization below for routine operations; serious security issues and actual permission refusals still stop that step.
 6. **Before every chat ends or runs low on room:** update the tracker and chat log in section 13, this file, `docs/HANDOFF.md` and the relevant `docs/knowledge/` topic, then give the owner the prompt for the next chat. The owner requires that each new chat has all prior knowledge.
 
-**Plan.** P0 is 37 items in eleven proposed chats (section 13.2). **Chat 1 is done and live**: ARCH-01 and ARCH-02 are standing rules; OPS-01 is verified on `main` run 42150028596 (47, 59 and 206 browser cases, none skipped); DIS-14 is verified; DIS-15 is owner-verified; FRS-05 awaits the host sweep. PR #29 merged as `caf1e12`, PR #30 as `1363103`. **Chat 2 (DIS-16):** owner approved board/employer separation and planned Pear VC switch-off after impact review, not the live write. Local `requirements-chat-2-company-identity-20261105`, based on main `1363103`, has identity checks, unverified portfolio leads and exact petition guards. No screen or migration. 232 affected tests pass; full local backend stalled and was interrupted. Snapshot acceptance passes; live read-only new-code dry run and six-board preview passed; hosted CI pending. Hosted CI pending; nothing pushed or live. Earlier branch-command refusal was not retried; later read-only status showed the branch exists. Continue chat 2, not chat 3. P1 and later get planned when P0 is done.
+**Plan.** Chat 2's repair is live and verified at 2026-11-06T23:04Z, using tested backend b70ebf9. PR #33 contains the repair and continuity. Normal board additions work through feed, batch and paste while shared/conflicting evidence remains blocked. Unverified ownership persists in source provenance and withholds sponsorship links; existing manual Undo and network cadence remain. All previously enabled sources retain their settings, the affected board was rechecked and restored without stopping the scheduler, and normal poll advancement is measured privately. Pear VC stays off with history retained. No screen, schema or configuration change.
+
+Validation: 426 affected tests; full backend 2,779 passed with two PostgreSQL-only skips; hosted browser sequence 47/59/206 without skips; real metadata previews and affected-board recheck; checked fresh backup and isolated restore; 201 fictional cases against the built image; exact backend file hashes on both services, protected-record comparisons, public health/auth/assets and polling-preservation checks. Signed-in production screens and positive real sponsorship remain unverified. Private proof/rollback: `/opt/ace/private-backups/chat2-repair-20261106T1658Z/` and `artifacts/requirements-chat-2-repair-20261106/`. Never replay completed operators. Shared-board suspects from the stored-title sweep are with the owner; their polling was not changed. The separate host-permission follow-up remains open. Chat 3 follows this repair's main merge, with item discussion before code.
+
+**Latest authorization, November 6 Pacific.** Owner: "I'm giving you permissions for everything until unless it's very security issue. So do everything and don't ask me for every small change." Proceed with routine operations within the assigned chat without repeated prompts; pause for serious security issues or actual permission refusals. Item/design discussion before code and scope limits remain. GitHub integration refused create/rerun/ready mutations; owner ran supplied commands, no workaround. Do not re-request already authorized steps.
 
 **Owner decisions, 2026-11-05.** Plain words everywhere, with every page saying what it is (the first Coverage design was jargon to the owner). Show exactly what a chat will build, not the whole vision. Pasting a job gets an answer on screen; email and phone stay with alert work.
 
 **Owner decisions, 2026-11-04.** Full-time roles only. Breadth first: finding and adding companies moved up into P0. $5 a month approved for LLM use. Phone push is design only for now. All alert work goes last, even though production email alerts are currently off. Add to the existing interface with no new sidebar items and no fifth Analytics tab. Registrations are approved batch by batch.
 
-**Open with the owner** (sections 10 and 13.5 of the requirements file), one at a time: Pear VC exact live switch-off approval, after impact review; SmartRecruiters' robots file (it says `Disallow: /` to all but LinkedIn's bot, and ACE reads 155 boards through that API), Workday's site terms, borderline role families, the DOL LCA file for DIS-10, whether to use FreeHire's UKG links as pointers, labelling time, tailoring and options.
+**Open with the owner** (sections 10 and 13.5 of the requirements file), one at a time: the stored host refusals and enforcement flag (private requirements section 13.5), Workday's site terms, borderline role families, the DOL LCA file for DIS-10, whether to use FreeHire's UKG links as pointers, labelling time, tailoring and options.
 
 ## Current running state
 
-Last verified 2026-11-06T00:33Z through public HTTP, container identity and read-only audits. No release has been checked in a signed-in production browser by the agent; the owner is the only one who has seen these pages signed in. Check again before claiming anything is running.
+Final repair verification passed at 2026-11-06T23:04Z. API and scheduler run b70ebf9; web remains 1a08549, schema 0051. Existing source settings and normal polling are preserved. Signed-in production UI and positive real sponsorship are unverified. Check actual state before later changes.
 
 | Surface | Current |
 | --- | --- |
 | Website | https://ace.opik.net |
 | Web | `1a08549550b765f40acc047dd0a82f684c3af58a`, PR #29 |
-| API | `1a08549550b765f40acc047dd0a82f684c3af58a`, Inbox parser 15 |
-| Scheduler | `1a08549550b765f40acc047dd0a82f684c3af58a`, gate `2026-10-29-v56`, 8 workers, lead ledger on, `HOST_POLICY_ENFORCE` off |
+| API | `b70ebf907559bc11cf0cdabeb3934d1929373fba`, chat 2 repair, Inbox parser 15 |
+| Scheduler | `b70ebf907559bc11cf0cdabeb3934d1929373fba`, gate `2026-10-29-v56`, 8 workers, lead ledger on, `HOST_POLICY_ENFORCE` off |
 | Schema | `0051` |
 | Extension | Source 1.31.6, unpacked from `extension/`, never published to the Web Store; owner reload pending |
 | Production checkout | `/opt/ace`, Compose project `oracle`, stays at `8ec89cd` with the intended Caddyfile edit; images come from an override, never from this checkout |
-| Source | `main` in `anwarbuilds/ace`, public (live commit merged as `caf1e12`); local standalone clone at `/home/ubuntu/Documents/ace-next` |
+| Source | `main` in `anwarbuilds/ace`, public (repair and continuity PR #33; API/scheduler run tested b70ebf9); local standalone clone at `/home/ubuntu/Documents/ace-next` |
 
-- Services now run one commit, and only the web reports its build. Source pushes do not deploy. Images were built from an isolated exact-commit archive: `ace-chat1-backend:1a08549` (migrate, API, scheduler) and `ace-chat1-web:1a08549`.
-- Latest proof and rollback: `/opt/ace/private-backups/chat1-release-20261105T2137Z/`, images `oracle-api:before-chat1-20261105T2137Z`, `oracle-scheduler:before-chat1-20261105T2137Z`, `oracle-web:before-chat1-20261105T2137Z`, guarded rollback in section 13.5 of the requirements file, owner-local `artifacts/requirements-chat-1-20261105/`. Migration 0051 is additive and stays through a rollback. Never restore old SQL as an image rollback.
-- **Never run `docker compose up` for a service without the release override.** Compose has no image names, so it would start stale `oracle-*:latest` images. Live images: `ace-chat1-backend:1a08549` (migrate, API, scheduler), `ace-chat1-web:1a08549`. The same goes for any scheduler recreate to change a setting.
+- API/scheduler run ace-chat2-repair-backend:b70ebf9; web ace-chat1-web:1a08549. Exact archive/image/source hashes verified on both backend services. Source pushes do not deploy. No migration ran in chat 2.
+- Latest proof/rollback: `/opt/ace/private-backups/chat2-repair-20261106T1658Z/`, local `artifacts/requirements-chat-2-repair-20261106/`. Retained `oracle-api:before-chat2-repair-20261106T1658Z` and scheduler counterpart restore prior f7702f4 images only. Keep schema 0051, the restored polling flag and Pear withdrawal; never restore old SQL over owner activity. Preparation, drill, API, scheduler and scoped source recovery are complete and must never be replayed.
+- **Never run Compose up without the current image override.** The fresh repair `release.yaml` supplies API/scheduler `ace-chat2-repair-backend:b70ebf9`; web stays `ace-chat1-web:1a08549`. Replace only the intended service. Configuration hashes, modes and inodes remain protected.
+
 - Caddy: since 2026-11-03 it serves HTTP/1.1 and HTTP/2 with `Alt-Svc: clear`, after a QUIC error in Chrome. The edited file is bind-mounted: preserve its content (SHA256 `0445b6da406ffb6cb860f5b7a05ca8c30757c47fe9633db7dddb911f591bff15`) and inode through any checkout or release. Older source holds the pre-repair file. Proof: `artifacts/site-reachability-20261103/REVIEW.md`.
 - Gmail: the API runs one monitor with a PostgreSQL lease about every 180 seconds (`GMAIL_BACKGROUND_SYNC_ENABLED`). `GMAIL_HISTORICAL_RECHECKS_ENABLED` stays false. The parser-7 operator stays stopped: never restart it. The connection was seen going from ready to error around 2026-11-01; recheck it (INB-02).
 - Alerts: production email alerts are off, with the alert address and mail key unset on the scheduler. Deferred to the end by owner decision.
@@ -62,8 +67,8 @@ Last verified 2026-11-06T00:33Z through public HTTP, container identity and read
 - Backups: private, on the VM, unencrypted, no offsite copy yet (OPS-02).
 - Legacy: retired. Recovery material stays until the owner decides: volume `ace_ace_postgres_data`, recovery images, `/home/ubuntu/ace-private-backups/consolidation-20261030T170532Z/`, public tag `legacy-main-final`, private local `recovery-20261030/*` tags (never push all tags). Do not restart legacy services, comparison or replication.
 - Open extension issues: on some Workday tenants the disability checkboxes stay unanswered and the self-identification Date shows digits while Workday reports it required; waiting for the owner's Copy field diagnostics paste. SmartRecruiters one-click forms in shadow roots are unsupported (APP-02). ACE cannot attach files.
-- Coverage: three tabs at `/app/coverage` (Scoreboard, Leads, Sources). Scheduler maintenance keeps `employer_leads` and `host_policies` current in small budgets and never registers a board; first sweep runs for about 3 days. A refused host keeps polling until the owner decides (`HOST_POLICY_ENFORCE`). SmartRecruiters' API is the known refused host, with 155 boards.
-- Open source issue: Pear VC's shared Ashby board was registered under the firm's name. Owner decision pending; the check gets fixed with a fictional regression (DIS-16).
+- Coverage: three tabs at `/app/coverage` (Scoreboard, Leads, Sources). Ledger checks keep unverified names without registering boards. Host-verdict pickup remains open for rate-limited robots reads; stored refusal enforcement remains off. Details and retry times stay in private requirements section 13.5.
+- Company identity DIS-16 is live and verified: shared boards are separate from employers; Pear VC is disabled and withdrawn from current discovery, with historical records retained. No inferred parent, acquisition or shared-board sponsorship links.
 
 ## Rules
 
@@ -75,7 +80,7 @@ Last verified 2026-11-06T00:33Z through public HTTP, container identity and read
 - This repo is public. No names, contact details, application history, answers, mail, resumes, screenshots, dumps, tokens or credentials in Git, logs or issues. Actual owner totals stay in private artifacts.
 - Respect robots and refusals. A 401, 403, 405, 429 or bot challenge is an answer: back off, and never get around it with proxies, other addresses, fingerprints or signed-in sessions.
 - No user-facing em dashes or en dash punctuation. Run `python3 scripts/no_user_facing_dashes.py`.
-- Deployment, publication, migration, scheduler change, source registration and destructive data work each need the owner's explicit approval for that operation. An approval does not carry over.
+- Follow the latest owner authorization above for routine scoped operations. Pause for serious security issues or actual permission refusals, and never use another route around a refusal.
 - Commit with the owner's configured identity. No co-author trailers and no mention of any AI in commits or PRs. Commit or push only when asked, and branch first on `main`.
 - Do not claim a local test is production verification. Report failures and limits plainly. Never call classification or coverage perfect or complete without evidence.
 - No destructive Git (reset, clean, force push) over owner work. Fetch before editing or pushing.
@@ -96,7 +101,7 @@ Last verified 2026-11-06T00:33Z through public HTTP, container identity and read
 
 **Coverage.** Each tab says in plain words what it is. Adding by hand always answers on screen, keeps a lead whatever happens, and asks robots first; a board switched off earlier stays off. Lead checks only record: a board that qualifies waits for the owner. Details: `docs/knowledge/03-coverage-and-discovery.md`, `05-web-ui.md`.
 
-**Discovery.** One adapter per platform. Job identity is (source, source_account, external_id); numeric IDs are internal. Only a complete snapshot can close jobs; a partial, empty, refused or non-authoritative read never does (`close_missing=False`). Conditional HTTP, bounded jittered retries, refusal backoff up to six hours, restarts resume persisted schedules. Eight workers; maintenance every 30 minutes. New boards go through `scripts/register_network_boards.py`, a dry run by default: it reads each board once and adds it only if it reads, is not an agency or shared board, and has a US software or ML role. A board with a passing role polls every 15 minutes, others hourly. Workable refuses the VM with 429s. The employer's own posting is the apply link; RippleMatch is the one exception. Details: `docs/knowledge/02-sources-and-scheduler.md`, `03-coverage-and-discovery.md`.
+**Discovery.** One adapter per platform. Job identity is (source, source_account, external_id); numeric IDs are internal. Only a complete snapshot can close jobs; a partial, empty, refused or non-authoritative read never does (`close_missing=False`). Conditional HTTP, bounded jittered retries, refusal backoff up to six hours, restarts resume persisted schedules. Eight workers; maintenance every 30 minutes. New boards go through `backend/scripts/register_network_boards.py`, a dry run by default: it reads each board once and adds it only if it reads, is not an agency or shared board, and has a US software or ML role. A board with a passing role polls every 15 minutes, others hourly. Workable refuses the VM with 429s. The employer's own posting is the apply link; RippleMatch is the one exception. Details: `docs/knowledge/02-sources-and-scheduler.md`, `03-coverage-and-discovery.md`.
 
 **Applications.** Identity is `job:<id>` from applied marks plus `external:<id>` records; separate applications are never fuzzy-merged. Marked pages ignore gate and active filters so history never vanishes. No spreadsheet import UI. "Applied before" is read-time evidence and never copies a mark.
 
@@ -108,7 +113,7 @@ Last verified 2026-11-06T00:33Z through public HTTP, container identity and read
 
 ## Release procedure
 
-Prepare and test first, and get approval for the exact SHA and operation. If the agent's permission check refuses a production step, stop and offer the owner the exact command; never work around it. A release with a migration adds a real restore drill into a throwaway container with no network (about 4 minutes), a schema-only rehearsal including a downgrade, and runs `compose run --rm --no-deps migrate` before the services; the scripts that did this are in ignored `artifacts/requirements-chat-1-20261105/release/`, and section 13.5 of the requirements file explains them. For a schema-free release:
+Prepare and test first, bind the exact tested SHA and operation, and follow the latest owner authorization. If the agent's permission check refuses a production step, stop and offer the owner the exact command; never work around it. A release with a migration adds a real restore drill into a throwaway container with no network (about 4 minutes), a schema-only rehearsal including a downgrade, and runs `compose run --rm --no-deps migrate` before the services; the scripts that did this are in ignored `artifacts/requirements-chat-1-20261105/release/`, and section 13.5 of the requirements file explains them. For a schema-free release:
 
 1. Inspect what is running: commits, images, container IDs, schema, private inventory.
 2. Take a fresh private backup in `/opt/ace/private-backups/<name>-<UTC stamp>/` (directory 700, dump 600). Check gzip, archive catalog and full expansion. This is not a restore drill. No pruning.

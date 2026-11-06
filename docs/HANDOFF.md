@@ -1,6 +1,10 @@
 # ACE current handoff
 
-Updated 2026-11-06 Pacific after requirements chat 1 went live and merged. This is
+**Chat 2 repair live.** Chat 2's repair is live and verified at 2026-11-06T23:04Z, using tested backend b70ebf9. PR #33 contains the repair and continuity. Normal board additions work through feed, batch and paste while shared/conflicting evidence remains blocked. Unverified ownership persists in source provenance and withholds sponsorship links; existing manual Undo and network cadence remain. All previously enabled sources retain their settings, the affected board was rechecked and restored without stopping the scheduler, and normal poll advancement is measured privately. Pear VC stays off with history retained. No screen, schema or configuration change.
+
+Validation: 426 affected tests; full backend 2,779 passed with two PostgreSQL-only skips; hosted browser sequence 47/59/206 without skips; real metadata previews and affected-board recheck; checked fresh backup and isolated restore; 201 fictional cases against the built image; exact backend file hashes on both services, protected-record comparisons, public health/auth/assets and polling-preservation checks. Signed-in production screens and positive real sponsorship remain unverified. Private proof/rollback: `/opt/ace/private-backups/chat2-repair-20261106T1658Z/` and `artifacts/requirements-chat-2-repair-20261106/`. Never replay completed operators. Shared-board suspects from the stored-title sweep are with the owner; their polling was not changed. The separate host-permission follow-up remains open. Chat 3 follows this repair's main merge, with item discussion before code.
+
+Updated November 6 Pacific after requirements chat 2 completed live verification. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
@@ -16,19 +20,19 @@ Designs are on a private canvas linked from the top of `ACE_NEXT_KNOWLEDGE.md`. 
 items in very simple words, one item and one question at a time, agrees any interface change with the
 owner, builds item and interface together, and saves progress before it ends.
 
-## Requirements chat 1 LIVE and merged, 2026-11-05
+## Original requirements releases (superseded by the repair above)
 
-Chat 2 checkpoint, November 5 Pacific: main CI 42150028596 passed (47/59/206 browser cases, none skipped), and owner verified real-job add. Approved sweep audit matches budgets; host sweep remains incomplete. DIS-16 is built locally on `requirements-chat-2-company-identity-20261105` from main `1363103`: shared identity checks, unverified portfolio leads, exact petition guards, no screen or migration. 232 affected tests pass; full local backend stalled and was interrupted. Snapshot acceptance catches Pear VC. Owner approved planning switch-off, not the live write; preserve marks/history. New-code live read-only dry run and six-board preview passed; hosted CI pending. No push/merge/release. Private proof: `artifacts/requirements-chat-2-20261105/`. Continue chat 2.
+Read-only status recheck at 15:56Z on November 6 confirmed the deployed services healthy and chat 2 state unchanged; current metrics are in the private release/live-status-20261106.json artifact.
 
-Owner-approved exact tested `1a08549550b765f40acc047dd0a82f684c3af58a` is live since 2026-11-05T22:18Z (14:18 Pacific): migration 0051, API,
-scheduler and web. PR #29 merged as `caf1e12e2e44ab6685322470786f73387febb127`; the only later changes are documents. Coverage is now three tabs in plain
+The original chat 2 release was verified before the board-addition repair above. PR #32 merged as 58e8762; API/scheduler then ran tested f7702f4, web 1a08549, schema 0051. No screen/migration. Main CI 42234193774 passed first time: backend 2,609/two PostgreSQL-only skips and browser 47/59/206 with none skipped. 232 affected cases, approved real-data read-only audit, six-board preview, snapshot replay, fresh checked backup and real isolated restore pass. Final installed identity/registry/ledger/source-hash/configuration/protected-record/public/monitor verification passed at 15:36Z. Pear VC shared board is off and active shared records withdrawn, preserving history. Private operational false positives caused safe rollbacks; tested corrections completed, product code unchanged. Successful operators must never be replayed. VM proof/rollback: private chat2-release-20261106T1418Z; local artifacts/requirements-chat-2-20261105/. No signed-in production UI claim; positive sponsorship is fixture-tested only. FRS-05 host-permission pickup remains open, details private requirements section 13.5. Owner authorized routine scoped work without repeated approval prompts; pause for serious security issues or actual permission refusals. The repair above supersedes its board-addition acceptance; complete the continuity merge before chat 3.
+
+Chat 1 activated owner-approved exact tested `1a08549550b765f40acc047dd0a82f684c3af58a` at 2026-11-05T22:18Z (14:18 Pacific): migration 0051, API,
+scheduler and web. Web still uses that image; API/scheduler now use the repair recorded above. PR #29 merged as `caf1e12e2e44ab6685322470786f73387febb127`; chat 2 is merged as 58e8762. Coverage is now three tabs in plain
 words, pasting a job gets an answer on screen, every employer has a lasting record (lead ledger), and every host a dated
 robots verdict. Full CI passes, for the first time in the 97 retained runs. A fresh backup and a real restore drill
 passed, and 19 protected tables are preserved across the cutover. No signed-in production browser check by the agent.
 
-**Pick up from "Latest state to pick up" in section 13.5 of the requirements file.** It lists what to do first, one at a
-time: read how the first sweep went, bring the owner the refused-host list (SmartRecruiters is the known case), ask whether
-adding a real job worked, then chat 2 (DIS-16). It also holds the code map, release method, rollback and test helpers.
+**Pick up from "Latest state to pick up" in requirements section 13.5.** It holds the remaining host-verdict/refusal follow-up, current permissions, release/rollback and test helpers. OPS-01 and DIS-14 remain verified. DIS-15 and DIS-16 have passed repair acceptance; the continuity merge must finish before chat 3. Do not replay completed releases or start chat 3 incidentally.
 
 ## Assessment invitation headline (previous release)
 
