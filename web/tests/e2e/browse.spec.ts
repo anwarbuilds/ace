@@ -84,7 +84,10 @@ test("an opened Pull stays open after job navigation and reload until closed", a
   await summary.click();
   await expect(summary).toHaveAttribute("aria-expanded", "true");
   await expect(entry.locator(".job-title").first()).toBeVisible();
-  await entry.locator(".job-title").first().scrollIntoViewIfNeeded();
+  // Asked again if the list redraws underneath: an opened Pull refreshes itself.
+  await expect(async () => {
+    await entry.locator(".job-title").first().scrollIntoViewIfNeeded({ timeout: 2000 });
+  }).toPass();
   const place = await page.evaluate(() => window.scrollY);
   expect(place).toBeGreaterThan(0);
   await entry.locator(".job-company").first().click();

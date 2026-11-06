@@ -569,3 +569,19 @@ the collapsed "Choose another question" picker (2026-10-26) and learned answers 
 - **To try browser specs fast:** tests here run hosted only, and a full run takes about 20 minutes. Push the commit plus a
   temporary workflow to a throwaway branch (`ci-quick-tmp`, `on: push`) to run one spec family in about two minutes, and
   delete the branch afterwards. Nothing about it reaches the pull request.
+
+## A release with a migration, proven (2026-11-05)
+
+Chat 1 changed the database, API, scheduler and web together. What worked, in order: rehearse the migration on a schema-only copy of
+production in a throwaway local database, including a downgrade that leaves the schema identical; dry-run the new code read-only on real
+data; preview outside hosts before trusting a rule. Then take a backup, restore it for real into a throwaway container with no network
+(about 4 minutes for 1.25 million jobs), build images from an isolated exact-commit archive, and activate with automatic rollback: migrate,
+API, scheduler, web. Compare 19 protected tables across the cutover.
+
+- **The dry run and the preview each caught what passing tests missed.** A due window starved boards behind old name searches, and a 401
+  on an API host's robots address read as a refusal of 1,250 working boards.
+- **Compose has no image names here.** Services run from an override file, so a bare `up` would start stale `oracle-*:latest` images.
+- **A scheduler has no `--wait`.** Its health check first runs after five minutes; wait for `ace_scheduler_ready` in its log instead.
+- **Rebuild, don't re-backup, when only a test moved the commit.** A checked backup stays good for 48 hours in the script.
+- **CI can pass by skipping.** A slow Chrome start skipped 46 tests in a step that still passed. The fixture now fails on CI. Read the counts, not only the colour.
+- **Tests hidden behind a red step were never checked for timing.** Once they ran every time, four proved flaky, one per run, on code that had just passed: a key pressed before scripts load, a scroll before a streamed list arrives, a scroll during a redraw, and a click during a save (`beginJobMutation` drops it on purpose, so nothing double counts). When a test fails on code that passed, read why before rerunning: fix the wait, and keep the assertion.

@@ -1,6 +1,6 @@
 # ACE Next knowledge
 
-Last updated: 2026-11-05 Pacific. Requirements chat 1 LIVE: Coverage tabs, lead ledger, host verdicts, schema 0051; not yet merged to `main`.
+Last updated: 2026-11-06 Pacific. Requirements chat 1 done and live (Coverage tabs, lead ledger, host verdicts, schema 0051), merged to `main`. Next: chat 1 follow-ups, then chat 2.
 
 **This is ACE's global memory. It loads in every chat, so it holds only current state, rules and an index.** The complete dated history, word for word, is in `docs/archive/ACE_NEXT_KNOWLEDGE-history.md` (about 130,000 tokens).
 
@@ -10,15 +10,15 @@ Last updated: 2026-11-05 Pacific. Requirements chat 1 LIVE: Coverage tabs, lead 
 
 ## Requirements programme and working method, 2026-11-04 Pacific
 
-> **Start here for new work.** Read "Chat 1 state to pick up" in section 13.5 of the requirements file first. Running state is in the next section.
+> **Start here for new work.** Read section 13 of the requirements file, beginning with "Latest state to pick up" in 13.5. It says exactly what is done, what to do first and where the code lives. Running state is in the next section.
 
 The owner's goal: ACE finds every eligible role as soon as it is posted, with the employer's own link, and becomes the strongest tool for this search without rebuilding the architecture. A long research chat produced a master requirements file and interface designs. All new work follows them.
 
 **Where things are**
 
-- Requirements: `docs/requirements/2026-11-04-ace-requirements.md` (137 requirements, version 5). **A new chat starts at its section 13** (method, chat plan, P0 in simple words, tracker, reader and code facts, chat log) and reads only what its items need. It is the only requirements document: overwrite it in place, with no copies or archives. **It stays out of Git by owner decision**, because it describes the owner's search profile and this repo is public; `.git/info/exclude` blocks it. It exists only in this checkout, so the owner keeps a private copy.
-- Designs: private canvas https://claude.ai/artifact/7jxkV16W8A34SPLzmka4fX, 14 screens with fictional data. Generator copy and rebuild notes: ignored `artifacts/ace-design-20261104/README.md`.
-- Evidence: ignored `artifacts/platform-research-20261103/` holds the read-only scripts and results. Measured figures stay in the requirements file and out of public documents.
+- Requirements: `docs/requirements/2026-11-04-ace-requirements.md` (137 requirements, version 6). **A new chat starts at its section 13** (method, chat plan, P0 in simple words, tracker, reader and code facts, chat log) and reads only what its items need. It is the only requirements document: overwrite it in place, with no copies or archives. **It stays out of Git by owner decision**, because it describes the owner's search profile and this repo is public; `.git/info/exclude` blocks it. It exists only in this checkout, so the owner keeps a private copy.
+- Designs: private canvas https://claude.ai/artifact/7jxkV16W8A34SPLzmka4fX, 17 boards with fictional data; its top row is what chat 1 built, and the older boards need rewriting in plain words before they are shown. Generator copy and rebuild notes: ignored `artifacts/ace-design-20261104/README.md`.
+- Evidence: ignored `artifacts/platform-research-20261103/` holds the read-only scripts and results, and ignored `artifacts/requirements-chat-1-20261105/` holds the release scripts, read-only audits and the quick CI helper. Measured figures stay in the requirements file and out of public documents.
 
 **How every chat works (owner's method)**
 
@@ -29,37 +29,40 @@ The owner's goal: ACE finds every eligible role as soon as it is posted, with th
 5. An item closes only with its acceptance evidence. Merge, deployment, migration, scheduler change and each source registration batch need the owner's approval for that operation.
 6. **Before every chat ends or runs low on room:** update the tracker and chat log in section 13, this file, `docs/HANDOFF.md` and the relevant `docs/knowledge/` topic, then give the owner the prompt for the next chat. The owner requires that each new chat has all prior knowledge.
 
-**Plan.** P0 is 37 items in eleven proposed chats (section 13.2). Chat 1 (ARCH-01, ARCH-02, OPS-01, DIS-14, FRS-05, plus DIS-15 moved up) is LIVE from branch `requirements-chat-1-20261104`, draft PR #29, not merged. Its full CI is green (first time in the 97 retained runs). Next: the owner's yes on merging, then read the first sweep's results, then chat 2 (DIS-16). P1 and later use the same method and the same starting prompt (section 13.4); their chats get planned when P0 is done.
+**Plan.** P0 is 37 items in eleven proposed chats (section 13.2). **Chat 1 is done and live**: ARCH-01 and ARCH-02 are standing rules, OPS-01 closes when `main` shows the same green as its pull request (see the tracker), DIS-14 is verified, and FRS-05 and DIS-15 close when the first sweep finishes and the owner has added a real job. PR #29 merged as `caf1e12`. **Next:** the follow-ups in section 13.5, then chat 2 (DIS-16). P1 and later use the same method and the same starting prompt (section 13.4); their chats get planned when P0 is done.
+
+**Owner decisions, 2026-11-05.** Plain words everywhere, with every page saying what it is (the first Coverage design was jargon to the owner). Show exactly what a chat will build, not the whole vision. Pasting a job gets an answer on screen; email and phone stay with alert work.
 
 **Owner decisions, 2026-11-04.** Full-time roles only. Breadth first: finding and adding companies moved up into P0. $5 a month approved for LLM use. Phone push is design only for now. All alert work goes last, even though production email alerts are currently off. Add to the existing interface with no new sidebar items and no fifth Analytics tab. Registrations are approved batch by batch.
 
-**Open with the owner** (sections 10 and 13.5 of the requirements file), one at a time: merging PR #29, SmartRecruiters' robots file (it says `Disallow: /` to all but LinkedIn's bot, and ACE reads 155 boards through that API), Workday's site terms, borderline role families, the DOL LCA file for DIS-10, whether to use FreeHire's UKG links as pointers, labelling time, tailoring and options.
+**Open with the owner** (sections 10 and 13.5 of the requirements file), one at a time: SmartRecruiters' robots file (it says `Disallow: /` to all but LinkedIn's bot, and ACE reads 155 boards through that API), Workday's site terms, borderline role families, the DOL LCA file for DIS-10, whether to use FreeHire's UKG links as pointers, labelling time, tailoring and options.
 
 ## Current running state
 
-Last verified 2026-11-05T22:21Z through public HTTP, container identity and read-only audits. No release has been checked in a signed-in production browser by the agent. Check again before claiming anything is running.
+Last verified 2026-11-06T00:33Z through public HTTP, container identity and read-only audits. No release has been checked in a signed-in production browser by the agent; the owner is the only one who has seen these pages signed in. Check again before claiming anything is running.
 
 | Surface | Current |
 | --- | --- |
 | Website | https://ace.opik.net |
-| Web | `1a08549550b765f40acc047dd0a82f684c3af58a`, branch of PR #29 |
+| Web | `1a08549550b765f40acc047dd0a82f684c3af58a`, PR #29 |
 | API | `1a08549550b765f40acc047dd0a82f684c3af58a`, Inbox parser 15 |
 | Scheduler | `1a08549550b765f40acc047dd0a82f684c3af58a`, gate `2026-10-29-v56`, 8 workers, lead ledger on, `HOST_POLICY_ENFORCE` off |
 | Schema | `0051` |
-| Extension | Source 1.31.5 on `main`, 1.31.6 on the chat 1 branch; unpacked from `extension/`, never published to the Web Store |
-| Production checkout | `/opt/ace`, Compose project `oracle`, stays at `8ec89cd` with the intended Caddyfile edit |
-| Source | `main` in `anwarbuilds/ace`, public; local standalone clone at `/home/ubuntu/Documents/ace-next` |
+| Extension | Source 1.31.6, unpacked from `extension/`, never published to the Web Store; owner reload pending |
+| Production checkout | `/opt/ace`, Compose project `oracle`, stays at `8ec89cd` with the intended Caddyfile edit; images come from an override, never from this checkout |
+| Source | `main` in `anwarbuilds/ace`, public (live commit merged as `caf1e12`); local standalone clone at `/home/ubuntu/Documents/ace-next` |
 
 - Services now run one commit, and only the web reports its build. Source pushes do not deploy. Images were built from an isolated exact-commit archive: `ace-chat1-backend:1a08549` (migrate, API, scheduler) and `ace-chat1-web:1a08549`.
 - Latest proof and rollback: `/opt/ace/private-backups/chat1-release-20261105T2137Z/`, images `oracle-api:before-chat1-20261105T2137Z`, `oracle-scheduler:before-chat1-20261105T2137Z`, `oracle-web:before-chat1-20261105T2137Z`, guarded rollback in section 13.5 of the requirements file, owner-local `artifacts/requirements-chat-1-20261105/`. Migration 0051 is additive and stays through a rollback. Never restore old SQL as an image rollback.
+- **Never run `docker compose up` for a service without the release override.** Compose has no image names, so it would start stale `oracle-*:latest` images. Live images: `ace-chat1-backend:1a08549` (migrate, API, scheduler), `ace-chat1-web:1a08549`. The same goes for any scheduler recreate to change a setting.
 - Caddy: since 2026-11-03 it serves HTTP/1.1 and HTTP/2 with `Alt-Svc: clear`, after a QUIC error in Chrome. The edited file is bind-mounted: preserve its content (SHA256 `0445b6da406ffb6cb860f5b7a05ca8c30757c47fe9633db7dddb911f591bff15`) and inode through any checkout or release. Older source holds the pre-repair file. Proof: `artifacts/site-reachability-20261103/REVIEW.md`.
 - Gmail: the API runs one monitor with a PostgreSQL lease about every 180 seconds (`GMAIL_BACKGROUND_SYNC_ENABLED`). `GMAIL_HISTORICAL_RECHECKS_ENABLED` stays false. The parser-7 operator stays stopped: never restart it. The connection was seen going from ready to error around 2026-11-01; recheck it (INB-02).
 - Alerts: production email alerts are off, with the alert address and mail key unset on the scheduler. Deferred to the end by owner decision.
-- CI: red on `main` until PR #29 merges; green on the PR (run 42097842455: backend, web, 47 extension, 59 Inbox and Analytics and all remaining browser cases). Each browser step stops the next, so treat any failure as new. Before changing a failing test, check it against the newest owner decision (`docs/knowledge/08-operations-and-testing.md`).
+- CI: full sequence passing (backend, web, 47 extension, 59 Inbox and Analytics, 206 other browser cases, none skipped). Each browser step stops the next, so any failure is new, not a baseline, though timing races have shown up once each: see the topic. Before changing a failing test, check it against the newest owner decision (`docs/knowledge/08-operations-and-testing.md`).
 - Backups: private, on the VM, unencrypted, no offsite copy yet (OPS-02).
 - Legacy: retired. Recovery material stays until the owner decides: volume `ace_ace_postgres_data`, recovery images, `/home/ubuntu/ace-private-backups/consolidation-20261030T170532Z/`, public tag `legacy-main-final`, private local `recovery-20261030/*` tags (never push all tags). Do not restart legacy services, comparison or replication.
 - Open extension issues: on some Workday tenants the disability checkboxes stay unanswered and the self-identification Date shows digits while Workday reports it required; waiting for the owner's Copy field diagnostics paste. SmartRecruiters one-click forms in shadow roots are unsupported (APP-02). ACE cannot attach files.
-- Coverage: three tabs at `/app/coverage` (Scoreboard, Leads, Sources). Scheduler maintenance keeps `employer_leads` and `host_policies` current in small budgets and never registers a board; first sweep runs for about 3 days. A refused host keeps polling until the owner decides (`HOST_POLICY_ENFORCE`).
+- Coverage: three tabs at `/app/coverage` (Scoreboard, Leads, Sources). Scheduler maintenance keeps `employer_leads` and `host_policies` current in small budgets and never registers a board; first sweep runs for about 3 days. A refused host keeps polling until the owner decides (`HOST_POLICY_ENFORCE`). SmartRecruiters' API is the known refused host, with 155 boards.
 - Open source issue: Pear VC's shared Ashby board was registered under the firm's name. Owner decision pending; the check gets fixed with a fictional regression (DIS-16).
 
 ## Rules
@@ -77,7 +80,7 @@ Last verified 2026-11-05T22:21Z through public HTTP, container identity and read
 - Do not claim a local test is production verification. Report failures and limits plainly. Never call classification or coverage perfect or complete without evidence.
 - No destructive Git (reset, clean, force push) over owner work. Fetch before editing or pushing.
 
-**Working with the owner.** Lead with the result in a few plain sentences and keep replies short. The owner judges interface work by looking, so show Day and Night. "Push" means commit and push; "live" means https://ace.opik.net through an approved release. Say which one a change needs.
+**Working with the owner.** Very simple words, with a small example, one item and one question at a time, never a list of decisions together. Lead with the result in a few plain sentences and keep replies short. The owner judges interface work by looking, so show Day and Night. "Push" means commit and push; "live" means https://ace.opik.net through an approved release. Say which one a change needs.
 
 ## Product contracts
 
@@ -105,7 +108,7 @@ Last verified 2026-11-05T22:21Z through public HTTP, container identity and read
 
 ## Release procedure
 
-Prepare and test first, and get approval for the exact SHA and operation. For a schema-free release:
+Prepare and test first, and get approval for the exact SHA and operation. If the agent's permission check refuses a production step, stop and offer the owner the exact command; never work around it. A release with a migration adds a real restore drill into a throwaway container with no network (about 4 minutes), a schema-only rehearsal including a downgrade, and runs `compose run --rm --no-deps migrate` before the services; the scripts that did this are in ignored `artifacts/requirements-chat-1-20261105/release/`, and section 13.5 of the requirements file explains them. For a schema-free release:
 
 1. Inspect what is running: commits, images, container IDs, schema, private inventory.
 2. Take a fresh private backup in `/opt/ace/private-backups/<name>-<UTC stamp>/` (directory 700, dump 600). Check gzip, archive catalog and full expansion. This is not a restore drill. No pruning.
@@ -116,11 +119,11 @@ Prepare and test first, and get approval for the exact SHA and operation. For a 
 
 Access: `ssh -i ~/.ssh/ace_oracle ubuntu@161.153.89.170`, checkout `/opt/ace`. Never print `.env` or expanded Compose configuration. The agent's permission check can refuse production reads until the owner approves in that chat.
 
-Lessons: in SSH `bash -s`, give non-input `docker compose exec` calls `</dev/null` or they swallow the remaining script. With `pipefail`, `gzip -dc | pg_restore --list` can exit 141, so run `gzip -t` first and use process substitution. Start long VM builds with `nohup` and poll a log. Use umask 022 for checkouts and 077 for private files. Health alone once missed unreadable new assets, so check hashes through public HTTPS.
+Lessons: a scheduler has no `--wait`, because its health check first runs after five minutes, so wait for `ace_scheduler_ready` in its log. In SSH `bash -s`, give non-input `docker compose exec` calls `</dev/null` or they swallow the remaining script. With `pipefail`, `gzip -dc | pg_restore --list` can exit 141, so run `gzip -t` first and use process substitution. Start long VM builds with `nohup` and poll a log. Use umask 022 for checkouts and 077 for private files. Health alone once missed unreadable new assets, so check hashes through public HTTPS.
 
 ## Local work and testing
 
-- Browser tests run on hosted CI only. Do not launch Chrome on this laptop: it has shut down under load, and the cooling restriction stands.
+- Browser tests run on hosted CI only. Full CI runs on a pull request in about 15 minutes, and a push cancels it. `artifacts/requirements-chat-1-20261105/ci-quick/quick_push.sh <commit>` runs chosen specs and takes Day and Night screenshots in about four minutes on a throwaway branch; delete it afterwards. Do not launch Chrome on this laptop: it has shut down under load, and the cooling restriction stands.
 - Run heavy commands one at a time with `nice -n 15 taskset -c 0`. Node DOM tests: `--max-old-space-size=256`. TypeScript: 768 MB.
 - Backend: pyenv 3.12.12 with `PYTHONPATH=.venv/lib/python3.12/site-packages`, because the `.venv` python symlink fails importing `_ctypes`. Fictional fixtures only. Starlette TestClient can stall in a restricted sandbox.
 - Checks: `node extension/test-rules.js`, `node extension/test-memory.js`, `npm run test:extension-dom`, `npm run test:inbox`, `npm run typecheck`, `npm run lint`, `npm run build` (in `web/`), `git diff --check`, the dash scan. `npx next typegen` generates route types in a fresh checkout.

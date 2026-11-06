@@ -1,6 +1,6 @@
 # ACE current handoff
 
-Updated 2026-11-05 Pacific after the requirements chat 1 release. This is
+Updated 2026-11-06 Pacific after requirements chat 1 went live and merged. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
 is preserved as history. Read **all** of [ACE_NEXT_KNOWLEDGE.md](../ACE_NEXT_KNOWLEDGE.md),
 [AGENTS.md](../AGENTS.md) and the relevant [knowledge topic](knowledge/README.md)
@@ -16,15 +16,17 @@ Designs are on a private canvas linked from the top of `ACE_NEXT_KNOWLEDGE.md`. 
 items in very simple words, one item and one question at a time, agrees any interface change with the
 owner, builds item and interface together, and saves progress before it ends.
 
-## Requirements chat 1 LIVE, 2026-11-05
+## Requirements chat 1 LIVE and merged, 2026-11-05
 
 Owner-approved exact tested `1a08549550b765f40acc047dd0a82f684c3af58a` is live since 2026-11-05T22:18Z (14:18 Pacific): migration 0051, API,
-scheduler and web. Coverage is now three tabs in plain words, paste a job to add it and get an answer on screen,
-a lead ledger and dated host verdicts. Branch `requirements-chat-1-20261104`, draft PR #29, **not merged**: a release
-built from `main` would lose this until it merges. Full CI is green on the PR (run 42118383973), for the first time in
-the 97 retained runs. Fresh backup and a real restore drill passed, and 19 protected tables are preserved across the
-cutover. No signed-in production browser check by the agent. Pickup steps, proof and rollback: "Chat 1 state to pick up" in
-section 13.5 of the requirements file. Open with the owner, one at a time: merging, then SmartRecruiters' robots file.
+scheduler and web. PR #29 merged as `caf1e12e2e44ab6685322470786f73387febb127`; the only later changes are documents. Coverage is now three tabs in plain
+words, pasting a job gets an answer on screen, every employer has a lasting record (lead ledger), and every host a dated
+robots verdict. Full CI passes, for the first time in the 97 retained runs. A fresh backup and a real restore drill
+passed, and 19 protected tables are preserved across the cutover. No signed-in production browser check by the agent.
+
+**Pick up from "Latest state to pick up" in section 13.5 of the requirements file.** It lists what to do first, one at a
+time: read how the first sweep went, bring the owner the refused-host list (SmartRecruiters is the known case), ask whether
+adding a real job worked, then chat 2 (DIS-16). It also holds the code map, release method, rollback and test helpers.
 
 ## Assessment invitation headline (previous release)
 
@@ -42,7 +44,11 @@ an isolated exact-source archive. Preserve its mount/inode. Fresh backup and
 guarded unexecuted web rollback: `/opt/ace/private-backups/assessment-headline-20261104T0115Z/`.
 Current owner-local proof/counts: `artifacts/assessment-release-20261104/REVIEW.md`.
 
-## Extension 1.31.5 on main, owner reload pending
+## Extension 1.31.6 on main, owner reload pending
+
+1.31.6 only fixes double-clicking the card's grip to reset its position. The notes below still apply.
+
+## Extension 1.31.5
 
 Workday dropdown questions were read as per-application generated IDs
 (a hidden companion input made each question block look like two), so no
