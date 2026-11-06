@@ -21,6 +21,7 @@ from sqlalchemy.orm import sessionmaker
 from backend.app.db.base import Base
 from backend.app.db.models import JobSourceRecord
 from backend.app.models.job import CanonicalJob
+from backend.app.coverage.identity import BoardEvidence
 from backend.scripts.register_network_boards import (
     DISCOVERY_SOURCE,
     Candidate,
@@ -94,6 +95,7 @@ def test_a_board_hiring_us_engineers_is_registered(
             job("Software Engineer, New Grad"),
             job("Account Executive"),
         ],
+        lambda candidate: "Fictional AI",
     )
 
     assert outcome.added
@@ -142,6 +144,7 @@ def test_a_senior_only_board_still_counts_as_hiring_us_engineers() -> None:
         lambda definition: [
             job("Senior Software Engineer"),
         ],
+        lambda candidate: "Fictional AI",
     )
 
     assert outcome.added
@@ -156,6 +159,7 @@ def test_a_board_without_a_passing_role_starts_hourly(
         lambda definition: [
             job("Senior Software Engineer"),
         ],
+        lambda candidate: "Fictional AI",
     )
 
     with session_factory.begin() as session:
@@ -367,23 +371,27 @@ def test_a_board_is_registered_under_the_name_it_declares() -> None:
         "Fictional Tower",
     ) == ("Fictional Tower", None)
 
-    # Initials are the same employer; the longer name says more.
+    # Initials alone do not prove a legal alias. Use the board's own name.
     assert settle_name(
         "Fictional Space Intelligence",
         "FSI",
-    ) == ("Fictional Space Intelligence", None)
+    ) == ("FSI", None)
 
     assert settle_name(
         "FSI",
         "Fictional Space Intelligence",
     ) == ("Fictional Space Intelligence", None)
 
-    # Agreeing names, a domain suffix and silence keep the listed name.
-    for declared in ("Fictional AI", "Fictional.ai", "Fictional", None, ""):
+    # Agreeing names and a domain suffix keep the listed name.
+    for declared in ("Fictional AI", "Fictional.ai"):
         assert settle_name(
             "Fictional AI",
             declared,
         ) == ("Fictional AI", None), declared
+
+    assert settle_name("Fictional AI", "Fictional") == ("Fictional", None)
+    for declared in (None, ""):
+        assert settle_name("Fictional AI", declared)[1].startswith("identity:")
 
 
 def test_a_firms_shared_portfolio_board_is_left_out() -> None:
@@ -399,7 +407,7 @@ def test_a_firms_shared_portfolio_board_is_left_out() -> None:
         lambda definition: [
             job("Software Engineer, New Grad"),
         ],
-        lambda candidate: "Fictional VC",
+        lambda candidate: BoardEvidence(owner="Fictional VC", shared=True),
     )
 
     assert not outcome.added

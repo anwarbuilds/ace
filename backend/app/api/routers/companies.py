@@ -16,7 +16,8 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
-from backend.app.db.models import CompanyPetitionReportRecord, JobEvaluationRecord, JobMarkRecord, JobRecord
+from backend.app.db.models import JobEvaluationRecord, JobMarkRecord, JobRecord
+from backend.app.coverage.petition_identity import petition_reports_for
 from backend.app.intelligence.companies import classify_company
 from backend.app.branding.cache import LogoBusy, LogoCache
 from backend.app.branding.sources import LogoSeed, company_logo_seed
@@ -65,11 +66,7 @@ def company_intelligence_batch(name: list[str] = Query(default=[]), session: Ses
     names = list(dict.fromkeys(value[:255] for value in name if value))[:30]
     if not names:
         return {"items": {}}
-    rows = session.scalars(
-        select(CompanyPetitionReportRecord)
-        .where(CompanyPetitionReportRecord.ace_company.in_(names), CompanyPetitionReportRecord.entity_verified.is_(True))
-        .order_by(CompanyPetitionReportRecord.period.desc())
-    ).all()
+    rows = petition_reports_for(session, names)
     items = {}
     for row in rows:
         items.setdefault(row.ace_company, {
@@ -83,12 +80,7 @@ def company_intelligence_batch(name: list[str] = Query(default=[]), session: Ses
 @router.get("/api/company-intelligence")
 def company_intelligence(name: str = Query(..., min_length=1, max_length=255), session: Session = Depends(get_session)) -> dict:
     """Only explicitly resolved official legal-entity evidence is shown."""
-    reports = session.scalars(
-        select(CompanyPetitionReportRecord)
-        .where(CompanyPetitionReportRecord.ace_company == name, CompanyPetitionReportRecord.entity_verified.is_(True))
-        .order_by(CompanyPetitionReportRecord.period.desc())
-        .limit(20)
-    ).all()
+    reports = petition_reports_for(session, [name])[:20]
     return {
         "company": name,
         "petition_history": [

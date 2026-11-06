@@ -28,6 +28,7 @@ confirms.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import json
 import re
 import urllib.error
@@ -36,6 +37,7 @@ import urllib.request
 from urllib.parse import urlsplit
 
 from backend.app.coverage.benchmark import normalise_company
+from backend.app.coverage.identity import name_keys, read_board_evidence, resolve_employer, shared_board_reason
 from backend.app.coverage.companies import is_namesake
 
 
@@ -836,18 +838,6 @@ def board_page_name(
     ).strip() or None
 
 
-# A company that writes its own name with its domain attached. Calm's
-# Greenhouse board declares itself "Calm.com", and comparing that to
-# "Calm" for exact equality rejected a board that really is theirs --
-# then returned early, because a board that names *somebody else* must
-# not be rescued by weaker evidence. The refusal was right and the
-# comparison was wrong.
-_TLD_TAIL = re.compile(
-    r"\.(?:com|ai|io|co|dev|org|net|app|tech|xyz)$",
-    re.IGNORECASE,
-)
-
-
 _PUNCT = re.compile(
     r"[^a-z0-9]+"
 )
@@ -872,54 +862,6 @@ def _unstripped(
             name or ""
         ).lower(),
     ).strip()
-
-
-def _comparable(
-    name: str,
-) -> set[str]:
-    """Return the keys a name could reasonably be written as.
-
-    Trimming is deliberately narrow: a trailing domain suffix, and
-    nothing else. In particular this is not company_keys, which also
-    drops generic trailing words so that one list writing "Anduril"
-    and another writing "Anduril Industries" count as one company.
-    That is the right rule for measuring coverage and the wrong rule
-    for deciding whose board this is -- under it "Ramp Networks"
-    accepts a board belonging to Ramp, and "Aurora Innovation" accepts
-    Aurora Labs, which is the subscription ACE actually made once and
-    had to unpick.
-    """
-
-    text = (
-        name or ""
-    ).strip()
-
-    keys = {
-        key
-        for key in (
-            normalise_company(
-                text
-            ),
-        )
-        if key
-    }
-
-    trimmed = _TLD_TAIL.sub(
-        "",
-        text,
-    )
-
-    if trimmed and trimmed != text:
-        key = normalise_company(
-            trimmed
-        )
-
-        if key:
-            keys.add(
-                key
-            )
-
-    return keys
 
 
 def posting_company_name(
@@ -1021,6 +963,7 @@ def board_belongs_to(
     source_type: str,
     token: str,
     jobs: list[dict],
+    source_host: str | None = None,
     fetch=_fetch_json,
     fetch_text=_fetch_text,
 ) -> str | None:
@@ -1057,53 +1000,28 @@ def board_belongs_to(
     ):
         return None
 
-    keys = _comparable(
-        company
-    )
-
-    declared = board_metadata_name(
-        source_type=source_type,
-        token=token,
-        fetch=fetch,
-    ) or (
-        posting_company_name(
-            jobs
-        )
-        if source_type == "smartrecruiters"
-        else None
-    )
-
-    if declared and (
-        keys
-        & _comparable(
-            declared
-        )
-    ):
-        return (
-            "board declares itself "
-            f"{declared!r}"
-        )
-
-    if declared:
-        # It answered, and with somebody else's name.
+    if shared_board_reason(source_type, token):
         return None
 
-    titled = board_page_name(
-        source_type=source_type,
-        token=token,
-        fetch_text=fetch_text,
+    evidence = read_board_evidence(
+        source_type, token, source_host=source_host, fetch=fetch, fetch_text=fetch_text, jobs=jobs,
     )
-
-    if titled and (
-        keys
-        & _comparable(
-            titled
-        )
-    ):
-        return (
-            "board page titled "
-            f"{titled!r}"
-        )
+    identity = resolve_employer(
+        company, evidence, source_type=source_type, account=token,
+        titles=[job.get("title") or job.get("name") or "" for job in jobs],
+    )
+    if identity.state == "shared":
+        return None
+    if evidence.owner or evidence.employers:
+        # A board naming a different employer cannot be rescued by a
+        # customer mention, substring, initialism or subsidiary name.
+        if identity.company and name_keys(company) & name_keys(identity.company):
+            declared = evidence.owner or evidence.employers[0]
+            label = "board page titled" if evidence.basis == "The board's own page." else "board declares itself"
+            return f"{label} {declared!r}"
+        return None
+    if evidence.shared:
+        return None
 
     # No metadata endpoint. Fall back to the employer's own words in a
     # posting, which is the weakest evidence here and is held to the
@@ -1578,8 +1496,9 @@ def workday_belongs_to(
     company. The only fact available is the tenant, which the employer
     chose and which sits in a hostname they control.
 
-    So the rule is narrow on purpose: the tenant has to be the
-    company's own name. That refuses boards that really are theirs --
+    So the rule is narrow on purpose: the whole tenant has to be the
+    company's own name, with only legal endings and punctuation removed.
+    A prefix cannot prove a subsidiary or alias. That refuses boards that really are theirs --
     a tenant abbreviated past recognition is unreachable by this route
     -- and it also refuses the failure that made the rule necessary.
     Sana Labs' careers page links Workday's own tenant, because they
@@ -1594,50 +1513,9 @@ def workday_belongs_to(
     ):
         return None
 
-    tenant = token.partition(
-        "/"
-    )[0].replace(
-        "-",
-        ""
-    ).lower()
-
-    if len(
-        tenant
-    ) < 3:
-        return None
-
-    for key in _comparable(
-        company
-    ):
-        flattened = key.replace(
-            " ",
-            ""
-        )
-
-        if not flattened:
-            continue
-
-        if tenant == flattened:
-            return (
-                "Workday tenant "
-                f"{tenant!r} is the "
-                "company's own"
-            )
-
-        # "devoted" for Devoted Health, "bolt" for Bolt Financial.
-        # A prefix only, and only a substantial one: a two- or
-        # three-letter head matches half the internet.
-        if len(
-            tenant
-        ) >= 4 and flattened.startswith(
-            tenant
-        ):
-            return (
-                "Workday tenant "
-                f"{tenant!r} is the "
-                "company's own"
-            )
-
+    tenant = re.sub(r"[^a-z0-9]", "", token.partition("/")[0].casefold())
+    if len(tenant) >= 3 and tenant in name_keys(company):
+        return f"Workday tenant {tenant!r} is the company's own"
     return None
 
 
@@ -2403,6 +2281,22 @@ def ref_belongs_to(
     whose board it is.
     """
 
+    if shared_board_reason(ref.source_type, ref.token):
+        return None
+    fetch = lru_cache(maxsize=8)(fetch) if fetch else (lambda url: None)
+    fetch_text = lru_cache(maxsize=8)(fetch_text) if fetch_text else (lambda url: "")
+    identity_evidence = read_board_evidence(
+        ref.source_type, ref.token, source_host=ref.source_host,
+        fetch=fetch, fetch_text=fetch_text, jobs=jobs,
+    )
+    resolved = resolve_employer(company, identity_evidence,
+        source_type=ref.source_type, account=ref.token,
+        titles=[job.get("title") or job.get("name") or "" for job in jobs])
+    if resolved.state == "shared" or (identity_evidence.owner or identity_evidence.employers) and (
+        not resolved.company or not name_keys(company) & name_keys(resolved.company)
+    ):
+        return None
+
     if ref.source_type == "workday":
         return workday_belongs_to(
             company=company,
@@ -2420,6 +2314,7 @@ def ref_belongs_to(
         source_type=ref.source_type,
         token=ref.token,
         jobs=jobs,
+        source_host=ref.source_host,
         fetch=fetch,
         fetch_text=fetch_text,
     ) or linked_board_belongs_to(

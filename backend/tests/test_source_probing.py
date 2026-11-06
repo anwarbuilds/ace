@@ -468,11 +468,11 @@ def test_a_workday_board_on_somebody_elses_tenant_is_refused(
         token="salesforce/Slack",
     ) is None
 
-    # Their own tenant, abbreviated the way employers abbreviate.
+    # A prefix alone cannot prove ownership of a longer company name.
     assert workday_belongs_to(
         company="Devoted Health",
         token="devoted/Devoted",
-    ) is not None
+    ) is None
 
 
 def test_the_wrong_companys_website_is_not_searched() -> None:

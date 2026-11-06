@@ -96,8 +96,10 @@ def test_tenant_hosts_use_the_real_path_and_shared_hosts_a_stand_in() -> None:
     assert greenhouse.host == "boards-api.greenhouse.io"
     assert "fictional" not in greenhouse.paths[0]
 
-    [eu] = read_targets("lever", "fictional", "jobs.eu.lever.co")
+    [eu, page] = read_targets("lever", "fictional", "jobs.eu.lever.co")
     assert eu.host == "api.eu.lever.co"
+    assert page.host == "jobs.eu.lever.co"
+    assert page.paths == ("/example",)
 
 
 def test_the_verdict_comes_from_the_paths_ace_reads_and_longest_match_wins() -> None:

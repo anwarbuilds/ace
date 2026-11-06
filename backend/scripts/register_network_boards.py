@@ -35,13 +35,14 @@ from datetime import (
 )
 import json
 from pathlib import Path
-import re
 import time
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
-from backend.app.coverage.benchmark import normalise_company
+from backend.app.coverage.identity import (
+    BoardEvidence, read_board_evidence, resolve_employer, shared_board_reason,
+)
 from backend.app.coverage.companies import (
     NETWORK_DISCOVERY_SOURCE,
     NETWORK_POLL_INTERVAL_SECONDS,
@@ -113,121 +114,22 @@ _NOT_FULL_TIME = frozenset(
 )
 
 
-# A firm's own board carrying its portfolio's roles: Pear VC's Ashby
-# board lists a hundred postings from a dozen companies, and the network
-# that linked one of them named the board after that one company.
-_FIRM_NAME = re.compile(
-    r"\b(?:vc|ventures?|capital|partners|portfolio|talent\s+network)\b",
-    re.IGNORECASE,
-)
-
-
-def _same_employer(
-    first: str,
-    second: str,
-) -> bool:
-    """One name contains the other, or every word of one is in the other.
-
-    Not merely a shared word: "Blue Apron" is not "Blue Origin".
-    """
-
-    left = normalise_company(
-        first
-    )
-
-    right = normalise_company(
-        second
-    )
-
-    if not left or not right:
-        return True
-
-    squashed_left = left.replace(" ", "")
-
-    squashed_right = right.replace(" ", "")
-
-    left_words = set(left.split())
-
-    right_words = set(right.split())
-
-    return (
-        squashed_left in squashed_right
-        or squashed_right in squashed_left
-        or left_words <= right_words
-        or right_words <= left_words
-    )
-
-
-def _initials_of(
-    first: str,
-    second: str,
-) -> bool:
-    """Whether one name is the initials of the other's words."""
-
-    for short, long in (
-        (first, second),
-        (second, first),
-    ):
-        words = normalise_company(
-            long
-        ).split()
-
-        if len(words) >= 2 and normalise_company(
-            short
-        ).replace(" ", "") == "".join(
-            word[0]
-            for word in words
-        ):
-            return True
-
-    return False
-
-
 def settle_name(
     listed: str,
-    declared: str | None,
+    declared: str | BoardEvidence | None,
+    *,
+    source_type: str = "",
+    account: str = "",
+    titles: Sequence[str] = (),
 ) -> tuple[str, str | None]:
-    """The name to register under, or why the board is not one employer.
-
-    The network's name is kept when the board agrees with it or says
-    nothing. A board that declares another employer is registered under
-    its own name: Greycroft lists Data.ai, whose roles are on Sensor
-    Tower's board now. One that declares a venture firm while the network
-    named a company is the firm's shared board, and is left out.
-    """
-
-    declared = (
-        declared or ""
-    ).strip()
-
-    if not declared or _same_employer(
-        listed,
-        declared,
-    ):
-        return listed, None
-
-    # "ASI" is Air Space Intelligence and "BCC" Black Canyon Consulting:
-    # one name is the other's initials, and the longer one says more.
-    if _initials_of(
-        listed,
-        declared,
-    ):
-        return max(
-            listed,
-            declared,
-            key=len,
-        ), None
-
-    if _FIRM_NAME.search(
-        declared
-    ) and not _FIRM_NAME.search(
-        listed
-    ):
-        return listed, (
-            f"shared: a firm's portfolio board, {declared!r}"
-        )
-
-    return declared, None
+    """Resolve one board's owner without creating a global legal alias."""
+    identity = resolve_employer(
+        listed, declared, source_type=source_type, account=account, titles=titles,
+    )
+    if identity.company is None:
+        prefix = "shared" if identity.state == "shared" else "identity"
+        return listed, f"{prefix}: {identity.reason}"
+    return identity.company, None
 
 
 @dataclass(
@@ -353,11 +255,15 @@ def known_boards(
 def assess(
     candidate: Candidate,
     read_board: Callable[[SourceDefinition], Sequence],
-    declared_name: Callable[[Candidate], str | None] = (
+    declared_name: Callable[[Candidate], str | BoardEvidence | None] = (
         lambda candidate: None
     ),
 ) -> Outcome:
     """Read one board and decide whether it earns a place."""
+
+    shared = shared_board_reason(candidate.source_type, candidate.source_account)
+    if shared:
+        return Outcome(candidate=candidate, added=False, reason=f"shared: {shared}")
 
     try:
         jobs = list(
@@ -451,9 +357,10 @@ def assess(
 
     name, shared = settle_name(
         candidate.company,
-        declared_name(
-            candidate
-        ),
+        declared_name(candidate),
+        source_type=candidate.source_type,
+        account=candidate.source_account,
+        titles=[job.title for job in jobs],
     )
 
     if shared is not None:
@@ -532,38 +439,16 @@ def declared_name(
     *,
     fetch=None,
     fetch_text=None,
-) -> str | None:
-    """The employer a board names itself, where its provider says.
-
-    A scheduled caller passes fetchers that ask robots first.
-    """
-
-    from backend.app.coverage.probing import (
-        _fetch_json,
-        _fetch_text,
-        board_metadata_name,
-        board_page_name,
-    )
-
+) -> BoardEvidence:
+    """Dated board findings and the owner's own metadata, not the token."""
     try:
-        if candidate.source_type == "greenhouse":
-            return board_metadata_name(
-                source_type="greenhouse",
-                token=candidate.source_account,
-                fetch=fetch or _fetch_json,
-            )
-
-        if candidate.source_type in ("ashby", "lever"):
-            return board_page_name(
-                source_type=candidate.source_type,
-                token=candidate.source_account,
-                fetch_text=fetch_text or _fetch_text,
-            )
-
+        return read_board_evidence(
+            candidate.source_type, candidate.source_account,
+            source_host=candidate.source_host, fetch=fetch, fetch_text=fetch_text,
+        )
     except Exception:
-        return None
-
-    return None
+        # Failure is no evidence. The lead remains unconfirmed, never gone.
+        return BoardEvidence()
 
 
 def main(
