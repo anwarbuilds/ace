@@ -35,7 +35,6 @@ from pydantic import (
 
 from backend.app.intelligence.roles import (
     EXCLUDED_FAMILIES,
-    NEW_GRAD_ONLY_FAMILIES,
     RoleFamily,
     RolePriority,
     classify_role,
@@ -83,6 +82,15 @@ EXCLUDED_FAMILY_REASONS = {
         "Infrastructure, platform, cloud and DevOps roles are not on "
         "the list."
     ),
+    RoleFamily.COMPILER_ENGINEERING: (
+        "Compiler engineering roles are not on the list."
+    ),
+    RoleFamily.RUNTIME_ENGINEERING: (
+        "Runtime engineering roles are not on the list."
+    ),
+    RoleFamily.QUALITY_ASSURANCE: (
+        "QA, software testing and test automation roles are not on the list."
+    ),
 }
 
 
@@ -94,12 +102,14 @@ PROFILES: dict[str, CandidateProfile] = {
     # v55 changes no threshold either: site reliability and mobile roles
     # leave the list, at the owner's request on 2026-10-29; v56 the same
     # day takes infrastructure, platform, cloud and DevOps titles off too.
+    # v57 applies the approved role list, including data families under
+    # these same experience limits; compiler, runtime and QA stay out.
     "early-career": CandidateProfile(
         key="early-career",
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=3,
-        rule_version="2026-10-29-v56",
+        rule_version="2026-11-07-v57",
     ),
     # New grad roles stay the primary target (they sort first), and SDE
     # II comes in: with three years, a posting asking "3+ years" is one
@@ -110,7 +120,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=4,
-        rule_version="2026-10-29-v56-sde2",
+        rule_version="2026-11-07-v57-sde2",
     ),
 }
 
@@ -1198,31 +1208,10 @@ def is_new_grad_title(
 EARLY_CAREER_MAX_YEARS = 2
 
 
-# Career levels written into a title, for the families tracked only for
-# new graduates.
-_LEVEL_TWO_OR_ABOVE = re.compile(
-    r"\b(?:ii|iii|iv|v|2|3|4|5)\b(?!\s*\+)",
-    re.IGNORECASE,
-)
-
-_LEVEL_ONE = re.compile(
-    r"\b(?:i|1)\b\s*(?:/|or|-|to|&)?\s*(?:ii|2)?\b",
-    re.IGNORECASE,
-)
-
-
 # Internships are excluded: the user is targeting full-time early-career
 # roles only. Kept as a flag rather than deleted rules, because a search
 # strategy changes more often than code should.
 INCLUDE_INTERNSHIPS = False
-
-
-# Data engineering and data science are excluded too. The user asked
-# for new-grad data roles on 2026-10-09 and withdrew the request the
-# same day: their preparation is for software, machine learning and
-# forward deployed engineering. With the flag on, those families pass
-# only when written for new graduates or early career.
-INCLUDE_NEW_GRAD_DATA_ROLES = False
 
 
 INTERNSHIP_TITLE_PATTERNS = (
@@ -1819,6 +1808,13 @@ def _is_clearly_senior(
     title: str,
 ) -> bool:
     """Detect titles clearly outside ACE's early-career scope."""
+
+    # This approved title names a software role, not the staff rank.
+    # Preserve surrounding Senior/Staff/Principal and level qualifiers.
+    title = re.sub(
+        r"\bmember of technical staff\b", "software engineer", title,
+        flags=re.IGNORECASE,
+    )
 
     return _matches_any_regex(
         title,
@@ -2867,44 +2863,9 @@ def evaluate_job(
         )
     )
 
-    # Data engineering and data science: off the list unless switched on
-    # (INCLUDE_NEW_GRAD_DATA_ROLES), and then only for new graduates and
-    # early career -- "Data Engineer, 2027 Graduate" in, a Data
-    # Scientist II asking three years out.
-    if (
-        role.family
-        in NEW_GRAD_ONLY_FAMILIES
-        and (
-            not INCLUDE_NEW_GRAD_DATA_ROLES
-            or not is_early_career
-            # "Data Scientist II", Amazon's "Applied Scientist II": a
-            # rung past the graduate one, whatever years it states.
-            # "Data Scientist I or II" is open to the graduate.
-            or (
-                _LEVEL_TWO_OR_ABOVE.search(job.title)
-                and not _LEVEL_ONE.search(job.title)
-            )
-        )
-    ):
-        reject_codes.append(
-            EligibilityReasonCode
-            .NON_TARGET_ROLE
-        )
-
-        reject_reasons.append(
-            (
-                "Data engineering and data "
-                "science roles are tracked "
-                "only when written for new "
-                "graduates or early career."
-            )
-            if INCLUDE_NEW_GRAD_DATA_ROLES
-            else (
-                "Data engineering and data "
-                "science roles are not on "
-                "the list."
-            )
-        )
+    # Data engineering, analytics, data science and applied scientist
+    # roles now use these same checks. The owner's 2026-11-07 decision
+    # supersedes the old new-grad-only restriction, including level II.
 
     if not has_verifiable_requirements(
         job

@@ -20,7 +20,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict
 
 
-ROLE_RULE_VERSION = "2026-10-29-v4"
+ROLE_RULE_VERSION = "2026-11-07-v5"
 
 
 class RoleFamily(str, Enum):
@@ -31,9 +31,8 @@ class RoleFamily(str, Enum):
     FORWARD_DEPLOYED_ENGINEERING = (
         "FORWARD_DEPLOYED_ENGINEERING"
     )
-    # Named so the gate can say what a role is. Off the list unless the
-    # gate's INCLUDE_NEW_GRAD_DATA_ROLES is set, and then only for new
-    # graduates and early career: asked for and withdrawn on 2026-10-09.
+    # Included under the same eligibility rules as software and ML after
+    # the owner's combined role review on 2026-11-07.
     DATA_ENGINEERING = "DATA_ENGINEERING"
     DATA_SCIENCE = "DATA_SCIENCE"
     # Named for the same reason, and never on the list: the owner said on
@@ -47,16 +46,10 @@ class RoleFamily(str, Enum):
     INFRASTRUCTURE_ENGINEERING = (
         "INFRASTRUCTURE_ENGINEERING"
     )
+    COMPILER_ENGINEERING = "COMPILER_ENGINEERING"
+    RUNTIME_ENGINEERING = "RUNTIME_ENGINEERING"
+    QUALITY_ASSURANCE = "QUALITY_ASSURANCE"
     OTHER = "OTHER"
-
-
-# The families admitted only for new-grad and early-career postings.
-NEW_GRAD_ONLY_FAMILIES = frozenset(
-    {
-        RoleFamily.DATA_ENGINEERING,
-        RoleFamily.DATA_SCIENCE,
-    }
-)
 
 
 # Software trades the owner does not want, at any level.
@@ -65,6 +58,9 @@ EXCLUDED_FAMILIES = frozenset(
         RoleFamily.SITE_RELIABILITY_ENGINEERING,
         RoleFamily.MOBILE_ENGINEERING,
         RoleFamily.INFRASTRUCTURE_ENGINEERING,
+        RoleFamily.COMPILER_ENGINEERING,
+        RoleFamily.RUNTIME_ENGINEERING,
+        RoleFamily.QUALITY_ASSURANCE,
     }
 )
 
@@ -144,6 +140,24 @@ FORWARD_DEPLOYED_PATTERNS = (
 )
 
 
+# Explicitly excluded trades win over a generic software or ML title.
+# Real-time software is distinct from a language runtime.
+COMPILER_PATTERNS = (
+    r"\bcompilers?\b",
+    r"\bcompilation\b",
+)
+RUNTIME_PATTERNS = (
+    r"\bruntimes?\b",
+    r"\brun[- ]time (?:systems?|software|engineer|developer)\b",
+)
+QUALITY_ASSURANCE_PATTERNS = (
+    r"\b(?:qa|sdet|quality assurance|test automation|automation testing)\b",
+    r"\b(?:software )?test(?:ing)? engineer(?:ing)?\b",
+    r"\bsoftware (?:development )?engineer(?:ing)? in test\b",
+    r"\bsoftware quality engineer(?:ing)?\b",
+)
+
+
 AI_ML_PATTERNS = (
     r"\bai engineer\b",
     r"\bartificial intelligence engineer\b",
@@ -164,6 +178,9 @@ AI_ML_PATTERNS = (
     r"\bml platform engineer\b",
     r"\bai research engineer\b",
     r"\bmachine learning research engineer\b",
+    r"\banalytical ai engineer(?:ing)?\b",
+    r"\b(?:computer vision|machine learning|deep learning|ai|ml) "
+    r"algorithms? developer\b",
 
     # Machine learning infrastructure and AI platform roles, kept by the
     # owner on 2026-10-29 when infrastructure and platform roles left.
@@ -265,6 +282,9 @@ SOFTWARE_CORE_PATTERNS = (
     r"\bfull[- ]?stack\b",
     r"\bfounding\b(?:\s+\w+){0,2}\s+engineer\b",
     r"\bmember of technical staff\b",
+    r"\bsoftware (?:tools?|integration|systems?) "
+    r"(?:engineer(?:ing)?|developer|programmer)\b",
+    r"\bsoftware systems? integration engineer(?:ing)?\b",
 )
 
 
@@ -309,6 +329,14 @@ SOFTWARE_ENGINEERING_PATTERNS = (
     r"\bsde\b",
     r"\bsoftware dev\.? engineer\b",
     r"\bsoftware developer\b",
+    # The approved software title shapes and full-time programme names.
+    # Internships, contracts and other eligibility rules still apply.
+    r"\bsoftware (?:tools?|integration|systems?) "
+    r"(?:engineer(?:ing)?|developer|programmer)\b",
+    r"\bsoftware systems? integration engineer(?:ing)?\b",
+    r"\bsoftware (?:(?:engineering|development) )?"
+    r"(?:rotation(?:al)?(?: development)?|development) program(?:me)?\b",
+    r"\balgorithms? developer\b",
     r"\bsystems software engineer(?:ing)?\b",
     r"\bbackend software engineer(?:ing)?\b",
     r"\bbackend engineer(?:ing)?\b",
@@ -472,6 +500,19 @@ def classify_role(
             priority=RolePriority.NONE,
             matched_pattern=None,
         )
+
+    for family, patterns in (
+        (RoleFamily.COMPILER_ENGINEERING, COMPILER_PATTERNS),
+        (RoleFamily.RUNTIME_ENGINEERING, RUNTIME_PATTERNS),
+        (RoleFamily.QUALITY_ASSURANCE, QUALITY_ASSURANCE_PATTERNS),
+    ):
+        match = _first_matching_pattern(title, patterns)
+        if match:
+            return RoleClassification(
+                family=family,
+                priority=RolePriority.NONE,
+                matched_pattern=match,
+            )
 
     fde_match = (
         _first_matching_pattern(
