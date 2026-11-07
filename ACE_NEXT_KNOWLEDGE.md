@@ -1,5 +1,7 @@
 # ACE Next knowledge
 
+**Current pickup: final Workday case in progress.** The initial repair below is live, but a fresh audit found that short Workday tenant codes still fail registration. The same approved unverified-board rule is being completed: an exact readable address can be monitored without confirming employer ownership or linking sponsorship. Conflicting/shared evidence, the vendor-board trap and mismatched addresses remain blocked. New fictional cases reproduce the failure through feed, batch and paste; 211 identity cases and all 297 directly affected cases now pass. The stalled local full run was stopped; complete hosted CI and a fresh guarded release remain. Preserve all existing polling and Pear protection; do not start chat 3 or merge the earlier checkpoint.
+
 Last updated: November 6 Pacific. Chat 2 repair backend b70ebf9 is live and verified; web stays 1a08549, schema 0051. PR #33 contains source and continuity. Preserve existing polling and Pear protection; see the plan below before chat 3.
 
 **This is ACE's global memory. It loads in every chat, so it holds only current state, rules and an index.** The complete dated history, word for word, is in `docs/archive/ACE_NEXT_KNOWLEDGE-history.md` (about 130,000 tokens).

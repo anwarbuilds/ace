@@ -219,10 +219,20 @@ def registration_identity(listed, evidence, *, source_type, account, jobs=(),
         return EmployerIdentity(None, 'unknown', 'The feed names different employers for this board. Kept as a lead.')
     if source_type == 'workday':
         from backend.app.coverage.probing import workday_belongs_to
+        from backend.app.coverage.companies import is_namesake
+        tenant = account.partition('/')[0].casefold()
+        if source_host and not re.fullmatch(re.escape(tenant) + r'\.wd\d+\.myworkdayjobs\.com', source_host.casefold()):
+            return EmployerIdentity(None, 'unknown', 'The Workday tenant and board address disagree. Kept as a lead.')
         binding = workday_belongs_to(company=listed, token=account)
         if binding:
             return EmployerIdentity(listed, 'confirmed', binding)
-        return result
+        # The vendor's own board is a known wrong destination from customer
+        # careers pages. A shortened employer tenant, however, is silence
+        # about ownership, not evidence that it belongs to another company.
+        # Keep name searches strict; only an already-read exact address may
+        # fall through as unverified, without any sponsorship inheritance.
+        if not source_host or tenant == 'workday' or is_namesake(source_type, account):
+            return result
     if source_type in ('greenhouse', 'ashby', 'lever'):
         # These providers publish owner metadata; do not rescue a failed
         # name search or customer mention with the token it started from.

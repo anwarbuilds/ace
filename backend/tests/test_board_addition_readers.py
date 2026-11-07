@@ -80,16 +80,20 @@ def normalized(reader):
 
 
 @pytest.mark.parametrize('reader,owner_stated', [(reader, True) for reader in BOARDS]
-    + [(reader, False) for reader in ('oracle_recruiting', 'workable', 'gem')])
+    + [(reader, False) for reader in ('oracle_recruiting', 'workable', 'gem', 'workday')])
 @pytest.mark.parametrize('path', ['feed', 'batch', 'paste'])
 def test_normal_board_can_be_added_through_each_path(db, reader, path, owner_stated):
     url = BOARDS[reader]
+    if reader == 'workday' and not owner_stated:
+        # A short tenant is an address, not evidence of a different employer.
+        url = url.replace('birchlabs.wd5', 'bl.wd5')
     ref = detect_source_from_url(url)
     assert ref and ref.source_type.value == reader
     fetch, post, page = fetchers(reader)
     if not owner_stated:
         page = lambda url, **kwargs: '<html><h1>Open roles</h1></html>'
     jobs = normalized(reader)
+    jobs = [job.model_copy(update={'official_url': url}) for job in jobs]
 
     def evidence(candidate, jobs):
         return read_board_evidence(reader, ref.source_account,
@@ -115,7 +119,8 @@ def test_normal_board_can_be_added_through_each_path(db, reader, path, owner_sta
     source = db.scalar(select(JobSourceRecord))
     assert source.enabled
     assert source.source_type == reader and source.source_account == ref.source_account
-    assert source.company_name.casefold().replace(' ', '') == 'birchlabs' or reader == 'oracle_recruiting'
+    expected_name = 'bl' if reader == 'workday' and not owner_stated and path == 'paste' else 'birchlabs'
+    assert source.company_name.casefold().replace(' ', '') == expected_name or reader == 'oracle_recruiting'
     unverified = reader == 'oracle_recruiting' or not owner_stated
     assert ('identity_unverified' in source.discovery_source.split()) == unverified
     # A reviewed legal report alone cannot establish that this board belongs
@@ -128,6 +133,28 @@ def test_normal_board_can_be_added_through_each_path(db, reader, path, owner_sta
     db.expire_all()
     from backend.app.coverage.petition_identity import petition_reports_for
     assert bool(petition_reports_for(db, [source.company_name])) == (not unverified)
+
+
+@pytest.mark.parametrize('account,host', [
+    ('workday/External', 'workday.wd5.myworkdayjobs.com'),
+    ('bl/External', 'cedarworks.wd5.myworkdayjobs.com'),
+    ('bl/External', None),
+])
+def test_unknown_workday_owner_cannot_rescue_a_vendor_or_unbound_address(account, host):
+    found = registration_identity('Birch Labs', BoardEvidence(), source_type='workday',
+        account=account, source_host=host, jobs=normalized('workday'))
+    assert found.company is None and found.state == 'unknown'
+
+
+@pytest.mark.parametrize('evidence', [
+    BoardEvidence(owner='Birch Labs', employers=('Cedar Works',)),
+    BoardEvidence(employers=('Birch Labs', 'Cedar Works')),
+    BoardEvidence(shared=True), BoardEvidence(unavailable=True),
+])
+def test_short_workday_tenant_never_overrides_conflicts_or_failed_evidence(evidence):
+    found = registration_identity('Birch Labs', evidence, source_type='workday',
+        account='bl/External', source_host='bl.wd5.myworkdayjobs.com', jobs=normalized('workday'))
+    assert found.company is None and found.state in ('unknown', 'shared')
 
 
 def test_matrix_covers_all_current_board_detectors():
