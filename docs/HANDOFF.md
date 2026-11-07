@@ -1,5 +1,8 @@
 # ACE current handoff
 
+**SmartRecruiters P1 pickup, November 7 Pacific:** the owner approved the approach and zero-question wording. Local baselines pass (267 rule cases, Memory checks, 110 DOM contracts). Only a fictional shadow-root regression has been added; extension source remains 1.31.6. A focused test command hit an OS stream permission error and stopped without another route; the exact command is with the owner. Continue from private requirements 13.5 after the owner responds. No Chrome, server, website or chat 3 work.
+
+
 **Cleanup complete, November 7 Pacific:** the approved one-row recovery, label correction and duplicate-board retirement are verified. The owner chose to keep the reviewed shared board polling for now; it remains unchanged and its ownership concern stays open. Existing job identities, history, marks and applications are preserved. No chat 3 or SmartRecruiters work was started. The separate SmartRecruiters P1 fix requires its own owner-requested chat. Private proof: `artifacts/verify-chats-1-2-20261106/cleanup-progress.md` and requirements 13.5.
 
 **Chat 2 repair live; approved small cleanup complete.** The final Workday correction is live and verified at 2026-11-07T03:39Z, backend fbc44f9. Feed, batch and paste support ordinary readable boards, including short Workday tenants, without inventing employer ownership. An exact address without owner evidence remains unverified in source provenance and cannot inherit sponsorship. Conflicting/shared/failed evidence, the known vendor-board trap and mismatched addresses stay blocked. Existing enabled polling settings, manual Undo, cadence, Pear protection, web 1a08549, schema 0051 and configuration are preserved. No screen or migration change.
