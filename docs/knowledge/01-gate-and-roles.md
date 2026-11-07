@@ -1,5 +1,9 @@
 # The eligibility gate and role rules
 
+## Chat 3 discussion checkpoint (2026-11-07)
+
+ELG-02 to ELG-05 are the assigned scope, with no screen change. The owner excluded compiler engineering; runtime engineering is still a question. Bare compiler titles currently fall outside target families, but generic software titles naming compiler work can pass, so the exclusion needs to cover that wording too. Current code already recognizes Software Developer Engineer, Software Machine Learning Engineer and Software Engineering Rotation Program. Reuse those patterns and verify the remaining measured misses before changing them. No gate source/version change, dry run, backfill or release has happened. Continue the remaining borderline-family questions individually before code. Host-pickup approval/backup state is private in requirements 13.5 and `artifacts/requirements-chat-3-20261107/`; its activation was rejected before execution, so existing running versions/settings remain.
+
 > Part of the ace knowledge set (index: `README.md`). Dated entries, each a problem found, its cause, the fix and the lesson. An entry describes the system on its date: where it disagrees with the code, trust the code and fix the entry. Superseded entries carry a Status line.
 >
 > Read this when: you change who passes (experience, location, contract, security, new grad, sponsorship, role families) or wonder why a posting was rejected or admitted.
