@@ -1,5 +1,8 @@
 # The Chrome extension and form filling
 
+**SmartRecruiters P1 pickup, November 7 Pacific:** the owner approved the approach and zero-question wording. Local baselines pass (267 rule cases, Memory checks, 110 DOM contracts). Only a fictional shadow-root regression has been added; extension source remains 1.31.6. A focused test command hit an OS stream permission error and stopped without another route; the exact command is with the owner. Continue from private requirements 13.5 after the owner responds. No Chrome, server, website or chat 3 work.
+
+
 > Part of the ace knowledge set (index: `README.md`). Dated entries, each a problem found, its cause, the fix and the lesson. An entry describes the system on its date: where it disagrees with the code, trust the code and fix the entry. Superseded entries carry a Status line.
 >
 > Read this when: you change the autofill matcher, the panel, the answer bank or anything that touches a live application form.

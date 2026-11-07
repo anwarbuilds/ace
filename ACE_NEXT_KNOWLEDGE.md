@@ -1,5 +1,8 @@
 # ACE Next knowledge
 
+**SmartRecruiters P1 pickup, November 7 Pacific:** the owner approved the approach and zero-question wording. Local baselines pass (267 rule cases, Memory checks, 110 DOM contracts). Only a fictional shadow-root regression has been added; extension source remains 1.31.6. A focused test command hit an OS stream permission error and stopped without another route; the exact command is with the owner. Continue from private requirements 13.5 after the owner responds. No Chrome, server, website or chat 3 work.
+
+
 **Cleanup complete, November 7 Pacific:** the approved one-row recovery, label correction and duplicate-board retirement are verified. The owner chose to keep the reviewed shared board polling for now; it remains unchanged and its ownership concern stays open. Existing job identities, history, marks and applications are preserved. No chat 3 or SmartRecruiters work was started. The separate SmartRecruiters P1 fix requires its own owner-requested chat. Private proof: `artifacts/verify-chats-1-2-20261106/cleanup-progress.md` and requirements 13.5.
 
 Last updated: November 7 Pacific. Workday correction fbc44f9 is live; the approved one-row recovery is verified. Preserve existing polling and Pear protection; read requirements 13.5 before chat 3.
