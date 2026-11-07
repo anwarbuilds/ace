@@ -142,9 +142,12 @@ test("zero-question card disables Fill in Day and Night and keeps Scan available
     await panel.locator('[data-ace="theme"]').click();
   }
   await panel.getByRole("button", { name: "Settings & activity", exact: true }).click();
-  await expect(panel).toContainText("No questions found");
+  await expect(panel).toContainText("Activity");
   await expect(panel).not.toContainText(/0 of 0|ACE entered approved answers/);
   await expect(panel.getByRole("button", { name: "Fill all known answers", exact: true })).toBeDisabled();
+  await panel.locator('[data-ace="tab:overview"]').click();
+  await expect(panel).toContainText("No questions found");
+  await panel.getByRole("button", { name: "Settings & activity", exact: true }).click();
   await panel.locator('[data-ace="tab:memory"]').click();
   await expect(panel).toContainText("Memory");
   expect(await page.evaluate(() => (window as ShadowWindow).__shadow.submits)).toBe(0);
