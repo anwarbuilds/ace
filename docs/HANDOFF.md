@@ -1,10 +1,8 @@
 # ACE current handoff
 
-**Current pickup: final Workday case in progress.** The initial repair below is live, but a fresh audit found that short Workday tenant codes still fail registration. The same approved unverified-board rule is being completed: an exact readable address can be monitored without confirming employer ownership or linking sponsorship. Conflicting/shared evidence, the vendor-board trap and mismatched addresses remain blocked. New fictional cases reproduce the failure through feed, batch and paste; 211 identity cases and all 297 directly affected cases now pass. The stalled local full run was stopped; complete hosted CI and a fresh guarded release remain. Preserve all existing polling and Pear protection; do not start chat 3 or merge the earlier checkpoint.
+**Chat 2 repair code live; refused-target recovery deferred.** The final Workday correction is live and verified at 2026-11-07T03:39Z, backend fbc44f9. Feed, batch and paste support ordinary readable boards, including short Workday tenants, without inventing employer ownership. An exact address without owner evidence remains unverified in source provenance and cannot inherit sponsorship. Conflicting/shared/failed evidence, the known vendor-board trap and mismatched addresses stay blocked. Existing enabled polling settings, manual Undo, cadence, Pear protection, web 1a08549, schema 0051 and configuration are preserved. No screen or migration change.
 
-**Chat 2 repair live.** Chat 2's repair is live and verified at 2026-11-06T23:04Z, using tested backend b70ebf9. PR #33 contains the repair and continuity. Normal board additions work through feed, batch and paste while shared/conflicting evidence remains blocked. Unverified ownership persists in source provenance and withholds sponsorship links; existing manual Undo and network cadence remain. All previously enabled sources retain their settings, the affected board was rechecked and restored without stopping the scheduler, and normal poll advancement is measured privately. Pear VC stays off with history retained. No screen, schema or configuration change.
-
-Validation: 426 affected tests; full backend 2,779 passed with two PostgreSQL-only skips; hosted browser sequence 47/59/206 without skips; real metadata previews and affected-board recheck; checked fresh backup and isolated restore; 201 fictional cases against the built image; exact backend file hashes on both services, protected-record comparisons, public health/auth/assets and polling-preservation checks. Signed-in production screens and positive real sponsorship remain unverified. Private proof/rollback: `/opt/ace/private-backups/chat2-repair-20261106T1658Z/` and `artifacts/requirements-chat-2-repair-20261106/`. Never replay completed operators. Shared-board suspects from the stored-title sweep are with the owner; their polling was not changed. The separate host-permission follow-up remains open. Chat 3 follows this repair's main merge, with item discussion before code.
+Concurrent extension usage caused one safe scheduler rollback. A timestamp-only audit and 57 fictional recovery-guard tests proved normal usage clocks can advance while every owner fact remains strict; a distinct fresh recovery checkpoint passed. Validation: 297 affected local cases, complete hosted backend 2,789 passed with two PostgreSQL-only skips, hosted browser sequence 47/59/206 without skips, read-only previews, fresh checked backup and isolated restore, 211 fictional cases against the built image, exact installed backend hashes, protected records, normal recovery polling and public health/auth/assets. Local full/API route runs stalled and were stopped; complete hosted tests passed. Data recovery remains incomplete for a target that returned HTTP 429: it stays off, with no retry or alternate route. Details, proof and rollback are private at `/opt/ace/private-backups/chat2-repair-20261107T0330Z/` and `artifacts/requirements-chat-2-repair-workday-20261106/`. Never replay completed operators. The one-time shared-board sweep is complete and its suspects are with the owner, unchanged. Signed-in production UI and positive real sponsorship remain unverified. PR #33 contains source and continuity; consult requirements 13.5 before chat 3.
 
 Updated November 6 Pacific after requirements chat 2 completed live verification. This is
 the current starting point; the [previous handoff](archive/HANDOFF-before-consolidation-20261030.md)
@@ -34,7 +32,7 @@ words, pasting a job gets an answer on screen, every employer has a lasting reco
 robots verdict. Full CI passes, for the first time in the 97 retained runs. A fresh backup and a real restore drill
 passed, and 19 protected tables are preserved across the cutover. No signed-in production browser check by the agent.
 
-**Pick up from "Latest state to pick up" in requirements section 13.5.** It holds the remaining host-verdict/refusal follow-up, current permissions, release/rollback and test helpers. OPS-01 and DIS-14 remain verified. DIS-15 and DIS-16 have passed repair acceptance; the continuity merge must finish before chat 3. Do not replay completed releases or start chat 3 incidentally.
+**Pick up from "Latest state to pick up" in requirements section 13.5.** It holds the remaining host-verdict/refusal follow-up, current permissions, release/rollback and test helpers. OPS-01 and DIS-14 remain verified. DIS-15 and DIS-16 code checks pass; finish the current private pickup and continuity merge before chat 3. Do not replay completed releases or start chat 3 incidentally.
 
 ## Assessment invitation headline (previous release)
 
@@ -52,9 +50,9 @@ an isolated exact-source archive. Preserve its mount/inode. Fresh backup and
 guarded unexecuted web rollback: `/opt/ace/private-backups/assessment-headline-20261104T0115Z/`.
 Current owner-local proof/counts: `artifacts/assessment-release-20261104/REVIEW.md`.
 
-## Extension 1.31.6 on main, owner reload pending
+## Extension 1.31.6 on main, owner confirmed installed November 6
 
-1.31.6 only fixes double-clicking the card's grip to reset its position. The notes below still apply.
+1.31.6 only fixes double-clicking the card's grip to reset its position. The owner confirmed this version is installed; the remaining limitations below still apply.
 
 ## Extension 1.31.5
 
