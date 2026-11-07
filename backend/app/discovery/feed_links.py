@@ -36,7 +36,7 @@ import httpx
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
-from backend.app.coverage.identity import BoardEvidence, resolve_employer, shared_board_reason
+from backend.app.coverage.identity import BoardEvidence, registration_identity, registration_origin, shared_board_reason
 from backend.app.coverage.companies import (
     MULTI_EMPLOYER_SOURCES,
     SOURCE_HOSTS,
@@ -276,6 +276,8 @@ class BoardOutcome:
     # it again.
     transient: bool = False
 
+    identity_state: str = ''
+
 
 def boards_named_in(
     links: Iterable[tuple[str, str]],
@@ -451,7 +453,7 @@ def is_transient(
 def read_boards(
     boards: Sequence[NamedBoard],
     read_board: Callable[[SourceDefinition], Sequence],
-    identity_evidence: Callable[[NamedBoard], BoardEvidence | str | None] | None = None,
+    identity_evidence: Callable[[NamedBoard, Sequence], BoardEvidence | str | None] | None = None,
 ) -> list[BoardOutcome]:
     """Read each candidate once through the normal adapter.
 
@@ -521,17 +523,18 @@ def read_boards(
             continue
 
         try:
-            evidence = identity_evidence(board) if identity_evidence else None
+            evidence = identity_evidence(board, jobs) if identity_evidence else None
         except Exception:
-            evidence = None
-        identity = resolve_employer(
+            evidence = BoardEvidence(unavailable=True)
+        identity = registration_identity(
             board.company_name, evidence,
             source_type=board.detected.source_type.value, account=board.detected.source_account,
-            titles=[getattr(job, "title", "") for job in jobs],
+            source_host=board.detected.source_host, jobs=jobs, listed_names=board.listed_names,
         )
         if identity.company is None:
             prefix = "shared" if identity.state == "shared" else "identity"
-            outcomes.append(BoardOutcome(board=board, registered=False, job_count=len(jobs), error=f"{prefix}: {identity.reason}"))
+            outcomes.append(BoardOutcome(board=board, registered=False, job_count=len(jobs),
+                error=f"{prefix}: {identity.reason}", transient=isinstance(evidence, BoardEvidence) and evidence.unavailable))
             continue
         # Conflicting feed labels are not aliases. An authoritative owner can
         # settle the board's display name, never merge the legal employers.
@@ -541,6 +544,7 @@ def read_boards(
                 board=board,
                 registered=True,
                 job_count=len(jobs),
+                identity_state=identity.state,
             )
         )
 
@@ -594,7 +598,7 @@ def register_confirmed_boards(
                     definition.poll_interval_seconds
                 ),
                 discovery_source=(
-                    DISCOVERY_SOURCE
+                    registration_origin(DISCOVERY_SOURCE, outcome.identity_state)
                     if outcome.registered
                     # The column holds 100 characters.
                     else (

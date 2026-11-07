@@ -34,6 +34,11 @@ class CanonicalJob(BaseModel):
     # field and this stays None for them.
     employment_type: str | None = None
 
+    # Independent structured employer evidence, when the provider publishes
+    # it. `company` is the caller's display label and cannot verify itself.
+    # Discovery-only: not persisted or included in the job content hash.
+    hiring_organizations: tuple[str, ...] = ()
+
 class JobList(list):
     """Jobs read from one source, and whether that was all of them.
 

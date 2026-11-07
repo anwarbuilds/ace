@@ -132,7 +132,7 @@ def promote_productive_sources(
             in SINGLE_REQUEST_PROVIDERS
             # Found in bulk through a talent network: it earns fifteen
             # minutes by producing a passing role, like a Workday board.
-            and record.discovery_source
+            and (record.discovery_source or '').split(' ', 1)[0]
             != NETWORK_DISCOVERY_SOURCE
         ):
             target = registration_interval(

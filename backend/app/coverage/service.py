@@ -58,7 +58,8 @@ from backend.app.coverage.host_policy import (
     refusal_for,
     refused_hosts,
 )
-from backend.app.coverage.identity import read_board_evidence, resolve_employer, shared_board_reason
+from backend.app.coverage.identity import read_board_evidence, registration_identity, registration_origin, shared_board_reason
+from backend.app.discovery.detector import detect_source_from_url
 from backend.app.coverage.leads import (
     AGENCY,
     CHECKING,
@@ -249,21 +250,18 @@ def _verify(
     identity_evidence = read_board_evidence(
         ref.source_type, ref.token, source_host=ref.source_host, fetch=fetch, fetch_text=fetch_text, jobs=jobs,
     )
-    identity = resolve_employer(
+    identity = registration_identity(
         company, identity_evidence, source_type=ref.source_type, account=ref.token,
-        titles=[job.get("title") or job.get("name") or "" for job in jobs],
+        source_host=ref.source_host, jobs=jobs, direct=bool(default_evidence),
     )
-    if (identity.company is None and evidence and ref.source_type == "workday"
-            and not (identity_evidence.owner or identity_evidence.employers or identity_evidence.shared)):
-        # Preserve the exact tenant binding. A prose mention can be a
-        # customer or partner and cannot confirm the board's employer.
-        identity = resolve_employer(company, company)
     if identity.company is None:
         prefix = "shared" if identity.state == "shared" else "identity"
         return BoardCandidate(company=company, source_type=ref.source_type,
             source_account=ref.token, job_count=len(jobs),
             evidence=f"{prefix}: {identity.reason}", source_host=ref.source_host)
     if evidence is None and not default_evidence:
+        return None
+    if identity.state == 'unverified' and not default_evidence:
         return None
 
     return BoardCandidate(
@@ -274,10 +272,10 @@ def _verify(
             jobs
         ),
         evidence=(
-            evidence
-            or default_evidence
+            identity.reason if identity.state == 'unverified' else evidence or default_evidence
         ),
         source_host=ref.source_host,
+        identity_state=identity.state,
     )
 
 
@@ -295,23 +293,22 @@ def _from_board_url(
     says which board and not whose.
     """
 
-    ref = careers_page_token(
-        url
-    )
+    detected = detect_source_from_url(url)
+    ref = (BoardRef(detected.source_type.value, detected.source_account, detected.source_host)
+           if detected else careers_page_token(url))
 
     if ref is None:
         return None
 
     return _verify(
         ref,
-        _name_from_url(
-            url
-        ),
+        (ref.token.partition('/')[0].split('.')[0]
+         if ref.source_type == 'oracle_recruiting'
+         else ref.token.partition('/')[0]),
         fetch=fetch,
         fetch_text=fetch_text,
         post=post,
-        # The exact link identifies a board, not its employer. Missing
-        # owner evidence is kept as a lead rather than a guessed name.
+        # The exact link identifies a board, not a verified legal employer.
         default_evidence=(
             "named directly by the link given"
         ),
@@ -792,7 +789,7 @@ def add_source(
                     candidate.source_type
                 )
             ),
-            discovery_source="added_by_hand",
+            discovery_source=registration_origin('added_by_hand', candidate.identity_state),
         )
     )
 
@@ -898,7 +895,7 @@ def undo_added(
     if (
         row is None
         or not row.enabled
-        or row.discovery_source != "added_by_hand"
+        or row.discovery_source not in ('added_by_hand', registration_origin('added_by_hand', 'unverified'))
     ):
         return False
 

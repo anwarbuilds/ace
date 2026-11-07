@@ -86,7 +86,7 @@ def test_copied_board_name_is_not_independent_job_employer_evidence():
 def test_matching_investor_labels_cannot_rescue_different_portfolio_jobs():
     outcome = assess(Candidate("ashby", "fictional-capital", "Fictional Capital"),
         lambda definition: [job("Software Engineer - Fictional Birch"), job("Software Engineer - Fictional Acorn")],
-        lambda candidate: "Fictional Capital")
+        lambda candidate, jobs: "Fictional Capital")
     assert not outcome.added and outcome.reason.startswith("identity:")
     finding = finding_from(outcome, {"source_type": "ashby"})
     assert finding.state == CHECKING and not finding.gone
@@ -169,8 +169,9 @@ def test_feed_job_count_and_matching_input_name_are_not_proof():
     [board] = boards_named_in([("https://jobs.ashbyhq.com/fictional-one/job-1", "Fictional One")])
     [result] = read_boards([board], lambda definition: [job()])
     assert not result.registered and result.error.startswith("identity:")
-    [renamed] = read_boards([board], lambda definition: [job()], lambda board: BoardEvidence(owner="Fictional Acquirer"))
-    assert renamed.registered and renamed.board.company_name == "Fictional Acquirer"
+    [renamed] = read_boards([board], lambda definition: [job()], lambda board, jobs: BoardEvidence(owner="Fictional Acquirer"))
+    # The owner requires conflicting evidence to stop automatic additions.
+    assert not renamed.registered and 'disagree' in renamed.error
 
 
 def hand_add(db, url, *, page="", fetch=None):

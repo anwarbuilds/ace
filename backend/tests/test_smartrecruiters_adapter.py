@@ -158,6 +158,8 @@ def test_fetches_and_normalizes_smartrecruiters_posting() -> None:
         0
     ]
 
+    assert job.hiring_organizations == ('Example Company',)
+
     assert (
         job.source
         == "smartrecruiters"

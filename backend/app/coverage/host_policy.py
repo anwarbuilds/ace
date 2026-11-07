@@ -137,7 +137,7 @@ def read_targets(
             HostTarget(
                 "apply.workable.com",
                 "workable",
-                ("/api/v3/accounts/example/jobs", "/api/v2/accounts/example/jobs/example"),
+                ("/api/v3/accounts/example/jobs", "/api/v2/accounts/example/jobs/example", "/example/"),
             ),
         )
 
@@ -163,7 +163,10 @@ def read_targets(
         )
 
     if source_type == "gem":
-        return (HostTarget("api.gem.com", "gem", ("/job_board/v0/example/job_posts/",)),)
+        return (
+            HostTarget("api.gem.com", "gem", ("/job_board/v0/example/job_posts/",)),
+            HostTarget("jobs.gem.com", "gem", ("/example",)),
+        )
 
     if source_type == "eightfold":
         eightfold_host = host or _host_of(account)
