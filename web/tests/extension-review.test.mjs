@@ -153,6 +153,104 @@ test('shadow-root application finds separate labels, fills only on Fill and undo
   assert.equal(f.submissions(), 0);
 });
 
+test('shadow host labels and scoped sensitive answers use the existing policies', async t => {
+  let root;
+  const f = fixture('', { answerItems: [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Work authorisation', value: 'Yes' }, { label: 'Need sponsorship now', value: 'No' }], setup(window) {
+    const host = window.document.createElement('spl-form'); window.document.querySelector('form').append(host);
+    root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<spl-input label="Full name"></spl-input><label for="us">Are you authorized to work in the US?</label><select id="us"><option value="">Select one</option><option>Yes</option><option>No</option></select><label for="narrow">Are you authorized to work in Canada?</label><select id="narrow"><option value="">Select one</option><option>Yes</option><option>No</option></select><label for="sponsor">Will you now or in the future require sponsorship?</label><select id="sponsor"><option value="">Select one</option><option>Yes</option><option>No</option></select><label for="signature">Name (Signature Field)</label><input id="signature">';
+    root.querySelector('spl-input').attachShadow({ mode: 'open' }).innerHTML = '<input id="internal">';
+  } }); t.after(f.dispose);
+  assert.match(f.internals.diagnostics(), /full name/);
+  f.click('fill');
+  await until(() => root.querySelector('spl-input').shadowRoot.querySelector('input').value === 'Example Applicant', 'host label names its native input');
+  assert.equal(root.getElementById('us').value, 'Yes', 'saved exact sensitive fact still fills');
+  for (const id of ['narrow', 'sponsor', 'signature']) assert.equal(root.getElementById(id).value, '', 'unsupported scope, incomplete negative and signature stay unanswered');
+});
+
+test('shadow choice groups cross component boundaries without borrowing a neighbouring question', async t => {
+  let root;
+  const f = fixture('', { answerItems: [{ label: 'Willing to relocate', value: 'Yes' }], setup(window) {
+    const host = window.document.createElement('spl-choice-form'); window.document.querySelector('form').append(host);
+    root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<span id="prompt">Are you willing to relocate?</span><fieldset aria-labelledby="prompt"><spl-choice></spl-choice><spl-choice></spl-choice></fieldset><label for="other">Are you authorized to work in Canada?</label><input id="other">';
+    root.querySelectorAll('spl-choice').forEach((host, i) => { host.attachShadow({ mode: 'open' }).innerHTML = `<label><input type="radio" name="relocate" value="${i ? 'No' : 'Yes'}">${i ? 'No' : 'Yes'}</label>`; });
+  } }); t.after(f.dispose);
+  f.click('fill');
+  const choices = Array.from(root.querySelectorAll('spl-choice'), host => host.shadowRoot.querySelector('input'));
+  await until(() => choices[0].checked, 'group question names its split native choices');
+  assert.equal(choices[1].checked, false); assert.equal(root.getElementById('other').value, '');
+  f.click('undo'); assert.equal(choices[0].checked, false); assert.equal(f.submissions(), 0);
+});
+
+test('ACE own shadow inputs never enter scanning or diagnostics', t => {
+  const f = fixture(''); t.after(f.dispose);
+  const root = f.panel().getRootNode();
+  const input = f.document.createElement('input'); input.setAttribute('aria-label', 'Private card editor'); root.append(input);
+  Object.defineProperty(input, 'value', { get() { assert.fail('ACE editor value must not be scanned'); } });
+  assert.doesNotMatch(f.internals.diagnostics(), /private card editor/i);
+  f.click('scan'); assert.match(f.panel().textContent, /4 questions answered/);
+});
+
+test('a custom dropdown finds options in its nested root and keeps an unrelated menu separate', async t => {
+  let button;
+  const f = fixture('<div role="listbox"><div role="option">Wrong unrelated option</div></div>', { answerItems: [{ label: 'Willing to relocate', value: 'Yes' }], setup(window) {
+    const host = window.document.createElement('spl-select'); window.document.querySelector('form').append(host);
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<label for="control">Are you willing to relocate?</label><button id="control" type="button" aria-haspopup="listbox" aria-controls="menu">Select one</button><spl-menu></spl-menu>';
+    button = root.querySelector('button');
+    const menu = root.querySelector('spl-menu').attachShadow({ mode: 'open' });
+    button.addEventListener('click', () => {
+      menu.innerHTML = '<div role="listbox" id="menu"><div role="option">Yes</div><div role="option">No</div></div>';
+      menu.querySelectorAll('[role=option]').forEach(option => option.addEventListener('click', () => { button.textContent = option.textContent; menu.innerHTML = ''; }));
+    });
+  } }); t.after(f.dispose);
+  assert.equal(button.textContent, 'Select one'); f.click('fill');
+  await until(() => button.textContent === 'Yes', 'the actual shadow menu supplies its option');
+  assert.equal(f.submissions(), 0);
+});
+
+test('zero-question card is honest in Day, Night and the dock after explicit toolbar wake', t => {
+  const f = fixture('', { topOnly: true }); t.after(f.dispose);
+  assert.equal(f.panel(), undefined, 'quiet until the owner explicitly wakes it');
+  f.deliver({ type: 'wake' });
+  for (let i = 0; i < 2; i++) {
+    assert.match(f.panel().textContent, /No questions found/);
+    assert.match(f.panel().textContent, /ACE hasn’t found any questions it can fill/);
+    assert.doesNotMatch(f.panel().textContent, /Form detected|0 of 0|Check answers/);
+    assert.equal(f.panel().querySelector('[data-ace="fill"]').disabled, true);
+    assert.equal(f.panel().querySelector('[data-ace="scan"]').disabled, false);
+    f.click('theme');
+  }
+  f.click('minimize'); assert.doesNotMatch(f.panel().textContent, /Form detected|0 filled/);
+  assert.match(f.panel().textContent, /No questions found/); assert.equal(f.submissions(), 0);
+});
+
+test('a late root attached to an existing host is detected and later questions stay passive', async t => {
+  let host;
+  const f = fixture('', { topOnly: true, observeDOM: true, setup(window) {
+    host = window.document.createElement('spl-late-form'); window.document.querySelector('form').append(host);
+  } }); t.after(f.dispose);
+  assert.equal(f.panel(), undefined);
+  const root = host.attachShadow({ mode: 'open' });
+  root.innerHTML = '<label>Full name<input></label><label>Email<input></label><label>Phone<input></label><label>LinkedIn profile<input></label>';
+  await sleep(2000); await until(() => f.panel(), 'late attachShadow wakes application detection');
+  const group = f.document.createElement('label'); group.textContent = 'Your favourite testing tool'; group.append(f.document.createElement('input')); root.append(group);
+  await until(() => f.panel().textContent.includes('of 5 questions answered'), 'root observer notices a later question');
+  for (const field of root.querySelectorAll('input')) assert.equal(field.value, '');
+  assert.equal(f.submissions(), 0);
+});
+
+test('a shadow checkout with only contact fields remains quiet and sends no private requests', async t => {
+  const sent = [];
+  const f = fixture('', { topOnly: true, observeDOM: true, onSend(message) { sent.push(message.type); }, setup(window) {
+    const host = window.document.createElement('shop-checkout'); window.document.querySelector('form').append(host);
+    host.attachShadow({ mode: 'open' }).innerHTML = '<label>Full name<input></label><label>Email<input></label><label>Phone<input></label><label>City<input></label>';
+  } }); t.after(f.dispose);
+  await sleep(1700);
+  assert.equal(f.panel(), undefined); assert.deepEqual(sent, []);
+});
+
 test('quick fill has one main action and fills every matching native dropdown without changing existing answers', t => {
   const memoryStore = [{ id: 1, concept: 'q:preferred development environment', question: 'Preferred development environment', answer: 'Linux', answer_type: 'choice', reuse_policy: 'reusable' }];
   const f = fixture(['first', 'second', 'manual', 'unavailable'].map(id => `<label for="${id}">Preferred development environment</label><select id="${id}"><option value="">Select one</option>${id === 'unavailable' ? '<option value="other">Other</option>' : '<option value="linux">Linux</option><option value="mac">macOS</option>'}</select>`).join(''), { memoryStore }); t.after(f.dispose);

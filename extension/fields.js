@@ -668,6 +668,62 @@ function aceIsChoiceControl(field) {
    blank. Filling it correctly needs the listbox open and a real
    option clicked, which fields.js cannot do on its own -- see
    fillOneCombobox in content.js. */
+// Query only inspectable employer DOM. ACE's own cards are shadow hosts too.
+function aceIsOwnHost(node) {
+  return !!(node && node.matches && node.matches('.ace-root,.ace-remote-root'));
+}
+
+function aceParentElement(node) {
+  if (!node) return null;
+  return node.assignedSlot || node.parentElement ||
+    (node.getRootNode && node.getRootNode().host) || null;
+}
+
+function aceClosest(node, selector) {
+  for (; node; node = aceParentElement(node)) {
+    if (node.matches && node.matches(selector)) return node;
+  }
+  return null;
+}
+
+function aceIsOwnUI(node) { return !!aceClosest(node, '.ace-root,.ace-remote-root'); }
+
+function aceContains(scope, node) {
+  for (; node; node = aceParentElement(node)) if (node === scope) return true;
+  return false;
+}
+
+function aceQueryAll(scope, selector) {
+  var found = [];
+  function visit(parent) {
+    // Let the browser match each selector once per tree, rather than once
+    // per element. Insert open roots at their host's position in page order.
+    var matches = new Set(parent.querySelectorAll(selector));
+    Array.prototype.forEach.call(parent.querySelectorAll('*'), function (node) {
+      if (aceIsOwnHost(node)) return;
+      if (matches.has(node) && !aceIsOwnUI(node)) found.push(node);
+      if (node.shadowRoot && !aceIsOwnUI(node)) visit(node.shadowRoot);
+    });
+  }
+  if (scope && !aceIsOwnUI(scope)) {
+    visit(scope);
+    if (scope.shadowRoot) visit(scope.shadowRoot);
+  }
+  return found;
+}
+
+function aceQuery(scope, selector) { return aceQueryAll(scope, selector)[0] || null; }
+
+// IDs belong to their own tree. Identical IDs in another component must not win.
+function aceTreeFor(node) { return node.getRootNode ? node.getRootNode() : document; }
+function aceElementById(node, id) {
+  var root = aceTreeFor(node);
+  return root.getElementById ? root.getElementById(id) : root.querySelector('#' + CSS.escape(id));
+}
+function aceLabelFor(node) {
+  return node.id ? aceTreeFor(node).querySelector('label[for="' + CSS.escape(node.id) + '"]') : null;
+}
+
 function aceIsAutocomplete(field) {
   return (
     (
@@ -690,10 +746,10 @@ function aceIsAutocomplete(field) {
 function aceIsQuestionControl(control) {
   if (!control || control.type === "hidden") return false;
   if (/^(radio|checkbox)$/.test(control.type || "")) return true;
-  if (control.closest && control.closest('[aria-hidden="true"]')) return false;
+  if (control.closest && aceClosest(control, '[aria-hidden="true"]')) return false;
   if (control.tagName === "INPUT" && control.getAttribute("tabindex") === "-1") {
-    var block = control.closest && control.closest('[data-automation-id^="formField-"]');
-    if (block && block.querySelector('[aria-haspopup="listbox"]')) return false;
+    var block = control.closest && aceClosest(control, '[data-automation-id^="formField-"]');
+    if (block && aceQuery(block, '[aria-haspopup="listbox"]')) return false;
   }
   return !!control.offsetParent;
 }
@@ -711,9 +767,9 @@ function aceIsOpaqueName(text) {
 /* Some ATSs put role=combobox on a wrapper instead of the actual input.
    Only a wrapper owning one visible input can name that input's control. */
 function aceComboboxScope(field) {
-  var scope = field.closest('[role="combobox"]');
+  var scope = aceClosest(field, '[role="combobox"]');
   if (!scope || scope === field) return scope;
-  var inputs = Array.prototype.filter.call(scope.querySelectorAll('input:not([type=hidden])'), function (input) {
+  var inputs = Array.prototype.filter.call(aceQueryAll(scope, 'input:not([type=hidden])'), function (input) {
     return input === field || aceIsQuestionControl(input);
   });
   return inputs.length === 1 && inputs[0] === field ? scope : null;
@@ -726,7 +782,7 @@ function aceIsWorkdayPrompt(field) {
   return (
     field.tagName === "INPUT" &&
     field.type !== "hidden" && field.type !== "file" &&
-    !!field.closest('[data-automation-id="multiSelectContainer"]')
+    !!aceClosest(field, '[data-automation-id="multiSelectContainer"]')
   );
 }
 
@@ -742,7 +798,7 @@ function aceIsListboxButton(field) {
   return (
     ((field.tagName === "BUTTON" && field.getAttribute("aria-haspopup") === "listbox") ||
       (field.getAttribute("role") === "combobox" && !/^(INPUT|SELECT|TEXTAREA)$/.test(field.tagName) &&
-        !field.querySelector('input:not([type=hidden]),select,textarea')))
+        !aceQuery(field, 'input:not([type=hidden]),select,textarea')))
   );
 }
 
@@ -861,12 +917,12 @@ function aceNormalise(text) {
    option reading "LinkedIn", which matched the LinkedIn profile rule,
    so a stored profile URL would have ticked a referral-source box. */
 function aceChoiceScope(field) {
-  var declared = field.closest('fieldset, [role=radiogroup], [role=group], ' +
+  var declared = aceClosest(field, 'fieldset, [role=radiogroup], [role=group], ' +
     '[data-automation-id^="formField-"], [data-automation-id="formField"]');
   if (declared) return declared;
-  var node = field.parentElement;
-  for (var depth = 0; node && node.tagName !== 'FORM' && depth < 8; depth++, node = node.parentElement) {
-    var controls = Array.prototype.filter.call(node.querySelectorAll('input:not([type=hidden]),select,textarea,button'), aceIsQuestionControl);
+  var node = aceParentElement(field);
+  for (var depth = 0; node && node.tagName !== 'FORM' && depth < 8; depth++, node = aceParentElement(node)) {
+    var controls = Array.prototype.filter.call(aceQueryAll(node, 'input:not([type=hidden]),select,textarea,button'), aceIsQuestionControl);
     if (controls.length > 1 && Array.prototype.every.call(controls, aceIsChoiceControl) && aceHeadingIn(node, field, true)) return node;
   }
   return null;
@@ -894,7 +950,7 @@ function aceGroupQuestionLabel(field) {
 
     if (!own && labelledBy) {
       own = labelledBy.split(/\s+/).map(function (id) {
-        var node = document.getElementById(id);
+        var node = aceElementById(declared, id);
         return node ? node.textContent : "";
       }).join(" ");
     }
@@ -908,12 +964,12 @@ function aceGroupQuestionLabel(field) {
 
   // Lever declares no group, so the question is whatever heading sits
   // nearest above that is not itself one of the options.
-  var node = field.parentElement;
+  var node = aceParentElement(field);
 
   for (var depth = 0; node && depth < 8; depth++) {
     var found = aceHeadingIn(node, field, true);
     if (found) return found;
-    node = node.parentElement;
+    node = aceParentElement(node);
   }
 
   return "";
@@ -933,7 +989,7 @@ function aceGroupPromptText(block, field) {
 }
 
 function aceChoiceMembersIn(block, field) {
-  return Array.prototype.filter.call(block.querySelectorAll('input[type="' + field.type + '"]'), function (input) {
+  return Array.prototype.filter.call(aceQueryAll(block, 'input[type="' + field.type + '"]'), function (input) {
     return aceIsQuestionControl(input);
   });
 }
@@ -959,7 +1015,7 @@ var ACE_MAX_QUESTION = 520;
    because they name a group rather than one input. */
 function aceHeadingIn(block, field, original) {
   var candidates = Array.prototype.filter.call(
-    block.querySelectorAll(
+    aceQueryAll(block,
       "legend, label, h1, h2, h3, h4, h5, h6, " +
       "[class*='heading'], [class*='label'], [class*='question']"
     ),
@@ -967,12 +1023,12 @@ function aceHeadingIn(block, field, original) {
       // A heading that wraps a control is an option, not the question.
       // Lever puts each choice in its own label, so without this the
       // group's question reads as "he/him" or "female".
-      if (node.querySelector("input, select, textarea, button")) return false;
-      if (node.contains(field)) return false;
+      if (aceQuery(node, "input, select, textarea, button")) return false;
+      if (aceContains(node, field)) return false;
       // Workday uses separate label[for] elements after each checkbox.
       // Those labels are answers, even though they do not wrap the input.
       var target = node.tagName === "LABEL" && node.getAttribute("for");
-      var control = target && document.getElementById(target);
+      var control = target && aceElementById(node, target);
       if (control && aceIsChoiceControl(control)) return false;
 
       return !!aceNormalise(aceTextWithoutControls(node));
@@ -985,9 +1041,10 @@ function aceHeadingIn(block, field, original) {
   // above it. A label placed after its control still counts, but only
   // when nothing precedes it.
   var best = null;
+  var ordered = aceQueryAll(block, "*");
 
   for (var i = 0; i < candidates.length; i++) {
-    var where = candidates[i].compareDocumentPosition(field);
+    var where = ordered.indexOf(candidates[i]) < ordered.indexOf(field) ? Node.DOCUMENT_POSITION_FOLLOWING : 0;
 
     if (where & Node.DOCUMENT_POSITION_FOLLOWING) {
       best = candidates[i];
@@ -1009,9 +1066,9 @@ function aceChoiceMembers(field) {
   var scope = aceChoiceScope(field);
   var name = field.getAttribute("name");
   if (!scope && name) {
-    var node = field.parentElement;
-    for (var depth = 0; node && depth < 8; depth++, node = node.parentElement) {
-      if (node.querySelectorAll('[name="' + CSS.escape(name) + '"]').length > 1) {
+    var node = aceParentElement(field);
+    for (var depth = 0; node && depth < 8; depth++, node = aceParentElement(node)) {
+      if (aceQueryAll(node, '[name="' + CSS.escape(name) + '"]').length > 1) {
         scope = node;
         break;
       }
@@ -1021,7 +1078,7 @@ function aceChoiceMembers(field) {
   var question = aceGroupQuestion(field);
   var selector = 'input[type="' + field.type + '"]';
   if (field.type === "radio" && name) selector += '[name="' + CSS.escape(name) + '"]';
-  var members = Array.prototype.filter.call(scope.querySelectorAll(selector), function (member) {
+  var members = Array.prototype.filter.call(aceQueryAll(scope, selector), function (member) {
     return aceGroupQuestion(member) === question;
   });
   return members.length ? members : [field];
@@ -1033,20 +1090,14 @@ function aceChoiceMembers(field) {
    Lever gender select reads "gender select male female decline to
    self-identify" and the question is lost in its own answers. */
 function aceTextWithoutControls(block) {
-  if (!block.querySelector("select, option, input, textarea, button, [role=combobox]")) {
-    return block.textContent;
+  function read(node) {
+    if (node.nodeType === 3) return node.textContent;
+    if (aceIsOwnHost(node) || node.matches && node.matches('select,option,input,textarea,button,[role=combobox]')) return '';
+    var text = Array.prototype.map.call(node.childNodes || [], read).join('');
+    if (node.shadowRoot) text += ' ' + read(node.shadowRoot);
+    return text;
   }
-
-  var clone = block.cloneNode(true);
-
-  Array.prototype.forEach.call(
-    clone.querySelectorAll("select, option, input, textarea, button, [role=combobox]"),
-    function (node) {
-      node.remove();
-    }
-  );
-
-  return clone.textContent;
+  return read(block);
 }
 
 /* An option's text as written, for showing the user.
@@ -1068,17 +1119,15 @@ function aceOptionRaw(field) {
     return field.textContent || field.value || "";
   }
 
-  var wrapping = field.closest("label");
+  var wrapping = aceClosest(field, "label");
   if (wrapping) return wrapping.textContent;
 
   if (field.id) {
-    var labelled = document.querySelector(
-      'label[for="' + CSS.escape(field.id) + '"]'
-    );
+    var labelled = aceLabelFor(field);
     if (labelled) return labelled.textContent;
   }
 
-  var option = field.closest("[class*='option']");
+  var option = aceClosest(field, "[class*='option']");
   if (option) return option.textContent;
 
   return field.value || "";
@@ -1108,22 +1157,20 @@ function aceQuestionLabelFor(field) {
   var sources = [];
 
   if (field.id) {
-    var labelled = document.querySelector(
-      'label[for="' + CSS.escape(field.id) + '"]'
-    );
+    var labelled = aceLabelFor(field);
     if (labelled) sources.push(aceTextWithoutControls(labelled));
   }
 
   // Stripped, because a label wrapping a select carries every option:
   // Lever's gender label reads "gender select male female decline to
   // self-identify", where the question runs straight into its answers.
-  var wrapping = field.closest("label");
+  var wrapping = aceClosest(field, "label");
   if (wrapping) sources.push(aceTextWithoutControls(wrapping));
 
   var describedBy = field.getAttribute("aria-labelledby");
   if (describedBy) {
     var joined = describedBy.split(/\s+/).map(function (id) {
-      var node = document.getElementById(id);
+      var node = aceElementById(field, id);
       return node && node !== field ? aceTextWithoutControls(node) : "";
     }).join(" ");
     sources.push(joined);
@@ -1134,15 +1181,31 @@ function aceQuestionLabelFor(field) {
   var combo = aceComboboxScope(field);
   if (combo && combo !== field) {
     if (combo.id) {
-      var comboLabel = document.querySelector('label[for="' + CSS.escape(combo.id) + '"]');
+      var comboLabel = aceLabelFor(combo);
       if (comboLabel) sources.push(aceTextWithoutControls(comboLabel));
     }
     sources.push(combo.getAttribute('aria-label'));
     var comboIds = combo.getAttribute('aria-labelledby');
     if (comboIds) sources.push(comboIds.split(/\s+/).map(function (id) {
-      var node = document.getElementById(id);
+      var node = aceElementById(combo, id);
       return node ? node.textContent : '';
     }).join(' '));
+  }
+
+  var tree = aceTreeFor(field);
+  for (var depth = 0; tree.host && depth < 8; depth++) {
+    var host = tree.host;
+    var controls = aceQueryAll(host, 'input:not([type=hidden]),select,textarea').filter(aceIsQuestionControl);
+    if (controls.length !== 1 || controls[0] !== field) break;
+    var hostLabel = aceLabelFor(host);
+    if (hostLabel) sources.push(aceTextWithoutControls(hostLabel));
+    sources.push(host.getAttribute('aria-label'), host.getAttribute('label'));
+    var hostIds = host.getAttribute('aria-labelledby');
+    if (hostIds) sources.push(hostIds.split(/\s+/).map(function (id) {
+      var label = aceElementById(host, id);
+      return label ? aceTextWithoutControls(label) : '';
+    }).join(' '));
+    tree = aceTreeFor(host);
   }
 
   // Only consulted when nothing above named the field. Greenhouse gives
@@ -1176,18 +1239,18 @@ function aceQuestionLabelFor(field) {
    printed above it. Climbing only while the block still contains one
    control keeps the question and its box together. */
 function aceOwnGroup(field) {
-  var node = field.parentElement;
+  var node = aceParentElement(field);
   var best = null;
 
   for (var depth = 0; node && depth < 6; depth++) {
-    var controls = Array.from(node.querySelectorAll(
+    var controls = Array.from(aceQueryAll(node,
       'input:not([type=hidden]),select,textarea,button[aria-haspopup="listbox"],[role="combobox"]'
-    )).filter(function (control) { return control === field || !control.contains(field) && aceIsQuestionControl(control); });
+    )).filter(function (control) { return control === field || !aceContains(control, field) && aceIsQuestionControl(control); });
 
     if (controls.length > 1) break;
 
     best = node;
-    node = node.parentElement;
+    node = aceParentElement(node);
   }
 
   return best;
@@ -1766,7 +1829,7 @@ function aceDateSide(field, block) {
   // ancestor holds "Start Date" and "End Date" together and so says
   // neither, and the dates were left unassigned on every block.
   var nodes = Array.prototype.slice.call(
-    block.querySelectorAll("*")
+    aceQueryAll(block, "*")
   );
 
   var at = nodes.indexOf(field);
@@ -1785,7 +1848,7 @@ function aceDateSide(field, block) {
 
     // A container holds both headings and so names neither. Only a
     // short piece of text can be the one that names this dropdown.
-    if (node.querySelector("input, select, textarea, button")) continue;
+    if (aceQuery(node, "input, select, textarea, button")) continue;
 
     var text = aceNormalise(node.textContent || "").replace(/\s*\*\s*$/, '').replace(/\s*\(?required\)?\s*$/, '').trim();
     if (!text || text.length > 40) continue;
