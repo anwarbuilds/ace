@@ -9,6 +9,11 @@ type ShadowWindow = typeof window & {
   __wake: (message: unknown, sender: unknown, reply: (value: unknown) => void) => void;
 };
 
+// Playwright's trace snapshotter reads every textarea.value, including the
+// read trap below. Keep this measurement non-invasive; all assertions and
+// failure screenshots remain enabled. Hosted stack evidence is saved privately.
+test.use({ trace: "off" });
+
 // Fictional web components; nothing here is copied from an employer's form.
 async function mount(page: Page, options: { late?: boolean; checkout?: boolean; empty?: boolean } = {}) {
   await page.goto("data:text/html,<html><body></body></html>");
