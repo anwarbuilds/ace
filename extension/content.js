@@ -16,6 +16,81 @@
   if (window.__aceLoaded) return;
   window.__aceLoaded = true;
 
+  var employerListeners = [];
+  var formRoots = new Map();
+  var formWatchCallback = null, formWatchTimer = null, formWatchQueued = null;
+
+  function listenEmployer(type, callback) {
+    var seen = new WeakSet();
+    var listener = function (event) {
+      if (seen.has(event)) return;
+      seen.add(event);
+      var path = event.composedPath ? event.composedPath() : [];
+      var target = path[0] || event.target;
+      if (!target || aceIsOwnUI(target)) return;
+      callback({ target: target, type: event.type, isTrusted: event.isTrusted });
+    };
+    employerListeners.push({ type: type, listener: listener });
+    document.addEventListener(type, listener, true);
+    formRoots.forEach(function (_, root) {
+      if (root.host) root.addEventListener(type, listener, true);
+    });
+  }
+
+  function queueFormRefresh() {
+    clearTimeout(formWatchQueued);
+    formWatchQueued = setTimeout(function () {
+      syncFormRoots();
+      if (formWatchCallback) formWatchCallback();
+    }, 400);
+  }
+
+  function syncFormRoots() {
+    var roots = [document.body].concat(aceQueryAll(document, '*').filter(function (node) {
+      return !!node.shadowRoot;
+    }).map(function (node) { return node.shadowRoot; })).filter(Boolean);
+    var changed = false;
+    formRoots.forEach(function (observer, root) {
+      if (roots.indexOf(root) >= 0) return;
+      observer.disconnect();
+      employerListeners.forEach(function (entry) { root.removeEventListener(entry.type, entry.listener, true); });
+      formRoots.delete(root); changed = true;
+    });
+    roots.forEach(function (root) {
+      if (formRoots.has(root)) return;
+      var observer = new MutationObserver(function (records) {
+        if (records.every(function (record) {
+          if (aceIsOwnUI(record.target)) return true;
+          var nodes = Array.from(record.addedNodes || []).concat(Array.from(record.removedNodes || []));
+          return record.type === 'childList' && nodes.length && nodes.every(aceIsOwnHost);
+        })) return;
+        queueFormRefresh();
+      });
+      observer.observe(root, { childList: true, subtree: true, characterData: true, attributes: true,
+        attributeFilter: ['hidden', 'disabled', 'readonly', 'aria-hidden', 'aria-label', 'aria-labelledby', 'label', 'aria-checked', 'aria-pressed', 'aria-selected', 'aria-expanded'] });
+      formRoots.set(root, observer); changed = true;
+      if (root.host) employerListeners.forEach(function (entry) { root.addEventListener(entry.type, entry.listener, true); });
+    });
+    return changed;
+  }
+
+  function observeFormDOM(callback) {
+    formWatchCallback = callback;
+    syncFormRoots();
+    if (formWatchTimer) return;
+    // Attaching a root to an existing host does not cause a DOM mutation.
+    // A passive, visible-page check discovers late custom-element upgrades.
+    function checkRoots() {
+      if (!extensionAlive()) {
+        formRoots.forEach(function (observer) { observer.disconnect(); });
+        formRoots.clear(); return;
+      }
+      if (document.hidden !== true && syncFormRoots()) queueFormRefresh();
+      formWatchTimer = setTimeout(checkRoots, 1500);
+    }
+    formWatchTimer = setTimeout(checkRoots, 1500);
+  }
+
   var answers = {};
   var aliases = {};
   var memory = [];
@@ -486,9 +561,9 @@
       /^datesection(month|day|year)-input$/.test((field.getAttribute('data-automation-id') || '').toLowerCase());
   }
   function dateSections(field) {
-    var wrapper = field.closest('[data-automation-id="dateInputWrapper"]') ||
-      field.closest('[data-automation-id^="formField-"]');
-    var parts = wrapper ? Array.prototype.filter.call(wrapper.querySelectorAll('input'), isDateSection) : [];
+    var wrapper = aceClosest(field, '[data-automation-id="dateInputWrapper"]') ||
+      aceClosest(field, '[data-automation-id^="formField-"]');
+    var parts = wrapper ? Array.prototype.filter.call(aceQueryAll(wrapper, 'input'), isDateSection) : [];
     return parts.length ? parts : [field];
   }
   // What Workday holds for a section. Its spinbutton reports its own value
@@ -503,13 +578,13 @@
   }
   function stepSection(field, key) {
     var code = key === 'ArrowUp' ? 38 : 40;
-    field.dispatchEvent(new KeyboardEvent('keydown', { key: key, code: key, keyCode: code, which: code, bubbles: true, cancelable: true }));
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: key, code: key, keyCode: code, which: code, bubbles: true, composed: true, cancelable: true }));
   }
   // One character, as a keyboard sends it: keydown, keypress, the browser's
   // own insertText edit unless the page took the key itself, then keyup.
   function typeCharacter(field, character) {
     var keyCode = character.charCodeAt(0);
-    var init = { key: character, code: /\d/.test(character) ? 'Digit' + character : 'Slash', keyCode: keyCode, which: keyCode, charCode: keyCode, bubbles: true, cancelable: true };
+    var init = { key: character, code: /\d/.test(character) ? 'Digit' + character : 'Slash', keyCode: keyCode, which: keyCode, charCode: keyCode, bubbles: true, composed: true, cancelable: true };
     var proceed = field.dispatchEvent(new KeyboardEvent('keydown', init));
     proceed = field.dispatchEvent(new KeyboardEvent('keypress', init)) && proceed;
     if (proceed) {
@@ -518,8 +593,8 @@
       if (!typed) {
         Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(field, String(field.value || '') + character);
         field.dispatchEvent(typeof InputEvent === 'function'
-          ? new InputEvent('input', { bubbles: true, inputType: 'insertText', data: character })
-          : new Event('input', { bubbles: true }));
+          ? new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText', data: character })
+          : new Event('input', { bubbles: true, composed: true }));
       }
     }
     field.dispatchEvent(new KeyboardEvent('keyup', init));
@@ -567,9 +642,9 @@
   // declaration. Only a field labelled for today, or that form's plain
   // Date, gets today's month, day and year.
   function todayPartFor(field) {
-    var scope = field.closest('[data-automation-id^="formField-"]');
+    var scope = aceClosest(field, '[data-automation-id^="formField-"]');
     if (!scope) return null;
-    var heading = scope.querySelector('label, legend');
+    var heading = aceQuery(scope, 'label, legend');
     var label = aceNormalise(aceTextWithoutControls(heading || scope)).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
     var id = scope.getAttribute('data-automation-id') || '';
     var today = /\b(today|todays|date signed|signature date|signed on)\b/.test(label) || /date.?signed|signed.?on|today/i.test(id) ||
@@ -586,14 +661,14 @@
     if (!isDateSection(field) || parseInt(String(field.value || ''), 10) !== parseInt(value, 10)) return false;
     // The box shows the number while Workday's own value is still empty.
     if (/^(mm|dd|yy|yyyy)$/i.test(String(field.getAttribute('aria-valuetext') || '').trim())) return true;
-    var scope = field.closest('[data-automation-id^="formField-"]') || field.closest('[data-automation-id="dateInputWrapper"]');
+    var scope = aceClosest(field, '[data-automation-id^="formField-"]') || aceClosest(field, '[data-automation-id="dateInputWrapper"]');
     return field.getAttribute('aria-invalid') === 'true' || !!(scope && /invalid date|must have a value/i.test(scope.textContent || ''));
   }
   function clearDateSection(field) {
     try { field.focus({ preventScroll: true }); } catch (error) { /* clear anyway */ }
     field.value = '';
     ['Backspace', 'Delete'].forEach(function (key) {
-      field.dispatchEvent(new KeyboardEvent('keydown', { key: key, code: key, bubbles: true, cancelable: true }));
+      field.dispatchEvent(new KeyboardEvent('keydown', { key: key, code: key, bubbles: true, composed: true, cancelable: true }));
     });
     try { field.blur(); } catch (error) { /* nothing to restore */ }
   }
@@ -637,8 +712,8 @@
 
     setter.call(field, value);
 
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-    field.dispatchEvent(new Event("change", { bubbles: true }));
+    field.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+    field.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
 
     // Blurred last. Formik and React Hook Form mark a field touched,
     // and run its validator, on blur and not before: without this a
@@ -695,9 +770,9 @@
     // an empty search input. The input being empty is not the question
     // being unanswered, and picking again could take the choice away.
     if (aceIsAutocomplete(field)) {
-      var picker = field.closest('[data-automation-id="multiSelectContainer"]');
+      var picker = aceClosest(field, '[data-automation-id="multiSelectContainer"]');
 
-      if (picker && picker.querySelector('[data-automation-id="selectedItem"]')) {
+      if (picker && aceQuery(picker, '[data-automation-id="selectedItem"]')) {
         return false;
       }
       var comboValue = autocompleteValue(field);
@@ -744,7 +819,7 @@
 
   function fillable() {
     var normal = Array.prototype.filter.call(
-      document.querySelectorAll("input, select, textarea"),
+      aceQueryAll(document, "input, select, textarea"),
       function (field) {
         if (field.disabled || (field.readOnly && !aceIsAutocomplete(field))) return false;
         if (field.type === "hidden" || field.type === "file") return false;
@@ -767,7 +842,7 @@
     // not see a single one of the twenty-two questions on a real Dell
     // application.
     var choiceButtons = Array.prototype.filter.call(
-      document.querySelectorAll("button"),
+      aceQueryAll(document, "button"),
       function (field) {
         if (field.disabled || !field.offsetParent) return false;
         if (field.type === "submit") return false;
@@ -778,7 +853,7 @@
     // Workday's dropdowns, which are buttons too: see
     // aceIsListboxButton in fields.js.
     var listboxButtons = Array.prototype.filter.call(
-      document.querySelectorAll('button[aria-haspopup="listbox"],[role="combobox"]'),
+      aceQueryAll(document, 'button[aria-haspopup="listbox"],[role="combobox"]'),
       function (field) {
         if (!aceIsListboxButton(field) || field.disabled || field.getAttribute('aria-disabled') === 'true' || field.type === 'submit' || !field.offsetParent) return false;
         return !aceShouldSkip(field) && !aceMemory.isEmployerMotivation(aceQuestionFor(field));
@@ -868,11 +943,11 @@
       // immediate one. Read pill by pill, an answered "No" did not
       // count as answered when ACE's answer was "Yes".
       var scope =
-        field.closest("[role=radiogroup]") || field.parentElement;
+        aceClosest(field, "[role=radiogroup]") || aceParentElement(field);
 
       var siblings = scope
         ? Array.prototype.slice.call(
-            scope.querySelectorAll("button")
+            aceQueryAll(scope, "button")
           ).filter(aceIsChoiceControl)
         : [];
 
@@ -1041,7 +1116,7 @@
       if (!role) return;
 
       for (var i = 0; i < blocks.length; i++) {
-        if (!blocks[i].node.contains(field)) continue;
+        if (!aceContains(blocks[i].node, field)) continue;
 
         if (role === "month" || role === "year") {
           var side = aceDateSide(field, blocks[i].node);
@@ -1061,18 +1136,18 @@
 
   /* The smallest ancestor holding this employer box and no other. */
   function blockAround(field, anchors) {
-    var node = field.parentElement;
+    var node = aceParentElement(field);
     var best = null;
 
     for (var depth = 0; node && depth < 12; depth++) {
       var inside = anchors.filter(function (other) {
-        return node.contains(other);
+        return aceContains(node, other);
       });
 
       if (inside.length > 1) break;
 
       best = node;
-      node = node.parentElement;
+      node = aceParentElement(node);
     }
 
     return best;
@@ -1499,10 +1574,10 @@
     var id =
       field.getAttribute("aria-controls") ||
       field.getAttribute("aria-owns");
-    var declared = aceComboboxScope(field);
-    if (!id && declared) id = declared.getAttribute('aria-controls') || declared.getAttribute('aria-owns');
+    var declared = aceComboboxScope(field), owner = field;
+    if (!id && declared) { id = declared.getAttribute('aria-controls') || declared.getAttribute('aria-owns'); owner = declared; }
 
-    if (id) box = document.getElementById(id);
+    if (id) box = aceElementById(owner, id);
 
     // react-select, which is what Greenhouse renders, points at
     // nothing and simply puts the menu inside the field's own
@@ -1512,7 +1587,7 @@
     // field, which is the mistake this whole function exists to not
     // make again.
     if (!box) {
-      var scope = field.parentElement;
+      var scope = aceParentElement(field);
 
       // Bounded deliberately. On Greenhouse the menu sits four levels
       // above the input, as a sibling of the control; anything beyond
@@ -1525,25 +1600,25 @@
 
         // Past a second combobox the subtree covers a neighbour too,
         // and a menu found here could be theirs.
-        if (scope.querySelectorAll("[role=combobox]").length > 1) break;
+        if (aceQueryAll(scope, "[role=combobox]").length > 1) break;
 
-        box = scope.querySelector("[role=listbox]");
+        box = aceQuery(scope, "[role=listbox]");
         if (box) break;
 
-        scope = scope.parentElement;
+        scope = aceParentElement(scope);
       }
     }
 
     if (!box) return [];
 
-    var options = box.querySelectorAll("[role=option]");
+    var options = aceQueryAll(box, "[role=option]");
 
     // Oracle's Candidate Experience -- Staples, Dell -- lists its
     // choices as a grid: role="gridcell" in role="row", never
     // role="option". Read as options only, every one of its dropdowns
     // opened onto "nothing to choose", and ZIP code, city and state
     // were left empty on a required page.
-    if (!options.length) options = box.querySelectorAll("[role=gridcell]");
+    if (!options.length) options = aceQueryAll(box, "[role=gridcell]");
 
     return Array.prototype.filter.call(options, function (option) {
       return option.getClientRects().length && safeChoiceOption(option);
@@ -1551,7 +1626,7 @@
   }
 
   function safeChoiceOption(option) {
-    var button = option.closest('button');
+    var button = aceClosest(option, 'button');
     return option.getAttribute('aria-disabled') !== 'true' && !option.disabled &&
       (!button || (!button.disabled && button.type !== 'submit'));
   }
@@ -1565,8 +1640,8 @@
      shut and ACE went on to read whatever listbox it could find. */
   function openCombobox(field) {
     var toggle =
-      field.parentElement &&
-      field.parentElement.querySelector("button");
+      aceParentElement(field) &&
+      aceQuery(aceParentElement(field), "button");
     if (toggle && (toggle.type === 'submit' || /clear|remove|delete/i.test(toggle.getAttribute('aria-label') || toggle.getAttribute('title') || ''))) toggle = null;
 
     if (toggle) {
@@ -1582,8 +1657,8 @@
 
     var control =
       aceComboboxScope(field) ||
-      field.closest('[class*="control"]') ||
-      field.parentElement ||
+      aceClosest(field, '[class*="control"]') ||
+      aceParentElement(field) ||
       field;
 
     [
@@ -1594,7 +1669,7 @@
     ].forEach(function (type) {
       control.dispatchEvent(
         new MouseEvent(type, {
-          bubbles: true,
+          bubbles: true, composed: true,
           cancelable: true,
           view: window,
           button: 0,
@@ -1611,7 +1686,7 @@
         code: "ArrowDown",
         keyCode: 40,
         which: 40,
-        bubbles: true
+        bubbles: true, composed: true
       })
     );
   }
@@ -1639,7 +1714,7 @@
         key: "Escape",
         code: "Escape",
         keyCode: 27,
-        bubbles: true
+        bubbles: true, composed: true
       })
     );
 
@@ -1671,7 +1746,7 @@
 
     setter.call(field, text);
 
-    field.dispatchEvent(new Event("input", { bubbles: true }));
+    field.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
   }
 
   /* The queries to try, longest first.
@@ -1726,7 +1801,7 @@
 
       element.dispatchEvent(
         new Kind(type, {
-          bubbles: true,
+          bubbles: true, composed: true,
           cancelable: true,
           view: window,
           button: 0,
@@ -1739,7 +1814,7 @@
 
   function shownListboxes() {
     return Array.prototype.filter.call(
-      document.querySelectorAll("[role=listbox]"),
+      aceQueryAll(document, "[role=listbox]"),
       function (box) {
         return box.getClientRects().length > 0;
       }
@@ -1761,18 +1836,18 @@
       field.getAttribute("aria-controls") ||
       field.getAttribute("aria-owns");
 
-    var declared = id ? document.getElementById(id) : null;
+    var declared = id ? aceElementById(field, id) : null;
 
     if (declared && declared.getClientRects().length && declared.querySelector("[role=option]")) return declared;
 
     var fresh = shownListboxes().filter(function (box) {
-      return before.indexOf(box) < 0 && !!box.querySelector("[role=option]");
+      return before.indexOf(box) < 0 && !!aceQuery(box, "[role=option]");
     });
 
     // A menu inside another new one is the same menu found twice.
     fresh = fresh.filter(function (box) {
       return !fresh.some(function (other) {
-        return other !== box && box.contains(other);
+        return other !== box && aceContains(box, other);
       });
     });
 
@@ -1805,7 +1880,7 @@
           key: "Escape",
           code: "Escape",
           keyCode: 27,
-          bubbles: true
+          bubbles: true, composed: true
         })
       );
     });
@@ -1828,7 +1903,7 @@
       }
 
       var options = Array.prototype.slice.call(
-        box.querySelectorAll("[role=option]")
+        aceQueryAll(box, "[role=option]")
       ).filter(safeChoiceOption);
 
       var texts = options.map(function (option) {
@@ -1865,22 +1940,22 @@
      choice lands as a pill beside the box, which is how it is confirmed. */
   function workdayResults() {
     return Array.prototype.filter.call(
-      document.querySelectorAll('[data-automation-id="promptOption"]'),
+      aceQueryAll(document, '[data-automation-id="promptOption"]'),
       function (node) {
         return (
           node.getClientRects().length > 0 &&
-          !node.closest('[data-automation-id="selectedItem"]')
+          !aceClosest(node, '[data-automation-id="selectedItem"]')
         );
       }
     );
   }
 
   function workdayPicked(field) {
-    var picker = field.closest('[data-automation-id="multiSelectContainer"]');
+    var picker = aceClosest(field, '[data-automation-id="multiSelectContainer"]');
 
     return !!(
       picker &&
-      picker.querySelector('[data-automation-id="selectedItem"]')
+      aceQuery(picker, '[data-automation-id="selectedItem"]')
     );
   }
 
@@ -1892,7 +1967,7 @@
           code: "Enter",
           keyCode: 13,
           which: 13,
-          bubbles: true,
+          bubbles: true, composed: true,
           cancelable: true
         })
       );
@@ -2000,10 +2075,10 @@
   }
 
   function autocompleteValue(field) {
-    var scope = aceComboboxScope(field) || field.parentElement;
-    for (var depth = 0; scope && scope !== document.body && scope.tagName !== 'FORM' && depth < 5; depth++, scope = scope.parentElement) {
-      if (scope.querySelectorAll('input:not([type=hidden])').length > 1) break;
-      var selected = scope.querySelector('[class*="singleValue"], [class*="single-value"], [data-automation-id="selectedItem"]');
+    var scope = aceComboboxScope(field) || aceParentElement(field);
+    for (var depth = 0; scope && scope !== document.body && scope.tagName !== 'FORM' && depth < 5; depth++, scope = aceParentElement(scope)) {
+      if (aceQueryAll(scope, 'input:not([type=hidden])').length > 1) break;
+      var selected = aceQuery(scope, '[class*="singleValue"], [class*="single-value"], [data-automation-id="selectedItem"]');
       if (selected && selected.getClientRects().length) return String(selected.textContent || '').trim();
     }
     return String(field.value || '').trim();
@@ -2105,7 +2180,7 @@
      taken for the control. */
   function pageHasPhoneCountryControl() {
     return Array.prototype.some.call(
-      document.querySelectorAll("label, legend, input, select, button"),
+      aceQueryAll(document, "label, legend, input, select, button"),
       function (node) {
         var text = /^(INPUT|SELECT|BUTTON)$/.test(node.tagName)
           ? aceQuestionFor(node)
@@ -2241,16 +2316,16 @@
             entry.field.click();
           } else {
             entry.field.checked = entry.checked;
-            entry.field.dispatchEvent(new Event('input', { bubbles: true }));
-            entry.field.dispatchEvent(new Event('change', { bubbles: true }));
+            entry.field.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+            entry.field.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
           }
         });
       } else if (record.reviewOptions) {
         Array.from(record.field.options).forEach(function (option) {
           option.selected = record.reviewOptions.indexOf(option.value) >= 0;
         });
-        record.field.dispatchEvent(new Event('input', { bubbles: true }));
-        record.field.dispatchEvent(new Event('change', { bubbles: true }));
+        record.field.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        record.field.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
       } else if (record.ticked && record.field.tagName === "BUTTON") {
         // Ashby's Yes/No widget has no property to unset; clicking the
         // same button again is what toggles it back off, confirmed
@@ -2258,7 +2333,7 @@
         record.field.click();
       } else if (record.ticked) {
         record.field.checked = false;
-        record.field.dispatchEvent(new Event("change", { bubbles: true }));
+        record.field.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
       } else if (aceIsListboxButton(record.field)) {
         // A Workday dropdown has no value to write back and, once
         // answered, usually no "Select One" left to choose. Left as
@@ -2383,7 +2458,7 @@
      real application working: a form of name, email, phone and a CV
      upload has nothing else in it to go on. */
   function asksForAResume() {
-    var inputs = document.querySelectorAll('input[type="file"]');
+    var inputs = aceQueryAll(document, 'input[type="file"]');
 
     for (var i = 0; i < inputs.length; i++) {
       var question = aceQuestionFor(inputs[i]);
@@ -2550,6 +2625,7 @@
   .focus-panel .focus-known-empty{font-size:var(--text-tick);color:var(--muted);margin:0 0 6px}.focus-panel .focus-save-all{width:100%;margin:2px 0 4px}
   .focus-panel .focus-review-actions>.studio-button{width:100%;min-height:39px;padding:9px 10px;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
   .focus-panel .studio-live{white-space:nowrap}
+  .focus-panel .studio-button:disabled{opacity:.5;cursor:not-allowed}
   .focus-panel .focus-dock-status strong,.focus-panel .focus-dock-status small{overflow:hidden;text-overflow:ellipsis}
   `;
 
@@ -2644,7 +2720,7 @@
       if (!control || !/^(click|input|change)$/.test(message.event) || message.event === 'click' && control.getAttribute('data-ace') !== message.action) { respond({ ok: false }); return; }
       applyFocusControlState(card, message.controls);
       if (message.event === 'click') control.click();
-      else control.dispatchEvent(new Event(message.event, { bubbles: true }));
+      else control.dispatchEvent(new Event(message.event, { bubbles: true, composed: true }));
       respond({ ok: true }); return;
     }
     if (embeddedPanel || !Number.isSafeInteger(message.sourceFrame) || message.sourceFrame <= 0) { respond({ ok: false }); return; }
@@ -3156,7 +3232,7 @@
       return attribute === null ? '' : ' ' + name + '="' + esc(attribute) + '"';
     }).join('');
     var listId = item.field.getAttribute('list');
-    var list = listId && document.getElementById(listId);
+    var list = listId && aceElementById(item.field, listId);
     var hasList = list && list.tagName === 'DATALIST';
     return '<label for="studio-answer">Your answer</label><input id="studio-answer" class="studio-search" aria-label="Your answer" type="' + type + '" value="' + esc(value) + '"' + attributes + (hasList ? ' list="studio-answer-options"' : '') + '>' +
       (hasList ? '<datalist id="studio-answer-options">' + Array.from(list.querySelectorAll('option')).map(function (option) {
@@ -3243,6 +3319,13 @@
     });
     return counts;
   }
+  function focusEmpty() {
+    return '<h2 class="focus-compact-title">No questions found</h2>' +
+      '<p class="focus-compact-copy">ACE hasn’t found any questions it can fill. If the form is still loading, wait a moment, then scan again.</p>' +
+      '<div class="focus-compact-actions"><button class="studio-button wine" data-ace="fill" disabled>Fill all known answers</button></div>' +
+      '<div class="focus-utility"><button data-ace="scan">Scan fields</button><button data-ace="workspace">Settings &amp; activity</button></div>';
+  }
+
   function focusCompact(fields) {
     var open = fields.filter(function (field) { return needsStudioReview(field) || skippedQuestions.has(field.key); }).length;
     var counts = formCounts(fields);
@@ -3403,7 +3486,7 @@
     var titleParts = document.title.split(/\s[|·]\s/);
     var employer = (titleParts.length > 1 ? titleParts[titleParts.length - 1] : location.hostname.replace(/^www\./, "")) || "Application form";
     var role = titleParts.length > 1 ? titleParts[0] : document.title || 'Application form';
-    var body = focusMode === 'review' ? studioReview(fields) : focusMode === 'compact' ? focusCompact(fields) :
+    var body = !fields.length && focusMode !== 'workspace' ? focusEmpty() : focusMode === 'review' ? studioReview(fields) : focusMode === 'compact' ? focusCompact(fields) :
       focusMode === 'answers' ? focusAnswers(fields) :
       studioTab === "memory" ? studioMemory() : studioTab === "activity" ? studioActivity() : studioOverview(fields);
     host.className = 'ace-panel focus-panel focus-' + focusMode + (studioTheme === 'night' ? ' night' : '');
@@ -3413,12 +3496,12 @@
     var closeIcon = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>';
     var themeSvg = studioTheme === "day" ? '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"/></svg>' : '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>';
     if (focusMode === 'dock') {
-      render(host, '<div class="focus-dock-body">' + focusGrip() + '<span class="studio-logo">ace</span><span class="focus-dock-status"><strong>' + lastFill.length + ' filled · ' + open + ' to review</strong><small>Form detected · No auto-submit</small></span><button class="focus-dock-open" data-ace="expand" aria-label="Expand ACE">⌄</button><button class="focus-dock-open focus-close" data-ace="close" aria-label="Close ACE" title="Close ACE on this page. Reopen it from the toolbar">' + closeIcon + '</button></div>');
+      render(host, '<div class="focus-dock-body">' + focusGrip() + '<span class="studio-logo">ace</span><span class="focus-dock-status"><strong>' + (fields.length ? lastFill.length + ' filled · ' + open + ' to review' : 'No questions found') + '</strong><small>' + (fields.length ? 'Form detected' : 'No questions found') + ' · No auto-submit</small></span><button class="focus-dock-open" data-ace="expand" aria-label="Expand ACE">⌄</button><button class="focus-dock-open focus-close" data-ace="close" aria-label="Close ACE" title="Close ACE on this page. Reopen it from the toolbar">' + closeIcon + '</button></div>');
     } else {
-      render(host, '<span class="ace-title" style="display:none">' + legacyStatus + '</span><header class="studio-head"><div class="focus-brand"><div class="focus-brand-top"><span class="studio-logo">ace</span><span class="studio-live">● Form detected</span></div><p class="studio-tagline">' + esc(plain(employer)) + ' · ' + esc(plain(role)) + '</p></div><div class="focus-head-controls">' + focusGrip() + '<button class="studio-icon focus-theme" data-ace="theme" aria-label="' + themeLabel + '" title="' + themeTitle + '">' + themeSvg + '</button><button class="studio-icon" data-ace="minimize" aria-label="Minimize ACE" title="Minimize ACE"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><button class="studio-icon focus-close" data-ace="close" aria-label="Close ACE" title="Close ACE on this page. Reopen it from the toolbar">' + closeIcon + '</button></div></header>' +
+      render(host, '<span class="ace-title" style="display:none">' + legacyStatus + '</span><header class="studio-head"><div class="focus-brand"><div class="focus-brand-top"><span class="studio-logo">ace</span>' + (fields.length ? '<span class="studio-live">● Form detected</span>' : '') + '</div><p class="studio-tagline">' + esc(plain(employer)) + ' · ' + esc(plain(role)) + '</p></div><div class="focus-head-controls">' + focusGrip() + '<button class="studio-icon focus-theme" data-ace="theme" aria-label="' + themeLabel + '" title="' + themeTitle + '">' + themeSvg + '</button><button class="studio-icon" data-ace="minimize" aria-label="Minimize ACE" title="Minimize ACE"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><button class="studio-icon focus-close" data-ace="close" aria-label="Close ACE" title="Close ACE on this page. Reopen it from the toolbar">' + closeIcon + '</button></div></header>' +
         (focusMode === 'workspace' ? '<nav class="studio-tabs" aria-label="ACE sections">' + ["overview", "review", "memory", "activity"].map(function (tab) { return '<button data-ace="tab:' + tab + '" class="' + (studioTab === tab ? 'active' : '') + '">' + tab.charAt(0).toUpperCase() + tab.slice(1) + '</button>'; }).join('') + '</nav>' : '') +
         '<div class="studio-scroll">' + (studioError ? '<div class="studio-error">' + esc(studioError) + '</div>' : '') + body + '</div>' +
-        '<footer class="studio-foot">' + (focusMode === 'workspace' ? '<div class="studio-foot-actions"><button class="studio-button wine" data-ace="fill">Fill all known answers</button><button class="studio-button" data-ace="scan">Scan fields</button></div>' : '') + '<small><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>ACE fills. You review. You submit.</small></footer>');
+        '<footer class="studio-foot">' + (focusMode === 'workspace' ? '<div class="studio-foot-actions"><button class="studio-button wine" data-ace="fill"' + (fields.length ? '' : ' disabled') + '>Fill all known answers</button><button class="studio-button" data-ace="scan">Scan fields</button></div>' : '') + '<small><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>ACE fills. You review. You submit.</small></footer>');
       var scroller = host.querySelector(".studio-scroll");
       if (scroller) scroller.scrollTop = scroll;
     }
@@ -3540,24 +3623,24 @@
     // Every choice box and Workday date section on the page, read or not,
     // with what ACE makes of it. A box ACE never lists is the one this
     // report is opened for. No answer is included.
-    var boxes = Array.prototype.filter.call(document.querySelectorAll('input[type=checkbox],input[type=radio],[role=checkbox],[role=radio]'), function (box) {
-      return !(box.closest && box.closest('.ace-root'));
+    var boxes = Array.prototype.filter.call(aceQueryAll(document, 'input[type=checkbox],input[type=radio],[role=checkbox],[role=radio]'), function (box) {
+      return !aceIsOwnUI(box) && !aceMemory.isEmployerMotivation(aceQuestionFor(box));
     });
     if (boxes.length) {
       lines.push("", "Choice boxes (" + boxes.length + "):");
       boxes.slice(0, 20).forEach(function (box) {
-        var block = box.closest && box.closest('[data-automation-id^="formField-"]');
+        var block = box.closest && aceClosest(box, '[data-automation-id^="formField-"]');
         lines.push("- " + tidy(aceOptionRaw(box)).slice(0, 50) + "\n    " + box.tagName.toLowerCase() + " " + fieldSignature(box) +
           ", visible: " + (box.offsetParent ? "yes" : "no") + ", listed: " + (fillable().indexOf(box) >= 0 ? "yes" : "no") +
           ", block: " + (block ? block.getAttribute("data-automation-id") : "none") +
           "\n    question: " + (aceQuestionFor(box).slice(0, 80) || "none") + ", matched: " + (answerNameFor(aceQuestionFor(box), kindOf(box), box) || "nothing"));
       });
     }
-    var sections = Array.prototype.filter.call(document.querySelectorAll('input'), isDateSection);
+    var sections = Array.prototype.filter.call(aceQueryAll(document, 'input'), isDateSection);
     if (sections.length) {
       lines.push("", "Date sections (" + sections.length + "):");
       sections.forEach(function (section) {
-        var scope = section.closest('[data-automation-id^="formField-"]');
+        var scope = aceClosest(section, '[data-automation-id^="formField-"]');
         lines.push("- " + fieldSignature(section) + ", box " + (section.value ? "shows a value" : "empty") +
           ", aria-valuenow " + (section.hasAttribute("aria-valuenow") ? "set" : "absent") +
           ", aria-valuetext " + (/^(mm|dd|yy|yyyy)$/i.test(String(section.getAttribute("aria-valuetext") || "").trim()) ? "placeholder" : section.hasAttribute("aria-valuetext") ? "set" : "absent") +
@@ -3917,12 +4000,7 @@
 
       refresh();
 
-      var queued = null;
-
-      new MutationObserver(function () {
-        clearTimeout(queued);
-        queued = setTimeout(refresh, 400);
-      }).observe(document.body, { childList: true, subtree: true });
+      observeFormDOM(refresh);
     });
   }
 
@@ -4030,7 +4108,7 @@
   }
   function handleAceClick(event) {
     var button = event.target.closest("[data-ace]");
-    if (!button) return;
+    if (!button || button.disabled) return;
 
     event.preventDefault();
     event.stopPropagation();
@@ -4274,8 +4352,8 @@
           outcome = Promise.resolve({ matched: members.every(function (member, at) { return aceIsChosen(member) === (values.indexOf(at) >= 0); }) });
         } else if (chosen.field.tagName === 'SELECT' && chosen.field.multiple && values) {
           Array.from(chosen.field.options).forEach(function (option) { option.selected = values.indexOf(option.value) >= 0; });
-          chosen.field.dispatchEvent(new Event('input', { bubbles: true }));
-          chosen.field.dispatchEvent(new Event('change', { bubbles: true }));
+          chosen.field.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+          chosen.field.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
           outcome = Promise.resolve({ matched: true });
         } else if (chosen.field.tagName === 'SELECT') {
           var exact = Array.from(chosen.field.options).filter(function (option) {
@@ -4599,7 +4677,7 @@
   function employerAnswerEdited(event, ownerIntent) {
     if (aceTyping) return;
     var field = event.target;
-    if (!loaded || filling && event.isTrusted !== true && !ownerIntent || !field || field.closest && field.closest('.ace-root')) return;
+    if (!loaded || filling && event.isTrusted !== true && !ownerIntent || !field || aceIsOwnUI(field)) return;
     if (!field.matches || !field.matches('input,textarea,select,button,[role=combobox]')) return;
     var question = aceQuestionFor(field);
     if (!question || aceShouldSkip(field) || aceMemory.isEmployerMotivation(question)) return;
@@ -4630,28 +4708,28 @@
       if (host && host.shadowRoot) renderStudio(host.shadowRoot.querySelector('.ace-panel'));
     }, 180);
   }
-  document.addEventListener('input', function (event) { employerAnswerEdited(event); }, true);
-  document.addEventListener('change', function (event) { employerAnswerEdited(event); }, true);
-  document.addEventListener('focusout', function (event) {
+  listenEmployer('input', function (event) { employerAnswerEdited(event); }, true);
+  listenEmployer('change', function (event) { employerAnswerEdited(event); }, true);
+  listenEmployer('focusout', function (event) {
     if (event.isTrusted === true) { commitEmployerAnswer(event.target); scheduleRoutineLearning(event.target); }
   }, true);
-  document.addEventListener('click', function (event) {
-    var field = event.target && event.target.closest && event.target.closest('button');
-    if (!loaded || filling || !field || field.closest('.ace-root') || !aceIsChoiceControl(field)) return;
+  listenEmployer('click', function (event) {
+    var field = event.target && event.target.closest && aceClosest(event.target, 'button');
+    if (!loaded || filling || !field || aceIsOwnUI(field) || !aceIsChoiceControl(field)) return;
     // Some accessible choice buttons only change aria-pressed/aria-checked.
     // Read after the employer's own click handler has committed the choice.
     var ownerIntent = event.isTrusted === true ? { commit: true, choiceCommitted: true } : null;
     setTimeout(function () { employerAnswerEdited({ target: field }, ownerIntent); }, 0);
   }, true);
 
-  document.addEventListener('click', function (event) {
-    if (!loaded || filling || event.isTrusted !== true || !event.target || event.target.closest('.ace-root')) return;
-    var option = event.target.closest('[role=option],[role=gridcell]');
+  listenEmployer('click', function (event) {
+    if (!loaded || filling || event.isTrusted !== true || !event.target || aceClosest(event.target, '.ace-root')) return;
+    var option = aceClosest(event.target, '[role=option],[role=gridcell]');
     if (option && ownerDropdown) {
       var opened = ownerDropdown, field = opened.field;
       if (!field.isConnected || opened.href !== location.href || opened.question !== aceQuestionFor(field) || Date.now() - opened.at > 30000 || !safeChoiceOption(option)) return;
       var box = aceIsListboxButton(field) ? listboxOpenedBy(field, opened.before) : null;
-      var associated = box ? box.contains(option) : comboboxOptions(field).indexOf(option) >= 0;
+      var associated = box ? aceContains(box, option) : comboboxOptions(field).indexOf(option) >= 0;
       if (!associated) return;
       ownerDropdown = null;
       var label = String(option.textContent || '').replace(/\s+/g, ' ').trim();
@@ -4666,9 +4744,9 @@
       }, 0);
       return;
     }
-    var trigger = event.target.closest('input,button,[role=combobox]');
+    var trigger = aceClosest(event.target, 'input,button,[role=combobox]');
     if (trigger && trigger.tagName !== 'INPUT' && trigger.tagName !== 'BUTTON' && !aceIsListboxButton(trigger)) {
-      var inputs = trigger.querySelectorAll('input');
+      var inputs = aceQueryAll(trigger, 'input');
       trigger = inputs.length === 1 ? inputs[0] : null;
     }
     if (!trigger || !aceIsAutocomplete(trigger) || aceShouldSkip(trigger)) return;
@@ -4679,8 +4757,8 @@
 
   // A Workday-style listbox may not expose options until the applicant
   // opens it. Mirror only the actual menu associated with that control.
-  document.addEventListener('click', function (event) {
-    var field = event.target && event.target.closest && event.target.closest('button[aria-haspopup="listbox"],[role="combobox"]');
+  listenEmployer('click', function (event) {
+    var field = event.target && event.target.closest && aceClosest(event.target, 'button[aria-haspopup="listbox"],[role="combobox"]');
     if (!field || !aceIsListboxButton(field) || !loaded || filling) return;
     var question = aceQuestionFor(field);
     if (aceMemory.isEmployerMotivation(question)) return;
@@ -4688,7 +4766,7 @@
     setTimeout(function () {
       var box = listboxOpenedBy(field, before);
       if (!box) return;
-      var options = Array.from(box.querySelectorAll('[role=option]')).filter(function (option) {
+      var options = Array.from(aceQueryAll(box, '[role=option]')).filter(function (option) {
         return option.getAttribute('aria-disabled') !== 'true';
       }).map(function (option) { return String(option.textContent || '').trim(); }).filter(Boolean);
       if (!options.length) return;
@@ -4708,30 +4786,16 @@
      surprise. A form built after load still counts, so a page that is
      not one yet is watched rather than given up on.
 
-     The watcher disconnects on the first start, and start() installs
-     its own. */
+     The same root observers remain installed when detection starts ACE;
+     only their debounced refresh callback changes. */
   function waitForApplication() {
     if (looksLikeApplication()) {
       start();
       return;
     }
 
-    var queued = null;
-
-    var watcher = new MutationObserver(function () {
-      clearTimeout(queued);
-
-      queued = setTimeout(function () {
-        if (!looksLikeApplication()) return;
-
-        watcher.disconnect();
-        start();
-      }, 500);
-    });
-
-    watcher.observe(document.body, {
-      childList: true,
-      subtree: true
+    observeFormDOM(function () {
+      if (looksLikeApplication()) start();
     });
   }
 

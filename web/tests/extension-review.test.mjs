@@ -95,6 +95,7 @@ function fixture(body, config = {}) {
       } } },
   });
   document.querySelector('form').addEventListener('submit', event => { event.preventDefault(); submissions++; });
+  config.setup?.(window);
   for (const file of ['fields.js', 'memory.js', 'content.js']) vm.runInContext(fs.readFileSync(path.join(extension, file), 'utf8'), context, { filename: file });
   const panel = () => document.querySelector('.ace-root')?.shadowRoot?.querySelector('.ace-panel');
   function click(action) { const button = panel()?.querySelector(`[data-ace="${action}"]`); assert.ok(button, `Missing action ${action}`); button.click(); }
@@ -112,6 +113,150 @@ function fixture(body, config = {}) {
     }, submissions: () => submissions,
     dispose() { timers.forEach(clearTimeout); } };
 }
+
+// Fictional web components, with repeated internal IDs as independent components use.
+function shadowApplication(window) {
+  const host = window.document.createElement('spl-application');
+  window.document.querySelector('form').append(host);
+  const root = host.attachShadow({ mode: 'open' });
+  root.innerHTML = '<section id="questions"></section>';
+  const controls = {};
+  for (const [key, label, tag] of [['name', 'Full name', 'input'], ['email', 'Email', 'input'], ['phone', 'Phone', 'input'], ['linkedin', 'LinkedIn profile', 'input'], ['motivation', 'Why this company?', 'textarea']]) {
+    const component = window.document.createElement('spl-input');
+    root.querySelector('section').append(component);
+    const inner = component.attachShadow({ mode: 'open' });
+    inner.innerHTML = `<label for="control">${label}</label><${tag} id="control"></${tag}>`;
+    controls[key] = inner.querySelector(tag);
+  }
+  return { host, root, controls };
+}
+
+test('shadow-root application finds separate labels, fills only on Fill and undoes without reading motivation', async t => {
+  let form, reads = 0;
+  const f = fixture('', { topOnly: true, setup(window) {
+    form = shadowApplication(window);
+    Object.defineProperty(form.controls.motivation, 'value', { get() { reads++; return 'Employer-only fictional text'; }, set() { assert.fail('motivation must never be written'); } });
+  } }); t.after(f.dispose);
+  assert.ok(f.panel(), 'application is detected inside nested open shadow roots');
+  for (const field of Object.values(form.controls).slice(0, 4)) assert.equal(field.value, '', 'opening remains passive');
+  assert.match(f.internals.diagnostics(), /email/);
+  assert.match(f.internals.diagnostics(), /phone/);
+  assert.doesNotMatch(f.internals.diagnostics(), /why this company|employer-only fictional text/i);
+  f.click('fill');
+  await until(() => form.controls.email.value === 'applicant@example.test', 'Email gets its own answer');
+  assert.equal(form.controls.name.value, 'Example Applicant');
+  assert.equal(form.controls.phone.value, '5550100100');
+  assert.equal(reads, 0);
+  f.click('undo');
+  for (const field of Object.values(form.controls).slice(0, 4)) assert.equal(field.value, '');
+  assert.equal(reads, 0);
+  assert.equal(f.submissions(), 0);
+});
+
+test('shadow host labels and scoped sensitive answers use the existing policies', async t => {
+  let root;
+  const f = fixture('', { answerItems: [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Work authorisation', value: 'Yes' }, { label: 'Need sponsorship now', value: 'No' }], setup(window) {
+    const host = window.document.createElement('spl-form'); window.document.querySelector('form').append(host);
+    root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<spl-input label="Full name"></spl-input><label for="us">Are you authorized to work in the US?</label><select id="us"><option value="">Select one</option><option>Yes</option><option>No</option></select><label for="narrow">Are you authorized to work in Canada?</label><select id="narrow"><option value="">Select one</option><option>Yes</option><option>No</option></select><label for="sponsor">Will you now or in the future require sponsorship?</label><select id="sponsor"><option value="">Select one</option><option>Yes</option><option>No</option></select><label for="signature">Name (Signature Field)</label><input id="signature">';
+    root.querySelector('spl-input').attachShadow({ mode: 'open' }).innerHTML = '<input id="internal">';
+  } }); t.after(f.dispose);
+  assert.match(f.internals.diagnostics(), /full name/);
+  f.click('fill');
+  await until(() => root.querySelector('spl-input').shadowRoot.querySelector('input').value === 'Example Applicant', 'host label names its native input');
+  assert.equal(root.getElementById('us').value, 'Yes', 'saved exact sensitive fact still fills');
+  for (const id of ['narrow', 'sponsor', 'signature']) assert.equal(root.getElementById(id).value, '', 'unsupported scope, incomplete negative and signature stay unanswered');
+});
+
+test('shadow choice groups cross component boundaries without borrowing a neighbouring question', async t => {
+  let root;
+  const f = fixture('', { answerItems: [{ label: 'Willing to relocate', value: 'Yes' }], setup(window) {
+    const host = window.document.createElement('spl-choice-form'); window.document.querySelector('form').append(host);
+    root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<span id="prompt">Are you willing to relocate?</span><fieldset aria-labelledby="prompt"><spl-choice></spl-choice><spl-choice></spl-choice></fieldset><label for="other">Are you authorized to work in Canada?</label><input id="other">';
+    root.querySelectorAll('spl-choice').forEach((host, i) => { host.attachShadow({ mode: 'open' }).innerHTML = `<label><input type="radio" name="relocate" value="${i ? 'No' : 'Yes'}">${i ? 'No' : 'Yes'}</label>`; });
+  } }); t.after(f.dispose);
+  f.click('fill');
+  const choices = Array.from(root.querySelectorAll('spl-choice'), host => host.shadowRoot.querySelector('input'));
+  await until(() => choices[0].checked, 'group question names its split native choices');
+  assert.equal(choices[1].checked, false); assert.equal(root.getElementById('other').value, '');
+  f.click('undo'); assert.equal(choices[0].checked, false); assert.equal(f.submissions(), 0);
+});
+
+test('ACE own shadow inputs never enter scanning or diagnostics', t => {
+  const f = fixture(''); t.after(f.dispose);
+  const root = f.panel().getRootNode();
+  const input = f.document.createElement('input'); input.setAttribute('aria-label', 'Private card editor'); root.append(input);
+  Object.defineProperty(input, 'value', { get() { assert.fail('ACE editor value must not be scanned'); } });
+  assert.doesNotMatch(f.internals.diagnostics(), /private card editor/i);
+  f.click('scan'); assert.match(f.panel().textContent, /4 questions answered/);
+});
+
+test('a custom dropdown finds options in its nested root and keeps an unrelated menu separate', async t => {
+  let button;
+  const f = fixture('<div role="listbox"><div role="option">Wrong unrelated option</div></div>', { answerItems: [{ label: 'Willing to relocate', value: 'Yes' }], setup(window) {
+    const host = window.document.createElement('spl-select'); window.document.querySelector('form').append(host);
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<label for="control">Are you willing to relocate?</label><button id="control" type="button" aria-haspopup="listbox" aria-controls="menu">Select one</button><spl-menu></spl-menu>';
+    button = root.querySelector('button');
+    const menu = root.querySelector('spl-menu').attachShadow({ mode: 'open' });
+    button.addEventListener('click', () => {
+      menu.innerHTML = '<div role="listbox" id="menu"><div role="option">Yes</div><div role="option">No</div></div>';
+      menu.querySelectorAll('[role=option]').forEach(option => option.addEventListener('click', () => { button.textContent = option.textContent; menu.innerHTML = ''; }));
+    });
+  } }); t.after(f.dispose);
+  assert.equal(button.textContent, 'Select one'); f.click('fill');
+  await until(() => button.textContent === 'Yes', 'the actual shadow menu supplies its option');
+  assert.equal(f.submissions(), 0);
+});
+
+test('zero-question card is honest in Day, Night and the dock after explicit toolbar wake', t => {
+  const f = fixture('', { topOnly: true }); t.after(f.dispose);
+  assert.equal(f.panel(), undefined, 'quiet until the owner explicitly wakes it');
+  f.deliver({ type: 'wake' });
+  for (let i = 0; i < 2; i++) {
+    assert.match(f.panel().textContent, /No questions found/);
+    assert.match(f.panel().textContent, /ACE hasn’t found any questions it can fill/);
+    assert.doesNotMatch(f.panel().textContent, /Form detected|0 of 0|Check answers/);
+    assert.equal(f.panel().querySelector('[data-ace="fill"]').disabled, true);
+    assert.equal(f.panel().querySelector('[data-ace="scan"]').disabled, false);
+    f.click('theme');
+  }
+  f.click('workspace');
+  assert.match(f.panel().textContent, /Activity/);
+  assert.doesNotMatch(f.panel().textContent, /0 of 0|ACE entered approved answers/);
+  assert.equal(f.panel().querySelector('[data-ace="fill"]').disabled, true);
+  f.click('tab:overview'); assert.match(f.panel().textContent, /No questions found/);
+  f.click('workspace');
+  f.click('tab:memory'); assert.match(f.panel().textContent, /Memory/);
+  f.click('minimize'); assert.doesNotMatch(f.panel().textContent, /Form detected|0 filled/);
+  assert.match(f.panel().textContent, /No questions found/); assert.equal(f.submissions(), 0);
+});
+
+test('a late root attached to an existing host is detected and later questions stay passive', async t => {
+  let host;
+  const f = fixture('', { topOnly: true, observeDOM: true, setup(window) {
+    host = window.document.createElement('spl-late-form'); window.document.querySelector('form').append(host);
+  } }); t.after(f.dispose);
+  assert.equal(f.panel(), undefined);
+  const root = host.attachShadow({ mode: 'open' });
+  root.innerHTML = '<label>Full name<input></label><label>Email<input></label><label>Phone<input></label><label>LinkedIn profile<input></label>';
+  await sleep(2000); await until(() => f.panel(), 'late attachShadow wakes application detection');
+  const group = f.document.createElement('label'); group.textContent = 'Your favourite testing tool'; group.append(f.document.createElement('input')); root.append(group);
+  await until(() => f.panel().textContent.includes('of 5 questions answered'), 'root observer notices a later question');
+  for (const field of root.querySelectorAll('input')) assert.equal(field.value, '');
+  assert.equal(f.submissions(), 0);
+});
+
+test('a shadow checkout with only contact fields remains quiet and sends no private requests', async t => {
+  const sent = [];
+  const f = fixture('', { topOnly: true, observeDOM: true, onSend(message) { sent.push(message.type); }, setup(window) {
+    const host = window.document.createElement('shop-checkout'); window.document.querySelector('form').append(host);
+    host.attachShadow({ mode: 'open' }).innerHTML = '<label>Full name<input></label><label>Email<input></label><label>Phone<input></label><label>City<input></label>';
+  } }); t.after(f.dispose);
+  await sleep(1700);
+  assert.equal(f.panel(), undefined); assert.deepEqual(sent, []);
+});
 
 test('quick fill has one main action and fills every matching native dropdown without changing existing answers', t => {
   const memoryStore = [{ id: 1, concept: 'q:preferred development environment', question: 'Preferred development environment', answer: 'Linux', answer_type: 'choice', reuse_policy: 'reusable' }];
