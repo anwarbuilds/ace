@@ -95,6 +95,7 @@ function fixture(body, config = {}) {
       } } },
   });
   document.querySelector('form').addEventListener('submit', event => { event.preventDefault(); submissions++; });
+  config.setup?.(window);
   for (const file of ['fields.js', 'memory.js', 'content.js']) vm.runInContext(fs.readFileSync(path.join(extension, file), 'utf8'), context, { filename: file });
   const panel = () => document.querySelector('.ace-root')?.shadowRoot?.querySelector('.ace-panel');
   function click(action) { const button = panel()?.querySelector(`[data-ace="${action}"]`); assert.ok(button, `Missing action ${action}`); button.click(); }
@@ -112,6 +113,45 @@ function fixture(body, config = {}) {
     }, submissions: () => submissions,
     dispose() { timers.forEach(clearTimeout); } };
 }
+
+// Fictional web components, with repeated internal IDs as independent components use.
+function shadowApplication(window) {
+  const host = window.document.createElement('spl-application');
+  window.document.querySelector('form').append(host);
+  const root = host.attachShadow({ mode: 'open' });
+  root.innerHTML = '<section id="questions"></section>';
+  const controls = {};
+  for (const [key, label, tag] of [['name', 'Full name', 'input'], ['email', 'Email', 'input'], ['phone', 'Phone', 'input'], ['linkedin', 'LinkedIn profile', 'input'], ['motivation', 'Why this company?', 'textarea']]) {
+    const component = window.document.createElement('spl-input');
+    root.querySelector('section').append(component);
+    const inner = component.attachShadow({ mode: 'open' });
+    inner.innerHTML = `<label for="control">${label}</label><${tag} id="control"></${tag}>`;
+    controls[key] = inner.querySelector(tag);
+  }
+  return { host, root, controls };
+}
+
+test('shadow-root application finds separate labels, fills only on Fill and undoes without reading motivation', async t => {
+  let form, reads = 0;
+  const f = fixture('', { topOnly: true, setup(window) {
+    form = shadowApplication(window);
+    Object.defineProperty(form.controls.motivation, 'value', { get() { reads++; return 'Employer-only fictional text'; }, set() { assert.fail('motivation must never be written'); } });
+  } }); t.after(f.dispose);
+  assert.ok(f.panel(), 'application is detected inside nested open shadow roots');
+  for (const field of Object.values(form.controls).slice(0, 4)) assert.equal(field.value, '', 'opening remains passive');
+  assert.match(f.internals.diagnostics(), /email/);
+  assert.match(f.internals.diagnostics(), /phone/);
+  assert.doesNotMatch(f.internals.diagnostics(), /why this company|employer-only fictional text/i);
+  f.click('fill');
+  await until(() => form.controls.email.value === 'applicant@example.test', 'Email gets its own answer');
+  assert.equal(form.controls.name.value, 'Example Applicant');
+  assert.equal(form.controls.phone.value, '5550100100');
+  assert.equal(reads, 0);
+  f.click('undo');
+  for (const field of Object.values(form.controls).slice(0, 4)) assert.equal(field.value, '');
+  assert.equal(reads, 0);
+  assert.equal(f.submissions(), 0);
+});
 
 test('quick fill has one main action and fills every matching native dropdown without changing existing answers', t => {
   const memoryStore = [{ id: 1, concept: 'q:preferred development environment', question: 'Preferred development environment', answer: 'Linux', answer_type: 'choice', reuse_policy: 'reusable' }];
