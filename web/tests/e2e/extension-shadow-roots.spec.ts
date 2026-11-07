@@ -117,7 +117,7 @@ test("a shadow checkout stays quiet through field and label changes", async ({ p
   expect(await page.evaluate(() => (window as ShadowWindow).__shadow.messages)).toEqual([]);
 });
 
-test("zero-question card disables Fill in Day and Night and keeps Scan available", async ({ page }) => {
+test("zero-question card disables Fill in Day and Night and keeps Scan available", async ({ page }, testInfo) => {
   await page.emulateMedia({ colorScheme: "light" });
   const panel = await mount(page, { empty: true });
   await expect(panel).toHaveCount(0);
@@ -133,6 +133,7 @@ test("zero-question card disables Fill in Day and Night and keeps Scan available
     const bounds = await panel.boundingBox();
     expect(bounds!.width).toBeLessThanOrEqual(320);
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    await panel.screenshot({ path: testInfo.outputPath(index ? "shadow-empty-night.png" : "shadow-empty-day.png") });
     await panel.locator('[data-ace="theme"]').click();
   }
   expect(await page.evaluate(() => (window as ShadowWindow).__shadow.submits)).toBe(0);
