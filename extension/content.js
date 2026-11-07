@@ -3319,11 +3319,11 @@
     });
     return counts;
   }
-  function focusEmpty() {
+  function focusEmpty(inWorkspace) {
     return '<h2 class="focus-compact-title">No questions found</h2>' +
       '<p class="focus-compact-copy">ACE hasn’t found any questions it can fill. If the form is still loading, wait a moment, then scan again.</p>' +
-      '<div class="focus-compact-actions"><button class="studio-button wine" data-ace="fill" disabled>Fill all known answers</button></div>' +
-      '<div class="focus-utility"><button data-ace="scan">Scan fields</button><button data-ace="workspace">Settings &amp; activity</button></div>';
+      (inWorkspace ? '' : '<div class="focus-compact-actions"><button class="studio-button wine" data-ace="fill" disabled>Fill all known answers</button></div>' +
+      '<div class="focus-utility"><button data-ace="scan">Scan fields</button><button data-ace="workspace">Settings &amp; activity</button></div>');
   }
 
   function focusCompact(fields) {
@@ -3486,7 +3486,7 @@
     var titleParts = document.title.split(/\s[|·]\s/);
     var employer = (titleParts.length > 1 ? titleParts[titleParts.length - 1] : location.hostname.replace(/^www\./, "")) || "Application form";
     var role = titleParts.length > 1 ? titleParts[0] : document.title || 'Application form';
-    var body = !fields.length && focusMode !== 'workspace' ? focusEmpty() : focusMode === 'review' ? studioReview(fields) : focusMode === 'compact' ? focusCompact(fields) :
+    var body = !fields.length && !(focusMode === 'workspace' && /^(memory|activity)$/.test(studioTab)) ? focusEmpty(focusMode === 'workspace') : focusMode === 'review' ? studioReview(fields) : focusMode === 'compact' ? focusCompact(fields) :
       focusMode === 'answers' ? focusAnswers(fields) :
       studioTab === "memory" ? studioMemory() : studioTab === "activity" ? studioActivity() : studioOverview(fields);
     host.className = 'ace-panel focus-panel focus-' + focusMode + (studioTheme === 'night' ? ' night' : '');

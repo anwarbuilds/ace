@@ -222,6 +222,11 @@ test('zero-question card is honest in Day, Night and the dock after explicit too
     assert.equal(f.panel().querySelector('[data-ace="scan"]').disabled, false);
     f.click('theme');
   }
+  f.click('workspace');
+  assert.match(f.panel().textContent, /No questions found/);
+  assert.doesNotMatch(f.panel().textContent, /0 of 0|ACE entered approved answers/);
+  assert.equal(f.panel().querySelector('[data-ace="fill"]').disabled, true);
+  f.click('tab:memory'); assert.match(f.panel().textContent, /Memory/);
   f.click('minimize'); assert.doesNotMatch(f.panel().textContent, /Form detected|0 filled/);
   assert.match(f.panel().textContent, /No questions found/); assert.equal(f.submissions(), 0);
 });
