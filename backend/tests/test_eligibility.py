@@ -2340,10 +2340,8 @@ def test_level_three_and_above_are_still_senior() -> None:
         ), title
 
 
-def test_data_engineering_and_data_science_are_off_the_list() -> None:
-    """The user asked for new-grad data roles and withdrew the request
-    the same day: their preparation is for software, machine learning and
-    forward deployed engineering."""
+def test_data_engineering_and_data_science_are_on_the_list() -> None:
+    """The 2026-11-07 role review includes data roles under normal gates."""
 
     for title in (
         "Data Engineer, 2027 Graduate U.S",
@@ -2351,15 +2349,12 @@ def test_data_engineering_and_data_science_are_off_the_list() -> None:
         "Associate Data Scientist",
         "Data Engineer I",
     ):
-        assert (
-            EligibilityReasonCode.NON_TARGET_ROLE
-            in evaluate_job(
-                make_job(
-                    title=title,
-                    description="1+ years of experience with SQL.",
-                )
-            ).reason_codes
-        ), title
+        assert evaluate_job(
+            make_job(
+                title=title,
+                description="1+ years of experience with SQL.",
+            )
+        ).status is EligibilityStatus.PASS, title
 
     # Software and machine learning engineering on data are unaffected.
     for title in (
@@ -2373,17 +2368,7 @@ def test_data_engineering_and_data_science_are_off_the_list() -> None:
         ).status is EligibilityStatus.PASS, title
 
 
-def test_with_data_roles_switched_on_only_new_grad_ones_pass(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from backend.app.intelligence import eligibility
-
-    monkeypatch.setattr(
-        eligibility,
-        "INCLUDE_NEW_GRAD_DATA_ROLES",
-        True,
-    )
-
+def test_data_roles_use_the_same_experience_rules_without_a_new_grad_label() -> None:
     for title, description in (
         ("Data Engineer, 2027 Graduate U.S", "Build pipelines in Python."),
         ("Associate Data Scientist", "Python and SQL."),
@@ -2400,17 +2385,15 @@ def test_with_data_roles_switched_on_only_new_grad_ones_pass(
     for title in (
         "Data Engineer",
         "Data Scientist II",
+        "Applied Scientist II",
     ):
-        assert (
-            EligibilityReasonCode.NON_TARGET_ROLE
-            in evaluate_job(
-                make_job(
-                    title=title,
-                    description="Own the data platform.",
-                    early_career=False,
-                )
-            ).reason_codes
-        ), title
+        assert evaluate_job(
+            make_job(
+                title=title,
+                description="Own the data platform.",
+                early_career=False,
+            )
+        ).status is EligibilityStatus.PASS, title
 
 
 def test_a_distinguished_engineer_is_senior() -> None:
