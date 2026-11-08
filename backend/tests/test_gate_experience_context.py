@@ -69,6 +69,7 @@ def test_previous_intern_eligibility_does_not_make_the_role_an_internship(title)
     "Intern Software Engineer (For Previous Interns Only)",
     "Software Engineer (Internship Only)", "Software Engineer Co-op",
     "Software Engineer Part-Time Student",
+    "Data Science Extern", "Software Engineer Externship",
 ))
 def test_genuine_internship_roles_stay_excluded(title):
     assert is_internship(job(title=title))

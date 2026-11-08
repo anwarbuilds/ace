@@ -20,7 +20,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict
 
 
-ROLE_RULE_VERSION = "2026-11-07-v5"
+ROLE_RULE_VERSION = "2026-11-07-v6"
 
 
 class RoleFamily(str, Enum):
@@ -258,6 +258,10 @@ INFRASTRUCTURE_PATTERNS = (
     r"(?:engineer(?:ing)?|developer|architect)\b",
     r"\bdev[ -]?ops\b",
     r"\bdevsecops\b",
+    # The generic staff wrapper does not turn a platform specialty into
+    # the software trade. Explicit software/ML/data exceptions still win.
+    r"\bmember of technical staff\b.*(?<!data )\b(?:infrastructure|platform|cloud)\b",
+    r"(?<!data )\b(?:infrastructure|platform|cloud)\b.*\bmember of technical staff\b",
 )
 
 
@@ -281,7 +285,6 @@ SOFTWARE_CORE_PATTERNS = (
     r"\bfront[- ]?end\b",
     r"\bfull[- ]?stack\b",
     r"\bfounding\b(?:\s+\w+){0,2}\s+engineer\b",
-    r"\bmember of technical staff\b",
     r"\bsoftware (?:tools?|integration|systems?) "
     r"(?:engineer(?:ing)?|developer|programmer)\b",
     r"\bsoftware systems? integration engineer(?:ing)?\b",
@@ -420,6 +423,24 @@ DATA_SCIENCE_PATTERNS = (
 )
 
 
+MTS_NON_SOFTWARE_SPECIALTIES = (
+    r"[,;:/(\-]\s*it\s*\)?\s*$|\b(?:information technology|customer success|developer relations|"
+    r"gtm|go[- ]to[- ]market|fleet operations|business systems)\b",
+    r"\b(?:brand marketing designer|product design|web design|design engineer)\b",
+    r"\b(?:analog design|thin films?|soc|physical design|physical architect)\b",
+    r"\b(?:computational biolog(?:ist|y)|statistical genetics|translational medicine)\b",
+    r"(?:[,;:/-]\s*)science\s*$",
+    r"\bproduct engineers?\b",
+)
+
+MTS_ML_INFRASTRUCTURE_PATTERNS = (
+    r"\b(?:ai|ml|machine learning|llm|genai|inference|rl|pre[- ]?training|"
+    r"post[- ]?training)\b.*\b(?:infrastructure|platform)\b",
+    r"\b(?:infrastructure|platform)\b.*\b(?:ai|ml|machine learning|llm|"
+    r"genai|inference|rl|pre[- ]?training|post[- ]?training)\b",
+)
+
+
 def _first_matching_pattern(
     title: str,
     patterns: tuple[str, ...],
@@ -492,6 +513,17 @@ def classify_role(
     rejecting explicit seniority or experience blockers.
     """
 
+    is_technical_staff = bool(re.search(r"\bmember of technical staff\b", title, re.IGNORECASE))
+    if is_technical_staff:
+        title = re.sub(r"\beng\.?(?=\s|$|[),;])", "Engineer", title, flags=re.IGNORECASE)
+        title = re.sub(r"\binfra\b", "Infrastructure", title, flags=re.IGNORECASE)
+        # The wrapper names neither a rank nor a license to admit other
+        # trades. Explicit software, ML and data titles retain their scope.
+        if _first_matching_pattern(title, MTS_NON_SOFTWARE_SPECIALTIES) and not _first_matching_pattern(
+            title, SOFTWARE_CORE_PATTERNS + AI_ML_PATTERNS + DATA_ENGINEERING_PATTERNS + DATA_SCIENCE_PATTERNS,
+        ):
+            return RoleClassification(family=RoleFamily.OTHER, priority=RolePriority.NONE, matched_pattern=None)
+
     if _is_non_software_domain(
         title
     ):
@@ -558,6 +590,9 @@ def classify_role(
             AI_ML_PATTERNS,
         )
     )
+
+    if is_technical_staff and not ai_ml_match:
+        ai_ml_match = _first_matching_pattern(title, MTS_ML_INFRASTRUCTURE_PATTERNS)
 
     if ai_ml_match:
         return RoleClassification(
