@@ -102,7 +102,9 @@ PROFILES: dict[str, CandidateProfile] = {
     # v55 changes no threshold either: site reliability and mobile roles
     # leave the list, at the owner's request on 2026-10-29; v56 the same
     # day takes infrastructure, platform, cloud and DevOps titles off too.
-    # v58 recognizes compressed US addresses and Any State; v57 applied
+    # v59 distinguishes founders' history and former-intern eligibility
+    # from requirements of this role. v58 recognizes compressed US
+    # addresses and Any State; v57 applied
     # the approved role list, including data families under
     # these same experience limits; compiler, runtime and QA stay out.
     "early-career": CandidateProfile(
@@ -110,7 +112,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=3,
-        rule_version="2026-11-07-v58",
+        rule_version="2026-11-07-v59",
     ),
     # New grad roles stay the primary target (they sort first), and SDE
     # II comes in: with three years, a posting asking "3+ years" is one
@@ -121,7 +123,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=4,
-        rule_version="2026-11-07-v58-sde2",
+        rule_version="2026-11-07-v59-sde2",
     ),
 }
 
@@ -1246,17 +1248,26 @@ INTERNSHIP_TITLE_PATTERNS = (
 )
 
 
+FORMER_INTERN_ELIGIBILITY_PATTERN = re.compile(
+    r"\(\s*for\s+(?:current\s*/\s*previous|previous|former|prior|past)"
+    r"\s+[^()]{0,80}?\binterns?\s+only\s*\)",
+    re.IGNORECASE,
+)
+
+
 def is_internship(
     job: CanonicalJob,
 ) -> bool:
     """Detect internship and placement roles.
 
     Title only. A full-time posting that merely mentions an internship
-    programme elsewhere in its text is still a full-time posting.
+    programme elsewhere in its text is still a full-time posting. A
+    parenthetical limiting applicants to former interns is eligibility,
+    not the role's employment type; actual Intern titles still match.
     """
 
     return _matches_any_regex(
-        job.title,
+        FORMER_INTERN_ELIGIBILITY_PATTERN.sub("", job.title),
         INTERNSHIP_TITLE_PATTERNS,
     )
 
@@ -1894,7 +1905,7 @@ def _has_early_career_signal(
 # team is the scope of the work and not the holder of the experience.
 COLLECTIVE_EXPERIENCE_PATTERN = re.compile(
     r"(?:our|the)\s+(?:team|company|"
-    r"founders?|leadership|group)\s+"
+    r"(?:\w+\s+)?(?:co[-\s]?)?founders?|leadership|group)\s+"
     r"(?:has|have|brings?|combines?|"
     r"bring|share)\b[^.]{0,30}$"
     r"|\bcombined\b[^.]{0,24}$"
