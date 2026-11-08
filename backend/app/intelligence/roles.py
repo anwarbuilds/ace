@@ -20,7 +20,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict
 
 
-ROLE_RULE_VERSION = "2026-11-07-v6"
+ROLE_RULE_VERSION = "2026-11-07-v7"
 
 
 class RoleFamily(str, Enum):
@@ -114,6 +114,13 @@ NON_SOFTWARE_DOMAIN_PATTERNS = (
     r"\bsolutions?\s+architect\b",
     r"\bcustomer\s+engineer\b",
     r"\bsupport\s+engineer\b",
+    r"\bsolutions?\s+engineer\b",
+    r"\bit\s+(?:engineer|support|administrator)\b",
+    r"\bsystems?\s+admin(?:istrator)?\b",
+    r"\b(?:data engineer(?:ing)?|analytics)[\s/&-]+support\s*$",
+    r"\b(?:data science|software|programming)\s+(?:coach|instructor|tutor)\b",
+    r"^\s*(?:technical\s+)?product\s+owner\b",
+    r"\bdata engineer(?:ing)?\s+analyst\b",
     r"\bnetwork\s+operations\b",
     r"\bhelp\s?desk\b",
     r"\bdesktop\b",
@@ -152,8 +159,12 @@ RUNTIME_PATTERNS = (
 )
 QUALITY_ASSURANCE_PATTERNS = (
     r"\b(?:qa|sdet|quality assurance|test automation|automation testing)\b",
+    r"\bquality automation\b",
+    r"\btest(?:ing)?\s+(?:and|&)\s+(?:software|analytics)\b",
     r"\b(?:software )?test(?:ing)? engineer(?:ing)?\b",
     r"\bsoftware (?:development )?engineer(?:ing)? in test\b",
+    r"\bsoftware (?:dev(?:elopment)? )?engineer(?:ing)?"
+    r"(?:\s+(?:[ivx]+|\d+))?\s*[-,:/]\s*test\b",
     r"\bsoftware quality engineer(?:ing)?\b",
 )
 
@@ -427,7 +438,7 @@ MTS_NON_SOFTWARE_SPECIALTIES = (
     r"[,;:/(\-]\s*it\s*\)?\s*$|\b(?:information technology|customer success|developer relations|"
     r"gtm|go[- ]to[- ]market|fleet operations|business systems)\b",
     r"\b(?:brand marketing designer|product design|web design|design engineer)\b",
-    r"\b(?:analog design|thin films?|soc|physical design|physical architect)\b",
+    r"\b(?:analog design|chip design|thin films?|soc|physical design|physical architect)\b",
     r"\b(?:computational biolog(?:ist|y)|statistical genetics|translational medicine)\b",
     r"(?:[,;:/-]\s*)science\s*$",
     r"\bproduct engineers?\b",
@@ -666,6 +677,12 @@ def classify_role(
             matched_pattern=software_match,
         )
 
+    # An institute's name is not the occupation: a medical informaticist
+    # in an Institute for Data Science is still that medical occupation.
+    data_title = re.split(
+        r"\s+-\s+(?:department|institute|school)\s+(?:of|for)\b",
+        title, maxsplit=1, flags=re.IGNORECASE,
+    )[0]
     for family, patterns in (
         (
             RoleFamily.DATA_ENGINEERING,
@@ -677,7 +694,7 @@ def classify_role(
         ),
     ):
         data_match = _first_matching_pattern(
-            title,
+            data_title,
             patterns,
         )
 

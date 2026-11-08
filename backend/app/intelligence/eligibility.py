@@ -102,6 +102,8 @@ PROFILES: dict[str, CandidateProfile] = {
     # v55 changes no threshold either: site reliability and mobile roles
     # leave the list, at the owner's request on 2026-10-29; v56 the same
     # day takes infrastructure, platform, cloud and DevOps titles off too.
+    # v62 preserves trade, leadership and full-time exclusions when the
+    # wider approved families match a title or a department name.
     # v61 reads flattened doctoral bullets and preserves optional degrees.
     # v60 keeps seniority and explicit specialties from slipping through
     # generic staff/data titles, including degree-plus-years title bars.
@@ -115,7 +117,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=3,
-        rule_version="2026-11-07-v61",
+        rule_version="2026-11-07-v62",
     ),
     # New grad roles stay the primary target (they sort first), and SDE
     # II comes in: with three years, a posting asking "3+ years" is one
@@ -126,7 +128,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=4,
-        rule_version="2026-11-07-v61-sde2",
+        rule_version="2026-11-07-v62-sde2",
     ),
 }
 
@@ -269,6 +271,8 @@ class EligibilityReasonCode(
     CONTRACT_ROLE = (
         "CONTRACT_ROLE"
     )
+
+    PART_TIME_ROLE = "PART_TIME_ROLE"
 
     NO_HARD_BLOCKER = (
         "NO_HARD_BLOCKER"
@@ -769,6 +773,10 @@ SENIOR_TITLE_PATTERNS = (
     r"^\s*fellow\b",
     r"\b(?:technical|corporate|engineering)\s+fellow\b",
     r"\blead\b",
+    r"\bleaders?\b",
+    r"\bsupervisor\b",
+    r"\bmanaging\s+(?:engineer|scientist)\b",
+    r"\bchief\b(?!\s+(?:data\s+)?office\b)",
     r"\bmanager\b",
     # "Mgr Software Engineering" passed: only the full word was read.
     r"\bmgrs?\b",
@@ -853,6 +861,8 @@ PHD_TITLE_PATTERNS = (
     r"\bph\.?\s*d\.?s?\b",
     r"\bdoctoral\b",
     r"\bdoctorate\b",
+    r"\bpost[- ]?doctoral\b",
+    r"\bpost[- ]?doc\b",
 )
 
 
@@ -1236,6 +1246,9 @@ EARLY_CAREER_MAX_YEARS = 2
 # strategy changes more often than code should.
 INCLUDE_INTERNSHIPS = False
 
+PART_TIME_PATTERN = re.compile(r"\bpart[-_\s]?time\b", re.IGNORECASE)
+FULL_TIME_PATTERN = re.compile(r"\bfull[-_\s]?time\b", re.IGNORECASE)
+
 
 INTERNSHIP_TITLE_PATTERNS = (
     # One pattern for all four forms. Written as three -- intern,
@@ -1250,7 +1263,7 @@ INTERNSHIP_TITLE_PATTERNS = (
     # \b then has to hold between two word characters.
     r"\bintern(?:ship)?s?\b",
     r"\bextern(?:ship)?s?\b",
-    r"\bco-?op\b",
+    r"\bco[-\s]?op\b",
     r"\bsummer\s+analyst\b",
     r"\bindustrial\s+placement\b",
     r"\bplacement\s+year\b",
@@ -1261,6 +1274,7 @@ INTERNSHIP_TITLE_PATTERNS = (
     # (four ways round) and Zoox's "Contract Student Worker".
     r"\bpart[-\s]?time\s+student\b",
     r"\bstudent\s+worker\b",
+    r"\bstudent\s+assistant\b",
     # A misspelling, but the role is what it says: Microsoft's
     # "Software Engineer: Intership Opportunities, Azure Databases".
     r"\binterships?\b",
@@ -1346,10 +1360,12 @@ SECURITY_TITLE_PATTERNS = (
     r"\bappsec\b",
     r"\binfosec\b",
     r"\bcyber\s*security\b",
+    r"\bcyber\b(?![-\s]+(?:physical|monday)\b)",
     r"\bpenetration\s+test",
     r"\bvulnerability\b",
     r"\bcryptograph",
-    r"\btrust\s+and\s+safety\b",
+    r"\b(?:trust|integrity)\s*(?:and|&|/)\s*safety\b",
+    r"\buser\s+and\s+entity\s+behaviou?r\s+analytics\b",
 )
 
 
@@ -3137,6 +3153,15 @@ def evaluate_job(
                 "not full-time employment."
             )
         )
+
+    # Explicit alternatives offering full-time work remain eligible.
+    # Mentioning part-time colleagues in the description is not this role.
+    if any(
+        PART_TIME_PATTERN.search(value) and not FULL_TIME_PATTERN.search(value)
+        for value in (job.title, job.employment_type or "")
+    ):
+        reject_codes.append(EligibilityReasonCode.PART_TIME_ROLE)
+        reject_reasons.append("Posting is a part-time role; ACE is scoped to full-time employment.")
 
     if TASK_PARTICIPANT_ROLE_PATTERN.search(job.description) and PAID_TASK_PATTERN.search(job.description):
         reject_codes.append(EligibilityReasonCode.NON_TARGET_ROLE)
