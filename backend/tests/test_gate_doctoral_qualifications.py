@@ -108,3 +108,28 @@ def test_single_doctoral_degree_and_flattened_required_section_reject(requiremen
 def test_flattened_optional_and_alternate_degree_sections_remain_eligible(requirement):
     decision=decide(requirement)
     assert decision.status is EligibilityStatus.PASS,decision.reasons
+
+
+@pytest.mark.parametrize('requirement',(
+    "Qualifications\nBachelor's degree and 2 years of software experience.\nOR\nPhD in computer science.",
+    "Qualifications\nMaster's degree and 1 year of software experience.\nOR\nPhD in computer science.",
+    "Qualifications\nPhD in computer science.\nOR\nMaster's degree and 2 years of software experience.",
+    "Qualifications\nBachelor's degree and 2+ years of software experience.\nOR\nMaster's degree and 1+ years of software experience.\nOR\nPhD in computer science.",
+    "Required qualifications\nMaster's degree\nin computer science with 2 years of software experience.\nOR\nPhD in computer science.",
+    "Required qualifications\nPhD in computer science.\nOR\nMaster's degree\nin computer science with 2 years of software experience.",
+    'Minimum qualifications\nExperience building Python services.\nThe Extras That Set You Apart\nPhD in computer science.',
+    'Requirements\nExperience building Python services.\nExtras that set you apart\nPhD in computer science.',
+    "Requirements\nMaster's degree in computer science.\n\nOR\n\nPhD in computer science.",
+))
+def test_separate_degree_alternatives_and_extras_stay_eligible(requirement):
+    decision=decide(requirement)
+    assert decision.status is EligibilityStatus.PASS,decision.reasons
+
+
+@pytest.mark.parametrize('requirement',(
+    'Qualifications\nPhD in computer science.\nOR\nEquivalent advanced research experience.',
+    "We support master's degree programs for employees.\n\nRequirements\nPhD in computer science.",
+    'Required qualifications\nPhD in computer science.\nThe Extras That Set You Apart\nPython proficiency.',
+))
+def test_linked_degrees_do_not_excuse_a_doctoral_only_requirement(requirement):
+    assert EligibilityReasonCode.PHD_TARGETED_ROLE in decide(requirement).reason_codes

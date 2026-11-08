@@ -102,6 +102,8 @@ PROFILES: dict[str, CandidateProfile] = {
     # v55 changes no threshold either: site reliability and mobile roles
     # leave the list, at the owner's request on 2026-10-29; v56 the same
     # day takes infrastructure, platform, cloud and DevOps titles off too.
+    # v64 preserves degree alternatives separated by OR lines and
+    # recognizes the optional Extras section during doctorate checks.
     # v63 reads explicit sponsorship refusals and required-clearance
     # fields found while reviewing newly eligible jobs.
     # v62 preserves trade, leadership and full-time exclusions when the
@@ -119,7 +121,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=3,
-        rule_version="2026-11-07-v63",
+        rule_version="2026-11-07-v64",
     ),
     # New grad roles stay the primary target (they sort first), and SDE
     # II comes in: with three years, a posting asking "3+ years" is one
@@ -130,7 +132,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=4,
-        rule_version="2026-11-07-v63-sde2",
+        rule_version="2026-11-07-v64-sde2",
     ),
 }
 
@@ -1619,6 +1621,7 @@ PREFERRED_SECTION_PATTERNS = (
     r"bonus\s+points",
     r"desired\s+qualifications",
     r"good\s+to\s+have",
+    r"(?:the\s+)?extras\s+that\s+set\s+you\s+apart",
     r"pluses",
     r"it'?s\s+a\s+plus",
     r"desired\s+capabilities",
@@ -1929,6 +1932,30 @@ def _is_clearly_senior(
     )
 
 
+def _has_linked_non_doctoral_alternative(
+    description: str,
+    line_start: int,
+    line_end: int,
+) -> bool:
+    """Read adjacent degree choices joined by a standalone OR line."""
+
+    separator = r"(?:^|\n)\s*or\s*\n"
+    before = description[max(0, line_start - SECTION_LOOKBACK_CHARS):line_start]
+    choices = re.split(separator, before, flags=re.IGNORECASE)
+    if len(choices) > 1 and not choices[-1].strip():
+        adjacent = choices[-2].strip().rsplit("\n\n", 1)[-1]
+        if NON_DOCTORAL_DEGREE_PATTERN.search(adjacent):
+            return True
+
+    after = description[line_end:line_end + SECTION_LOOKBACK_CHARS]
+    choices = re.split(separator, after, maxsplit=1, flags=re.IGNORECASE)
+    if len(choices) > 1 and not choices[0].strip():
+        adjacent = choices[1].strip().split("\n\n", 1)[0]
+        if NON_DOCTORAL_DEGREE_PATTERN.search(adjacent):
+            return True
+    return False
+
+
 def _is_phd_targeted_role(
     job: CanonicalJob,
 ) -> bool:
@@ -1953,6 +1980,8 @@ def _is_phd_targeted_role(
         left = text.rfind("\n", 0, match.start()) + 1
         right = text.find("\n", match.end())
         right = len(text) if right < 0 else right
+        if _has_linked_non_doctoral_alternative(text, left, right):
+            continue
         # Sentence boundaries skip the internal punctuation in Ph.D.
         boundaries = list(re.finditer(r"[.;]\s+(?=[A-Z])", text[left:match.start() + 1]))
         if boundaries:
