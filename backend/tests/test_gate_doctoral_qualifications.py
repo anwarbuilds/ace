@@ -68,3 +68,43 @@ def test_plural_phds_in_the_title_still_names_a_doctoral_role():
 def test_optional_alternative_or_incidental_doctorate_mentions_stay_eligible(requirement):
     decision=decide(requirement)
     assert decision.status is EligibilityStatus.PASS,decision.reasons
+
+
+@pytest.mark.parametrize('requirement',(
+    'Build and review algorithms with our software team. - PhD in computer science - Experience programming in Python.',
+    'Build and review algorithms with our software team. - PhD or equivalent research experience - Experience programming in Python.',
+    'Required Qualifications Education. Doctoral degree (PhD) in computer science. Programming experience in Python.',
+    'Qualifications\n- Currently has, or is in the process of obtaining, a PhD in computer science.',
+    "What You'll Bring\n- Research Pedigree: PhD in computer science or equivalent research experience.",
+))
+def test_flattened_or_labelled_doctoral_requirements_reject(requirement):
+    assert EligibilityReasonCode.PHD_TARGETED_ROLE in decide(requirement).reason_codes
+
+
+@pytest.mark.parametrize('requirement',(
+    'Build our models. - PhD or Master\'s degree in computer science - Experience programming in Python.',
+    'Build our models. - PhD in computer science preferred - Experience programming in Python.',
+    'Our collaborators include PhD researchers. Work with them to build production software.',
+    'Our research community\n- PhD students collaborate with our software team.',
+    'Preferred qualifications\nYou have a PhD in computer science.',
+))
+def test_flattened_optional_alternative_and_team_degree_mentions_stay_eligible(requirement):
+    decision=decide(requirement)
+    assert decision.status is EligibilityStatus.PASS,decision.reasons
+
+
+@pytest.mark.parametrize('requirement',(
+    'Sourced from a curated new-graduate listing. Degrees considered: PhD.',
+    'Responsibilities Build models About You Required Qualifications PhD in computer science Preferred Qualifications Experience with deployment.',
+))
+def test_single_doctoral_degree_and_flattened_required_section_reject(requirement):
+    assert EligibilityReasonCode.PHD_TARGETED_ROLE in decide(requirement).reason_codes
+
+
+@pytest.mark.parametrize('requirement',(
+    "Sourced from a curated new-graduate listing. Degrees considered: Master's, PhD.",
+    'Preferred qualifications You have a PhD in computer science Required qualifications Experience programming in Python.',
+))
+def test_flattened_optional_and_alternate_degree_sections_remain_eligible(requirement):
+    decision=decide(requirement)
+    assert decision.status is EligibilityStatus.PASS,decision.reasons

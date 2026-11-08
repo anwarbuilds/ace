@@ -102,6 +102,7 @@ PROFILES: dict[str, CandidateProfile] = {
     # v55 changes no threshold either: site reliability and mobile roles
     # leave the list, at the owner's request on 2026-10-29; v56 the same
     # day takes infrastructure, platform, cloud and DevOps titles off too.
+    # v61 reads flattened doctoral bullets and preserves optional degrees.
     # v60 keeps seniority and explicit specialties from slipping through
     # generic staff/data titles, including degree-plus-years title bars.
     # v59 distinguishes founders' history and former-intern eligibility
@@ -114,7 +115,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=3,
-        rule_version="2026-11-07-v60",
+        rule_version="2026-11-07-v61",
     ),
     # New grad roles stay the primary target (they sort first), and SDE
     # II comes in: with three years, a posting asking "3+ years" is one
@@ -125,7 +126,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=4,
-        rule_version="2026-11-07-v60-sde2",
+        rule_version="2026-11-07-v61-sde2",
     ),
 }
 
@@ -1904,28 +1905,52 @@ def _is_phd_targeted_role(
     ):
         return True
 
-    if _matches_any_regex(
-        job.description,
-        PHD_REQUIRED_PATTERNS,
-    ):
-        return True
-
     for match in PHD_QUALIFICATION_PATTERN.finditer(job.description):
         text = job.description
         left = text.rfind("\n", 0, match.start()) + 1
         right = text.find("\n", match.end())
         right = len(text) if right < 0 else right
         # Sentence boundaries skip the internal punctuation in Ph.D.
-        boundaries = list(re.finditer(r"[.;]\s+(?=[A-Z])", text[left:match.start()]))
+        boundaries = list(re.finditer(r"[.;]\s+(?=[A-Z])", text[left:match.start() + 1]))
         if boundaries:
             left += boundaries[-1].end()
         boundary = re.search(r"[.;]\s+(?=[A-Z])", text[match.end():right])
         if boundary:
             right = match.end() + boundary.start() + 1
+        # Some readers flatten lists into one line. Keep the degree's
+        # bullet separate from neighbouring duties and degree alternatives.
+        bullets = list(re.finditer(r"(?:^|\s)[-*\u2022]\s+", text[left:match.start()]))
+        degree_bullet = bool(bullets)
+        if bullets:
+            left += bullets[-1].end()
+        next_bullet = re.search(r"\s[-*\u2022]\s+", text[match.end():right])
+        if next_bullet:
+            right = match.end() + next_bullet.start()
+        # Flattened text can also join required and preferred sections.
+        # A later preferred header must not qualify an earlier requirement.
+        qualification_header = (
+            r"\b(?:(?:required|minimum|basic|preferred|desired)\s+)?"
+            r"(?:qualifications|requirements)\b"
+        )
+        preceding_headers = list(re.finditer(
+            qualification_header, text[left:match.start()], re.IGNORECASE,
+        ))
+        if preceding_headers:
+            left += preceding_headers[-1].end()
+        following_header = re.search(
+            qualification_header, text[match.end():right], re.IGNORECASE,
+        )
+        if following_header:
+            right = match.end() + following_header.start()
         clause = text[left:right]
         prefix = text[left:match.start()].strip(" \t-*\u2022")
 
-        if _is_optional_figure(text, match.start()) or re.search(
+        # An inline "You have" is a degree claim, not a new required
+        # section overriding a preceding Preferred qualifications header.
+        optional_degree_claim = bool(re.fullmatch(
+            r"you\s+(?:have|hold|possess)\s+(?:an?\s*)?", prefix, re.IGNORECASE,
+        )) and _nearest_section_is_preferred(text, left)
+        if optional_degree_claim or _nearest_section_is_preferred(text, match.start()) or re.search(
             r"\b(?:preferred|optional|ideally|beneficial|a\s+(?:plus|bonus)|"
             r"nice[- ]to[- ]have|not\s+(?:required|necessary|essential)|"
             r"(?:don't|do not)\s+need|would\s+be\s+great)\b", clause, re.IGNORECASE,
@@ -1946,16 +1971,20 @@ def _is_phd_targeted_role(
                 break
         if alternatives:
             continue
+        if _matches_any_regex(clause, PHD_REQUIRED_PATTERNS):
+            return True
         if re.search(r"\bor\s+(?:(?:a|an|relevant)\s+){0,2}$", prefix + " ", re.IGNORECASE):
             continue
         if re.search(r"\blooking\s+for\b[^.\n]{0,120}$", prefix, re.IGNORECASE) and not re.search(
             r"\bnot\s+looking\s+for\b", prefix, re.IGNORECASE,
         ) and re.match(r"\s+(?:researchers?|scientists?|candidates?)\b", text[match.end():], re.IGNORECASE):
             return True
-        degree_claim = not prefix or bool(re.search(
+        degree_label = bool(re.fullmatch(r"degrees?\s+considered\s*:", prefix, re.IGNORECASE))
+        degree_claim = degree_label or not prefix or bool(re.search(
             r"(?:\b(?:have|hold|possess|education|degree|qualifications|requirements)"
             r"\s*:?\s*(?:an?\b\s*)?(?:relevant\s+)?|^an?\s*|"
-            r"\b(?:enrolled\s+in|graduated\s+from)\s+(?:an?\s*)?)$", prefix, re.IGNORECASE,
+            r"\b(?:enrolled\s+in|graduated\s+from|obtaining)\s*,?\s*(?:an?\s*)?|"
+            r"\bresearch\s+pedigree\s*:)\s*$", prefix, re.IGNORECASE,
         ))
         headers = [
             header for pattern in REQUIRED_SECTION_PATTERNS
@@ -1964,7 +1993,11 @@ def _is_phd_targeted_role(
         if headers:
             after_header = prefix[max(header.end() for header in headers):].strip(" :?-")
             degree_claim = degree_claim or after_header.lower() in ("", "to succeed")
-        if degree_claim and _inside_a_qualifications_section(text, match.start()):
+        bare_bullet_degree = degree_bullet and bool(re.match(
+            r"\s*(?:\([^)]{1,20}\)\s*)?(?:in\b|or\s+equivalent\b|degree\b)",
+            text[match.end():right], re.IGNORECASE,
+        ))
+        if degree_claim and (degree_label or bare_bullet_degree or _inside_a_qualifications_section(text, match.start())):
             return True
     return False
 
