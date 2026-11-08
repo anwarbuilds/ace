@@ -102,6 +102,8 @@ PROFILES: dict[str, CandidateProfile] = {
     # v55 changes no threshold either: site reliability and mobile roles
     # leave the list, at the owner's request on 2026-10-29; v56 the same
     # day takes infrastructure, platform, cloud and DevOps titles off too.
+    # v60 keeps seniority and explicit specialties from slipping through
+    # generic staff/data titles, including degree-plus-years title bars.
     # v59 distinguishes founders' history and former-intern eligibility
     # from requirements of this role. v58 recognizes compressed US
     # addresses and Any State; v57 applied
@@ -112,7 +114,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=3,
-        rule_version="2026-11-07-v59",
+        rule_version="2026-11-07-v60",
     ),
     # New grad roles stay the primary target (they sort first), and SDE
     # II comes in: with three years, a posting asking "3+ years" is one
@@ -123,7 +125,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=4,
-        rule_version="2026-11-07-v59-sde2",
+        rule_version="2026-11-07-v60-sde2",
     ),
 }
 
@@ -732,6 +734,12 @@ CONTRACT_TITLE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+TASK_PARTICIPANT_ROLE_PATTERN = re.compile(
+    r"\bjoin(?:ing)?\b[^.!?\n]{0,80}\bas\s+(?:an?\s+)?participant\b",
+    re.IGNORECASE,
+)
+PAID_TASK_PATTERN = re.compile(r"\bpaid\s+tasks?\b", re.IGNORECASE)
+
 
 # "Software Engineer III" is Google's second rung, asking two years of
 # experience -- 19 of the first 20 mid-level software postings Google
@@ -764,6 +772,7 @@ SENIOR_TITLE_PATTERNS = (
     # "Mgr Software Engineering" passed: only the full word was read.
     r"\bmgrs?\b",
     r"\bdirector\b",
+    r"\bhead\s+of\b",
     # A bank's corporate title. Vice President is the rung past Associate,
     # typically five years and more: 59 passing roles carried it on
     # 2026-10-07, 40 of them BNY's "Vice President, Full-Stack
@@ -840,7 +849,7 @@ PREFERRED_CONTEXT_MARKERS = (
 
 
 PHD_TITLE_PATTERNS = (
-    r"\bph\.?\s*d\.?\b",
+    r"\bph\.?\s*d\.?s?\b",
     r"\bdoctoral\b",
     r"\bdoctorate\b",
 )
@@ -862,6 +871,16 @@ PHD_REQUIRED_PATTERNS = (
     r"\bdoctorate\s+(?:is\s+)?required\b",
 
     r"\brequires?\s+(?:an?\s+)?doctorate\b",
+)
+
+PHD_QUALIFICATION_PATTERN = re.compile(
+    r"\bph\.?\s*d\.?(?!\w)|\bdoctoral\s+degree\b|\bdoctorate\b",
+    re.IGNORECASE,
+)
+NON_DOCTORAL_DEGREE_PATTERN = re.compile(
+    r"\b(?:bachelor(?:['\u2019]?s)?|master(?:['\u2019]?s)?|"
+    r"b\.?s\.?c?\.?|m\.?s\.?c?\.?|b\.?a\.?|m\.?a\.?)\b",
+    re.IGNORECASE,
 )
 
 
@@ -1229,6 +1248,7 @@ INTERNSHIP_TITLE_PATTERNS = (
     # not match: after "intern" the optional groups match nothing and
     # \b then has to hold between two word characters.
     r"\bintern(?:ship)?s?\b",
+    r"\bextern(?:ship)?s?\b",
     r"\bco-?op\b",
     r"\bsummer\s+analyst\b",
     r"\bindustrial\s+placement\b",
@@ -1534,6 +1554,12 @@ EXPERIENCE_TRAILING_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+TITLE_DEGREE_YEARS_PATTERN = re.compile(
+    r"\b(?:bs|ms|ba|ma|bsc|msc)\s*\+\s*(?P<years>\d{1,2})"
+    r"\s*(?P<unit>years?|yrs?)?\b",
+    re.IGNORECASE,
+)
+
 
 # Section headers decide whether a figure is required or merely wanted.
 #
@@ -1544,6 +1570,7 @@ EXPERIENCE_TRAILING_PATTERN = re.compile(
 # being discarded and senior roles reached the queue.
 PREFERRED_SECTION_PATTERNS = (
     r"preferred\s+qualifications",
+    r"preferred\s+requirements",
     r"nice[-\s]to[-\s]have",
     r"bonus\s+points",
     r"desired\s+qualifications",
@@ -1561,8 +1588,9 @@ REQUIRED_SECTION_PATTERNS = (
     r"basic\s+qualifications",
     r"required\s+qualifications",
     r"requirements",
-    r"what\s+you'?ll\s+need",
-    r"what\s+we'?re\s+looking\s+for",
+    r"what\s+you['\u2019]?ll\s+need",
+    r"what\s+we['\u2019]?re\s+looking\s+for",
+    r"what\s+are\s+we\s+looking\s+for",
     r"who\s+you\s+are",
     r"about\s+you",
     # Real headers found in the corpus that were unrecognised, so a
@@ -1571,13 +1599,14 @@ REQUIRED_SECTION_PATTERNS = (
     # unrecorded.
     r"what\s+we\s+need\s+to\s+see",
     r"qualifications\s+we\s+need",
-    r"what\s+you'?ll\s+bring",
+    r"what\s+you['\u2019]?ll\s+bring",
     r"what\s+you\s+bring",
     r"your\s+(?:skills\s+and\s+)?experience",
     r"skills\s+and\s+experience",
     r"your\s+background",
     r"must\s+haves?",
     r"you\s+(?:will\s+)?have",
+    r"you['\u2019]ll\s+have",
     r"qualifications",
 )
 
@@ -1842,6 +1871,9 @@ def _is_clearly_senior(
 
     # This approved title names a software role, not the staff rank.
     # Preserve surrounding Senior/Staff/Principal and level qualifiers.
+    if re.search(r"\bmember of technical staff\b", title, re.IGNORECASE) and re.search(r"\btlm\b", title, re.IGNORECASE):
+        return True
+
     title = re.sub(
         r"\bmember of technical staff\b", "software engineer", title,
         flags=re.IGNORECASE,
@@ -1872,10 +1904,69 @@ def _is_phd_targeted_role(
     ):
         return True
 
-    return _matches_any_regex(
+    if _matches_any_regex(
         job.description,
         PHD_REQUIRED_PATTERNS,
-    )
+    ):
+        return True
+
+    for match in PHD_QUALIFICATION_PATTERN.finditer(job.description):
+        text = job.description
+        left = text.rfind("\n", 0, match.start()) + 1
+        right = text.find("\n", match.end())
+        right = len(text) if right < 0 else right
+        # Sentence boundaries skip the internal punctuation in Ph.D.
+        boundaries = list(re.finditer(r"[.;]\s+(?=[A-Z])", text[left:match.start()]))
+        if boundaries:
+            left += boundaries[-1].end()
+        boundary = re.search(r"[.;]\s+(?=[A-Z])", text[match.end():right])
+        if boundary:
+            right = match.end() + boundary.start() + 1
+        clause = text[left:right]
+        prefix = text[left:match.start()].strip(" \t-*\u2022")
+
+        if _is_optional_figure(text, match.start()) or re.search(
+            r"\b(?:preferred|optional|ideally|beneficial|a\s+(?:plus|bonus)|"
+            r"nice[- ]to[- ]have|not\s+(?:required|necessary|essential)|"
+            r"(?:don't|do not)\s+need|would\s+be\s+great)\b", clause, re.IGNORECASE,
+        ):
+            continue
+        alternatives = False
+        for degree in NON_DOCTORAL_DEGREE_PATTERN.finditer(clause):
+            if degree.end() <= match.start() - left:
+                between = clause[degree.end():match.start() - left]
+            elif degree.start() >= match.end() - left:
+                between = clause[match.end() - left:degree.start()]
+            else:
+                continue
+            if re.fullmatch(r"[\s,()./]*", between) or re.search(
+                r"\bor\s+(?:(?:a|an|relevant)\s+){0,2}$", between, re.IGNORECASE,
+            ):
+                alternatives = True
+                break
+        if alternatives:
+            continue
+        if re.search(r"\bor\s+(?:(?:a|an|relevant)\s+){0,2}$", prefix + " ", re.IGNORECASE):
+            continue
+        if re.search(r"\blooking\s+for\b[^.\n]{0,120}$", prefix, re.IGNORECASE) and not re.search(
+            r"\bnot\s+looking\s+for\b", prefix, re.IGNORECASE,
+        ) and re.match(r"\s+(?:researchers?|scientists?|candidates?)\b", text[match.end():], re.IGNORECASE):
+            return True
+        degree_claim = not prefix or bool(re.search(
+            r"(?:\b(?:have|hold|possess|education|degree|qualifications|requirements)"
+            r"\s*:?\s*(?:an?\b\s*)?(?:relevant\s+)?|^an?\s*|"
+            r"\b(?:enrolled\s+in|graduated\s+from)\s+(?:an?\s*)?)$", prefix, re.IGNORECASE,
+        ))
+        headers = [
+            header for pattern in REQUIRED_SECTION_PATTERNS
+            for header in re.finditer(pattern, prefix, re.IGNORECASE)
+        ]
+        if headers:
+            after_header = prefix[max(header.end() for header in headers):].strip(" :?-")
+            degree_claim = degree_claim or after_header.lower() in ("", "to succeed")
+        if degree_claim and _inside_a_qualifications_section(text, match.start()):
+            return True
+    return False
 
 
 def _has_early_career_signal(
@@ -2452,6 +2543,20 @@ def _required_experience_years(
     return None
 
 
+def _title_degree_experience_years(title: str) -> int | None:
+    """Read explicit degree-plus-years title bars, not arbitrary numbers."""
+    matches = list(TITLE_DEGREE_YEARS_PATTERN.finditer(title))
+    if not any(match.group("unit") for match in matches):
+        return None
+    years = [int(match.group("years")) for match in matches]
+    # "BS+10 yrs or MS+8" shares its unit and offers alternatives.
+    alternatives = len(matches) > 1 and all(
+        re.search(r"\bor\b", title[left.end():right.start()], re.IGNORECASE)
+        for left, right in zip(matches, matches[1:])
+    )
+    return min(years) if alternatives else max(years)
+
+
 def _is_early_career_role(
     job: CanonicalJob,
     *,
@@ -2789,6 +2894,10 @@ def evaluate_job(
         )
     )
 
+    title_years = _title_degree_experience_years(job.title)
+    if title_years is not None:
+        required_years = max(year for year in (required_years, title_years) if year is not None)
+
     early_career_signal = (
         _has_early_career_signal(
             job
@@ -2995,6 +3104,10 @@ def evaluate_job(
                 "not full-time employment."
             )
         )
+
+    if TASK_PARTICIPANT_ROLE_PATTERN.search(job.description) and PAID_TASK_PATTERN.search(job.description):
+        reject_codes.append(EligibilityReasonCode.NON_TARGET_ROLE)
+        reject_reasons.append("Posting offers paid task participation rather than full-time employment.")
 
     if _is_security_role(
         job
