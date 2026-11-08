@@ -102,6 +102,8 @@ PROFILES: dict[str, CandidateProfile] = {
     # v55 changes no threshold either: site reliability and mobile roles
     # leave the list, at the owner's request on 2026-10-29; v56 the same
     # day takes infrastructure, platform, cloud and DevOps titles off too.
+    # v63 reads explicit sponsorship refusals and required-clearance
+    # fields found while reviewing newly eligible jobs.
     # v62 preserves trade, leadership and full-time exclusions when the
     # wider approved families match a title or a department name.
     # v61 reads flattened doctoral bullets and preserves optional degrees.
@@ -117,7 +119,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=3,
-        rule_version="2026-11-07-v62",
+        rule_version="2026-11-07-v63",
     ),
     # New grad roles stay the primary target (they sort first), and SDE
     # II comes in: with three years, a posting asking "3+ years" is one
@@ -128,7 +130,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=4,
-        rule_version="2026-11-07-v62-sde2",
+        rule_version="2026-11-07-v63-sde2",
     ),
 }
 
@@ -939,6 +941,28 @@ SPONSORSHIP_BLOCKERS = (
 SPONSORSHIP_BLOCKER_PATTERNS = (
     r"\bnot\s+eligible\s+for\b[^\n]{0,40}?\bsponsorship\b",
     r"\bineligible\s+for\b[^\n]{0,40}?\bsponsorship\b",
+    # Adjectives between the refusal and sponsorship are still part of
+    # that refusal. A partial ability to sponsor every role is unknown,
+    # rather than a refusal for this opening.
+    r"\b(?:cannot|can't|unable\s+to|not\s+able\s+to)\s+(?:provide|offer)\s+"
+    r"(?:(?:employment|work|immigration|visa)\s+){1,3}sponsorship\b"
+    r"(?!\s+(?:for\s+)?(?:every|all)\b)",
+    r"\b(?:do|does|will)\s+not\s+(?:provide|offer)\s+"
+    r"(?:(?:employment|work|immigration|visa)\s+){1,3}sponsorship\b"
+    r"(?!\s+(?:for\s+)?(?:every|all)\b)",
+    r"\bunable\s+to\s+consider\s+candidates\s+who\s+require\s+"
+    r"(?:visa\s+)?sponsorship\s+for\s+(?:this|the)\s+(?:role|position)\b",
+    r"\bwithout\s+visa\s+sponsorship\s+now\s+or\s+in\s+the\s+future\b",
+    r"\bmust\s+not\s+require\s+(?:visa\s+)?sponsorship\b",
+    r"\bno\s+(?:visa\s+)?sponsorship\s+(?:is\s+)?offered\s+for\s+"
+    r"(?:this|the)\s+(?:position|role)\b",
+    r"\bnot\s+available\s+for\s+(?:any\s+)?(?:work|visa|immigration)\s+sponsorship\b",
+    r"\bmust\b[^.;\n]{0,70}\bwork\s+authori[sz]ation\b[^.;\n]{0,45}"
+    r"\bdoes\s+not\s+now\s+or\s+in\s+the\s+future\s+require\s+"
+    r"sponsorship\s+of\s+(?:an?\s+)?visa\b",
+    r"\bnot\s+offering\s+relocation\s*,\s*sponsorship\s*,\s*and\b",
+    r"\bsponsorship\s+of\s+new\s+applicants\s+for\s+employment\s+authori[sz]ation"
+    r"(?:(?!\b(?:but|however)\b)[^.;\n]){0,120}?\bis\s+not\s+available\b",
 )
 
 
@@ -1143,6 +1167,9 @@ CLEARANCE_BLOCKER_PATTERNS = (
     r"\bdod\s+clearance\b",
     r"\bclearable\b",
     r"\bq\s+clearance\b",
+    r"\brequired\s+clearance\s*:\s*(?:active\s+)?(?:secret|ts|q)\b",
+    r"(?:^|[.\n])\s*clearance\s*:\s*must\s+be\s+eligible\s+"
+    r"(?:and\s+willing\s+)?to\s+obtain\s+(?:a\s+)?clearance\b",
 )
 
 
