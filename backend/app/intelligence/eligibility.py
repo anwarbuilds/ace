@@ -102,14 +102,15 @@ PROFILES: dict[str, CandidateProfile] = {
     # v55 changes no threshold either: site reliability and mobile roles
     # leave the list, at the owner's request on 2026-10-29; v56 the same
     # day takes infrastructure, platform, cloud and DevOps titles off too.
-    # v57 applies the approved role list, including data families under
+    # v58 recognizes compressed US addresses and Any State; v57 applied
+    # the approved role list, including data families under
     # these same experience limits; compiler, runtime and QA stay out.
     "early-career": CandidateProfile(
         key="early-career",
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=3,
-        rule_version="2026-11-07-v57",
+        rule_version="2026-11-07-v58",
     ),
     # New grad roles stay the primary target (they sort first), and SDE
     # II comes in: with three years, a posting asking "3+ years" is one
@@ -120,7 +121,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=4,
-        rule_version="2026-11-07-v57-sde2",
+        rule_version="2026-11-07-v58-sde2",
     ),
 }
 
@@ -1707,6 +1708,13 @@ US_MARKER_PATTERN = re.compile(
 )
 
 
+COMPRESSED_US_LOCATION_PATTERN = re.compile(
+    r"(?P<city>[A-Za-z][A-Za-z .'-]*?)\s+"
+    r"(?:" + "|".join(sorted(US_STATE_ABBREVIATIONS)) + r")"
+    r"(?:\s*\+\s*\d+\s+(?i:more))?"
+)
+
+
 def _is_us_location(
     location: str,
 ) -> bool:
@@ -1740,6 +1748,18 @@ def _is_us_location(
         location
     ):
         return False
+
+    if normalized == "any state":
+        return True
+
+    compressed = COMPRESSED_US_LOCATION_PATTERN.fullmatch(location.strip())
+    if compressed:
+        # Toronto ON CA has a province and country, not a US state.
+        # Require a city before the postal state code, rather than
+        # treating a preceding two-letter region as part of the city.
+        last_city_word = compressed.group("city").split()[-1]
+        if not re.fullmatch(r"[A-Za-z]{2}", last_city_word):
+            return True
 
     if US_MARKER_PATTERN.search(
         normalized
