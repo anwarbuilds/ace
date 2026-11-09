@@ -2,11 +2,11 @@
 
 **Chat 3 gate installed, November 8 Pacific:** API/scheduler run exact tested `9c45ddd`, gate `2026-11-08-v67` and roles v8 from PR #48. Full CI passes 3,300 backend cases (two PostgreSQL-only skips), web and all 316 hosted browser cases; 733 focused fictional cases also pass in the exact image. The reviewed read-only corpus, fresh checked backup, isolated restore, installed backend hashes and protected owner/source/configuration checks pass. One guarded rollback was traced to the same upstream Workday 410 on the old image; preservation was verified before a fresh release.
 
-**Owner-requested stop and handoff, November 9 Pacific.** The long stale-row writer finished successfully. The latest installed audits match every saved control, but a residual cache gap prevents zero-stale acceptance. ELG-02 through ELG-04 remain OPEN; residual repair and a fresh final acceptance attempt have not started. Existing automatic cadence promotions were individually verified against unchanged policy and normal logs; source identities and enables are preserved. No screen or schema change; host enforcement stays off. ELG-05 stays OPEN: older marks work, but recent upstream marks remain missing and README uses the same JSON field. SmartRecruiters installed/real-form acceptance remains owner-deferred and unverified. Exact counts, failed receipts, remaining checks and a detailed continuation prompt are private in `artifacts/requirements-chat-3-20261107/progress.md`, `next-chat-prompt.txt` and requirements 13.4/13.5. Release proof is `/opt/ace/private-backups/chat3-gates-20261109T0350Z/`. Do not replay the finished writer or completed, failed or rolled-back operators. Resume task work only when the owner starts the continuation.
+**Chat 3 accepted, November 9 Pacific.** ELG-02, ELG-03 and ELG-04 are live and verified on gate `2026-11-08-v67` and roles v8 (API/scheduler `9c45ddd`). A read-only classifier explained every residual stale evaluation: the right v67 decision stored under a recomputed hash while the job row kept a hash from an older formula. After a fresh checked backup and isolated restore drill, a guarded, bounded repair through the existing `refresh_stale_evaluations` changed only `content_hash` and `evaluated_at` in `job_evaluations` on proven rows: no decision, job, source, owner or alert write and no gate change. A new final acceptance (`final3`; two earlier failed attempts are kept as receipts) passed: zero stale rows, all and active, in both services; every acceptance and control case and the older Simplify marks; protected owner rows with each change positively attributed (the owner's learned-answer saves and one Inbox automatic rejection with Undo); one Gmail lease; normal polling; log-proven cadence promotions; Pear protection; configuration; public health, auth, assets and 85 logos. No schema, screen or configuration change; host enforcement stays off. ELG-05 stays OPEN by owner choice: older marks work, recent upstream marks are missing. New fictional tests: `backend/tests/test_refresh_stale_evaluations.py`. Follow-up for the next gate release: the backfill CLI still recomputes hashes and would recreate this residue. A few active jobs sit on boards with no good read since September (chat 4, DIS-04). Private proof: `/opt/ace/private-backups/chat3-residual-20261109T1524Z/` and `artifacts/requirements-chat-3-20261107/residual-20261109/`. SmartRecruiters real-form acceptance remains owner-deferred and unverified. Chat 4 has not started.
 
 The owner-approved role list includes all four data families under ordinary experience rules. Generic Member of Technical Staff is allowed without treating its staff word as a senior rank; explicit excluded specialties and senior qualifiers still win. The corpus review added fictional regressions for excluded staff specializations, head titles, degree-plus-years bars and doctoral requirements without the literal word required. Merely preferred doctorates and bachelor/master alternatives stay eligible. Explicit paid-task participant work and externships are outside full-time scope. The existing software-infrastructure and ML/data exceptions remain.
 
-ELG-03 recognizes compressed US city/state forms and exact Any State after explicit foreign guards. ELG-04 reuses collective-history filtering for numbered co-founders and removes only the bounded former-intern applicant qualifier before title-only internship detection. Per-item previews call the actual gate_dry_run.py and prove changed-input coverage; the final source corpus review and long stale-row backfill are complete, but residual cache repair and zero-stale installed acceptance remain pending.
+ELG-03 recognizes compressed US city/state forms and exact Any State after explicit foreign guards. ELG-04 reuses collective-history filtering for numbered co-founders and removes only the bounded former-intern applicant qualifier before title-only internship detection. Per-item previews call the actual gate_dry_run.py and prove changed-input coverage; the final source corpus review, long stale-row backfill, guarded residual cache repair and zero-stale installed acceptance are complete.
 
 > Part of the ace knowledge set (index: `README.md`). Dated entries, each a problem found, its cause, the fix and the lesson. An entry describes the system on its date: where it disagrees with the code, trust the code and fix the entry. Superseded entries carry a Status line.
 >
@@ -346,3 +346,32 @@ Experience is unchanged. The owner briefly asked for "3+ years" to count, then c
 experience is fine, not 3+". That is the `early-career` profile as it stands. Measured before the correction, `sde2`
 would have admitted about 1,200 open roles rejected today only for an open-ended three years.
 `backfill_job_evaluations.py --required-years 3` re-evaluates exactly those if the profile is ever switched.
+
+## The backfill CLI left old-hash jobs stale forever (2026-11-09, v67)
+
+After the long v67 stale-row writer finished, both installed audits still
+found stale evaluations, a small number of them on jobs marked active. A
+read-only classifier explained every one: each already held the correct
+v67 decision, but the job row kept a content hash from an older formula
+(before 2026-09-09 the hash had no employment type; before 2026-10-04 it
+hashed the posting time as text with its offset, mostly -04:00 and -05:00).
+Those jobs had not been re-read since, so their stored hash never moved
+to the current formula. `backfill_job_evaluations.py` rebuilds
+`CanonicalJob` from the row and hashes it again, so it wrote each correct
+decision under a hash the row never had, and the row read as stale again.
+The active ones sit on boards with no successful read since September.
+
+The fix reused `refresh_stale_evaluations` in `persistence/evaluations.py`,
+which labels the decision with the hash stored on the job: the same
+identity polling compares. A guarded, bounded, one-time repair proved
+every row was this one kind first, then changed only `content_hash` and
+`evaluated_at` in `job_evaluations` (no insert, delete, decision, job,
+source, owner or alert write). No gate rule or version changed.
+`test_refresh_stale_evaluations.py` covers older-formula hashes, missing
+and old-version rows, real blockers, inactive jobs, bounds and the
+writes-only-evaluations property.
+
+Lesson: a derived cache's identity must be the stored row's identity, not
+a recomputation. The CLI still recomputes, so the next gate release that
+runs it will recreate the same residue. Before then, make the CLI record
+the stored hash (or run the refresh helper after it), with a test.
