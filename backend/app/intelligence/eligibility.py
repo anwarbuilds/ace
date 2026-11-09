@@ -102,6 +102,8 @@ PROFILES: dict[str, CandidateProfile] = {
     # v55 changes no threshold either: site reliability and mobile roles
     # leave the list, at the owner's request on 2026-10-29; v56 the same
     # day takes infrastructure, platform, cloud and DevOps titles off too.
+    # v66 preserves optional doctoral choices and reads written minimum
+    # experience floors using the same limits as numeric ones.
     # v65 recognizes abbreviated software ML titles and the software
     # discipline in engineering development programme names.
     # v64 preserves degree alternatives separated by OR lines and
@@ -123,7 +125,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=3,
-        rule_version="2026-11-07-v65",
+        rule_version="2026-11-07-v66",
     ),
     # New grad roles stay the primary target (they sort first), and SDE
     # II comes in: with three years, a posting asking "3+ years" is one
@@ -134,7 +136,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=4,
-        rule_version="2026-11-07-v65-sde2",
+        rule_version="2026-11-07-v66-sde2",
     ),
 }
 
@@ -1566,6 +1568,46 @@ EXPERIENCE_CONTEXT = (
 PLUS = r"(?:\+|\(\s*\+\s*\))"
 
 
+EXPERIENCE_NUMBER_WORD_VALUES = {
+    word: value for value, word in enumerate((
+        "zero", "one", "two", "three", "four", "five", "six", "seven",
+        "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
+        "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+    ))
+} | {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
+     "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90}
+EXPERIENCE_WRITTEN_NUMBER = (
+    r"(?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)"
+    r"(?:[-\s]+(?:one|two|three|four|five|six|seven|eight|nine))?|"
+    r"nineteen|eighteen|seventeen|sixteen|fifteen|fourteen|thirteen|"
+    r"twelve|eleven|zero|one|two|three|four|five|six|seven|eight|nine|ten)"
+)
+EXPERIENCE_FLOOR_WORDING = re.compile(
+    rf"(?<![\w-])(?:(?P<prefix>at\s+least|(?:a\s+)?minimum(?:\s+of)?|"
+    rf"no\s+less\s+than)\s+(?P<prefix_number>{EXPERIENCE_WRITTEN_NUMBER}|\d{{1,2}})"
+    rf"\s+(?P<prefix_unit>years?|yrs?)|"
+    rf"(?P<suffix_number>{EXPERIENCE_WRITTEN_NUMBER}|\d{{1,2}})"
+    rf"\s+or\s+more\s+(?P<suffix_unit>years?|yrs?))\b",
+    re.IGNORECASE,
+)
+
+
+def _normalize_written_experience_floors(description: str) -> str:
+    """Read explicit written minimums without turning other prose into years."""
+
+    def replace(match: re.Match) -> str:
+        amount = match.group("prefix_number") or match.group("suffix_number")
+        years = int(amount) if amount.isdigit() else sum(
+            EXPERIENCE_NUMBER_WORD_VALUES[word]
+            for word in re.split(r"[-\s]+", amount.casefold())
+        )
+        if match.group("prefix"):
+            return f"{match.group('prefix')} {years} {match.group('prefix_unit')}"
+        return f"{years}+ {match.group('suffix_unit')}"
+
+    return EXPERIENCE_FLOOR_WORDING.sub(replace, description)
+
+
 # "2-5+ years of experience" states a minimum of two, not five.
 EXPERIENCE_RANGE_PATTERN = re.compile(
     rf"(?P<low>\d{{1,2}})\s*(?:-|\u2013|\u2014|\s+to\s+)\s*"
@@ -2019,6 +2061,20 @@ def _is_phd_targeted_role(
         clause = text[left:right]
         prefix = text[left:match.start()].strip(" \t-*\u2022")
 
+        # Welcomed candidates and substitute degrees do not make the
+        # doctorate mandatory. An explicit requirement still wins.
+        degree_suffix = text[match.end():right].split(";", 1)[0]
+        welcomed = re.match(
+            r"\s+(?:candidates?|graduates?|holders?)\s+(?:are\s+)?welcome\s+to\s+apply\b",
+            degree_suffix, re.IGNORECASE,
+        )
+        alternative = re.search(
+            r"\b(?:also\s+considered|can\s+be\s+an?\s+exception)\b",
+            degree_suffix, re.IGNORECASE,
+        )
+        if not _matches_any_regex(clause, PHD_REQUIRED_PATTERNS) and (welcomed or alternative):
+            continue
+
         # An inline "You have" is a degree claim, not a new required
         # section overriding a preceding Preferred qualifications header.
         optional_degree_claim = bool(re.fullmatch(
@@ -2129,6 +2185,24 @@ def _describes_the_company(
             ]
         )
     )
+
+
+def _is_degree_experience_alternative(description: str, position: int) -> bool:
+    """Years offered instead of a degree are not an additional experience bar."""
+
+    clause = re.split(r"[.;!?\n]", description[position:position + 250], maxsplit=1)[0]
+    alternative = re.search(
+        r"\b(?:may|can)\s+be\s+(?:considered|accepted)\s+"
+        r"(?:in\s+place\s+of|in\s+lieu\s+of)\s+(?:an?\s+)?"
+        r"(?:bachelor|master)(?:['\u2019]?s)?\s+degree\b", clause, re.IGNORECASE,
+    )
+    if not alternative:
+        return False
+    figures = re.findall(
+        rf"(?<![\w-])(?:{EXPERIENCE_WRITTEN_NUMBER}|\d{{1,2}})"
+        rf"\s*{PLUS}?\s*(?:years?|yrs?)\b", clause[:alternative.start()], re.IGNORECASE,
+    )
+    return len(figures) == 1
 
 
 def _inside_a_qualifications_section(
@@ -2258,6 +2332,7 @@ def _experience_figures(
 ]:
     """Return (required, optional) stated experience figures."""
 
+    description = _normalize_written_experience_floors(description)
     required: list[int] = []
 
     optional: list[int] = []
@@ -2279,6 +2354,8 @@ def _experience_figures(
                 offset
             )
 
+        if _is_degree_experience_alternative(description, match.start()):
+            continue
         years = int(
             match.group(
                 "low"
@@ -2327,7 +2404,7 @@ def _experience_figures(
         if match.start() in consumed:
             continue
 
-        if _describes_the_company(
+        if _is_degree_experience_alternative(description, match.start()) or _describes_the_company(
             description,
             match.start(),
         ):
@@ -2369,6 +2446,7 @@ def _experience_range_ceiling(
     that means "a new graduate can apply to this".
     """
 
+    description = _normalize_written_experience_floors(description or "")
     highs = [
         int(
             match.group(
@@ -2534,6 +2612,7 @@ def _open_ended_required_years(
     if not description:
         return None
 
+    description = _normalize_written_experience_floors(description)
     consumed: set[int] = set()
 
     for match in (
@@ -2572,7 +2651,7 @@ def _open_ended_required_years(
         if match.start() in consumed:
             continue
 
-        if _describes_the_company(
+        if _is_degree_experience_alternative(description, match.start()) or _describes_the_company(
             description,
             match.start(),
         ):
