@@ -388,6 +388,6 @@ Google pages do not carry. Those feed postings passed unchecked although ACE rea
 Fix (ELG-05): `DIRECT_COPY_RULES` maps a feed link to the (source, posting number) ACE stores it under, for example
 `lifeattiktok.com/search/<n>` to `bytedance <n>`, and `DirectCopyStore` supplies that stored description (open
 copy first, stubs ignored) when no page reading exists, with no page fetched. Only feed descriptions change, so
-the gate version stays and the next Simplify poll re-judges the postings. Postings on sites ACE cannot read at all
+the gate version stays and the next Simplify poll re-judges the postings. Live since 2026-11-09 (API/scheduler `e25919a`); the release's final check confirmed every targeted posting was re-judged on its direct copy and visa-limited copies now reject. A direct copy rejected only on its own title does not carry over, because each posting keeps its own title. Postings on sites ACE cannot read at all
 stay unverified: silence is not rejection. Lesson: before calling a feed gap upstream-only, check whether ACE
 already holds the same posting from the employer.
