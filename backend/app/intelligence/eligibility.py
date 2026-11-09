@@ -102,6 +102,8 @@ PROFILES: dict[str, CandidateProfile] = {
     # v55 changes no threshold either: site reliability and mobile roles
     # leave the list, at the owner's request on 2026-10-29; v56 the same
     # day takes infrastructure, platform, cloud and DevOps titles off too.
+    # v67 keeps explicitly offered lower job levels separate from higher
+    # alternatives, while retaining shared experience and sponsorship bars.
     # v66 preserves optional doctoral choices and reads written minimum
     # experience floors using the same limits as numeric ones.
     # v65 recognizes abbreviated software ML titles and the software
@@ -125,7 +127,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=3,
-        rule_version="2026-11-07-v66",
+        rule_version="2026-11-08-v67",
     ),
     # New grad roles stay the primary target (they sort first), and SDE
     # II comes in: with three years, a posting asking "3+ years" is one
@@ -136,7 +138,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=4,
-        rule_version="2026-11-07-v66-sde2",
+        rule_version="2026-11-08-v67-sde2",
     ),
 }
 
@@ -958,6 +960,8 @@ SPONSORSHIP_BLOCKER_PATTERNS = (
     r"(?!\s+(?:for\s+)?(?:every|all)\b)",
     r"\bunable\s+to\s+consider\s+candidates\s+who\s+require\s+"
     r"(?:visa\s+)?sponsorship\s+for\s+(?:this|the)\s+(?:role|position)\b",
+    r"\bnot\s+considering\s+applicants\s+(?:that|who)\s+(?:need|require)\s+"
+    r"(?:any\s+type\s+of\s+)?(?:(?:immigration|visa|work)\s+)?sponsorship\b",
     r"\bwithout\s+visa\s+sponsorship\s+now\s+or\s+in\s+the\s+future\b",
     r"\bmust\s+not\s+require\s+(?:visa\s+)?sponsorship\b",
     r"\bno\s+(?:visa\s+)?sponsorship\s+(?:is\s+)?offered\s+for\s+"
@@ -2743,10 +2747,51 @@ def _title_degree_experience_years(title: str) -> int | None:
     return min(years) if alternatives else max(years)
 
 
+def _experience_text_for_level_options(job: CanonicalJob) -> str:
+    """Select an explicitly offered lower level, preserving shared requirements."""
+
+    title_options = bool(re.search(
+        r"\bsoftware engineer\s+(?:2\s*/\s*3|ii\s*/\s*iii)\b", job.title, re.IGNORECASE,
+    ))
+    multilevel = bool(re.search(
+        r"\bthis\s+is\s+a\s+multi[- ]level\s+posting\b|"
+        r"\bthis\s+position\s+may\s+be\s+filled\s+at\s+multiple\s+career\s+levels\b",
+        job.description, re.IGNORECASE,
+    ))
+    if not (title_options or multilevel):
+        return job.description
+    text = _normalize_written_experience_floors(job.description)
+    labelled = re.compile(
+        r"\b(?:a\s+)?(?:minimum(?:\s+of)?|at\s+least)\s+\d{1,2}\s*\+?\s*years?\b"
+        r"[^\n]{0,600}?\bfor\s+(?:an?\s+)?software engineer\s+(?P<level>[1-5]|iii|ii|iv|v|i)\b",
+        re.IGNORECASE,
+    )
+    matches = list(labelled.finditer(text))
+    rank = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5}
+    levels = {m.start(): rank.get(m.group("level").casefold(), int(m.group("level")) if m.group("level").isdigit() else 0) for m in matches}
+    if len(set(levels.values())) > 1:
+        lowest = min(levels.values())
+        text = labelled.sub(lambda m: m.group(0) if levels[m.start()] == lowest else "", text)
+    if multilevel:
+        menu = re.compile(
+            r"^[^\S\n]*(?:[-*\u2022]\s*)?(?P<label>junior|entry[- ]level|associate|"
+            r"mid[- ]level|senior|staff|principal)\s*\(\s*(?P<low>\d{1,2})\s*"
+            r"(?:(?:to|[-\u2013\u2014])\s*(?P<high>\d{1,2})|(?P<open>\+))\s*"
+            r"(?:years?|yrs?)\s*\)[^\S\n]*$", re.IGNORECASE | re.MULTILINE,
+        )
+        choices = list(menu.finditer(text))
+        lower = [m for m in choices if m.group("label").casefold() in ("junior", "entry-level", "entry level", "associate") and m.group("high")]
+        if len(choices) > 1 and lower:
+            chosen = min(lower, key=lambda m: int(m.group("low")))
+            text = menu.sub(lambda m: f"{chosen.group('low')}-{chosen.group('high')} years of experience." if m.start() == chosen.start() else "", text)
+    return text
+
+
 def _is_early_career_role(
     job: CanonicalJob,
     *,
     required_years: int | None,
+    experience_description: str | None = None,
 ) -> bool:
     """Detect roles open to a new graduate.
 
@@ -2776,7 +2821,7 @@ def _is_early_career_role(
     # its floor lets a graduate apply, and leaving this below the
     # signal let boilerplate about new grads override it.
     ceiling = _experience_range_ceiling(
-        job.description
+        job.description if experience_description is None else experience_description
     )
 
     if (
@@ -3074,9 +3119,10 @@ def evaluate_job(
             )
         )
 
+    experience_description = _experience_text_for_level_options(job)
     required_years = (
         _required_experience_years(
-            job.description
+            experience_description
         )
     )
 
@@ -3124,7 +3170,7 @@ def evaluate_job(
     # seven years is contradicting itself, and the years are the part
     # that survives contact with a recruiter.
     open_ended = _open_ended_required_years(
-        job.description
+        experience_description
     )
 
     # A bounded range is judged by its floor, not its ceiling. Stripe
@@ -3186,6 +3232,7 @@ def evaluate_job(
         _is_early_career_role(
             job,
             required_years=required_years,
+            experience_description=experience_description,
         )
     )
 
