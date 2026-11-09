@@ -375,3 +375,12 @@ Lesson: a derived cache's identity must be the stored row's identity, not
 a recomputation. The CLI still recomputes, so the next gate release that
 runs it will recreate the same residue. Before then, make the CLI record
 the stored hash (or run the refresh helper after it), with a test.
+
+## Simplify-only jobs cannot be checked for visa limits (2026-11-09)
+
+The owner wants jobs that clearly say no sponsorship or US citizens only rejected outright. The gate already does
+this from a job's own text (`SPONSORSHIP_BLOCKER`, `CITIZENSHIP_BLOCKER`, plus clearance and ITAR), and the
+Simplify reader renders Simplify's marks as the same sentences. Simplify's list carries no description, and
+Simplify stopped filling those marks in July; its README is generated from the same field, so it cannot restore
+them. Jobs reaching ACE only through Simplify therefore pass with nothing to check. ELG-05 stays open until the
+owner decides whether ACE should read each such job's employer page once (robots respected, refusals honoured).
