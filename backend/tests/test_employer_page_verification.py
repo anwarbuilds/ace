@@ -25,7 +25,7 @@ from sqlalchemy.orm import (
 )
 
 from backend.app.db.base import Base
-from backend.app.db.models import EmployerPageReading
+from backend.app.db.models import EmployerPageReading, JobRecord
 from backend.app.intelligence.eligibility import (
     EligibilityReasonCode,
     EligibilityStatus,
@@ -39,6 +39,7 @@ from backend.app.verification.employer_page import (
     UNREACHABLE,
     EmployerPageVerifier,
     RobotsCache,
+    direct_copy_key,
     extract_job_description,
     read_employer_page,
 )
@@ -596,3 +597,217 @@ def test_an_unchanged_feed_reads_no_pages() -> None:
     )
 
     assert seen == []
+
+
+# --- the same posting, read directly from the employer -----------------
+#
+# Fictional postings. TikTok, ByteDance, Amazon, Apple and Google pages
+# carry no schema.org JobPosting, so the page reader found nothing and
+# these feed postings passed unchecked. ACE reads the same postings from
+# those employers' own systems, under the same number.
+
+CITIZEN_TEXT = (
+    "Build developer tools for a fictional video platform as a new "
+    "graduate software engineer. You will write services in Go and "
+    "Python, review designs with senior engineers and own features "
+    "from design to launch. Minimum qualifications: a bachelor's "
+    "degree in Computer Science or a related field, and experience "
+    "from coursework or internships. This role requires U.S. "
+    "citizenship because of the program it supports. Preferred: "
+    "experience with distributed systems and testing."
+)
+
+SPONSOR_TEXT = (
+    "Join a fictional logistics team as an entry level software "
+    "development engineer. You will design, build and operate "
+    "services that schedule deliveries, working in Java and Python "
+    "with mentorship from experienced engineers. Basic "
+    "qualifications: a bachelor's degree in Computer Science or a "
+    "related field, programming experience from school or "
+    "internships. We are unable to sponsor work visas for this "
+    "position, now or in the future, for any candidate."
+)
+
+OPEN_TEXT = (
+    "Join a fictional design tools team as a new graduate software "
+    "engineer. You will build features in Swift and Python, write "
+    "tests, review code and work with designers and researchers on "
+    "the products people use every day. Minimum qualifications: a "
+    "bachelor's degree in Computer Science or a related field and "
+    "programming experience from coursework, projects or "
+    "internships. Preferred: interest in graphics, performance and "
+    "accessibility, and clear written communication."
+)
+
+
+def store_direct(
+    sessions,
+    source: str,
+    external_id: str,
+    description: str,
+    *,
+    active: bool = True,
+    seen: datetime = NOW,
+) -> None:
+    with sessions() as session:
+        session.add(
+            JobRecord(
+                source=source,
+                source_account=f"{source}-fixture",
+                external_id=external_id,
+                company="Northwind Media",
+                requisition_id=None,
+                title="Software Engineer - Graduate",
+                location="San Jose, CA",
+                description=description,
+                official_url=f"https://direct.example/{source}/{external_id}",
+                posted_at=None,
+                source_updated_at=None,
+                employment_type=None,
+                content_hash=f"fixture-{source}-{external_id}-{active}",
+                first_seen_at=seen - timedelta(days=3),
+                last_seen_at=seen,
+                is_active=active,
+                closed_at=None if active else seen,
+            )
+        )
+        session.commit()
+
+
+@pytest.mark.parametrize(
+    "url, key",
+    [
+        ("https://lifeattiktok.com/search/7600000000000000001", ("bytedance", "7600000000000000001")),
+        ("https://lifeattiktok.com/search/7600000000000000001?utm_source=Simplify&ref=Simplify", ("bytedance", "7600000000000000001")),
+        ("https://jobs.bytedance.com/en/position/7600000000000000002/detail", ("bytedance", "7600000000000000002")),
+        ("https://amazon.jobs/en/jobs/10000001/software-dev-engineer-new-grad", ("amazon", "10000001")),
+        ("https://www.amazon.jobs/en/jobs/10000002/", ("amazon", "10000002")),
+        ("https://jobs.apple.com/en-us/details/200000001", ("apple", "200000001")),
+        ("https://jobs.apple.com/en-us/details/200000002-0836/software-engineer", ("apple", "200000002")),
+        ("https://www.google.com/about/careers/applications/jobs/results/100000000000000001", ("google", "100000000000000001")),
+        ("https://www.google.com/about/careers/applications/jobs/results/100000000000000002-software-engineer", ("google", "100000000000000002")),
+        ("https://lifeattiktok.com/search/7600000000000000003abc", None),
+        ("https://lifeattiktok.com/about", None),
+        ("https://jobs.lever.co/northwind/0f000000-0000-4000-8000-000000000000/apply", None),
+        ("https://careers.northwind.example/job/1", None),
+        ("", None),
+    ],
+)
+def test_a_feed_link_names_the_posting_ace_stores_from_the_employer(
+    url: str,
+    key,
+) -> None:
+    assert direct_copy_key(url) == key
+
+
+@pytest.mark.parametrize(
+    "url, source, number, text, code",
+    [
+        ("https://lifeattiktok.com/search/7600000000000000011", "bytedance", "7600000000000000011", CITIZEN_TEXT, EligibilityReasonCode.CITIZENSHIP_BLOCKER),
+        ("https://amazon.jobs/en/jobs/10000011/software-dev-engineer", "amazon", "10000011", SPONSOR_TEXT, EligibilityReasonCode.SPONSORSHIP_BLOCKER),
+    ],
+)
+def test_a_feed_posting_is_rejected_on_the_text_the_employer_gave_ace_directly(
+    sessions,
+    url: str,
+    source: str,
+    number: str,
+    text: str,
+    code,
+) -> None:
+    """The owner's ask: a posting that clearly says US citizens only or
+    no sponsorship is rejected, even when it reached ACE through the
+    feed and its page cannot be read."""
+
+    job = feed_job(url)
+    assert evaluate_job(job).status == EligibilityStatus.PASS
+
+    store_direct(sessions, source, number, text)
+    site = Site({url: (200, page(None))})
+
+    [checked] = verifier(sessions, site)([job])
+
+    decision = evaluate_job(checked)
+    assert decision.status == EligibilityStatus.REJECT
+    assert code in decision.reason_codes
+    assert "curated new-graduate listing" in checked.description
+    assert site.fetched == [], "no page is fetched when ACE holds the employer's text"
+
+
+def test_a_feed_posting_the_direct_copy_supports_passes_as_checked(
+    sessions,
+) -> None:
+    url = "https://jobs.apple.com/en-us/details/200000021"
+    store_direct(sessions, "apple", "200000021", OPEN_TEXT)
+
+    [checked] = verifier(sessions, Site({}))([feed_job(url)])
+
+    decision = evaluate_job(checked)
+    assert decision.status == EligibilityStatus.PASS
+    assert EligibilityReasonCode.REQUIREMENTS_NOT_VERIFIED not in decision.reason_codes
+
+
+def test_an_open_direct_copy_is_preferred_to_a_closed_one(
+    sessions,
+) -> None:
+    url = "https://jobs.bytedance.com/en/position/7600000000000000031/detail"
+    store_direct(sessions, "bytedance", "7600000000000000031", OPEN_TEXT, active=False, seen=NOW + timedelta(days=1))
+    with sessions() as session:
+        # A second fixture account holds the same posting, still open.
+        session.add(
+            JobRecord(
+                source="bytedance", source_account="tiktok-fixture", external_id="7600000000000000031",
+                company="Northwind Media", requisition_id=None, title="Software Engineer - Graduate",
+                location="San Jose, CA", description=CITIZEN_TEXT,
+                official_url="https://direct.example/tiktok/7600000000000000031", posted_at=None,
+                source_updated_at=None, employment_type=None, content_hash="fixture-open-copy",
+                first_seen_at=NOW - timedelta(days=3), last_seen_at=NOW, is_active=True, closed_at=None,
+            )
+        )
+        session.commit()
+
+    [checked] = verifier(sessions, Site({}))([feed_job(url)])
+
+    assert "requires U.S. citizenship" in checked.description
+    assert evaluate_job(checked).status == EligibilityStatus.REJECT
+
+
+def test_a_stub_direct_copy_is_not_used_and_the_page_is_read_as_before(
+    sessions,
+) -> None:
+    url = "https://amazon.jobs/en/jobs/10000041/software-dev-engineer"
+    store_direct(sessions, "amazon", "10000041", "Apply now.")
+    site = Site({url: (200, page(CLEARED_ROLE))})
+
+    [checked] = verifier(sessions, site)([feed_job(url)])
+
+    assert site.fetched == [url]
+    assert evaluate_job(checked).status == EligibilityStatus.REJECT
+
+
+def test_without_a_direct_copy_the_posting_stays_as_it_was(
+    sessions,
+) -> None:
+    """Silence is still not rejection."""
+
+    url = "https://lifeattiktok.com/search/7600000000000000051"
+    job = feed_job(url)
+
+    [checked] = verifier(sessions, Site({url: (200, page(None))}))([job])
+
+    assert checked == job
+    assert EligibilityReasonCode.REQUIREMENTS_NOT_VERIFIED in evaluate_job(checked).reason_codes
+
+
+def test_a_page_reading_still_comes_first(
+    sessions,
+) -> None:
+    url = "https://www.google.com/about/careers/applications/jobs/results/100000000000000061"
+    store_direct(sessions, "google", "100000000000000061", OPEN_TEXT)
+    with sessions() as session:
+        session.add(EmployerPageReading(url=url, status=READ, description=CITIZEN_TEXT, checked_at=NOW))
+        session.commit()
+
+    [checked] = verifier(sessions, Site({}))([feed_job(url)])
+
+    assert checked.description.startswith(CITIZEN_TEXT)

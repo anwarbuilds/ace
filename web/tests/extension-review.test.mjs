@@ -70,6 +70,7 @@ function fixture(body, config = {}) {
     location: { href: config.url || 'https://fixture.example/apply', hostname: new URL(config.url || 'https://fixture.example/apply').hostname, pathname: new URL(config.url || 'https://fixture.example/apply').pathname },
     CSS: { escape: value => String(value).replace(/[^a-zA-Z0-9_-]/g, character => `\\${character}`) },
     innerWidth: config.width || 1440, innerHeight: config.height || 900, console, crypto: webcrypto, TextEncoder, URL,
+    ...(config.globals ? config.globals(window) : {}),
     setTimeout(fn, ms) { const id = setTimeout(() => { timers.delete(id); fn(); }, ms); timers.add(id); return id; },
     clearTimeout(id) { clearTimeout(id); timers.delete(id); },
     MutationObserver: config.observeDOM ? window.MutationObserver : class { observe() {} disconnect() {} },
@@ -1179,11 +1180,12 @@ test('explicit Fill uses each exact saved authorization or sponsorship fact rath
   assert.equal(f.document.getElementById('relative').value, ''); assert.equal(f.document.getElementById('foreign').value, ''); assert.equal(f.saved.length, 0);
 });
 
-test('Workday sectioned month/year controls receive their own job dates and correct current flags', t => {
+test('Workday sectioned month/year controls receive their own job dates and correct current flags', async t => {
   const date = (prefix, label) => `<div data-automation-id="formField-${prefix}"><label>${label}*</label><div data-automation-id="dateInputWrapper"><input id="${prefix}-month" aria-label="${label}" data-automation-id="dateSectionMonth-input" placeholder="MM" maxlength="2"><span>/</span><input id="${prefix}-year" aria-label="${label}" data-automation-id="dateSectionYear-input" placeholder="YYYY" maxlength="4"></div></div>`;
   const block = (id, company, end) => `<section><h2>Work Experience ${id}</h2><label for="company-${id}">Company</label><input id="company-${id}" value="${company}"><label for="current-${id}">I currently work here</label><input id="current-${id}" type="checkbox">${date(`start-${id}`, 'From')}${end ? date(`end-${id}`, 'To') : ''}</section>`;
   const f = fixture(block(1, 'Fictional Current Lab', false) + block(2, 'Fictional Previous Lab', true), { work: [{ employer: 'Fictional Previous Lab', is_current: false, start_month: 6, start_year: 2020, end_month: 8, end_year: 2023 }, { employer: 'Fictional Current Lab', is_current: true, start_month: 9, start_year: 2024 }] }); t.after(f.dispose);
   f.click('fill');
+  await f.internals.datesSettled();
   assert.equal(f.document.getElementById('start-1-month').value, '09'); assert.equal(f.document.getElementById('start-1-year').value, '2024');
   assert.equal(f.document.getElementById('start-2-month').value, '06'); assert.equal(f.document.getElementById('start-2-year').value, '2020');
   assert.equal(f.document.getElementById('end-2-month').value, '08'); assert.equal(f.document.getElementById('end-2-year').value, '2023');
@@ -1394,11 +1396,12 @@ function spinbuttons(f, prefix, parts = ['Month', 'Year']) {
   return { state, validations, error };
 }
 
-test('Workday From dates are stepped into Workday state and validated only once complete', t => {
+test('Workday From dates are stepped into Workday state and validated only once complete', async t => {
   const body = `<section><h2>Work Experience 1</h2><label for="company">Company</label><input id="company" value="Fictional Research Group"><label for="current">I currently work here</label><input id="current" type="checkbox">${sectionDate('start', 'From')}</section>`;
   const f = fixture(body, { work: [{ employer: 'Fictional Research Group', is_current: true, start_month: 1, start_year: 2026 }] }); t.after(f.dispose);
   const date = spinbuttons(f, 'start');
   f.click('fill');
+  await f.internals.datesSettled();
   assert.equal(date.state.Month, '01'); assert.equal(date.state.Year, '2026');
   assert.deepEqual(date.validations, ['01/2026'], 'the date is validated once, with both parts');
   assert.equal(date.error.textContent, '', 'no Invalid Date error');
@@ -1406,7 +1409,7 @@ test('Workday From dates are stepped into Workday state and validated only once 
   assert.equal(f.submissions(), 0);
 });
 
-test('a date Workday rejected after an earlier fill is stepped in again and its error clears', t => {
+test('a date Workday rejected after an earlier fill is stepped in again and its error clears', async t => {
   const body = `<section><h2>Work Experience 1</h2><label for="company">Company</label><input id="company" value="Fictional Research Group">${sectionDate('start', 'From')}</section>`;
   const f = fixture(body, { work: [{ employer: 'Fictional Research Group', is_current: true, start_month: 1, start_year: 2026 }] }); t.after(f.dispose);
   const date = spinbuttons(f, 'start');
@@ -1414,19 +1417,152 @@ test('a date Workday rejected after an earlier fill is stepped in again and its 
   month.value = '01'; month.setAttribute('aria-valuenow', '1'); date.state.Month = '01'; year.value = '2026';
   date.error.textContent = 'Error: Invalid Date: 01/'; month.setAttribute('aria-invalid', 'true');
   f.click('fill');
+  await f.internals.datesSettled();
   assert.equal(date.state.Year, '2026'); assert.equal(date.error.textContent, '');
   assert.equal(date.validations[date.validations.length - 1], '01/2026');
 });
 
-test('a self-identification date gets today in Workday month, day and year sections', t => {
+test('a self-identification date gets today in Workday month, day and year sections', async t => {
   const f = fixture(sectionDate('dateSignedOn', 'Date', ['Month', 'Day', 'Year'])); t.after(f.dispose);
   const date = spinbuttons(f, 'dateSignedOn', ['Month', 'Day', 'Year']);
   f.click('fill');
+  await f.internals.datesSettled();
   const now = new Date();
   assert.equal(date.state.Month, String(now.getMonth() + 1).padStart(2, '0'));
   assert.equal(date.state.Day, String(now.getDate()).padStart(2, '0'));
   assert.equal(date.state.Year, String(now.getFullYear()));
   assert.equal(date.error.textContent, '');
+});
+
+// Workday's date box as its candidate scripts (2026.45) build it, which the
+// simple model above is not. Each section shows its own number at once, but
+// the box keeps one date of its own: a section's change is worked out from
+// the date at the last screen update and lands at the next one (a
+// microtask). The box saves its date only when focus leaves it, using the
+// date at the last screen update. Pasting sets month, day and year in one
+// step; cutting empties them. A hidden note beside the box reads "current
+// value is MM/DD/YYYY". ACE filling the sections and leaving at once saved
+// an empty date while every section showed its digits.
+const placeholderOf = { Month: 'MM', Day: 'DD', Year: 'YYYY' };
+const heldBox = (prefix, label, parts = ['Month', 'Day', 'Year']) => `<div data-automation-id="formField-${prefix}"><label>${label}*</label><div aria-hidden="true" class="held">current value is ${parts.map(part => placeholderOf[part]).join('/')}</div><div data-automation-id="dateInputWrapper" role="group">${parts.map(part => `<input id="${prefix}-${part.toLowerCase()}" role="spinbutton" aria-label="${part}" aria-valuetext="${placeholderOf[part]}" data-automation-id="dateSection${part}-input">`).join('<span>/</span>')}</div><p class="error"></p></div>`;
+function workdayDateBox(f, prefix, parts = ['Month', 'Day', 'Year'], { paste = true } = {}) {
+  const { document, window } = f;
+  const scope = document.querySelector(`[data-automation-id="formField-${prefix}"]`);
+  const box = scope.querySelector('[data-automation-id="dateInputWrapper"]');
+  const note = scope.querySelector('.held'), error = scope.querySelector('.error');
+  const inputs = parts.map(part => document.getElementById(`${prefix}-${part.toLowerCase()}`));
+  const empty = () => Object.fromEntries(parts.map(part => [part, '']));
+  const saves = [];
+  let rendered = empty(), queued = null, scheduled = false;
+  function display(at, value) {
+    const input = inputs[at];
+    input.value = value;
+    if (value) { input.setAttribute('aria-valuenow', String(parseInt(value, 10))); input.setAttribute('aria-valuetext', String(parseInt(value, 10))); }
+    else { input.removeAttribute('aria-valuenow'); input.setAttribute('aria-valuetext', placeholderOf[parts[at]]); }
+  }
+  function render() {
+    scheduled = false;
+    if (!queued) return;
+    const before = rendered; rendered = queued; queued = null;
+    parts.forEach((part, at) => { if (rendered[part] !== before[part]) display(at, rendered[part]); });
+    note.textContent = `current value is ${parts.map(part => rendered[part] || placeholderOf[part]).join('/')}`;
+  }
+  function update(next) { queued = next; if (!scheduled) { scheduled = true; queueMicrotask(render); } }
+  inputs.forEach((input, at) => {
+    const part = parts[at];
+    input.addEventListener('input', event => {
+      if (event.inputType !== 'insertText' || !/^\d$/.test(event.data || '')) return;
+      const typed = String(input.value || '').replace(/\D/g, '').slice(part === 'Year' ? -4 : -2);
+      display(at, typed);
+      update({ ...rendered, [part]: String(parseInt(typed, 10)) });
+    });
+    input.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+      const base = parseInt(input.value, 10);
+      const next = (isNaN(base) ? 0 : base) + (event.key === 'ArrowUp' ? 1 : -1);
+      display(at, String(next));
+      update({ ...rendered, [part]: String(next) });
+    });
+  });
+  if (paste) {
+    box.addEventListener('paste', event => {
+      event.preventDefault();
+      const runs = String(event.clipboardData.getData('text') || '').match(/\d+/g) || [];
+      const next = empty();
+      runs.forEach((run, at) => { if (parts[at]) next[parts[at]] = String(parseInt(run, 10)); });
+      update(next);
+    });
+    box.addEventListener('cut', event => { event.preventDefault(); update(empty()); });
+  }
+  function leave() {
+    const date = { ...rendered };
+    update(date);
+    saves.push(parts.map(part => date[part]).join('/'));
+    error.textContent = parts.every(part => date[part]) ? '' : 'Error: The field Date is required and must have a value.';
+  }
+  const proto = window.HTMLElement.prototype, focus = proto.focus, blur = proto.blur;
+  const inside = node => !!node && box.contains(node);
+  proto.focus = function (...args) { const was = document.activeElement; focus.apply(this, args); if (inside(was) && !inside(this)) leave(); };
+  proto.blur = function (...args) { const was = document.activeElement; blur.apply(this, args); if (inside(was)) leave(); };
+  return { saves, error, note, inputs, held: () => note.textContent.replace('current value is ', '') };
+}
+const clipboard = window => ({
+  DataTransfer: class { constructor() { this.store = {}; } setData(type, value) { this.store[type] = String(value); } getData(type) { return this.store[type === 'text' ? 'text/plain' : type] || ''; } },
+  ClipboardEvent: class extends window.Event { constructor(type, init = {}) { super(type, init); this.clipboardData = init.clipboardData || null; } },
+});
+const todayParts = () => { const now = new Date(); return [now.getMonth() + 1, now.getDate(), now.getFullYear()].map(String); };
+
+test('a self-identification date is saved by Workday, not only shown in its sections', async t => {
+  const f = fixture(heldBox('dateSignedOn', 'Date'), { globals: clipboard }); t.after(f.dispose);
+  const date = workdayDateBox(f, 'dateSignedOn');
+  f.click('fill');
+  await f.internals.datesSettled();
+  const today = todayParts().join('/');
+  assert.equal(date.held(), today, 'Workday holds today');
+  assert.deepEqual(date.saves, [today], 'the box is left once, after Workday updated, and saves the full date');
+  assert.equal(date.error.textContent, '');
+  assert.equal(f.submissions(), 0);
+});
+
+test('without paste handling a Workday date is typed section by section and still saved whole', async t => {
+  const f = fixture(heldBox('dateSignedOn', 'Date'), { globals: clipboard }); t.after(f.dispose);
+  const date = workdayDateBox(f, 'dateSignedOn', ['Month', 'Day', 'Year'], { paste: false });
+  f.click('fill');
+  await f.internals.datesSettled();
+  const today = todayParts().join('/');
+  assert.equal(date.held(), today);
+  assert.equal(date.saves[date.saves.length - 1], today, 'the last save holds month, day and year');
+  assert.equal(date.error.textContent, '');
+});
+
+test('a date Workday showed but never held, as on the owner report, is written again and saved', async t => {
+  const f = fixture(heldBox('dateSignedOn', 'Date'), { globals: clipboard }); t.after(f.dispose);
+  const date = workdayDateBox(f, 'dateSignedOn');
+  const now = new Date();
+  [String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0'), String(now.getFullYear())]
+    .forEach((value, at) => { date.inputs[at].value = value; date.inputs[at].setAttribute('aria-valuenow', String(parseInt(value, 10))); date.inputs[at].setAttribute('aria-valuetext', String(parseInt(value, 10))); });
+  date.error.textContent = 'Error: The field Date is required and must have a value.';
+  assert.match(f.internals.diagnostics(), /Workday holds no date/);
+  f.click('fill');
+  await f.internals.datesSettled();
+  assert.equal(date.held(), todayParts().join('/'));
+  assert.equal(date.saves[date.saves.length - 1], todayParts().join('/'));
+  assert.equal(date.error.textContent, '');
+  assert.match(f.internals.diagnostics(), /Workday holds a full date/);
+});
+
+test('a work history From date reaches Workday whole, and Undo empties what Workday holds', async t => {
+  const body = `<section><h2>Work Experience 1</h2><label for="company">Company</label><input id="company" value="Fictional Research Group">${heldBox('start', 'From', ['Month', 'Year'])}</section>`;
+  const f = fixture(body, { globals: clipboard, work: [{ employer: 'Fictional Research Group', is_current: true, start_month: 1, start_year: 2026 }] }); t.after(f.dispose);
+  const date = workdayDateBox(f, 'start', ['Month', 'Year']);
+  f.click('fill');
+  await f.internals.datesSettled();
+  assert.equal(date.held(), '1/2026');
+  assert.deepEqual(date.saves, ['1/2026']);
+  f.click('undo');
+  await until(() => date.held() === 'MM/YYYY', 'Undo empties the date Workday holds');
+  await until(() => date.saves[date.saves.length - 1] === '/', 'and Workday saves it empty');
+  assert.equal(f.submissions(), 0);
 });
 
 test('screening answers given once on one employer fill reworded questions at another employer', async t => {
@@ -1720,7 +1856,7 @@ test('a copy cut off by an extension reload says so instead of ignoring clicks',
   assert.ok(f.panel().textContent.includes('ACE was updated'), 'the card asks for a refresh');
 });
 
-test('a self-identification date Workday reports as missing is typed in again', t => {
+test('a self-identification date Workday reports as missing is typed in again', async t => {
   const f = fixture(sectionDate('dateSignedOn', 'Date', ['Month', 'Day', 'Year']) +
     '<div data-automation-id="formField-disability"><label>Please check one of the boxes below:</label></div>'); t.after(f.dispose);
   const date = spinbuttons(f, 'dateSignedOn', ['Month', 'Day', 'Year']);
@@ -1729,6 +1865,7 @@ test('a self-identification date Workday reports as missing is typed in again', 
   ['month', 'day', 'year'].forEach((part, at) => { f.document.getElementById(`dateSignedOn-${part}`).value = shown[at]; });
   date.error.textContent = 'Error: The field Date is required and must have a value.';
   f.click('fill');
+  await f.internals.datesSettled();
   assert.deepEqual([date.state.Month, date.state.Day, date.state.Year], shown, 'Workday now holds the date it only showed before');
   assert.equal(date.error.textContent, '');
 });
