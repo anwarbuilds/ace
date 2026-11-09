@@ -61,7 +61,7 @@ API/scheduler run tested 9c45ddd and gate v67. The writer, guarded residual cach
 | API | `9c45ddd29ef1f35187324b099054bab241d1adc1`, chat 3 gate, Inbox parser 15 |
 | Scheduler | `9c45ddd29ef1f35187324b099054bab241d1adc1`, gate `2026-11-08-v67`, 8 workers, lead ledger on, `HOST_POLICY_ENFORCE` off |
 | Schema | `0051` |
-| Extension | Source 1.31.7, unpacked from `extension/`, never published to the Web Store; owner plans Reload, installed version and real SmartRecruiters form unverified |
+| Extension | Source 1.31.8 (Workday date fix), unpacked from `extension/`, never published to the Web Store; owner Reload, installed version, real Workday date and SmartRecruiters forms unverified |
 | Production checkout | `/opt/ace`, Compose project `oracle`, stays at `8ec89cd` with the intended Caddyfile edit; images come from an override, never from this checkout |
 | Source | `main` in `anwarbuilds/ace`, public (gate source PR #48; API/scheduler run tested 9c45ddd); local standalone clone at `/home/ubuntu/Documents/ace-next` |
 
@@ -75,7 +75,7 @@ API/scheduler run tested 9c45ddd and gate v67. The writer, guarded residual cach
 - CI: full sequence passing (backend, web, 47 extension, 59 Inbox and Analytics, 210 other browser cases, none skipped). Each browser step stops the next, so any failure is new, not a baseline. Lessons on flaky tests: the topic. Before changing a failing test, check it against the newest owner decision (`docs/knowledge/08-operations-and-testing.md`).
 - Backups: private, on the VM, unencrypted, no offsite copy yet (OPS-02).
 - Legacy: retired. Recovery material stays until the owner decides: volume `ace_ace_postgres_data`, recovery images, `/home/ubuntu/ace-private-backups/consolidation-20261030T170532Z/`, public tag `legacy-main-final`, private local `recovery-20261030/*` tags (never push all tags). Do not restart legacy services, comparison or replication.
-- Open extension issues: on some Workday tenants the disability checkboxes stay unanswered and the self-identification Date shows digits while Workday reports it required; waiting for the owner's Copy field diagnostics paste. SmartRecruiters shadow-root support is automated-tested in 1.31.7 (APP-02); the owner authorized save/merge with the real-form check deferred and will report recurrence. ACE cannot attach files.
+- Open extension issues: on some Workday tenants the disability checkboxes stay unanswered; waiting for the owner's Copy field diagnostics paste. The self-identification Date that showed digits while Workday reported it required is fixed in source 1.31.8 (Workday saves a date only when focus leaves the whole box; ACE now pastes the whole date, waits, leaves and checks Workday's hidden note; topic 06). Real-form check pending the owner's Reload. SmartRecruiters shadow-root support is automated-tested in 1.31.7 (APP-02); the owner authorized save/merge with the real-form check deferred and will report recurrence. ACE cannot attach files.
 - Coverage: three tabs at `/app/coverage` (Scoreboard, Leads, Sources). Ledger checks keep unverified names without registering boards. Host-verdict pickup remains open for rate-limited robots reads; stored refusal enforcement remains off. Details and retry times stay in private requirements section 13.5.
 - Company identity DIS-16 is live and verified: shared boards are separate from employers; Pear VC is disabled and withdrawn from current discovery, with historical records retained. No inferred parent, acquisition or shared-board sponsorship links.
 

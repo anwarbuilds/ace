@@ -599,13 +599,10 @@
     }
     field.dispatchEvent(new KeyboardEvent('keyup', init));
   }
-  // Workday's date sections take a value the way a person enters one: the
-  // box is clicked and its digits are typed. Stepping with ArrowUp and, last,
-  // writing the box remain as fallbacks. No section is left until every one
-  // holds a value, so Workday checks the date once, complete.
-  function fillDateSection(field, value) {
-    var target = parseInt(String(value || '').trim(), 10);
-    if (!(target > 0)) return false;
+  // One section, the way a person enters it: the box is clicked and its
+  // digits are typed. Stepping with ArrowUp and, last, writing the box
+  // remain as fallbacks. The section is not left here: see settleDate.
+  function typeDateSection(field, target) {
     var year = /year/i.test(field.getAttribute('data-automation-id') || '');
     var digits = year ? String(target) : String(target).padStart(2, '0');
     aceTyping = true;
@@ -633,10 +630,177 @@
     } finally {
       aceTyping = false;
     }
-    if (dateSections(field).every(function (part) { return !!String(part.value || '').trim(); })) {
-      try { field.blur(); } catch (error) { /* nothing to validate */ }
-    }
     return sectionNumber(field) === target;
+  }
+
+  /* Workday keeps one date for the whole box, apart from what each section
+     shows. It saves that date only when focus leaves the box (or a day is
+     picked on its calendar), and it reads the date as it stood at its last
+     screen update. ACE filled the three sections and left the box in one
+     go, before Workday had updated, so Workday saved an empty date while
+     every section showed its digits: "The field Date is required and must
+     have a value." on the self-identification form.
+
+     A date is therefore written after the rest of the form, in one step
+     through Workday's own paste handling, and the box is left only once
+     Workday has updated. Workday writes what it holds into a hidden note
+     beside the box, "current value is 11/09/2026", which is how ACE
+     checks that the date was taken. */
+  var pendingDates = [];
+  var dateWork = null;
+
+  function pause(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+  function dateBox(field) {
+    return aceClosest(field, '[data-automation-id="dateInputWrapper"]') ||
+      aceClosest(field, '[data-automation-id^="formField-"]') || field;
+  }
+  function isHeldNote(node) {
+    return !!node && !(node.children && node.children.length) && /^\s*current value is\b/i.test(node.textContent || '');
+  }
+  // What Workday holds, one number per section in the box's order (NaN for
+  // an empty one), or null when the page has no such note.
+  function heldDate(field) {
+    var box = aceClosest(field, '[data-automation-id="dateInputWrapper"]');
+    var note = box && [box.previousElementSibling, box.nextElementSibling].filter(isHeldNote)[0];
+    if (!note) {
+      var scope = aceClosest(field, '[data-automation-id^="formField-"]');
+      if (scope && aceQueryAll(scope, '[data-automation-id="dateInputWrapper"]').length <= 1) {
+        note = Array.prototype.filter.call(aceQueryAll(scope, 'div,span,p'), isHeldNote)[0];
+      }
+    }
+    if (!note) return null;
+    return (String(note.textContent).replace(/^\s*current value is\s*/i, '').match(/[a-z]+|\d+/gi) || [])
+      .map(function (part) { return /^\d+$/.test(part) ? parseInt(part, 10) : NaN; });
+  }
+  // For diagnostics: the shape of what Workday holds, never the date.
+  function heldSummary(field) {
+    var held = heldDate(field);
+    if (!held) return 'unknown';
+    var known = held.filter(function (number) { return number > 0; }).length;
+    return !known ? 'no date' : known === held.length ? 'a full date' : 'part of a date';
+  }
+  function dateHeld(sections, numbers) {
+    var held = heldDate(sections[0]);
+    if (held) return held.length === numbers.length && numbers.every(function (number, at) { return held[at] === number; });
+    return sections.every(function (section, at) { return sectionNumber(section) === numbers[at]; });
+  }
+  function dateText(sections, numbers) {
+    return numbers.map(function (number, at) {
+      return /year/i.test(sections[at].getAttribute('data-automation-id') || '') ? String(number) : String(number).padStart(2, '0');
+    }).join('/');
+  }
+  // A clipboard event on the box, as Ctrl+V or Ctrl+X sends one. Workday's
+  // own handler takes it and cancels the browser's, so a cancelled event
+  // means Workday handled it.
+  function clipboardToBox(section, type, text) {
+    if (typeof ClipboardEvent !== 'function' || typeof DataTransfer !== 'function') return false;
+    var event;
+    try {
+      var data = new DataTransfer();
+      data.setData('text/plain', text);
+      event = new ClipboardEvent(type, { bubbles: true, cancelable: true, composed: true, clipboardData: data });
+    } catch (error) { return false; }
+    if (!event.clipboardData) return false;
+    aceTyping = true;
+    try {
+      try { section.focus({ preventScroll: true }); } catch (error) { /* send anyway */ }
+      return !section.dispatchEvent(event);
+    } finally {
+      aceTyping = false;
+    }
+  }
+  // Focus leaves the box, which is when Workday saves its date.
+  function leaveDate(box, sections) {
+    var active = document.activeElement;
+    if (active && box.contains && box.contains(active)) {
+      try { active.blur(); } catch (error) { /* already left */ }
+    } else if (active && sections.indexOf(active) >= 0) {
+      try { active.blur(); } catch (error) { /* already left */ }
+    }
+  }
+  function restoreFocus(before, box) {
+    if (before && before.isConnected && /^(INPUT|SELECT|TEXTAREA)$/.test(before.tagName) && !aceIsOwnUI(before) &&
+        !(box.contains && box.contains(before)) && document.activeElement === document.body) {
+      try { before.focus({ preventScroll: true }); } catch (error) { /* the employer keeps focus */ }
+    }
+  }
+  async function settleDate(entry) {
+    var first = entry.wanted.keys().next().value;
+    if (!first || !first.isConnected) return true;
+    var sections = dateSections(first);
+    var numbers = sections.map(function (section) {
+      return entry.wanted.has(section) ? entry.wanted.get(section) : sectionNumber(section);
+    });
+    var before = document.activeElement;
+    var complete = numbers.every(function (number) { return number > 0; });
+    var pasted = complete && clipboardToBox(sections[0], 'paste', dateText(sections, numbers));
+    if (pasted) {
+      await pause(60);
+      leaveDate(entry.box, sections);
+      await pause(60);
+    }
+    if (!pasted || !dateHeld(sections, numbers)) {
+      // No paste handling here, or it did not take: one section at a time,
+      // letting Workday update between them, and the box left once.
+      for (var at = 0; at < sections.length; at++) {
+        if (!(numbers[at] > 0) || !sections[at].isConnected) continue;
+        typeDateSection(sections[at], numbers[at]);
+        await pause(40);
+      }
+      leaveDate(entry.box, sections);
+      await pause(60);
+    }
+    restoreFocus(before, entry.box);
+    return dateHeld(sections, numbers);
+  }
+  async function settleDates() {
+    var missed = 0;
+    while (pendingDates.length) {
+      var entry = pendingDates.shift();
+      try { if (!(await settleDate(entry))) missed += 1; } catch (error) { missed += 1; }
+    }
+    if (missed) activityNote(missed === 1 ? 'Workday did not keep a date ACE entered. Enter it on the form.' : 'Workday did not keep ' + missed + ' dates ACE entered. Enter them on the form.');
+  }
+  // Called while the rest of the form fills: the section is noted and the
+  // whole date is written once that pass is over.
+  function fillDateSection(field, value) {
+    var target = parseInt(String(value || '').trim(), 10);
+    if (!(target > 0)) return false;
+    var box = dateBox(field);
+    var entry = pendingDates.filter(function (item) { return item.box === box; })[0];
+    if (!entry) { entry = { box: box, wanted: new Map() }; pendingDates.push(entry); }
+    entry.wanted.set(field, target);
+    if (!dateWork) {
+      dateWork = pause(0).then(settleDates).then(function () { dateWork = null; }, function () { dateWork = null; });
+    }
+    return true;
+  }
+  function datesSettled() {
+    return dateWork || Promise.resolve();
+  }
+  // Undo of a date: Workday's own cut handling empties the whole box at
+  // once, then the box is left so Workday saves it empty.
+  async function clearDates(fields) {
+    var boxes = [];
+    fields.forEach(function (field) {
+      var box = dateBox(field);
+      if (boxes.indexOf(box) < 0) boxes.push(box);
+    });
+    await datesSettled();
+    for (var at = 0; at < boxes.length; at++) {
+      var sections = Array.prototype.filter.call(aceQueryAll(boxes[at], 'input'), isDateSection);
+      if (!sections.length) sections = fields.filter(function (field) { return dateBox(field) === boxes[at]; });
+      if (!sections[0] || !sections[0].isConnected) continue;
+      if (clipboardToBox(sections[0], 'cut', '')) {
+        await pause(60);
+        leaveDate(boxes[at], sections);
+        await pause(60);
+      } else {
+        sections.forEach(clearDateSection);
+      }
+    }
   }
   // The voluntary self-identification of disability form dates the owner's
   // declaration. Only a field labelled for today, or that form's plain
@@ -661,6 +825,9 @@
     if (!isDateSection(field) || parseInt(String(field.value || ''), 10) !== parseInt(value, 10)) return false;
     // The box shows the number while Workday's own value is still empty.
     if (/^(mm|dd|yy|yyyy)$/i.test(String(field.getAttribute('aria-valuetext') || '').trim())) return true;
+    // Workday's note says it holds something else for this section.
+    var held = heldDate(field), at = dateSections(field).indexOf(field);
+    if (held && at >= 0 && held[at] !== parseInt(value, 10)) return true;
     var scope = aceClosest(field, '[data-automation-id^="formField-"]') || aceClosest(field, '[data-automation-id="dateInputWrapper"]');
     return field.getAttribute('aria-invalid') === 'true' || !!(scope && /invalid date|must have a value/i.test(scope.textContent || ''));
   }
@@ -1326,15 +1493,17 @@
 
         // Native date controls reject an invalid string without an
         // exception. Do not claim a history date was filled if the
-        // browser left the control empty.
-        if (!aceIsChoiceControl(slot.field) && !slot.field.value) return;
+        // browser left the control empty. A Workday date section is
+        // written once the pass is over (settleDate) and checked there.
+        var later = isDateSection(slot.field);
+        if (!later && !aceIsChoiceControl(slot.field) && !slot.field.value) return;
 
         var touched = lastPicked || slot.field;
 
         lastFill.push({
           field: touched,
           previous: previous,
-          wrote: touched.value,
+          wrote: later ? String(value) : touched.value,
           ticked: aceIsChoiceControl(touched),
           name: kind === 'work' ? 'Work history' : 'Education history'
         });
@@ -1449,7 +1618,7 @@
         if (!part || !aceIsEmpty(field) && !dateNeedsRepair(field, part)) return;
         var before = field.value;
         if (fillOne(field, part)) {
-          lastFill.push({ field: field, previous: before, wrote: field.value, ticked: false, name: "Today's date" });
+          lastFill.push({ field: field, previous: before, wrote: part, ticked: false, name: "Today's date" });
           if (filled.indexOf("Today's date") < 0) filled.push("Today's date");
         }
         return;
@@ -2306,6 +2475,7 @@
   }
 
   function undo() {
+    var dates = [];
     lastFill.slice().reverse().forEach(function (record) {
       if (record.reviewChoices) {
         record.reviewChoices.forEach(function (entry) {
@@ -2339,12 +2509,13 @@
         // answered, usually no "Select One" left to choose. Left as
         // chosen rather than throwing halfway through the undo.
       } else if (isDateSection(record.field) && !record.previous) {
-        clearDateSection(record.field);
+        if (record.field.isConnected) dates.push(record.field);
       } else {
         setNatively(record.field, record.previous);
       }
     });
     lastFill = [];
+    if (dates.length) clearDates(dates);
   }
 
   /* Long option text is a definition paragraph in EEO questions, and
@@ -3645,7 +3816,8 @@
           ", aria-valuenow " + (section.hasAttribute("aria-valuenow") ? "set" : "absent") +
           ", aria-valuetext " + (/^(mm|dd|yy|yyyy)$/i.test(String(section.getAttribute("aria-valuetext") || "").trim()) ? "placeholder" : section.hasAttribute("aria-valuetext") ? "set" : "absent") +
           ", invalid " + (section.getAttribute("aria-invalid") || "no") +
-          ", error shown " + (scope && /must have a value|invalid date/i.test(scope.textContent || "") ? "yes" : "no"));
+          ", error shown " + (scope && /must have a value|invalid date/i.test(scope.textContent || "") ? "yes" : "no") +
+          ", Workday holds " + heldSummary(section));
       });
     }
 
@@ -4814,6 +4986,7 @@
     fillComboboxes: fillComboboxes,
     gatesAPlainField: gatesAPlainField,
     fillOne: fillOne,
+    datesSettled: datesSettled,
     restoreClobbered: restoreClobbered,
     recordFill: function (record) { lastFill.push(record); },
     panel: panel,

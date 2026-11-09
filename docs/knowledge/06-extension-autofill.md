@@ -7,6 +7,37 @@
 >
 > Read this when: you change the autofill matcher, the panel, the answer bank or anything that touches a live application form.
 
+## Workday showed the date but saved none (2026-11-09, extension 1.31.8)
+
+Problem: on the disability self-identification page the Date showed today's
+digits while Workday said "The field Date is required and must have a value",
+on every application. Two earlier fixes (typing, ArrowUp, repair) passed the
+local harness and still failed on the real form.
+
+Cause, read from Workday's public candidate scripts (2026.45): the date box
+keeps one date of its own, apart from what each month, day and year section
+shows. It saves that date only when focus leaves the whole box (or a day is
+picked on its calendar), and it reads the date as it stood at its last
+screen update. ACE filled the sections and left the box in one synchronous
+pass, before Workday had updated, so Workday saved an empty date. Each
+section kept showing its own digits, which hid the failure. The harness
+saved every section at once, so it could never fail this way.
+
+Fix: date sections are noted during the fill and written after the rest of
+the form, in one step through Workday's own paste handling (it sets month,
+day and year together); the box is left only after Workday has updated.
+Workday writes what it holds into a hidden note beside the box ("current
+value is MM/DD/YYYY"); ACE checks it, falls back to typing section by
+section with pauses, and notes in activity when Workday kept no date.
+Repair also triggers when the note disagrees with a section. Undo empties
+the box through Workday's cut handling. Diagnostics report whether Workday
+holds a full date, part, none or unknown, never the date.
+
+Lesson: model the harness on the ATS's real timing, not only its markup.
+`workdayDateBox` in `web/tests/extension-review.test.mjs` defers updates to
+a microtask, saves only on leaving the box and reproduces the old failure.
+The real-form check is the owner's; it is not proven by local tests.
+
 ## Hidden Workday companion inputs hid every question (2026-11-03)
 
 Workday puts a hidden `tabindex=-1` input beside each dropdown in the same
