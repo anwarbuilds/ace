@@ -20,7 +20,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict
 
 
-ROLE_RULE_VERSION = "2026-11-07-v7"
+ROLE_RULE_VERSION = "2026-11-07-v8"
 
 
 class RoleFamily(str, Enum):
@@ -173,6 +173,7 @@ AI_ML_PATTERNS = (
     r"\bai engineer\b",
     r"\bartificial intelligence engineer\b",
     r"\bmachine learning engineer\b",
+    r"\bsoftware mach(?:ine)?\.? learn(?:ing)?\.? engr\b",
     r"\bml engineer\b",
     r"\bai/ml engineer\b",
     r"\bml/ai engineer\b",
@@ -350,6 +351,8 @@ SOFTWARE_ENGINEERING_PATTERNS = (
     r"\bsoftware systems? integration engineer(?:ing)?\b",
     r"\bsoftware (?:(?:engineering|development) )?"
     r"(?:rotation(?:al)?(?: development)?|development) program(?:me)?\b",
+    r"\b(?:leadership )?development program(?:me)?\s*[-,\u2013\u2014:/]\s*"
+    r"engineering\s*[-,\u2013\u2014:/]\s*software discipline\b",
     r"\balgorithms? developer\b",
     r"\bsystems software engineer(?:ing)?\b",
     r"\bbackend software engineer(?:ing)?\b",

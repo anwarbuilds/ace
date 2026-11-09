@@ -102,6 +102,8 @@ PROFILES: dict[str, CandidateProfile] = {
     # v55 changes no threshold either: site reliability and mobile roles
     # leave the list, at the owner's request on 2026-10-29; v56 the same
     # day takes infrastructure, platform, cloud and DevOps titles off too.
+    # v65 recognizes abbreviated software ML titles and the software
+    # discipline in engineering development programme names.
     # v64 preserves degree alternatives separated by OR lines and
     # recognizes the optional Extras section during doctorate checks.
     # v63 reads explicit sponsorship refusals and required-clearance
@@ -121,7 +123,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=3,
-        rule_version="2026-11-07-v64",
+        rule_version="2026-11-07-v65",
     ),
     # New grad roles stay the primary target (they sort first), and SDE
     # II comes in: with three years, a posting asking "3+ years" is one
@@ -132,7 +134,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=4,
-        rule_version="2026-11-07-v64-sde2",
+        rule_version="2026-11-07-v65-sde2",
     ),
 }
 
