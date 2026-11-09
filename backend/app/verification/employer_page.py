@@ -26,6 +26,10 @@ Pages are fetched only where robots.txt allows, only for postings whose
 title could pass at all, at most a set number per poll, and each at most
 once a week. A page that could not be read leaves the posting judged as
 before, marked unverified -- silence is not rejection.
+
+A posting ACE already reads directly from the employer's own job system
+(TikTok, ByteDance, Amazon, Apple, Google) takes that stored text
+instead, with no page fetched: see ``DIRECT_COPY_RULES``.
 """
 
 from __future__ import annotations
@@ -494,6 +498,187 @@ class ReadingStore:
             session.commit()
 
 
+# The same posting, read directly from the employer.
+#
+# Many feed postings live on sites whose pages carry no schema.org
+# JobPosting -- TikTok, ByteDance, Amazon, Apple, Google -- so the page
+# reader above finds nothing and the posting passed unchecked, "US
+# citizenship required" or not. ACE already reads those employers'
+# own job systems, and each publishes a posting under one number in
+# both places: lifeattiktok.com/search/7673... in the feed is the
+# posting ACE stores as bytedance 7673.... That stored description is
+# the employer's own text, so it is used, and no page is fetched.
+DIRECT_COPY_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (
+        re.compile(
+            r"^https?://(?:www\.)?lifeattiktok\.com/search/(\d+)(?:[/?#]|$)",
+            re.I,
+        ),
+        "bytedance",
+    ),
+    (
+        re.compile(
+            r"^https?://jobs\.bytedance\.com/[a-z-]+/position/(\d+)(?:[/?#]|$)",
+            re.I,
+        ),
+        "bytedance",
+    ),
+    (
+        re.compile(
+            r"^https?://(?:www\.)?amazon\.jobs/[a-z-]+/jobs/(\d+)(?:[/?#]|$)",
+            re.I,
+        ),
+        "amazon",
+    ),
+    (
+        re.compile(
+            r"^https?://jobs\.apple\.com/[a-z-]+/details/(\d+)(?:[-/?#]|$)",
+            re.I,
+        ),
+        "apple",
+    ),
+    (
+        re.compile(
+            r"^https?://(?:www\.)?google\.com/about/careers/applications"
+            r"/jobs/results/(\d+)(?:[-/?#]|$)",
+            re.I,
+        ),
+        "google",
+    ),
+)
+
+# Keys per query, well under any database's parameter limit.
+DIRECT_COPY_CHUNK = 400
+
+
+def direct_copy_key(
+    url: str,
+) -> tuple[str, str] | None:
+    """The (source, posting number) ACE stores this posting under, if
+    the link is on a site ACE reads directly."""
+
+    for pattern, source in DIRECT_COPY_RULES:
+        match = pattern.match(
+            url or ""
+        )
+
+        if match:
+            return (
+                source,
+                match.group(1),
+            )
+
+    return None
+
+
+class DirectCopyStore:
+    """Descriptions ACE already holds for a posting from the employer's
+    own job system. Read in a short session of its own, never inside a
+    poll."""
+
+    def __init__(
+        self,
+        session_factory: Callable | None = None,
+    ) -> None:
+        self._session_factory = session_factory
+
+    def _sessions(
+        self,
+    ):
+        if self._session_factory is not None:
+            return self._session_factory
+
+        from backend.app.db.session import (
+            SessionLocal,
+        )
+
+        return SessionLocal
+
+    def load(
+        self,
+        keys: Sequence[tuple[str, str]],
+    ) -> dict[tuple[str, str], str]:
+        """The stored description for each key that has a usable one.
+
+        An open posting is preferred to a closed one, then the most
+        recently seen. A stub is no description.
+        """
+
+        from backend.app.db.models import (
+            JobRecord,
+        )
+
+        wanted = sorted(
+            set(keys)
+        )
+
+        if not wanted:
+            return {}
+
+        found: dict[tuple[str, str], tuple[tuple, str]] = {}
+
+        with self._sessions()() as session:
+            for start in range(
+                0,
+                len(wanted),
+                DIRECT_COPY_CHUNK,
+            ):
+                chunk = wanted[start:start + DIRECT_COPY_CHUNK]
+
+                rows = session.execute(
+                    sa.select(
+                        JobRecord.source,
+                        JobRecord.external_id,
+                        JobRecord.description,
+                        JobRecord.is_active,
+                        JobRecord.last_seen_at,
+                    ).where(
+                        sa.tuple_(
+                            JobRecord.source,
+                            JobRecord.external_id,
+                        ).in_(
+                            chunk
+                        ),
+                    )
+                ).all()
+
+                for source, external_id, description, active, seen in rows:
+                    text = (
+                        description or ""
+                    ).strip()
+
+                    if len(text) < MIN_DESCRIPTION_CHARS:
+                        continue
+
+                    if seen is not None and seen.tzinfo is None:
+                        seen = seen.replace(
+                            tzinfo=timezone.utc,
+                        )
+
+                    rank = (
+                        bool(active),
+                        seen or datetime.min.replace(
+                            tzinfo=timezone.utc,
+                        ),
+                    )
+
+                    key = (
+                        source,
+                        external_id,
+                    )
+
+                    if key not in found or rank > found[key][0]:
+                        found[key] = (
+                            rank,
+                            text,
+                        )
+
+        return {
+            key: text
+            for key, (_rank, text) in found.items()
+        }
+
+
 def is_stale(
     reading: Reading,
     checked_at: datetime,
@@ -527,8 +712,13 @@ class EmployerPageVerifier:
         now: Callable[[], datetime] = lambda: datetime.now(
             timezone.utc
         ),
+        direct_copies: DirectCopyStore | None = None,
     ) -> None:
         self._store = ReadingStore(
+            session_factory
+        )
+
+        self._direct = direct_copies or DirectCopyStore(
             session_factory
         )
 
@@ -583,13 +773,34 @@ class EmployerPageVerifier:
             for url, (reading, _checked) in stored.items()
         }
 
+        # A posting ACE already holds from the employer's own job
+        # system needs no page read: its stored text is used instead.
+        copy_keys = {
+            url: key
+            for url in wanted
+            if (key := direct_copy_key(url)) is not None
+        }
+
+        copies = self._direct.load(
+            list(copy_keys.values())
+        )
+
+        direct = {
+            url: copies[key]
+            for url, key in copy_keys.items()
+            if key in copies
+        }
+
         due = [
             url
             for url in wanted
-            if url not in stored
-            or is_stale(
-                *stored[url],
-                moment,
+            if url not in direct
+            and (
+                url not in stored
+                or is_stale(
+                    *stored[url],
+                    moment,
+                )
             )
         ][
             :self._fresh_reads
@@ -652,9 +863,24 @@ class EmployerPageVerifier:
                         ),
                     },
                 )
+            elif job.official_url in direct:
+                job = job.model_copy(
+                    update={
+                        "description": merged_description(
+                            direct[job.official_url],
+                            job.description,
+                        ),
+                    },
+                )
 
             verified.append(
                 job
+            )
+
+        if direct:
+            LOGGER.info(
+                "employer_direct_copies_used count=%d",
+                len(direct),
             )
 
         return verified

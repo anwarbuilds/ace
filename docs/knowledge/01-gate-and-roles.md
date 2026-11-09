@@ -376,11 +376,18 @@ a recomputation. The CLI still recomputes, so the next gate release that
 runs it will recreate the same residue. Before then, make the CLI record
 the stored hash (or run the refresh helper after it), with a test.
 
-## Simplify-only jobs cannot be checked for visa limits (2026-11-09)
+## Feed postings judged on the employer's own text (2026-11-09)
 
 The owner wants jobs that clearly say no sponsorship or US citizens only rejected outright. The gate already does
 this from a job's own text (`SPONSORSHIP_BLOCKER`, `CITIZENSHIP_BLOCKER`, plus clearance and ITAR), and the
-Simplify reader renders Simplify's marks as the same sentences. Simplify's list carries no description, and
-Simplify stopped filling those marks in July; its README is generated from the same field, so it cannot restore
-them. Jobs reaching ACE only through Simplify therefore pass with nothing to check. ELG-05 stays open until the
-owner decides whether ACE should read each such job's employer page once (robots respected, refusals honoured).
+Simplify reader renders Simplify's marks as the same sentences. But Simplify's list carries no description,
+Simplify stopped filling those marks in July (its README is generated from the same field), and the page reader in
+`verification/employer_page.py` only understands schema.org JobPosting, which TikTok, ByteDance, Amazon, Apple and
+Google pages do not carry. Those feed postings passed unchecked although ACE reads the same postings directly.
+
+Fix (ELG-05): `DIRECT_COPY_RULES` maps a feed link to the (source, posting number) ACE stores it under, for example
+`lifeattiktok.com/search/<n>` to `bytedance <n>`, and `DirectCopyStore` supplies that stored description (open
+copy first, stubs ignored) when no page reading exists, with no page fetched. Only feed descriptions change, so
+the gate version stays and the next Simplify poll re-judges the postings. Postings on sites ACE cannot read at all
+stay unverified: silence is not rejection. Lesson: before calling a feed gap upstream-only, check whether ACE
+already holds the same posting from the employer.
