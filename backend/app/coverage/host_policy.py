@@ -145,7 +145,8 @@ def read_targets(
         tenant, _, site = account.partition("/")
         if not host or not site:
             return ()
-        return (HostTarget(host, "workday", (f"/wday/cxs/{tenant}/{site}/jobs",)),)
+        # The job API names the tenant with underscores (adapters/workday.api_tenant).
+        return (HostTarget(host, "workday", (f"/wday/cxs/{tenant.replace('-', '_')}/{site}/jobs",)),)
 
     if source_type == "oracle_recruiting":
         oracle_host = _host_of(account)

@@ -285,6 +285,26 @@ def parse_source_account(
     )
 
 
+def api_tenant(
+    tenant: str,
+) -> str:
+    """The tenant as Workday's job API names it.
+
+    A host name cannot hold an underscore, so a tenant such as
+    ``vhr_genband`` is served at ``vhr-genband.wd1.myworkdayjobs.com``,
+    while its job list answers only at ``/wday/cxs/vhr_genband/...``:
+    the hyphenated form gets HTTP 422. Six boards registered from feed
+    links (Amerisure, Sallie Mae, Castleton, Magnite, Ribbon, EPRI) were
+    switched off as unreadable for exactly this, measured 2026-11-10.
+    The board's identity keeps the form it was registered under.
+    """
+
+    return tenant.replace(
+        "-",
+        "_",
+    )
+
+
 def _require_host(
     source_host: str | None,
 ) -> str:
@@ -790,6 +810,10 @@ def fetch_workday_jobs(
 
     tenant, site = parse_source_account(
         source_account
+    )
+
+    tenant = api_tenant(
+        tenant
     )
 
     host = _require_host(
