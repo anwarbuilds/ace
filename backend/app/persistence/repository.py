@@ -27,6 +27,33 @@ from backend.app.persistence.types import (
 )
 
 
+# An unchanged, still open posting has its last-seen time refreshed at
+# most this often. Measured on 2026-11-09, writing it on every read was
+# about 1.2 million row rewrites an hour across every reader, 88% of them
+# on boards read every fifteen minutes or faster, for a time shown only on
+# a job's own page. Its board's own read time is still kept exactly
+# (source_states); a posting that changes, reopens or is new is written in
+# full, as before.
+LAST_SEEN_REFRESH = timedelta(
+    hours=1,
+)
+
+
+def _as_utc(
+    value: datetime | None,
+) -> datetime | None:
+    if value is None:
+        return None
+
+    return (
+        value
+        if value.tzinfo is not None
+        else value.replace(
+            tzinfo=timezone.utc
+        )
+    )
+
+
 class JobRepository:
     """Persistence operations for normalized jobs and source state.
 
@@ -163,6 +190,44 @@ class JobRepository:
                 != content_hash
             )
 
+            if not (
+                was_inactive
+                or content_changed
+            ):
+                # Nothing a person reads moved. The provider's own
+                # update time is kept when it changes, and the
+                # last-seen time once it is LAST_SEEN_REFRESH old;
+                # otherwise the row is not written at all.
+                if _as_utc(
+                    existing_record.source_updated_at
+                ) != _as_utc(
+                    job.updated_at
+                ):
+                    existing_record.source_updated_at = (
+                        job.updated_at
+                    )
+
+                last_seen = _as_utc(
+                    existing_record.last_seen_at
+                )
+
+                if (
+                    last_seen is None
+                    or observed_at - last_seen
+                    >= LAST_SEEN_REFRESH
+                ):
+                    existing_record.last_seen_at = (
+                        observed_at
+                    )
+
+                statuses[
+                    job.external_id
+                ] = (
+                    JobObservationStatus.UNCHANGED
+                )
+
+                continue
+
             existing_record.company = (
                 job.company
             )
@@ -210,26 +275,13 @@ class JobRepository:
             existing_record.is_active = True
             existing_record.closed_at = None
 
-            if was_inactive:
-                statuses[
-                    job.external_id
-                ] = (
-                    JobObservationStatus.REOPENED
-                )
-
-            elif content_changed:
-                statuses[
-                    job.external_id
-                ] = (
-                    JobObservationStatus.UPDATED
-                )
-
-            else:
-                statuses[
-                    job.external_id
-                ] = (
-                    JobObservationStatus.UNCHANGED
-                )
+            statuses[
+                job.external_id
+            ] = (
+                JobObservationStatus.REOPENED
+                if was_inactive
+                else JobObservationStatus.UPDATED
+            )
 
         self._session.flush()
 

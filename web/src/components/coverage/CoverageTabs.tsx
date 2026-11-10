@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { CompanyIdentity } from "@/components/CompanyIdentity";
 import { AddCompany } from "@/components/coverage/AddCompany";
 import { clean, shortDate } from "@/lib/format";
-import type { Coverage, CoverageGap, HostsReport, LeadState, LeadsReport, SourcesReport } from "@/lib/types";
+import type { CapacityReport, Coverage, CoverageGap, HostsReport, LeadState, LeadsReport, SourcesReport } from "@/lib/types";
 
 const n = (value: number) => value.toLocaleString("en-US");
 
@@ -79,6 +79,50 @@ function Stat({ value, label, note, href }: { value: string; label: string; note
     </Link>
   ) : (
     <div className="cov-stat">{body}</div>
+  );
+}
+
+function minutes(value: number): string {
+  if (value < 60) return `${Math.max(1, Math.round(value))} min`;
+  const hours = value / 60;
+  return `${hours < 10 ? hours.toFixed(1) : Math.round(hours)} h`;
+}
+
+// Can ace keep up? Three numbers the scheduler already records, so the owner
+// sees capacity before any board is added (OPS-05).
+function Capacity({ c }: { c: CapacityReport | null }) {
+  if (!c) {
+    return <p className="why">Whether ace is keeping up could not be loaded just now. Refresh to try again.</p>;
+  }
+  const typical = c.new_jobs.typical_minutes;
+  const nineInTen = c.new_jobs.nine_in_ten_minutes;
+  return (
+    <section className="cov-card cov-capacity" aria-labelledby="cov-capacity">
+      <h2 id="cov-capacity">Can ace keep up?</h2>
+      <p className="why">How much reading ace does, and how fast new jobs reach you. ace checks this before adding boards.</p>
+      <div className="cov-stats">
+        <Stat
+          value={n(c.reads_last_hour)}
+          label="Reads in the last hour"
+          note={`Your boards ask for about ${n(c.reads_asked_per_hour)} an hour`}
+        />
+        <Stat
+          value={`${n(c.boards_on_time)} of ${n(c.boards)}`}
+          label="Boards read on time"
+          note="Within one and a half times their planned gap"
+        />
+        <Stat
+          value={typical === null ? "Not yet" : `About ${minutes(typical)}`}
+          label="New jobs reach you in"
+          note={
+            typical === null || nineInTen === null
+              ? "Too few new jobs with a real posting time in the last day to tell"
+              : `Typical. 9 in 10 within ${minutes(nineInTen)}, on boards that give a real posting time`
+          }
+        />
+      </div>
+      <p className={`cov-capacity-line ${c.keeping_up ? "cov-good" : "cov-warn"}`}>{c.status_label}</p>
+    </section>
   );
 }
 
@@ -465,7 +509,7 @@ export function LeadsTab({ report, tz, state, q, offset }: { report: LeadsReport
   );
 }
 
-export function SourcesTab({ report, hosts, tz, show, q, offset }: { report: SourcesReport | null; hosts: HostsReport | null; tz: string; show?: string; q?: string; offset: number }) {
+export function SourcesTab({ report, hosts, capacity, tz, show, q, offset }: { report: SourcesReport | null; hosts: HostsReport | null; capacity: CapacityReport | null; tz: string; show?: string; q?: string; offset: number }) {
   const href = (next: { show?: string | null; offset?: number }) => {
     const params = new URLSearchParams({ tab: "sources" });
     const chosen = next.show === undefined ? show : next.show;
@@ -492,6 +536,8 @@ export function SourcesTab({ report, hosts, tz, show, q, offset }: { report: Sou
             <Stat value={n(report.counts.dark)} label="Stopped answering" note={report.counts.dark ? "Listed below" : undefined} />
             <Stat value={n(report.counts.says_no)} label="On sites that say no" note={report.counts.says_no ? "Listed below" : undefined} />
           </div>
+
+          <Capacity c={capacity} />
 
           <section className="cov-section" aria-labelledby="cov-all">
             <div className="cov-section-head">

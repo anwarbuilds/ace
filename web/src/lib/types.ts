@@ -324,6 +324,18 @@ export interface SourcesReport {
   }[];
 }
 
+export interface CapacityReport {
+  reads_last_hour: number;
+  reads_window_start: string;
+  reads_window_end: string;
+  reads_asked_per_hour: number;
+  boards: number;
+  boards_on_time: number;
+  new_jobs: { jobs: number; typical_minutes: number | null; nine_in_ten_minutes: number | null };
+  keeping_up: boolean;
+  status_label: string;
+}
+
 export interface HostsReport {
   enforcing: boolean;
   total: number;

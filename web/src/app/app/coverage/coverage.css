@@ -30,6 +30,12 @@ a.cov-stat:hover { border-color: var(--border-strong); }
 .cov-stat span { margin-top: 6px; font-size: var(--text-label); color: var(--text); }
 .cov-stat small { margin-top: 4px; font-size: var(--text-small); color: var(--text-secondary); }
 
+.cov-capacity .cov-stats { margin-top: 14px; }
+.cov-capacity .cov-stat { background: var(--surface-2); }
+.cov-capacity-line { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: var(--text-label); color: var(--text); }
+.cov-capacity-line::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--warning); }
+.cov-capacity-line.cov-good::before { background: var(--success); }
+
 .cov-add { max-width: none; margin: 14px 0 0; }
 .cov-note { margin: 10px 0 0; font-size: var(--text-label); color: var(--text-secondary); }
 .cov-answer { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 14px; padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--surface-2); }
