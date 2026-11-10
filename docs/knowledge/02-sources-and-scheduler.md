@@ -394,3 +394,38 @@ restart repeats every Workable refusal once; that is now a fast failure rather t
 
 After: about 136 polls a minute instead of 88; fifteen-minute boards a median 8 to 11.5 minutes old, 90th percentile
 17 to 19, instead of 15 to 19 and 23 to 25. Workday is now two thirds of worker time; that is the next limit.
+
+## One line for every board, and two writes nobody needed (2026-11-09, Chat 4)
+
+Capacity was measured before any growth (OPS-05). Eight workers were busy 99.6% of the time. Workday held 69% of
+worker time at about 11 seconds a read, Oracle 13% at 17, against half a second for Greenhouse and a quarter for
+Ashby. Every due board was handed to the pool at once, so the pool's first-come queue held several hundred boards
+and every read, quick or slow, started about four minutes after it was due.
+
+- **Fair turns** (`scheduling/runtime.py`). A board starts only when a worker is free, the one due longest goes first,
+  and a platform at its limit waits while other boards go ahead (`PLATFORM_LIMITS`: Workday 5, Oracle 2; a shared
+  edge stays one at a time). A finished worker takes the next due board at once instead of waiting for the next
+  cycle. A single run (`--once`) still polls every due board once. Each cycle logs `waiting=`, the line of due boards.
+  `SCHEDULER_WORKERS` (1 to 16, default 8) and `SCHEDULER_PLATFORM_LIMITS` are settings, so a measured step up needs
+  no rebuild. An offline replay of the measured durations predicted quick boards' wait falling from minutes to about
+  a minute and a half at eight workers, and to near zero at ten.
+- **Workday dates moved on every read** (`adapters/workday.py`). The list says "Posted 3 Days Ago"; the adapter made
+  that "now minus three days", and `posted_at` is in the content hash, so 97% of Workday postings counted as edited on
+  every poll: about 725,000 needless gate evaluations and row rewrites an hour, and Workday jobs claiming a posted
+  time of day Workday never gave. The label now names a day (midnight UTC, like the detail `startDate`), and
+  `steady_posted_on` keeps the stored day while the label still agrees within a day (Workday's midnight is not UTC's;
+  "30+ Days Ago" names no day). The dispatcher reads the stored days in its own short session first.
+- **Every read rewrote every posting's last-seen time** (`persistence/repository.py`), about 1.2 million row writes
+  an hour, 88% on boards read every fifteen minutes or faster, for a time shown only on a job's own page. An unchanged
+  open posting is now not written at all except to refresh `last_seen_at` once it is an hour old
+  (`LAST_SEEN_REFRESH`, the auth sessions' pattern) or to keep a changed provider update time. A 304 never touched
+  job rows anyway. Changed, reopened and new postings are written in full as before.
+
+Lessons: count writes, not only requests. The database had the indexes polling needs; its time went on rewriting
+rows that had not changed. A field derived from "now" must never sit in a content hash. And a queue in front of a
+thread pool hides waiting: in-flight looked like eight, the log's `still_running` was really the queue.
+
+The Sources tab's "Can ace keep up?" box (`coverage/capacity.py`, `/api/coverage/capacity`) shows reads in the last
+four complete quarter hours against the reads the boards ask for, boards read within one and a half planned
+intervals, and how fast new jobs arrive (median and nine in ten, last day, boards already read, posted times with a
+real time of day; midnight UTC is a date).

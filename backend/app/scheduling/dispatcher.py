@@ -12,7 +12,7 @@ from collections.abc import (
     Mapping,
     Sequence,
 )
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Protocol
 
 from backend.app.adapters.ashby import (
@@ -213,6 +213,7 @@ class WorkdayFetcher(Protocol):
         company_name: str,
         source_host: str | None,
         should_fetch_detail,
+        known_posted: Mapping[str, datetime] | None = None,
     ) -> list[CanonicalJob]:
         """Fetch and normalize one Workday tenant."""
 
@@ -615,7 +616,12 @@ class LeverSourceFetcher:
 
 
 class WorkdaySourceFetcher:
-    """Dispatch adapter for Workday-backed source definitions."""
+    """Dispatch adapter for Workday-backed source definitions.
+
+    ``posted_lookup`` gives the posted day ACE already holds for each of
+    a tenant's postings, so a list label that still agrees with it does
+    not count as an edit (``steady_posted_on`` in the adapter).
+    """
 
     def __init__(
         self,
@@ -624,9 +630,17 @@ class WorkdaySourceFetcher:
             fetch_workday_jobs
         ),
         clock: Clock = utc_now,
+        posted_lookup: (
+            Callable[
+                [SourceDefinition],
+                Mapping[str, datetime],
+            ]
+            | None
+        ) = None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
+        self._posted_lookup = posted_lookup
 
     def __call__(
         self,
@@ -650,6 +664,18 @@ class WorkdaySourceFetcher:
                 )
             )
 
+        known = (
+            {}
+            if self._posted_lookup is None
+            else {
+                "known_posted": (
+                    self._posted_lookup(
+                        source
+                    )
+                ),
+            }
+        )
+
         jobs = self._fetcher(
             source_account=(
                 source.source_account
@@ -668,6 +694,7 @@ class WorkdaySourceFetcher:
                     ),
                 )
             ),
+            **known,
         )
 
         return FetchedSourceSnapshot(
@@ -1988,6 +2015,47 @@ def _stored_descriptions(
     }
 
 
+def _stored_posted_dates(
+    source: SourceDefinition,
+) -> dict[str, datetime]:
+    """The posted day ACE holds for each active posting of one source.
+
+    Read in its own short session, before any request, like the
+    validators.
+    """
+
+    from sqlalchemy import (
+        select,
+    )
+
+    from backend.app.db.models import (
+        JobRecord,
+    )
+    from backend.app.db.session import (
+        SessionLocal,
+    )
+
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(
+                JobRecord.external_id,
+                JobRecord.posted_at,
+            ).where(
+                JobRecord.source
+                == source.source_type.value,
+                JobRecord.source_account
+                == source.source_account,
+                JobRecord.is_active.is_(True),
+                JobRecord.posted_at.is_not(None),
+            )
+        ).all()
+
+    return {
+        external_id: posted_at
+        for external_id, posted_at in rows
+    }
+
+
 def _stored_validators(
     source: SourceDefinition,
 ):
@@ -2069,7 +2137,11 @@ def build_default_source_dispatcher() -> (
                 )
             ),
             SourceType.WORKDAY: (
-                WorkdaySourceFetcher()
+                WorkdaySourceFetcher(
+                    posted_lookup=(
+                        _stored_posted_dates
+                    )
+                )
             ),
             SourceType.AMAZON: (
                 AmazonSourceFetcher()

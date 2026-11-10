@@ -5,7 +5,7 @@ import { LeadsTab, ScoreboardTab, SourcesTab } from "@/components/coverage/Cover
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGet, apiGetOr } from "@/lib/api";
 import { getPrefs } from "@/lib/prefs";
-import type { Coverage, CoverageSummary, HostsReport, LeadsReport, SourcesReport } from "@/lib/types";
+import type { CapacityReport, Coverage, CoverageSummary, HostsReport, LeadsReport, SourcesReport } from "@/lib/types";
 import "./coverage.css";
 
 export const metadata = { title: "Coverage · ace" };
@@ -82,6 +82,7 @@ export default async function CoveragePage({ searchParams }: PageProps<"/app/cov
                   ...(show ? { show } : {}),
                 })}
                 hosts={await apiGetOr<HostsReport | null>("/api/coverage/hosts", null)}
+                capacity={await apiGetOr<CapacityReport | null>("/api/coverage/capacity", null)}
                 tz={tz}
                 show={show}
                 q={q}

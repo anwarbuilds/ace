@@ -98,3 +98,19 @@ def test_the_hosts_route_reports_verdicts_and_says_it_is_not_enforcing(client) -
 def test_a_stolen_extension_token_cannot_read_either_route() -> None:
     assert "/api/coverage/leads" not in EXTENSION_PATHS
     assert "/api/coverage/hosts" not in EXTENSION_PATHS
+
+
+def test_the_capacity_route_answers_with_the_three_numbers(client) -> None:
+    body = client.get("/api/coverage/capacity").json()
+
+    assert set(body) >= {
+        "reads_last_hour",
+        "reads_asked_per_hour",
+        "boards",
+        "boards_on_time",
+        "new_jobs",
+        "keeping_up",
+        "status_label",
+    }
+
+    assert body["new_jobs"]["typical_minutes"] is None

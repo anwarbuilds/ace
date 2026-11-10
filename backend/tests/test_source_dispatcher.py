@@ -495,3 +495,75 @@ def test_default_dispatcher_supports_all_implemented_sources() -> None:
             }
         )
     )
+
+
+def test_workday_fetcher_hands_over_the_days_ace_already_holds() -> None:
+    """So a list label that still agrees with a stored day is no edit."""
+
+    from backend.app.scheduling.dispatcher import (
+        WorkdaySourceFetcher,
+    )
+
+    source = SourceDefinition(
+        source_type=SourceType.WORKDAY,
+        source_account="fictional/External",
+        company_name="Fictional Works",
+        source_host="fictional.wd1.myworkdayjobs.com",
+    )
+
+    known = {
+        "/job/one": datetime(
+            2026,
+            9,
+            1,
+            tzinfo=timezone.utc,
+        ),
+    }
+
+    seen: dict = {}
+
+    def fetcher(
+        **kwargs,
+    ):
+        seen.update(
+            kwargs
+        )
+
+        return []
+
+    looked_up: list[SourceDefinition] = []
+
+    def lookup(
+        asked: SourceDefinition,
+    ):
+        looked_up.append(
+            asked
+        )
+
+        return known
+
+    WorkdaySourceFetcher(
+        fetcher=fetcher,
+        clock=lambda: DETECTED_AT,
+        posted_lookup=lookup,
+    )(
+        source
+    )
+
+    assert looked_up == [
+        source
+    ]
+
+    assert seen["known_posted"] == known
+
+    # Without a lookup nothing extra is passed, so plain fetchers work.
+    seen.clear()
+
+    WorkdaySourceFetcher(
+        fetcher=fetcher,
+        clock=lambda: DETECTED_AT,
+    )(
+        source
+    )
+
+    assert "known_posted" not in seen

@@ -154,6 +154,9 @@ test("pages carry the security headers", async ({ page }) => {
 
 test("a change without the CSRF header is refused", async ({ page }) => {
   await page.goto("/app");
+  // /app streams its loading screen, then forwards to Pulls in the browser;
+  // evaluating before that move lands can lose the page mid-navigation.
+  await page.waitForURL(/\/app\/pulls/);
   const status = await page.evaluate(async () => {
     const res = await fetch("/api/answers", {
       method: "PUT",

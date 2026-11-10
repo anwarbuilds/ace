@@ -95,6 +95,21 @@ test("what you added stays on record, and shows in Sources", async ({ page }) =>
   await expect(boards.getByRole("row")).toHaveCount(2);
 });
 
+test("Sources says in plain words whether ace keeps up", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/app/coverage?tab=sources");
+  const box = page.locator("section", { has: page.getByRole("heading", { name: "Can ace keep up?" }) });
+  await expect(box).toBeVisible();
+  await expect(box.getByText("How much reading ace does, and how fast new jobs reach you.")).toBeVisible();
+  await expect(box.getByText("Reads in the last hour")).toBeVisible();
+  await expect(box.getByText(/Your boards ask for about [\d,]+ an hour/)).toBeVisible();
+  await expect(box.getByText("Boards read on time")).toBeVisible();
+  await expect(box.getByText(/^[\d,]+ of [\d,]+$/)).toBeVisible();
+  await expect(box.getByText("New jobs reach you in")).toBeVisible();
+  await expect(box.getByText(/^ace is (keeping up\.|behind: some boards are read later than planned\.)$/)).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("Sources shows what stopped answering and which sites say no", async ({ page }) => {
   await page.goto("/app/coverage?tab=sources&show=dark");
   const boards = page.locator("section", { has: page.getByRole("heading", { name: "All boards ace reads" }) });

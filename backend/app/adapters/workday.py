@@ -43,7 +43,7 @@ is re-evaluated in full.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import (
     date,
@@ -344,19 +344,37 @@ RELATIVE_POSTED_PATTERN = re.compile(
 )
 
 
-def parse_posted_on(
+def _day(
+    value: datetime,
+) -> datetime:
+    """The UTC calendar day ``value`` falls on, as midnight UTC."""
+
+    if value.tzinfo is None:
+        value = value.replace(
+            tzinfo=timezone.utc
+        )
+
+    value = value.astimezone(
+        timezone.utc
+    )
+
+    return datetime(
+        value.year,
+        value.month,
+        value.day,
+        tzinfo=timezone.utc,
+    )
+
+
+def _read_posted_label(
     value: object,
     *,
     reference: datetime,
-) -> datetime | None:
-    """Parse Workday's relative posting label.
+) -> tuple[datetime, bool] | None:
+    """The day a relative label names, and whether it is open ended.
 
-    Workday reports list-level recency as prose: "Posted Today",
-    "Posted Yesterday", "Posted 3 Days Ago", "Posted 30+ Days Ago".
-
-    The detail endpoint carries a real ``startDate``, which is preferred
-    wherever available. This exists for postings whose detail was
-    skipped.
+    "Posted 30+ Days Ago" is open ended: it names no day, only that the
+    posting is at least that old.
     """
 
     if not isinstance(
@@ -371,11 +389,15 @@ def parse_posted_on(
         return None
 
     if "today" in text:
-        return reference
+        return _day(reference), False
 
     if "yesterday" in text:
-        return reference - timedelta(
-            days=1
+        return (
+            _day(reference)
+            - timedelta(
+                days=1
+            ),
+            False,
         )
 
     match = RELATIVE_POSTED_PATTERN.search(
@@ -391,6 +413,8 @@ def parse_posted_on(
         )
     )
 
+    open_ended = "+" in match.group(0)
+
     unit = match.group(
         "unit"
     ).lower()
@@ -398,19 +422,131 @@ def parse_posted_on(
     if unit.startswith(
         "hour"
     ):
-        return reference - timedelta(
-            hours=count
+        return (
+            _day(
+                reference
+                - timedelta(
+                    hours=count
+                )
+            ),
+            open_ended,
         )
 
     if unit.startswith(
         "month"
     ):
-        return reference - timedelta(
-            days=count * 30
+        return (
+            _day(reference)
+            - timedelta(
+                days=count * 30
+            ),
+            open_ended,
         )
 
-    return reference - timedelta(
-        days=count
+    return (
+        _day(reference)
+        - timedelta(
+            days=count
+        ),
+        open_ended,
+    )
+
+
+def parse_posted_on(
+    value: object,
+    *,
+    reference: datetime,
+) -> datetime | None:
+    """Parse Workday's relative posting label into the day it names.
+
+    Workday reports list-level recency as prose: "Posted Today",
+    "Posted Yesterday", "Posted 3 Days Ago", "Posted 30+ Days Ago".
+
+    The label names a day, so the answer is that day, at midnight UTC,
+    the same form as the detail endpoint's ``startDate``. It used to be
+    the moment of reading minus so many days, which moved with every
+    read: on 2026-11-09 97% of Workday postings counted as edited on
+    every poll, about 725,000 needless re-evaluations and rewrites an
+    hour, and their "posted" times claimed a time of day Workday never
+    gave.
+
+    The detail endpoint carries a real ``startDate``, which is preferred
+    wherever available. This exists for postings whose detail was
+    skipped.
+    """
+
+    read = _read_posted_label(
+        value,
+        reference=reference,
+    )
+
+    return (
+        None
+        if read is None
+        else read[0]
+    )
+
+
+def steady_posted_on(
+    value: object,
+    *,
+    reference: datetime,
+    stored: datetime | None,
+) -> datetime | None:
+    """The day a label names, keeping the stored day while they agree.
+
+    Workday counts days on its own clock, not on UTC, so near midnight
+    the same posting can name two neighbouring days on two reads. A
+    stored day within one day of what the label names now still
+    stands, and so does any old enough day under an open-ended label
+    such as "30+ Days Ago", which names no day at all. A label that
+    disagrees by more, as on a posting taken down and put up again, is
+    a real change and replaces it.
+
+    A stored value with a time of day is the old moving estimate. It is
+    replaced once by the day, and holds from then on.
+    """
+
+    read = _read_posted_label(
+        value,
+        reference=reference,
+    )
+
+    if read is None:
+        return None
+
+    estimate, open_ended = read
+
+    if stored is None:
+        return estimate
+
+    if stored.tzinfo is None:
+        stored = stored.replace(
+            tzinfo=timezone.utc
+        )
+
+    stored = stored.astimezone(
+        timezone.utc
+    )
+
+    if stored != _day(stored):
+        return estimate
+
+    slack = timedelta(
+        days=1
+    )
+
+    if open_ended:
+        return (
+            stored
+            if stored <= estimate + slack
+            else estimate
+        )
+
+    return (
+        stored
+        if abs(stored - estimate) <= slack
+        else estimate
     )
 
 
@@ -638,6 +774,7 @@ def fetch_workday_jobs(
         DEFAULT_MAX_DETAIL_FETCHES
     ),
     concurrency: int = DEFAULT_CONCURRENCY,
+    known_posted: Mapping[str, datetime] | None = None,
 ) -> list[CanonicalJob]:
     """Fetch and normalize one Workday tenant's public postings.
 
@@ -645,6 +782,10 @@ def fetch_workday_jobs(
     the expensive detail request is worth making. Composition wires this
     to ACE's eligibility gate so the adapter itself stays free of
     eligibility knowledge.
+
+    ``known_posted`` is the posted day ACE already holds for each
+    posting, by its identifier, so a list label that still agrees with
+    it leaves it alone (``steady_posted_on``).
     """
 
     tenant, site = parse_source_account(
@@ -1015,11 +1156,18 @@ def fetch_workday_jobs(
                 external_path,
             )
 
-            posted_at = parse_posted_on(
+            posted_at = steady_posted_on(
                 posting.get(
                     "postedOn"
                 ),
                 reference=reference,
+                stored=(
+                    known_posted.get(
+                        external_path
+                    )
+                    if known_posted
+                    else None
+                ),
             )
 
             requisition_id = (

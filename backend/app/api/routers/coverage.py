@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
 from backend.app.config import get_settings
+from backend.app.coverage.capacity import capacity_report
 from backend.app.coverage.host_policy import hosts_report
 from backend.app.coverage.host_terms import TERMS
 from backend.app.coverage.leads import leads_report
@@ -65,6 +66,13 @@ def get_sources(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/api/coverage/capacity")
+def get_capacity(session: Session = Depends(get_session)) -> dict:
+    """Can ace keep up: reads in the last hour, boards on time, new-job speed."""
+
+    return capacity_report(session, now=datetime.now(timezone.utc))
 
 
 @router.get("/api/coverage/hosts")
