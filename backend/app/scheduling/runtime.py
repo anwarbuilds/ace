@@ -44,7 +44,7 @@ from collections.abc import (
 )
 import threading
 import time
-from collections import deque
+from collections import Counter, deque
 from datetime import (
     datetime,
     timedelta,
@@ -120,17 +120,33 @@ SHARED_EDGE = {
 }
 
 
-def _edge_of(
+# How many boards of one slow platform may hold a worker at once. Measured
+# on 2026-11-09: a Workday read held a worker for 11 seconds and an Oracle
+# read for 17, against half a second for Greenhouse and a quarter for
+# Ashby. With every due board in one first-come line, Workday held 69% of
+# worker time and every board, quick or slow, started about four minutes
+# after it was due. A platform at its limit waits its turn while quick
+# boards go ahead; boards behind a shared edge still go one at a time.
+PLATFORM_LIMITS = {
+    "workday": 5,
+    "oracle_recruiting": 2,
+}
+
+
+def _lane_of(
     source_type: object,
-) -> str | None:
-    """The shared edge a source type's boards sit behind, if any."""
+) -> str:
+    """The platform, or shared edge, a source type's boards queue in."""
+
+    value = getattr(
+        source_type,
+        "value",
+        source_type,
+    )
 
     return SHARED_EDGE.get(
-        getattr(
-            source_type,
-            "value",
-            source_type,
-        )
+        value,
+        value,
     )
 
 
@@ -356,6 +372,10 @@ class SchedulerCycleResult:
     # finished; they carry on in the background.
     still_running: int = 0
 
+    # Boards due and not yet started when the cycle ended: the line
+    # waiting for a free worker or for their platform's turn.
+    waiting: int = 0
+
     @property
     def succeeded_count(
         self,
@@ -386,6 +406,100 @@ class SchedulerCycleResult:
             self.succeeded_count
             + self.failed_count
         )
+
+
+class _Turns:
+    """The polls one call of run_due_sources started, and what came of them.
+
+    A single run (--once) names the boards it must poll before it may
+    return, its batch, and waits until every one has finished, however
+    many turns that takes. ``batch`` shrinks as boards start, guarded by
+    the runtime's _due_lock; what has not finished is kept apart. The
+    continuous loop names none: a worker that finishes takes the next
+    due board on the loop's behalf, and those background polls record
+    nothing here.
+    """
+
+    def __init__(
+        self,
+        *,
+        batch: set[tuple[object, str]] | None,
+        record: bool = True,
+    ) -> None:
+        self.batch = batch
+
+        self.record = record
+
+        self.lock = threading.Lock()
+
+        self.successes: list[
+            SourcePollSuccess
+        ] = []
+
+        self.failures: list[
+            SourcePollFailure
+        ] = []
+
+        self._remaining = set(
+            batch or ()
+        )
+
+        self.finished = threading.Event()
+
+        if not self._remaining:
+            self.finished.set()
+
+    def succeeded(
+        self,
+        success: SourcePollSuccess,
+    ) -> None:
+        if self.record:
+            with self.lock:
+                self.successes.append(
+                    success
+                )
+
+    def failed(
+        self,
+        failure: SourcePollFailure,
+    ) -> None:
+        if self.record:
+            with self.lock:
+                self.failures.append(
+                    failure
+                )
+
+    def done_with(
+        self,
+        identity: tuple[object, str],
+    ) -> None:
+        if self.batch is None:
+            return
+
+        with self.lock:
+            self._remaining.discard(
+                identity
+            )
+
+            if not self._remaining:
+                self.finished.set()
+
+    def result(
+        self,
+        still_running: int,
+        waiting: int = 0,
+    ) -> "SchedulerCycleResult":
+        with self.lock:
+            return SchedulerCycleResult(
+                succeeded=tuple(
+                    self.successes
+                ),
+                failed=tuple(
+                    self.failures
+                ),
+                still_running=still_running,
+                waiting=waiting,
+            )
 
 
 class SchedulerRuntime:
@@ -442,9 +556,39 @@ class SchedulerRuntime:
         cycle_budget_seconds: float = (
             CYCLE_BUDGET_SECONDS
         ),
+        platform_limits: (
+            Mapping[str, int] | None
+        ) = None,
     ) -> None:
         self._sources = (
             registry.enabled_sources
+        )
+
+        # Lanes with a limit on boards read at once: every shared edge at
+        # one, then each slow platform's own.
+        self._limits: dict[str, int] = {
+            edge: 1
+            for edge in SHARED_EDGE.values()
+        }
+
+        for lane, limit in (
+            PLATFORM_LIMITS
+            if platform_limits is None
+            else platform_limits
+        ).items():
+            self._limits[
+                _lane_of(lane)
+            ] = max(
+                1,
+                int(limit),
+            )
+
+        # Polls started by a worker that finished, on the continuous
+        # loop's behalf. They are counted where the loop counts every
+        # poll (activity_since), not in any one cycle's result.
+        self._background = _Turns(
+            batch=None,
+            record=False,
         )
 
         # Re-read the source list between cycles, so a source
@@ -889,8 +1033,9 @@ class SchedulerRuntime:
         One source failure is captured and logged without preventing
         later due sources from executing.
 
-        With no budget, waits for every source it started -- what a
-        single run (--once) needs, since the process exits after it.
+        With no budget, waits for every source due when it was called --
+        what a single run (--once) needs, since the process exits after
+        it.
 
         With a budget, waits that long and no longer. A source still
         running carries on in the background, finishes and reschedules
@@ -900,6 +1045,15 @@ class SchedulerRuntime:
         takes six minutes every fifteen, and for those six minutes the
         five-minute sources -- the ones that exist to catch a posting
         early -- were not polled at all.
+
+        Boards take fair turns. One starts only when a worker is free,
+        the board due longest goes first, and a platform at its limit
+        (PLATFORM_LIMITS; one board at a time behind a shared edge)
+        waits while other boards go ahead. Every due board used to be
+        handed to the pool at once, so a quick board queued behind
+        whatever slow ones were handed over before it. A worker that
+        finishes takes the next due board straight away, rather than
+        sitting idle until the next cycle.
         """
 
         cycle_time = (
@@ -908,42 +1062,122 @@ class SchedulerRuntime:
             else now
         )
 
-        successes: list[
-            SourcePollSuccess
-        ] = []
-
-        failures: list[
-            SourcePollFailure
-        ] = []
+        if (
+            self._concurrency == 1
+            and budget_seconds is None
+        ):
+            return self._run_in_turn(
+                cycle_time
+            )
 
         with self._due_lock:
-            busy_edges = self._busy_edges()
+            still_running_before = len(
+                self._in_flight
+            )
+
+            batch = (
+                None
+                if budget_seconds is not None
+                else {
+                    source.identity
+                    for source in self._due_sources(
+                        cycle_time
+                    )
+                }
+            )
+
+        turns = _Turns(
+            batch=batch,
+        )
+
+        cycle_started_at = datetime.now(
+            timezone.utc
+        )
+
+        futures = self._start_turns(
+            turns,
+            now=cycle_time,
+        )
+
+        if not futures:
+            # A poll that finished in the background since the last
+            # cycle still has what it found grouped into a pull.
+            self._record_cycle(
+                None
+            )
+
+            with self._due_lock:
+                waiting = len(
+                    self._due_sources(
+                        self._clock()
+                    )
+                )
+
+            return SchedulerCycleResult(
+                succeeded=(),
+                failed=(),
+                still_running=(
+                    still_running_before
+                ),
+                waiting=waiting,
+            )
+
+        if budget_seconds is None:
+            turns.finished.wait()
+
+        else:
+            wait(
+                futures,
+                timeout=budget_seconds,
+            )
+
+        with self._due_lock:
+            still_running = len(
+                self._in_flight
+            )
+
+            waiting = len(
+                self._due_sources(
+                    self._clock()
+                )
+            )
+
+        self._record_cycle(
+            cycle_started_at
+        )
+
+        return turns.result(
+            still_running,
+            waiting,
+        )
+
+    def _run_in_turn(
+        self,
+        cycle_time: float,
+    ) -> SchedulerCycleResult:
+        """One worker and no budget: every due board, one after another.
+
+        As before fair turns, a shared edge gives one board per call.
+        """
+
+        with self._due_lock:
+            edges: set[str] = set()
 
             due_sources = []
 
-            for source in self._sources:
-                if (
-                    source.identity
-                    in self._in_flight
-                    or self._next_due_at[
-                        source.identity
-                    ]
-                    > cycle_time
-                ):
-                    continue
-
-                edge = _edge_of(
+            for source in self._due_sources(
+                cycle_time
+            ):
+                lane = _lane_of(
                     source.source_type
                 )
 
-                # One board per shared edge at a time. The rest stay
-                # due and go when it finishes.
-                if edge is not None:
-                    if edge in busy_edges:
+                if lane in SHARED_EDGE.values():
+                    if lane in edges:
                         continue
 
-                    busy_edges.add(
-                        edge
+                    edges.add(
+                        lane
                     )
 
                 due_sources.append(
@@ -955,15 +1189,7 @@ class SchedulerRuntime:
                     source.identity
                 )
 
-            still_running_before = len(
-                self._in_flight
-            ) - len(
-                due_sources
-            )
-
         if not due_sources:
-            # A poll that finished in the background since the last
-            # cycle still has what it found grouped into a pull.
             self._record_cycle(
                 None
             )
@@ -971,153 +1197,288 @@ class SchedulerRuntime:
             return SchedulerCycleResult(
                 succeeded=(),
                 failed=(),
-                still_running=(
-                    still_running_before
-                ),
             )
 
         cycle_started_at = datetime.now(
             timezone.utc
         )
 
-        results_lock = threading.Lock()
+        turns = _Turns(
+            batch=None,
+        )
 
-        def run_one(
-            source: SourceDefinition,
-        ) -> None:
-            """Poll one source, isolated from every other source.
-
-            However it ends, it reschedules itself and leaves the
-            in-flight set: a source stuck as "running" would never be
-            polled again, which is worse than any single failed poll.
-            """
-
-            started_at = self._clock()
-
-            started_wall = datetime.now(
-                timezone.utc
+        for source in due_sources:
+            self._poll_one(
+                source,
+                turns,
+                take_next=False,
             )
 
-            delay = (
-                source.poll_interval_seconds
+        self._record_cycle(
+            cycle_started_at
+        )
+
+        return turns.result(
+            0
+        )
+
+    def _due_sources(
+        self,
+        now: float,
+        *,
+        within: set[tuple[object, str]] | None = None,
+    ) -> list[SourceDefinition]:
+        """Sources not running and due, the one due longest first.
+
+        ``within`` limits the choice to a single run's batch, which was
+        due when that run began. Caller holds _due_lock.
+        """
+
+        due = []
+
+        for order, source in enumerate(
+            self._sources
+        ):
+            identity = source.identity
+
+            if identity in self._in_flight:
+                continue
+
+            # Absent only for a source registered a moment ago, before
+            # the reload has booked it.
+            due_at = self._next_due_at.get(
+                identity
             )
 
-            succeeded = False
+            if due_at is None:
+                continue
 
-            try:
-                self._logger.info(
-                    (
-                        "source_poll_started "
-                        "source_type=%s "
-                        "source_account=%s "
-                        "company=%r"
-                    ),
-                    source.source_type.value,
-                    source.source_account,
-                    source.company_name,
+            if within is None:
+                if due_at > now:
+                    continue
+
+            elif identity not in within:
+                continue
+
+            due.append(
+                (
+                    due_at,
+                    order,
+                    source,
+                )
+            )
+
+        due.sort(
+            key=lambda item: (
+                item[0],
+                item[1],
+            )
+        )
+
+        return [
+            source
+            for _due_at, _order, source in due
+        ]
+
+    def _lane_counts(
+        self,
+    ) -> Counter[str]:
+        """Boards running now in each lane. Caller holds _due_lock."""
+
+        return Counter(
+            _lane_of(
+                identity[0]
+            )
+            for identity in self._in_flight
+        )
+
+    def _full_lanes(
+        self,
+    ) -> set[str]:
+        """Lanes at their limit. Caller holds _due_lock."""
+
+        return {
+            lane
+            for lane, running in (
+                self._lane_counts().items()
+            )
+            if lane in self._limits
+            and running >= self._limits[lane]
+        }
+
+    def _claim_turns(
+        self,
+        turns: _Turns,
+        *,
+        now: float,
+    ) -> list[SourceDefinition]:
+        """Due boards to start now: as many as workers are free.
+
+        The one due longest goes first; a lane at its limit is passed
+        over, so the boards behind it are not. Caller holds _due_lock.
+        """
+
+        free = self._concurrency - len(
+            self._in_flight
+        )
+
+        if free <= 0:
+            return []
+
+        running = self._lane_counts()
+
+        chosen = []
+
+        for source in self._due_sources(
+            now,
+            within=turns.batch,
+        ):
+            lane = _lane_of(
+                source.source_type
+            )
+
+            limit = self._limits.get(
+                lane
+            )
+
+            if limit is not None:
+                if running[lane] >= limit:
+                    continue
+
+                running[lane] += 1
+
+            self._in_flight.add(
+                source.identity
+            )
+
+            # A single run polls each board of its batch once: what is
+            # left of the batch is only what has not started.
+            if turns.batch is not None:
+                turns.batch.discard(
+                    source.identity
                 )
 
-                try:
-                    result = self._poller(
-                        source
-                    )
+            chosen.append(
+                source
+            )
 
-                except Exception as exc:
-                    finished_at = self._clock()
+            if len(chosen) >= free:
+                break
 
-                    duration_seconds = max(
-                        0.0,
-                        finished_at - started_at,
-                    )
+        return chosen
 
-                    refused_with = _refusal_status(
-                        exc
-                    )
+    def _start_turns(
+        self,
+        turns: _Turns,
+        *,
+        now: float | None = None,
+    ) -> list:
+        """Start every due board a free worker can take."""
 
-                    if refused_with is not None:
-                        with self._due_lock:
-                            refusals = (
-                                self._refusals.get(
-                                    source.identity,
-                                    0,
-                                )
-                                + 1
-                            )
+        with self._due_lock:
+            chosen = self._claim_turns(
+                turns,
+                now=(
+                    self._clock()
+                    if now is None
+                    else now
+                ),
+            )
 
-                            self._refusals[
-                                source.identity
-                            ] = refusals
+        futures = []
 
-                        # Never sooner than the source's own interval,
-                        # even where that is longer than the cap.
-                        delay = max(
-                            delay,
-                            min(
-                                delay
-                                * 2**refusals,
-                                REFUSAL_BACKOFF_CAP_SECONDS,
-                            ),
+        for index, source in enumerate(
+            chosen
+        ):
+            try:
+                future = self._worker_pool().submit(
+                    self._poll_one,
+                    source,
+                    turns,
+                )
+
+            except Exception:
+                # A board claimed and never started would look
+                # "running" for ever, so it would never be polled again.
+                with self._due_lock:
+                    for unstarted in chosen[index:]:
+                        self._in_flight.discard(
+                            unstarted.identity
                         )
 
-                    with results_lock:
-                        failures.append(
-                            SourcePollFailure(
-                                source=source,
-                                error_type=(
-                                    type(exc).__name__
-                                ),
-                                error_message=str(
-                                    exc
-                                ),
-                                duration_seconds=(
-                                    duration_seconds
-                                ),
-                            )
-                        )
+                raise
 
-                    if refused_with is not None:
-                        # Expected, and its cause is in the status: a
-                        # traceback per refusal would bury the log.
-                        self._logger.warning(
-                            (
-                                "source_poll_refused "
-                                "source_type=%s "
-                                "source_account=%s "
-                                "company=%r "
-                                "status=%d "
-                                "refusals=%d "
-                                "duration_seconds=%.3f "
-                                "next_poll_seconds=%d"
-                            ),
-                            source.source_type.value,
-                            source.source_account,
-                            source.company_name,
-                            refused_with,
-                            refusals,
-                            duration_seconds,
-                            delay,
-                        )
+            future.add_done_callback(
+                self._report_crash
+            )
 
-                        return
+            futures.append(
+                future
+            )
 
-                    self._logger.exception(
-                        (
-                            "source_poll_failed "
-                            "source_type=%s "
-                            "source_account=%s "
-                            "company=%r "
-                            "duration_seconds=%.3f "
-                            "next_poll_seconds=%d"
-                        ),
-                        source.source_type.value,
-                        source.source_account,
-                        source.company_name,
-                        duration_seconds,
-                        delay,
-                    )
+        return futures
 
-                    return
+    def _report_crash(
+        self,
+        future,
+    ) -> None:
+        if future.cancelled():
+            return
 
+        crash = future.exception()
+
+        if crash is not None:
+            self._logger.error(
+                "scheduler_worker_crashed",
+                exc_info=crash,
+            )
+
+    def _poll_one(
+        self,
+        source: SourceDefinition,
+        turns: _Turns,
+        *,
+        take_next: bool = True,
+    ) -> None:
+        """Poll one source, isolated from every other source.
+
+        However it ends, it reschedules itself and leaves the in-flight
+        set: a source stuck as "running" would never be polled again,
+        which is worse than any single failed poll. Then its worker
+        takes the next due board.
+        """
+
+        started_at = self._clock()
+
+        started_wall = datetime.now(
+            timezone.utc
+        )
+
+        delay = (
+            source.poll_interval_seconds
+        )
+
+        succeeded = False
+
+        try:
+            self._logger.info(
+                (
+                    "source_poll_started "
+                    "source_type=%s "
+                    "source_account=%s "
+                    "company=%r"
+                ),
+                source.source_type.value,
+                source.source_account,
+                source.company_name,
+            )
+
+            try:
+                result = self._poller(
+                    source
+                )
+
+            except Exception as exc:
                 finished_at = self._clock()
 
                 duration_seconds = max(
@@ -1125,173 +1486,213 @@ class SchedulerRuntime:
                     finished_at - started_at,
                 )
 
-                with self._due_lock:
-                    self._refusals.pop(
-                        source.identity,
-                        None,
-                    )
+                refused_with = _refusal_status(
+                    exc
+                )
 
-                    self._last_checked[
-                        source.identity
-                    ] = (
-                        self._wall_clock(),
-                        int(
-                            getattr(
-                                result,
-                                "checked_count",
-                                getattr(
-                                    result,
-                                    "fetched_count",
-                                    0,
-                                ),
+                if refused_with is not None:
+                    with self._due_lock:
+                        refusals = (
+                            self._refusals.get(
+                                source.identity,
+                                0,
                             )
-                            or 0
+                            + 1
+                        )
+
+                        self._refusals[
+                            source.identity
+                        ] = refusals
+
+                    # Never sooner than the source's own interval,
+                    # even where that is longer than the cap.
+                    delay = max(
+                        delay,
+                        min(
+                            delay
+                            * 2**refusals,
+                            REFUSAL_BACKOFF_CAP_SECONDS,
                         ),
                     )
 
-                succeeded = True
+                turns.failed(
+                    SourcePollFailure(
+                        source=source,
+                        error_type=(
+                            type(exc).__name__
+                        ),
+                        error_message=str(
+                            exc
+                        ),
+                        duration_seconds=(
+                            duration_seconds
+                        ),
+                    )
+                )
 
-                with results_lock:
-                    successes.append(
-                        SourcePollSuccess(
-                            source=source,
-                            result=result,
-                            duration_seconds=(
-                                duration_seconds
-                            ),
-                        )
+                if refused_with is not None:
+                    # Expected, and its cause is in the status: a
+                    # traceback per refusal would bury the log.
+                    self._logger.warning(
+                        (
+                            "source_poll_refused "
+                            "source_type=%s "
+                            "source_account=%s "
+                            "company=%r "
+                            "status=%d "
+                            "refusals=%d "
+                            "duration_seconds=%.3f "
+                            "next_poll_seconds=%d"
+                        ),
+                        source.source_type.value,
+                        source.source_account,
+                        source.company_name,
+                        refused_with,
+                        refusals,
+                        duration_seconds,
+                        delay,
                     )
 
-                self._logger.info(
+                    return
+
+                self._logger.exception(
                     (
-                        "source_poll_succeeded "
+                        "source_poll_failed "
                         "source_type=%s "
                         "source_account=%s "
                         "company=%r "
-                        "fetched=%d "
-                        "evaluated=%d "
-                        "alert_candidates=%d "
-                        "stale_suppressed=%d "
                         "duration_seconds=%.3f "
                         "next_poll_seconds=%d"
                     ),
                     source.source_type.value,
                     source.source_account,
                     source.company_name,
-                    result.fetched_count,
-                    result.evaluated_count,
-                    result.alert_candidate_count,
-                    result.stale_suppressed_count,
                     duration_seconds,
-                    source.poll_interval_seconds,
+                    delay,
                 )
 
-            finally:
-                with self._due_lock:
-                    # Absent only if the source was removed while it
-                    # ran. Putting it back would leave a due time no
-                    # source owns -- always in the past, so the loop
-                    # would wake for it forever.
-                    if (
-                        source.identity
-                        in self._next_due_at
-                    ):
-                        self._next_due_at[
-                            source.identity
-                        ] = (
-                            self._clock()
-                            + delay
-                        )
+                return
 
-                    self._in_flight.discard(
-                        source.identity
-                    )
+            finished_at = self._clock()
 
-                    self._note_attempt(
-                        source.identity,
-                        succeeded=succeeded,
-                    )
-
-                    # What it found is grouped into a pull from the
-                    # time it started, which may be several cycles ago.
-                    if (
-                        self._unrecorded_since is None
-                        or started_wall
-                        < self._unrecorded_since
-                    ):
-                        self._unrecorded_since = (
-                            started_wall
-                        )
-
-        if (
-            self._concurrency == 1
-            and budget_seconds is None
-        ):
-            for source in due_sources:
-                run_one(
-                    source
-                )
-
-            still_running = 0
-
-        else:
-            futures = [
-                self._worker_pool().submit(
-                    run_one,
-                    source,
-                )
-                for source in due_sources
-            ]
-
-            done, not_done = wait(
-                futures,
-                timeout=budget_seconds,
+            duration_seconds = max(
+                0.0,
+                finished_at - started_at,
             )
-
-            for future in done:
-                crash = future.exception()
-
-                if crash is not None:
-                    self._logger.error(
-                        "scheduler_worker_crashed",
-                        exc_info=crash,
-                    )
 
             with self._due_lock:
-                still_running = len(
-                    self._in_flight
+                self._refusals.pop(
+                    source.identity,
+                    None,
                 )
 
-        self._record_cycle(
-            cycle_started_at
-        )
-
-        with results_lock:
-            return SchedulerCycleResult(
-                succeeded=tuple(
-                    successes
-                ),
-                failed=tuple(
-                    failures
-                ),
-                still_running=still_running,
-            )
-
-    def _busy_edges(
-        self,
-    ) -> set[str]:
-        """Shared edges with a board being polled. Caller holds the lock."""
-
-        return {
-            edge
-            for edge in (
-                _edge_of(
-                    identity[0]
+                self._last_checked[
+                    source.identity
+                ] = (
+                    self._wall_clock(),
+                    int(
+                        getattr(
+                            result,
+                            "checked_count",
+                            getattr(
+                                result,
+                                "fetched_count",
+                                0,
+                            ),
+                        )
+                        or 0
+                    ),
                 )
-                for identity in self._in_flight
+
+            succeeded = True
+
+            turns.succeeded(
+                SourcePollSuccess(
+                    source=source,
+                    result=result,
+                    duration_seconds=(
+                        duration_seconds
+                    ),
+                )
             )
-            if edge is not None
-        }
+
+            self._logger.info(
+                (
+                    "source_poll_succeeded "
+                    "source_type=%s "
+                    "source_account=%s "
+                    "company=%r "
+                    "fetched=%d "
+                    "evaluated=%d "
+                    "alert_candidates=%d "
+                    "stale_suppressed=%d "
+                    "duration_seconds=%.3f "
+                    "next_poll_seconds=%d"
+                ),
+                source.source_type.value,
+                source.source_account,
+                source.company_name,
+                result.fetched_count,
+                result.evaluated_count,
+                result.alert_candidate_count,
+                result.stale_suppressed_count,
+                duration_seconds,
+                source.poll_interval_seconds,
+            )
+
+        finally:
+            with self._due_lock:
+                # Absent only if the source was removed while it
+                # ran. Putting it back would leave a due time no
+                # source owns -- always in the past, so the loop
+                # would wake for it forever.
+                if (
+                    source.identity
+                    in self._next_due_at
+                ):
+                    self._next_due_at[
+                        source.identity
+                    ] = (
+                        self._clock()
+                        + delay
+                    )
+
+                self._in_flight.discard(
+                    source.identity
+                )
+
+                self._note_attempt(
+                    source.identity,
+                    succeeded=succeeded,
+                )
+
+                # What it found is grouped into a pull from the
+                # time it started, which may be several cycles ago.
+                if (
+                    self._unrecorded_since is None
+                    or started_wall
+                    < self._unrecorded_since
+                ):
+                    self._unrecorded_since = (
+                        started_wall
+                    )
+
+            if take_next:
+                try:
+                    self._start_turns(
+                        turns
+                        if turns.batch is not None
+                        else self._background
+                    )
+
+                except Exception:
+                    self._logger.exception(
+                        "scheduler_next_turn_failed"
+                    )
+
+            turns.done_with(
+                source.identity
+            )
 
     def _worker_pool(
         self,
@@ -1485,11 +1886,19 @@ class SchedulerRuntime:
         )
 
         with self._due_lock:
-            busy_edges = self._busy_edges()
+            # Every worker busy: each takes the next due board itself
+            # as it finishes, so the loop has nothing to start sooner.
+            if len(
+                self._in_flight
+            ) >= self._concurrency:
+                return IN_FLIGHT_RECHECK_SECONDS
 
-            # A board held back behind its edge is due but cannot go
-            # yet. Counting it would make the loop wake for it at once,
-            # and again, and again, until the edge was free.
+            full_lanes = self._full_lanes()
+
+            # A board held back behind its edge, or its platform's
+            # limit, is due but cannot go yet. Counting it would make
+            # the loop wake for it at once, and again, and again, until
+            # the lane was free.
             waiting = [
                 due_at
                 for identity, due_at in (
@@ -1497,10 +1906,10 @@ class SchedulerRuntime:
                 )
                 if identity
                 not in self._in_flight
-                and _edge_of(
+                and _lane_of(
                     identity[0]
                 )
-                not in busy_edges
+                not in full_lanes
             ]
 
             running = bool(
@@ -1595,13 +2004,15 @@ class SchedulerRuntime:
                     "attempted=%d "
                     "succeeded=%d "
                     "failed=%d "
-                    "still_running=%d"
+                    "still_running=%d "
+                    "waiting=%d"
                 ),
                 cycle_count,
                 cycle_result.attempted_count,
                 cycle_result.succeeded_count,
                 cycle_result.failed_count,
                 cycle_result.still_running,
+                cycle_result.waiting,
             )
 
             if (

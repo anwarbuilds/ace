@@ -780,3 +780,204 @@ def test_a_listed_location_is_kept_as_listed() -> None:
         "Austin, TX",
         "/job/Austin-TX/Software-Engineer_R3",
     ) == "Austin, TX"
+
+
+# ----------------------------------------------------------------------
+# Steady posted days
+# ----------------------------------------------------------------------
+#
+# Measured 2026-11-09: a list label turned into "now minus so many days"
+# moved with every read, so 97% of Workday postings counted as edited on
+# every poll and were evaluated and rewritten again for no change.
+
+
+from datetime import timedelta  # noqa: E402
+
+from backend.app.adapters.workday import (  # noqa: E402
+    steady_posted_on,
+)
+from backend.app.persistence.hashing import (  # noqa: E402
+    compute_job_content_hash,
+)
+
+
+def day(
+    month: int,
+    date: int,
+) -> datetime:
+    return datetime(
+        2026,
+        month,
+        date,
+        tzinfo=timezone.utc,
+    )
+
+
+def never_detail(
+    _title: str,
+) -> bool:
+    return False
+
+
+def test_a_list_label_names_a_day_not_a_moment() -> None:
+    assert parse_posted_on(
+        "Posted 3 Days Ago",
+        reference=REFERENCE,
+    ) == day(9, 3)
+
+    assert parse_posted_on(
+        "Posted Today",
+        reference=REFERENCE,
+    ) == day(9, 6)
+
+
+def test_an_unchanged_posting_reads_the_same_fifteen_minutes_later() -> None:
+    postings = [
+        listing(
+            title="Fictional Payroll Specialist",
+            path="/job/payroll",
+            posted="Posted 3 Days Ago",
+        ),
+    ]
+
+    first = fetch(
+        postings,
+        should_fetch_detail=never_detail,
+    )
+
+    with httpx.Client(
+        transport=build_transport(
+            postings
+        )
+    ) as client:
+        later = fetch_workday_jobs(
+            source_account=ACCOUNT,
+            company_name="Acme",
+            source_host=HOST,
+            client=client,
+            now=REFERENCE
+            + timedelta(
+                minutes=15
+            ),
+            should_fetch_detail=never_detail,
+        )
+
+    assert first[0].posted_at == later[0].posted_at == day(9, 3)
+
+    assert compute_job_content_hash(
+        first[0]
+    ) == compute_job_content_hash(
+        later[0]
+    )
+
+
+def test_a_stored_day_stands_while_the_label_agrees() -> None:
+    """Workday's own midnight is not UTC's: near it, one posting can name
+    neighbouring days on two reads."""
+
+    just_after_midnight = datetime(
+        2026,
+        9,
+        7,
+        2,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    assert steady_posted_on(
+        "Posted Today",
+        reference=just_after_midnight,
+        stored=day(9, 6),
+    ) == day(9, 6)
+
+    assert steady_posted_on(
+        "Posted Yesterday",
+        reference=REFERENCE,
+        stored=day(9, 6),
+    ) == day(9, 6)
+
+
+def test_the_old_moving_estimate_is_replaced_once_by_the_day() -> None:
+    moving = datetime(
+        2026,
+        9,
+        3,
+        11,
+        47,
+        12,
+        tzinfo=timezone.utc,
+    )
+
+    assert steady_posted_on(
+        "Posted 3 Days Ago",
+        reference=REFERENCE,
+        stored=moving,
+    ) == day(9, 3)
+
+
+def test_a_posting_put_up_again_takes_its_new_day() -> None:
+    assert steady_posted_on(
+        "Posted Today",
+        reference=REFERENCE,
+        stored=day(8, 1),
+    ) == day(9, 6)
+
+
+def test_thirty_plus_days_keeps_an_old_enough_stored_day() -> None:
+    """The label names no day, only that the posting is at least that old."""
+
+    assert steady_posted_on(
+        "Posted 30+ Days Ago",
+        reference=REFERENCE,
+        stored=day(7, 1),
+    ) == day(7, 1)
+
+    # A stored day too recent for the label is not kept.
+    assert steady_posted_on(
+        "Posted 30+ Days Ago",
+        reference=REFERENCE,
+        stored=day(9, 1),
+    ) == day(8, 7)
+
+
+def test_an_unknown_label_stays_unknown_whatever_is_stored() -> None:
+    assert (
+        steady_posted_on(
+            "Posted recently",
+            reference=REFERENCE,
+            stored=day(9, 1),
+        )
+        is None
+    )
+
+
+def test_the_adapter_keeps_the_day_ace_already_holds() -> None:
+    jobs = fetch(
+        [
+            listing(
+                title="Fictional Payroll Specialist",
+                path="/job/payroll",
+                posted="Posted 3 Days Ago",
+            ),
+            listing(
+                title="Fictional Office Manager",
+                path="/job/office",
+                posted="Posted 30+ Days Ago",
+            ),
+        ],
+        should_fetch_detail=never_detail,
+        known_posted={
+            "/job/payroll": day(9, 2),
+            "/job/office": day(6, 15),
+        },
+    )
+
+    by_path = {
+        job.external_id: job.posted_at
+        for job in jobs
+    }
+
+    assert by_path == {
+        "/job/payroll": day(9, 2),
+        "/job/office": day(6, 15),
+    }

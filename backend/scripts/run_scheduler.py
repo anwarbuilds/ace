@@ -931,6 +931,10 @@ def main(
     runtime = SchedulerRuntime(
         registry=registry,
         poller=poll_source,
+        concurrency=settings.scheduler_workers,
+        platform_limits=(
+            settings.scheduler_platform_limit_map
+        ),
         cycle_recorder=record_cycle,
         alert_sender=send_alerts,
         reload_registry=reload_registry,
@@ -957,9 +961,13 @@ def main(
     LOGGER.info(
         (
             "ace_scheduler_ready "
-            "enabled_sources=%d"
+            "enabled_sources=%d "
+            "workers=%d "
+            "platform_limits=%s"
         ),
         runtime.source_count,
+        settings.scheduler_workers,
+        settings.scheduler_platform_limits,
     )
 
     try:

@@ -2414,3 +2414,430 @@ def test_a_pull_reports_distinct_boards_and_the_postings_they_held() -> None:
     runtime.run_due_sources()
 
     assert runtime.checks_since(window) == (2, 540)
+
+
+# --- fair turns: quick boards are not stuck behind slow platforms -----
+
+
+def _board(
+    source_type: SourceType,
+    account: str,
+    *,
+    interval: int = 900,
+) -> SourceDefinition:
+    return SourceDefinition(
+        source_type=source_type,
+        source_account=account,
+        company_name=f"Fictional {account}",
+        enabled=True,
+        poll_interval_seconds=interval,
+        source_host=(
+            "fictional.wd1.myworkdayjobs.com"
+            if source_type == SourceType.WORKDAY
+            else None
+        ),
+    )
+
+
+def _recording_poller(
+    release: threading.Event,
+    *,
+    hold: str = "workday",
+):
+    """Holds every board of one platform until released; records starts."""
+
+    lock = threading.Lock()
+
+    started: list[str] = []
+
+    running: dict[str, int] = {}
+
+    peak: dict[str, int] = {}
+
+    def poller(
+        source: SourceDefinition,
+    ):
+        kind = source.source_type.value
+
+        with lock:
+            started.append(
+                source.source_account
+            )
+
+            running[kind] = running.get(kind, 0) + 1
+
+            peak[kind] = max(
+                peak.get(kind, 0),
+                running[kind],
+            )
+
+        try:
+            if kind == hold:
+                assert release.wait(
+                    timeout=10,
+                )
+
+            return make_result()
+
+        finally:
+            with lock:
+                running[kind] -= 1
+
+    return poller, started, peak
+
+
+def _wait_until(
+    condition,
+    *,
+    timeout: float = 5.0,
+) -> bool:
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
+        if condition():
+            return True
+
+        time.sleep(
+            0.01
+        )
+
+    return condition()
+
+
+def test_quick_boards_go_ahead_of_a_platform_at_its_limit() -> None:
+    """Measured 2026-11-09: in one first-come line, a half-second
+    Greenhouse read waited about four minutes behind Workday reads."""
+
+    release = threading.Event()
+
+    poller, started, peak = _recording_poller(
+        release,
+    )
+
+    workday = tuple(
+        _board(
+            SourceType.WORKDAY,
+            f"tenant{index}/External",
+        )
+        for index in range(4)
+    )
+
+    quick = tuple(
+        _board(
+            SourceType.GREENHOUSE,
+            f"quick{index}",
+        )
+        for index in range(3)
+    )
+
+    runtime = SchedulerRuntime(
+        # Workday registered first, so a first-come line would hand it
+        # every worker.
+        registry=SourceRegistry(
+            workday + quick
+        ),
+        poller=poller,
+        clock=FakeClock(),
+        sleeper=lambda _seconds: None,
+        concurrency=3,
+        platform_limits={
+            "workday": 2,
+        },
+    )
+
+    try:
+        runtime.run_due_sources(
+            budget_seconds=0.2,
+        )
+
+        # Every quick board was read while two Workday boards held
+        # their workers; the other two Workday boards wait their turn.
+        assert _wait_until(
+            lambda: all(
+                f"quick{index}" in started
+                for index in range(3)
+            )
+        )
+
+        assert peak["workday"] == 2
+
+        assert sum(
+            1
+            for account in started
+            if account.startswith("tenant")
+        ) == 2
+
+    finally:
+        release.set()
+
+    # Once a Workday board finishes, the next one takes its worker.
+    assert _wait_until(
+        lambda: sum(
+            1
+            for account in started
+            if account.startswith("tenant")
+        )
+        == 4
+    )
+
+    assert peak["workday"] == 2
+
+
+def test_the_board_due_longest_goes_first() -> None:
+    """Not the order boards happen to be registered in."""
+
+    clock = FakeClock()
+
+    order: list[str] = []
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            (
+                _board(SourceType.GREENHOUSE, "c", interval=900),
+                _board(SourceType.GREENHOUSE, "b", interval=600),
+                _board(SourceType.GREENHOUSE, "a", interval=300),
+            )
+        ),
+        poller=lambda source: (
+            order.append(
+                source.source_account
+            )
+            or make_result()
+        ),
+        clock=clock,
+        sleeper=lambda _seconds: None,
+        concurrency=1,
+    )
+
+    # Every board read once; they fall due again at 400, 700 and 1000.
+    runtime.run_due_sources()
+
+    order.clear()
+
+    clock.advance(
+        1000
+    )
+
+    # One worker: each turn goes to the board due longest.
+    runtime.run_due_sources(
+        budget_seconds=5,
+    )
+
+    assert _wait_until(
+        lambda: len(order) == 3
+    )
+
+    assert order == [
+        "a",
+        "b",
+        "c",
+    ]
+
+
+def test_a_finished_worker_takes_the_next_due_board_at_once() -> None:
+    """A worker left idle until the next cycle is a worker wasted: most
+    reads take under a second and a cycle sleeps up to fifteen."""
+
+    polled: list[str] = []
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            tuple(
+                _board(
+                    SourceType.ASHBY,
+                    f"board{index}",
+                )
+                for index in range(5)
+            )
+        ),
+        poller=lambda source: (
+            polled.append(
+                source.source_account
+            )
+            or make_result()
+        ),
+        clock=FakeClock(),
+        sleeper=lambda _seconds: None,
+        concurrency=1,
+    )
+
+    # One cycle, one worker: the rest follow without another cycle.
+    runtime.run_due_sources(
+        budget_seconds=5,
+    )
+
+    assert _wait_until(
+        lambda: len(polled) == 5
+    )
+
+    assert sorted(polled) == [
+        f"board{index}"
+        for index in range(5)
+    ]
+
+
+def test_a_single_run_polls_each_due_board_once_within_the_limits() -> None:
+    lock = threading.Lock()
+
+    polled: list[str] = []
+
+    running = [0]
+
+    peak = [0]
+
+    def poller(
+        source: SourceDefinition,
+    ):
+        is_workday = (
+            source.source_type
+            == SourceType.WORKDAY
+        )
+
+        with lock:
+            polled.append(
+                source.source_account
+            )
+
+            if is_workday:
+                running[0] += 1
+                peak[0] = max(peak[0], running[0])
+
+        time.sleep(
+            0.02
+        )
+
+        with lock:
+            if is_workday:
+                running[0] -= 1
+
+        return make_result()
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            tuple(
+                _board(
+                    SourceType.WORKDAY,
+                    f"tenant{index}/External",
+                )
+                for index in range(4)
+            )
+            + tuple(
+                _board(
+                    SourceType.LEVER,
+                    f"lever{index}",
+                )
+                for index in range(3)
+            )
+        ),
+        poller=poller,
+        clock=FakeClock(),
+        sleeper=lambda _seconds: None,
+        concurrency=3,
+        platform_limits={
+            "workday": 1,
+        },
+    )
+
+    result = runtime.run_due_sources()
+
+    assert result.succeeded_count == 7
+
+    assert sorted(polled) == sorted(
+        [f"tenant{index}/External" for index in range(4)]
+        + [f"lever{index}" for index in range(3)]
+    )
+
+    assert peak[0] == 1
+
+
+def test_the_loop_rests_while_every_worker_is_busy() -> None:
+    """Boards are due, but no worker is free and each takes the next due
+    board itself; waking at once would spin the loop."""
+
+    release = threading.Event()
+
+    calls: dict[str, int] = {}
+
+    runtime = SchedulerRuntime(
+        registry=_sources_fast_and_slow(),
+        poller=_blocking_poller(
+            release,
+            calls,
+        ),
+        clock=FakeClock(),
+        sleeper=lambda _seconds: None,
+        concurrency=1,
+    )
+
+    try:
+        # Accenture holds the only worker; Cursor is due and waits.
+        runtime.run_due_sources(
+            budget_seconds=0.05,
+        )
+
+        assert calls == {
+            "accenture": 1,
+        }
+
+        assert (
+            runtime.seconds_until_next_poll()
+            == runtime_module.IN_FLIGHT_RECHECK_SECONDS
+        )
+
+    finally:
+        release.set()
+
+
+def test_default_limits_cover_the_slow_platforms() -> None:
+    assert runtime_module.PLATFORM_LIMITS == {
+        "workday": 5,
+        "oracle_recruiting": 2,
+    }
+
+    assert runtime_module.DEFAULT_CONCURRENCY == 8
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(()),
+        poller=lambda _source: make_result(),
+    )
+
+    # Every shared edge still goes one board at a time.
+    assert runtime._limits["eightfold"] == 1
+
+    assert runtime._limits["workday"] == 5
+
+
+def test_a_cycle_reports_how_many_due_boards_wait_their_turn() -> None:
+    release = threading.Event()
+
+    calls: dict[str, int] = {}
+
+    runtime = SchedulerRuntime(
+        registry=SourceRegistry(
+            tuple(
+                make_source(
+                    source_account=name,
+                )
+                for name in ("accenture", "b", "c")
+            )
+        ),
+        poller=_blocking_poller(
+            release,
+            calls,
+        ),
+        clock=FakeClock(),
+        sleeper=lambda _seconds: None,
+        concurrency=1,
+    )
+
+    try:
+        result = runtime.run_due_sources(
+            budget_seconds=0.05,
+        )
+
+        assert result.still_running == 1
+
+        assert result.waiting == 2
+
+    finally:
+        release.set()

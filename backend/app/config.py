@@ -20,6 +20,47 @@ from pydantic_settings import (
 
 
 
+# The scheduler's workers each hold a database connection while they
+# write; the pool is twelve plus eight overflow, and maintenance and the
+# loop itself need theirs.
+SCHEDULER_MAX_WORKERS = 16
+
+
+def parse_platform_limits(
+    value: str,
+) -> dict[str, int]:
+    """Read "workday=5,oracle_recruiting=2" into a limit per platform."""
+
+    limits: dict[str, int] = {}
+
+    for part in value.split(","):
+        part = part.strip()
+
+        if not part:
+            continue
+
+        name, sep, number = part.partition("=")
+
+        name = name.strip().lower()
+
+        if (
+            not sep
+            or not name
+            or not number.strip().isdigit()
+            or int(number) < 1
+        ):
+            raise ValueError(
+                (
+                    "SCHEDULER_PLATFORM_LIMITS must read like "
+                    "workday=5,oracle_recruiting=2."
+                )
+            )
+
+        limits[name] = int(number)
+
+    return limits
+
+
 class Settings(BaseSettings):
     """Runtime configuration required by the ACE backend."""
 
@@ -157,6 +198,14 @@ class Settings(BaseSettings):
     # and lead checks obey a refusal either way.
     host_policy_enforce: bool = False
 
+    # How many boards the scheduler reads at once, and how many of one
+    # slow platform's boards may hold a worker together, as
+    # "workday=5,oracle_recruiting=2". Workers stay below the database
+    # pool of twelve plus eight overflow. Capacity is measured before and
+    # after every change to either (OPS-05).
+    scheduler_workers: int = 8
+    scheduler_platform_limits: str = "workday=5,oracle_recruiting=2"
+
     # The interactive API docs list every route. Off unless asked for.
     api_docs: bool = False
 
@@ -215,6 +264,53 @@ class Settings(BaseSettings):
             ) from error
 
         return value
+
+
+    @field_validator(
+        "scheduler_workers"
+    )
+    @classmethod
+    def _validate_scheduler_workers(
+        cls,
+        value: int,
+    ) -> int:
+        """Refuse a worker count the database pool cannot carry."""
+
+        if not 1 <= value <= SCHEDULER_MAX_WORKERS:
+            raise ValueError(
+                (
+                    "SCHEDULER_WORKERS must be between 1 "
+                    f"and {SCHEDULER_MAX_WORKERS}."
+                )
+            )
+
+        return value
+
+
+    @field_validator(
+        "scheduler_platform_limits"
+    )
+    @classmethod
+    def _validate_scheduler_platform_limits(
+        cls,
+        value: str,
+    ) -> str:
+        """Refuse a typo at startup rather than poll without the limit."""
+
+        parse_platform_limits(
+            value
+        )
+
+        return value
+
+
+    @property
+    def scheduler_platform_limit_map(
+        self,
+    ) -> dict[str, int]:
+        return parse_platform_limits(
+            self.scheduler_platform_limits
+        )
 
 
     @field_validator(
