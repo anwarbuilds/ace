@@ -320,3 +320,30 @@ def test_a_page_without_a_jobposting_has_none() -> None:
         "<html><script type='application/ld+json'>"
         '{"@type": "Organization"}</script></html>'
     ) is None
+
+
+def test_a_radancy_address_after_a_language_is_a_posting() -> None:
+    """Moody's and L3Harris list "/en/job/..."; read as empty, the board
+    would look as if it had stopped answering (DIS-07)."""
+
+    from backend.app.adapters.sitemap_jobs import site_for
+
+    site = site_for("careers.fictional-ratings.example")
+
+    for address in (
+        "https://careers.fictional-ratings.example/job/new-york/software-engineer/4900/1234567",
+        "https://careers.fictional-ratings.example/en/job/new-york/software-engineer/4900/1234567",
+        "https://careers.fictional-ratings.example/en-us/job/new-york/software-engineer/4900/1234567/",
+    ):
+        match = site.posting.match(address)
+
+        assert match is not None, address
+
+        assert match.group("id") == "1234567"
+
+        assert match.group("slug") == "software-engineer"
+
+    # Anything else on the site is not a posting.
+    assert site.posting.match("https://careers.fictional-ratings.example/en/search-jobs/") is None
+
+    assert site.posting.match("https://careers.fictional-ratings.example/english/job/a/b/1/2") is None
