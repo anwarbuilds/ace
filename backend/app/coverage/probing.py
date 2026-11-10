@@ -1464,7 +1464,8 @@ def board_jobs(
         return _jobs_from(
             post(
                 f"https://{ref.source_host}"
-                f"/wday/cxs/{tenant}/{site}/jobs",
+                # The job API names the tenant with underscores.
+                f"/wday/cxs/{tenant.replace('-', '_')}/{site}/jobs",
                 {
                     "appliedFacets": {},
                     "limit": 20,

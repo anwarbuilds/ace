@@ -148,11 +148,14 @@ def site_for(
             titled=False,
         )
 
-    # Radancy: "/job/<city>/<title>/<org id>/<job id>".
+    # Radancy: "/job/<city>/<title>/<org id>/<job id>", on some sites
+    # after a language, "/en/job/..." (Moody's, L3Harris).
     return Site(
         sitemap=f"https://{host}/sitemap.xml",
         posting=re.compile(
-            rf"^https://{re.escape(host)}/job/(?P<city>[^/]+)/"
+            rf"^https://{re.escape(host)}/"
+            r"(?:[a-z]{2}(?:-[a-z]{2})?/)?"
+            r"job/(?P<city>[^/]+)/"
             r"(?P<slug>[^/]+)/\d+/(?P<id>\d+)/?$"
         ),
         titled=True,

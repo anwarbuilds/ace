@@ -1028,3 +1028,30 @@ Name searches and board reads have separate budgets, so they must not share a wi
 Read-only status recheck at 15:56Z on November 6 confirmed the deployed services healthy and chat 2 state unchanged; current metrics are in the private release/live-status-20261106.json artifact.
 
 The original DIS-16 release was verified before the repair above superseded its board-addition acceptance. `coverage/identity.py` centralizes evidence-based owner decisions, strict whole-name/legal-ending and tenant checks, structured/shared-page findings and reviewed shared boards; contradictory metadata cannot fall through to weaker prose. Registration/feed/paste/careers reuse it. Shared-board names remain unverified ledger leads; `petition_identity.py` retains exact reviewed legal joins without parent/acquisition/shared-board inheritance. API/scheduler then ran tested f7702f4 (PR #32/main 58e8762), web unchanged, no screen/migration. Main CI 42234193774 passed first time, backend 2,609/two PostgreSQL-only skips and browser 47/59/206 with none skipped. 232 affected cases, six-board preview, real-data read-only audit, shared-board replay, fresh backup/restore and installed acceptance pass. Pear VC is disabled and active shared records withdrawn, retaining historical data; scope-guarded ledger refresh found it current. Final source hashes, all protected-row comparisons, configuration/unrelated containers, parser/monitor and public checks passed at 15:36Z. Positive sponsorship remains fixture-tested; signed-in UI unchecked. VM proof/rollback in private chat2-release-20261106T1418Z; local artifacts/requirements-chat-2-20261105/. Private release-only corrections: classify handled old reader errors without accepting unexpected errors; explicitly preserve source updated_at when only flag changes are intended. No completed operator replay. Host-permission pickup remains open in private requirements section 13.5. Chat 3 follows the repair; owner authorizes routine scoped operations without repeated prompts, while serious security issues/actual permission refusals stop the step.
+
+## Boards switched off by a fixable error, and jobs "never stored" (Chat 4, 2026-11-10)
+
+- **Workday tenants with a hyphen** (DIS-04). A host name cannot hold an underscore, so tenant `vhr_genband` is served at
+  `vhr-genband.wd1.myworkdayjobs.com` while its job list answers only at `/wday/cxs/vhr_genband/...`; the hyphenated
+  path answers 422. Six feed-link boards had been switched off as "unreadable" for this. The careers page names the real
+  tenant (`tenant: "osv_amerisure"`). The reader, robots read targets and board finder now use the underscore form
+  (`adapters/workday.api_tenant`); identities keep their registered form. Two more boards had moved data centre
+  (Carnegie Mellon to `wd115`, OneDigital to `wd504`). Seven were restored by a guarded operation and read on their first
+  try; EPRI answered 429 and Nio's site 500, so both stay off and the lead ledger keeps rechecking them. The ledger
+  already rechecks unreadable companies (growing gaps up to 14 days) and boards with no US software role (weekly).
+- **Switched-off duplicates kept their jobs open.** A board retired as a duplicate is no longer read, so nothing closes
+  its postings: three held 3,747 "open" jobs a month old. With the owner's approval they were closed in one guarded
+  transaction (no owner link to any of them; the live boards untouched). Retiring a duplicate should withdraw its open
+  postings in the same step.
+- **Radancy paths with a language** (DIS-07). Moody's and L3Harris list `/en/job/...`; the sitemap reader now accepts an
+  optional language before `/job/`. UnitedHealth, Moody's, L3Harris and Takeda were added as an owner-approved batch.
+  Munich Re's career store carries no JobPosting and is not Radancy. A lead marked refused for "moodys.ai" was a guessed
+  domain, not Moody's careers site: check which host refused before treating a company as closed to ACE.
+- **"Never stored" was mostly mismatched boards** (DIS-13). The November 4 research paired listings with boards by loose
+  name matching (Amazon to a motor association's Workday, Cisco to an Ashby board called sf-tensor, UPS to "upside"). ACE
+  had the CACI, Cisco, RTX and Amazon jobs on their real boards, mostly rejected by the gate; Shield AI had retitled its
+  roles. Check the board before calling a job missing.
+- **Capped Workday boards** (RTX, Lowe's, CVS, Target and others at 2,000). Workday stops a search at 2,000 and RTX's job
+  families cannot be split below it (Engineering 2,140; within it Regular 2,034). Its list is mostly newest first, so new
+  postings are seen, but not strictly in date order: a dry run of a "close only what the read vouches for" rule refused
+  on real data, so the rule was dropped. Old postings past the cap stay open; RTX showed 6,657 open against 4,590 listed.

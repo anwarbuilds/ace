@@ -981,3 +981,79 @@ def test_the_adapter_keeps_the_day_ace_already_holds() -> None:
         "/job/payroll": day(9, 2),
         "/job/office": day(6, 15),
     }
+
+
+# ----------------------------------------------------------------------
+# Tenant names in the job API (DIS-04)
+# ----------------------------------------------------------------------
+#
+# Measured 2026-11-10: six boards were switched off as unreadable because
+# their job list was asked for at /wday/cxs/vhr-genband/..., which Workday
+# answers with 422; /wday/cxs/vhr_genband/... answers with the jobs.
+
+
+from backend.app.adapters.workday import api_tenant  # noqa: E402
+
+
+def test_the_job_api_names_a_hyphenated_tenant_with_underscores() -> None:
+    assert api_tenant("vhr-genband") == "vhr_genband"
+
+    assert api_tenant("nvidia") == "nvidia"
+
+
+def test_a_hyphenated_tenant_is_read_at_its_underscore_address() -> None:
+    asked: list[str] = []
+
+    def handler(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        asked.append(
+            request.url.path
+        )
+
+        if "/wday/cxs/fictional_works/Careers/" not in request.url.path:
+            return httpx.Response(
+                422,
+                json={"errorCode": "HTTP_422"},
+            )
+
+        return httpx.Response(
+            200,
+            json={
+                "total": 1,
+                "jobPostings": [
+                    listing(
+                        title="Fictional Payroll Specialist",
+                        path="/job/payroll",
+                    )
+                ],
+            },
+        )
+
+    with httpx.Client(
+        transport=httpx.MockTransport(
+            handler
+        )
+    ) as client:
+        jobs = fetch_workday_jobs(
+            source_account="fictional-works/Careers",
+            company_name="Fictional Works",
+            source_host="fictional-works.wd1.myworkdayjobs.com",
+            client=client,
+            now=REFERENCE,
+            should_fetch_detail=never_detail,
+        )
+
+    assert [job.external_id for job in jobs] == [
+        "/job/payroll"
+    ]
+
+    assert all(
+        "/wday/cxs/fictional_works/Careers/" in path
+        for path in asked
+    )
+
+    # The public link keeps the board's own address.
+    assert jobs[0].official_url.startswith(
+        "https://fictional-works.wd1.myworkdayjobs.com/"
+    )

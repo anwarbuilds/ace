@@ -269,12 +269,13 @@ def test_a_productive_workday_board_is_polled_every_fifteen_minutes(
     assert interval(session, "workday", "chewy/External") == 900
 
 
-def test_a_network_board_earns_fifteen_minutes_by_producing_a_passing_role(
+def test_a_network_board_is_read_every_fifteen_minutes_like_any_quick_board(
     session: Session,
 ) -> None:
-    """Several hundred startup boards were registered from talent
-    networks on 2026-10-29. Fifteen minutes for all of them would add
-    about a third to the scheduler's work, so a quiet one stays hourly."""
+    """Owner, 2026-11-10: everything should reach them as fast as possible.
+    With fair turns, a one-request board at fifteen minutes is cheap, so a
+    startup board from a talent network no longer waits hourly for its
+    first passing role (it used to)."""
 
     add_source(
         session,
@@ -302,7 +303,6 @@ def test_a_network_board_earns_fifteen_minutes_by_producing_a_passing_role(
     }
 
     assert promoted == {
+        "fictional-quiet": 900,
         "fictional-hiring": 900,
     }
-
-    assert interval(session, "ashby", "fictional-quiet") == 3600
