@@ -429,3 +429,10 @@ The Sources tab's "Can ace keep up?" box (`coverage/capacity.py`, `/api/coverage
 four complete quarter hours against the reads the boards ask for, boards read within one and a half planned
 intervals, and how fast new jobs arrive (median and nine in ten, last day, boards already read, posted times with a
 real time of day; midnight UTC is a date).
+
+Measured steps up the same day: ten workers (Workday 6, Oracle 2) by setting, and every one-request board at fifteen
+minutes whatever its origin (579 startup boards promoted), together since 19:52Z. Against eight workers in the afternoon
+(quick boards waited a median 92 s, Workday 377 s, 178 reads a minute), one hour later quick boards waited 22 s, Workday
+85 s, 222 reads a minute, workers 93% busy, scheduler CPU 51% on average, new jobs typical 7.2 minutes. A first
+ten-worker try rolled back on a false alarm: the scheduler's own moved-board repair switched a board off, and the strict
+settings check did not know it; measured numbers had not been saved before the check.
