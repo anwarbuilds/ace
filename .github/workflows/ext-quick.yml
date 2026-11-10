@@ -1,0 +1,53 @@
+name: coverage-quick-temporary
+on:
+  push:
+    branches: [ci-quick-tmp]
+permissions:
+  contents: read
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: sqlite:///ace-demo.db
+      ACE_DEMO_COMPANIES: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: python -m backend.scripts.seed_demo
+      - run: |
+          nohup python -m uvicorn backend.app.api.main:app --port 8000 > uvicorn.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8000/healthz && break; sleep 1; done
+      - working-directory: web
+        run: |
+          npm ci
+          npx next build
+          nohup npx next start -p 3000 > next.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf -o /dev/null localhost:3000/login && break; sleep 1; done
+          npx playwright install --with-deps chromium
+      - working-directory: web
+        env:
+          ACE_SCREENSHOT_DIR: ${{ github.workspace }}/shots
+        run: npx playwright test tests/e2e/coverage-tabs.spec.ts tests/e2e/v2-visual.spec.ts -g "tab|Add|ledger|added|Sources|answer|empty|coverage"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-shots
+          path: |
+            shots/**/*.png
+            web/test-results/**/*.png
+            web/test-results/**/error-context.md
+          retention-days: 2
+          if-no-files-found: ignore
+      - if: failure()
+        run: tail -n 60 uvicorn.log web/next.log || true
