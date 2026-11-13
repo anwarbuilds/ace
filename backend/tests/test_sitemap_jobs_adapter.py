@@ -401,3 +401,60 @@ def test_a_dassault_careers_sitemap_lists_its_postings() -> None:
     assert by_id["910001"].title == "Software Engineer"
     assert evaluate_job(by_id["910001"]).status == EligibilityStatus.PASS
     assert jobs.complete is True
+
+
+def _teaser_page(years: str) -> str:
+    posting = {
+        "@type": "JobPosting",
+        "title": "Software Engineer",
+        "datePosted": "2026-11-11T04:11:52.000Z",
+        "employmentType": "Full-Time",
+        "description": "Role Description &amp; Responsibilities Fictional Labs is seeking a Software Engineer to",
+        "jobLocation": {"@type": "Place", "address": {"addressLocality": "San Diego", "addressRegion": "CA", "addressCountry": "United States"}},
+    }
+    return (
+        "<html><head><script type=\"application/ld+json\">" + json.dumps(posting) + "</script></head><body>"
+        "<div class=\"jobdetails-body-container\"><div class=\"ds-job-wrapper__desc\">"
+        "<div class=\"ds-job-wrapper__desc-external\"><p>Role Description</p><p>Build fictional lab software.</p></div>"
+        f"<div class=\"ds-job-wrapper__desc-qualification\"><ul><li>{years}</li></ul></div>"
+        "</div><div class=\"share\">Share</div></div></body></html>"
+    )
+
+
+def test_a_dassault_page_gives_the_whole_description_when_its_jobposting_is_a_teaser() -> None:
+    """Its JobPosting stops after about 240 characters; the experience asked
+    for is only on the page (seen 2026-11-12)."""
+
+    layout_sitemap = f"https://{DASSAULT}/sitemap/sitemap-careers.xml"
+
+    client, _ = site({layout_sitemap: sitemap(DS_SWE), DS_SWE: _teaser_page("5+ years of professional software development experience.")})
+
+    jobs = fetch_sitemap_jobs(host=DASSAULT, company_name="Dassault Systemes", client=client, store=MemoryStore(), now=lambda: NOW, pause_seconds=0)
+
+    job = {job.external_id: job for job in jobs}["910001"]
+
+    assert "5+ years" in job.description
+    assert "Share" not in job.description
+    assert evaluate_job(job).status == EligibilityStatus.REJECT
+
+
+def test_a_teaser_reading_taken_before_is_read_again_once() -> None:
+    from backend.app.adapters.sitemap_jobs import READING_SUFFIX
+
+    layout_sitemap = f"https://{DASSAULT}/sitemap/sitemap-careers.xml"
+    store = MemoryStore()
+    teaser = json.dumps({"@type": "JobPosting", "title": "Software Engineer", "description": "Role Description"})
+    store.rows[DS_SWE + READING_SUFFIX] = (Reading(READ, teaser), NOW - timedelta(hours=1))
+
+    client, asked = site({layout_sitemap: sitemap(DS_SWE), DS_SWE: _teaser_page("0 to 2 years of professional experience.")})
+
+    jobs = fetch_sitemap_jobs(host=DASSAULT, company_name="Dassault Systemes", client=client, store=store, now=lambda: NOW, pause_seconds=0)
+
+    assert DS_SWE in asked
+    assert "0 to 2 years" in {job.external_id: job for job in jobs}["910001"].description
+
+    asked.clear()
+
+    fetch_sitemap_jobs(host=DASSAULT, company_name="Dassault Systemes", client=client, store=store, now=lambda: NOW + timedelta(hours=1), pause_seconds=0)
+
+    assert asked == [layout_sitemap]
