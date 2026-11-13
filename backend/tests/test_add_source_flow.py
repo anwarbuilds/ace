@@ -358,3 +358,17 @@ def test_sources_filters_counts_and_order(session) -> None:
     assert sources_report(session, now=NOW, limit=1, offset=1)["rows"][0]["company"] == "Closed Works"
     assert report["dark"][0]["company"] == "Silent Works"
     assert coverage_summary(session)["sources"] == 3
+
+
+def test_a_dayforce_link_says_ace_has_no_reader_for_it(session) -> None:
+    """Corpay's US roles moved to Dayforce (2026-11-12); a pasted link must
+    say why ACE cannot read it rather than go quiet."""
+
+    result = add(
+        session,
+        "https://jobs.dayforcehcm.com/en-US/quillfeather/CANDIDATEPORTAL/jobs/4821",
+        fetch=lambda url, **k: None,
+    )
+
+    assert result.status == "saved_no_reader"
+    assert "Dayforce" in result.detail

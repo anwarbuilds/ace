@@ -575,6 +575,10 @@ SINGLE_REQUEST_PROVIDERS = frozenset(
 # only roles the owner would not apply to.
 NETWORK_DISCOVERY_SOURCE = "talent_network"
 
+# Boards the lead ledger's own check found and added (2026-11-12): read,
+# one employer's, hiring US engineers. Polled like network boards.
+LEAD_DISCOVERY_SOURCE = "lead_ledger"
+
 NETWORK_POLL_INTERVAL_SECONDS = 3600
 
 

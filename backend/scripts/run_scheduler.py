@@ -86,10 +86,12 @@ from backend.app.persistence.sessions import (
     record_check,
     record_discoveries,
 )
+from backend.app.coverage.companies import LEAD_DISCOVERY_SOURCE
 from backend.scripts.register_network_boards import (
     Candidate,
     assess,
     declared_name,
+    register as register_board,
 )
 from backend.app.scheduling import (
     SchedulerRuntime,
@@ -756,8 +758,9 @@ def main(
     def keep_lead_ledger() -> None:
         """Keep the lead ledger and host verdicts current.
 
-        Only ever reads and records; nothing here registers a board. Runs
-        on its own terms so a failure cannot cost the dark-board recovery.
+        Reads and records, and adds a board that passed every check (owner
+        request, November 12, 2026). Runs on its own terms so a failure
+        cannot cost the dark-board recovery.
         """
 
         if not settings.lead_ledger_enabled:
@@ -808,10 +811,35 @@ def main(
                 ),
             )
 
+        def add_board(session, outcome) -> bool:
+            added = register_board(
+                session,
+                outcome,
+                now=now_utc(),
+                origin=LEAD_DISCOVERY_SOURCE,
+            )
+
+            if added:
+                LOGGER.info(
+                    "lead_board_added company=%r source=%s/%s us_roles=%d passing=%d",
+                    outcome.candidate.company,
+                    outcome.candidate.source_type,
+                    outcome.candidate.source_account,
+                    outcome.us_engineering,
+                    outcome.passing,
+                )
+
+            return added
+
         checked = check_due_leads(
             SessionLocal,
             now=now_utc,
             assess_board=assess_board,
+            register_board=(
+                add_board
+                if settings.lead_auto_add_enabled
+                else None
+            ),
             diagnose_name=lambda company: diagnose(
                 company,
                 fetch=reader.fetch,
@@ -826,7 +854,7 @@ def main(
                 "lead_ledger_updated "
                 "leads=%d leads_new=%d hosts_new=%d hosts_checked=%d "
                 "boards_read=%d names_searched=%d refused=%d deferred=%d "
-                "states=%s"
+                "added=%d states=%s"
             ),
             synced.total,
             synced.created,
@@ -836,6 +864,7 @@ def main(
             checked.names,
             checked.refused,
             checked.deferred,
+            checked.added,
             checked.states,
         )
 

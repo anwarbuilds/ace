@@ -74,7 +74,7 @@ def test_the_ledger_route_lists_filters_and_limits(client) -> None:
     body = client.get("/api/coverage/leads").json()
     assert body["total"] == 1
     assert body["rows"][0]["company"] == "Fictional Works"
-    assert body["rows"][0]["state_label"] == "Waiting for you"
+    assert body["rows"][0]["state_label"] == "Good board, left out"
 
     assert client.get("/api/coverage/leads", params={"state": "polling"}).json()["rows"] == []
     assert client.get("/api/coverage/leads", params={"q": "works"}).json()["matched"] == 1

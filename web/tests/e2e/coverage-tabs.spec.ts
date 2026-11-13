@@ -64,7 +64,7 @@ test("the Add button on any tab lands in the box, ready to paste", async ({ page
 test("the ledger filters by status and search, in the URL, and explains itself", async ({ page }) => {
   await page.goto("/app/coverage?tab=leads");
   const ledger = page.locator("section", { has: page.getByRole("heading", { name: "All companies ace has heard of" }) });
-  await expect(ledger.getByRole("row", { name: /Marlowe Robotics/ })).toContainText("Waiting for you");
+  await expect(ledger.getByRole("row", { name: /Marlowe Robotics/ })).toContainText("Good board, left out");
 
   await ledger.getByRole("link", { name: /Site says no/ }).click();
   await expect(page).toHaveURL(/state=refused/);

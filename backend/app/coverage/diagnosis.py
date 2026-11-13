@@ -102,6 +102,12 @@ FOREIGN_ATS = (
         "Teamtailor",
         r"[a-z0-9-]+\.teamtailor\.com",
     ),
+    # Its job list loads from a search that answers automated readers with
+    # 403, and it publishes no sitemap (checked 2026-11-12, Corpay).
+    (
+        "Dayforce",
+        r"jobs\.dayforcehcm\.com/[A-Za-z-]+/[A-Za-z0-9_-]+",
+    ),
 )
 
 

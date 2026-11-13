@@ -396,6 +396,7 @@ def register(
     outcome: Outcome,
     *,
     now: datetime,
+    origin: str = DISCOVERY_SOURCE,
 ) -> bool:
     """Add one confirmed board, unless the catalog gained it meanwhile.
 
@@ -426,7 +427,7 @@ def register(
                     NETWORK_POLL_INTERVAL_SECONDS,
                 )
             ),
-            discovery_source=registration_origin(DISCOVERY_SOURCE, outcome.identity_state),
+            discovery_source=registration_origin(origin, outcome.identity_state),
             last_verified_at=now,
         )
     )

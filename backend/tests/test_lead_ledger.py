@@ -394,8 +394,9 @@ def seed(sessions, company, *, boards=(), state=CHECKING, next_check=NOW, reason
         )
 
 
-def test_a_hiring_board_waits_for_the_owner_and_is_never_registered(sessions) -> None:
-    """Owner decision: ACE proposes, the owner approves."""
+def test_without_an_adder_a_hiring_board_waits_and_is_never_registered(sessions) -> None:
+    """Callers that pass no ``register_board`` only record (the scheduler
+    passes one since 2026-11-12)."""
 
     seed(sessions, "Fictional Works", boards=[BOARD])
 
@@ -641,7 +642,7 @@ def test_the_report_counts_every_state_and_filters(sessions) -> None:
     assert {item["state"]: item["leads"] for item in report["states"]}[WAITING] == 1
     # The owner's next action comes first.
     assert report["rows"][0]["company"] == "Waiting Works"
-    assert report["rows"][0]["state_label"] == "Waiting for you"
+    assert report["rows"][0]["state_label"] == "Good board, left out"
     assert report["rows"][0]["next_check_at"]
     assert [row["company"] for row in waiting["rows"]] == ["Waiting Works"]
     assert [row["company"] for row in searched["rows"]] == ["Quiet Works"]
@@ -672,3 +673,124 @@ def test_a_polling_row_reports_its_real_last_read_and_cadence(sessions, network)
 
     assert row["poll_interval_seconds"] == 900
     assert row["last_checked_at"].startswith((NOW - timedelta(minutes=3)).isoformat()[:16])
+
+
+def test_a_board_on_twice_with_different_capitals_counts_as_polling(sessions, network) -> None:
+    """A switched-off copy under other capitals must not hide the enabled one
+    (seen on 2026-11-12: three boards ACE reads were left waiting)."""
+
+    with sessions.begin() as session:
+        add_source(session, "Fictional Works", "workday", "fictional/Careers", enabled=False, discovery="duplicate of fictional/careers")
+        add_source(session, "Fictional Works", "workday", "fictional/careers")
+        session.add(
+            EmployerLead(
+                company_key="fictional works",
+                company_name="Fictional Works",
+                origin=NETWORK,
+                origin_details=[NETWORK],
+                state=WAITING,
+                reason="old",
+                boards=[{"source_type": "workday", "source_account": "fictional/careers", "source_host": None}],
+                first_seen_at=NOW,
+                next_check_at=NOW + timedelta(days=3),
+                updated_at=NOW,
+            )
+        )
+
+    run_sync(sessions, network)
+
+    with sessions() as session:
+        assert lead(session, "Fictional Works").state == POLLING
+
+
+def _real_outcome(company="Fictional Works", account="fictional", passing=1):
+    from backend.scripts.register_network_boards import Candidate, Outcome as Real
+
+    return Real(
+        candidate=Candidate(source_type="ashby", source_account=account, company=company),
+        added=True,
+        reason="hiring US engineers",
+        jobs=5,
+        us_engineering=3,
+        passing=passing,
+    )
+
+
+def _adder():
+    from backend.scripts.register_network_boards import register
+
+    return lambda session, outcome: register(session, outcome, now=NOW, origin="lead_ledger")
+
+
+def test_a_qualifying_board_is_added_and_the_lead_polls(sessions) -> None:
+    """Owner request, 2026-11-12: a good board is added, not left waiting."""
+
+    seed(sessions, "Fictional Works", boards=[BOARD])
+
+    summary = check(sessions, assess=lambda board, company: _real_outcome(), register_board=_adder())
+
+    assert summary.added == 1
+
+    with sessions() as session:
+        row = lead(session, "Fictional Works")
+        assert row.state == POLLING
+        assert row.reason.startswith("Added on November 5")
+        source = session.scalar(sa.select(JobSourceRecord))
+        assert (source.source_type, source.source_account, source.enabled) == ("ashby", "fictional", True)
+        assert source.discovery_source == "lead_ledger"
+        assert source.poll_interval_seconds == 900
+
+
+def test_a_board_with_no_passing_role_yet_is_added_hourly(sessions) -> None:
+    seed(sessions, "Fictional Works", boards=[BOARD])
+
+    check(sessions, assess=lambda board, company: _real_outcome(passing=0), register_board=_adder())
+
+    with sessions() as session:
+        assert session.scalar(sa.select(JobSourceRecord)).poll_interval_seconds == 3600
+
+
+def test_a_board_switched_off_earlier_stays_off(sessions) -> None:
+    with sessions.begin() as session:
+        add_source(session, "Fictional Works", "ashby", "Fictional", enabled=False)
+    seed(sessions, "Fictional Works", boards=[BOARD])
+
+    summary = check(sessions, assess=lambda board, company: _real_outcome(), register_board=_adder())
+
+    assert summary.added == 0
+
+    with sessions() as session:
+        assert lead(session, "Fictional Works").state == WAITING
+        rows = session.scalars(sa.select(JobSourceRecord)).all()
+        assert [(row.source_account, row.enabled) for row in rows] == [("Fictional", False)]
+
+
+def test_a_board_named_only_by_an_internal_id_is_not_added(sessions) -> None:
+    seed(sessions, "Fictional Works", boards=[BOARD])
+
+    check(
+        sessions,
+        assess=lambda board, company: _real_outcome(company="0b5d2c4e-1a2b-4c3d-8e9f-001122334455"),
+        register_board=_adder(),
+    )
+
+    with sessions() as session:
+        assert lead(session, "Fictional Works").state == WAITING
+        assert session.scalar(sa.select(sa.func.count()).select_from(JobSourceRecord)) == 0
+
+
+def test_a_failed_add_leaves_the_lead_waiting_and_the_run_going(sessions) -> None:
+    seed(sessions, "Fictional Works", boards=[BOARD])
+    seed(sessions, "Other Fictional", boards=[{**BOARD, "source_account": "other"}])
+
+    def broken(session, outcome):
+        raise RuntimeError("fictional failure")
+
+    summary = check(sessions, assess=lambda board, company: _real_outcome(company=company, account=board["source_account"]), register_board=broken)
+
+    assert summary.boards == 2
+    assert summary.added == 0
+
+    with sessions() as session:
+        assert lead(session, "Fictional Works").state == WAITING
+        assert lead(session, "Other Fictional").state == WAITING
