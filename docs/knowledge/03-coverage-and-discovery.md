@@ -10,6 +10,17 @@ Concurrent extension usage caused one safe scheduler rollback. A timestamp-only 
 >
 > Read this when: a company or role was missed, you add a company or reader, or you judge whether a site may be read at all.
 
+## Three missed new grad roles (2026-11-12)
+
+The owner found three new grad roles ACE never stored. **Jamf** (Greenhouse): ACE knew Jamf only through the Simplify
+list; its own board read fine and was "waiting" for an approval no screen offers. Fixed by adding good boards automatically
+(lead ledger, below). **Dassault Systemes**: posts on its own site, unknown to every feed; its robots.txt names a sitemap
+whose careers part lists every posting with a JobPosting page, so `sitemap_jobs` reads `www.3ds.com` (`/careers/jobs/<title>-<id>`).
+**Corpay**: its Workday board still reads but now lists only non-US roles; its US roles moved to Dayforce, whose job search
+answers automated readers 403 and which has no sitemap. That is a refusal: ACE does not read Dayforce, and `diagnosis`
+now names it so a pasted Dayforce link says why. Lesson: a board that reads can still be the wrong board; a company whose
+board turns all non-US is a sign its US jobs moved.
+
 ## Source-check follow-ups (2026-11-07)
 
 The owner's ten-source post was checked against current code and public robots rules; no job pages were read. Schedule the existing Jobright names reader into the lead ledger after reading its terms (DIS-12, chat 7); consider HiringCafe only as an outside comparison after checking terms (REC-03, chat 5). In a later Coverage chat, show clearer wording for pasted LinkedIn, Handshake and Wellfound links that asks for the company name or its careers page. Other sources were already covered, restricted or not job lists. The owner declined job-alert email work for now; do not build or raise it again unless asked. Details stay in private requirements 13.5.
@@ -991,8 +1002,15 @@ a month old). `employer_leads` now gives every employer ACE hears of a state, a 
 check, and `host_policies` gives every host ACE reads a dated robots verdict. Code: `coverage/leads.py`,
 `coverage/host_policy.py`, `coverage/host_terms.py`; the scheduler's 30-minute maintenance runs them.
 
-- **Evidence only.** A check never registers a board. A board hiring US engineers becomes "Waiting for you". Keep it that
-  way: source registration is approved by the owner batch by batch.
+- **A good board is added (since 2026-11-12).** **Status:** supersedes "evidence only". No screen ever offered the
+  approval "Waiting for you" asked for, so 42 good boards sat unread; one hid a Jamf new grad role the owner found by hand.
+  At the owner's request the scheduler now adds a board that reads, is one employer's and hires US engineers (15 minutes
+  with a passing role, hourly otherwise; `discovery_source` `lead_ledger`; setting `LEAD_AUTO_ADD_ENABLED`). A board the
+  catalog already holds, on or off, is never touched, and a board named only by an internal id still waits ("Good board,
+  left out"). Owner-named batches still go through `register_network_boards.py`.
+- **One board under two capitals.** The catalog can hold `amgen/Careers` (off) beside `amgen/careers` (on). The sync once
+  keyed them as one board and let the switched-off copy win, so Amgen, Broadridge and Guidehouse were read again and left
+  waiting though ACE polls them. Any enabled copy now means polling.
 - **Identity.** A lead is `normalise_company`, the key `source_probes` uses. A board registered under another name still
   counts: polling is decided from the boards on the lead, not from the name. Better identity is DIS-16.
 - **A verdict is judged on the paths ACE reads**, because a robots file usually opens one route and closes another. Shared
