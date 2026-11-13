@@ -130,6 +130,15 @@ class Site:
 
     titled: bool
 
+    # Where the page itself carries the whole description, when its
+    # JobPosting holds only a teaser: the class of that block's <div>.
+    body_class: str | None = None
+
+
+# A stored reading taken from the page's own block says so, so a reading
+# taken before a site's block was known is read again.
+FULL_TEXT_KEY = "aceFullText"
+
 
 def site_for(
     host: str,
@@ -159,6 +168,10 @@ def site_for(
                 r"(?P<slug>[^/?#]+)-(?P<id>\d+)/?$"
             ),
             titled=True,
+            # Its JobPosting description stops after about 240
+            # characters; the page holds the whole text, qualifications
+            # and years of experience included.
+            body_class="ds-job-wrapper__desc",
         )
 
     # Radancy: "/job/<city>/<title>/<org id>/<job id>", on some sites
@@ -316,6 +329,59 @@ def parse_posting_page(
     return None
 
 
+_DIV = re.compile(
+    r"<(/?)div\b",
+    re.IGNORECASE,
+)
+
+
+def page_block(
+    markup: str,
+    css_class: str,
+) -> str | None:
+    """The whole <div> with exactly this class, or None."""
+
+    opening = re.search(
+        r"<div\b[^>]*\bclass=[\"']" + re.escape(css_class) + r"[\"'][^>]*>",
+        markup,
+    )
+
+    if opening is None:
+        return None
+
+    depth = 0
+
+    for found in _DIV.finditer(markup, opening.start()):
+        depth += -1 if found.group(1) else 1
+
+        if depth == 0:
+            return markup[opening.start():found.end()]
+
+    return None
+
+
+def with_page_text(
+    posting: dict,
+    markup: str,
+    site: Site,
+) -> dict:
+    """The posting, with the page's own description when it says more."""
+
+    if not site.body_class:
+        return posting
+
+    block = page_block(markup, site.body_class)
+
+    if block is None or len(_text(block)) <= len(_text(posting.get("description"))):
+        return posting
+
+    return {
+        **posting,
+        "description": block,
+        FULL_TEXT_KEY: True,
+    }
+
+
 def _name(
     value: object,
 ) -> str:
@@ -469,8 +535,17 @@ def _due(
     reading: Reading,
     checked_at: datetime,
     moment: datetime,
+    site: Site | None = None,
 ) -> bool:
     age = moment - checked_at
+
+    if (
+        site is not None
+        and site.body_class
+        and reading.status == READ
+        and FULL_TEXT_KEY not in (reading.description or "")
+    ):
+        return True
 
     return age >= (
         REREAD_AFTER
@@ -564,6 +639,7 @@ def fetch_sitemap_jobs(
             or _due(
                 *stored[keys[entry.external_id]],
                 moment,
+                site,
             )
         ][:max_reads]
 
@@ -587,6 +663,13 @@ def fetch_sitemap_jobs(
                 posting = parse_posting_page(
                     page.text
                 )
+
+                if posting is not None:
+                    posting = with_page_text(
+                        posting,
+                        page.text,
+                        site,
+                    )
             except (httpx.HTTPError, ValueError) as error:
                 LOGGER.warning(
                     "sitemap_posting_failed host=%s id=%s error=%s",
