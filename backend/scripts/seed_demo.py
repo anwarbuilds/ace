@@ -1313,7 +1313,7 @@ def _store_coverage(
         "Marlowe Robotics",
         "network",
         "waiting",
-        "Ashby board reads, with 4 US software roles today, 1 passing your filters. Waiting for your approval.",
+        "Ashby board reads, with 4 US software roles today, 1 passing your filters. Not added: switched off earlier, or its name is unclear.",
         checked=now,
     )
     lead(

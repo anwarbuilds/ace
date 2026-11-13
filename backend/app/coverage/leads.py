@@ -10,8 +10,14 @@ Each lead here has a state, a reason, the last check and the next check.
 ``sync_leads`` writes what ACE already knows, without a single request, and
 ``check_due_leads`` looks again at what is due, a few at a time.
 
-Evidence only. A check that finds a board hiring US engineers moves the lead
-to "waiting" for the owner. Nothing here registers a board.
+A check that finds a board hiring US engineers moves the lead to "waiting".
+On November 12, 2026 the owner found a new grad role that sat unseen for a
+day because its board was waiting for an approval no screen offers, and
+asked that such boards be added. So when the caller passes ``register_board``
+(the scheduler does), a waiting board that passed every check is added at
+once and the lead moves to polling. A board the catalog already holds,
+enabled or switched off, is never touched, so a board switched off earlier
+stays off.
 """
 
 from __future__ import annotations
@@ -24,6 +30,7 @@ import logging
 from pathlib import Path
 import re
 import time
+from zoneinfo import ZoneInfo
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
@@ -54,6 +61,8 @@ from backend.app.discovery.feed_links import board_key
 
 LOGGER = logging.getLogger("ace.coverage.leads")
 
+PACIFIC = ZoneInfo("America/Los_Angeles")
+
 POLLING = "polling"
 WAITING = "waiting"
 CHECKING = "checking"
@@ -66,7 +75,7 @@ STATES = (POLLING, WAITING, CHECKING, DORMANT, NOREADER, REFUSED, AGENCY)
 
 STATE_LABELS = {
     POLLING: "ace reads it",
-    WAITING: "Waiting for you",
+    WAITING: "Good board, left out",
     CHECKING: "Being checked",
     DORMANT: "No US software jobs",
     NOREADER: "Can't read yet",
@@ -77,7 +86,7 @@ STATE_LABELS = {
 # Said once on the page, for anyone wondering what a status means.
 STATE_MEANINGS = {
     POLLING: "ace reads this company all day. You will find it under Sources.",
-    WAITING: "ace found a good board, and adding it needs your approval.",
+    WAITING: "ace found a good board but left it out: it was switched off earlier, or its name is unclear.",
     CHECKING: "ace has not looked yet, or will try again soon.",
     DORMANT: "The board reads fine, with no US software jobs today. ace looks again every week.",
     NOREADER: "They use a site ace has no reader for, or no board was found. ace looks again every month.",
@@ -441,18 +450,23 @@ def sync_leads(
 
     evidence = gather_evidence(session, network_file=network_file)
 
-    catalog = {
-        board_key(row.source_type, row.source_account): row
-        for row in session.execute(
-            sa.select(
-                JobSourceRecord.source_type,
-                JobSourceRecord.source_account,
-                JobSourceRecord.enabled,
+    # One board can sit in the catalog twice under different capitals, one
+    # copy switched off (amgen/Careers off, amgen/careers on). Any enabled
+    # copy means ACE reads it; a dict keyed by board let the switched-off
+    # copy win, so the lead was read again and left waiting for approval.
+    enabled = {
+        key
+        for key in (
+            board_key(row.source_type, row.source_account)
+            for row in session.execute(
+                sa.select(
+                    JobSourceRecord.source_type,
+                    JobSourceRecord.source_account,
+                ).where(JobSourceRecord.enabled.is_(True))
             )
         )
+        if key[0] not in MULTI_EMPLOYER_SOURCES and not shared_board_reason(*key)
     }
-
-    enabled = {key for key, row in catalog.items() if row.enabled and key[0] not in MULTI_EMPLOYER_SOURCES and not shared_board_reason(*key)}
 
     last_success: dict[tuple[str, str], datetime] = {}
 
@@ -585,7 +599,7 @@ def finding_from(outcome, board: dict) -> Finding:
         return Finding(
             WAITING,
             f"{platform} board reads, with {roles} US software {noun} today, "
-            f"{outcome.passing} passing your filters. Waiting for your approval.",
+            f"{outcome.passing} passing your filters. Not added: switched off earlier, or its name is unclear.",
         )
 
     if reason.startswith("no US software"):
@@ -639,6 +653,7 @@ class CheckSummary:
     names: int = 0
     refused: int = 0
     deferred: int = 0
+    added: int = 0
     stopped_early: bool = False
     states: dict[str, int] = field(default_factory=dict)
 
@@ -649,6 +664,7 @@ def check_due_leads(
     now: Callable[[], datetime],
     assess_board: Callable[[dict, str], object],
     diagnose_name: Callable[[str], object],
+    register_board: Callable[[Session, object], bool] | None = None,
     refusal: Callable[..., str | None] = refusal_for,
     boards_per_run: int = BOARDS_PER_RUN,
     paged_per_run: int = PAGED_PER_RUN,
@@ -722,6 +738,7 @@ def check_due_leads(
                 refusal=refusal,
                 throttled=throttled,
                 summary=summary,
+                register_board=register_board,
             )
 
             pause(PAUSE_SECONDS)
@@ -757,8 +774,12 @@ def _check_boards(
     refusal,
     throttled: set[str],
     summary: CheckSummary,
+    register_board: Callable[[Session, object], bool] | None = None,
 ) -> None:
     findings: list[Finding] = []
+
+    # Boards that passed every check, in the order read.
+    qualified: list[object] = []
 
     gone: set[tuple[str, str]] = set()
 
@@ -803,6 +824,9 @@ def _check_boards(
 
         finding = finding_from(outcome, board)
 
+        if finding.state == WAITING:
+            qualified.append(outcome)
+
         if finding.transient:
             throttled.add(board["source_type"])
 
@@ -830,7 +854,47 @@ def _check_boards(
 
         _record(row, best, now())
 
+        if best.state == WAITING and register_board is not None:
+            added = [outcome for outcome in qualified if _register(register_board, session, outcome)]
+            if added:
+                summary.added += len(added)
+                row.state = POLLING
+                row.reason = _added_reason(added[0], now())
+                row.next_check_at = now() + RECHECK_AFTER[POLLING]
+
         summary.states[row.state] = summary.states.get(row.state, 0) + 1
+
+
+_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+
+
+def is_real_name(company: str | None) -> bool:
+    """A board read under an internal id, not a name, waits instead."""
+
+    text = (company or "").strip()
+    return bool(text) and not _UUID.match(text)
+
+
+def _register(register_board, session: Session, outcome) -> bool:
+    candidate = getattr(outcome, "candidate", None)
+    if candidate is not None and not is_real_name(getattr(candidate, "company", None)):
+        return False
+    try:
+        with session.begin_nested():
+            return bool(register_board(session, outcome))
+    except Exception as exc:  # One board must never take the maintenance down.
+        LOGGER.warning("lead_board_register_failed error=%s", type(exc).__name__)
+        return False
+
+
+def _added_reason(outcome, moment: datetime) -> str:
+    roles = getattr(outcome, "us_engineering", 0) or getattr(outcome, "passing", 0)
+    noun = "role" if roles == 1 else "roles"
+    day = moment.astimezone(PACIFIC).strftime("%B %-d")
+    return (
+        f"Added on {day}: its board read, with {roles} US software {noun}, "
+        f"{getattr(outcome, 'passing', 0)} passing your filters."
+    )
 
 
 def _check_name(

@@ -191,8 +191,13 @@ class Settings(BaseSettings):
     gmail_background_sync_enabled: bool = True
 
     # The scheduler's maintenance keeps the lead ledger and host verdicts
-    # current. It only ever reads and records; it never registers a board.
+    # current.
     lead_ledger_enabled: bool = True
+    # A lead whose board reads, is one employer's, and hires US engineers is
+    # added at once instead of waiting for an approval no screen offers
+    # (owner request, November 12, 2026). A board the catalog already holds,
+    # switched off or not, is never touched.
+    lead_auto_add_enabled: bool = True
     # False reports a refused host and keeps polling what already polls,
     # so the owner sees the first report before anything stops. New boards
     # and lead checks obey a refusal either way.

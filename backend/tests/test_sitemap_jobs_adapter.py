@@ -347,3 +347,57 @@ def test_a_radancy_address_after_a_language_is_a_posting() -> None:
     assert site.posting.match("https://careers.fictional-ratings.example/en/search-jobs/") is None
 
     assert site.posting.match("https://careers.fictional-ratings.example/english/job/a/b/1/2") is None
+
+
+DASSAULT = "www.3ds.com"
+
+DS_SWE = f"https://{DASSAULT}/careers/jobs/software-engineer-910001"
+
+DS_INTERN = f"https://{DASSAULT}/careers/jobs/stage-ingenieur-logiciel-f-h-910002"
+
+
+def test_a_dassault_careers_sitemap_lists_its_postings() -> None:
+    """A San Diego new grad role went unseen on 2026-11-12: Dassault
+    Systemes posts on its own site, listed in its careers sitemap."""
+
+    from backend.app.adapters.sitemap_jobs import site_for
+
+    layout = site_for(DASSAULT)
+
+    assert layout.sitemap == f"https://{DASSAULT}/sitemap/sitemap-careers.xml"
+
+    match = layout.posting.match(DS_SWE)
+
+    assert match is not None
+    assert match.group("id") == "910001"
+    assert match.group("slug") == "software-engineer"
+
+    # The careers landing page and other pages are not postings.
+    assert layout.posting.match(f"https://{DASSAULT}/careers/jobs") is None
+    assert layout.posting.match(f"https://{DASSAULT}/careers/life-at-3ds") is None
+
+    client, asked = site(
+        {
+            layout.sitemap: sitemap(DS_SWE, DS_INTERN),
+            DS_SWE: posting_page("Software Engineer", years="Bachelor's degree in computer science."),
+        }
+    )
+
+    jobs = fetch_sitemap_jobs(
+        host=DASSAULT,
+        company_name="Dassault Systemes",
+        client=client,
+        should_fetch_detail=lambda title: "Stage" not in title,
+        store=MemoryStore(),
+        now=lambda: NOW,
+        pause_seconds=0,
+    )
+
+    assert DS_INTERN not in asked
+
+    by_id = {job.external_id: job for job in jobs}
+
+    assert by_id["910001"].official_url == DS_SWE
+    assert by_id["910001"].title == "Software Engineer"
+    assert evaluate_job(by_id["910001"]).status == EligibilityStatus.PASS
+    assert jobs.complete is True

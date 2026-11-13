@@ -148,6 +148,19 @@ def site_for(
             titled=False,
         )
 
+    # Dassault Systemes: robots.txt names /sitemap/sitemap.xml, whose
+    # careers part lists every posting at "/careers/jobs/<title>-<id>".
+    # Added 2026-11-12 after a San Diego new grad role went unseen.
+    if host.endswith("3ds.com"):
+        return Site(
+            sitemap=f"https://{host}/sitemap/sitemap-careers.xml",
+            posting=re.compile(
+                rf"^https://{re.escape(host)}/careers/jobs/"
+                r"(?P<slug>[^/?#]+)-(?P<id>\d+)/?$"
+            ),
+            titled=True,
+        )
+
     # Radancy: "/job/<city>/<title>/<org id>/<job id>", on some sites
     # after a language, "/en/job/..." (Moody's, L3Harris).
     return Site(
