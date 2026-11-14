@@ -299,6 +299,10 @@
   function answerNameFor(question, kind, field) {
     if (!question || aceMemory.isEmployerMotivation(question)) return null;
     var row = bankConcept(question, kind, field);
+    // A language level is the owner's saved answer, never one learned from
+    // a form: learned copies drifted to "Advanced (Proficient)" and
+    // "Beginner" and outranked the saved "Fluent" (2026-11-10, 2026-11-13).
+    if (row === 'Language fluency') return bankAnswerName(question, kind, row);
     if (!field || !isDateSection(field)) {
       var onForm = aceMemory.learnedMatch(question, kind, formAnswers.filter(function (entry) {
         return entry.href === location.href && sameFormAnswer(entry.receipt);
@@ -320,6 +324,7 @@
   // applications. Checked from the question before any value is read.
   function reusableItem(item) {
     if (!item || !item.field || !aceMemory.learnable(item.question) || isDateSection(item.field) ||
+        bankConcept(item.question, item.kind || kindOf(item.field), item.field) === 'Language fluency' ||
         item.field.multiple || /^(password|file|hidden)$/.test(item.field.type || '')) return false;
     // A repeated From/To/current-job prompt belongs to one history entry,
     // never to a global answer shared with another job or school.
@@ -1054,6 +1059,7 @@
     // A choice the owner made on another form is matched by its exact
     // text and its label before any qualifier, see aceChooseLearnedOption.
     if (name && /^(Memory|Form):/.test(name)) return aceChooseLearnedOption(options, wanted);
+    if (name === "Language fluency") return aceChooseLanguageLevel(options, wanted);
     if (name === "Field of study" || name === "Age range from adult status") {
       // A saved major must beat a nearby but different major. An adult
       // answer may only select an exact 18+ option, never an age band.
@@ -2055,6 +2061,20 @@
     });
   }
 
+  /* A menu ACE opened is closed again before ACE moves on. Workday ignores
+     a synthetic Escape on some tenants, and a menu left open held the page:
+     the owner's own clicks on the next dropdown did nothing until the card
+     was closed (TD, 2026-11-13). The button toggles its menu, so a second
+     press closes what Escape did not. */
+  function closeOpenedListbox(field, before) {
+    closeListbox(field);
+    return waitFor(function () {
+      return !listboxOpenedBy(field, before);
+    }, 400).then(function (closed) {
+      if (!closed && listboxOpenedBy(field, before)) press(field);
+    });
+  }
+
   /* Open the dropdown, pick the option, and confirm the button now
      shows it. A press that did not take leaves the question reported
      as unanswered rather than claimed. */
@@ -2082,8 +2102,9 @@
       var index = chooseMatchedOption(field, texts, value, alts);
 
       if (index < 0) {
-        closeListbox(field);
-        return { matched: false };
+        return closeOpenedListbox(field, before).then(function () {
+          return { matched: false };
+        });
       }
 
       press(options[index]);
@@ -2092,8 +2113,9 @@
         return aceNormalise(listboxValue(field)) === aceNormalise(texts[index]);
       }, 1200).then(function (took) {
         if (!took) {
-          closeListbox(field);
-          return { matched: false };
+          return closeOpenedListbox(field, before).then(function () {
+            return { matched: false };
+          });
         }
 
         return { matched: true, text: texts[index] };
@@ -3935,9 +3957,28 @@
     return formSignature() !== lastSignature;
   }
 
+  /* Whether one of the employer's own menus is open right now. While the
+     owner is choosing in one, ACE leaves the page alone: redrawing the card
+     on every change the menu makes is work done under the owner's hands. */
+  function employerMenuOpen() {
+    return aceQueryAll(document, '[aria-expanded="true"]').some(function (element) {
+      return !aceIsOwnUI(element) && element.getClientRects().length > 0 &&
+        (aceIsListboxButton(element) || element.getAttribute('role') === 'combobox' ||
+         /^(listbox|true)$/.test(element.getAttribute('aria-haspopup') || ''));
+    });
+  }
+  var menuOpenSince = 0;
+
   function refresh() {
     if (!loaded) return;
     if (!extensionAlive()) { showUpdated(); return; }
+    if (!filling && employerMenuOpen()) {
+      if (!menuOpenSince) menuOpenSince = Date.now();
+      // Bounded, so a menu that never reports closing cannot freeze the card.
+      if (Date.now() - menuOpenSince < 30000) { queueFormRefresh(); return; }
+    } else {
+      menuOpenSince = 0;
+    }
 
     // Workday routes between an application and Search For Jobs without a
     // document reload. A deliberate toolbar Wake still overrides this guard.
@@ -4943,7 +4984,8 @@
       }).map(function (option) { return String(option.textContent || '').trim(); }).filter(Boolean);
       if (!options.length) return;
       customOptions.set(questionKey(field, question, kindOf(field)), options);
-      if (focusMode === 'review') {
+      // Redrawn once the menu closes, by the refresh its closing triggers.
+      if (focusMode === 'review' && !employerMenuOpen()) {
         var host = ownHost();
         if (host && host.shadowRoot) renderStudio(host.shadowRoot.querySelector('.ace-panel'));
       }

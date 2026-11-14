@@ -7,6 +7,26 @@
 >
 > Read this when: you change the autofill matcher, the panel, the answer bank or anything that touches a live application form.
 
+## Language levels by rank, and menus left open (2026-11-13, extension 1.31.9)
+
+On a TD Workday form ACE put "Beginner" on "Conduct Business" and the owner could not then change the other level
+dropdowns until the card was closed. Causes: (1) "Conduct Business" matched no rule, so learned memory answered it, and
+learned memory is checked before the answer bank. Learned copies of the level had drifted across forms ("2 -
+Intermediate", then "Advanced (Proficient)" at revision 11, then "Beginner"), because each finished form re-learned
+whatever the box held. (2) A level is a scale, and text matching a saved "Fluent" against "Advanced (Proficient)" or
+"Beginner" picked the least bad text. (3) When no option fitted, ACE sent Escape to close the menu it opened; some
+Workday tenants ignore a synthetic Escape, so the menu stayed open over the page; and the card redrew on every change
+an open menu made.
+
+Fix: "conduct business" and "business proficiency" belong to the Language fluency rule; that rule always uses the saved
+answer and is never learned (`answerNameFor`, `reusableItem`); options are ranked by `aceLanguageLevel` and
+`aceChooseLanguageLevel` takes the highest option at or below the saved level (native, bilingual, fluent, expert 4;
+advanced, proficient 3; intermediate, conversational 2; beginner, basic, elementary 1); `closeOpenedListbox` presses the
+button again when Escape did not close a menu ACE opened; and `refresh` waits, at most 30 seconds, while an employer
+dropdown reports `aria-expanded="true"`. Fictional DOM tests cover all three. The stuck-menu cause is inferred from code
+and the screenshot; no real TD form was run. Learned rows 536 and 941 still hold the wrong levels (a production edit
+was refused by the permission check); the code ignores them for level questions.
+
 ## Workday showed the date but saved none (2026-11-09, extension 1.31.8)
 
 Problem: on the disability self-identification page the Date showed today's
