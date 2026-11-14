@@ -3957,25 +3957,30 @@
     return formSignature() !== lastSignature;
   }
 
-  /* Whether one of the employer's own menus is open right now. While the
-     owner is choosing in one, ACE leaves the page alone: redrawing the card
-     on every change the menu makes is work done under the owner's hands. */
-  function employerMenuOpen() {
-    return aceQueryAll(document, '[aria-expanded="true"]').some(function (element) {
-      return !aceIsOwnUI(element) && element.getClientRects().length > 0 &&
-        (aceIsListboxButton(element) || element.getAttribute('role') === 'combobox' ||
-         /^(listbox|true)$/.test(element.getAttribute('aria-haspopup') || ''));
-    });
+  /* Whether the owner is choosing in one of the employer's menus right now:
+     the control they are using reports its menu open. Only that control
+     counts. A page can hold another control that always reports "open",
+     and counting it kept the card from appearing at all (1.31.9, Workday,
+     2026-11-14). */
+  function ownerInEmployerMenu() {
+    var element = document.activeElement;
+    while (element && element.shadowRoot && element.shadowRoot.activeElement) element = element.shadowRoot.activeElement;
+    var trigger = element && element.closest ? element.closest('[aria-expanded]') : null;
+    if (!trigger || aceIsOwnUI(trigger) || trigger.getAttribute('aria-expanded') !== 'true') return false;
+    return aceIsListboxButton(trigger) || trigger.getAttribute('role') === 'combobox' ||
+      /^(listbox|true)$/.test(trigger.getAttribute('aria-haspopup') || '');
   }
   var menuOpenSince = 0;
 
   function refresh() {
     if (!loaded) return;
     if (!extensionAlive()) { showUpdated(); return; }
-    if (!filling && employerMenuOpen()) {
+    // Only a card already on screen waits, and briefly: the card must always
+    // appear, and a menu that never reports closing cannot hold it.
+    var shownCard = ownHost();
+    if (!filling && !dismissed && shownCard && ownerInEmployerMenu()) {
       if (!menuOpenSince) menuOpenSince = Date.now();
-      // Bounded, so a menu that never reports closing cannot freeze the card.
-      if (Date.now() - menuOpenSince < 30000) { queueFormRefresh(); return; }
+      if (Date.now() - menuOpenSince < 10000) { queueFormRefresh(); return; }
     } else {
       menuOpenSince = 0;
     }
@@ -4985,7 +4990,7 @@
       if (!options.length) return;
       customOptions.set(questionKey(field, question, kindOf(field)), options);
       // Redrawn once the menu closes, by the refresh its closing triggers.
-      if (focusMode === 'review' && !employerMenuOpen()) {
+      if (focusMode === 'review' && !ownerInEmployerMenu()) {
         var host = ownHost();
         if (host && host.shadowRoot) renderStudio(host.shadowRoot.querySelector('.ace-panel'));
       }

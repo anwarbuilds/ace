@@ -2037,3 +2037,16 @@ test('a Workday menu that ignores Escape is closed by its own button when no opt
   assert.equal(f.document.getElementById('overall-menu'), null, 'no menu is left open over the page');
   assert.equal(trigger.textContent, 'Select One');
 });
+
+test('a control that always reports its menu open never keeps the card from appearing', async t => {
+  // Workday pages can hold a header control that stays aria-expanded="true";
+  // 1.31.9 waited on it, so the card never appeared (2026-11-14).
+  const header = '<button type="button" id="utility" aria-haspopup="true" aria-expanded="true">Menu</button><div role="combobox" aria-expanded="true">Search</div>';
+  const answerItems = [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Language fluency', value: 'Fluent' }];
+  const f = fixture(header + languagePage('run1'), { answerItems, url: tdUrl }); t.after(f.dispose);
+  for (const [id] of languageLevels) wireListbox(f, id, levelChoices);
+  await until(() => countOf(f, 'known') === '5', 'the card appears and counts the known levels');
+  f.click('fill');
+  await until(() => languageLevels.every(([id]) => f.document.getElementById(id).textContent === 'Fluent'), 'every level fills');
+  await until(() => f.panel() && !f.panel().textContent.includes('Filling'), 'the card shows the result');
+});

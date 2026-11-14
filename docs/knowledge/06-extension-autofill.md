@@ -7,6 +7,13 @@
 >
 > Read this when: you change the autofill matcher, the panel, the answer bank or anything that touches a live application form.
 
+## The card did not appear (2026-11-14, extension 1.31.10)
+
+After reloading 1.31.9 the owner saw no card; a toolbar Fill still filled. 1.31.9 paused the card while any control on
+the page reported `aria-expanded="true"`, and a page can hold one that always does, so the first card waited up to 30
+seconds. 1.31.10 waits only when a card is already on screen and the focused control's own menu is open, at most 10
+seconds (`ownerInEmployerMenu`). A fictional test with an always-open header control covers it.
+
 ## Language levels by rank, and menus left open (2026-11-13, extension 1.31.9)
 
 On a TD Workday form ACE put "Beginner" on "Conduct Business" and the owner could not then change the other level
