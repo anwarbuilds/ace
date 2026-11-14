@@ -24,8 +24,9 @@ answer and is never learned (`answerNameFor`, `reusableItem`); options are ranke
 advanced, proficient 3; intermediate, conversational 2; beginner, basic, elementary 1); `closeOpenedListbox` presses the
 button again when Escape did not close a menu ACE opened; and `refresh` waits, at most 30 seconds, while an employer
 dropdown reports `aria-expanded="true"`. Fictional DOM tests cover all three. The stuck-menu cause is inferred from code
-and the screenshot; no real TD form was run. Learned rows 536 and 941 still hold the wrong levels (a production edit
-was refused by the permission check); the code ignores them for level questions.
+and the screenshot; no real TD form was run. At the owner's request learned rows 536 and 941 were set back to
+"Fluent" (before-values private in `artifacts/extension-language-levels-20261113/`); the code ignores them for level
+questions anyway.
 
 ## Workday showed the date but saved none (2026-11-09, extension 1.31.8)
 
