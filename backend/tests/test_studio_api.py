@@ -207,7 +207,16 @@ def test_the_company_directory_counts_open_roles_and_applications(client, factor
                       "newest_role_at": items[0]["newest_role_at"]}]
 
 
-def test_the_dashboard_groups_open_roles_by_tier_and_score(client, factory):
+def test_the_dashboard_groups_open_roles_by_tier_and_score(client, factory, monkeypatch):
+    # The fixture role opened October 14; open roles are those opened in the
+    # last 30 days, so the clock is pinned to the fixture as below. Without
+    # it the role aged out on November 13 and the count read 0.
+    from backend.app.api.routers import dashboard
+    class FixtureClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return NOW.astimezone(tz) if tz else NOW.replace(tzinfo=None)
+    monkeypatch.setattr(dashboard, "datetime", FixtureClock)
     body = client.get("/api/dashboard").json()
     assert body["total_open"] == 1
     assert sum(t["open"] for t in body["tiers"]) == 1
