@@ -1856,6 +1856,21 @@ test('a copy cut off by an extension reload says so instead of ignoring clicks',
   assert.ok(f.panel().textContent.includes('ACE was updated'), 'the card asks for a refresh');
 });
 
+test('a reload in the middle of a redraw asks for a refresh instead of throwing', async t => {
+  // Chrome cut a running copy off while it drew the card (Frost, 2026-11-14):
+  // "Extension context invalidated" was thrown from showPreview, uncaught.
+  const f = fixture(routine); t.after(f.dispose);
+  await until(() => f.panel(), 'the card appears');
+  const runtime = f.context.chrome.runtime;
+  const real = f.context.aceAnswerNameFor;
+  // Alive when the redraw starts, cut off part way through it.
+  f.context.aceAnswerNameFor = () => { runtime.id = undefined; throw new Error('Extension context invalidated.'); };
+  f.document.body.append(f.document.createElement('input'));
+  assert.doesNotThrow(() => f.internals.refresh());
+  assert.ok(f.panel().textContent.includes('ACE was updated'), 'the card asks for a refresh');
+  f.context.aceAnswerNameFor = real;
+});
+
 test('a self-identification date Workday reports as missing is typed in again', async t => {
   const f = fixture(sectionDate('dateSignedOn', 'Date', ['Month', 'Day', 'Year']) +
     '<div data-automation-id="formField-disability"><label>Please check one of the boxes below:</label></div>'); t.after(f.dispose);
@@ -2036,4 +2051,17 @@ test('a Workday menu that ignores Escape is closed by its own button when no opt
   await until(() => !f.panel().textContent.includes('Filling'), 'the fill finishes');
   assert.equal(f.document.getElementById('overall-menu'), null, 'no menu is left open over the page');
   assert.equal(trigger.textContent, 'Select One');
+});
+
+test('a control that always reports its menu open never keeps the card from appearing', async t => {
+  // Workday pages can hold a header control that stays aria-expanded="true";
+  // 1.31.9 waited on it, so the card never appeared (2026-11-14).
+  const header = '<button type="button" id="utility" aria-haspopup="true" aria-expanded="true">Menu</button><div role="combobox" aria-expanded="true">Search</div>';
+  const answerItems = [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Language fluency', value: 'Fluent' }];
+  const f = fixture(header + languagePage('run1'), { answerItems, url: tdUrl }); t.after(f.dispose);
+  for (const [id] of languageLevels) wireListbox(f, id, levelChoices);
+  await until(() => countOf(f, 'known') === '5', 'the card appears and counts the known levels');
+  f.click('fill');
+  await until(() => languageLevels.every(([id]) => f.document.getElementById(id).textContent === 'Fluent'), 'every level fills');
+  await until(() => f.panel() && !f.panel().textContent.includes('Filling'), 'the card shows the result');
 });
