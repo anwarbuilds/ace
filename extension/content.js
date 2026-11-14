@@ -3972,7 +3972,19 @@
   }
   var menuOpenSince = 0;
 
+  /* Every redraw goes through here. Reloading the extension cuts the copy
+     already running in an open tab off from Chrome, and it can happen in the
+     middle of a redraw: Chrome then reported "Extension context invalidated"
+     from showPreview (Frost, 2026-11-14) and the card stayed blank. The card
+     says to refresh the page instead; any other failure shows on the card. */
   function refresh() {
+    try { redraw(); } catch (error) {
+      if (!extensionAlive() || /context invalidated/i.test(String(error && error.message))) { showUpdated(); return; }
+      reportFailure(error);
+    }
+  }
+
+  function redraw() {
     if (!loaded) return;
     if (!extensionAlive()) { showUpdated(); return; }
     // Only a card already on screen waits, and briefly: the card must always
@@ -5035,6 +5047,7 @@
     fillOne: fillOne,
     datesSettled: datesSettled,
     restoreClobbered: restoreClobbered,
+    refresh: function () { refresh(); },
     recordFill: function (record) { lastFill.push(record); },
     panel: panel,
     shell: shell,

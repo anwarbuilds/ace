@@ -1856,6 +1856,21 @@ test('a copy cut off by an extension reload says so instead of ignoring clicks',
   assert.ok(f.panel().textContent.includes('ACE was updated'), 'the card asks for a refresh');
 });
 
+test('a reload in the middle of a redraw asks for a refresh instead of throwing', async t => {
+  // Chrome cut a running copy off while it drew the card (Frost, 2026-11-14):
+  // "Extension context invalidated" was thrown from showPreview, uncaught.
+  const f = fixture(routine); t.after(f.dispose);
+  await until(() => f.panel(), 'the card appears');
+  const runtime = f.context.chrome.runtime;
+  const real = f.context.aceAnswerNameFor;
+  // Alive when the redraw starts, cut off part way through it.
+  f.context.aceAnswerNameFor = () => { runtime.id = undefined; throw new Error('Extension context invalidated.'); };
+  f.document.body.append(f.document.createElement('input'));
+  assert.doesNotThrow(() => f.internals.refresh());
+  assert.ok(f.panel().textContent.includes('ACE was updated'), 'the card asks for a refresh');
+  f.context.aceAnswerNameFor = real;
+});
+
 test('a self-identification date Workday reports as missing is typed in again', async t => {
   const f = fixture(sectionDate('dateSignedOn', 'Date', ['Month', 'Day', 'Year']) +
     '<div data-automation-id="formField-disability"><label>Please check one of the boxes below:</label></div>'); t.after(f.dispose);

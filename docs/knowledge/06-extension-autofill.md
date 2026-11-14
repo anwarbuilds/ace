@@ -7,12 +7,17 @@
 >
 > Read this when: you change the autofill matcher, the panel, the answer bank or anything that touches a live application form.
 
-## The card did not appear (2026-11-14, extension 1.31.10)
+## The card did not appear (2026-11-14, extensions 1.31.10 and 1.31.11)
 
 After reloading 1.31.9 the owner saw no card; a toolbar Fill still filled. 1.31.9 paused the card while any control on
 the page reported `aria-expanded="true"`, and a page can hold one that always does, so the first card waited up to 30
 seconds. 1.31.10 waits only when a card is already on screen and the focused control's own menu is open, at most 10
 seconds (`ownerInEmployerMenu`). A fictional test with an always-open header control covers it.
+
+1.31.11: the owner then saw "Uncaught Error: Extension context invalidated" from `showPreview` on a Frost Bank form. A
+reload cut off the copy running in that open tab in the middle of a redraw. `refresh` now catches it and shows the
+existing "ACE was updated, refresh the page" note; any other redraw failure shows on the card. After every Reload,
+refresh the employer tab.
 
 ## Language levels by rank, and menus left open (2026-11-13, extension 1.31.9)
 
