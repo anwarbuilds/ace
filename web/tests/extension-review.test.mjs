@@ -1983,3 +1983,57 @@ test('a Workday prompt printed as plain text names its checkbox group, and diagn
   later.click('fill');
   assert.deepEqual(choices.map((_, at) => later.document.getElementById(`d-${at}`).checked), [false, true, false]);
 });
+
+// TD asks six language levels, "Conduct Business" among them (2026-11-13).
+// Learned copies had drifted to "Beginner" and "Advanced (Proficient)" and
+// outranked the saved "Fluent"; a menu ACE left open then held the page.
+const languageLevels = [['conduct', 'Conduct Business'], ['overall', 'Overall'], ['reading', 'Reading'], ['speaking', 'Speaking'], ['writing', 'Writing']];
+const levelChoices = ['Beginner', 'Intermediate', 'Advanced', 'Fluent'];
+const languagePage = run => languageLevels.map(([id, q]) => workdayDropdown(id, q, run)).join('');
+const tdUrl = 'https://fictionalbank.wd3.myworkdayjobs.com/en-US/Careers/job/Engineer_R1/apply/applyManually';
+
+test('Workday language levels take the saved level by rank, never a drifted learned copy', async t => {
+  const memoryStore = [
+    { id: 1, concept: 'learn:topic:choice:business-conduct', question: 'Conduct Business*', answer: 'Beginner', answer_type: 'choice', reuse_policy: 'learned', revision: 1, source_host: 'fictionalbank.wd3.myworkdayjobs.com' },
+    { id: 2, concept: 'learn:bank:choice:language-fluency', question: 'Overall*', answer: 'Advanced (Proficient)', answer_type: 'choice', reuse_policy: 'learned', revision: 11, source_host: 'fictionalpharma.wd1.myworkdayjobs.com' },
+  ];
+  const answerItems = [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Language fluency', value: 'Fluent' }];
+  const f = fixture(languagePage('run1'), { memoryStore, answerItems, autoLearn: true, url: tdUrl }); t.after(f.dispose);
+  for (const [id] of languageLevels) wireListbox(f, id, levelChoices);
+  await until(() => countOf(f, 'known') === '5', 'all five levels are known from the saved answer');
+  f.click('fill');
+  await until(() => languageLevels.every(([id]) => f.document.getElementById(id).textContent !== 'Select One'), 'every level fills');
+  assert.deepEqual(languageLevels.map(([id]) => f.document.getElementById(id).textContent), Array(5).fill('Fluent'));
+  assert.equal(f.saved.length, 0, 'a filled level is never learned');
+  assert.equal(f.submissions(), 0);
+});
+
+test('a language level the owner picks is kept on the form and never learned', async t => {
+  const answerItems = [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Language fluency', value: 'Fluent' }];
+  const f = fixture(languagePage('run1'), { answerItems, autoLearn: true, url: tdUrl }); t.after(f.dispose);
+  for (const [id] of languageLevels) wireListbox(f, id, levelChoices);
+  await ownerPicks(f, 'conduct', 'Intermediate');
+  await ownerPicks(f, 'overall', 'Advanced');
+  await new Promise(resolve => setTimeout(resolve, 900));
+  assert.equal(f.document.getElementById('conduct').textContent, 'Intermediate');
+  assert.equal(f.document.getElementById('overall').textContent, 'Advanced');
+  assert.equal(f.saved.length, 0);
+});
+
+test('a Workday menu that ignores Escape is closed by its own button when no option fits', async t => {
+  const answerItems = [{ label: 'Full name', value: 'Example Applicant' }, { label: 'Language fluency', value: 'Fluent' }];
+  const f = fixture(workdayDropdown('overall', 'Overall', 'run1'), { answerItems, url: tdUrl }); t.after(f.dispose);
+  const trigger = f.document.getElementById('overall');
+  // A toggle, like Workday's: a second press closes the menu; Escape does nothing.
+  trigger.addEventListener('click', event => { if (event.target === trigger) setTimeout(() => {
+    const open = f.document.getElementById('overall-menu');
+    if (open) { open.remove(); trigger.setAttribute('aria-expanded', 'false'); return; }
+    const menu = f.document.createElement('div'); menu.id = 'overall-menu'; menu.setAttribute('role', 'listbox');
+    for (const text of ['Option A', 'Option B']) { const option = f.document.createElement('div'); option.setAttribute('role', 'option'); option.textContent = text; menu.append(option); }
+    trigger.setAttribute('aria-expanded', 'true'); f.document.body.append(menu);
+  }, 0); });
+  f.click('fill');
+  await until(() => !f.panel().textContent.includes('Filling'), 'the fill finishes');
+  assert.equal(f.document.getElementById('overall-menu'), null, 'no menu is left open over the page');
+  assert.equal(trigger.textContent, 'Select One');
+});

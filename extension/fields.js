@@ -506,8 +506,11 @@ var ACE_RULES = [
   // only, and never where the word belongs to a consent or a statement:
   // "written consent" is not a language level.
   { answer: "Language fluency", type: ACE_CHOICE, needs: ACE_CHOICE,
+    // TD asks a sixth, "Conduct Business" (2026-11-13). Left to learned
+    // memory it took "Beginner" and then saved that as the owner's level.
     any: ["comprehension", "reading", "speaking", "writing", "overall",
-          "proficiency", "fluency level", "spoken", "written"],
+          "proficiency", "fluency level", "spoken", "written",
+          "conduct business", "business proficiency"],
     not: ["gpa", "grade point", "result", "overall result", "consent",
           "authorization", "authorisation", "statement", "permission",
           "notice", "agreement", "acknowledge", "acknowledgement",
@@ -1623,6 +1626,45 @@ function aceChooseOption(options, answer, aliases) {
    federal self-identification form. So the exact text decides first,
    then the label before its qualifier, and only then the general rules,
    which still refuse to choose between two equally good options. */
+/* A language level is a scale, not a phrase.
+
+   Forms word the same levels differently: "Fluent", "5 - Fluent",
+   "Advanced (Proficient)", "Native or bilingual proficiency". Matched as
+   text, a saved "Fluent" met a form whose top option said "Advanced" and
+   fell through to whatever matched least badly; on TD's six dropdowns
+   that was "Beginner". Read as ranks, the saved level picks the highest
+   option the form offers at or below it, so a fluent speaker is never
+   put down as a beginner, and never claimed above the saved level.
+
+   4 native, bilingual, fluent, expert; 3 advanced, proficient;
+   2 intermediate, conversational; 1 beginner, basic, elementary;
+   0 none. Unknown wording ranks -1 and is never chosen. */
+function aceLanguageLevel(text) {
+  var t = aceNormalise(text);
+  if (!t) return -1;
+  if (/\b(no knowledge|no proficiency|none|not applicable)\b/.test(t)) return 0;
+  if (/\b(native|mother tongue|bilingual|fluent|fluency|full professional|expert|mastery|excellent)\b/.test(t)) return 4;
+  if (/\blimited working\b/.test(t)) return 2;
+  if (/\b(elementary|beginner|beginning|basic|novice|minimal|poor)\b/.test(t)) return 1;
+  if (/\b(advanced|professional working|proficient|proficiency|high)\b/.test(t)) return 3;
+  if (/\b(intermediate|conversational|working|moderate|good|fair)\b/.test(t)) return 2;
+  if (/\blimited\b/.test(t)) return 1;
+  return -1;
+}
+
+function aceChooseLanguageLevel(options, answer) {
+  var wanted = aceLanguageLevel(answer);
+  if (wanted < 0) return aceChooseOption(options, answer, []);
+
+  var best = -1, bestRank = -1;
+  options.forEach(function (text, index) {
+    var rank = aceLanguageLevel(text);
+    if (rank < 0 || rank > wanted) return;
+    if (rank > bestRank) { best = index; bestRank = rank; }
+  });
+  return best;
+}
+
 function aceLearnedHead(text) {
   return aceNormalise(String(text || "").split(/\(|\[|\s-\s|:/)[0]);
 }
