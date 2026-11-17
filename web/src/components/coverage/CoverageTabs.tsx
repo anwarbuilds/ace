@@ -16,6 +16,7 @@ import type {
   LeadsReport,
   RecallMissed,
   RecallReport,
+  ScheduleReport,
   SourcesReport,
 } from "@/lib/types";
 
@@ -407,6 +408,58 @@ function Counts({ c, tz }: { c: CountingReport | null; tz: string }) {
           </>
         ) : null}
       </p>
+    </section>
+  );
+}
+
+// Is reading on schedule? Each hiring site's working boards against their
+// planned gap, from what the scheduler already records (FRS-02).
+function Schedule({ s }: { s: ScheduleReport | null }) {
+  if (!s) return <p className="why">Whether reading is on schedule could not be loaded just now. Refresh to try again.</p>;
+  const ago = (value: number) => (value < 1 ? "under 1 min" : minutes(value));
+  return (
+    <section className="cov-section" aria-labelledby="cov-schedule">
+      <h2 id="cov-schedule">Is reading on schedule?</h2>
+      <p className="why">
+        Each board has a plan, such as every 15 minutes. This is how long ago each site&rsquo;s working boards were last read,
+        right now. A board is late after one and a half planned gaps. Boards not read in two days are on the Scoreboard instead.
+      </p>
+      <p className={`cov-capacity-line ${s.late ? "cov-warn" : "cov-good"}`}>
+        Right now {n(s.due_now)} of {n(s.working_boards)} working boards are due and waiting their turn
+        {s.due_now ? `; the longest has waited ${ago(s.longest_wait_minutes)} past its plan` : ""}. {n(s.late)} are late.
+      </p>
+      {s.sites.length ? (
+        <div className="cov-table">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Hiring site</th>
+                <th scope="col" className="cov-num">Boards</th>
+                <th scope="col">Plan</th>
+                <th scope="col" className="cov-num">Typical last read</th>
+                <th scope="col" className="cov-num">19 in 20 within</th>
+                <th scope="col" className="cov-num">99 in 100 within</th>
+                <th scope="col" className="cov-num">Late</th>
+              </tr>
+            </thead>
+            <tbody>
+              {s.sites.map((row) => (
+                <tr key={row.site}>
+                  <th scope="row">{row.site}</th>
+                  <td className="cov-num">{n(row.boards)}</td>
+                  <td>{row.plan}</td>
+                  <td className="cov-num">{ago(row.typical_minutes)} ago</td>
+                  <td className="cov-num">{ago(row.p95_minutes)}</td>
+                  <td className="cov-num">{ago(row.p99_minutes)}</td>
+                  <td className={`cov-num ${row.late ? "cov-late" : ""}`}>{n(row.late)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="why">No board has been read yet.</p>
+      )}
     </section>
   );
 }
@@ -812,7 +865,25 @@ export function LeadsTab({ report, tz, state, q, offset }: { report: LeadsReport
   );
 }
 
-export function SourcesTab({ report, hosts, capacity, tz, show, q, offset }: { report: SourcesReport | null; hosts: HostsReport | null; capacity: CapacityReport | null; tz: string; show?: string; q?: string; offset: number }) {
+export function SourcesTab({
+  report,
+  hosts,
+  capacity,
+  schedule,
+  tz,
+  show,
+  q,
+  offset,
+}: {
+  report: SourcesReport | null;
+  hosts: HostsReport | null;
+  capacity: CapacityReport | null;
+  schedule: ScheduleReport | null;
+  tz: string;
+  show?: string;
+  q?: string;
+  offset: number;
+}) {
   const href = (next: { show?: string | null; offset?: number }) => {
     const params = new URLSearchParams({ tab: "sources" });
     const chosen = next.show === undefined ? show : next.show;
@@ -841,6 +912,8 @@ export function SourcesTab({ report, hosts, capacity, tz, show, q, offset }: { r
           </div>
 
           <Capacity c={capacity} />
+
+          <Schedule s={schedule} />
 
           <section className="cov-section" aria-labelledby="cov-all">
             <div className="cov-section-head">

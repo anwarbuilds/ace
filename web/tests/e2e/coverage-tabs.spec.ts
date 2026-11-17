@@ -85,6 +85,16 @@ test("every board and company is counted once, and the groups add up", async ({ 
   await expect(card.getByText(/Jobs, counted apart:/)).toBeVisible();
 });
 
+test("Sources says whether reading is on schedule, per hiring site", async ({ page }) => {
+  await page.goto("/app/coverage?tab=sources");
+  const section = page.locator("section", { has: page.getByRole("heading", { name: "Is reading on schedule?" }) });
+  await expect(section).toBeVisible();
+  await expect(section.getByText(/working boards are due and waiting their turn/)).toBeVisible();
+  const table = section.getByRole("table");
+  await expect(table.getByRole("columnheader", { name: "19 in 20 within" })).toBeVisible();
+  await expect(table.getByRole("rowheader").first()).toBeVisible();
+});
+
 test("the Add button on any tab lands in the box, ready to paste", async ({ page }) => {
   await page.goto("/app/coverage?tab=sources");
   await page.getByRole("link", { name: "Add a job or company" }).click();

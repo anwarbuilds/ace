@@ -13,6 +13,7 @@ import type {
   HostsReport,
   LeadsReport,
   RecallReport,
+  ScheduleReport,
   SourcesReport,
 } from "@/lib/types";
 import "./coverage.css";
@@ -95,6 +96,7 @@ export default async function CoveragePage({ searchParams }: PageProps<"/app/cov
                 })}
                 hosts={await apiGetOr<HostsReport | null>("/api/coverage/hosts", null)}
                 capacity={await apiGetOr<CapacityReport | null>("/api/coverage/capacity", null)}
+                schedule={await apiGetOr<ScheduleReport | null>("/api/coverage/schedule", null)}
                 tz={tz}
                 show={show}
                 q={q}

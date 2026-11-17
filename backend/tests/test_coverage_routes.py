@@ -125,3 +125,8 @@ def test_the_counts_route_adds_up(client) -> None:
     assert body["boards"]["total"] == sum(group["count"] for group in body["boards"]["groups"])
     assert body["companies"]["total"] == sum(group["count"] for group in body["companies"]["groups"]) == 1
     assert body["jobs"] == {"open": 0, "passing": 0}
+
+
+def test_the_schedule_route_answers_with_no_boards(client) -> None:
+    body = client.get("/api/coverage/schedule").json()
+    assert body["working_boards"] == 0 and body["sites"] == [] and body["due_now"] == 0

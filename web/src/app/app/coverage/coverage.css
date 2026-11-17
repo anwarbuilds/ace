@@ -165,3 +165,8 @@ a.cov-stat:hover { border-color: var(--border-strong); }
   .cov-count-row { grid-template-columns: 10px minmax(0, 1fr) auto; }
   .cov-count-meaning { grid-column: 2 / -1; }
 }
+
+/* Is reading on schedule? (FRS-02) */
+.cov-table th.cov-num, .cov-table td.cov-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cov-table td.cov-late { color: var(--warning); font-weight: var(--weight-semibold); }
+.cov-capacity-line.cov-warn::before { background: var(--warning); }

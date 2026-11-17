@@ -491,3 +491,21 @@ export interface CountingReport {
   jobs: { open: number; passing: number };
   feeds: number;
 }
+
+export interface ScheduleReport {
+  measured_at: string;
+  working_boards: number;
+  due_now: number;
+  longest_wait_minutes: number;
+  late: number;
+  late_after: number;
+  sites: {
+    site: string;
+    boards: number;
+    plan: string;
+    typical_minutes: number;
+    p95_minutes: number;
+    p99_minutes: number;
+    late: number;
+  }[];
+}
