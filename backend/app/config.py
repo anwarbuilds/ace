@@ -213,7 +213,7 @@ class Settings(BaseSettings):
     # pool of twelve plus eight overflow. Capacity is measured before and
     # after every change to either (OPS-05).
     scheduler_workers: int = 8
-    scheduler_platform_limits: str = "workday=5,oracle_recruiting=2"
+    scheduler_platform_limits: str = "workday=3,oracle_recruiting=2"
 
     # The interactive API docs list every route. Off unless asked for.
     api_docs: bool = False

@@ -53,8 +53,9 @@ from datetime import (
 )
 import html
 import re
-from typing import Any
+from typing import Any, NamedTuple
 from urllib.parse import unquote
+import zlib
 
 import httpx
 
@@ -62,6 +63,7 @@ from backend.app.adapters.html_text import (
     unescape_fully,
 )
 from backend.app.adapters.retry import (
+    RETRYABLE_STATUS_CODES,
     request_with_retry,
 )
 from backend.app.models.job import (
@@ -77,6 +79,8 @@ WORKDAY_SOURCE = "workday"
 WORKDAY_PAGE_SIZE = 20
 
 REQUEST_TIMEOUT_SECONDS = 25.0
+
+REFUSAL_STATUSES = frozenset({401, 403, 405, 429})
 
 # Workday's search returns at most this many results, and reports this
 # as its total, however many postings the tenant has.
@@ -95,7 +99,43 @@ DEFAULT_MAX_DETAIL_FETCHES = 400
 #
 # Kept deliberately small: this is a courtesy limit on someone else's
 # careers site, not a throughput target.
-DEFAULT_CONCURRENCY = 4
+DEFAULT_CONCURRENCY = 2
+
+# Workday's 429 is a refusal of ACE's address, not a hiccup: from
+# 2026-11-14 it answered most requests that way. Asking again at once
+# only adds to the count, so a refused page fails the read at once and
+# the scheduler pauses Workday (runtime.LANE_PAUSES).
+LISTING_RETRY_STATUSES = RETRYABLE_STATUS_CODES - {
+    429,
+}
+
+# A posting's detail ACE already stored is reused instead of fetched
+# again on every read; each posting's detail is fetched afresh in one
+# hour of every DETAIL_REFRESH_HOURS, chosen by its identifier, so an
+# edit still reaches ACE within a day. Before this, every read fetched
+# every promising posting's detail: about 17,000 requests an hour.
+DETAIL_REFRESH_HOURS = 24
+
+
+class StoredDetail(NamedTuple):
+    """What a posting's detail gave ACE the last time it was read."""
+
+    description: str
+    location: str
+    posted_at: datetime | None
+    requisition_id: str | None
+    official_url: str
+
+
+def detail_refresh_due(
+    external_path: str,
+    reference: datetime,
+) -> bool:
+    """Whether this hour is this posting's hour to fetch its detail afresh."""
+
+    hour = int(reference.timestamp() // 3600)
+    slot = zlib.crc32(external_path.encode("utf-8")) % DETAIL_REFRESH_HOURS
+    return hour % DETAIL_REFRESH_HOURS == slot
 
 USER_AGENT = (
     "ACE/0.1 "
@@ -795,6 +835,7 @@ def fetch_workday_jobs(
     ),
     concurrency: int = DEFAULT_CONCURRENCY,
     known_posted: Mapping[str, datetime] | None = None,
+    known_details: Mapping[str, StoredDetail] | None = None,
 ) -> list[CanonicalJob]:
     """Fetch and normalize one Workday tenant's public postings.
 
@@ -806,6 +847,11 @@ def fetch_workday_jobs(
     ``known_posted`` is the posted day ACE already holds for each
     posting, by its identifier, so a list label that still agrees with
     it leaves it alone (``steady_posted_on``).
+
+    ``known_details`` is what each posting's detail gave ACE before; it is
+    reused instead of fetched again (``DETAIL_REFRESH_HOURS``), and kept
+    when a fresh detail read fails, so a refusal never blanks a stored
+    description.
     """
 
     tenant, site = parse_source_account(
@@ -872,7 +918,8 @@ def fetch_workday_jobs(
                     "offset": offset,
                     "searchText": "",
                 },
-            )
+            ),
+            retry_statuses=LISTING_RETRY_STATUSES,
         )
 
         response.raise_for_status()
@@ -959,10 +1006,15 @@ def fetch_workday_jobs(
             allowed == page_count,
         )
 
+    refused_detail: list[int] = []
+
     def fetch_detail(
         external_path: str,
     ) -> dict[str, Any] | None:
-        """Fetch one posting's detail record."""
+        """Fetch one posting's detail record. None after a refusal."""
+
+        if refused_detail:
+            return None
 
         response = http.get(
             (
@@ -971,6 +1023,14 @@ def fetch_workday_jobs(
                 f"{external_path}"
             )
         )
+
+        if response.status_code in REFUSAL_STATUSES:
+            # Stop asking for details this read; stored ones stand in.
+            refused_detail.append(
+                response.status_code
+            )
+
+            return None
 
         if response.status_code != 200:
             return None
@@ -1119,7 +1179,25 @@ def fetch_workday_jobs(
                         path
                     )
 
-        wanted = wanted[
+        stored = known_details or {}
+
+        # Reuse what ACE stored, except in each posting's refresh hour.
+        reused = {
+            path
+            for path in wanted
+            if path in stored
+            and stored[path].description
+            and not detail_refresh_due(
+                path,
+                reference,
+            )
+        }
+
+        wanted = [
+            path
+            for path in wanted
+            if path not in reused
+        ][
             :max_detail_fetches
         ]
 
@@ -1203,6 +1281,17 @@ def fetch_workday_jobs(
             info = details.get(
                 external_path
             )
+
+            kept = stored.get(
+                external_path
+            )
+
+            if info is None and kept is not None and kept.description:
+                description = kept.description
+                location = kept.location or location
+                posted_at = kept.posted_at or posted_at
+                requisition_id = kept.requisition_id or requisition_id
+                official_url = kept.official_url or official_url
 
             if info is not None:
                 description = _clean_html(

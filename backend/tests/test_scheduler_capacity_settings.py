@@ -24,7 +24,7 @@ def test_defaults_keep_todays_eight_workers_with_slow_platforms_limited() -> Non
     assert current.scheduler_workers == 8
 
     assert current.scheduler_platform_limit_map == {
-        "workday": 5,
+        "workday": 3,
         "oracle_recruiting": 2,
     }
 
