@@ -114,3 +114,7 @@ def test_the_capacity_route_answers_with_the_three_numbers(client) -> None:
     }
 
     assert body["new_jobs"]["typical_minutes"] is None
+
+
+def test_the_recall_route_says_when_nothing_was_checked_yet(client) -> None:
+    assert client.get("/api/coverage/recall").json() == {"checked": False}

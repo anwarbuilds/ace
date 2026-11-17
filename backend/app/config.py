@@ -202,6 +202,10 @@ class Settings(BaseSettings):
     # so the owner sees the first report before anything stops. New boards
     # and lead checks obey a refusal either way.
     host_policy_enforce: bool = False
+    # Once a Pacific day the scheduler scores ACE against the two test lists
+    # (REC-01), the only reads of them anywhere. Reports only: it never adds
+    # a board or a job.
+    recall_check_enabled: bool = True
 
     # How many boards the scheduler reads at once, and how many of one
     # slow platform's boards may hold a worker together, as

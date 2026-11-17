@@ -32,6 +32,7 @@ from urllib.parse import (
 
 import httpx
 
+from backend.app.coverage.held_out import is_held_out, refuse_held_out
 from backend.app.discovery.detector import (
     detect_source_from_url,
 )
@@ -87,6 +88,12 @@ class DiscoveryFeed:
             raise ValueError(
                 "Discovery feed URL "
                 "must not be empty."
+            )
+
+        if is_held_out(normalized_url):
+            raise ValueError(
+                "A test list is never a discovery feed: "
+                f"{normalized_url}"
             )
 
         object.__setattr__(
@@ -627,6 +634,10 @@ def _fetch_public_text(
     url: str,
 ) -> str:
     """Fetch one public discovery document."""
+
+    refuse_held_out(
+        url
+    )
 
     response = httpx.get(
         url,

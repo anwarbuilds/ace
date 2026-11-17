@@ -2058,3 +2058,39 @@ class ResumeAssessmentRecord(Base):
     result: Mapped[dict] = mapped_column(JSON_PAYLOAD, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RecallRunRecord(Base):
+    """One day's score against the test lists (REC-01).
+
+    Derived and rebuildable: the scheduler reads the two test lists once a
+    Pacific day and records how many of their open roles ACE holds from the
+    employer's board, only as a feed copy, or not at all, with the missed
+    roles and why. Nothing else writes it, and nothing reads it to find jobs.
+    """
+
+    __tablename__ = "recall_runs"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "day",
+            name="uq_recall_runs_day",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BIGINT_ID,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    # The Pacific day the score is for.
+    day: Mapped[date] = mapped_column(Date, nullable=False)
+
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    # Totals, each list's counts and the leak check.
+    summary: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+    # The missed roles, each with what ACE knows about the company.
+    missed: Mapped[list] = mapped_column(JSON, nullable=False, default=list)

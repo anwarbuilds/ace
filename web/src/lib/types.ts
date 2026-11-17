@@ -433,3 +433,46 @@ export interface PullsPage {
   day: { date: string; new_postings: number; new_qualifying: number; counts: Record<PullFilter, number> };
   buckets: PullBucket[];
 }
+
+export interface RecallCounts {
+  listed: number;
+  found: number;
+  board: number;
+  feed: number;
+  missed: number;
+  timed: number;
+  within_day: number;
+  seen_first: number;
+  hidden: number;
+  hidden_reasons: { reason: string; count: number }[];
+}
+
+export interface RecallList extends Partial<RecallCounts> {
+  key: string;
+  label: string;
+  links: "employer" | "short";
+  error?: string;
+}
+
+export interface RecallMissed {
+  list: string;
+  company: string;
+  title: string;
+  location: string;
+  listed_on: string | null;
+  link: string | null;
+  reason: string;
+}
+
+export type RecallReport =
+  | { checked: false }
+  | {
+      checked: true;
+      day: string;
+      checked_at: string;
+      total: RecallCounts;
+      lists: RecallList[];
+      leaks: { boards: number; jobs: number; leads: number };
+      missed: RecallMissed[];
+      trend: { day: string; listed: number; found: number }[];
+    };

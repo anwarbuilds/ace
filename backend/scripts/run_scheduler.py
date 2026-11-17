@@ -48,6 +48,7 @@ from backend.app.coverage.leads import (
     check_due_leads,
     sync_leads,
 )
+from backend.app.coverage.recall import run_daily_check
 from backend.app.coverage.recovery import (
     recover_dark_sources,
 )
@@ -914,6 +915,18 @@ def main(
             LOGGER.exception(
                 "lead_ledger_failed"
             )
+
+        if settings.recall_check_enabled:
+            try:
+                run_daily_check(
+                    SessionLocal,
+                    now=now_utc(),
+                )
+
+            except Exception:
+                LOGGER.exception(
+                    "recall_check_failed"
+                )
 
         if time.monotonic() - dark_checked[0] < DARK_CHECK_SECONDS:
             return
