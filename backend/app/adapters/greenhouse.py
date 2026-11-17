@@ -142,7 +142,8 @@ def fetch_greenhouse_jobs(
             external_id=str(raw_job["id"]),
             requisition_id=raw_job.get("requisition_id"),
             title=raw_job["title"],
-            location=location_data.get("name", "Unknown"),
+            # A posting can name its location as null; one such job once failed the whole board.
+            location=location_data.get("name") or "Unknown",
             description=_clean_html(raw_job.get("content")),
             official_url=raw_job["absolute_url"],
             posted_at=raw_job.get("first_published"),
