@@ -1073,3 +1073,29 @@ The original DIS-16 release was verified before the repair above superseded its 
   families cannot be split below it (Engineering 2,140; within it Regular 2,034). Its list is mostly newest first, so new
   postings are seen, but not strictly in date order: a dry run of a "close only what the read vouches for" rule refused
   on real data, so the rule was dropped. Old postings past the cap stay open; RTX showed 6,657 open against 4,590 listed.
+
+## Measuring ACE against lists it never reads (Chat 5, 2026-11-16)
+
+- **Test lists** (REC-03, `coverage/held_out.py`). speedyapply's new grad USA file and vanshb03's new grad list are scored
+  against and never read to find jobs: `is_held_out` names their GitHub accounts, raw files and short-link host; the polite
+  reader and the public feed reader refuse them; a pasted short link is never followed; `held_out_rows` finds any board, job
+  or lead that came from one; and a test fails if any code or data file outside `held_out.py` names them. Reading lists
+  (Simplify, zapply, FreeHire, Jobright, companies the lead check adds) can never be test lists; zapply stays a reading list
+  for chat 7 by owner decision. HiringCafe's terms page answers automated readers with a bot check, so it is left out.
+- **Daily score** (REC-01, `coverage/recall.py`, table `recall_runs`, migration 0052). Once a Pacific day after 05:00 the
+  scheduler reads both lists (the only reads of them) and says for every open role: found on the employer's board, found
+  only as a Simplify copy, or missed, with what ACE knows about the company. Matching: a posting number in an employer link
+  first; otherwise company and title, where a list's "New Grad 2027:" label is not part of the title, a trailing code after
+  " - " is ignored, and an employer title that is itself early career may carry up to three extra words (team, "Graduate",
+  "2027 Start"); internships never match a full-time role. A role counts as found whatever the gate decided; hidden roles are
+  counted with the gate's reason. "Within a day" compares ACE's first sight with the list's date-only day.
+- **Lessons from the first real run.** Read-only dry runs on real data found that list labels hid most matches and that
+  internships and empty titles made false ones; a sample of the looser matches was then checked by hand. Most misses are
+  real: boards ACE can read but has not added, sites without a reader (iCIMS, JazzHR, Dayforce, ADP, Breezy), and companies
+  ACE never heard of. Fixing them is REC-02 (chat 6): reading the company's own board, never copying the list's job.
+- **Honest counting** (REC-05, `coverage/accounting.py`). Every board sits in one group, checked in order: switched off,
+  turned ace away, not read yet, not read lately (two days), working. There is no "working, empty" group: ACE refuses an
+  empty answer as a read, so an empty board has no good read. Companies use the lead ledger's states. Jobs are counted apart.
+- **Reading on schedule** (FRS-02, `coverage/schedule.py`). For working boards, per hiring site: how long ago each was last
+  read (typical, 19 in 20, 99 in 100), how many are late (more than one and a half planned gaps) and how many are due now.
+  It is a picture of now from the scheduler's own records; it is what showed Workday refusing (topic 02).
