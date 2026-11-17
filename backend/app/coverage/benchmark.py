@@ -23,34 +23,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
-
-# Held-out on purpose. Adding any of these to the seed feeds destroys
-# the measurement, because ACE would then be tested on its own inputs.
-HELD_OUT_LISTS = (
-    (
-        "speedyapply/2026-SWE-College-Jobs",
-        "https://raw.githubusercontent.com/"
-        "speedyapply/2026-SWE-College-Jobs/"
-        "main/README.md",
-    ),
-    (
-        "vanshb03/New-Grad-2026",
-        "https://raw.githubusercontent.com/"
-        "vanshb03/New-Grad-2026/"
-        "main/README.md",
-    ),
-)
+from backend.app.coverage.held_out import HELD_OUT_LISTS as _TEST_LISTS
 
 
-# Dropped 2026-09-23: jobright-ai/2025-SWE-New-Grad.
-#
-# ACE now reads JobRight's category pages to learn which companies are
-# hiring, so their list is no longer a list ACE has never seen. Kept as
-# a benchmark it would have measured ACE against its own inputs, which
-# is the one thing this file exists to avoid. Two independent lists
-# remain, and the recall number moved from 33% to whatever those two
-# say on their own -- a smaller number measured honestly is worth more
-# than a larger one that is quietly circular.
+# The test lists live in ``held_out.py``, which also keeps every job-finding
+# read away from them (REC-03). Adding any of them to the reading lists
+# destroys the measurement, because ACE would then be tested on its own inputs.
+HELD_OUT_LISTS = tuple((item.label, item.url) for item in _TEST_LISTS)
+
+
+# Dropped 2026-09-23: Jobright's new grad list. ACE reads Jobright's category
+# pages to learn which companies are hiring, so it is a reading list, not a
+# test list.
 
 
 _PUNCTUATION = re.compile(

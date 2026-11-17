@@ -433,3 +433,79 @@ export interface PullsPage {
   day: { date: string; new_postings: number; new_qualifying: number; counts: Record<PullFilter, number> };
   buckets: PullBucket[];
 }
+
+export interface RecallCounts {
+  listed: number;
+  found: number;
+  board: number;
+  feed: number;
+  missed: number;
+  timed: number;
+  within_day: number;
+  seen_first: number;
+  hidden: number;
+  hidden_reasons: { reason: string; count: number }[];
+}
+
+export interface RecallList extends Partial<RecallCounts> {
+  key: string;
+  label: string;
+  links: "employer" | "short";
+  error?: string;
+}
+
+export interface RecallMissed {
+  list: string;
+  company: string;
+  title: string;
+  location: string;
+  listed_on: string | null;
+  link: string | null;
+  reason: string;
+}
+
+export type RecallReport =
+  | { checked: false }
+  | {
+      checked: true;
+      day: string;
+      checked_at: string;
+      total: RecallCounts;
+      lists: RecallList[];
+      leaks: { boards: number; jobs: number; leads: number };
+      missed: RecallMissed[];
+      trend: { day: string; listed: number; found: number }[];
+    };
+
+export interface CountGroup {
+  key: string;
+  label: string;
+  meaning: string;
+  count: number;
+}
+
+export interface CountingReport {
+  counted_at: string;
+  boards: { total: number; groups: CountGroup[] };
+  companies: { total: number; groups: CountGroup[] };
+  jobs: { open: number; passing: number };
+  feeds: number;
+}
+
+export interface ScheduleReport {
+  measured_at: string;
+  working_boards: number;
+  due_now: number;
+  longest_wait_minutes: number;
+  late: number;
+  late_after: number;
+  sites: {
+    site: string;
+    boards: number;
+    plan: string;
+    typical_minutes: number;
+    p95_minutes: number;
+    p99_minutes: number;
+    late: number;
+  }[];
+}

@@ -436,3 +436,45 @@ minutes whatever its origin (579 startup boards promoted), together since 19:52Z
 85 s, 222 reads a minute, workers 93% busy, scheduler CPU 51% on average, new jobs typical 7.2 minutes. A first
 ten-worker try rolled back on a false alarm: the scheduler's own moved-board repair switched a board off, and the strict
 settings check did not know it; measured numbers had not been saved before the check.
+
+## Workday turned ACE away, so ACE now reads it gently (2026-11-17, Chat 5)
+
+The new "Is reading on schedule?" table showed most Workday boards a day late. The scheduler's log showed why: from
+2026-11-14 Workday answered more and more requests with 429, and from about 07:00Z on 2026-11-16 most of them. Every
+board backed off on its own (doubling to six hours) while the other 970 kept asking, which probably kept the limit in
+place. ACE had been sending tens of thousands of Workday requests an hour: about three quarters were list pages (a
+2,000-posting board is a hundred pages, read in full every fifteen minutes) and the rest were posting details fetched
+again on every read although nothing had changed.
+
+- **One shared pause** (`scheduling/runtime.py`, `LANE_PAUSES`). Three refusals within five minutes, with no Workday answer
+  in those five minutes, pause every Workday board (on Nov 17 Workday answered about half, and pausing on any refusal read
+  almost nothing): ten minutes, doubling to two hours while Workday keeps refusing, starting over after an answer. Paused boards stay
+  due and go first, oldest due first, when the pause ends; a single run (`--once`) leaves them to the next run instead of
+  waiting. A refused Workday board's own backoff stops at an hour (`LANE_BOARD_BACKOFF_CAP_SECONDS`), so no board sits for
+  six hours after Workday answers again.
+- **No instant repeat.** A refused list page fails the read at once (`adapters/workday.LISTING_RETRY_STATUSES`, as Workable
+  already did); a refused detail stops further detail reads in that read.
+- **Fewer at once.** Three Workday boards at a time (was six; `PLATFORM_LIMITS`, `SCHEDULER_PLATFORM_LIMITS`), two requests
+  at a time per board (`DEFAULT_CONCURRENCY`).
+- **Big boards hourly.** A board that listed 200 or more postings waits at least an hour (`BIG_BOARD_CADENCE`); small boards
+  keep their plan. Nothing is written to `job_sources`, so cadence promotions and the polling-settings checks are unaffected.
+- **Stored details reused.** The dispatcher hands the adapter what each active posting's detail gave before
+  (`_stored_workday_details`, `StoredDetail`); it is reused, and each posting's detail is fetched afresh in one hour of every
+  24 (`detail_refresh_due`, by its identifier). A detail read that fails keeps the stored text: before, a refused detail
+  stored the posting with an empty description.
+
+Release lesson: two activations were rolled back by wrong checks in their own measurement ("Workday still being read" when
+Workday's refusal is its choice; a daily-score log line in an hour when the score runs once a day). A check must match its
+stated rule; test a measurement's checks against the expected states before it can roll back production.
+
+**Second step the same day: one steady pace** (`adapters/workday.WorkdayPace`, wired by the dispatcher as `WORKDAY_PACE`).
+Pausing on any three refusals read nothing while Workday refused most requests; pausing only when nothing answered let
+1,384 refused polls through in an hour. In one quarter hour Workday answered 15 of 18 requests sent gently, so every
+Workday list and detail request now waits its turn on one pace: six a minute to start, halved on a refusal down to one,
+raised a quarter after twenty answers up to 120. Boards read every fifteen minutes (those with matching roles) go first;
+a slower board overdue six hours goes first anyway (`PRIORITY_LANES`, `NO_STARVING_SECONDS`). Between daily full reads a
+board reads only its newest three pages and is never sliced (`quick`, `QUICK_READ_PAGES`, `WORKDAY_FULL_READ_EVERY`); a
+partial read closes nothing. That evening Workday still refused nearly everything even at one request a minute: ACE waits.
+
+Lessons: a refusal that covers a whole platform needs a platform answer, not 975 separate ones. Count requests per platform
+before adding boards (OPS-05), and read only what changed.

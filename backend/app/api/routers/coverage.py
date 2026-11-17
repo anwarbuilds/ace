@@ -14,10 +14,13 @@ from sqlalchemy.orm import Session
 
 from backend.app.api.deps import get_session
 from backend.app.config import get_settings
+from backend.app.coverage.accounting import counting_report
 from backend.app.coverage.capacity import capacity_report
 from backend.app.coverage.host_policy import hosts_report
 from backend.app.coverage.host_terms import TERMS
 from backend.app.coverage.leads import leads_report
+from backend.app.coverage.recall import recall_report
+from backend.app.coverage.schedule import schedule_report
 from backend.app.coverage.service import undo_added
 from backend.app.coverage.sources_view import coverage_summary, sources_report
 
@@ -73,6 +76,27 @@ def get_capacity(session: Session = Depends(get_session)) -> dict:
     """Can ace keep up: reads in the last hour, boards on time, new-job speed."""
 
     return capacity_report(session, now=datetime.now(timezone.utc))
+
+
+@router.get("/api/coverage/counts")
+def get_counts(session: Session = Depends(get_session)) -> dict:
+    """Every board and every company in exactly one group; jobs counted apart."""
+
+    return counting_report(session, now=datetime.now(timezone.utc))
+
+
+@router.get("/api/coverage/recall")
+def get_recall(session: Session = Depends(get_session)) -> dict:
+    """The daily score against the test lists: found on the board, feed copy only, or missed."""
+
+    return recall_report(session)
+
+
+@router.get("/api/coverage/schedule")
+def get_schedule(session: Session = Depends(get_session)) -> dict:
+    """Is reading on schedule: each hiring site's working boards against their plan."""
+
+    return schedule_report(session, now=datetime.now(timezone.utc))
 
 
 @router.get("/api/coverage/hosts")

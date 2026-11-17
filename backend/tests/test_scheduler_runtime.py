@@ -2790,7 +2790,7 @@ def test_the_loop_rests_while_every_worker_is_busy() -> None:
 
 def test_default_limits_cover_the_slow_platforms() -> None:
     assert runtime_module.PLATFORM_LIMITS == {
-        "workday": 5,
+        "workday": 3,
         "oracle_recruiting": 2,
     }
 
@@ -2804,7 +2804,7 @@ def test_default_limits_cover_the_slow_platforms() -> None:
     # Every shared edge still goes one board at a time.
     assert runtime._limits["eightfold"] == 1
 
-    assert runtime._limits["workday"] == 5
+    assert runtime._limits["workday"] == 3
 
 
 def test_a_cycle_reports_how_many_due_boards_wait_their_turn() -> None:

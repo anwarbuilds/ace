@@ -127,10 +127,66 @@ SHARED_EDGE = {
 # worker time and every board, quick or slow, started about four minutes
 # after it was due. A platform at its limit waits its turn while quick
 # boards go ahead; boards behind a shared edge still go one at a time.
+# Workday went to 3 on 2026-11-17, after it began refusing most requests.
 PLATFORM_LIMITS = {
-    "workday": 5,
+    "workday": 3,
     "oracle_recruiting": 2,
 }
+
+
+# Platforms whose "too many requests" covers every board ACE reads there,
+# not one. From 2026-11-14 Workday answered 429 more and more often, and
+# from 2026-11-16 about 07:00Z to most requests: each of 975 boards backed
+# off on its own while the others kept asking, which kept the limit in
+# place. Now a few refusals close together pause the whole platform; its
+# boards stay due and go first, oldest due first, when the pause ends.
+LANE_PAUSES = frozenset(
+    {
+        "workday",
+    }
+)
+
+# This many refusals within the window pause the platform, but only when it
+# answered nothing in that window. On 2026-11-17 Workday answered about half
+# of ACE's requests: pausing on any three refusals then read almost nothing,
+# while each refused board's own backoff already slows ACE down.
+LANE_REFUSALS_TO_PAUSE = 3
+LANE_REFUSAL_WINDOW_SECONDS = 5 * 60
+
+# The first pause, doubled by each pause before the platform answers
+# again, up to the cap. A success after a pause starts over.
+LANE_PAUSE_FIRST_SECONDS = 10 * 60
+LANE_PAUSE_CAP_SECONDS = 2 * 60 * 60
+
+# On a paused platform one board's own backoff is kept short: the pause
+# does the waiting, and a board must not sit for six hours after the
+# platform answers again.
+LANE_BOARD_BACKOFF_CAP_SECONDS = 60 * 60
+
+
+# A big board is read in many pages: Workday lists twenty postings a
+# request, so a 2,000-posting board is a hundred requests a read. A board
+# that listed at least this many postings waits at least this long
+# between reads; small boards keep their own plan.
+BIG_BOARD_CADENCE = {
+    "workday": (
+        200,
+        60 * 60,
+    ),
+}
+
+
+# Platforms whose boards take turns by worth while the platform limits ACE:
+# a board read every fifteen minutes (one that has had a role passing the
+# owner's filters, coverage/cadence.py) goes before a slower one. A slower
+# board overdue this long goes first anyway, so none is starved.
+PRIORITY_LANES = frozenset(
+    {
+        "workday",
+    }
+)
+PRIORITY_INTERVAL_SECONDS = 15 * 60
+NO_STARVING_SECONDS = 6 * 60 * 60
 
 
 def _lane_of(
@@ -643,6 +699,29 @@ class SchedulerRuntime:
                 str,
             ],
             int,
+        ] = {}
+
+        # A paused platform: recent refusals, the pause's end, and how
+        # many pauses in a row (LANE_PAUSES).
+        self._lane_refused_at: dict[
+            str,
+            list[float],
+        ] = {}
+
+        self._lane_paused_until: dict[
+            str,
+            float,
+        ] = {}
+
+        self._lane_pauses: dict[
+            str,
+            int,
+        ] = {}
+
+        # When each paused platform last answered a read.
+        self._lane_answered_at: dict[
+            str,
+            float,
         ] = {}
 
         self._maintenance = maintenance
@@ -1222,6 +1301,94 @@ class SchedulerRuntime:
             0
         )
 
+    def _paused_lanes(
+        self,
+        now: float,
+    ) -> set[str]:
+        """Platforms paused after refusals. Caller holds _due_lock."""
+
+        return {
+            lane
+            for lane, until in (
+                self._lane_paused_until.items()
+            )
+            if until > now
+        }
+
+    def _note_lane_refusal(
+        self,
+        lane: str,
+        now: float,
+    ) -> float | None:
+        """Count a refusal; pause the platform when enough come together.
+
+        Returns the new pause in seconds, or None. Caller holds _due_lock.
+        """
+
+        if lane not in LANE_PAUSES:
+            return None
+
+        if self._lane_paused_until.get(lane, 0.0) > now:
+            return None
+
+        recent = [
+            moment
+            for moment in self._lane_refused_at.get(
+                lane,
+                [],
+            )
+            if now - moment
+            <= LANE_REFUSAL_WINDOW_SECONDS
+        ]
+
+        recent.append(
+            now
+        )
+
+        answered = (
+            now
+            - self._lane_answered_at.get(
+                lane,
+                float("-inf"),
+            )
+            <= LANE_REFUSAL_WINDOW_SECONDS
+        )
+
+        if (
+            len(recent) < LANE_REFUSALS_TO_PAUSE
+            or answered
+        ):
+            self._lane_refused_at[
+                lane
+            ] = recent
+
+            return None
+
+        pauses = self._lane_pauses.get(
+            lane,
+            0,
+        )
+
+        seconds = min(
+            LANE_PAUSE_FIRST_SECONDS
+            * 2**pauses,
+            LANE_PAUSE_CAP_SECONDS,
+        )
+
+        self._lane_pauses[
+            lane
+        ] = pauses + 1
+
+        self._lane_paused_until[
+            lane
+        ] = now + seconds
+
+        self._lane_refused_at[
+            lane
+        ] = []
+
+        return seconds
+
     def _due_sources(
         self,
         now: float,
@@ -1260,8 +1427,20 @@ class SchedulerRuntime:
             elif identity not in within:
                 continue
 
+            later = (
+                _lane_of(
+                    source.source_type
+                )
+                in PRIORITY_LANES
+                and source.poll_interval_seconds
+                > PRIORITY_INTERVAL_SECONDS
+                and now - due_at
+                < NO_STARVING_SECONDS
+            )
+
             due.append(
                 (
+                    later,
                     due_at,
                     order,
                     source,
@@ -1272,12 +1451,13 @@ class SchedulerRuntime:
             key=lambda item: (
                 item[0],
                 item[1],
+                item[2],
             )
         )
 
         return [
             source
-            for _due_at, _order, source in due
+            for _later, _due_at, _order, source in due
         ]
 
     def _lane_counts(
@@ -1327,6 +1507,10 @@ class SchedulerRuntime:
 
         running = self._lane_counts()
 
+        paused = self._paused_lanes(
+            now
+        )
+
         chosen = []
 
         for source in self._due_sources(
@@ -1336,6 +1520,20 @@ class SchedulerRuntime:
             lane = _lane_of(
                 source.source_type
             )
+
+            # Still due, and first in line when the pause ends. A single
+            # run leaves it to the next run rather than wait the pause out.
+            if lane in paused:
+                if turns.batch is not None:
+                    turns.batch.discard(
+                        source.identity
+                    )
+
+                    turns.done_with(
+                        source.identity
+                    )
+
+                continue
 
             limit = self._limits.get(
                 lane
@@ -1490,7 +1688,13 @@ class SchedulerRuntime:
                     exc
                 )
 
+                lane_pause = None
+
                 if refused_with is not None:
+                    lane = _lane_of(
+                        source.source_type
+                    )
+
                     with self._due_lock:
                         refusals = (
                             self._refusals.get(
@@ -1504,6 +1708,11 @@ class SchedulerRuntime:
                             source.identity
                         ] = refusals
 
+                        lane_pause = self._note_lane_refusal(
+                            lane,
+                            finished_at,
+                        )
+
                     # Never sooner than the source's own interval,
                     # even where that is longer than the cap.
                     delay = max(
@@ -1511,9 +1720,26 @@ class SchedulerRuntime:
                         min(
                             delay
                             * 2**refusals,
-                            REFUSAL_BACKOFF_CAP_SECONDS,
+                            (
+                                LANE_BOARD_BACKOFF_CAP_SECONDS
+                                if lane in LANE_PAUSES
+                                else REFUSAL_BACKOFF_CAP_SECONDS
+                            ),
                         ),
                     )
+
+                    if lane_pause is not None:
+                        self._logger.warning(
+                            (
+                                "platform_paused "
+                                "platform=%s "
+                                "seconds=%d "
+                                "after_refusals=%d"
+                            ),
+                            lane,
+                            lane_pause,
+                            LANE_REFUSALS_TO_PAUSE,
+                        )
 
                 turns.failed(
                     SourcePollFailure(
@@ -1580,11 +1806,51 @@ class SchedulerRuntime:
                 finished_at - started_at,
             )
 
+            lane = _lane_of(
+                source.source_type
+            )
+
+            big = BIG_BOARD_CADENCE.get(
+                lane
+            )
+
+            if big is not None and (
+                int(
+                    getattr(
+                        result,
+                        "fetched_count",
+                        0,
+                    )
+                    or 0
+                )
+                >= big[0]
+            ):
+                delay = max(
+                    delay,
+                    big[1],
+                )
+
             with self._due_lock:
                 self._refusals.pop(
                     source.identity,
                     None,
                 )
+
+                if lane in LANE_PAUSES:
+                    self._lane_answered_at[
+                        lane
+                    ] = finished_at
+
+                # The platform answers again: the next pause, if any,
+                # starts short.
+                if self._lane_paused_until.get(
+                    lane,
+                    0.0,
+                ) <= finished_at:
+                    self._lane_pauses.pop(
+                        lane,
+                        None,
+                    )
 
                 self._last_checked[
                     source.identity
@@ -1637,7 +1903,7 @@ class SchedulerRuntime:
                 result.alert_candidate_count,
                 result.stale_suppressed_count,
                 duration_seconds,
-                source.poll_interval_seconds,
+                delay,
             )
 
         finally:
@@ -1895,12 +2161,29 @@ class SchedulerRuntime:
 
             full_lanes = self._full_lanes()
 
+            paused = {
+                lane: until
+                for lane, until in (
+                    self._lane_paused_until.items()
+                )
+                if until > current_time
+            }
+
             # A board held back behind its edge, or its platform's
             # limit, is due but cannot go yet. Counting it would make
             # the loop wake for it at once, and again, and again, until
             # the lane was free.
+            # A paused platform's boards wait for the pause to end.
             waiting = [
-                due_at
+                max(
+                    due_at,
+                    paused.get(
+                        _lane_of(
+                            identity[0]
+                        ),
+                        0.0,
+                    ),
+                )
                 for identity, due_at in (
                     self._next_due_at.items()
                 )

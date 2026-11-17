@@ -99,3 +99,74 @@ a.cov-stat:hover { border-color: var(--border-strong); }
   .cov-add input, .cov-add button { flex: 1 1 100%; }
   .cov-find { flex: 1 1 100%; }
 }
+
+/* Did ace find the jobs on the test lists? (REC-01) */
+.cov-recall { display: flex; flex-direction: column; gap: 18px; border-color: var(--border); box-shadow: var(--shadow-sm); }
+.cov-recall .cov-stat { background: var(--surface-2); }
+.cov-recall-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; }
+.cov-recall-head > div:first-child { flex: 1 1 420px; }
+.cov-recall-goaltext { display: flex; flex-direction: column; align-items: flex-end; font-size: var(--text-meta); color: var(--text-secondary); }
+.cov-recall-goaltext b { font-size: var(--text-nav); color: var(--text); font-weight: var(--weight-semibold); }
+.cov-recall-top { display: grid; grid-template-columns: minmax(0, 2fr) minmax(min(240px, 100%), 1fr); gap: 16px; }
+.cov-recall-score { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cov-recall-big { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
+.cov-recall-big strong { font-size: clamp(2rem, 3vw, 2.5rem); font-weight: var(--weight-title); letter-spacing: -.04em; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--text); }
+.cov-recall-big span { font-size: var(--text-emphasis); color: var(--text-secondary); }
+.cov-recall-big b { color: var(--text); }
+.cov-recall-bar { display: flex; height: 14px; overflow: hidden; border-radius: 999px; background: var(--surface-2); }
+.cov-recall-bar i, .cov-recall-legend i { display: block; }
+.cov-recall .is-board { background: var(--accent); }
+.cov-recall .is-feed { background: var(--tier-est); }
+.cov-recall .is-missed { background: var(--warning); }
+.cov-recall-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 12px; }
+.cov-recall-legend > div { display: flex; flex-direction: column; gap: 2px; }
+.cov-recall-legend b { display: flex; align-items: center; gap: 7px; font-variant-numeric: tabular-nums; color: var(--text); }
+.cov-recall-legend b i { width: 10px; height: 10px; border-radius: 3px; }
+.cov-recall-legend span { font-size: var(--text-nav); font-weight: var(--weight-semibold); color: var(--text); }
+.cov-recall-legend small { font-size: var(--text-meta); color: var(--text-secondary); }
+.cov-recall-trend { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 10px; background: var(--surface-2); }
+.cov-recall-trend > span { font-size: var(--text-label); color: var(--text-secondary); }
+.cov-recall-trend svg { width: 100%; height: 70px; overflow: visible; }
+.cov-recall-goal { stroke: var(--border-strong); stroke-dasharray: 3 4; }
+.cov-recall-line { fill: none; stroke: var(--accent-text); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.cov-recall-axis { display: flex; justify-content: space-between; gap: 8px; font-size: var(--text-small); color: var(--text-secondary); }
+.cov-recall-lists { display: flex; flex-direction: column; }
+.cov-recall-lists h3 { margin: 0 0 6px; font-size: var(--text-label); font-weight: var(--weight-semibold); color: var(--text-secondary); }
+.cov-recall-lists .cov-row { padding: 9px 0; border-top: 1px solid var(--border-subtle); border-bottom: 0; }
+.cov-recall-lists .cov-row:hover { background: transparent; }
+.cov-recall-why { flex: 0 1 260px; text-align: right; font-size: var(--text-meta); color: var(--warning); }
+.cov-recall-more summary { padding: 10px 0 4px; cursor: pointer; font-size: var(--text-button); font-weight: var(--weight-semibold); color: var(--accent-text); }
+@media (max-width: 760px) {
+  .cov-recall-top { grid-template-columns: minmax(0, 1fr); }
+  .cov-recall-goaltext { align-items: flex-start; }
+  .cov-recall-why { text-align: left; }
+}
+
+/* Every board, counted once (REC-05) */
+.cov-counts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 20px; margin-top: 14px; }
+.cov-count { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cov-count h3 { margin: 0; font-size: var(--text-card); font-weight: var(--weight-heading); color: var(--text); }
+.cov-count h3 span { margin-left: 4px; font-variant-numeric: tabular-nums; color: var(--text-secondary); font-weight: var(--weight-medium); }
+.cov-count-bar { display: flex; gap: 2px; height: 12px; overflow: hidden; border-radius: 999px; background: var(--surface-2); }
+.cov-count-bar i, .cov-count-row i { display: block; }
+.cov-count-rows { display: flex; flex-direction: column; }
+.cov-count-row { display: grid; grid-template-columns: 10px minmax(120px, auto) minmax(0, 1fr) auto; align-items: baseline; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border-subtle); }
+.cov-count-row i { width: 10px; height: 10px; border-radius: 3px; align-self: center; }
+.cov-count-label { font-size: var(--text-nav); font-weight: var(--weight-semibold); color: var(--text); }
+.cov-count-meaning { font-size: var(--text-meta); color: var(--text-secondary); }
+.cov-count-row b { font-variant-numeric: tabular-nums; color: var(--text); }
+.cov-counts .is-good { background: var(--accent); }
+.cov-counts .is-new { background: var(--accent-hover); }
+.cov-counts .is-warn { background: var(--warning); }
+.cov-counts .is-bad { background: var(--danger); }
+.cov-counts .is-quiet { background: var(--tier-est); }
+.cov-counts .is-off, .cov-counts .is-other { background: var(--text-muted); }
+@media (max-width: 760px) {
+  .cov-count-row { grid-template-columns: 10px minmax(0, 1fr) auto; }
+  .cov-count-meaning { grid-column: 2 / -1; }
+}
+
+/* Is reading on schedule? (FRS-02) */
+.cov-table th.cov-num, .cov-table td.cov-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cov-table td.cov-late { color: var(--warning); font-weight: var(--weight-semibold); }
+.cov-capacity-line.cov-warn::before { background: var(--warning); }

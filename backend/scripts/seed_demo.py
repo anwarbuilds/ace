@@ -67,8 +67,10 @@ from backend.app.db.models import (
     JobRecord,
     JobSourceRecord,
     PollSessionRecord,
+    RecallRunRecord,
     SourceState,
 )
+from backend.app.coverage.held_out import HELD_OUT_LISTS
 from backend.app.demo.companies import DEMO_COMPANY_TIERS
 from backend.app.intelligence.eligibility import evaluate_job
 from backend.app.matching.service import (
@@ -1165,6 +1167,82 @@ def _store_studio(session, *, now: datetime) -> None:
     session.flush()
 
 
+# Fictional daily scores against the test lists, for the Scoreboard card.
+_LINKED, _SHORT = HELD_OUT_LISTS
+_DEMO_MISSED = (
+    (_SHORT.key, "Kestrel Grid", "Software Engineer, New Grad", 1, None, "ace has not heard of this company"),
+    (_LINKED.key, "Driftmark", "Backend Engineer I", 2, "https://jobs.lever.co/driftmark/0a1b2c3d", "On a board ace can read, not added yet"),
+    (_SHORT.key, "Halcyon Bio", "Associate Software Engineer", 2, None, "Board read, role not there"),
+    (_LINKED.key, "Northwind Robotics", "Software Engineer, 2027", 3, "https://careers-northwind.icims.com/jobs/7844/job", "Posted on iCIMS, which ace can't read yet"),
+    (_SHORT.key, "Fabrikam", "Machine Learning Engineer I", 4, None, "The site turned ace away"),
+    (_LINKED.key, "Lumora Pay", "Data Engineer, New Grad", 5, None, "Uses a hiring site ace can't read yet"),
+)
+
+
+def _store_recall(
+    session,
+    *,
+    now: datetime,
+) -> None:
+    """Fourteen fictional days of the test-list score (REC-01)."""
+
+    shares = (930, 934, 940, 938, 945, 950, 946, 952, 956, 951, 958, 962, 959, 960)
+    today = now.date()
+    for offset, share in enumerate(shares):
+        day = today - timedelta(days=len(shares) - 1 - offset)
+        listed = 430
+        found = round(listed * share / 1000)
+        feed = 41
+        lists = [
+            {"key": _LINKED.key, "label": _LINKED.label, "links": _LINKED.links,
+             "listed": 120, "found": 118, "board": 109, "feed": 9, "missed": 2,
+             "timed": 30, "within_day": 28, "seen_first": 19, "hidden": 17, "hidden_reasons": []},
+            {"key": _SHORT.key, "label": _SHORT.label, "links": _SHORT.links,
+             "listed": 310, "found": found - 118, "board": found - 118 - 32, "feed": 32, "missed": 310 - (found - 118),
+             "timed": 70, "within_day": 62, "seen_first": 41, "hidden": 40, "hidden_reasons": []},
+        ]
+        session.add(
+            RecallRunRecord(
+                day=day,
+                checked_at=datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc) + timedelta(hours=14, minutes=10),
+                summary={
+                    "day": day.isoformat(),
+                    "checked_at": "",
+                    "total": {
+                        "listed": listed,
+                        "found": found,
+                        "board": found - feed,
+                        "feed": feed,
+                        "missed": listed - found,
+                        "timed": 100,
+                        "within_day": 90,
+                        "seen_first": 60,
+                        "hidden": 57,
+                        "hidden_reasons": [
+                            {"reason": "Requires 3+ years of experience.", "count": 31},
+                            {"reason": "Role is outside ACE target role families.", "count": 18},
+                            {"reason": "Posting says it does not sponsor visas.", "count": 8},
+                        ],
+                    },
+                    "lists": lists,
+                    "leaks": {"boards": 0, "jobs": 0, "leads": 0},
+                },
+                missed=[
+                    {
+                        "list": key,
+                        "company": company,
+                        "title": title,
+                        "location": "Remote, US",
+                        "listed_on": (day - timedelta(days=age)).isoformat(),
+                        "link": link,
+                        "reason": reason,
+                    }
+                    for key, company, title, age, link, reason in _DEMO_MISSED
+                ],
+            )
+        )
+
+
 def _store_coverage(
     session,
     *,
@@ -1469,6 +1547,11 @@ def seed(
         _store_studio(session, now=now)
 
         _store_coverage(
+            session,
+            now=now,
+        )
+
+        _store_recall(
             session,
             now=now,
         )

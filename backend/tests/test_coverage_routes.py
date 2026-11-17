@@ -114,3 +114,19 @@ def test_the_capacity_route_answers_with_the_three_numbers(client) -> None:
     }
 
     assert body["new_jobs"]["typical_minutes"] is None
+
+
+def test_the_recall_route_says_when_nothing_was_checked_yet(client) -> None:
+    assert client.get("/api/coverage/recall").json() == {"checked": False}
+
+
+def test_the_counts_route_adds_up(client) -> None:
+    body = client.get("/api/coverage/counts").json()
+    assert body["boards"]["total"] == sum(group["count"] for group in body["boards"]["groups"])
+    assert body["companies"]["total"] == sum(group["count"] for group in body["companies"]["groups"]) == 1
+    assert body["jobs"] == {"open": 0, "passing": 0}
+
+
+def test_the_schedule_route_answers_with_no_boards(client) -> None:
+    body = client.get("/api/coverage/schedule").json()
+    assert body["working_boards"] == 0 and body["sites"] == [] and body["due_now"] == 0

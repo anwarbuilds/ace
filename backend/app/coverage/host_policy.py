@@ -28,6 +28,7 @@ from backend.app.adapters.bytedance import PORTALS
 from backend.app.adapters.lever import LEVER_API_HOST_BY_JOB_HOST
 from backend.app.adapters.simplify import FEED_URLS
 from backend.app.adapters.sitemap_jobs import site_for
+from backend.app.coverage.held_out import is_held_out
 from backend.app.coverage.probing import (
     PAGE_READ_BYTES,
     TIMEOUT_SECONDS,
@@ -636,6 +637,8 @@ class PoliteReader:
         self._texts: dict[str, str | None] = {}
 
     def allows(self, url: str) -> bool:
+        if is_held_out(url):
+            return False
         host = urlsplit(url).netloc.lower()
         if not host or host in self._refused:
             return False

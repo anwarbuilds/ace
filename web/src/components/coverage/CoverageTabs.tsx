@@ -5,7 +5,20 @@ import type { ReactNode } from "react";
 import { CompanyIdentity } from "@/components/CompanyIdentity";
 import { AddCompany } from "@/components/coverage/AddCompany";
 import { clean, shortDate } from "@/lib/format";
-import type { CapacityReport, Coverage, CoverageGap, HostsReport, LeadState, LeadsReport, SourcesReport } from "@/lib/types";
+import type {
+  CapacityReport,
+  CountGroup,
+  CountingReport,
+  Coverage,
+  CoverageGap,
+  HostsReport,
+  LeadState,
+  LeadsReport,
+  RecallMissed,
+  RecallReport,
+  ScheduleReport,
+  SourcesReport,
+} from "@/lib/types";
 
 const n = (value: number) => value.toLocaleString("en-US");
 
@@ -126,6 +139,331 @@ function Capacity({ c }: { c: CapacityReport | null }) {
   );
 }
 
+const pct = (part: number, whole: number) => (whole ? Math.round((part / whole) * 100) : 0);
+
+const GOAL = 98;
+
+function monthDay(day: string | null): string {
+  if (!day) return "";
+  const [, month, date] = day.split("-").map(Number);
+  return new Date(Date.UTC(2000, month - 1, date)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+function Trend({ points }: { points: { day: string; listed: number; found: number }[] }) {
+  const shares = points.map((p) => (p.listed ? (p.found / p.listed) * 100 : 0));
+  if (shares.length < 2) {
+    return <p className="why">The line starts once ace has checked on two days.</p>;
+  }
+  const low = Math.max(0, Math.min(...shares, GOAL) - 2);
+  const y = (share: number) => 66 - ((share - low) / (100 - low)) * 60;
+  const x = (i: number) => (i / (shares.length - 1)) * 260;
+  const first = shares[0];
+  const last = shares[shares.length - 1];
+  return (
+    <div className="cov-recall-trend">
+      <span>Score each day, last {points.length} days</span>
+      <svg viewBox="0 0 260 70" role="img" aria-label={`Daily score from ${Math.round(first)}% to ${Math.round(last)}% over ${points.length} days`}>
+        <line x1="0" x2="260" y1={y(GOAL)} y2={y(GOAL)} className="cov-recall-goal" />
+        <polyline points={shares.map((s, i) => `${x(i).toFixed(1)},${y(s).toFixed(1)}`).join(" ")} className="cov-recall-line" />
+      </svg>
+      <div className="cov-recall-axis">
+        <span>
+          {monthDay(points[0].day)}: {Math.round(first)}%
+        </span>
+        <span>dashed line: goal</span>
+        <span>Today: {Math.round(last)}%</span>
+      </div>
+    </div>
+  );
+}
+
+// Did ace find the jobs on the test lists? Two public new grad lists ace
+// never reads act as an answer key, checked once a day (REC-01, REC-03).
+function Recall({ r, tz }: { r: RecallReport | null; tz: string }) {
+  if (!r) {
+    return <p className="why">The test list score could not be loaded just now. Refresh to try again.</p>;
+  }
+  if (!r.checked) {
+    return (
+      <section className="cov-card cov-recall" aria-labelledby="cov-recall">
+        <h2 id="cov-recall">Did ace find the jobs on the test lists?</h2>
+        <p className="why">
+          Two public new grad lists that ace never reads are used only to check ace. The first check runs this morning.
+        </p>
+      </section>
+    );
+  }
+  const t = r.total;
+  const share = pct(t.found, t.listed);
+  const separate = !r.leaks.boards && !r.leaks.jobs && !r.leaks.leads;
+  const unreadable = r.lists.filter((l) => l.error);
+  const shown = r.missed.slice(0, 8);
+  const rest = r.missed.slice(8);
+  const row = (m: RecallMissed, i: number) => (
+    <div className="cov-row cov-recall-miss" key={`${m.list}-${m.company}-${m.title}-${i}`}>
+      <span className="cov-name">
+        <CompanyIdentity name={m.company}>
+          <b>{m.company}</b>, {clean(m.title)}
+        </CompanyIdentity>
+      </span>
+      <span className="cov-n">
+        {r.lists.find((l) => l.key === m.list)?.label ?? m.list}
+        {m.listed_on ? `, ${monthDay(m.listed_on)}` : ""}
+      </span>
+      <span className="cov-recall-why">{m.reason}</span>
+    </div>
+  );
+  return (
+    <section className="cov-card cov-recall" aria-labelledby="cov-recall">
+      <div className="cov-recall-head">
+        <div>
+          <h2 id="cov-recall">Did ace find the jobs on the test lists?</h2>
+          <p className="why">
+            Two public new grad lists that ace never reads. They are used only to check ace, so the score is honest. Checked
+            once a day, last {readWhen(r.checked_at, tz)}.
+          </p>
+        </div>
+        <div className="cov-recall-goaltext">
+          Goal
+          <b>{GOAL}% within a day</b>
+        </div>
+      </div>
+
+      <div className="cov-recall-top">
+        <div className="cov-recall-score">
+          <div className="cov-recall-big">
+            <strong>
+              {n(t.found)} of {n(t.listed)}
+            </strong>
+            <span>
+              roles found <b>({share}%)</b>
+            </span>
+          </div>
+          <div
+            className="cov-recall-bar"
+            role="img"
+            aria-label={`${n(t.board)} from the employer's board, ${n(t.feed)} only as a feed copy, ${n(t.missed)} missed`}
+          >
+            <i className="is-board" style={{ width: `${(t.board / Math.max(1, t.listed)) * 100}%` }} />
+            <i className="is-feed" style={{ width: `${(t.feed / Math.max(1, t.listed)) * 100}%` }} />
+            <i className="is-missed" style={{ width: `${(t.missed / Math.max(1, t.listed)) * 100}%` }} />
+          </div>
+          <div className="cov-recall-legend">
+            <div>
+              <b>
+                <i className="is-board" aria-hidden="true" />
+                {n(t.board)}
+              </b>
+              <span>From the employer&rsquo;s board</span>
+              <small>ace has it from the company&rsquo;s own job board. The best case.</small>
+            </div>
+            <div>
+              <b>
+                <i className="is-feed" aria-hidden="true" />
+                {n(t.feed)}
+              </b>
+              <span>Only as a feed copy</span>
+              <small>ace has it only because a list it reads (Simplify) showed it.</small>
+            </div>
+            <div>
+              <b>
+                <i className="is-missed" aria-hidden="true" />
+                {n(t.missed)}
+              </b>
+              <span>Missed</span>
+              <small>ace does not have it at all. Listed below with the reason.</small>
+            </div>
+          </div>
+        </div>
+        <Trend points={r.trend} />
+      </div>
+
+      <div className="cov-stats">
+        <Stat
+          value={t.timed ? `${n(t.within_day)} of ${n(t.timed)}` : "Not yet"}
+          label="Found within a day of the list"
+          note={
+            t.timed
+              ? `Roles listed in the last two weeks. ace saw ${n(t.seen_first)} before the list did.`
+              : "No role listed in the last two weeks yet"
+          }
+        />
+        <Stat
+          value={`${n(t.hidden)} of ${n(t.found)}`}
+          label="Found, then hidden by your filters"
+          note={t.hidden_reasons[0] ? `Most often: ${t.hidden_reasons[0].reason}` : "None hidden"}
+        />
+        <Stat
+          value={separate ? "Yes" : "No"}
+          label="Test lists kept separate"
+          note={separate ? "ace never read either list to find jobs." : "A board, job or lead came from a test list. The score is not honest until it is removed."}
+        />
+      </div>
+
+      <div className="cov-recall-lists">
+        <h3>By list</h3>
+        {r.lists.map((l) => (
+          <div className="cov-row" key={l.key}>
+            <span className="cov-name">{l.label}</span>
+            <span className="cov-n">{l.links === "employer" ? "links the employer's own posting" : "short links, matched by company and title"}</span>
+            <span className="cov-pct">{l.error ? "Could not be read today" : `${n(l.found ?? 0)} of ${n(l.listed ?? 0)}`}</span>
+          </div>
+        ))}
+        {unreadable.length ? (
+          <p className="why">A list that could not be read is left out of today&rsquo;s score, never counted as misses.</p>
+        ) : null}
+      </div>
+
+      <div className="cov-recall-lists">
+        <h3>Missed roles ({n(r.missed.length)})</h3>
+        {r.missed.length ? (
+          <>
+            {shown.map(row)}
+            {rest.length ? (
+              <details className="cov-recall-more">
+                <summary>Show all {n(r.missed.length)} missed roles</summary>
+                {rest.map((m, i) => row(m, i + shown.length))}
+              </details>
+            ) : null}
+          </>
+        ) : (
+          <p className="why">ace found every role on both lists today.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Split({ id, title, total, groups, tones }: { id: string; title: string; total: number; groups: CountGroup[]; tones: Record<string, string> }) {
+  return (
+    <div className="cov-count">
+      <h3 id={id}>
+        {title} <span>{n(total)}</span>
+      </h3>
+      <div
+        className="cov-count-bar"
+        role="img"
+        aria-label={`${title}: ${groups.map((g) => `${n(g.count)} ${g.label.toLowerCase()}`).join(", ")}`}
+      >
+        {groups
+          .filter((g) => g.count)
+          .map((g) => (
+            <i key={g.key} className={tones[g.key] ?? "is-other"} style={{ width: `${(g.count / Math.max(1, total)) * 100}%` }} />
+          ))}
+      </div>
+      <div className="cov-count-rows">
+        {groups.map((g) => (
+          <div className="cov-count-row" key={g.key} title={g.meaning}>
+            <i className={tones[g.key] ?? "is-other"} aria-hidden="true" />
+            <span className="cov-count-label">{g.label}</span>
+            <span className="cov-count-meaning">{g.meaning}</span>
+            <b>{n(g.count)}</b>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const BOARD_TONES: Record<string, string> = {
+  working: "is-good",
+  stale: "is-warn",
+  unread: "is-quiet",
+  refused: "is-bad",
+  off: "is-off",
+};
+
+const COMPANY_TONES: Record<string, string> = {
+  polling: "is-good",
+  waiting: "is-new",
+  dormant: "is-quiet",
+  checking: "is-quiet",
+  noreader: "is-warn",
+  refused: "is-bad",
+  agency: "is-off",
+};
+
+// Every board and every company in exactly one group, so the parts always add
+// up to the total shown. Jobs are counted apart (REC-05).
+function Counts({ c, tz }: { c: CountingReport | null; tz: string }) {
+  if (!c) return <p className="why">The counts could not be loaded just now. Refresh to try again.</p>;
+  return (
+    <section className="cov-card cov-counts" aria-labelledby="cov-counts">
+      <h2 id="cov-counts">Every board, counted once</h2>
+      <p className="why">
+        Each board and each company sits in exactly one group, so the groups always add up to the total. Companies, boards and
+        jobs are counted apart and never added together. Counted {readWhen(c.counted_at, tz)} from ace&rsquo;s own records.
+      </p>
+      <div className="cov-counts-grid">
+        <Split id="cov-count-boards" title="Job boards" total={c.boards.total} groups={c.boards.groups} tones={BOARD_TONES} />
+        <Split id="cov-count-companies" title="Companies" total={c.companies.total} groups={c.companies.groups} tones={COMPANY_TONES} />
+      </div>
+      <p className="cov-note">
+        Jobs, counted apart: <b>{n(c.jobs.open)}</b> open jobs on these boards, of which <b>{n(c.jobs.passing)}</b> pass your
+        filters.{" "}
+        {c.feeds ? (
+          <>
+            ace also reads {n(c.feeds)} public {c.feeds === 1 ? "list" : "lists"} of many employers&rsquo; jobs, which are not boards
+            and are not counted above.
+          </>
+        ) : null}
+      </p>
+    </section>
+  );
+}
+
+// Is reading on schedule? Each hiring site's working boards against their
+// planned gap, from what the scheduler already records (FRS-02).
+function Schedule({ s }: { s: ScheduleReport | null }) {
+  if (!s) return <p className="why">Whether reading is on schedule could not be loaded just now. Refresh to try again.</p>;
+  const ago = (value: number) => (value < 1 ? "under 1 min" : minutes(value));
+  return (
+    <section className="cov-section" aria-labelledby="cov-schedule">
+      <h2 id="cov-schedule">Is reading on schedule?</h2>
+      <p className="why">
+        Each board has a plan, such as every 15 minutes. This is how long ago each site&rsquo;s working boards were last read,
+        right now. A board is late after one and a half planned gaps. Boards not read in two days are on the Scoreboard instead.
+      </p>
+      <p className={`cov-capacity-line ${s.late ? "cov-warn" : "cov-good"}`}>
+        Right now {n(s.due_now)} of {n(s.working_boards)} working boards are due and waiting their turn
+        {s.due_now ? `; the longest has waited ${ago(s.longest_wait_minutes)} past its plan` : ""}. {n(s.late)} are late.
+      </p>
+      {s.sites.length ? (
+        <div className="cov-table">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Hiring site</th>
+                <th scope="col" className="cov-num">Boards</th>
+                <th scope="col">Plan</th>
+                <th scope="col" className="cov-num">Typical last read</th>
+                <th scope="col" className="cov-num">19 in 20 within</th>
+                <th scope="col" className="cov-num">99 in 100 within</th>
+                <th scope="col" className="cov-num">Late</th>
+              </tr>
+            </thead>
+            <tbody>
+              {s.sites.map((row) => (
+                <tr key={row.site}>
+                  <th scope="row">{row.site}</th>
+                  <td className="cov-num">{n(row.boards)}</td>
+                  <td>{row.plan}</td>
+                  <td className="cov-num">{ago(row.typical_minutes)} ago</td>
+                  <td className="cov-num">{ago(row.p95_minutes)}</td>
+                  <td className="cov-num">{ago(row.p99_minutes)}</td>
+                  <td className={`cov-num ${row.late ? "cov-late" : ""}`}>{n(row.late)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="why">No board has been read yet.</p>
+      )}
+    </section>
+  );
+}
+
 function Pager({ total, offset, limit, href }: { total: number; offset: number; limit: number; href: (offset: number) => string }) {
   if (!total) return null;
   const last = Math.min(offset + limit, total);
@@ -193,7 +531,21 @@ function Names({ rows }: { rows: CoverageGap[] }) {
   );
 }
 
-export function ScoreboardTab({ c, leads, polling }: { c: Coverage; leads: number; polling: number }) {
+export function ScoreboardTab({
+  c,
+  leads,
+  polling,
+  recall,
+  counts,
+  tz,
+}: {
+  c: Coverage;
+  leads: number;
+  polling: number;
+  recall: RecallReport | null;
+  counts: CountingReport | null;
+  tz: string;
+}) {
   const by: Record<string, CoverageGap[]> = {};
   for (const r of c.unreached) (by[r.outcome] ??= []).push(r);
   const known = new Set(GROUPS.map(([k]) => k));
@@ -206,6 +558,8 @@ export function ScoreboardTab({ c, leads, polling }: { c: Coverage; leads: numbe
         <b>How well is ace doing?</b> This page is a report card. You don&rsquo;t need to do anything here unless a
         number looks wrong.
       </p>
+
+      <Recall r={recall} tz={tz} />
 
       <section className="cov-card" aria-labelledby="cov-how">
         <h2 id="cov-how">How ace finds jobs</h2>
@@ -234,6 +588,8 @@ export function ScoreboardTab({ c, leads, polling }: { c: Coverage; leads: numbe
         <Stat value={`${n(c.reached)} of ${n(c.total)}`} label="Companies on your list ace reads" note="The rest are listed below" />
         <Stat value={n(c.dark.length)} label="Boards that stopped answering" note="Open Sources" href="/app/coverage?tab=sources&show=dark" />
       </div>
+
+      <Counts c={counts} tz={tz} />
 
       <Section id="cov-gaps" title={`Companies on your list ace can't read yet (${n(c.unreached.length)})`} intro="Grouped by what is in the way, so you can see what would fix each one. Hover a name for the detail.">
         {c.unreached.length ? (
@@ -509,7 +865,25 @@ export function LeadsTab({ report, tz, state, q, offset }: { report: LeadsReport
   );
 }
 
-export function SourcesTab({ report, hosts, capacity, tz, show, q, offset }: { report: SourcesReport | null; hosts: HostsReport | null; capacity: CapacityReport | null; tz: string; show?: string; q?: string; offset: number }) {
+export function SourcesTab({
+  report,
+  hosts,
+  capacity,
+  schedule,
+  tz,
+  show,
+  q,
+  offset,
+}: {
+  report: SourcesReport | null;
+  hosts: HostsReport | null;
+  capacity: CapacityReport | null;
+  schedule: ScheduleReport | null;
+  tz: string;
+  show?: string;
+  q?: string;
+  offset: number;
+}) {
   const href = (next: { show?: string | null; offset?: number }) => {
     const params = new URLSearchParams({ tab: "sources" });
     const chosen = next.show === undefined ? show : next.show;
@@ -538,6 +912,8 @@ export function SourcesTab({ report, hosts, capacity, tz, show, q, offset }: { r
           </div>
 
           <Capacity c={capacity} />
+
+          <Schedule s={schedule} />
 
           <section className="cov-section" aria-labelledby="cov-all">
             <div className="cov-section-head">

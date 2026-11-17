@@ -615,6 +615,13 @@ class LeverSourceFetcher:
         )
 
 
+# Each Workday board is read in full this often; quick reads in between.
+WORKDAY_FULL_READ_EVERY = timedelta(hours=24)
+
+# One steady speed limit for every Workday request (adapters/workday.WorkdayPace).
+from backend.app.adapters.workday import PACE as WORKDAY_PACE  # noqa: E402
+
+
 class WorkdaySourceFetcher:
     """Dispatch adapter for Workday-backed source definitions.
 
@@ -637,10 +644,23 @@ class WorkdaySourceFetcher:
             ]
             | None
         ) = None,
+        detail_lookup: (
+            Callable[
+                [SourceDefinition],
+                Mapping[str, object],
+            ]
+            | None
+        ) = None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
         self._posted_lookup = posted_lookup
+        self._detail_lookup = detail_lookup
+        # When each board was last read in full. Between full reads a board
+        # reads only its newest pages (adapters/workday.QUICK_READ_PAGES),
+        # which closes nothing; a full read once a day closes what left.
+        # A board first seen since a restart starts on quick reads.
+        self._last_full: dict[tuple[object, str], datetime] = {}
 
     def __call__(
         self,
@@ -675,6 +695,27 @@ class WorkdaySourceFetcher:
                 ),
             }
         )
+
+        if self._detail_lookup is not None:
+            moment = self._clock()
+            last_full = self._last_full.setdefault(
+                source.identity,
+                moment,
+            )
+            full = moment - last_full >= WORKDAY_FULL_READ_EVERY
+            if full:
+                self._last_full[source.identity] = moment
+            known["quick"] = not full
+            known["pace"] = WORKDAY_PACE
+
+        # What each posting's detail gave before, so it is not fetched
+        # again on every read (adapters/workday.DETAIL_REFRESH_HOURS).
+        if self._detail_lookup is not None:
+            known["known_details"] = (
+                self._detail_lookup(
+                    source
+                )
+            )
 
         jobs = self._fetcher(
             source_account=(
@@ -2056,6 +2097,67 @@ def _stored_posted_dates(
     }
 
 
+def _stored_workday_details(
+    source: SourceDefinition,
+) -> dict[str, object]:
+    """What each active posting's detail gave ACE, for one Workday board.
+
+    Read in its own short session, before any request, like the posted
+    days. Only postings with a stored description are reused.
+    """
+
+    from sqlalchemy import (
+        select,
+    )
+
+    from backend.app.adapters.workday import (
+        StoredDetail,
+    )
+    from backend.app.db.models import (
+        JobRecord,
+    )
+    from backend.app.db.session import (
+        SessionLocal,
+    )
+
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(
+                JobRecord.external_id,
+                JobRecord.description,
+                JobRecord.location,
+                JobRecord.posted_at,
+                JobRecord.requisition_id,
+                JobRecord.official_url,
+            ).where(
+                JobRecord.source
+                == source.source_type.value,
+                JobRecord.source_account
+                == source.source_account,
+                JobRecord.is_active.is_(True),
+                JobRecord.description != "",
+            )
+        ).all()
+
+    return {
+        external_id: StoredDetail(
+            description=description,
+            location=location or "",
+            posted_at=posted_at,
+            requisition_id=requisition_id,
+            official_url=official_url or "",
+        )
+        for (
+            external_id,
+            description,
+            location,
+            posted_at,
+            requisition_id,
+            official_url,
+        ) in rows
+    }
+
+
 def _stored_validators(
     source: SourceDefinition,
 ):
@@ -2140,7 +2242,10 @@ def build_default_source_dispatcher() -> (
                 WorkdaySourceFetcher(
                     posted_lookup=(
                         _stored_posted_dates
-                    )
+                    ),
+                    detail_lookup=(
+                        _stored_workday_details
+                    ),
                 )
             ),
             SourceType.AMAZON: (

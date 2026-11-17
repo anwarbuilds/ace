@@ -54,6 +54,47 @@ test("each tab says what it is, and opens from the others", async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
+test("the Scoreboard says how many test list roles ace found, and where from", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/app/coverage");
+  const card = page.locator("section", { has: page.getByRole("heading", { name: "Did ace find the jobs on the test lists?" }) });
+  await expect(card).toBeVisible();
+  await expect(card.getByText("413 of 430")).toBeVisible();
+  await expect(card.getByRole("img", { name: /372 from the employer's board, 41 only as a feed copy, 17 missed/ })).toBeVisible();
+  await expect(card.getByText("From the employer’s board")).toBeVisible();
+  await expect(card.getByText("Only as a feed copy")).toBeVisible();
+  await expect(card.getByRole("img", { name: /Daily score from 93% to 96% over 14 days/ })).toBeVisible();
+  await expect(card.getByText("Test lists kept separate")).toBeVisible();
+  await expect(card.getByText("ace never read either list to find jobs.")).toBeVisible();
+  const missed = card.locator(".cov-recall-miss", { hasText: "Kestrel Grid" });
+  await expect(missed).toContainText("ace has not heard of this company");
+  await expect(card.locator(".cov-recall-miss")).toHaveCount(6);
+  expect(errors).toEqual([]);
+});
+
+test("every board and company is counted once, and the groups add up", async ({ page }) => {
+  await page.goto("/app/coverage");
+  const card = page.locator("section", { has: page.getByRole("heading", { name: "Every board, counted once" }) });
+  await expect(card).toBeVisible();
+  for (const name of ["Job boards", "Companies"]) {
+    const block = card.locator(".cov-count", { has: page.getByRole("heading", { name: new RegExp(`^${name}`) }) });
+    const total = Number((await block.locator("h3 span").innerText()).replace(/,/g, ""));
+    const parts = await block.locator(".cov-count-row b").allInnerTexts();
+    expect(parts.reduce((sum, part) => sum + Number(part.replace(/,/g, "")), 0)).toBe(total);
+  }
+  await expect(card.getByText(/Jobs, counted apart:/)).toBeVisible();
+});
+
+test("Sources says whether reading is on schedule, per hiring site", async ({ page }) => {
+  await page.goto("/app/coverage?tab=sources");
+  const section = page.locator("section", { has: page.getByRole("heading", { name: "Is reading on schedule?" }) });
+  await expect(section).toBeVisible();
+  await expect(section.getByText(/working boards are due and waiting their turn/)).toBeVisible();
+  const table = section.getByRole("table");
+  await expect(table.getByRole("columnheader", { name: "19 in 20 within" })).toBeVisible();
+  await expect(table.getByRole("rowheader").first()).toBeVisible();
+});
+
 test("the Add button on any tab lands in the box, ready to paste", async ({ page }) => {
   await page.goto("/app/coverage?tab=sources");
   await page.getByRole("link", { name: "Add a job or company" }).click();
