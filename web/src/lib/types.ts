@@ -476,3 +476,18 @@ export type RecallReport =
       missed: RecallMissed[];
       trend: { day: string; listed: number; found: number }[];
     };
+
+export interface CountGroup {
+  key: string;
+  label: string;
+  meaning: string;
+  count: number;
+}
+
+export interface CountingReport {
+  counted_at: string;
+  boards: { total: number; groups: CountGroup[] };
+  companies: { total: number; groups: CountGroup[] };
+  jobs: { open: number; passing: number };
+  feeds: number;
+}

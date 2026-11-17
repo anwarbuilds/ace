@@ -7,6 +7,7 @@ import { apiGet, apiGetOr } from "@/lib/api";
 import { getPrefs } from "@/lib/prefs";
 import type {
   CapacityReport,
+  CountingReport,
   Coverage,
   CoverageSummary,
   HostsReport,
@@ -72,6 +73,7 @@ export default async function CoveragePage({ searchParams }: PageProps<"/app/cov
                 leads={summary.leads}
                 polling={summary.polling}
                 recall={await apiGetOr<RecallReport | null>("/api/coverage/recall", null)}
+                counts={await apiGetOr<CountingReport | null>("/api/coverage/counts", null)}
                 tz={tz}
               />
             ) : tab === "leads" ? (

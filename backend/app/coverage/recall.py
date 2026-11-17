@@ -109,12 +109,12 @@ UNREAD_SITES = {
 }
 
 LEAD_REASONS = {
-    "noreader": "Uses a hiring site ace can't read yet",
+    "noreader": "Uses a hiring site ace can't read yet, or no board found",
     "refused": "The site turned ace away",
     "agency": "A staffing agency, not the employer",
     "waiting": "Good board, left out",
-    "checking": "ace is still looking for its board",
-    "dormant": "ace found no board for it yet",
+    "checking": "ace has not checked this company yet",
+    "dormant": "Board read, no US software jobs on it then",
     "polling": "Board read, role not there",
 }
 NO_LEAD = "ace has not heard of this company"

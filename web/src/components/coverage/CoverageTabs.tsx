@@ -7,6 +7,8 @@ import { AddCompany } from "@/components/coverage/AddCompany";
 import { clean, shortDate } from "@/lib/format";
 import type {
   CapacityReport,
+  CountGroup,
+  CountingReport,
   Coverage,
   CoverageGap,
   HostsReport,
@@ -331,6 +333,84 @@ function Recall({ r, tz }: { r: RecallReport | null; tz: string }) {
   );
 }
 
+function Split({ id, title, total, groups, tones }: { id: string; title: string; total: number; groups: CountGroup[]; tones: Record<string, string> }) {
+  return (
+    <div className="cov-count">
+      <h3 id={id}>
+        {title} <span>{n(total)}</span>
+      </h3>
+      <div
+        className="cov-count-bar"
+        role="img"
+        aria-label={`${title}: ${groups.map((g) => `${n(g.count)} ${g.label.toLowerCase()}`).join(", ")}`}
+      >
+        {groups
+          .filter((g) => g.count)
+          .map((g) => (
+            <i key={g.key} className={tones[g.key] ?? "is-other"} style={{ width: `${(g.count / Math.max(1, total)) * 100}%` }} />
+          ))}
+      </div>
+      <div className="cov-count-rows">
+        {groups.map((g) => (
+          <div className="cov-count-row" key={g.key} title={g.meaning}>
+            <i className={tones[g.key] ?? "is-other"} aria-hidden="true" />
+            <span className="cov-count-label">{g.label}</span>
+            <span className="cov-count-meaning">{g.meaning}</span>
+            <b>{n(g.count)}</b>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const BOARD_TONES: Record<string, string> = {
+  working: "is-good",
+  stale: "is-warn",
+  unread: "is-quiet",
+  refused: "is-bad",
+  off: "is-off",
+};
+
+const COMPANY_TONES: Record<string, string> = {
+  polling: "is-good",
+  waiting: "is-new",
+  dormant: "is-quiet",
+  checking: "is-quiet",
+  noreader: "is-warn",
+  refused: "is-bad",
+  agency: "is-off",
+};
+
+// Every board and every company in exactly one group, so the parts always add
+// up to the total shown. Jobs are counted apart (REC-05).
+function Counts({ c, tz }: { c: CountingReport | null; tz: string }) {
+  if (!c) return <p className="why">The counts could not be loaded just now. Refresh to try again.</p>;
+  return (
+    <section className="cov-card cov-counts" aria-labelledby="cov-counts">
+      <h2 id="cov-counts">Every board, counted once</h2>
+      <p className="why">
+        Each board and each company sits in exactly one group, so the groups always add up to the total. Companies, boards and
+        jobs are counted apart and never added together. Counted {readWhen(c.counted_at, tz)} from ace&rsquo;s own records.
+      </p>
+      <div className="cov-counts-grid">
+        <Split id="cov-count-boards" title="Job boards" total={c.boards.total} groups={c.boards.groups} tones={BOARD_TONES} />
+        <Split id="cov-count-companies" title="Companies" total={c.companies.total} groups={c.companies.groups} tones={COMPANY_TONES} />
+      </div>
+      <p className="cov-note">
+        Jobs, counted apart: <b>{n(c.jobs.open)}</b> open jobs on these boards, of which <b>{n(c.jobs.passing)}</b> pass your
+        filters.{" "}
+        {c.feeds ? (
+          <>
+            ace also reads {n(c.feeds)} public {c.feeds === 1 ? "list" : "lists"} of many employers&rsquo; jobs, which are not boards
+            and are not counted above.
+          </>
+        ) : null}
+      </p>
+    </section>
+  );
+}
+
 function Pager({ total, offset, limit, href }: { total: number; offset: number; limit: number; href: (offset: number) => string }) {
   if (!total) return null;
   const last = Math.min(offset + limit, total);
@@ -403,12 +483,14 @@ export function ScoreboardTab({
   leads,
   polling,
   recall,
+  counts,
   tz,
 }: {
   c: Coverage;
   leads: number;
   polling: number;
   recall: RecallReport | null;
+  counts: CountingReport | null;
   tz: string;
 }) {
   const by: Record<string, CoverageGap[]> = {};
@@ -453,6 +535,8 @@ export function ScoreboardTab({
         <Stat value={`${n(c.reached)} of ${n(c.total)}`} label="Companies on your list ace reads" note="The rest are listed below" />
         <Stat value={n(c.dark.length)} label="Boards that stopped answering" note="Open Sources" href="/app/coverage?tab=sources&show=dark" />
       </div>
+
+      <Counts c={counts} tz={tz} />
 
       <Section id="cov-gaps" title={`Companies on your list ace can't read yet (${n(c.unreached.length)})`} intro="Grouped by what is in the way, so you can see what would fix each one. Hover a name for the detail.">
         {c.unreached.length ? (

@@ -72,6 +72,19 @@ test("the Scoreboard says how many test list roles ace found, and where from", a
   expect(errors).toEqual([]);
 });
 
+test("every board and company is counted once, and the groups add up", async ({ page }) => {
+  await page.goto("/app/coverage");
+  const card = page.locator("section", { has: page.getByRole("heading", { name: "Every board, counted once" }) });
+  await expect(card).toBeVisible();
+  for (const name of ["Job boards", "Companies"]) {
+    const block = card.locator(".cov-count", { has: page.getByRole("heading", { name: new RegExp(`^${name}`) }) });
+    const total = Number((await block.locator("h3 span").innerText()).replace(/,/g, ""));
+    const parts = await block.locator(".cov-count-row b").allInnerTexts();
+    expect(parts.reduce((sum, part) => sum + Number(part.replace(/,/g, "")), 0)).toBe(total);
+  }
+  await expect(card.getByText(/Jobs, counted apart:/)).toBeVisible();
+});
+
 test("the Add button on any tab lands in the box, ready to paste", async ({ page }) => {
   await page.goto("/app/coverage?tab=sources");
   await page.getByRole("link", { name: "Add a job or company" }).click();
