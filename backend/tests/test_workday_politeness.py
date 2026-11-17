@@ -280,3 +280,28 @@ def test_a_refused_detail_keeps_the_stored_text_and_stops_asking(monkeypatch) ->
     gets = [path for method, path in calls if method == "GET"]
     assert 1 <= len(gets) <= 3
     assert all(job.description == "Stored text" for job in jobs)
+
+
+def test_workday_keeps_being_read_while_it_still_answers_some_requests() -> None:
+    """On 2026-11-17 Workday answered about half: refusals then pause boards, not the platform."""
+    clock = Clock()
+    boards = [workday(name, interval=60) for name in ("alder", "birch", "cedar", "dogwood", "elder", "fir")]
+    answers = {"alder/External": True, "birch/External": False, "cedar/External": False,
+               "dogwood/External": False, "elder/External": True, "fir/External": False}
+    polled: list[str] = []
+
+    def poller(source):
+        polled.append(source.source_account)
+        if not answers[source.source_account]:
+            raise refusal()
+        return result()
+
+    runtime = runtime_for(boards, poller, clock)
+    for _ in range(3):
+        runtime.run_due_sources()
+        clock.now += 61
+
+    assert "workday" not in runtime._lane_paused_until
+    assert {"alder/External", "elder/External"} <= set(polled)
+    # Each refused board backs off on its own.
+    assert runtime._refusals[boards[1].identity] >= 1

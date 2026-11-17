@@ -146,7 +146,10 @@ LANE_PAUSES = frozenset(
     }
 )
 
-# This many refusals within the window pause the platform.
+# This many refusals within the window pause the platform, but only when it
+# answered nothing in that window. On 2026-11-17 Workday answered about half
+# of ACE's requests: pausing on any three refusals then read almost nothing,
+# while each refused board's own backoff already slows ACE down.
 LANE_REFUSALS_TO_PAUSE = 3
 LANE_REFUSAL_WINDOW_SECONDS = 5 * 60
 
@@ -700,6 +703,12 @@ class SchedulerRuntime:
         self._lane_pauses: dict[
             str,
             int,
+        ] = {}
+
+        # When each paused platform last answered a read.
+        self._lane_answered_at: dict[
+            str,
+            float,
         ] = {}
 
         self._maintenance = maintenance
@@ -1323,7 +1332,19 @@ class SchedulerRuntime:
             now
         )
 
-        if len(recent) < LANE_REFUSALS_TO_PAUSE:
+        answered = (
+            now
+            - self._lane_answered_at.get(
+                lane,
+                float("-inf"),
+            )
+            <= LANE_REFUSAL_WINDOW_SECONDS
+        )
+
+        if (
+            len(recent) < LANE_REFUSALS_TO_PAUSE
+            or answered
+        ):
             self._lane_refused_at[
                 lane
             ] = recent
@@ -1788,6 +1809,11 @@ class SchedulerRuntime:
                     source.identity,
                     None,
                 )
+
+                if lane in LANE_PAUSES:
+                    self._lane_answered_at[
+                        lane
+                    ] = finished_at
 
                 # The platform answers again: the next pause, if any,
                 # starts short.
