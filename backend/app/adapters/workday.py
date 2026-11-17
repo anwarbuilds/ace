@@ -54,6 +54,9 @@ from datetime import (
 import html
 import re
 from typing import Any, NamedTuple
+import logging
+import threading
+import time
 from urllib.parse import unquote
 import zlib
 
@@ -115,6 +118,92 @@ LISTING_RETRY_STATUSES = RETRYABLE_STATUS_CODES - {
 # edit still reaches ACE within a day. Before this, every read fetched
 # every promising posting's detail: about 17,000 requests an hour.
 DETAIL_REFRESH_HOURS = 24
+
+
+LOGGER = logging.getLogger(__name__)
+
+# Pages a quick read takes: the newest postings, where a new job appears.
+# A board of three pages or fewer is read whole either way.
+QUICK_READ_PAGES = 3
+
+
+class WorkdayPace:
+    """One steady speed limit for every Workday request ACE sends (2026-11-17).
+
+    Workday refused most of ACE's requests from 2026-11-16, yet answered
+    15 of 18 in a quarter hour when ACE asked gently: it accepts a small
+    steady flow and refuses bursts. Every list and detail request waits its
+    turn here. The pace rises a quarter after ``RAISE_AFTER`` answers in a
+    row, up to ``high``, and halves on a refusal, down to ``low``.
+    """
+
+    RAISE_AFTER = 20
+
+    def __init__(
+        self,
+        *,
+        start: float = 6.0,
+        low: float = 1.0,
+        high: float = 120.0,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self.per_minute = start
+        self.low = low
+        self.high = high
+        self._clock = clock
+        self._sleep = sleep
+        self._lock = threading.Lock()
+        self._next_at = 0.0
+        self._answers = 0
+
+    def wait(self) -> None:
+        with self._lock:
+            now = self._clock()
+            slot = max(now, self._next_at)
+            self._next_at = slot + 60.0 / self.per_minute
+        if slot > now:
+            self._sleep(slot - now)
+
+    def answered(self) -> None:
+        with self._lock:
+            self._answers += 1
+            if self._answers < self.RAISE_AFTER or self.per_minute >= self.high:
+                return
+            self._answers = 0
+            self.per_minute = min(self.high, self.per_minute * 1.25)
+            rate = self.per_minute
+        LOGGER.info("workday_pace per_minute=%.1f change=up", rate)
+
+    def refused(self) -> None:
+        with self._lock:
+            self._answers = 0
+            if self.per_minute <= self.low:
+                return
+            self.per_minute = max(self.low, self.per_minute / 2)
+            rate = self.per_minute
+        LOGGER.info("workday_pace per_minute=%.1f change=down", rate)
+
+    def note(self, status: int) -> None:
+        if status == 200:
+            self.answered()
+        elif status in REFUSAL_STATUSES:
+            self.refused()
+
+
+# The scheduler's one pace for every Workday request (dispatcher wires it).
+PACE = WorkdayPace()
+
+
+class _Unpaced:
+    def wait(self) -> None:
+        return None
+
+    def note(self, status: int) -> None:
+        return None
+
+
+_UNPACED = _Unpaced()
 
 
 class StoredDetail(NamedTuple):
@@ -836,6 +925,8 @@ def fetch_workday_jobs(
     concurrency: int = DEFAULT_CONCURRENCY,
     known_posted: Mapping[str, datetime] | None = None,
     known_details: Mapping[str, StoredDetail] | None = None,
+    quick: bool = False,
+    pace: WorkdayPace | None = None,
 ) -> list[CanonicalJob]:
     """Fetch and normalize one Workday tenant's public postings.
 
@@ -852,7 +943,17 @@ def fetch_workday_jobs(
     reused instead of fetched again (``DETAIL_REFRESH_HOURS``), and kept
     when a fresh detail read fails, so a refusal never blanks a stored
     description.
+
+    ``quick`` reads only the newest ``QUICK_READ_PAGES`` pages and never
+    slices a capped board; the read is then partial unless the board fits,
+    so it closes nothing. Every request waits its turn on ``pace``; the
+    scheduler passes ``PACE``, and with none a request is not held back.
     """
+
+    pace = pace or _UNPACED
+
+    if quick:
+        max_pages = min(max_pages, QUICK_READ_PAGES)
 
     tenant, site = parse_source_account(
         source_account
@@ -907,8 +1008,9 @@ def fetch_workday_jobs(
     ) -> dict[str, Any]:
         """Fetch one page of listings, as the whole response body."""
 
-        response = request_with_retry(
-            lambda: http.post(
+        def send():
+            pace.wait()
+            answer = http.post(
                 list_url,
                 json={
                     "appliedFacets": facets or {},
@@ -918,7 +1020,12 @@ def fetch_workday_jobs(
                     "offset": offset,
                     "searchText": "",
                 },
-            ),
+            )
+            pace.note(answer.status_code)
+            return answer
+
+        response = request_with_retry(
+            send,
             retry_statuses=LISTING_RETRY_STATUSES,
         )
 
@@ -1016,6 +1123,8 @@ def fetch_workday_jobs(
         if refused_detail:
             return None
 
+        pace.wait()
+
         response = http.get(
             (
                 f"https://{host}/wday/cxs/"
@@ -1023,6 +1132,8 @@ def fetch_workday_jobs(
                 f"{external_path}"
             )
         )
+
+        pace.note(response.status_code)
 
         if response.status_code in REFUSAL_STATUSES:
             # Stop asking for details this read; stored ones stand in.
@@ -1080,7 +1191,7 @@ def fetch_workday_jobs(
             _partition(
                 first
             )
-            if capped
+            if capped and not quick
             else None
         )
 

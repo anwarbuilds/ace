@@ -176,6 +176,19 @@ BIG_BOARD_CADENCE = {
 }
 
 
+# Platforms whose boards take turns by worth while the platform limits ACE:
+# a board read every fifteen minutes (one that has had a role passing the
+# owner's filters, coverage/cadence.py) goes before a slower one. A slower
+# board overdue this long goes first anyway, so none is starved.
+PRIORITY_LANES = frozenset(
+    {
+        "workday",
+    }
+)
+PRIORITY_INTERVAL_SECONDS = 15 * 60
+NO_STARVING_SECONDS = 6 * 60 * 60
+
+
 def _lane_of(
     source_type: object,
 ) -> str:
@@ -1414,8 +1427,20 @@ class SchedulerRuntime:
             elif identity not in within:
                 continue
 
+            later = (
+                _lane_of(
+                    source.source_type
+                )
+                in PRIORITY_LANES
+                and source.poll_interval_seconds
+                > PRIORITY_INTERVAL_SECONDS
+                and now - due_at
+                < NO_STARVING_SECONDS
+            )
+
             due.append(
                 (
+                    later,
                     due_at,
                     order,
                     source,
@@ -1426,12 +1451,13 @@ class SchedulerRuntime:
             key=lambda item: (
                 item[0],
                 item[1],
+                item[2],
             )
         )
 
         return [
             source
-            for _due_at, _order, source in due
+            for _later, _due_at, _order, source in due
         ]
 
     def _lane_counts(

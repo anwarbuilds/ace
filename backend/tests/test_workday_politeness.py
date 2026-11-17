@@ -305,3 +305,136 @@ def test_workday_keeps_being_read_while_it_still_answers_some_requests() -> None
     assert {"alder/External", "elder/External"} <= set(polled)
     # Each refused board backs off on its own.
     assert runtime._refusals[boards[1].identity] >= 1
+
+
+# The speed limit, quick reads and order (2026-11-17, second refinement).
+
+from datetime import timedelta  # noqa: E402
+
+from backend.app.adapters.workday import QUICK_READ_PAGES, WorkdayPace  # noqa: E402
+from backend.app.scheduling.dispatcher import WORKDAY_FULL_READ_EVERY, WorkdaySourceFetcher  # noqa: E402
+
+
+class FakeTime:
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.slept: list[float] = []
+
+    def clock(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        self.now += seconds
+
+
+def test_the_pace_spaces_requests_and_follows_workdays_answers() -> None:
+    fake = FakeTime()
+    pace = WorkdayPace(start=6.0, low=1.0, high=12.0, clock=fake.clock, sleep=fake.sleep)
+    for _ in range(3):
+        pace.wait()
+    assert fake.slept == [10.0, 10.0]
+
+    pace.refused()
+    assert pace.per_minute == 3.0
+    pace.refused(); pace.refused()
+    assert pace.per_minute == 1.0  # never below the floor
+
+    for _ in range(WorkdayPace.RAISE_AFTER):
+        pace.answered()
+    assert pace.per_minute == 1.25
+    for _ in range(WorkdayPace.RAISE_AFTER * 30):
+        pace.answered()
+    assert pace.per_minute == 12.0  # never above the ceiling
+
+
+def paged_board(total: int, calls: list):
+    listing = postings(total)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append((request.method, request.url.path))
+        if request.method == "POST":
+            import json as _json
+            body = _json.loads(request.content)
+            page = listing[body["offset"]:body["offset"] + 20]
+            return httpx.Response(200, json={"total": total, "jobPostings": page, "facets": []})
+        return httpx.Response(200, json={"jobPostingInfo": {"jobDescription": "<p>Text</p>"}})
+
+    return httpx.MockTransport(handler)
+
+
+def test_a_quick_read_takes_the_newest_pages_and_closes_nothing() -> None:
+    calls: list = []
+    jobs = read(paged_board(200, calls), quick=True, should_fetch_detail=lambda title: False)
+    assert len([c for c in calls if c[0] == "POST"]) == QUICK_READ_PAGES
+    assert len(jobs) == QUICK_READ_PAGES * 20
+    assert jobs.complete is False
+
+    calls.clear()
+    small = read(paged_board(35, calls), quick=True, should_fetch_detail=lambda title: False)
+    assert len(small) == 35 and small.complete is True
+
+
+def test_a_capped_board_is_not_sliced_on_a_quick_read() -> None:
+    calls: list = []
+    jobs = read(paged_board(2000, calls), quick=True, should_fetch_detail=lambda title: False)
+    assert len([c for c in calls if c[0] == "POST"]) == QUICK_READ_PAGES
+    assert jobs.complete is False
+
+
+def test_every_request_waits_on_the_pace_it_is_given() -> None:
+    class Recorder:
+        def __init__(self) -> None:
+            self.waits = 0
+            self.statuses: list[int] = []
+
+        def wait(self) -> None:
+            self.waits += 1
+
+        def note(self, status: int) -> None:
+            self.statuses.append(status)
+
+    pace = Recorder()
+    calls: list = []
+    read(paged_board(45, calls), pace=pace, should_fetch_detail=lambda title: True, max_detail_fetches=2)
+    assert pace.waits == len(calls) == 3 + 2
+    assert pace.statuses == [200] * 5
+
+
+def test_each_board_is_read_in_full_once_a_day_and_quickly_in_between() -> None:
+    moments = [REFERENCE]
+    seen: list[bool] = []
+
+    def fetcher(**kwargs):
+        seen.append(kwargs["quick"])
+        assert kwargs["pace"] is not None
+        return []
+
+    fetcher_ = WorkdaySourceFetcher(
+        fetcher=fetcher,
+        clock=lambda: moments[0],
+        posted_lookup=lambda source: {},
+        detail_lookup=lambda source: {},
+    )
+    board = workday("alder")
+    fetcher_(board)
+    moments[0] = REFERENCE + timedelta(hours=3)
+    fetcher_(board)
+    moments[0] = REFERENCE + WORKDAY_FULL_READ_EVERY
+    fetcher_(board)
+    moments[0] = REFERENCE + WORKDAY_FULL_READ_EVERY + timedelta(minutes=15)
+    fetcher_(board)
+    assert seen == [True, True, False, True]
+
+
+def test_workday_boards_with_matching_roles_go_first_and_none_starve() -> None:
+    clock = Clock()
+    mine = workday("alder", interval=900)
+    other = workday("birch", interval=3600)
+    runtime = runtime_for([other, mine], lambda source: result(), clock)
+    runtime._next_due_at[other.identity] = clock.now - 600
+    runtime._next_due_at[mine.identity] = clock.now - 60
+    assert [s.source_account for s in runtime._due_sources(clock.now)] == ["alder/External", "birch/External"]
+
+    runtime._next_due_at[other.identity] = clock.now - 7 * 3600
+    assert [s.source_account for s in runtime._due_sources(clock.now)] == ["birch/External", "alder/External"]

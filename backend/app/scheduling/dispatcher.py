@@ -615,6 +615,13 @@ class LeverSourceFetcher:
         )
 
 
+# Each Workday board is read in full this often; quick reads in between.
+WORKDAY_FULL_READ_EVERY = timedelta(hours=24)
+
+# One steady speed limit for every Workday request (adapters/workday.WorkdayPace).
+from backend.app.adapters.workday import PACE as WORKDAY_PACE  # noqa: E402
+
+
 class WorkdaySourceFetcher:
     """Dispatch adapter for Workday-backed source definitions.
 
@@ -649,6 +656,11 @@ class WorkdaySourceFetcher:
         self._clock = clock
         self._posted_lookup = posted_lookup
         self._detail_lookup = detail_lookup
+        # When each board was last read in full. Between full reads a board
+        # reads only its newest pages (adapters/workday.QUICK_READ_PAGES),
+        # which closes nothing; a full read once a day closes what left.
+        # A board first seen since a restart starts on quick reads.
+        self._last_full: dict[tuple[object, str], datetime] = {}
 
     def __call__(
         self,
@@ -683,6 +695,18 @@ class WorkdaySourceFetcher:
                 ),
             }
         )
+
+        if self._detail_lookup is not None:
+            moment = self._clock()
+            last_full = self._last_full.setdefault(
+                source.identity,
+                moment,
+            )
+            full = moment - last_full >= WORKDAY_FULL_READ_EVERY
+            if full:
+                self._last_full[source.identity] = moment
+            known["quick"] = not full
+            known["pace"] = WORKDAY_PACE
 
         # What each posting's detail gave before, so it is not fetched
         # again on every read (adapters/workday.DETAIL_REFRESH_HOURS).
