@@ -275,6 +275,7 @@ def test_the_report_carries_two_weeks_of_scores(factory) -> None:
         report = recall_report(session)
     assert report["checked"] is True
     assert report["day"] == "2026-11-16"
+    assert report["checked_at"] == NOW.isoformat()
     assert [point["day"] for point in report["trend"]] == ["2026-11-13", "2026-11-14", "2026-11-15", "2026-11-16"]
     assert report["missed"] and report["total"]["listed"] == 5
 

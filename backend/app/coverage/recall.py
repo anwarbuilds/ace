@@ -447,6 +447,10 @@ def score_roles(
     return results
 
 
+def _as_utc(moment: datetime) -> datetime:
+    return moment.replace(tzinfo=timezone.utc) if moment.tzinfo is None else moment
+
+
 def _pacific_day(moment: datetime) -> date:
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=timezone.utc)
@@ -674,6 +678,7 @@ def recall_report(session: Session) -> dict:
     return {
         "checked": True,
         **latest.summary,
+        "checked_at": _as_utc(latest.checked_at).isoformat(),
         "missed": latest.missed or [],
         "trend": [
             {
