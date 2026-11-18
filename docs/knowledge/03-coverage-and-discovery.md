@@ -1126,3 +1126,12 @@ The original DIS-16 release was verified before the repair above superseded its 
 
 Lessons: check the board a list's link names before calling a role missed. A board added because of a miss must stay
 visible as such, or the score ends up measuring its own inputs.
+- **The dark-board check mistook a refusal for a move** (November 18). While Workday refused ACE, Workday boards had no
+  good read for a day, so the six-hourly check (`coverage/recovery.py`) diagnosed each company again, waiting on
+  Workday's pace for about five hours, and "moved" eight boards to another career site of the same company (an early
+  careers site to the main one, a careers site to an Accounting site), closing their postings; maintenance, and with it
+  the daily score, waited behind it. The check now never moves a Workday or Workable board: on a platform that limits
+  ACE, silence is the platform's refusal, and a tenant's other site is another board (DIS-03). Those boards stay listed
+  as dark. The moved boards were switched back on with the owner's approval; their postings reopen on the next good
+  read. The daily score now runs first in maintenance. Lesson: an automatic repair must know when a platform, not a
+  board, is the reason for silence; and a slow step must not hold up a once-a-day measurement.
