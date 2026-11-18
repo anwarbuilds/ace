@@ -261,8 +261,13 @@ class RobotsCache:
     def __init__(
         self,
         client: httpx.Client,
+        *,
+        paced: Callable[[str], object | None] | None = None,
     ) -> None:
         self._client = client
+
+        # A host's own pace, where it has one (a Workday career site).
+        self._paced = paced
 
         self._texts: dict[str, str | None] = {}
 
@@ -293,12 +298,26 @@ class RobotsCache:
     ) -> str | None:
         # RFC 9309: a 4xx means no rules; a 5xx or no answer means the
         # rules are unknown, which must be read as disallow.
+        pace = (
+            self._paced(origin)
+            if self._paced is not None
+            else None
+        )
+
         try:
+            if pace is not None:
+                pace.wait()
+
             response = self._client.get(
                 f"{origin}/robots.txt",
             )
         except httpx.HTTPError:
             return None
+
+        if pace is not None:
+            pace.note(
+                response.status_code
+            )
 
         if response.status_code == 200:
             return response.text
@@ -314,8 +333,13 @@ def read_employer_page(
     *,
     client: httpx.Client,
     robots: RobotsCache,
+    pace: object | None = None,
 ) -> Reading:
-    """Read one posting page, if its site allows it."""
+    """Read one posting page, if its site allows it.
+
+    ``pace``, where the page's site has one (Workday's), spaces the request
+    and hears the answer, like that platform's other requests.
+    """
 
     if not url.startswith(
         ("https://", "http://")
@@ -332,12 +356,20 @@ def read_employer_page(
         )
 
     try:
+        if pace is not None:
+            pace.wait()
+
         response = client.get(
             url
         )
     except httpx.HTTPError:
         return Reading(
             UNREACHABLE,
+        )
+
+    if pace is not None:
+        pace.note(
+            response.status_code
         )
 
     if response.status_code != 200:
@@ -713,9 +745,20 @@ class EmployerPageVerifier:
             timezone.utc
         ),
         direct_copies: DirectCopyStore | None = None,
+        paced: Callable[[str], object | None] | None = None,
+        held: Callable[[str], bool] | None = None,
     ) -> None:
         self._store = ReadingStore(
             session_factory
+        )
+
+        # A page's site's own pace, and whether that platform is paused
+        # after refusals (Workday: scheduling/holds.py). A held page is
+        # not read this poll, and nothing is recorded for it.
+        self._paced = paced
+
+        self._held = held or (
+            lambda _url: False
         )
 
         self._direct = direct_copies or DirectCopyStore(
@@ -795,6 +838,7 @@ class EmployerPageVerifier:
             url
             for url in wanted
             if url not in direct
+            and not self._held(url)
             and (
                 url not in stored
                 or is_stale(
@@ -891,7 +935,8 @@ class EmployerPageVerifier:
     ) -> dict[str, Reading]:
         with self._client_factory() as client:
             robots = RobotsCache(
-                client
+                client,
+                paced=self._paced,
             )
 
             # robots.txt first, one host at a time, so concurrent page
@@ -912,6 +957,11 @@ class EmployerPageVerifier:
                                 url,
                                 client=client,
                                 robots=robots,
+                                pace=(
+                                    self._paced(url)
+                                    if self._paced is not None
+                                    else None
+                                ),
                             ),
                             urls,
                         ),

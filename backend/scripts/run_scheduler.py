@@ -57,6 +57,8 @@ from backend.app.adapters.simplify import (
     is_in_scope,
 )
 from backend.app.adapters.workday import PACE as WORKDAY_PACE
+from backend.app.adapters.workday import PAGE_PACE as WORKDAY_PAGE_PACE
+from backend.app.scheduling.holds import HOLDS
 from backend.app.discovery.feed_links import (
     BOARDS_PER_RUN,
     find_unregistered_boards,
@@ -974,8 +976,10 @@ def main(
                 recovery.diagnosis.outcome,
             )
 
-    # Workday's one pace climbs only while Workday answers, up to this top.
+    # Workday's paces climb only while Workday answers, up to this top: one
+    # for its job API, one for its career sites' sitemaps and posting pages.
     WORKDAY_PACE.set_top(settings.scheduler_workday_pace_max)
+    WORKDAY_PAGE_PACE.set_top(settings.scheduler_workday_pace_max)
 
     runtime = SchedulerRuntime(
         registry=registry,
@@ -984,6 +988,8 @@ def main(
         platform_limits=(
             settings.scheduler_platform_limit_map
         ),
+        # A Workday pause holds every reader in this process, sweeps too.
+        holds=HOLDS,
         cycle_recorder=record_cycle,
         alert_sender=send_alerts,
         reload_registry=reload_registry,
@@ -1013,7 +1019,8 @@ def main(
             "enabled_sources=%d "
             "workers=%d "
             "platform_limits=%s "
-            "workday_pace_max=%.0f"
+            "workday_pace_max=%.0f "
+            "workday_reading=sitemap_and_api"
         ),
         runtime.source_count,
         settings.scheduler_workers,

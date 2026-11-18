@@ -12,7 +12,7 @@ from collections.abc import (
     Mapping,
     Sequence,
 )
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
 from backend.app.adapters.ashby import (
@@ -620,6 +620,10 @@ WORKDAY_FULL_READ_EVERY = timedelta(hours=24)
 
 # One steady speed limit for every Workday request (adapters/workday.WorkdayPace).
 from backend.app.adapters.workday import PACE as WORKDAY_PACE  # noqa: E402
+from backend.app.adapters.workday import PAGE_PACE as WORKDAY_PAGE_PACE  # noqa: E402
+from backend.app.adapters.workday import API_REST as WORKDAY_API_REST  # noqa: E402
+from backend.app.scheduling.holds import PlatformHold  # noqa: E402
+from backend.app.scheduling.holds import HOLDS  # noqa: E402
 
 
 class WorkdaySourceFetcher:
@@ -651,11 +655,15 @@ class WorkdaySourceFetcher:
             ]
             | None
         ) = None,
+        hold: PlatformHold | None = None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
         self._posted_lookup = posted_lookup
         self._detail_lookup = detail_lookup
+        # Workday's pause, so a sweep's read of a Workday board waits for
+        # it like the scheduler's own turns (scheduling/holds.py).
+        self._hold = hold
         # When each board was last read in full. Between full reads a board
         # reads only its newest pages (adapters/workday.QUICK_READ_PAGES),
         # which closes nothing; a full read once a day closes what left.
@@ -684,6 +692,11 @@ class WorkdaySourceFetcher:
                 )
             )
 
+        if self._hold is not None:
+            self._hold.check(
+                "workday"
+            )
+
         known = (
             {}
             if self._posted_lookup is None
@@ -707,6 +720,11 @@ class WorkdaySourceFetcher:
                 self._last_full[source.identity] = moment
             known["quick"] = not full
             known["pace"] = WORKDAY_PACE
+            # Quick reads by the career site's sitemap; full reads by the
+            # job API unless it is resting (adapters/workday.ApiRest).
+            known["crawl"] = True
+            known["page_pace"] = WORKDAY_PAGE_PACE
+            known["api_rest"] = WORKDAY_API_REST
 
         # What each posting's detail gave before, so it is not fetched
         # again on every read (adapters/workday.DETAIL_REFRESH_HOURS).
@@ -1944,17 +1962,31 @@ FULL_REFETCH_INTERVAL = timedelta(
 )
 
 
-def _registered_board_check() -> Callable[[str], bool]:
+# A board ACE has not read within this long is not counted as read
+# directly: a list's copy of its postings stays until ACE reads it again
+# (2026-11-18). Before, every registered board counted, so while Workday
+# refused ACE no copy of a Workday posting reached ACE from any list.
+READ_DIRECTLY_WITHIN = timedelta(
+    hours=6,
+)
+
+
+def _registered_board_check(
+    *,
+    now: Callable[[], datetime] = utc_now,
+) -> Callable[[str], bool]:
     """Whether ACE reads the board a posting link names.
 
-    Registered and switched on -- not merely readable. Loaded once per
-    feed poll, in a short session of its own.
+    Registered, switched on and read within ``READ_DIRECTLY_WITHIN`` --
+    not merely readable. Loaded once per feed poll, in a short session of
+    its own.
     """
 
-    from sqlalchemy import select
+    from sqlalchemy import and_, select
 
     from backend.app.db.models import (
         JobSourceRecord,
+        SourceState,
     )
     from backend.app.db.session import (
         SessionLocal,
@@ -1963,20 +1995,35 @@ def _registered_board_check() -> Callable[[str], bool]:
         detect_source_from_url,
     )
 
+    since = now() - READ_DIRECTLY_WITHIN
+
     with SessionLocal() as session:
         registered = {
             (
                 source_type,
                 source_account.lower(),
             )
-            for source_type, source_account in session.execute(
+            for source_type, source_account, read_at in session.execute(
                 select(
                     JobSourceRecord.source_type,
                     JobSourceRecord.source_account,
-                ).where(
+                    SourceState.last_success_at,
+                )
+                .outerjoin(
+                    SourceState,
+                    and_(
+                        SourceState.source
+                        == JobSourceRecord.source_type,
+                        SourceState.source_account
+                        == JobSourceRecord.source_account,
+                    ),
+                )
+                .where(
                     JobSourceRecord.enabled.is_(True),
                 )
             ).all()
+            if read_at is not None
+            and _aware(read_at) >= since
         }
 
     def read_directly(
@@ -1992,6 +2039,57 @@ def _registered_board_check() -> Callable[[str], bool]:
         ) in registered
 
     return read_directly
+
+
+def _is_workday_page(
+    url: str,
+) -> bool:
+    """Whether a link is on a Workday career site."""
+
+    from urllib.parse import urlsplit
+
+    host = (
+        urlsplit(url).hostname
+        or ""
+    ).lower()
+
+    return host.endswith(
+        (".myworkdayjobs.com", ".myworkdaysite.com")
+    )
+
+
+def _workday_page_pace(
+    url: str,
+):
+    """Workday's page pace for a link on a Workday career site, else None."""
+
+    return (
+        WORKDAY_PAGE_PACE
+        if _is_workday_page(url)
+        else None
+    )
+
+
+def _workday_page_held(
+    url: str,
+) -> bool:
+    """Whether a Workday page waits for Workday's pause to end."""
+
+    return _is_workday_page(url) and HOLDS["workday"].held()
+
+
+def _aware(
+    moment: datetime,
+) -> datetime:
+    """A stored time as an aware UTC time (SQLite hands back naive ones)."""
+
+    return (
+        moment
+        if moment.tzinfo is not None
+        else moment.replace(
+            tzinfo=timezone.utc,
+        )
+    )
 
 
 def _title_could_pass(
@@ -2100,10 +2198,12 @@ def _stored_posted_dates(
 def _stored_workday_details(
     source: SourceDefinition,
 ) -> dict[str, object]:
-    """What each active posting's detail gave ACE, for one Workday board.
+    """What ACE holds for each active posting of one Workday board.
 
     Read in its own short session, before any request, like the posted
-    days. Only postings with a stored description are reused.
+    days. A job API read reuses only postings with a stored description; a
+    sitemap read, which names a posting by its link alone, hands back every
+    posting ACE holds as ACE holds it, title included.
     """
 
     from sqlalchemy import (
@@ -2129,23 +2229,24 @@ def _stored_workday_details(
                 JobRecord.posted_at,
                 JobRecord.requisition_id,
                 JobRecord.official_url,
+                JobRecord.title,
             ).where(
                 JobRecord.source
                 == source.source_type.value,
                 JobRecord.source_account
                 == source.source_account,
                 JobRecord.is_active.is_(True),
-                JobRecord.description != "",
             )
         ).all()
 
     return {
         external_id: StoredDetail(
-            description=description,
+            description=description or "",
             location=location or "",
             posted_at=posted_at,
             requisition_id=requisition_id,
             official_url=official_url or "",
+            title=title or "",
         )
         for (
             external_id,
@@ -2154,6 +2255,7 @@ def _stored_workday_details(
             posted_at,
             requisition_id,
             official_url,
+            title,
         ) in rows
     }
 
@@ -2246,6 +2348,7 @@ def build_default_source_dispatcher() -> (
                     detail_lookup=(
                         _stored_workday_details
                     ),
+                    hold=HOLDS["workday"],
                 )
             ),
             SourceType.AMAZON: (
@@ -2325,6 +2428,8 @@ def build_default_source_dispatcher() -> (
                         worth_reading=(
                             _title_could_pass
                         ),
+                        paced=_workday_page_pace,
+                        held=_workday_page_held,
                     ),
                     read_directly_factory=(
                         _registered_board_check

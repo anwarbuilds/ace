@@ -66,6 +66,9 @@ from backend.app.scheduling.service import (
 from backend.app.scheduling.types import (
     SourceDefinition,
 )
+from backend.app.scheduling.holds import (
+    PlatformHold,
+)
 
 
 LOGGER = logging.getLogger(
@@ -615,9 +618,19 @@ class SchedulerRuntime:
         platform_limits: (
             Mapping[str, int] | None
         ) = None,
+        holds: (
+            Mapping[str, PlatformHold] | None
+        ) = None,
     ) -> None:
         self._sources = (
             registry.enabled_sources
+        )
+
+        # Each paused platform's hold, so readers outside these turns (the
+        # feed-link sweep, the lead check, the employer-page check) wait for
+        # the pause too (scheduling/holds.py). None in tests.
+        self._holds = dict(
+            holds or {}
         )
 
         # Lanes with a limit on boards read at once: every shared edge at
@@ -1386,6 +1399,15 @@ class SchedulerRuntime:
         self._lane_refused_at[
             lane
         ] = []
+
+        hold = self._holds.get(
+            lane
+        )
+
+        if hold is not None:
+            hold.hold(
+                seconds
+            )
 
         return seconds
 

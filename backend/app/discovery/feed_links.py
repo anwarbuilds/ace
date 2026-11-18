@@ -33,6 +33,8 @@ import logging
 import re
 
 import httpx
+
+from backend.app.scheduling.holds import PlatformHeld
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
@@ -446,6 +448,9 @@ def is_transient(
         (
             httpx.TimeoutException,
             httpx.TransportError,
+            # The platform is paused after refusals: the board was not
+            # asked at all (scheduling/holds.py).
+            PlatformHeld,
         ),
     )
 
