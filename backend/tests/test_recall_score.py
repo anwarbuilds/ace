@@ -38,6 +38,7 @@ from backend.app.db.models import (
     JobRecord,
     JobSourceRecord,
     RecallRunRecord,
+    SourceState,
 )
 
 
@@ -151,6 +152,9 @@ def seed(session: Session) -> None:
     session.add(
         JobSourceRecord(source_type="ashby", source_account="fabrikam", company_name="Fabrikam", enabled=True, poll_interval_seconds=900)
     )
+    # Fabrikam's board read well an hour ago, so its miss is "role not there".
+    session.add(SourceState(source="ashby", source_account="fabrikam", initialized_at=NOW - timedelta(days=30),
+                            last_success_at=NOW - timedelta(hours=1), last_job_count=1))
     session.add(
         EmployerLead(company_key="kestrel grid", company_name="Kestrel Grid", origin="feed", origin_details=[],
                      state="noreader", reason="", boards=[], first_seen_at=NOW, next_check_at=NOW)
@@ -343,3 +347,121 @@ def test_an_internship_is_never_a_listed_full_time_role() -> None:
     intern = recall.Candidate(26, "workday", "w1", "Palm Ridge", "Software Engineer Intern (Summer 2027)", "", NOW)
     college = recall.Candidate(27, "workday", "w2", "Palm Ridge", "College Intern", "", NOW)
     assert match_role(role, build_index([intern, college])) == []
+
+
+# REC-02: a missed role's own link says which board it is on (Chat 6).
+
+def held(source_type, account, company, *, enabled=True, origin="", read=NOW - timedelta(hours=1)):
+    return recall.HeldBoard(source_type, account, company, enabled, origin, read)
+
+
+def catalog_of(*boards):
+    catalog = recall.Catalog(now=NOW)
+    for board in boards:
+        catalog.add(board)
+    return catalog
+
+
+def test_a_linked_board_finds_its_job_under_another_company_name() -> None:
+    # The list links SmartRecruiters' number with a title; ACE stores the number alone, under its own name.
+    role = ListedRole("speedyapply", "Orbitfield", "Software Engineer", "",
+                      "https://jobs.smartrecruiters.com/Orbitfield/744000123456789-software-engineer?oga=true", TODAY)
+    stored = recall.Candidate(30, "smartrecruiters", "0f0e0d0c-0b0a-4000-8000-000000000030", "Orbitfield Systems",
+                              "Software Engineer", "https://jobs.smartrecruiters.com/Orbitfield/744000123456789", NOW,
+                              "Orbitfield")
+    other = recall.Candidate(31, "smartrecruiters", "0f0e0d0c-0b0a-4000-8000-000000000031", "Orbitfield Systems",
+                             "Software Engineer", "https://jobs.smartrecruiters.com/Orbitfield/744000999999999", NOW,
+                             "Orbitfield")
+    assert match_role(role, build_index([stored, other])) == [stored]
+
+
+def test_a_workday_requisition_matches_within_its_board_only() -> None:
+    role = ListedRole("speedyapply", "Palm Ridge Health", "Software Engineer I", "",
+                      "https://palmridge.wd5.myworkdayjobs.com/en-US/Careers_1/job/Denver-CO/Software-Engineer-I_R0012345",
+                      TODAY)
+    # Retitled since the list copied it: the requisition still names it.
+    retitled = recall.Candidate(32, "workday", "/job/Denver-CO/Software-Engineer-I--Platform_R0012345", "PRH",
+                                "Software Engineer I, Platform",
+                                "https://palmridge.wd5.myworkdayjobs.com/Careers_1/job/Denver-CO/Software-Engineer-I--Platform_R0012345",
+                                NOW, "palmridge/Careers_1")
+    # Same board, another posting: the site name's digit must not make every posting match.
+    neighbour = recall.Candidate(33, "workday", "/job/Denver-CO/Data-Analyst_R0099999", "PRH", "Data Analyst",
+                                 "https://palmridge.wd5.myworkdayjobs.com/Careers_1/job/Denver-CO/Data-Analyst_R0099999",
+                                 NOW, "palmridge/Careers_1")
+    # Another employer numbering its requisitions alike.
+    namesake = recall.Candidate(34, "workday", "/job/Austin-TX/Accountant_R0012345", "Elsewhere Foods", "Accountant",
+                                "https://elsewhere.wd1.myworkdayjobs.com/External/job/Austin-TX/Accountant_R0012345",
+                                NOW, "elsewhere/External")
+    assert match_role(role, build_index([retitled, neighbour, namesake])) == [retitled]
+
+
+def test_a_missed_role_on_a_board_ace_holds_says_what_ace_knows_of_it() -> None:
+    def reason(link, catalog, company="Palm Ridge Health"):
+        role = ListedRole("speedyapply", company, "Software Engineer I", "", link, TODAY)
+        return recall.miss_reason(role, leads={}, boards=set(), catalog=catalog)
+
+    workday = "https://palmridge.wd5.myworkdayjobs.com/en-US/Careers_1/job/Denver-CO/Software-Engineer-I_R0012345"
+    read_today = catalog_of(held("workday", "palmridge/Careers_1", "PRH"))
+    assert reason(workday, read_today) == recall.BOARD_READ
+    refused_lately = catalog_of(held("workday", "palmridge/Careers_1", "PRH", read=NOW - timedelta(hours=42)))
+    assert reason(workday, refused_lately) == recall.NOT_READ_LATELY
+    never_read = catalog_of(held("workday", "palmridge/careers_1", "PRH", read=None))
+    assert reason(workday, never_read) == recall.NOT_READ_LATELY
+    agency = catalog_of(held("workday", "palmridge/Careers_1", "PRH", enabled=False,
+                             origin="feed_link rejected: staffing: 480 postings, none described"))
+    assert reason(workday, agency) == recall.OFF_AS_AGENCY
+    duplicate = catalog_of(held("workday", "palmridge/Careers_1", "PRH", enabled=False, origin="duplicate of 12"))
+    assert reason(workday, duplicate) == recall.SWITCHED_OFF
+    # One board under two capitals, one copy on: ACE reads it.
+    twice = catalog_of(held("workday", "palmridge/careers_1", "PRH", enabled=False, origin="duplicate of 12"),
+                       held("workday", "palmridge/Careers_1", "PRH"))
+    assert reason(workday, twice) == recall.BOARD_READ
+    other_site = catalog_of(held("workday", "palmridge/Early_Talent", "PRH"))
+    assert reason(workday, other_site) == recall.OTHER_SITE
+    assert reason(workday, catalog_of(held("workday", "elsewhere/External", "Elsewhere Foods"))) == recall.READABLE_NOT_ADDED
+
+
+def test_a_short_link_miss_on_boards_not_read_lately_says_so() -> None:
+    role = ListedRole("vanshb03", "Palm Ridge", "Software Engineer", "", None, TODAY)
+    boards = set(recall.company_keys("Palm Ridge"))
+    stale = catalog_of(held("workday", "palmridge/Careers_1", "Palm Ridge", read=NOW - timedelta(days=2)))
+    assert recall.miss_reason(role, leads={}, boards=boards, catalog=stale) == recall.NOT_READ_LATELY
+    mixed = catalog_of(held("workday", "palmridge/Careers_1", "Palm Ridge", read=NOW - timedelta(days=2)),
+                       held("greenhouse", "palmridge", "Palm Ridge"))
+    assert recall.miss_reason(role, leads={}, boards=boards, catalog=mixed) == recall.BOARD_READ
+
+
+def test_roles_found_on_boards_added_for_a_miss_are_counted_apart(factory) -> None:
+    with factory() as session:
+        seed(session)
+        session.add(JobSourceRecord(source_type="greenhouse", source_account="northwind", company_name="Northwind Robotics",
+                                    enabled=True, poll_interval_seconds=900, discovery_source=recall.MISSED_ROLE_ORIGIN))
+        session.commit()
+
+    result = run_daily_check(factory, now=NOW, fetch=fetcher)
+
+    total = result["total"]
+    # Northwind is still found on its employer board, and the score says a miss taught ACE that board.
+    assert (total["found"], total["board"], total["board_added"]) == (3, 2, 1)
+    assert total["added_companies"] == ["Northwind Robotics"]
+    with factory() as session:
+        report = recall_report(session)
+    assert report["total"]["board_added"] == 1
+    assert report["total"]["added_companies"] == ["Northwind Robotics"]
+
+
+def test_a_board_found_independently_is_not_counted_as_added() -> None:
+    role = ListedRole("speedyapply", "Northwind Robotics", "Software Engineer I", "",
+                      "https://job-boards.greenhouse.io/northwind/jobs/4100000001", TODAY)
+    on_added = recall.Candidate(40, "greenhouse", "4100000001", "Northwind Robotics", "Software Engineer I",
+                                "https://job-boards.greenhouse.io/northwind/jobs/4100000001", NOW, "northwind")
+    on_own = recall.Candidate(41, "lever", "nw-1", "Northwind Robotics", "Software Engineer I", "", NOW, "northwind")
+    catalog = catalog_of(held("greenhouse", "northwind", "Northwind Robotics", origin=recall.MISSED_ROLE_ORIGIN),
+                         held("lever", "northwind", "Northwind Robotics"))
+    index = build_index([on_added, on_own])
+    statuses = {40: ("PASS", []), 41: ("PASS", [])}
+    [both] = recall.score_roles([role], index, statuses=statuses, leads={}, boards=set(), catalog=catalog)
+    assert both.outcome == BOARD and not both.added_board
+    [only] = recall.score_roles([role], build_index([on_added]), statuses=statuses, leads={}, boards=set(),
+                                catalog=catalog)
+    assert only.outcome == BOARD and only.added_board

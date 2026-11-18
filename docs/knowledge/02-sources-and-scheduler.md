@@ -478,3 +478,23 @@ partial read closes nothing. That evening Workday still refused nearly everythin
 
 Lessons: a refusal that covers a whole platform needs a platform answer, not 975 separate ones. Count requests per platform
 before adding boards (OPS-05), and read only what changed.
+
+## Workday's outage, and the refusal that followed it (2026-11-17, Chat 6)
+
+The owner heard Workday had been down since Monday. Workday's real outage was Friday November 13 to Saturday November 14:
+a disaster-recovery test reached production databases, and service was restored by the Saturday morning. ACE's own log
+tells the rest. During the outage Workday answered ACE less but refused nothing. When it came back, every Workday board
+was overdue at once and ACE caught up at about twice its usual Workday load; Workday began refusing part of it, and from
+2026-11-16 07:00Z most of it. A day later others were still reading Workday (a public new grad list showed Workday roles
+minutes old) and ACE's own few answers carried postings from that day, so Workday was up and limiting ACE's address.
+ACE keeps its steady pace and never reads another way.
+
+- **Room to get back to speed.** The one Workday pace (`WorkdayPace`) climbs a quarter after twenty answers in a row and
+  halves on a refusal. Its top is now a setting, `SCHEDULER_WORKDAY_PACE_MAX` (default 150 a minute; the scheduler applies
+  it at start and logs it in `ace_scheduler_ready`), because every Workday board on its plan needs about 140 requests a
+  minute with newest-pages reading and reused details, a fifth of what ACE sent before; the old top of 120 kept ACE a
+  little short of its plan. Nothing changes while Workday refuses: the pace stays at its floor.
+
+Lessons: an outage is followed by a catch-up burst, and a burst is what a platform's limit sees. Read what a platform's
+users can see (its status, other readers, the dates on what it still answers) before calling a refusal an outage. A
+platform's top speed belongs in a setting, measured against what its boards need.

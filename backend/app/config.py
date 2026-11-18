@@ -215,6 +215,13 @@ class Settings(BaseSettings):
     scheduler_workers: int = 8
     scheduler_platform_limits: str = "workday=3,oracle_recruiting=2"
 
+    # The most Workday requests a minute ACE's one steady pace may climb to,
+    # and only while Workday answers (adapters/workday.WorkdayPace). With
+    # newest-pages reading every Workday board on its plan needs about 140 a
+    # minute (measured 2026-11-18), a fifth of what ACE sent before Workday
+    # began refusing it; 120 kept ACE a little short of that.
+    scheduler_workday_pace_max: float = 150.0
+
     # The interactive API docs list every route. Off unless asked for.
     api_docs: bool = False
 
@@ -291,6 +298,24 @@ class Settings(BaseSettings):
                     "SCHEDULER_WORKERS must be between 1 "
                     f"and {SCHEDULER_MAX_WORKERS}."
                 )
+            )
+
+        return value
+
+
+    @field_validator(
+        "scheduler_workday_pace_max"
+    )
+    @classmethod
+    def _validate_scheduler_workday_pace_max(
+        cls,
+        value: float,
+    ) -> float:
+        """A top below the pace's floor of one a minute, or a burst, is a typo."""
+
+        if not 1.0 <= value <= 600.0:
+            raise ValueError(
+                "SCHEDULER_WORKDAY_PACE_MAX must be between 1 and 600 requests a minute."
             )
 
         return value

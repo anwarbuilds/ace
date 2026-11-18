@@ -1099,3 +1099,39 @@ The original DIS-16 release was verified before the repair above superseded its 
 - **Reading on schedule** (FRS-02, `coverage/schedule.py`). For working boards, per hiring site: how long ago each was last
   read (typical, 19 in 20, 99 in 100), how many are late (more than one and a half planned gaps) and how many are due now.
   It is a picture of now from the scheduler's own records; it is what showed Workday refusing (topic 02).
+
+## Missed roles fixed by the company's own board (Chat 6, 2026-11-17)
+
+- **Boards behind missed roles** (REC-02). A role on a test list that ACE missed, on a board ACE can read but does not
+  hold, is fixed by reading that board, never by copying the list's job. Each board goes through the registration checks
+  in a dry run first (robots, the board's own reader, the staffing filter, a US software or ML role today, the identity
+  check) and is added as `discovery_source` `missed_role`. The score still counts its roles as found and also counts them
+  apart (`board_added`, `added_companies`), so it keeps showing which companies a miss taught ACE; a role ACE also holds on
+  a board it found by itself is not counted as taught. Two boards whose owner disagreed with the list's company stayed
+  leads, which is the identity check doing its job.
+- **The score matched by name, so it undercounted.** A list that says "Raytheon" links a board ACE holds as "RTX";
+  SmartRecruiters links `.../<number>-<title>` while ACE stores the posting's uuid. Such roles looked missed although ACE
+  held them. The score now matches by the board a link names and by an identifier in the link's last part (the
+  SmartRecruiters number, a Workday requisition), compared only within that board, since two employers can number
+  postings alike.
+- **A miss says what ACE knows of its board**: not added yet; switched off, as a staffing agency or otherwise; not read in
+  the last day (the Workday case); another career site of a Workday tenant ACE reads (DIS-03); or read with the role not
+  there.
+- **SmartRecruiters' robots rules refuse its postings API** (`api.smartrecruiters.com`, recorded since 2026-11-05). New
+  SmartRecruiters boards are never added; the ones ACE already reads keep polling while `HOST_POLICY_ENFORCE` is off and
+  the owner decides.
+- **The staffing filter misreads two kinds of employer.** Its size rule on SmartRecruiters catches a large employer whose
+  list carries no descriptions, and its template rule catches defense contractors, whose postings call the government
+  "our client". Rechecked by hand; nothing switched back on yet.
+
+Lessons: check the board a list's link names before calling a role missed. A board added because of a miss must stay
+visible as such, or the score ends up measuring its own inputs.
+- **The dark-board check mistook a refusal for a move** (November 18). While Workday refused ACE, Workday boards had no
+  good read for a day, so the six-hourly check (`coverage/recovery.py`) diagnosed each company again, waiting on
+  Workday's pace for about five hours, and "moved" eight boards to another career site of the same company (an early
+  careers site to the main one, a careers site to an Accounting site), closing their postings; maintenance, and with it
+  the daily score, waited behind it. The check now never moves a Workday or Workable board: on a platform that limits
+  ACE, silence is the platform's refusal, and a tenant's other site is another board (DIS-03). Those boards stay listed
+  as dark. The moved boards were switched back on with the owner's approval; their postings reopen on the next good
+  read. The daily score now runs first in maintenance. Lesson: an automatic repair must know when a platform, not a
+  board, is the reason for silence; and a slow step must not hold up a once-a-day measurement.

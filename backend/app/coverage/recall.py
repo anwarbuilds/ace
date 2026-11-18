@@ -16,9 +16,18 @@ without a time of day, so that is the finest honest comparison.
 
 Matching: a list that links the employer's posting is matched on its posting
 number first; a list of short links is never followed, so its roles match by
-company and title, as does any role whose number ACE does not hold.
-Nothing here finds jobs or adds a board: misses are reported, and fixing them
-is REC-02.
+company and title, as does any role whose number ACE does not hold. A link's
+board counts whatever company name ACE holds it under ("Raytheon" on a list,
+"RTX" in ACE), and its posting is matched by an identifier in the link's last
+part, compared only within that board (SmartRecruiters' number, Workday's
+requisition).
+
+A miss says what ACE knows of the role's board (REC-02): not added yet,
+switched off, not read in the last day, another career site of a company ACE
+reads, or read with the role not there. Nothing here finds jobs or adds a
+board. Boards added because of a miss (``MISSED_ROLE_ORIGIN``) still count as
+found, and the score also counts their roles apart, so it keeps showing which
+companies a miss taught ACE.
 """
 
 from __future__ import annotations
@@ -41,12 +50,14 @@ from sqlalchemy.orm import Session
 from backend.app.coverage.benchmark import company_keys, normalise_company
 from backend.app.coverage.held_out import HELD_OUT_LISTS, HeldOutList, held_out_rows, is_held_out
 from backend.app.discovery.detector import detect_source_from_url
+from backend.app.discovery.feed_links import board_key
 from backend.app.db.models import (
     EmployerLead,
     JobEvaluationRecord,
     JobRecord,
     JobSourceRecord,
     RecallRunRecord,
+    SourceState,
 )
 
 
@@ -120,6 +131,22 @@ LEAD_REASONS = {
 NO_LEAD = "ace has not heard of this company"
 BOARD_READ = "Board read, role not there"
 READABLE_NOT_ADDED = "On a board ace can read, not added yet"
+# Reasons a missed role's own link can give (REC-02), checked against the
+# board it names before the company name, since ACE may hold that board
+# under another name ("Raytheon" on a list, "RTX" in ACE).
+NOT_READ_LATELY = "Board not read in the last day"
+OFF_AS_AGENCY = "Board switched off as a staffing agency"
+SWITCHED_OFF = "Board switched off"
+OTHER_SITE = "Another career site of a company ace reads"
+
+# A board whose newest good read is older than this could not have shown a
+# role listed since, so its miss says so rather than "role not there".
+STALE_AFTER = timedelta(hours=24)
+
+# Boards ACE added because the daily score showed a role it missed (REC-02).
+# Their roles count as found, and the score also counts them apart, so it
+# keeps showing which companies a miss taught ACE.
+MISSED_ROLE_ORIGIN = "missed_role"
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +172,7 @@ class Candidate:
     title: str
     official_url: str
     first_seen_at: datetime
+    source_account: str = ""
 
 
 @dataclass(slots=True)
@@ -156,6 +184,8 @@ class RoleResult:
     shown: bool | None = None
     hidden_reason: str | None = None
     miss_reason: str | None = None
+    # Found only on boards ACE added because of an earlier miss.
+    added_board: bool = False
 
 
 @dataclass(slots=True)
@@ -163,6 +193,58 @@ class _Index:
     by_key: dict[str, list[Candidate]] = field(default_factory=dict)
     by_token: dict[str, list[Candidate]] = field(default_factory=dict)
     by_url: dict[str, list[Candidate]] = field(default_factory=dict)
+    # Jobs by the board they came from, and by a posting identifier within
+    # that board, so a list's link finds its job whatever company name ACE
+    # holds the board under.
+    by_board: dict[tuple[str, str], list[Candidate]] = field(default_factory=dict)
+    by_board_token: dict[tuple[str, str, str], list[Candidate]] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class HeldBoard:
+    """One board in ACE's catalog, as far as a missed role's reason needs it."""
+
+    source_type: str
+    source_account: str
+    company: str
+    enabled: bool
+    discovery_source: str
+    last_read_at: datetime | None
+
+
+@dataclass(slots=True)
+class Catalog:
+    """The boards ACE holds: by board, by company and by Workday tenant."""
+
+    now: datetime
+    by_board: dict[tuple[str, str], HeldBoard] = field(default_factory=dict)
+    by_company: dict[str, list[HeldBoard]] = field(default_factory=dict)
+    tenants: set[tuple[str, str]] = field(default_factory=set)
+
+    def add(self, board: HeldBoard) -> None:
+        key = board_key(board.source_type, board.source_account)
+        held = self.by_board.get(key)
+        # One board under two capitals is one board, read if either copy is on.
+        if held is None or (board.enabled and not held.enabled):
+            self.by_board[key] = board
+        if not board.enabled:
+            return
+        for company in company_keys(board.company):
+            self.by_company.setdefault(company, []).append(board)
+        tenant = workday_tenant(board.source_type, board.source_account)
+        if tenant:
+            self.tenants.add((board.source_type, tenant))
+
+    def stale(self, board: HeldBoard) -> bool:
+        if board.last_read_at is None:
+            return True
+        return self.now - _as_utc(board.last_read_at) > STALE_AFTER
+
+    def added_for_misses(self) -> set[tuple[str, str]]:
+        return {
+            key for key, board in self.by_board.items()
+            if board.enabled and board.discovery_source.startswith(MISSED_ROLE_ORIGIN)
+        }
 
 
 # Reading the lists.
@@ -325,6 +407,53 @@ def link_tokens(link: str | None) -> set[str]:
     return {token for token in tokens if len(token) >= 5 and any(ch.isdigit() for ch in token)}
 
 
+# A long number a posting's last address part starts with (SmartRecruiters
+# links "744000161528139-software-engineer"; ACE stores ".../744000161528139"),
+# and a requisition after its last underscore (Workday "..._01864077").
+_LEADING_NUMBER = re.compile(r"^(\d{8,})(?:-|$)")
+_REQUISITION = re.compile(r"_([A-Za-z]{0,3}\d{6,})$")
+
+
+def posting_tokens(url: str | None) -> set[str]:
+    """Identifiers of one posting in an address's last part. Compared only
+    within one board, because two employers can number their postings alike."""
+
+    if not url:
+        return set()
+    try:
+        path = urlsplit(url.strip()).path
+    except ValueError:
+        return set()
+    last = path.rstrip("/").rsplit("/", 1)[-1]
+    tokens = set()
+    if len(last) >= 5 and any(ch.isdigit() for ch in last):
+        tokens.add(last.lower())
+    for pattern in (_LEADING_NUMBER, _REQUISITION):
+        found = pattern.search(last)
+        if found:
+            tokens.add(found.group(1).lower())
+    return tokens
+
+
+def linked_board(link: str | None) -> tuple[str, str] | None:
+    """The board a list's employer link names, keyed as ACE keys boards."""
+
+    if not link:
+        return None
+    detected = detect_source_from_url(link)
+    if detected is None:
+        return None
+    return board_key(str(getattr(detected.source_type, "value", detected.source_type)), detected.source_account)
+
+
+def workday_tenant(source_type: str, source_account: str) -> str:
+    """A Workday tenant runs several career sites ("tenant/site"); "" for anything else."""
+
+    if source_type != "workday" or "/" not in source_account:
+        return ""
+    return source_account.split("/", 1)[0].strip().lower()
+
+
 def _url_key(url: str | None) -> str:
     if not url:
         return ""
@@ -345,7 +474,21 @@ def build_index(candidates: Iterable[Candidate]) -> _Index:
         url = _url_key(job.official_url)
         if url:
             index.by_url.setdefault(url, []).append(job)
+        if job.source_account:
+            board = board_key(job.source, job.source_account)
+            index.by_board.setdefault(board, []).append(job)
+            for token in posting_tokens(job.official_url) | posting_tokens(job.external_id):
+                index.by_board_token.setdefault((*board, token), []).append(job)
     return index
+
+
+def _indexed_jobs(index: _Index) -> list[Candidate]:
+    seen: dict[int, Candidate] = {}
+    for group in (index.by_key, index.by_token, index.by_url, index.by_board):
+        for jobs in group.values():
+            for job in jobs:
+                seen.setdefault(job.id, job)
+    return list(seen.values())
 
 
 def match_role(role: ListedRole, index: _Index) -> list[Candidate]:
@@ -353,6 +496,11 @@ def match_role(role: ListedRole, index: _Index) -> list[Candidate]:
 
     keys = company_keys(role.company)
     same_company = {job.id: job for key in keys for job in index.by_key.get(key, ())}
+    linked = linked_board(role.link)
+    if linked is not None:
+        # The board the list links is the employer's, whatever name ACE
+        # holds it under ("Raytheon" on the list, "RTX" in ACE).
+        same_company.update((job.id, job) for job in index.by_board.get(linked, ()))
     # A full-time role on a list is never an internship ACE holds.
     if not _INTERN.search(role.title):
         same_company = {key: job for key, job in same_company.items() if not _INTERN.search(job.title)}
@@ -363,6 +511,10 @@ def match_role(role: ListedRole, index: _Index) -> list[Candidate]:
     for token in link_tokens(role.link):
         for job in index.by_token.get(token, ()):
             if job.id in same_company or len(token) >= 8:
+                exact[job.id] = job
+    if linked is not None:
+        for token in posting_tokens(role.link):
+            for job in index.by_board_token.get((*linked, token), ()):
                 exact[job.id] = job
     if exact:
         return list(exact.values())
@@ -392,9 +544,31 @@ def match_role(role: ListedRole, index: _Index) -> list[Candidate]:
     return found
 
 
-def miss_reason(role: ListedRole, *, leads: dict[str, str], boards: set[str]) -> str:
+def miss_reason(
+    role: ListedRole,
+    *,
+    leads: dict[str, str],
+    boards: set[str],
+    catalog: Catalog | None = None,
+) -> str:
     keys = company_keys(role.company)
+    linked = linked_board(role.link)
+    if catalog is not None and linked is not None:
+        # The list links a board ACE can read: say what ACE knows of that board.
+        held = catalog.by_board.get(linked)
+        if held is not None and not held.enabled:
+            return OFF_AS_AGENCY if "staffing" in held.discovery_source.lower() else SWITCHED_OFF
+        if held is not None:
+            return NOT_READ_LATELY if catalog.stale(held) else BOARD_READ
+        tenant = workday_tenant(*linked)
+        if tenant and (linked[0], tenant) in catalog.tenants:
+            return OTHER_SITE
+        return READABLE_NOT_ADDED
     if keys & boards:
+        if catalog is not None:
+            held = [board for key in keys for board in catalog.by_company.get(key, ())]
+            if held and all(catalog.stale(board) for board in held):
+                return NOT_READ_LATELY
         return BOARD_READ
     if role.link and detect_source_from_url(role.link) is not None:
         return READABLE_NOT_ADDED
@@ -418,16 +592,34 @@ def score_roles(
     statuses: dict[int, tuple[str, list]] | Callable[[set[int]], dict[int, tuple[str, list]]],
     leads: dict[str, str],
     boards: set[str],
+    catalog: Catalog | None = None,
 ) -> list[RoleResult]:
     matched = [(role, match_role(role, index)) for role in roles]
     if callable(statuses):
         statuses = statuses({job.id for _, jobs in matched for job in jobs})
+    added = catalog.added_for_misses() if catalog is not None else set()
+
+    def on_added(job: Candidate) -> bool:
+        return bool(job.source_account) and board_key(job.source, job.source_account) in added
+
+    independent: _Index | None = None
     results = []
     for role, matches in matched:
         if not matches:
-            results.append(RoleResult(role, MISSED, miss_reason=miss_reason(role, leads=leads, boards=boards)))
+            results.append(
+                RoleResult(role, MISSED, miss_reason=miss_reason(role, leads=leads, boards=boards, catalog=catalog))
+            )
             continue
-        outcome = BOARD if any(job.source not in FEED_SOURCES for job in matches) else FEED
+        direct = [job for job in matches if job.source not in FEED_SOURCES]
+        outcome = BOARD if direct else FEED
+        # Found only on boards a miss taught ACE: counted as found, and apart.
+        # A role ACE also holds on a board it found by itself is not.
+        added_board = bool(direct) and all(on_added(job) for job in direct)
+        if added_board:
+            if independent is None:
+                independent = build_index(job for job in _indexed_jobs(index) if not on_added(job))
+            if any(job.source not in FEED_SOURCES for job in match_role(role, independent)):
+                added_board = False
         verdicts = [statuses.get(job.id) for job in matches]
         shown = any(verdict and verdict[0] == "PASS" for verdict in verdicts)
         hidden = None
@@ -442,6 +634,7 @@ def score_roles(
                 first_seen_at=min(job.first_seen_at for job in matches),
                 shown=shown,
                 hidden_reason=hidden,
+                added_board=added_board,
             )
         )
     return results
@@ -472,10 +665,14 @@ def summarize(results: list[RoleResult], *, today: date) -> dict:
     ]
     first = [result for result in timed if _pacific_day(result.first_seen_at) < result.role.listed_on]
     hidden = [result for result in found if not result.shown]
+    added = [result for result in found if result.added_board]
     return {
         "listed": len(results),
         "found": len(found),
         "board": outcomes[BOARD],
+        # Of "board": found only on boards ACE added because of an earlier miss.
+        "board_added": len(added),
+        "added_companies": sorted({result.role.company for result in added}, key=str.lower),
         "feed": outcomes[FEED],
         "missed": outcomes[MISSED],
         "timed": len(timed),
@@ -521,6 +718,7 @@ def load_candidates(session: Session, roles: list[ListedRole], *, now: datetime)
         JobRecord.title,
         JobRecord.official_url,
         JobRecord.first_seen_at,
+        JobRecord.source_account,
     )
     seen: dict[int, Candidate] = {}
 
@@ -532,6 +730,21 @@ def load_candidates(session: Session, roles: list[ListedRole], *, now: datetime)
         take(JobRecord.company.in_(names[start:start + 400]))
     for start in range(0, len(tokens), 400):
         take(JobRecord.external_id.in_(tokens[start:start + 400]))
+    # The boards the lists link, as the catalog spells them, whatever company
+    # name they hold: a role's own board is where its job would be.
+    linked = {board for role in roles if (board := linked_board(role.link))}
+    accounts: dict[str, set[str]] = {}
+    for source_type, account in session.execute(
+        sa.select(JobSourceRecord.source_type, JobSourceRecord.source_account).where(
+            JobSourceRecord.source_type.not_in(sorted(FEED_SOURCES))
+        )
+    ):
+        if board_key(source_type, account) in linked:
+            accounts.setdefault(source_type, set()).add(account)
+    for source_type, held in sorted(accounts.items()):
+        names_held = sorted(held)
+        for start in range(0, len(names_held), 200):
+            take(sa.and_(JobRecord.source == source_type, JobRecord.source_account.in_(names_held[start:start + 200])))
     return list(seen.values())
 
 
@@ -565,6 +778,41 @@ def load_company_facts(session: Session) -> tuple[dict[str, str], set[str]]:
     return leads, boards
 
 
+def load_catalog(session: Session, *, now: datetime) -> Catalog:
+    """Every employer board ACE holds, with its newest good read, as the schedule table counts reads."""
+
+    states = {
+        board_key(row.source, row.source_account): max(
+            (_as_utc(value) for value in (row.last_success_at, row.last_unchanged_at) if value), default=None
+        )
+        for row in session.execute(
+            sa.select(SourceState.source, SourceState.source_account, SourceState.last_success_at,
+                      SourceState.last_unchanged_at)
+        )
+    }
+    catalog = Catalog(now=now)
+    for row in session.execute(
+        sa.select(
+            JobSourceRecord.source_type,
+            JobSourceRecord.source_account,
+            JobSourceRecord.company_name,
+            JobSourceRecord.enabled,
+            JobSourceRecord.discovery_source,
+        ).where(JobSourceRecord.source_type.not_in(sorted(FEED_SOURCES)))
+    ):
+        catalog.add(
+            HeldBoard(
+                source_type=row.source_type,
+                source_account=row.source_account,
+                company=row.company_name or "",
+                enabled=bool(row.enabled),
+                discovery_source=row.discovery_source or "",
+                last_read_at=states.get(board_key(row.source_type, row.source_account)),
+            )
+        )
+    return catalog
+
+
 def fetch_list(url: str) -> str:
     """Read one test list. Only test lists: this is the one reader allowed to."""
 
@@ -587,6 +835,7 @@ def measure(
     lists: list[dict] = []
     all_results: list[RoleResult] = []
     leads, boards = load_company_facts(session)
+    catalog = load_catalog(session, now=now)
     for item in HELD_OUT_LISTS:
         text = texts.get(item.key)
         roles = parse_list(item, text, today=today) if text else []
@@ -600,6 +849,7 @@ def measure(
             statuses=lambda ids: load_statuses(session, ids),
             leads=leads,
             boards=boards,
+            catalog=catalog,
         )
         all_results.extend(results)
         lists.append({"key": item.key, "label": item.label, "links": item.links, **summarize(results, today=today)})
