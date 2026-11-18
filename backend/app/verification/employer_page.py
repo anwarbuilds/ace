@@ -74,6 +74,10 @@ TIMEOUT_SECONDS = 15.0
 # polls. A page is someone else's server, read once a week at most.
 FRESH_READS_PER_POLL = 150
 
+# Of those, pages on a site with its own pace (Workday's), which wait
+# their turn: a few per poll, so the feed is never held for long.
+PACED_READS_PER_POLL = 10
+
 CONCURRENCY = 4
 
 # How long a reading stands. Requirements rarely change once posted; a
@@ -846,7 +850,27 @@ class EmployerPageVerifier:
                     moment,
                 )
             )
-        ][
+        ]
+
+        if self._paced is not None:
+            paced = [
+                url
+                for url in due
+                if self._paced(url) is not None
+            ][
+                PACED_READS_PER_POLL:
+            ]
+
+            if paced:
+                later = set(paced)
+
+                due = [
+                    url
+                    for url in due
+                    if url not in later
+                ]
+
+        due = due[
             :self._fresh_reads
         ]
 

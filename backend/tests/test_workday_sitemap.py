@@ -617,3 +617,75 @@ def test_a_missing_sitemap_while_the_api_rests_is_the_reads_own_failure() -> Non
         read(log, sitemap_status=404, api_rest=rest)
 
     assert not any(line.startswith("POST") for line in log)
+
+
+def test_a_refusing_workday_holds_its_pages_back_from_the_feed_check(monkeypatch) -> None:
+    url = "https://fabrikam.wd5.myworkdayjobs.com/Fabrikam_Careers/job/US-Seattle-WA/Software-Engineer_R1002"
+    pace = WorkdayPace(start=6.0, sleep=lambda _s: None)
+    monkeypatch.setattr(dispatcher_module, "WORKDAY_PAGE_PACE", pace)
+
+    assert dispatcher_module._workday_page_held(url) is False
+    for _ in range(4):
+        pace.note(429)
+    assert pace.per_minute == pace.low
+    assert dispatcher_module._workday_page_held(url) is True
+    assert dispatcher_module._workday_page_held("https://job-boards.greenhouse.io/fabrikam/jobs/1") is False
+
+
+def test_the_feed_check_reads_only_a_few_paced_pages_a_poll(monkeypatch) -> None:
+    from backend.app.verification import employer_page
+
+    requested: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        requested.append(request.url.path)
+        if request.url.path == "/robots.txt":
+            return httpx.Response(404, request=request)
+        return httpx.Response(200, text=page("Software Engineer", "R1"), request=request)
+
+    class Store:
+        def __init__(self, *_args) -> None:
+            pass
+
+        def load(self, _urls):
+            return {}
+
+        def save(self, *_args, **_kwargs) -> None:
+            return None
+
+    class NoCopies:
+        def load(self, _keys):
+            return {}
+
+    monkeypatch.setattr(employer_page, "ReadingStore", Store)
+    jobs = [
+        CanonicalJob(
+            source="simplify",
+            company="Fabrikam",
+            external_id=f"fabrikam-{number}",
+            title="Software Engineer",
+            location="Seattle, WA",
+            official_url=f"https://fabrikam.wd5.myworkdayjobs.com/Fabrikam_Careers/job/X/Software-Engineer_R{number}",
+        )
+        for number in range(25)
+    ] + [
+        CanonicalJob(
+            source="simplify",
+            company="Contoso",
+            external_id="contoso-1",
+            title="Software Engineer",
+            location="Austin, TX",
+            official_url="https://job-boards.greenhouse.io/contoso/jobs/1",
+        )
+    ]
+    pace = CountingPace()
+
+    EmployerPageVerifier(
+        client_factory=lambda: httpx.Client(transport=httpx.MockTransport(handle)),
+        direct_copies=NoCopies(),
+        paced=lambda link: pace if "myworkdayjobs.com" in link else None,
+    )(jobs)
+
+    workday_pages = [path for path in requested if "/job/" in path]
+    assert len(workday_pages) == employer_page.PACED_READS_PER_POLL
+    assert "/contoso/jobs/1" in requested

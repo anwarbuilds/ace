@@ -2164,9 +2164,21 @@ def _workday_page_pace(
 def _workday_page_held(
     url: str,
 ) -> bool:
-    """Whether a Workday page waits for Workday's pause to end."""
+    """Whether a Workday page waits for a later poll.
 
-    return _is_workday_page(url) and HOLDS["workday"].held()
+    While Workday is paused, or refusing (its page pace at its floor), a
+    feed copy's Workday page is not read: at one request a minute, a poll
+    with a hundred pages due would hold the whole feed for hours
+    (measured 2026-11-18, the first minutes after the sitemap release).
+    """
+
+    if not _is_workday_page(url):
+        return False
+
+    return (
+        HOLDS["workday"].held()
+        or WORKDAY_PAGE_PACE.per_minute <= WORKDAY_PAGE_PACE.low
+    )
 
 
 def _aware(
