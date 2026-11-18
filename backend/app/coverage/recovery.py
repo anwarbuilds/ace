@@ -59,6 +59,16 @@ DARK_AFTER = timedelta(
 # A daily source a few hours late is not dark.
 DARK_AFTER_INTERVALS = 3
 
+# Platforms that limit how fast ACE may read them (Workday paces and refuses
+# ACE's address; Workable refuses it). A board there that has not answered
+# for a day is usually the platform's refusal, not a move, and a Workday
+# tenant's other career site is another board (DIS-03), not a new address.
+# On 2026-11-18, with Workday refusing ACE, this check took nearly five
+# hours waiting on Workday's pace and retired eight Workday boards (Visa's
+# early careers site among them) for other sites, closing their postings.
+# Boards there stay dark and listed; they are never moved by this check.
+NOT_MOVED_ON = frozenset({"workday", "workable"})
+
 
 @dataclass(
     frozen=True,
@@ -223,6 +233,9 @@ def recover_dark_sources(
         session,
         now=moment,
     ):
+        if dark.source_type in NOT_MOVED_ON:
+            continue
+
         diagnosis = diagnose(
             dark.company_name
         )

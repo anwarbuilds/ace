@@ -886,6 +886,21 @@ def main(
         days.
         """
 
+        # The daily score goes first: reading feed boards and leads can wait
+        # on Workday's pace for hours, which made the Nov 17 score six hours
+        # late and kept the Nov 18 one from running.
+        if settings.recall_check_enabled:
+            try:
+                run_daily_check(
+                    SessionLocal,
+                    now=now_utc(),
+                )
+
+            except Exception:
+                LOGGER.exception(
+                    "recall_check_failed"
+                )
+
         register_feed_boards()
 
         with SessionLocal.begin() as session:
@@ -916,18 +931,6 @@ def main(
             LOGGER.exception(
                 "lead_ledger_failed"
             )
-
-        if settings.recall_check_enabled:
-            try:
-                run_daily_check(
-                    SessionLocal,
-                    now=now_utc(),
-                )
-
-            except Exception:
-                LOGGER.exception(
-                    "recall_check_failed"
-                )
 
         if time.monotonic() - dark_checked[0] < DARK_CHECK_SECONDS:
             return

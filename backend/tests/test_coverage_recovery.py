@@ -478,3 +478,30 @@ def test_a_company_that_moved_to_eightfold_is_polled_as_eightfold_is(
         "eightfold_pcsx",
         "amplitude.com",
     ).poll_interval_seconds == 3600
+
+
+@pytest.mark.parametrize("source_type", ["workday", "workable"])
+def test_a_board_on_a_platform_that_limits_ace_is_never_moved(
+    session: Session,
+    source_type: str,
+) -> None:
+    """A Workday board silent for days while Workday refuses ACE is not a move:
+    its tenant's other site is another board. It stays dark, listed and enabled."""
+
+    add_source(
+        session,
+        source_type=source_type,
+        account="palmridge/Early_Careers",
+        company="Palm Ridge",
+        last_success=timedelta(days=2),
+    )
+    add_job(session, source=source_type, account="palmridge/Early_Careers", external_id="e1")
+
+    def diagnose(_company: str) -> Diagnosis:
+        raise AssertionError("a board on a limiting platform must not be diagnosed")
+
+    assert recover_dark_sources(session, now=NOW, diagnose=diagnose) == []
+    assert source(session, source_type, "palmridge/Early_Careers").enabled
+    assert session.scalar(sa.select(JobRecord.is_active).where(JobRecord.external_id == "e1")) is True
+    # Still listed as dark, so the Coverage page keeps showing it.
+    assert [d.source_account for d in dark_sources(session, now=NOW)] == ["palmridge/Early_Careers"]
