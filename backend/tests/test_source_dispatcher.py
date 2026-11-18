@@ -477,6 +477,7 @@ def test_default_dispatcher_supports_all_implemented_sources() -> None:
                 SourceType.WORKDAY,
                 SourceType.AMAZON,
                 SourceType.SIMPLIFY,
+                SourceType.ZAPPLY,
                 SourceType.EIGHTFOLD,
                 SourceType.EIGHTFOLD_PCSX,
                 SourceType.RIPPLEMATCH,

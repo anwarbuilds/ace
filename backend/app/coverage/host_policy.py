@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from backend.app.adapters.bytedance import PORTALS
 from backend.app.adapters.lever import LEVER_API_HOST_BY_JOB_HOST
 from backend.app.adapters.simplify import FEED_URLS
+from backend.app.adapters.zapply import LIST_URLS as ZAPPLY_LIST_URLS
 from backend.app.adapters.sitemap_jobs import site_for
 from backend.app.coverage.held_out import is_held_out
 from backend.app.coverage.probing import (
@@ -220,6 +221,10 @@ def read_targets(
 
     if source_type == "simplify":
         paths = tuple(sorted(urlsplit(url).path for url in FEED_URLS.values()))
+        return (HostTarget("raw.githubusercontent.com", "feed", paths),)
+
+    if source_type == "zapply":
+        paths = tuple(sorted(urlsplit(url).path for url in ZAPPLY_LIST_URLS.values()))
         return (HostTarget("raw.githubusercontent.com", "feed", paths),)
 
     fixed = {

@@ -81,6 +81,9 @@ from backend.app.verification.employer_page import (
 from backend.app.adapters.ripplematch import (
     fetch_ripplematch_jobs,
 )
+from backend.app.adapters.zapply import (
+    fetch_zapply_jobs,
+)
 from backend.app.adapters.simplify import (
     fetch_simplify_jobs,
 )
@@ -1890,6 +1893,94 @@ class SimplifySourceFetcher:
         )
 
 
+class ZapplySourceFetcher:
+    """Dispatch adapter for Zapply's public new grad list (DIS-12).
+
+    Like the curated feed it spans many employers; each row carries its
+    own. Its copies are pointers, judged on the employer's own page where
+    ACE can read it, and dropped while ACE reads the board directly.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher: Callable[..., tuple] = fetch_zapply_jobs,
+        clock: Clock = utc_now,
+        validator_lookup: (
+            ValidatorLookup | None
+        ) = None,
+        verifier: (
+            Callable[
+                [Sequence[CanonicalJob]],
+                list[CanonicalJob],
+            ]
+            | None
+        ) = None,
+        read_directly_factory: (
+            Callable[
+                [],
+                Callable[[str], bool],
+            ]
+            | None
+        ) = None,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+        self._validator_lookup = validator_lookup
+        self._verifier = verifier
+        self._read_directly_factory = read_directly_factory
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Read Zapply's list once."""
+
+        if source.source_type != SourceType.ZAPPLY:
+            raise ValueError(
+                "ZapplySourceFetcher requires a ZAPPLY SourceDefinition."
+            )
+
+        from backend.app.adapters.http_cache import (
+            CacheValidators,
+        )
+
+        jobs, unchanged, validators = self._fetcher(
+            source_account=source.source_account,
+            company_name=source.company_name,
+            validators=(
+                self._validator_lookup(source)
+                if self._validator_lookup is not None
+                else CacheValidators()
+            ),
+            read_directly=(
+                self._read_directly_factory()
+                if self._read_directly_factory is not None
+                else None
+            ),
+        )
+
+        if (
+            not unchanged
+            and jobs
+            and self._verifier is not None
+        ):
+            jobs = self._verifier(
+                jobs
+            )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+            unchanged=unchanged,
+            etag=validators.etag,
+            last_modified=validators.last_modified,
+        )
+
+
 class SourceDispatcher:
     """Dispatch configured sources to provider-specific fetch handlers."""
 
@@ -2418,6 +2509,23 @@ def build_default_source_dispatcher() -> (
             ),
             SourceType.JOBPOSTING_SITEMAP: (
                 SitemapSourceFetcher()
+            ),
+            SourceType.ZAPPLY: (
+                ZapplySourceFetcher(
+                    validator_lookup=(
+                        _stored_validators
+                    ),
+                    verifier=EmployerPageVerifier(
+                        worth_reading=(
+                            _title_could_pass
+                        ),
+                        paced=_workday_page_pace,
+                        held=_workday_page_held,
+                    ),
+                    read_directly_factory=(
+                        _registered_board_check
+                    ),
+                )
             ),
             SourceType.SIMPLIFY: (
                 SimplifySourceFetcher(
