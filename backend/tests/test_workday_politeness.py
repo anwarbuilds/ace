@@ -438,3 +438,23 @@ def test_workday_boards_with_matching_roles_go_first_and_none_starve() -> None:
 
     runtime._next_due_at[other.identity] = clock.now - 7 * 3600
     assert [s.source_account for s in runtime._due_sources(clock.now)] == ["birch/External", "alder/External"]
+
+
+def test_the_top_pace_is_set_by_the_scheduler_and_never_passed() -> None:
+    fake = FakeTime()
+    pace = WorkdayPace(start=6.0, low=1.0, high=120.0, clock=fake.clock, sleep=fake.sleep)
+    pace.set_top(150.0)
+    for _ in range(WorkdayPace.RAISE_AFTER * 40):
+        pace.answered()
+    assert pace.per_minute == 150.0
+    # Lowering the top lowers the pace at once; a top below the floor keeps the floor.
+    pace.set_top(10.0)
+    assert pace.per_minute == 10.0
+    pace.set_top(0.2)
+    assert pace.high == 1.0 and pace.per_minute == 1.0
+    # A refusal still halves it, as before.
+    pace.set_top(150.0)
+    for _ in range(WorkdayPace.RAISE_AFTER * 40):
+        pace.answered()
+    pace.refused()
+    assert pace.per_minute == 75.0

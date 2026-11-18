@@ -190,6 +190,13 @@ class WorkdayPace:
         elif status in REFUSAL_STATUSES:
             self.refused()
 
+    def set_top(self, high: float) -> None:
+        """The highest pace to climb to (the scheduler's setting); never below the floor."""
+
+        with self._lock:
+            self.high = max(self.low, float(high))
+            self.per_minute = min(self.per_minute, self.high)
+
 
 # The scheduler's one pace for every Workday request (dispatcher wires it).
 PACE = WorkdayPace()

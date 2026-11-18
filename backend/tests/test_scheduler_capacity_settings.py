@@ -71,3 +71,15 @@ def test_a_mistyped_limit_is_refused_at_startup(
 
 def test_no_limits_is_allowed() -> None:
     assert parse_platform_limits("") == {}
+
+
+def test_workdays_top_pace_is_a_setting_with_room_for_every_board() -> None:
+    # Every Workday board on its plan needs about 140 requests a minute with newest-pages reading.
+    assert settings().scheduler_workday_pace_max == 150.0
+    assert settings(scheduler_workday_pace_max=120).scheduler_workday_pace_max == 120.0
+
+
+@pytest.mark.parametrize("top", [0, 0.5, 601])
+def test_a_workday_top_pace_below_the_floor_or_a_burst_is_refused(top: float) -> None:
+    with pytest.raises(ValidationError):
+        settings(scheduler_workday_pace_max=top)

@@ -56,6 +56,7 @@ from backend.app.adapters.simplify import (
     FEED_URLS,
     is_in_scope,
 )
+from backend.app.adapters.workday import PACE as WORKDAY_PACE
 from backend.app.discovery.feed_links import (
     BOARDS_PER_RUN,
     find_unregistered_boards,
@@ -970,6 +971,9 @@ def main(
                 recovery.diagnosis.outcome,
             )
 
+    # Workday's one pace climbs only while Workday answers, up to this top.
+    WORKDAY_PACE.set_top(settings.scheduler_workday_pace_max)
+
     runtime = SchedulerRuntime(
         registry=registry,
         poller=poll_source,
@@ -1005,11 +1009,13 @@ def main(
             "ace_scheduler_ready "
             "enabled_sources=%d "
             "workers=%d "
-            "platform_limits=%s"
+            "platform_limits=%s "
+            "workday_pace_max=%.0f"
         ),
         runtime.source_count,
         settings.scheduler_workers,
         settings.scheduler_platform_limits,
+        settings.scheduler_workday_pace_max,
     )
 
     try:
