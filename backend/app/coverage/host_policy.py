@@ -465,6 +465,34 @@ def refused_hosts(session: Session) -> set[str]:
     )
 
 
+def newly_refused(
+    session: Session,
+    source_type: str,
+    source_account: str,
+    source_host: str | None = None,
+    *,
+    refused: set[str] | None = None,
+) -> bool:
+    """Whether a board ACE does not hold yet would be read on a host whose stored
+    robots verdict refuses ACE. For the automatic paths that add boards (the
+    feed-link sweep, the dark-board check), which never ask robots themselves;
+    adding by hand and the lead check ask first (``refusal_for``). Boards already
+    held keep polling while ``HOST_POLICY_ENFORCE`` is off.
+    """
+
+    hosts = refused if refused is not None else refused_hosts(session)
+
+    if not hosts:
+        return False
+
+    try:
+        targets = read_targets(source_type, source_account, source_host)
+    except Exception:  # an account this reader cannot name: nothing to refuse on
+        return False
+
+    return any(target.host in hosts for target in targets)
+
+
 def refusal_for(
     session: Session,
     target: HostTarget,

@@ -414,12 +414,27 @@ def find_unregistered_boards(
         session
     )
 
+    # A board on a host whose robots rules refuse ACE is never newly read
+    # (SmartRecruiters' postings service since 2026-11-05).
+    from backend.app.coverage.host_policy import newly_refused, refused_hosts
+
+    refused = refused_hosts(
+        session
+    )
+
     return [
         board
         for board in boards_named_in(
             links
         )
         if board.key not in known
+        and not newly_refused(
+            session,
+            board.detected.source_type.value,
+            board.detected.source_account,
+            board.detected.source_host,
+            refused=refused,
+        )
     ][
         :limit
     ]

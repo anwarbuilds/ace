@@ -869,3 +869,38 @@ def test_the_enabled_copy_of_a_board_is_the_one_found(
     assert found.enabled
 
     assert found.source_account == "amgen/Careers"
+
+
+def test_a_board_on_a_host_that_refuses_ace_is_never_newly_added(
+    session: Session,
+) -> None:
+    """Chat 7: SmartRecruiters' postings service refuses ACE in its robots
+    rules, so a list link to a SmartRecruiters board ACE does not hold adds
+    nothing; a board on an open host still does. Fictional boards."""
+
+    from datetime import datetime, timezone
+
+    from backend.app.coverage.host_policy import REFUSED, newly_refused
+    from backend.app.db.models import HostPolicyRecord
+
+    session.add(
+        HostPolicyRecord(
+            host="api.smartrecruiters.com",
+            platform="smartrecruiters",
+            robots_verdict=REFUSED,
+            next_check_at=datetime(2026, 11, 20, tzinfo=timezone.utc),
+        )
+    )
+    session.flush()
+
+    found = find_unregistered_boards(
+        session,
+        [
+            CHEWY,
+            ("https://jobs.smartrecruiters.com/Fabrikam1/744000000000001-software-engineer", "Fabrikam"),
+        ],
+    )
+
+    assert [board.detected.source_type.value for board in found] == ["workday"]
+    assert newly_refused(session, "smartrecruiters", "Fabrikam1") is True
+    assert newly_refused(session, "greenhouse", "fabrikam") is False
