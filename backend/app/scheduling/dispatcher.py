@@ -734,6 +734,10 @@ class WorkdaySourceFetcher:
             known["page_pace"] = WORKDAY_PAGE_PACE
             known["api_rest"] = WORKDAY_API_REST
 
+        # A bot check holds every Workday read for a day (adapters/workday.py),
+        # whatever kind of read this is.
+        known["bot_check_hold"] = self._hold
+
         # What each posting's detail gave before, so it is not fetched
         # again on every read (adapters/workday.DETAIL_REFRESH_HOURS).
         if self._detail_lookup is not None:
@@ -2327,18 +2331,17 @@ def _workday_page_held(
 ) -> bool:
     """Whether a Workday page waits for a later poll.
 
-    While Workday is paused, or refusing (its page pace at its floor), a
-    feed copy's Workday page is not read: at one request a minute, a poll
-    with a hundred pages due would hold the whole feed for hours
+    Always, since 2026-11-19: the employer-page check reads with its own
+    client, not the Workday reader's (standard cipher list, stop at the
+    first bot check), and while Workday answers, ACE reads those boards
+    directly, so their list copies are dropped. Before that, a Workday page
+    waited while Workday was paused or refusing: at one request a minute,
+    a poll with a hundred pages due would hold the whole feed for hours
     (measured 2026-11-18, the first minutes after the sitemap release).
     """
 
-    if not _is_workday_page(url):
-        return False
-
-    return (
-        HOLDS["workday"].held()
-        or WORKDAY_PAGE_PACE.per_minute <= WORKDAY_PAGE_PACE.low
+    return _is_workday_page(
+        url
     )
 
 

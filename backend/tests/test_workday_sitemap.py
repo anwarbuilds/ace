@@ -619,15 +619,11 @@ def test_a_missing_sitemap_while_the_api_rests_is_the_reads_own_failure() -> Non
     assert not any(line.startswith("POST") for line in log)
 
 
-def test_a_refusing_workday_holds_its_pages_back_from_the_feed_check(monkeypatch) -> None:
+def test_the_feed_check_never_opens_a_workday_page_itself() -> None:
+    """Since 2026-11-19 only the Workday reader, with its standard cipher list and its stop at the first bot
+    check, contacts Workday; the feed check's own client never does."""
     url = "https://fabrikam.wd5.myworkdayjobs.com/Fabrikam_Careers/job/US-Seattle-WA/Software-Engineer_R1002"
-    pace = WorkdayPace(start=6.0, sleep=lambda _s: None)
-    monkeypatch.setattr(dispatcher_module, "WORKDAY_PAGE_PACE", pace)
 
-    assert dispatcher_module._workday_page_held(url) is False
-    for _ in range(4):
-        pace.note(429)
-    assert pace.per_minute == pace.low
     assert dispatcher_module._workday_page_held(url) is True
     assert dispatcher_module._workday_page_held("https://job-boards.greenhouse.io/fabrikam/jobs/1") is False
 
@@ -689,3 +685,91 @@ def test_the_feed_check_reads_only_a_few_paced_pages_a_poll(monkeypatch) -> None
     workday_pages = [path for path in requested if "/job/" in path]
     assert len(workday_pages) == employer_page.PACED_READS_PER_POLL
     assert "/contoso/jobs/1" in requested
+
+
+# Workday's bot check (2026-11-19, owner approved): the standard cipher list, ACE's own name, a day's stop at the first check.
+
+
+def test_workday_reads_offer_the_standard_cipher_list_under_aces_own_name() -> None:
+    from backend.app.adapters.workday import USER_AGENT, standard_tls, workday_client
+
+    stock = httpx.create_ssl_context()
+    client = workday_client()
+
+    assert client.headers["User-Agent"] == USER_AGENT
+    assert USER_AGENT.startswith("ACE/")
+    assert len(standard_tls().get_ciphers()) > len(stock.get_ciphers())
+    # Certificates are still checked.
+    assert standard_tls().verify_mode == stock.verify_mode
+    assert standard_tls().check_hostname is True
+
+
+def test_a_bot_check_stops_every_workday_read_for_a_day_and_is_never_retried() -> None:
+    from backend.app.adapters.workday import BOT_CHECK_HOLD_SECONDS, workday_client
+
+    clock = {"now": 1000.0}
+    hold = PlatformHold(clock=lambda: clock["now"])
+    asked: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        asked.append(request.url.path)
+        return httpx.Response(
+            429,
+            headers={"cf-mitigated": "challenge"},
+            text="Security Check: Enable JavaScript and cookies to continue",
+            request=request,
+        )
+
+    with pytest.raises(PlatformHeld):
+        fetch_workday_jobs(
+            source_account=ACCOUNT,
+            company_name="Fabrikam",
+            source_host=HOST,
+            should_fetch_detail=lambda title: "engineer" in title.lower(),
+            client=workday_client(hold=hold, transport=httpx.MockTransport(handle)),
+            now=REFERENCE,
+            known_details=stored_held(),
+            quick=True,
+            crawl=True,
+            bot_check_hold=hold,
+        )
+
+    # One request, then nothing: not retried, not tried another way.
+    assert asked == [f"/{SITE}/siteMap.xml"]
+    assert hold.held() is True
+    clock["now"] += BOT_CHECK_HOLD_SECONDS - 60
+    assert hold.held() is True
+    clock["now"] += 120
+    assert hold.held() is False
+
+
+def test_a_plain_refusal_is_not_a_bot_check() -> None:
+    from backend.app.adapters.workday import is_bot_check
+
+    request = httpx.Request("GET", f"https://{HOST}/{SITE}/siteMap.xml")
+    assert is_bot_check(httpx.Response(429, headers={"cf-mitigated": "Challenge"}, request=request)) is True
+    assert is_bot_check(httpx.Response(403, headers={"cf-mitigated": "challenge"}, request=request)) is True
+    assert is_bot_check(httpx.Response(429, request=request)) is False
+    assert is_bot_check(httpx.Response(200, request=request)) is False
+
+
+def test_the_scheduler_hands_the_workday_reader_its_pause() -> None:
+    seen: dict = {}
+
+    def fetcher(**kwargs):
+        seen.update(kwargs)
+        return []
+
+    hold = PlatformHold()
+    WorkdaySourceFetcher(fetcher=fetcher, hold=hold)(
+        SourceDefinition(
+            source_type=SourceType.WORKDAY,
+            source_account=ACCOUNT,
+            company_name="Fabrikam",
+            source_host=HOST,
+            enabled=True,
+            poll_interval_seconds=900,
+        )
+    )
+
+    assert seen["bot_check_hold"] is hold

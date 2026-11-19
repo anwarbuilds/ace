@@ -75,8 +75,9 @@ from datetime import (
 )
 import html
 import re
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 import logging
+import ssl
 import threading
 import time
 from urllib.parse import unquote
@@ -149,6 +150,9 @@ DETAIL_REFRESH_HOURS = 24
 
 
 LOGGER = logging.getLogger(__name__)
+
+if TYPE_CHECKING:  # the scheduling package imports this module
+    from backend.app.scheduling.holds import PlatformHold
 
 # Pages a quick read takes: the newest postings, where a new job appears.
 # A board of three pages or fewer is read whole either way.
@@ -332,6 +336,115 @@ USER_AGENT = (
     "ACE/0.1 "
     "(personal career-intelligence project)"
 )
+
+
+# Workday's bot check (2026-11-16 onward). Cloudflare, in front of every
+# Workday career site, began answering automated readers with a bot check:
+# HTTP 429 with "cf-mitigated: challenge" and a "Security Check: Enable
+# JavaScript and cookies" page, for sitemaps, pages and the job API alike.
+# Other readers traced it chiefly to Python's short default cipher list,
+# which gives httpx a rare TLS fingerprint (from ACE's own server a plain
+# request with OpenSSL's standard list was answered while ACE's was not).
+# With the owner's approval (2026-11-19) ACE's Workday reader offers the
+# standard OpenSSL list, what curl and most tools offer, and keeps its
+# honest name above: no browser disguise, proxy or other address. A bot
+# check is still an answer: at the first one, every Workday read in the
+# process stops for a day and nothing is retried.
+BOT_CHECK_HOLD_SECONDS = 24 * 60 * 60
+
+_STANDARD_TLS: ssl.SSLContext | None = None
+
+
+def standard_tls() -> ssl.SSLContext:
+    """httpx's own context, certificate checks unchanged, offering OpenSSL's
+    standard cipher list instead of Python's short one."""
+
+    global _STANDARD_TLS
+
+    if _STANDARD_TLS is None:
+        context = httpx.create_ssl_context()
+        context.set_ciphers(
+            "DEFAULT"
+        )
+        _STANDARD_TLS = context
+
+    return _STANDARD_TLS
+
+
+def is_bot_check(
+    response: httpx.Response,
+) -> bool:
+    """Whether Workday's edge answered with a bot check, whatever the status."""
+
+    return (
+        response.headers.get(
+            "cf-mitigated",
+            "",
+        ).strip().lower()
+        == "challenge"
+    )
+
+
+def stop_at_bot_check(
+    hold: PlatformHold | None,
+) -> Callable[[httpx.Response], None]:
+    """A response hook: at a bot check, hold all of Workday for a day and end
+    this read at once (never retried)."""
+
+    def check(
+        response: httpx.Response,
+    ) -> None:
+        if not is_bot_check(
+            response
+        ):
+            return
+
+        LOGGER.info(
+            "workday_bot_check host=%s status=%d held_hours=%d",
+            response.request.url.host,
+            response.status_code,
+            BOT_CHECK_HOLD_SECONDS // 3600,
+        )
+
+        if hold is not None:
+            hold.hold(
+                BOT_CHECK_HOLD_SECONDS
+            )
+
+        from backend.app.scheduling.holds import PlatformHeld
+
+        raise PlatformHeld(
+            "workday is paused after refusals; this read waits for the pause to end"
+        )
+
+    return check
+
+
+def workday_client(
+    *,
+    hold: PlatformHold | None = None,
+    accept: str = "application/json",
+    transport: httpx.BaseTransport | None = None,
+) -> httpx.Client:
+    """The client every Workday read uses: ACE's honest name, the standard
+    cipher list, and a stop at the first bot check."""
+
+    return httpx.Client(
+        timeout=REQUEST_TIMEOUT_SECONDS,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": accept,
+        },
+        verify=standard_tls(),
+        event_hooks={
+            "response": [
+                stop_at_bot_check(
+                    hold
+                )
+            ],
+        },
+        transport=transport,
+    )
 
 
 def _postings(
@@ -1464,6 +1577,7 @@ def fetch_workday_jobs(
     crawl: bool = False,
     page_pace: WorkdayPace | None = None,
     api_rest: ApiRest | None = None,
+    bot_check_hold: PlatformHold | None = None,
 ) -> list[CanonicalJob]:
     """Fetch and normalize one Workday tenant's public postings.
 
@@ -1524,16 +1638,8 @@ def fetch_workday_jobs(
     http = (
         client
         if client is not None
-        else httpx.Client(
-            timeout=(
-                REQUEST_TIMEOUT_SECONDS
-            ),
-            headers={
-                "User-Agent": USER_AGENT,
-                "Accept": (
-                    "application/json"
-                ),
-            },
+        else workday_client(
+            hold=bot_check_hold,
         )
     )
 

@@ -1020,7 +1020,8 @@ def main(
             "workers=%d "
             "platform_limits=%s "
             "workday_pace_max=%.0f "
-            "workday_reading=sitemap_and_api"
+            "workday_reading=sitemap_and_api "
+            "workday_tls=standard"
         ),
         runtime.source_count,
         settings.scheduler_workers,
