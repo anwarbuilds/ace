@@ -29,8 +29,21 @@ import type { Job } from "@/lib/types";
 
 import { useMarks, type MarkKey } from "./useMarks";
 
-/** The public list a Zapply copy came from. */
-const ZAPPLY_LIST = "https://github.com/zapplyjobs/New-Grad-Software-Engineering-Positions";
+/** The public lists a Zapply copy may come from, by the copy's list. */
+const ZAPPLY_LISTS: Record<string, { label: string; href: string }> = {
+  "new-grad-swe": {
+    label: "Zapply\u2019s new grad list",
+    href: "https://github.com/zapplyjobs/New-Grad-Software-Engineering-Jobs-2027",
+  },
+  "new-grad-data": {
+    label: "Zapply\u2019s new grad data science list",
+    href: "https://github.com/zapplyjobs/New-Grad-Data-Science-Jobs-2027",
+  },
+};
+
+function zapplyList(account: string) {
+  return ZAPPLY_LISTS[account] ?? ZAPPLY_LISTS["new-grad-swe"];
+}
 
 /** Back to the list this job was opened from, as it was left. */
 function useBack() {
@@ -280,8 +293,13 @@ export function JobDetail({ job: served, resumeLabel }: { job: Job; resumeLabel:
                   {job.source === "zapply" ? (
                     <>
                       {/* Zapply's terms ask for credit and a followed link to its list. */}
-                      <a className="link-btn" href={ZAPPLY_LIST} target="_blank" rel="noopener">
-                        Zapply&rsquo;s new grad list
+                      <a
+                        className="link-btn"
+                        href={zapplyList(job.source_account).href}
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        {zapplyList(job.source_account).label}
                       </a>{" "}
                       (a copy; not read from {job.company}&rsquo;s own board)
                     </>

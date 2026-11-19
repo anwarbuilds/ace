@@ -203,7 +203,25 @@ def test_the_list_is_read_from_githubs_raw_file_host_under_its_robots_verdict() 
     [target] = read_targets("zapply", "new-grad-swe", None)
 
     assert target.host == "raw.githubusercontent.com"
-    assert target.paths == ("/zapplyjobs/New-Grad-Software-Engineering-Positions/main/README.md",)
+    assert target.paths == (
+        "/zapplyjobs/New-Grad-Data-Science-Jobs-2027/main/README.md",
+        "/zapplyjobs/New-Grad-Software-Engineering-Jobs-2027/main/README.md",
+    )
+
+
+def test_the_data_science_list_is_read_the_same_way_and_credits_its_own_repository() -> None:
+    log: list[dict] = []
+
+    jobs, _unchanged, _validators = fetch_zapply_jobs(
+        source_account="new-grad-data",
+        client=httpx.Client(transport=respond(log)),
+        now=NOW,
+    )
+
+    assert log[0]["url"] == LIST_URLS["new-grad-data"]
+    assert jobs
+    assert all("New-Grad-Data-Science-Jobs-2027" in job.description for job in jobs)
+    assert all(has_verifiable_requirements(job) is False for job in jobs)
 
 
 # A row ACE cannot spell (Workday among others) is linked by zapply's own link.

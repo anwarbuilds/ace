@@ -19,7 +19,7 @@ for (const theme of ["dark", "light"] as const) {
     await page.goto(`/app/jobs/${copy!.id}`);
     await expect(page.locator(".jp-title")).toBeVisible();
     const credit = page.getByRole("link", { name: "Zapply’s new grad list" });
-    await expect(credit).toHaveAttribute("href", "https://github.com/zapplyjobs/New-Grad-Software-Engineering-Positions");
+    await expect(credit).toHaveAttribute("href", "https://github.com/zapplyjobs/New-Grad-Software-Engineering-Jobs-2027");
     // A followed link: no nofollow.
     expect(await credit.getAttribute("rel")).not.toContain("nofollow");
     await expect(page.locator(".kv")).toContainText(`(a copy; not read from ${copy!.company}’s own board)`);

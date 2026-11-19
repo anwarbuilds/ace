@@ -1,7 +1,10 @@
-"""Zapply's public new grad software list, read as pointers (DIS-12, 2026-11-18).
+"""Zapply's public new grad lists, read as pointers (DIS-12, 2026-11-18).
 
-Zapply keeps a public list of new grad software roles on GitHub, updated
-every ten minutes (``REPOSITORY``). Its README is the whole listing ("This
+Zapply keeps public lists of new grad roles on GitHub, updated every ten
+minutes: software (``REPOSITORY``) and, since 2026-11-19, data science and
+machine learning (``LISTS``). The software list was renamed from
+"New-Grad-Software-Engineering-Positions" to its 2027 name; GitHub still
+answers the old one. Its README is the whole listing ("This
 repo is display-only: it intentionally contains no raw data files"). Each
 row names the company, the role, the place, how long ago it was posted and
 a short link that spells the employer's posting:
@@ -60,16 +63,26 @@ ZAPPLY_SOURCE = "zapply"
 
 ZAPPLY_HOST = "zapply.jobs"
 
-REPOSITORY = (
-    "https://github.com/zapplyjobs/"
-    "New-Grad-Software-Engineering-Positions"
-)
+# Each list ACE reads, by its source account: the repository its terms ask
+# a copy to link back to.
+LISTS = {
+    "new-grad-swe": "New-Grad-Software-Engineering-Jobs-2027",
+    "new-grad-data": "New-Grad-Data-Science-Jobs-2027",
+}
+
+REPOSITORIES = {
+    name: f"https://github.com/zapplyjobs/{repository}"
+    for name, repository in LISTS.items()
+}
+
+REPOSITORY = REPOSITORIES["new-grad-swe"]
 
 LIST_URLS = {
-    "new-grad-swe": (
+    name: (
         "https://raw.githubusercontent.com/zapplyjobs/"
-        "New-Grad-Software-Engineering-Positions/main/README.md"
-    ),
+        f"{repository}/main/README.md"
+    )
+    for name, repository in LISTS.items()
 }
 
 USER_AGENT = (
@@ -81,20 +94,32 @@ REQUEST_TIMEOUT_SECONDS = 30.0
 
 # What a copy says of itself. The employer's page, when ACE reads it, gives
 # the description the gate judges (verification/employer_page.py).
-PLACEHOLDER = (
-    "Listed on Zapply's new grad software list "
-    f"({REPOSITORY}). The link is the employer's own posting."
-)
+def placeholder(
+    name: str = "new-grad-swe",
+) -> str:
+    return (
+        "Listed on Zapply's new grad list "
+        f"({REPOSITORIES[name]}). The link is the employer's own posting."
+    )
+
 
 # What a copy linked by zapply's own link says of itself. Kept short of the
 # gate's 400 characters on purpose: the gate then says the requirements are
 # unverified, which they are.
-POINTER = (
-    "Listed on Zapply's new grad software list "
-    f"({REPOSITORY}). ACE cannot read this posting on the employer's own "
-    "site, so the link goes through Zapply to the employer's posting. "
-    "Check its requirements there."
-)
+def pointer(
+    name: str = "new-grad-swe",
+) -> str:
+    return (
+        "Listed on Zapply's new grad list "
+        f"({REPOSITORIES[name]}). ACE cannot read this posting on the "
+        "employer's own site, so the link goes through Zapply to the "
+        "employer's posting. Check its requirements there."
+    )
+
+
+PLACEHOLDER = placeholder()
+
+POINTER = pointer()
 
 # Where ACE holds postings a row names only by an identifier: the zapply
 # platform word, and the ACE sources whose external_id is that identifier.
@@ -614,7 +639,7 @@ def fetch_zapply_jobs(
                 if not row.link or row.code in held_codes:
                     continue
 
-                description = POINTER
+                description = pointer(name)
                 link = row.link
 
             elif read_directly is not None and read_directly(
@@ -623,7 +648,7 @@ def fetch_zapply_jobs(
                 continue
 
             else:
-                description = PLACEHOLDER
+                description = placeholder(name)
 
             jobs.append(
                 CanonicalJob(
