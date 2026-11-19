@@ -199,16 +199,21 @@ def read_targets(
         sitemap_host = _host_of(account)
         if not sitemap_host:
             return ()
+        site = site_for(account)
+        sitemap_path = urlsplit(site.sitemap).path
         posting = (
             "/profile/job_details/1/"
             if sitemap_host.endswith("metacareers.com")
+            # A Phenom board ("<host>/us/en"): postings sit beside its sitemap index.
+            else sitemap_path.rsplit("/", 1)[0] + "/job/example/example"
+            if sitemap_path.endswith("/sitemap_index.xml")
             else "/job/example/example/1/1"
         )
         return (
             HostTarget(
                 sitemap_host,
                 "employer_site",
-                (urlsplit(site_for(sitemap_host).sitemap).path, posting),
+                (sitemap_path, posting),
             ),
         )
 

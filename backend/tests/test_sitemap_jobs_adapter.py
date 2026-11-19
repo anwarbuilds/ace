@@ -458,3 +458,88 @@ def test_a_teaser_reading_taken_before_is_read_again_once() -> None:
     fetch_sitemap_jobs(host=DASSAULT, company_name="Dassault Systemes", client=client, store=store, now=lambda: NOW + timedelta(hours=1), pause_seconds=0)
 
     assert asked == [layout_sitemap]
+
+
+# Phenom careers sites (2026-11-19): Workday employers read on their own site.
+
+PHENOM = "careers.example-cards.com"
+
+PHENOM_SWE = f"https://{PHENOM}/us/en/job/R-1001/Software-Engineer-I"
+
+PHENOM_SENIOR = f"https://{PHENOM}/us/en/job/R-1002/Senior-Software-Engineer"
+
+
+def sitemap_index(*children: str) -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        + "".join(f"<sitemap><loc>{child}</loc></sitemap>" for child in children)
+        + "</sitemapindex>"
+    )
+
+
+def test_a_phenom_board_is_its_host_and_locale_and_its_index_is_read_whole() -> None:
+    from backend.app.adapters.sitemap_jobs import site_for
+
+    layout = site_for(f"{PHENOM}/us/en")
+    assert layout.sitemap == f"https://{PHENOM}/us/en/sitemap_index.xml"
+    assert layout.posting.match(PHENOM_SWE).group("id") == "R-1001"
+
+    client, asked = site(
+        {
+            f"https://{PHENOM}/us/en/sitemap_index.xml": sitemap_index(
+                f"https://{PHENOM}/us/en/sitemap1.xml",
+                f"https://{PHENOM}/us/en/sitemap2.xml",
+                "https://elsewhere.example/sitemap.xml",
+            ),
+            f"https://{PHENOM}/us/en/sitemap1.xml": sitemap(PHENOM_SWE),
+            f"https://{PHENOM}/us/en/sitemap2.xml": sitemap(PHENOM_SENIOR, f"https://{PHENOM}/us/en/c/engineering-jobs"),
+            PHENOM_SWE: posting_page(),
+        }
+    )
+
+    jobs = fetch_sitemap_jobs(
+        host=f"{PHENOM}/us/en",
+        company_name="Example Cards",
+        client=client,
+        should_fetch_detail=lambda title: "Senior" not in title,
+        store=MemoryStore(),
+        now=lambda: NOW,
+        pause_seconds=0,
+    )
+
+    assert sorted(job.external_id for job in jobs) == ["R-1001", "R-1002"]
+    assert jobs.complete is True
+    # Another site's sitemap and the senior posting's page are never asked for.
+    assert "https://elsewhere.example/sitemap.xml" not in asked
+    assert PHENOM_SENIOR not in asked
+
+
+def test_an_index_with_an_unread_part_fails_and_closes_nothing() -> None:
+    client, _asked = site(
+        {
+            f"https://{PHENOM}/us/en/sitemap_index.xml": sitemap_index(
+                f"https://{PHENOM}/us/en/sitemap1.xml",
+                f"https://{PHENOM}/us/en/sitemap2.xml",
+            ),
+            f"https://{PHENOM}/us/en/sitemap1.xml": sitemap(PHENOM_SWE),
+        }
+    )
+
+    with pytest.raises(httpx.HTTPStatusError):
+        fetch_sitemap_jobs(
+            host=f"{PHENOM}/us/en",
+            company_name="Example Cards",
+            client=client,
+            store=MemoryStore(),
+            now=lambda: NOW,
+            pause_seconds=0,
+        )
+
+
+def test_a_phenom_boards_robots_target_is_its_host_with_its_locale_paths() -> None:
+    from backend.app.coverage.host_policy import read_targets
+
+    [target] = read_targets("jobposting_sitemap", f"{PHENOM}/us/en")
+
+    assert target.host == PHENOM
+    assert target.paths == ("/us/en/sitemap_index.xml", "/us/en/job/example/example")
