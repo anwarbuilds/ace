@@ -12,7 +12,7 @@ from collections.abc import (
     Mapping,
     Sequence,
 )
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
 from backend.app.adapters.ashby import (
@@ -80,6 +80,14 @@ from backend.app.verification.employer_page import (
 )
 from backend.app.adapters.ripplematch import (
     fetch_ripplematch_jobs,
+)
+from backend.app.adapters.zapply import (
+    ZapplyRow,
+    fetch_zapply_jobs,
+    is_zapply_link,
+    posting_id,
+    workday_posting,
+    workday_requisitions,
 )
 from backend.app.adapters.simplify import (
     fetch_simplify_jobs,
@@ -620,6 +628,10 @@ WORKDAY_FULL_READ_EVERY = timedelta(hours=24)
 
 # One steady speed limit for every Workday request (adapters/workday.WorkdayPace).
 from backend.app.adapters.workday import PACE as WORKDAY_PACE  # noqa: E402
+from backend.app.adapters.workday import PAGE_PACE as WORKDAY_PAGE_PACE  # noqa: E402
+from backend.app.adapters.workday import API_REST as WORKDAY_API_REST  # noqa: E402
+from backend.app.scheduling.holds import PlatformHold  # noqa: E402
+from backend.app.scheduling.holds import HOLDS  # noqa: E402
 
 
 class WorkdaySourceFetcher:
@@ -651,11 +663,15 @@ class WorkdaySourceFetcher:
             ]
             | None
         ) = None,
+        hold: PlatformHold | None = None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
         self._posted_lookup = posted_lookup
         self._detail_lookup = detail_lookup
+        # Workday's pause, so a sweep's read of a Workday board waits for
+        # it like the scheduler's own turns (scheduling/holds.py).
+        self._hold = hold
         # When each board was last read in full. Between full reads a board
         # reads only its newest pages (adapters/workday.QUICK_READ_PAGES),
         # which closes nothing; a full read once a day closes what left.
@@ -684,6 +700,11 @@ class WorkdaySourceFetcher:
                 )
             )
 
+        if self._hold is not None:
+            self._hold.check(
+                "workday"
+            )
+
         known = (
             {}
             if self._posted_lookup is None
@@ -707,6 +728,15 @@ class WorkdaySourceFetcher:
                 self._last_full[source.identity] = moment
             known["quick"] = not full
             known["pace"] = WORKDAY_PACE
+            # Quick reads by the career site's sitemap; full reads by the
+            # job API unless it is resting (adapters/workday.ApiRest).
+            known["crawl"] = True
+            known["page_pace"] = WORKDAY_PAGE_PACE
+            known["api_rest"] = WORKDAY_API_REST
+
+        # A bot check holds every Workday read for a day (adapters/workday.py),
+        # whatever kind of read this is.
+        known["bot_check_hold"] = self._hold
 
         # What each posting's detail gave before, so it is not fetched
         # again on every read (adapters/workday.DETAIL_REFRESH_HOURS).
@@ -1872,6 +1902,128 @@ class SimplifySourceFetcher:
         )
 
 
+class ZapplySourceFetcher:
+    """Dispatch adapter for Zapply's public new grad list (DIS-12).
+
+    Like the curated feed it spans many employers; each row carries its
+    own. Its copies are pointers, judged on the employer's own page where
+    ACE can read it, and dropped while ACE reads the board directly. A
+    copy linked by zapply's own link is never handed to the page check:
+    ACE never opens a zapply link itself.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher: Callable[..., tuple] = fetch_zapply_jobs,
+        clock: Clock = utc_now,
+        validator_lookup: (
+            ValidatorLookup | None
+        ) = None,
+        verifier: (
+            Callable[
+                [Sequence[CanonicalJob]],
+                list[CanonicalJob],
+            ]
+            | None
+        ) = None,
+        read_directly_factory: (
+            Callable[
+                [],
+                Callable[[str], bool],
+            ]
+            | None
+        ) = None,
+        held: (
+            Callable[
+                [Sequence[ZapplyRow]],
+                set[str],
+            ]
+            | None
+        ) = None,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+        self._validator_lookup = validator_lookup
+        self._verifier = verifier
+        self._read_directly_factory = read_directly_factory
+        self._held = held
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Read Zapply's list once."""
+
+        if source.source_type != SourceType.ZAPPLY:
+            raise ValueError(
+                "ZapplySourceFetcher requires a ZAPPLY SourceDefinition."
+            )
+
+        from backend.app.adapters.http_cache import (
+            CacheValidators,
+        )
+
+        jobs, unchanged, validators = self._fetcher(
+            source_account=source.source_account,
+            company_name=source.company_name,
+            validators=(
+                self._validator_lookup(source)
+                if self._validator_lookup is not None
+                else CacheValidators()
+            ),
+            read_directly=(
+                self._read_directly_factory()
+                if self._read_directly_factory is not None
+                else None
+            ),
+            held=self._held,
+        )
+
+        if (
+            not unchanged
+            and jobs
+            and self._verifier is not None
+        ):
+            pointers = [
+                job
+                for job in jobs
+                if is_zapply_link(
+                    job.official_url
+                )
+            ]
+
+            checkable = [
+                job
+                for job in jobs
+                if not is_zapply_link(
+                    job.official_url
+                )
+            ]
+
+            jobs = [
+                *(
+                    self._verifier(
+                        checkable
+                    )
+                    if checkable
+                    else []
+                ),
+                *pointers,
+            ]
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+            unchanged=unchanged,
+            etag=validators.etag,
+            last_modified=validators.last_modified,
+        )
+
+
 class SourceDispatcher:
     """Dispatch configured sources to provider-specific fetch handlers."""
 
@@ -1944,17 +2096,153 @@ FULL_REFETCH_INTERVAL = timedelta(
 )
 
 
-def _registered_board_check() -> Callable[[str], bool]:
-    """Whether ACE reads the board a posting link names.
+# A board ACE has not read within this long is not counted as read
+# directly: a list's copy of its postings stays until ACE reads it again
+# (2026-11-18). Before, every registered board counted, so while Workday
+# refused ACE no copy of a Workday posting reached ACE from any list.
+READ_DIRECTLY_WITHIN = timedelta(
+    hours=6,
+)
 
-    Registered and switched on -- not merely readable. Loaded once per
-    feed poll, in a short session of its own.
+
+def _held_by_employer(
+    rows: Sequence[ZapplyRow],
+) -> set[str]:
+    """The zapply link codes whose posting ACE holds open from the employer.
+
+    For rows zapply alone can link: a Workday row by its board and
+    requisition, an Apple, ByteDance, Eightfold or Oracle row by its
+    identifier. Read once per list poll, in a short session of its own.
     """
+
+    from collections import defaultdict
 
     from sqlalchemy import select
 
     from backend.app.db.models import (
+        JobRecord,
         JobSourceRecord,
+    )
+    from backend.app.db.session import (
+        SessionLocal,
+    )
+
+    held: set[str] = set()
+
+    with SessionLocal() as session:
+        boards = [
+            account
+            for (account,) in session.execute(
+                select(
+                    JobSourceRecord.source_account,
+                ).where(
+                    JobSourceRecord.source_type == SourceType.WORKDAY.value,
+                    JobSourceRecord.enabled.is_(True),
+                )
+            ).all()
+        ]
+
+        on_workday = {
+            row.code: found
+            for row in rows
+            if (found := workday_posting(row.code, boards)) is not None
+        }
+
+        if on_workday:
+            requisitions: dict[str, set[str]] = defaultdict(set)
+
+            for account, external_id in session.execute(
+                select(
+                    JobRecord.source_account,
+                    JobRecord.external_id,
+                ).where(
+                    JobRecord.source == SourceType.WORKDAY.value,
+                    JobRecord.source_account.in_(
+                        sorted({board for board, _req in on_workday.values()})
+                    ),
+                    JobRecord.is_active.is_(True),
+                )
+            ).all():
+                requisitions[account.lower()].update(
+                    workday_requisitions(
+                        external_id
+                    )
+                )
+
+            held.update(
+                code
+                for code, (board, requisition) in on_workday.items()
+                if requisition in requisitions[board.lower()]
+            )
+
+        by_id = {
+            row.code: found
+            for row in rows
+            if (found := posting_id(row.code)) is not None
+        }
+
+        if by_id:
+            present = {
+                (
+                    source_name,
+                    external_id.lower(),
+                )
+                for source_name, external_id in session.execute(
+                    select(
+                        JobRecord.source,
+                        JobRecord.external_id,
+                    ).where(
+                        JobRecord.source.in_(
+                            sorted({name for names, _id in by_id.values() for name in names})
+                        ),
+                        JobRecord.external_id.in_(
+                            sorted({identifier for _names, identifier in by_id.values()})
+                        ),
+                        JobRecord.is_active.is_(True),
+                    )
+                ).all()
+            }
+
+            held.update(
+                code
+                for code, (names, identifier) in by_id.items()
+                if any(
+                    (name, identifier.lower()) in present
+                    for name in names
+                )
+            )
+
+    return held
+
+
+def _employer_page_worth_reading(
+    job: CanonicalJob,
+) -> bool:
+    """A list copy's page is read only on the employer's own site."""
+
+    return not is_zapply_link(
+        job.official_url
+    ) and _title_could_pass(
+        job
+    )
+
+
+def _registered_board_check(
+    *,
+    now: Callable[[], datetime] = utc_now,
+) -> Callable[[str], bool]:
+    """Whether ACE reads the board a posting link names.
+
+    Registered, switched on and read within ``READ_DIRECTLY_WITHIN`` --
+    not merely readable. Loaded once per feed poll, in a short session of
+    its own.
+    """
+
+    from sqlalchemy import and_, select
+
+    from backend.app.db.models import (
+        JobSourceRecord,
+        SourceState,
     )
     from backend.app.db.session import (
         SessionLocal,
@@ -1963,20 +2251,35 @@ def _registered_board_check() -> Callable[[str], bool]:
         detect_source_from_url,
     )
 
+    since = now() - READ_DIRECTLY_WITHIN
+
     with SessionLocal() as session:
         registered = {
             (
                 source_type,
                 source_account.lower(),
             )
-            for source_type, source_account in session.execute(
+            for source_type, source_account, read_at in session.execute(
                 select(
                     JobSourceRecord.source_type,
                     JobSourceRecord.source_account,
-                ).where(
+                    SourceState.last_success_at,
+                )
+                .outerjoin(
+                    SourceState,
+                    and_(
+                        SourceState.source
+                        == JobSourceRecord.source_type,
+                        SourceState.source_account
+                        == JobSourceRecord.source_account,
+                    ),
+                )
+                .where(
                     JobSourceRecord.enabled.is_(True),
                 )
             ).all()
+            if read_at is not None
+            and _aware(read_at) >= since
         }
 
     def read_directly(
@@ -1992,6 +2295,68 @@ def _registered_board_check() -> Callable[[str], bool]:
         ) in registered
 
     return read_directly
+
+
+def _is_workday_page(
+    url: str,
+) -> bool:
+    """Whether a link is on a Workday career site."""
+
+    from urllib.parse import urlsplit
+
+    host = (
+        urlsplit(url).hostname
+        or ""
+    ).lower()
+
+    return host.endswith(
+        (".myworkdayjobs.com", ".myworkdaysite.com")
+    )
+
+
+def _workday_page_pace(
+    url: str,
+):
+    """Workday's page pace for a link on a Workday career site, else None."""
+
+    return (
+        WORKDAY_PAGE_PACE
+        if _is_workday_page(url)
+        else None
+    )
+
+
+def _workday_page_held(
+    url: str,
+) -> bool:
+    """Whether a Workday page waits for a later poll.
+
+    Always, since 2026-11-19: the employer-page check reads with its own
+    client, not the Workday reader's (standard cipher list, stop at the
+    first bot check), and while Workday answers, ACE reads those boards
+    directly, so their list copies are dropped. Before that, a Workday page
+    waited while Workday was paused or refusing: at one request a minute,
+    a poll with a hundred pages due would hold the whole feed for hours
+    (measured 2026-11-18, the first minutes after the sitemap release).
+    """
+
+    return _is_workday_page(
+        url
+    )
+
+
+def _aware(
+    moment: datetime,
+) -> datetime:
+    """A stored time as an aware UTC time (SQLite hands back naive ones)."""
+
+    return (
+        moment
+        if moment.tzinfo is not None
+        else moment.replace(
+            tzinfo=timezone.utc,
+        )
+    )
 
 
 def _title_could_pass(
@@ -2100,10 +2465,12 @@ def _stored_posted_dates(
 def _stored_workday_details(
     source: SourceDefinition,
 ) -> dict[str, object]:
-    """What each active posting's detail gave ACE, for one Workday board.
+    """What ACE holds for each active posting of one Workday board.
 
     Read in its own short session, before any request, like the posted
-    days. Only postings with a stored description are reused.
+    days. A job API read reuses only postings with a stored description; a
+    sitemap read, which names a posting by its link alone, hands back every
+    posting ACE holds as ACE holds it, title included.
     """
 
     from sqlalchemy import (
@@ -2129,23 +2496,24 @@ def _stored_workday_details(
                 JobRecord.posted_at,
                 JobRecord.requisition_id,
                 JobRecord.official_url,
+                JobRecord.title,
             ).where(
                 JobRecord.source
                 == source.source_type.value,
                 JobRecord.source_account
                 == source.source_account,
                 JobRecord.is_active.is_(True),
-                JobRecord.description != "",
             )
         ).all()
 
     return {
         external_id: StoredDetail(
-            description=description,
+            description=description or "",
             location=location or "",
             posted_at=posted_at,
             requisition_id=requisition_id,
             official_url=official_url or "",
+            title=title or "",
         )
         for (
             external_id,
@@ -2154,6 +2522,7 @@ def _stored_workday_details(
             posted_at,
             requisition_id,
             official_url,
+            title,
         ) in rows
     }
 
@@ -2246,6 +2615,7 @@ def build_default_source_dispatcher() -> (
                     detail_lookup=(
                         _stored_workday_details
                     ),
+                    hold=HOLDS["workday"],
                 )
             ),
             SourceType.AMAZON: (
@@ -2316,6 +2686,24 @@ def build_default_source_dispatcher() -> (
             SourceType.JOBPOSTING_SITEMAP: (
                 SitemapSourceFetcher()
             ),
+            SourceType.ZAPPLY: (
+                ZapplySourceFetcher(
+                    validator_lookup=(
+                        _stored_validators
+                    ),
+                    verifier=EmployerPageVerifier(
+                        worth_reading=(
+                            _employer_page_worth_reading
+                        ),
+                        paced=_workday_page_pace,
+                        held=_workday_page_held,
+                    ),
+                    read_directly_factory=(
+                        _registered_board_check
+                    ),
+                    held=_held_by_employer,
+                )
+            ),
             SourceType.SIMPLIFY: (
                 SimplifySourceFetcher(
                     validator_lookup=(
@@ -2325,6 +2713,8 @@ def build_default_source_dispatcher() -> (
                         worth_reading=(
                             _title_could_pass
                         ),
+                        paced=_workday_page_pace,
+                        held=_workday_page_held,
                     ),
                     read_directly_factory=(
                         _registered_board_check

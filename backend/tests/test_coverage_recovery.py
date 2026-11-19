@@ -505,3 +505,36 @@ def test_a_board_on_a_platform_that_limits_ace_is_never_moved(
     assert session.scalar(sa.select(JobRecord.is_active).where(JobRecord.external_id == "e1")) is True
     # Still listed as dark, so the Coverage page keeps showing it.
     assert [d.source_account for d in dark_sources(session, now=NOW)] == ["palmridge/Early_Careers"]
+
+
+def test_a_move_to_a_host_that_refuses_ace_is_not_followed(
+    session: Session,
+) -> None:
+    """Chat 7: five SmartRecruiters boards were added this way on
+    2026-11-17 although SmartRecruiters' postings service refuses ACE in
+    its robots rules. The dark board and its postings are left alone."""
+
+    from backend.app.coverage.host_policy import REFUSED
+    from backend.app.db.models import HostPolicyRecord
+
+    session.add(
+        HostPolicyRecord(
+            host="api.smartrecruiters.com",
+            platform="smartrecruiters",
+            robots_verdict=REFUSED,
+            next_check_at=NOW,
+        )
+    )
+    add_source(session)
+    add_job(session, external_id="1")
+
+    [recovery] = recover_dark_sources(
+        session,
+        now=NOW,
+        diagnose=moved_to("smartrecruiters", "Amplitude1"),
+    )
+
+    assert recovery.replaced_by is None
+    assert recovery.closed_jobs == 0
+    assert source(session, "smartrecruiters", "Amplitude1") is None
+    assert source(session, "greenhouse", "amplitude").enabled

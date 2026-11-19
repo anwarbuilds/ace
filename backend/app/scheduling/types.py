@@ -39,6 +39,9 @@ class SourceType(StrEnum):
     WORKDAY = "workday"
     AMAZON = "amazon"
     SIMPLIFY = "simplify"
+    # Zapply's public new grad software list (DIS-12): read as pointers
+    # to employer postings, like Simplify's, never as coverage.
+    ZAPPLY = "zapply"
     EIGHTFOLD = "eightfold"
     # Eightfold's newer product line, found on Amdocs. Kept as a
     # distinct source type rather than a branch inside EIGHTFOLD

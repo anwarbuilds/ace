@@ -19,6 +19,15 @@ That is what this reads.
   ``/job/<city>/<title>/<org>/<id>``. The title in the address decides
   whether the page is worth reading at all, as it does for every board
   that lists before it describes.
+- Phenom (Mastercard, U.S. Bank, HPE, Adobe, State Street; 2026-11-19, so
+  Workday employers are read on their own sites while Workday refuses
+  ACE): the board is named ``<host>/<country>/<language>``, for example
+  ``careers.example.com/us/en``; robots.txt names its sitemap index at
+  ``/us/en/sitemap_index.xml``, whose sitemaps list postings at
+  ``/us/en/job/<id>/<title>``, each page with a JobPosting.
+
+A sitemap index is read whole: every sitemap it names, or the read fails,
+because a posting missing from an unread part must never be closed.
 
 The sitemap is the whole board, so a read is complete: a posting that
 leaves it is closed. A posting not yet read is left out rather than
@@ -140,12 +149,40 @@ class Site:
 FULL_TEXT_KEY = "aceFullText"
 
 
+# A Phenom board: "<host>/<country>/<language>" or "<host>/global/<language>".
+_PHENOM_ACCOUNT = re.compile(
+    r"^(?P<host>[a-z0-9.-]+)/(?P<prefix>[a-z]{2}/[a-z]{2}|global/[a-z]{2})$"
+)
+
+# At most this many sitemaps from one index; more is read as incomplete.
+MAX_INDEX_SITEMAPS = 25
+
+
 def site_for(
     host: str,
 ) -> Site:
-    """The layout of one careers site, by its host."""
+    """The layout of one careers site, by its host (a Phenom board by its
+    host and locale)."""
 
     host = host.strip().strip("/").lower()
+
+    phenom = _PHENOM_ACCOUNT.match(
+        host
+    )
+
+    if phenom is not None:
+        name = phenom.group("host")
+        prefix = phenom.group("prefix")
+
+        return Site(
+            sitemap=f"https://{name}/{prefix}/sitemap_index.xml",
+            posting=re.compile(
+                rf"^https://{re.escape(name)}/{re.escape(prefix)}/job/"
+                r"(?P<id>[^/?#]+)/(?P<slug>[^/?#]+)/?$",
+                re.IGNORECASE,
+            ),
+            titled=True,
+        )
 
     if host.endswith("metacareers.com"):
         return Site(
@@ -554,6 +591,68 @@ def _due(
     )
 
 
+def _listed_in(
+    http: httpx.Client,
+    markup: str,
+    site: Site,
+    host: str,
+) -> list[Listed]:
+    """The postings a sitemap lists, or, for a sitemap index, every sitemap it
+    names on the same site: all of them, or the read fails."""
+
+    if "<sitemapindex" not in markup[:4000].lower():
+        return parse_sitemap(
+            markup,
+            site,
+        )
+
+    own = site.sitemap.split("/", 3)[2]
+
+    parts = [
+        unescape_fully(url).strip()
+        for url in _LOC.findall(markup)
+    ]
+
+    parts = [
+        url
+        for url in parts
+        if url.split("/", 3)[2:3] == [own]
+    ]
+
+    if not parts or len(parts) > MAX_INDEX_SITEMAPS:
+        raise ValueError(
+            f"{host}'s sitemap index names {len(parts)} sitemaps on its own site."
+        )
+
+    listed: list[Listed] = []
+
+    seen: set[str] = set()
+
+    for url in parts:
+        response = request_with_retry(
+            lambda url=url: http.get(
+                url
+            )
+        )
+
+        response.raise_for_status()
+
+        for entry in parse_sitemap(
+            response.text,
+            site,
+        ):
+            if entry.external_id not in seen:
+                seen.add(
+                    entry.external_id
+                )
+
+                listed.append(
+                    entry
+                )
+
+    return listed
+
+
 def fetch_sitemap_jobs(
     *,
     host: str,
@@ -596,9 +695,11 @@ def fetch_sitemap_jobs(
 
         response.raise_for_status()
 
-        listed = parse_sitemap(
+        listed = _listed_in(
+            http,
             response.text,
             site,
+            host,
         )
 
         if not listed:

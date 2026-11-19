@@ -519,6 +519,33 @@ def build_demo_jobs(
             )
         )
 
+    # A copy from Zapply's list of a posting ACE cannot read on the
+    # employer's own site, so it is linked through Zapply (DIS-12).
+    from backend.app.adapters.zapply import POINTER as ZAPPLY_POINTER
+
+    zapply_code = "workday-ferrovia-external-careers-JR2026000101"
+
+    jobs.append(
+        DemoJob(
+            job=CanonicalJob(
+                source="zapply",
+                company="Ferrovia",
+                external_id=zapply_code,
+                requisition_id=None,
+                title="Software Engineer (Associate)",
+                location="Seattle, WA",
+                description=ZAPPLY_POINTER,
+                official_url=f"https://zapply.example/l/d/{zapply_code}?s=gh",
+                posted_at=now - timedelta(hours=2),
+            ),
+            account="new-grad-swe",
+            first_seen_at=pulls[0],
+            last_seen_at=max(pulls[0], now - timedelta(minutes=2)),
+            is_active=True,
+            pull_index=0,
+        )
+    )
+
     return jobs
 
 

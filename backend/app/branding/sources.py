@@ -73,7 +73,7 @@ def _page(url: str, *, employer_owned: bool = False) -> LogoPage | None:
 def company_logo_seed(session: Session, company: str) -> LogoSeed:
     sources = session.scalars(select(JobSourceRecord).where(
         JobSourceRecord.company_name == company, JobSourceRecord.enabled.is_(True),
-        JobSourceRecord.source_type.in_([kind.value for kind in SourceType if kind.value not in ("simplify", "ripplematch")]),
+        JobSourceRecord.source_type.in_([kind.value for kind in SourceType if kind.value not in ("simplify", "ripplematch", "zapply")]),
     ).order_by(JobSourceRecord.id).limit(6)).all()
     by_identity = {(s.source_type, s.source_account): s for s in sources}
     # Exact, indexed company lookup. Do not scan the job corpus with lower() or

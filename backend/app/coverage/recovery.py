@@ -31,6 +31,7 @@ from datetime import (
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from backend.app.coverage.host_policy import newly_refused
 from backend.app.coverage.companies import (
     SOURCE_HOSTS,
     registration_interval,
@@ -241,6 +242,18 @@ def recover_dark_sources(
         )
 
         candidate = diagnosis.candidate
+
+        # A board on a host whose robots rules refuse ACE is never newly
+        # read, whatever moved: SmartRecruiters' postings service has
+        # refused since 2026-11-05, yet five SmartRecruiters boards were
+        # added this way on 2026-11-17 (Chat 7).
+        if candidate is not None and newly_refused(
+            session,
+            candidate.source_type,
+            candidate.source_account,
+            candidate.source_host,
+        ):
+            candidate = None
 
         if candidate is None or _same_board(
             dark,

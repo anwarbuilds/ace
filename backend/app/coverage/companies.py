@@ -629,6 +629,7 @@ MULTI_EMPLOYER_SOURCES: frozenset[str] = frozenset(
     {
         "simplify",
         "ripplematch",
+        "zapply",
     }
 )
 

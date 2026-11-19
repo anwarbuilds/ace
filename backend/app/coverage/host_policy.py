@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from backend.app.adapters.bytedance import PORTALS
 from backend.app.adapters.lever import LEVER_API_HOST_BY_JOB_HOST
 from backend.app.adapters.simplify import FEED_URLS
+from backend.app.adapters.zapply import LIST_URLS as ZAPPLY_LIST_URLS
 from backend.app.adapters.sitemap_jobs import site_for
 from backend.app.coverage.held_out import is_held_out
 from backend.app.coverage.probing import (
@@ -198,16 +199,21 @@ def read_targets(
         sitemap_host = _host_of(account)
         if not sitemap_host:
             return ()
+        site = site_for(account)
+        sitemap_path = urlsplit(site.sitemap).path
         posting = (
             "/profile/job_details/1/"
             if sitemap_host.endswith("metacareers.com")
+            # A Phenom board ("<host>/us/en"): postings sit beside its sitemap index.
+            else sitemap_path.rsplit("/", 1)[0] + "/job/example/example"
+            if sitemap_path.endswith("/sitemap_index.xml")
             else "/job/example/example/1/1"
         )
         return (
             HostTarget(
                 sitemap_host,
                 "employer_site",
-                (urlsplit(site_for(sitemap_host).sitemap).path, posting),
+                (sitemap_path, posting),
             ),
         )
 
@@ -220,6 +226,10 @@ def read_targets(
 
     if source_type == "simplify":
         paths = tuple(sorted(urlsplit(url).path for url in FEED_URLS.values()))
+        return (HostTarget("raw.githubusercontent.com", "feed", paths),)
+
+    if source_type == "zapply":
+        paths = tuple(sorted(urlsplit(url).path for url in ZAPPLY_LIST_URLS.values()))
         return (HostTarget("raw.githubusercontent.com", "feed", paths),)
 
     fixed = {
@@ -458,6 +468,34 @@ def refused_hosts(session: Session) -> set[str]:
             sa.select(HostPolicyRecord.host).where(HostPolicyRecord.robots_verdict == REFUSED)
         )
     )
+
+
+def newly_refused(
+    session: Session,
+    source_type: str,
+    source_account: str,
+    source_host: str | None = None,
+    *,
+    refused: set[str] | None = None,
+) -> bool:
+    """Whether a board ACE does not hold yet would be read on a host whose stored
+    robots verdict refuses ACE. For the automatic paths that add boards (the
+    feed-link sweep, the dark-board check), which never ask robots themselves;
+    adding by hand and the lead check ask first (``refusal_for``). Boards already
+    held keep polling while ``HOST_POLICY_ENFORCE`` is off.
+    """
+
+    hosts = refused if refused is not None else refused_hosts(session)
+
+    if not hosts:
+        return False
+
+    try:
+        targets = read_targets(source_type, source_account, source_host)
+    except Exception:  # an account this reader cannot name: nothing to refuse on
+        return False
+
+    return any(target.host in hosts for target in targets)
 
 
 def refusal_for(

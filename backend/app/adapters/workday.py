@@ -39,6 +39,28 @@ predicate only skips what the gate already rejects on title alone, and
 it is self-healing: if the rules later change so the title qualifies,
 the next poll fetches the detail, the content hash changes, and the job
 is re-evaluated in full.
+
+The career site's own sitemap (2026-11-18)
+------------------------------------------
+
+From 2026-11-16 Workday refused nearly every automated request to the job
+API above, other job readers' as well as ACE's. Its robots.txt still
+names a sitemap for every career site and allows crawlers on the site's
+pages, and both kept answering ACE:
+
+    GET /{site}/siteMap.xml          the newest hundred postings, by link
+    GET /{site}/job/{place}/{title}_{req}   one posting's page, whose
+                                     schema.org JobPosting gives its
+                                     title, description, place and date
+
+A posting's link is ``https://{host}/{site}`` and the path ACE already
+stores it under, so the two ways of reading give the same postings. Quick
+reads go by the sitemap: one request finds what is new, and only a new
+posting whose title could pass costs a page. A full read asks the job
+API, which alone lists a board whole and so can close what left; when the
+API refuses, it rests (``ApiRest``) and full reads go by the sitemap too,
+closing nothing, until the API answers again. A sitemap holds at most a
+hundred postings, so a sitemap read never closes anything.
 """
 
 from __future__ import annotations
@@ -53,8 +75,9 @@ from datetime import (
 )
 import html
 import re
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 import logging
+import ssl
 import threading
 import time
 from urllib.parse import unquote
@@ -68,6 +91,12 @@ from backend.app.adapters.html_text import (
 from backend.app.adapters.retry import (
     RETRYABLE_STATUS_CODES,
     request_with_retry,
+)
+from backend.app.adapters.sitemap_jobs import (
+    _places as posting_places,
+    _posted as posting_date,
+    _text as posting_text,
+    parse_posting_page,
 )
 from backend.app.models.job import (
     CanonicalJob,
@@ -121,6 +150,9 @@ DETAIL_REFRESH_HOURS = 24
 
 
 LOGGER = logging.getLogger(__name__)
+
+if TYPE_CHECKING:  # the scheduling package imports this module
+    from backend.app.scheduling.holds import PlatformHold
 
 # Pages a quick read takes: the newest postings, where a new job appears.
 # A board of three pages or fewer is read whole either way.
@@ -201,6 +233,68 @@ class WorkdayPace:
 # The scheduler's one pace for every Workday request (dispatcher wires it).
 PACE = WorkdayPace()
 
+# The career site's sitemap and posting pages answer on their own terms
+# (2026-11-18: they answered while the job API refused nearly everything),
+# so they keep their own pace, and a refusal from one never slows the other.
+PAGE_PACE = WorkdayPace()
+
+
+class ApiRest:
+    """Whether Workday's job API is resting after a refusal (2026-11-18).
+
+    A refused job API is not asked again until the rest ends; reads go by
+    the career site's sitemap meanwhile. The first full read after a rest
+    asks the API once: a refusal doubles the rest, up to ``cap``; an answer
+    ends it.
+    """
+
+    def __init__(
+        self,
+        *,
+        first: float = 30 * 60,
+        cap: float = 6 * 60 * 60,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.first = first
+        self.cap = cap
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._until = 0.0
+        self._rest = 0.0
+
+    def resting(self) -> bool:
+        with self._lock:
+            return self._clock() < self._until
+
+    def refused(self) -> float:
+        with self._lock:
+            now = self._clock()
+            # Boards read at once can be refused together: the rest they
+            # started is not lengthened by the others.
+            if now < self._until:
+                return self._until - now
+            self._rest = (
+                self.first
+                if self._rest <= 0
+                else min(self.cap, self._rest * 2)
+            )
+            self._until = now + self._rest
+            rest = self._rest
+        LOGGER.warning("workday_api_rest seconds=%d", rest)
+        return rest
+
+    def answered(self) -> None:
+        with self._lock:
+            rested = self._rest > 0
+            self._rest = 0.0
+            self._until = 0.0
+        if rested:
+            LOGGER.info("workday_api_answers_again")
+
+
+# The scheduler's one record of whether the job API is resting.
+API_REST = ApiRest()
+
 
 class _Unpaced:
     def wait(self) -> None:
@@ -214,13 +308,18 @@ _UNPACED = _Unpaced()
 
 
 class StoredDetail(NamedTuple):
-    """What a posting's detail gave ACE the last time it was read."""
+    """What ACE holds for a posting, from the last time it was read.
+
+    ``title`` lets a sitemap read, which names a posting only by its link,
+    hand a posting ACE already holds back unchanged.
+    """
 
     description: str
     location: str
     posted_at: datetime | None
     requisition_id: str | None
     official_url: str
+    title: str = ""
 
 
 def detail_refresh_due(
@@ -237,6 +336,115 @@ USER_AGENT = (
     "ACE/0.1 "
     "(personal career-intelligence project)"
 )
+
+
+# Workday's bot check (2026-11-16 onward). Cloudflare, in front of every
+# Workday career site, began answering automated readers with a bot check:
+# HTTP 429 with "cf-mitigated: challenge" and a "Security Check: Enable
+# JavaScript and cookies" page, for sitemaps, pages and the job API alike.
+# Other readers traced it chiefly to Python's short default cipher list,
+# which gives httpx a rare TLS fingerprint (from ACE's own server a plain
+# request with OpenSSL's standard list was answered while ACE's was not).
+# With the owner's approval (2026-11-19) ACE's Workday reader offers the
+# standard OpenSSL list, what curl and most tools offer, and keeps its
+# honest name above: no browser disguise, proxy or other address. A bot
+# check is still an answer: at the first one, every Workday read in the
+# process stops for a day and nothing is retried.
+BOT_CHECK_HOLD_SECONDS = 24 * 60 * 60
+
+_STANDARD_TLS: ssl.SSLContext | None = None
+
+
+def standard_tls() -> ssl.SSLContext:
+    """httpx's own context, certificate checks unchanged, offering OpenSSL's
+    standard cipher list instead of Python's short one."""
+
+    global _STANDARD_TLS
+
+    if _STANDARD_TLS is None:
+        context = httpx.create_ssl_context()
+        context.set_ciphers(
+            "DEFAULT"
+        )
+        _STANDARD_TLS = context
+
+    return _STANDARD_TLS
+
+
+def is_bot_check(
+    response: httpx.Response,
+) -> bool:
+    """Whether Workday's edge answered with a bot check, whatever the status."""
+
+    return (
+        response.headers.get(
+            "cf-mitigated",
+            "",
+        ).strip().lower()
+        == "challenge"
+    )
+
+
+def stop_at_bot_check(
+    hold: PlatformHold | None,
+) -> Callable[[httpx.Response], None]:
+    """A response hook: at a bot check, hold all of Workday for a day and end
+    this read at once (never retried)."""
+
+    def check(
+        response: httpx.Response,
+    ) -> None:
+        if not is_bot_check(
+            response
+        ):
+            return
+
+        LOGGER.info(
+            "workday_bot_check host=%s status=%d held_hours=%d",
+            response.request.url.host,
+            response.status_code,
+            BOT_CHECK_HOLD_SECONDS // 3600,
+        )
+
+        if hold is not None:
+            hold.hold(
+                BOT_CHECK_HOLD_SECONDS
+            )
+
+        from backend.app.scheduling.holds import PlatformHeld
+
+        raise PlatformHeld(
+            "workday is paused after refusals; this read waits for the pause to end"
+        )
+
+    return check
+
+
+def workday_client(
+    *,
+    hold: PlatformHold | None = None,
+    accept: str = "application/json",
+    transport: httpx.BaseTransport | None = None,
+) -> httpx.Client:
+    """The client every Workday read uses: ACE's honest name, the standard
+    cipher list, and a stop at the first bot check."""
+
+    return httpx.Client(
+        timeout=REQUEST_TIMEOUT_SECONDS,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": accept,
+        },
+        verify=standard_tls(),
+        event_hooks={
+            "response": [
+                stop_at_bot_check(
+                    hold
+                )
+            ],
+        },
+        transport=transport,
+    )
 
 
 def _postings(
@@ -915,6 +1123,438 @@ def _public_url(
     )
 
 
+# A career site's sitemap lists at most this many postings, the newest:
+# 100 on a 133-posting board, measured 2026-11-18, and all six on a
+# six-posting one.
+SITEMAP_LIMIT = 100
+
+# A page's description shorter than this is a stub, not one the gate can
+# read requirements from; the stored one, if any, stands instead.
+MIN_PAGE_DESCRIPTION_CHARS = 200
+
+_SITEMAP_LOC = re.compile(
+    r"<loc>\s*([^<\s]+)\s*</loc>",
+    re.IGNORECASE,
+)
+
+
+def sitemap_url(
+    *,
+    host: str,
+    site: str,
+) -> str:
+    """The sitemap robots.txt names for one career site."""
+
+    return f"https://{host}/{site}/siteMap.xml"
+
+
+def sitemap_paths(
+    markup: str,
+    *,
+    host: str,
+    site: str,
+) -> list[str]:
+    """Each posting's path in a career site's sitemap, in its order.
+
+    ``<loc>https://{host}/{site}/job/{place}/{title}_{req}</loc>`` gives
+    ``/job/{place}/{title}_{req}``: the path ACE stores a Workday posting
+    under (the job API's ``externalPath``). Alternate-language links, other
+    hosts and other sites are left out.
+    """
+
+    prefix = f"https://{host}/{site}/".lower()
+
+    paths: list[str] = []
+
+    seen: set[str] = set()
+
+    for found in _SITEMAP_LOC.findall(
+        markup
+    ):
+        link = html.unescape(
+            found
+        )
+
+        if not link.lower().startswith(
+            prefix
+        ):
+            continue
+
+        path = "/" + link[len(prefix):]
+
+        if (
+            not path.startswith("/job/")
+            or path in seen
+        ):
+            continue
+
+        seen.add(
+            path
+        )
+
+        paths.append(
+            path
+        )
+
+    return paths
+
+
+def slug_title(
+    external_path: str,
+) -> str:
+    """A posting's title as its link spells it.
+
+    Workday writes each character of a title that is not a letter or a
+    digit as a hyphen: "Software-Engineer--Backend-_R123" is "Software
+    Engineer (Backend)". Punctuation is lost, words are not; the posting's
+    page, when it is read, gives the title in full.
+    """
+
+    last = external_path.rstrip(
+        "/"
+    ).rsplit(
+        "/",
+        1,
+    )[-1]
+
+    words = (
+        last.rsplit(
+            "_",
+            1,
+        )[0]
+        if "_" in last
+        else last
+    )
+
+    return " ".join(
+        unquote(
+            words
+        )
+        .replace(
+            "-",
+            " ",
+        )
+        .split()
+    )
+
+
+class PagePosting(NamedTuple):
+    """What a posting's own page says of it."""
+
+    title: str
+    description: str
+    location: str
+    posted_at: datetime | None
+    requisition_id: str | None
+
+
+def read_posting_page(
+    markup: str,
+) -> PagePosting | None:
+    """The posting a Workday page describes itself with, or None.
+
+    The page carries a schema.org ``JobPosting`` for search engines; a page
+    without one is not a live posting.
+    """
+
+    posting = parse_posting_page(
+        markup
+    )
+
+    if posting is None:
+        return None
+
+    identifier = posting.get(
+        "identifier"
+    )
+
+    requisition = (
+        identifier.get("value")
+        if isinstance(
+            identifier,
+            dict,
+        )
+        else None
+    )
+
+    return PagePosting(
+        title=" ".join(
+            unescape_fully(
+                str(
+                    posting.get("title")
+                    or ""
+                )
+            ).split()
+        ),
+        description=posting_text(
+            posting.get(
+                "description"
+            )
+        ),
+        location="; ".join(
+            posting_places(
+                posting
+            )
+        ),
+        posted_at=posting_date(
+            posting.get(
+                "datePosted"
+            )
+        ),
+        requisition_id=(
+            str(requisition).strip()
+            or None
+            if requisition
+            else None
+        ),
+    )
+
+
+def read_by_sitemap(
+    *,
+    http: httpx.Client,
+    host: str,
+    site: str,
+    company_name: str,
+    should_fetch_detail: (
+        Callable[[str], bool] | None
+    ),
+    known_posted: Mapping[str, datetime] | None,
+    known_details: Mapping[str, StoredDetail] | None,
+    reference: datetime,
+    max_detail_fetches: int,
+    concurrency: int,
+    pace: "WorkdayPace | _Unpaced",
+) -> JobList:
+    """One career site's newest postings, read by its sitemap.
+
+    A posting ACE already holds is handed back as ACE holds it, so nothing
+    is rewritten. A new posting whose title could pass, or a held one in its
+    daily refresh hour, has its page read. A refused page stops page reads
+    for this read; the sitemap's own refusal is the read's. Never complete:
+    a sitemap holds only the newest postings.
+    """
+
+    pace.wait()
+
+    response = http.get(
+        sitemap_url(
+            host=host,
+            site=site,
+        ),
+        headers={
+            "Accept": "application/xml, text/xml",
+        },
+    )
+
+    pace.note(
+        response.status_code
+    )
+
+    response.raise_for_status()
+
+    paths = sitemap_paths(
+        response.text,
+        host=host,
+        site=site,
+    )[:SITEMAP_LIMIT]
+
+    stored = known_details or {}
+
+    def title_of(
+        path: str,
+    ) -> str:
+        kept = stored.get(
+            path
+        )
+
+        return (
+            kept.title
+            if kept is not None and kept.title
+            else slug_title(
+                path
+            )
+        )
+
+    wanted = [
+        path
+        for path in paths
+        if title_of(path)
+        and (
+            should_fetch_detail is None
+            or should_fetch_detail(
+                title_of(path)
+            )
+        )
+    ]
+
+    wanted = [
+        path
+        for path in wanted
+        if not (
+            path in stored
+            and stored[path].description
+            and not detail_refresh_due(
+                path,
+                reference,
+            )
+        )
+    ][
+        :max_detail_fetches
+    ]
+
+    refused: list[int] = []
+
+    def read_page(
+        path: str,
+    ) -> PagePosting | None:
+        if refused:
+            return None
+
+        pace.wait()
+
+        answer = http.get(
+            _public_url(
+                host=host,
+                site=site,
+                external_path=path,
+            ),
+            headers={
+                "Accept": "text/html,application/xhtml+xml",
+            },
+        )
+
+        pace.note(
+            answer.status_code
+        )
+
+        if answer.status_code in REFUSAL_STATUSES:
+            refused.append(
+                answer.status_code
+            )
+
+            return None
+
+        if answer.status_code != 200:
+            return None
+
+        return read_posting_page(
+            answer.text
+        )
+
+    pages: dict[str, PagePosting] = {}
+
+    if wanted:
+        with ThreadPoolExecutor(
+            max_workers=concurrency
+        ) as pool:
+            for path, page in zip(
+                wanted,
+                pool.map(
+                    read_page,
+                    wanted,
+                ),
+            ):
+                if page is not None:
+                    pages[path] = page
+
+    jobs: list[CanonicalJob] = []
+
+    for path in paths:
+        kept = stored.get(
+            path
+        )
+
+        page = pages.get(
+            path
+        )
+
+        title = (
+            (page.title if page is not None else "")
+            or (kept.title if kept is not None else "")
+            or slug_title(path)
+        )
+
+        if not title:
+            continue
+
+        description = (
+            kept.description
+            if kept is not None
+            else ""
+        )
+
+        if (
+            page is not None
+            and len(page.description)
+            >= MIN_PAGE_DESCRIPTION_CHARS
+        ):
+            description = page.description
+
+        location = (
+            (page.location if page is not None else "")
+            or (kept.location if kept is not None else "")
+            or _listed_location(
+                "",
+                path,
+            )
+        )
+
+        posted_at = (
+            (page.posted_at if page is not None else None)
+            or (kept.posted_at if kept is not None else None)
+            or (
+                known_posted.get(path)
+                if known_posted
+                else None
+            )
+        )
+
+        requisition_id = (
+            (page.requisition_id if page is not None else None)
+            or (kept.requisition_id if kept is not None else None)
+        )
+
+        official_url = (
+            kept.official_url
+            if kept is not None and kept.official_url
+            else _public_url(
+                host=host,
+                site=site,
+                external_path=path,
+            )
+        )
+
+        jobs.append(
+            CanonicalJob(
+                source=WORKDAY_SOURCE,
+                company=company_name,
+                external_id=path,
+                requisition_id=requisition_id,
+                title=title,
+                location=location,
+                description=description,
+                official_url=official_url,
+                posted_at=posted_at,
+                updated_at=None,
+            )
+        )
+
+    LOGGER.info(
+        "workday_sitemap_read host=%s site=%s postings=%d pages_read=%d pages_refused=%d",
+        host,
+        site,
+        len(jobs),
+        len(pages),
+        len(refused),
+    )
+
+    return JobList(
+        jobs,
+        complete=False,
+    )
+
+
 def fetch_workday_jobs(
     *,
     source_account: str,
@@ -934,6 +1574,10 @@ def fetch_workday_jobs(
     known_details: Mapping[str, StoredDetail] | None = None,
     quick: bool = False,
     pace: WorkdayPace | None = None,
+    crawl: bool = False,
+    page_pace: WorkdayPace | None = None,
+    api_rest: ApiRest | None = None,
+    bot_check_hold: PlatformHold | None = None,
 ) -> list[CanonicalJob]:
     """Fetch and normalize one Workday tenant's public postings.
 
@@ -955,9 +1599,16 @@ def fetch_workday_jobs(
     slices a capped board; the read is then partial unless the board fits,
     so it closes nothing. Every request waits its turn on ``pace``; the
     scheduler passes ``PACE``, and with none a request is not held back.
+
+    ``crawl`` (the scheduler's way) reads by the career site's sitemap
+    instead for a quick read, and for a full read while ``api_rest`` says
+    the job API is resting; a full read the job API refuses rests it and
+    goes by the sitemap. Sitemap and page requests wait on ``page_pace``.
     """
 
     pace = pace or _UNPACED
+
+    page_pace = page_pace or _UNPACED
 
     if quick:
         max_pages = min(max_pages, QUICK_READ_PAGES)
@@ -987,16 +1638,8 @@ def fetch_workday_jobs(
     http = (
         client
         if client is not None
-        else httpx.Client(
-            timeout=(
-                REQUEST_TIMEOUT_SECONDS
-            ),
-            headers={
-                "User-Agent": USER_AGENT,
-                "Accept": (
-                    "application/json"
-                ),
-            },
+        else workday_client(
+            hold=bot_check_hold,
         )
     )
 
@@ -1166,10 +1809,62 @@ def fetch_workday_jobs(
             else None
         )
 
+    def by_sitemap() -> JobList:
+        return read_by_sitemap(
+            http=http,
+            host=host,
+            site=site,
+            company_name=company_name,
+            should_fetch_detail=should_fetch_detail,
+            known_posted=known_posted,
+            known_details=known_details,
+            reference=reference,
+            max_detail_fetches=max_detail_fetches,
+            concurrency=concurrency,
+            pace=page_pace,
+        )
+
+    # Whether the job API is being read, so that only its refusal, not the
+    # sitemap's, rests it and sends the read to the sitemap.
+    asking_api = [
+        False,
+    ]
+
     try:
+        if crawl and (
+            quick
+            or (
+                api_rest is not None
+                and api_rest.resting()
+            )
+        ):
+            try:
+                return by_sitemap()
+
+            except httpx.HTTPStatusError as exc:
+                # No sitemap at this address -- a site registered under
+                # other capitals, say: the job API reads it as before,
+                # unless it is resting.
+                if exc.response.status_code != 404 or (
+                    api_rest is not None
+                    and api_rest.resting()
+                ):
+                    raise
+
+                LOGGER.info(
+                    "workday_sitemap_missing host=%s site=%s",
+                    host,
+                    site,
+                )
+
+        asking_api[0] = True
+
         first = fetch_page(
             0
         )
+
+        if api_rest is not None:
+            api_rest.answered()
 
         if not _postings(
             first
@@ -1482,6 +2177,24 @@ def fetch_workday_jobs(
                     updated_at=None,
                 )
             )
+
+        asking_api[0] = False
+
+    except httpx.HTTPStatusError as exc:
+        if not (
+            crawl
+            and asking_api[0]
+            and exc.response.status_code
+            in REFUSAL_STATUSES
+        ):
+            raise
+
+        asking_api[0] = False
+
+        if api_rest is not None:
+            api_rest.refused()
+
+        return by_sitemap()
 
     finally:
         if owns_client:
