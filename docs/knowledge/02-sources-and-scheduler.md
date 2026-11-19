@@ -553,3 +553,38 @@ Lessons: when a platform refuses, look at what its robots.txt invites crawlers t
 one endpoint is not always a refusal of the site, and a one-off manual check is not the scheduler's client, so measure the
 real reader before relying on a route. Every reader in the process must see a platform's pause, not only the scheduler's
 own turns, and no reader may queue long on a refusing platform's pace.
+
+## Workday's bot check, Zapply's lists and employers' own sites (2026-11-19, Chat 7)
+
+**What blocked Workday.** From 2026-11-16 Cloudflare, in front of every Workday career site, answered automated readers
+with a bot check: HTTP 429 with `cf-mitigated: challenge` and a "Security Check: Enable JavaScript and cookies" page, on
+sitemaps, posting pages and the job API alike. Many public job readers reported it the same days (one aggregator went
+from 106k-170k Workday jobs a day to about 5.5k). Readers traced it chiefly to Python's short default cipher list, which
+gives httpx a rare TLS fingerprint; the address counts as a second factor. From ACE's own server a plain request with
+OpenSSL's standard list was answered while ACE's reader was not.
+
+**What ACE does, with the owner's approval (2026-11-19).** The Workday reader (`adapters/workday.workday_client`) offers
+OpenSSL's standard cipher list (`ctx.set_ciphers("DEFAULT")` on httpx's own context; certificates still checked), keeps
+the honest User-Agent `ACE/0.1 (personal career-intelligence project)`, its pace and robots, and uses no proxy, other
+address or browser disguise. A bot check is still an answer: at the first one every Workday read in the scheduler stops
+for 24 hours (`BOT_CHECK_HOLD_SECONDS`, the shared Workday hold) and nothing is retried; a plain 429 keeps the existing
+backoff. The employer-page check never opens Workday pages itself. A scheduler restart clears the day's hold (in memory).
+Not done, by rule: relays (Zapply sends Workday requests through a Cloudflare Worker, in its own words to "bypass" the
+block), proxies, other addresses, browser impersonation.
+
+**Zapply's lists (DIS-12).** ACE reads Zapply's public new grad software and data science lists from GitHub's raw host.
+A row whose employer posting ACE can spell (Greenhouse, Ashby, Lever, SmartRecruiters, Workable) is a copy with the
+employer's link while ACE does not read that board within six hours; a row ACE cannot spell (Workday, Phenom, Oracle,
+Eightfold and others) is a copy linked by Zapply's own link until ACE holds that posting open from the employer. ACE
+never opens a Zapply link itself; those copies say their requirements are unverified. A copy's detail credits its list
+with a followed link (Zapply's terms). Measured: Zapply's lists held only 6 of 301 Workday roles ACE had read directly
+and that pass the gate; they are a small safety net, not a replacement for reading Workday.
+
+**Employers' own careers sites (second doors).** Many Workday employers also publish every posting on their own site.
+The career-site reader (`adapters/sitemap_jobs`) reads Radancy sites and, since 2026-11-19, Phenom sites (a board named
+`<host>/<country>/<language>`, sitemap index read whole or not at all). A site counts as the employer's only when three or
+more specific titles ACE stored from that employer's Workday board appear in its job addresses. Boards are added only in
+an owner-approved batch.
+
+**Rule gap closed.** The feed-link sweep and the dark-board check never newly add a board on a host with a stored robots
+refusal (SmartRecruiters' postings service); the dark-board check had added five SmartRecruiters boards on 2026-11-17.
