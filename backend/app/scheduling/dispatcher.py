@@ -82,7 +82,12 @@ from backend.app.adapters.ripplematch import (
     fetch_ripplematch_jobs,
 )
 from backend.app.adapters.zapply import (
+    ZapplyRow,
     fetch_zapply_jobs,
+    is_zapply_link,
+    posting_id,
+    workday_posting,
+    workday_requisitions,
 )
 from backend.app.adapters.simplify import (
     fetch_simplify_jobs,
@@ -1898,7 +1903,9 @@ class ZapplySourceFetcher:
 
     Like the curated feed it spans many employers; each row carries its
     own. Its copies are pointers, judged on the employer's own page where
-    ACE can read it, and dropped while ACE reads the board directly.
+    ACE can read it, and dropped while ACE reads the board directly. A
+    copy linked by zapply's own link is never handed to the page check:
+    ACE never opens a zapply link itself.
     """
 
     def __init__(
@@ -1923,12 +1930,20 @@ class ZapplySourceFetcher:
             ]
             | None
         ) = None,
+        held: (
+            Callable[
+                [Sequence[ZapplyRow]],
+                set[str],
+            ]
+            | None
+        ) = None,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
         self._validator_lookup = validator_lookup
         self._verifier = verifier
         self._read_directly_factory = read_directly_factory
+        self._held = held
 
     def __call__(
         self,
@@ -1958,6 +1973,7 @@ class ZapplySourceFetcher:
                 if self._read_directly_factory is not None
                 else None
             ),
+            held=self._held,
         )
 
         if (
@@ -1965,9 +1981,32 @@ class ZapplySourceFetcher:
             and jobs
             and self._verifier is not None
         ):
-            jobs = self._verifier(
-                jobs
-            )
+            pointers = [
+                job
+                for job in jobs
+                if is_zapply_link(
+                    job.official_url
+                )
+            ]
+
+            checkable = [
+                job
+                for job in jobs
+                if not is_zapply_link(
+                    job.official_url
+                )
+            ]
+
+            jobs = [
+                *(
+                    self._verifier(
+                        checkable
+                    )
+                    if checkable
+                    else []
+                ),
+                *pointers,
+            ]
 
         return FetchedSourceSnapshot(
             source_definition=source,
@@ -2060,6 +2099,128 @@ FULL_REFETCH_INTERVAL = timedelta(
 READ_DIRECTLY_WITHIN = timedelta(
     hours=6,
 )
+
+
+def _held_by_employer(
+    rows: Sequence[ZapplyRow],
+) -> set[str]:
+    """The zapply link codes whose posting ACE holds open from the employer.
+
+    For rows zapply alone can link: a Workday row by its board and
+    requisition, an Apple, ByteDance, Eightfold or Oracle row by its
+    identifier. Read once per list poll, in a short session of its own.
+    """
+
+    from collections import defaultdict
+
+    from sqlalchemy import select
+
+    from backend.app.db.models import (
+        JobRecord,
+        JobSourceRecord,
+    )
+    from backend.app.db.session import (
+        SessionLocal,
+    )
+
+    held: set[str] = set()
+
+    with SessionLocal() as session:
+        boards = [
+            account
+            for (account,) in session.execute(
+                select(
+                    JobSourceRecord.source_account,
+                ).where(
+                    JobSourceRecord.source_type == SourceType.WORKDAY.value,
+                    JobSourceRecord.enabled.is_(True),
+                )
+            ).all()
+        ]
+
+        on_workday = {
+            row.code: found
+            for row in rows
+            if (found := workday_posting(row.code, boards)) is not None
+        }
+
+        if on_workday:
+            requisitions: dict[str, set[str]] = defaultdict(set)
+
+            for account, external_id in session.execute(
+                select(
+                    JobRecord.source_account,
+                    JobRecord.external_id,
+                ).where(
+                    JobRecord.source == SourceType.WORKDAY.value,
+                    JobRecord.source_account.in_(
+                        sorted({board for board, _req in on_workday.values()})
+                    ),
+                    JobRecord.is_active.is_(True),
+                )
+            ).all():
+                requisitions[account.lower()].update(
+                    workday_requisitions(
+                        external_id
+                    )
+                )
+
+            held.update(
+                code
+                for code, (board, requisition) in on_workday.items()
+                if requisition in requisitions[board.lower()]
+            )
+
+        by_id = {
+            row.code: found
+            for row in rows
+            if (found := posting_id(row.code)) is not None
+        }
+
+        if by_id:
+            present = {
+                (
+                    source_name,
+                    external_id.lower(),
+                )
+                for source_name, external_id in session.execute(
+                    select(
+                        JobRecord.source,
+                        JobRecord.external_id,
+                    ).where(
+                        JobRecord.source.in_(
+                            sorted({name for names, _id in by_id.values() for name in names})
+                        ),
+                        JobRecord.external_id.in_(
+                            sorted({identifier for _names, identifier in by_id.values()})
+                        ),
+                        JobRecord.is_active.is_(True),
+                    )
+                ).all()
+            }
+
+            held.update(
+                code
+                for code, (names, identifier) in by_id.items()
+                if any(
+                    (name, identifier.lower()) in present
+                    for name in names
+                )
+            )
+
+    return held
+
+
+def _employer_page_worth_reading(
+    job: CanonicalJob,
+) -> bool:
+    """A list copy's page is read only on the employer's own site."""
+
+    return not is_zapply_link(
+        job.official_url
+    ) and _title_could_pass(
+        job
+    )
 
 
 def _registered_board_check(
@@ -2529,7 +2690,7 @@ def build_default_source_dispatcher() -> (
                     ),
                     verifier=EmployerPageVerifier(
                         worth_reading=(
-                            _title_could_pass
+                            _employer_page_worth_reading
                         ),
                         paced=_workday_page_pace,
                         held=_workday_page_held,
@@ -2537,6 +2698,7 @@ def build_default_source_dispatcher() -> (
                     read_directly_factory=(
                         _registered_board_check
                     ),
+                    held=_held_by_employer,
                 )
             ),
             SourceType.SIMPLIFY: (

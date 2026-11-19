@@ -14,8 +14,19 @@ is read from, and never zapply's own site. From each row it builds the
 employer's own link where the posting's address can be spelled exactly
 (Greenhouse, Ashby, Lever, SmartRecruiters, Workable) and keeps the row as a
 copy only while ACE does not read that board directly: the same rule as
-Simplify's copies. A Workday row names no data centre and cannot be spelled
-exactly; ACE reads those boards itself, by their sitemaps.
+Simplify's copies.
+
+A Workday row names no data centre and no title slug, so its posting cannot
+be spelled exactly (Workday answers a wrong slug with a page that holds no
+posting); nor can Phenom, Oracle, Eightfold, BrassRing and a few others.
+Since 2026-11-19, with the owner's approval, such a row is still kept as a
+copy, linked by zapply's own link, which forwards the owner's click to the
+employer's posting: the one exception to "the employer's own link" besides
+RippleMatch. ACE itself never opens a zapply link (``is_zapply_link``): the
+employer-page check skips it, so the copy is judged on its title and place
+and says its requirements are unverified. The copy is dropped once ACE holds
+that same posting open from the employer's own board (``held``), so it only
+ever fills a gap, such as Workday refusing ACE's reads since 2026-11-16.
 
 zapply's "Visa" column is never read: its terms call that field an
 automated estimate, never an employer statement. A copy never counts as
@@ -29,10 +40,11 @@ or feeds; enrichment fields are not presented as employer statements.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime, timedelta, timezone
 import re
 from typing import NamedTuple
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -45,6 +57,8 @@ from backend.app.models.job import CanonicalJob
 
 
 ZAPPLY_SOURCE = "zapply"
+
+ZAPPLY_HOST = "zapply.jobs"
 
 REPOSITORY = (
     "https://github.com/zapplyjobs/"
@@ -72,13 +86,45 @@ PLACEHOLDER = (
     f"({REPOSITORY}). The link is the employer's own posting."
 )
 
+# What a copy linked by zapply's own link says of itself. Kept short of the
+# gate's 400 characters on purpose: the gate then says the requirements are
+# unverified, which they are.
+POINTER = (
+    "Listed on Zapply's new grad software list "
+    f"({REPOSITORY}). ACE cannot read this posting on the employer's own "
+    "site, so the link goes through Zapply to the employer's posting. "
+    "Check its requirements there."
+)
+
+# Where ACE holds postings a row names only by an identifier: the zapply
+# platform word, and the ACE sources whose external_id is that identifier.
+ID_SOURCES: dict[str, tuple[str, ...]] = {
+    "apple": ("apple",),
+    "bytedance": ("bytedance",),
+    "eightfold": ("eightfold", "eightfold_pcsx"),
+    "qualcomm": ("eightfold", "eightfold_pcsx"),
+    "oracle": ("oracle_recruiting",),
+}
+
 _ROW = re.compile(
     r"^\|(.+)\|\s*$",
     re.MULTILINE,
 )
 
 _CODE = re.compile(
-    r"https://zapply\.jobs/l/d/([A-Za-z0-9][A-Za-z0-9._~-]*)",
+    r"https://zapply\.jobs/l/d/([A-Za-z0-9][A-Za-z0-9._~-]*)"
+    r"(?:\?[A-Za-z0-9._~=&%-]*)?",
+)
+
+# A Workday posting's requisition, the last part of its path:
+# ".../Software-Engineer_JR2026530221", or "_R-083877", or "_JR1-1" when a
+# posting is listed twice.
+_WORKDAY_REQUISITION = re.compile(
+    r"_([A-Za-z0-9-]+)$",
+)
+
+_REPEAT = re.compile(
+    r"-\d+$",
 )
 
 _BOLD = re.compile(
@@ -124,6 +170,7 @@ class ZapplyRow(NamedTuple):
     location: str
     posted_at: datetime | None
     code: str
+    link: str = ""
 
 
 def _cell(
@@ -253,6 +300,7 @@ def parse_rows(
                     now=now,
                 ),
                 code=code.group(1),
+                link=code.group(0),
             )
         )
 
@@ -322,6 +370,136 @@ def employer_link(
     return None
 
 
+def is_zapply_link(
+    url: str,
+) -> bool:
+    """Whether a link is zapply's own, which ACE never opens itself."""
+
+    host = (
+        urlsplit(url).hostname
+        or ""
+    ).lower()
+
+    return host == ZAPPLY_HOST or host.endswith(
+        "." + ZAPPLY_HOST
+    )
+
+
+def _slug(
+    text: str,
+) -> str:
+    return re.sub(
+        r"[\s_]+",
+        "-",
+        text.strip().lower(),
+    )
+
+
+def workday_posting(
+    code: str,
+    boards: Iterable[str],
+) -> tuple[str, str] | None:
+    """The Workday board (``tenant/site``) and requisition a link code names.
+
+    zapply spells a Workday posting as ``workday-{tenant}-{site}-{req}`` in
+    lower case with hyphens, so "boeing/EXTERNAL_CAREERS" reads
+    "workday-boeing-external-careers-JR2026530221". Tenants, sites and
+    requisitions may all hold hyphens, so the code is read against the
+    boards ACE holds, the longest that fits first.
+    """
+
+    if not code.lower().startswith(
+        "workday-"
+    ):
+        return None
+
+    rest = code[len("workday-"):].lower()
+
+    best: tuple[str, str] | None = None
+
+    for board in boards:
+        tenant, _, site = board.partition(
+            "/"
+        )
+
+        if not tenant or not site:
+            continue
+
+        prefix = f"{_slug(tenant)}-{_slug(site)}-"
+
+        if (
+            rest.startswith(prefix)
+            and len(rest) > len(prefix)
+            and (best is None or len(prefix) > len(best[1]))
+        ):
+            best = (
+                board,
+                prefix,
+            )
+
+    if best is None:
+        return None
+
+    return (
+        best[0],
+        rest[len(best[1]):],
+    )
+
+
+def workday_requisitions(
+    external_id: str,
+) -> set[str]:
+    """The requisitions a held Workday posting's path ends with, in lower case."""
+
+    found = _WORKDAY_REQUISITION.search(
+        external_id.strip().rstrip("/")
+    )
+
+    if found is None:
+        return set()
+
+    requisition = found.group(1).lower()
+
+    return {
+        requisition,
+        _REPEAT.sub(
+            "",
+            requisition,
+        ),
+    } - {""}
+
+
+def posting_id(
+    code: str,
+) -> tuple[tuple[str, ...], str] | None:
+    """The ACE sources and identifier a non-Workday link code names, where ACE
+    holds that platform's postings under the same identifier."""
+
+    platform, _, rest = code.partition(
+        "-"
+    )
+
+    sources = ID_SOURCES.get(
+        platform.lower()
+    )
+
+    if sources is None or not rest:
+        return None
+
+    identifier = rest.rsplit(
+        "-",
+        1,
+    )[-1]
+
+    if len(identifier) < 5:
+        return None
+
+    return (
+        sources,
+        identifier,
+    )
+
+
 def parse_list_name(
     source_account: str,
 ) -> str:
@@ -342,6 +520,7 @@ def fetch_zapply_jobs(
     client: httpx.Client | None = None,
     validators: CacheValidators | None = None,
     read_directly: Callable[[str], bool] | None = None,
+    held: Callable[[Sequence[ZapplyRow]], set[str]] | None = None,
     now: datetime | None = None,
 ) -> tuple[
     list[CanonicalJob],
@@ -352,8 +531,9 @@ def fetch_zapply_jobs(
     the validators to send next time.
 
     ``company_name`` is ignored: the list spans many employers. A row
-    whose employer link cannot be spelled exactly, or whose board ACE reads
-    directly, gives no copy.
+    whose board ACE reads directly gives no copy. A row whose employer link
+    cannot be spelled exactly gives a copy linked by zapply's own link,
+    unless ``held`` says ACE holds that posting open from the employer.
     """
 
     name = parse_list_name(
@@ -407,21 +587,43 @@ def fetch_zapply_jobs(
 
         jobs: list[CanonicalJob] = []
 
-        for row in parse_rows(
+        rows = parse_rows(
             response.text,
             now=moment,
-        ):
+        )
+
+        unspelled = [
+            row
+            for row in rows
+            if employer_link(row.code) is None
+            and row.link
+        ]
+
+        held_codes = (
+            held(unspelled)
+            if held is not None and unspelled
+            else set()
+        )
+
+        for row in rows:
             link = employer_link(
                 row.code
             )
 
             if link is None:
-                continue
+                if not row.link or row.code in held_codes:
+                    continue
 
-            if read_directly is not None and read_directly(
+                description = POINTER
+                link = row.link
+
+            elif read_directly is not None and read_directly(
                 link
             ):
                 continue
+
+            else:
+                description = PLACEHOLDER
 
             jobs.append(
                 CanonicalJob(
@@ -431,7 +633,7 @@ def fetch_zapply_jobs(
                     requisition_id=None,
                     title=row.title,
                     location=row.location or "Unknown",
-                    description=PLACEHOLDER,
+                    description=description,
                     official_url=link,
                     posted_at=row.posted_at,
                     updated_at=None,

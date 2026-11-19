@@ -135,7 +135,7 @@ def test_seed_refuses_nothing_on_a_fresh_sqlite_file(
     with Session(create_engine(url)) as session:
         assert session.scalar(
             select(func.count()).select_from(JobRecord)
-        ) == 44
+        ) == 45
 
 
 def test_the_activity_feed_is_a_few_queries_and_unchanged(tmp_path):

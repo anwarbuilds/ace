@@ -263,7 +263,7 @@ function Recall({ r, tz }: { r: RecallReport | null; tz: string }) {
                 {n(t.feed)}
               </b>
               <span>Only as a feed copy</span>
-              <small>ace has it only because a list it reads (Simplify) showed it.</small>
+              <small>ace has it only because a list it reads (Simplify or Zapply) showed it.</small>
             </div>
             <div>
               <b>
