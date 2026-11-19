@@ -498,3 +498,58 @@ ACE keeps its steady pace and never reads another way.
 Lessons: an outage is followed by a catch-up burst, and a burst is what a platform's limit sees. Read what a platform's
 users can see (its status, other readers, the dates on what it still answers) before calling a refusal an outage. A
 platform's top speed belongs in a setting, measured against what its boards need.
+
+## Workday's job API refuses automated readers, so ACE reads its sitemaps (2026-11-18, Chat 7)
+
+Two days after the catch-up burst, ACE's pace sat at its floor of one request a minute and Workday still refused most of
+it. The refusal was not about ACE alone: other public job readers logged the same 429 on Workday's job API
+(`/wday/cxs/{tenant}/{site}/jobs`) from November 16, for Bank of America, Morgan Stanley and others. Workday had
+tightened its job API for automated readers. It is not a block of ACE's address: robots files, sitemaps and posting
+pages kept answering from the same VM, and the job API itself answered some requests on some data centres (wd1 and wd10
+about half, wd3 and wd5 almost none).
+
+Workday's robots.txt (served through Cloudflare) names a sitemap for every career site and allows crawlers on the site:
+
+    Sitemap: https://{host}/{Site}/siteMap.xml
+    User-agent: *
+    Allow: /{Site}/
+
+A sitemap lists a board's newest hundred postings by link (a smaller board in full), and each link is
+`https://{host}/{Site}` plus the path ACE already stores the posting under, so the two ways of reading give the same
+postings. A posting's page carries a schema.org `JobPosting` with title, description, place, date and requisition.
+
+- **Quick reads go by the sitemap** (`adapters/workday.read_by_sitemap`): one request finds what is new; only a new
+  posting whose title could pass costs a page; a posting ACE holds is handed back exactly as held (title included, from
+  `_stored_workday_details`), so its content hash does not change. A sitemap read never closes anything.
+- **Full reads ask the job API**, which alone lists a board whole. A refusal rests it (`ApiRest`: 30 minutes, doubling to
+  six hours, ended by an answer; boards refused together start one rest) and the read goes by the sitemap.
+- **Two paces**: `PACE` for the job API, `PAGE_PACE` for sitemaps and pages; one's refusals never slow the other. Both
+  climb to `SCHEDULER_WORKDAY_PACE_MAX`.
+- **One pause for every reader** (`scheduling/holds.py`): before, the feed-link sweep and the lead check kept reading
+  Workday boards through the scheduler's pause, and the employer-page check read Workday pages with no pace. The
+  scheduler now sets `HOLDS["workday"]` when it pauses; the fetcher raises `PlatformHeld` (transient, so a sweep puts the
+  board off), and the employer-page check skips Workday pages while held and paces them otherwise.
+- **List copies of unread boards stay**: a Simplify (or Zapply) copy is dropped only when ACE has read its board within
+  six hours (`READ_DIRECTLY_WITHIN`); before, any registered board counted, so no copy of a refused Workday board's
+  postings reached ACE.
+
+Not done, by rule: no other address, proxy, browser fingerprint or sign-in. Paid scrapers read Workday from their own
+addresses, which is the same thing at one remove. A link to a Workday posting cannot be spelled from a list's data (the
+title slug must match exactly), so list rows for Workday are not turned into made-up links.
+
+**What the release showed (23:34Z to 23:38Z).** Workday refused ACE's scheduler on the sitemaps too: of its first seven
+sitemap reads two answered, four got 429 and one 403, and the page pace fell to its floor within a minute. Yet a single
+plain request for AES's sitemap from the same VM, with the same user agent, answered 200 at 23:38:00, ninety seconds
+after the scheduler's read of that same file got 429; the manual checks earlier in the day answered nine of nine.
+Workday's edge (Cloudflare) treats ACE's own HTTP client as an automated reader and refuses most of what it sends,
+whatever the path or the pace. Making ACE's reader imitate another client to pass that filter is the "fingerprint" the
+rules forbid, so it is not done: the refusal is Workday's answer to ACE's reader. ACE keeps its pace, pause and rest,
+reads by sitemap whenever Workday answers (one request instead of several), and the six-hour rule lets Simplify's copies
+of refused Workday boards through. The employer-page check holds Workday pages back while Workday refuses (its page pace
+at its floor) and reads at most ten paced pages a poll, because at one request a minute a feed poll with a hundred
+Workday pages due would have held the whole feed for hours (51fdabc).
+
+Lessons: when a platform refuses, look at what its robots.txt invites crawlers to read before waiting it out; a refusal of
+one endpoint is not always a refusal of the site, and a one-off manual check is not the scheduler's client, so measure the
+real reader before relying on a route. Every reader in the process must see a platform's pause, not only the scheduler's
+own turns, and no reader may queue long on a refusing platform's pace.
