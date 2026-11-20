@@ -211,7 +211,8 @@ def applied_before_notes(
     session: Session,
     jobs: list,
 ) -> dict[int, str]:
-    """Job id to "Applied before, Oct 4" for re-listings of an application.
+    """Job id to "Applied on Oct 4" for the same opening, read again or from
+    another board, and "Similar role applied on Oct 4" for a resemblance.
 
     A posting the employer closed and listed again arrives as a new job
     with no mark, so without this the alert reads as a fresh opening the
@@ -235,13 +236,18 @@ def applied_before_notes(
                 job.company,
                 job.title,
                 job.location,
+                job.requisition_id,
             )
             for job, _evaluation, _score in jobs
         ],
     )
 
     return {
-        job_id: "Applied before, "
+        job_id: (
+            "Applied on "
+            if earlier.same_opening
+            else "Similar role applied on "
+        )
         + earlier.applied_at.astimezone(
             zone
         ).strftime(

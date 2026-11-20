@@ -13,6 +13,14 @@ identity went wrong. What is derived instead is a notice: this job
 resembles one the user applied to, with the date, so the user decides.
 It is computed when a page is read and never written, so the applied
 list, the counts and the export are unchanged.
+
+One case is certain: the employer's own requisition number. A posting at
+the same company with the same number as one the user applied to is that
+same opening, read from another board (an employer that moved from
+Workday to Eightfold lists R0137881 on both). It says "Applied on" with
+the date, whatever the title or place spelling; any other resemblance
+says "Similar role applied on", because one title can be several
+openings. Either way the mark stays on the posting the user marked.
 """
 
 from __future__ import annotations
@@ -70,6 +78,10 @@ class AppliedBefore:
     # How many earlier applications resemble the job, this one included.
     count: int
 
+    # Whether the job carries the same requisition number at the same
+    # company as the application: the same opening, not a similar one.
+    same_opening: bool = False
+
 
 def _words(
     text: str | None,
@@ -120,6 +132,18 @@ def same_place(
     )
 
 
+def _requisition(
+    value: str | None,
+) -> str:
+    """A requisition number compared without case or spacing."""
+
+    return re.sub(
+        r"\s+",
+        "",
+        (value or "").upper(),
+    )
+
+
 def _as_utc(
     value: datetime,
 ) -> datetime:
@@ -135,34 +159,39 @@ def _as_utc(
 
 def find_applied_before(
     session: Session,
-    jobs: Iterable[
-        tuple[int, str, str, str | None]
-    ],
+    jobs: Iterable[tuple],
 ) -> dict[int, AppliedBefore]:
     """Map job id to the earlier application it resembles, if any.
 
-    ``jobs`` are ``(id, company, title, location)`` for rows the user
-    has not marked applied themselves. Matching is exact on company and
-    title (ignoring case and spacing) and loose on place, so a looser
-    title never produces a false "you applied to this".
+    ``jobs`` are ``(id, company, title, location)`` or ``(id, company,
+    title, location, requisition_id)`` for rows the user has not marked
+    applied themselves. The same company and requisition number is the
+    same opening. Otherwise matching is exact on company and title
+    (ignoring case and spacing) and loose on place, so a looser title
+    never produces a false "you applied to this".
     """
 
     wanted = [
         (
-            job_id,
-            _words(company),
-            _words(title),
-            location,
+            job[0],
+            _words(job[1]),
+            _words(job[2]),
+            job[3],
+            _requisition(
+                job[4]
+                if len(job) > 4
+                else None
+            ),
         )
-        for job_id, company, title, location in jobs
+        for job in jobs
     ]
 
     if not wanted:
         return {}
 
     companies = {
-        company
-        for _id, company, _title, _loc in wanted
+        item[1]
+        for item in wanted
     }
 
     rows = session.execute(
@@ -197,7 +226,27 @@ def find_applied_before(
         list,
     ] = {}
 
+    by_requisition: dict[
+        tuple[str, str],
+        list,
+    ] = {}
+
     for row in rows:
+        number = _requisition(
+            row.requisition_id
+        )
+
+        if number:
+            by_requisition.setdefault(
+                (
+                    _words(row.company),
+                    number,
+                ),
+                [],
+            ).append(
+                row
+            )
+
         earlier.setdefault(
             (
                 _words(row.company),
@@ -213,22 +262,40 @@ def find_applied_before(
         AppliedBefore,
     ] = {}
 
-    for job_id, company, title, location in wanted:
+    for job_id, company, title, location, number in wanted:
         matches = [
             row
-            for row in earlier.get(
+            for row in by_requisition.get(
                 (
                     company,
-                    title,
+                    number,
                 ),
                 (),
             )
-            if row.id != job_id
-            and same_place(
-                location,
-                row.location,
-            )
+            if number
+            and row.id != job_id
         ]
+
+        same_opening = bool(
+            matches
+        )
+
+        if not same_opening:
+            matches = [
+                row
+                for row in earlier.get(
+                    (
+                        company,
+                        title,
+                    ),
+                    (),
+                )
+                if row.id != job_id
+                and same_place(
+                    location,
+                    row.location,
+                )
+            ]
 
         if not matches:
             continue
@@ -254,6 +321,7 @@ def find_applied_before(
             count=len(
                 matches
             ),
+            same_opening=same_opening,
         )
 
     return found

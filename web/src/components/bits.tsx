@@ -95,7 +95,7 @@ export function StatusBadge({ status, suffix }: { status: ApplicationStatus; suf
   return (
     <span className={`badge ${status}`}>
       {STATUS_LABEL[status] ?? status}
-      {suffix ? ` · ${suffix}` : ""}
+      {suffix ? (status === "applied" ? ` on ${suffix}` : ` · ${suffix}`) : ""}
     </span>
   );
 }
