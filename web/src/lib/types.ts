@@ -26,6 +26,8 @@ export interface AppliedBefore {
   is_active: boolean;
   requisition_id: string | null;
   count: number;
+  /** Same company and requisition number: the opening applied to, from another board. */
+  same_opening?: boolean;
 }
 
 export interface Job {

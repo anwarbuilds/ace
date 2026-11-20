@@ -113,7 +113,7 @@ function announceNewRoles(data: PullsResponse, onOpen: () => void): void {
   fresh.forEach((f) =>
     f.jobs.forEach((j) => {
       if (roles.length < 4)
-        roles.push(undash(`${j.company}, ${clean(j.title)}${j.applied_before ? " (applied before)" : ""}`));
+        roles.push(undash(`${j.company}, ${clean(j.title)}${j.applied_before ? (j.applied_before.same_opening ? " (already applied)" : " (similar role applied)") : ""}`));
     }),
   );
   try {

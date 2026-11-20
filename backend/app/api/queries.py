@@ -1557,6 +1557,7 @@ def list_jobs(
             item.company,
             item.title,
             item.location,
+            item.requisition_id,
         )
         for item in items
         if item.applied_at is None

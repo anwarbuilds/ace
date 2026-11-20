@@ -17,6 +17,7 @@ import {
   exportCaveat,
   isDone,
   parseDate,
+  priorTag,
   shortDate,
   tierMove,
   unscoredReason,
@@ -65,9 +66,11 @@ type Line =
   | { kind: "band"; rest: number };
 
 function BeforeBadge({ job, tz }: { job: Job; tz: string }) {
+  const tag = priorTag(job, tz);
+  if (!tag) return null;
   return (
-    <span className="badge before" title={beforeNote(job, tz)}>
-      Applied before {"·"} {shortDate(job.applied_before!.applied_at, tz)}
+    <span className={tag.cls} title={beforeNote(job, tz)}>
+      {tag.text}
     </span>
   );
 }
@@ -306,7 +309,7 @@ export function JobTable({
           if (l.kind === "group") {
             const isOpen = Boolean(expanded[l.key]);
             const tier = l.lead.company_tier || "OTHER";
-            const applied = l.members.filter((j) => j.applied_at || j.applied_before).length;
+            const applied = l.members.filter((j) => j.applied_at || j.applied_before?.same_opening).length;
             return (
               <tr
                 key={`g:${l.key}`}
@@ -328,8 +331,8 @@ export function JobTable({
                   <span className="grp-n">{l.members.length} similar openings</span>
                   {applied ? (
                     <span
-                      className="badge before grp-applied"
-                      title={`${applied} of these ${l.members.length} openings are ones you applied to, or re-listings of one. Open the group to see which.`}
+                      className="badge same grp-applied"
+                      title={`${applied} of these ${l.members.length} openings are ones you applied to, or the same opening listed again. Open the group to see which.`}
                     >
                       {applied} already applied
                     </span>

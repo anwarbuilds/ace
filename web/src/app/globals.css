@@ -405,8 +405,9 @@ tr.bandline span{display:block;padding:9px var(--gutter);font-size:var(--text-sm
 .badge.saved{background:var(--hover);color:var(--text-secondary)}
 .why a.link-btn{color:var(--text);text-decoration:underline;text-underline-offset:3px}
 .kv a.link-btn{padding:0;font-size:inherit;color:var(--text);text-decoration:underline;text-underline-offset:3px}
-.grp-head .badge.before{margin-left:10px;vertical-align:1px}
-.badge.before{background:var(--warning-soft);color:var(--warning)}
+.grp-head .badge.same,.grp-head .badge.similar{margin-left:10px;vertical-align:1px}
+.badge.same{background:var(--match-soft);color:var(--match)}
+.badge.similar{background:var(--hover);color:var(--text-secondary)}
 .badge.export{background:var(--warning-soft);color:var(--warning);margin-left:8px;vertical-align:1px;height:20px;font-size:var(--text-small)}
 
 .readline{padding:0}

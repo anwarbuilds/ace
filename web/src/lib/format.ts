@@ -185,10 +185,35 @@ export function isDone(j: Job): boolean {
   return j.review_state === "reviewed" || j.review_state === "dismissed";
 }
 
+/** "Applied on Nov 17" for a posting the user marked, or plain "Applied". */
+export function appliedOn(at: string | null | undefined, tz?: string): string {
+  return at ? `Applied on ${shortDate(at, tz)}` : "Applied";
+}
+
+/**
+ * The tag for a posting resembling one the user applied to: "Applied on Nov 17"
+ * when it is the same opening (same company and requisition number), otherwise
+ * "Similar role applied on Nov 17", since one title can be several openings.
+ */
+export function priorTag(j: Job, tz?: string): { text: string; cls: string } | null {
+  const b = j.applied_before;
+  if (!b) return null;
+  const day = shortDate(b.applied_at, tz);
+  return b.same_opening
+    ? { text: `Applied on ${day}`, cls: "badge same" }
+    : { text: `Similar role applied on ${day}`, cls: "badge similar" };
+}
+
 /** What "applied before" means for this posting, in one sentence or three. */
 export function beforeNote(j: Job, tz?: string): string {
   const b = j.applied_before;
   if (!b) return "";
+  if (b.same_opening)
+    return (
+      `Same opening as the posting you marked applied on ${shortDate(b.applied_at, tz)}` +
+      (b.requisition_id ? ` (requisition ${b.requisition_id})` : "") +
+      ", read from another listing. It counts once."
+    );
   const bits: string[] = [];
   if (b.requisition_id) bits.push(`requisition ${b.requisition_id}`);
   if (!b.is_active) bits.push("that posting has closed");
