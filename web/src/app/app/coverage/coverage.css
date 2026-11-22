@@ -1,4 +1,4 @@
-/* Coverage: three tabs, each saying in plain words what it is. */
+/* Coverage: four tabs, each saying in plain words what it is. */
 .cov-page .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .cov-tabs { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
 .cov-tabs a { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border: 1px solid transparent; border-radius: 9px; font-size: var(--text-button); font-weight: var(--weight-medium); color: var(--text-secondary); }
@@ -170,3 +170,10 @@ a.cov-stat:hover { border-color: var(--border-strong); }
 .cov-table th.cov-num, .cov-table td.cov-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cov-table td.cov-late { color: var(--warning); font-weight: var(--weight-semibold); }
 .cov-capacity-line.cov-warn::before { background: var(--warning); }
+
+/* Needs you: roles the daily check missed, and what ace did about each company's board. */
+.cov-needs td small { display: block; margin-top: 4px; font-size: var(--text-small); color: var(--text-secondary); }
+.cov-needs td .badge { white-space: nowrap; }
+.cov-needs-act { white-space: nowrap; text-align: right; }
+.cov-needs-act .btn { height: 30px; padding: 0 12px; font-size: var(--text-label); }
+.cov-needs-act .btn + .btn { margin-left: 6px; }

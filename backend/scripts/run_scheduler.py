@@ -48,7 +48,8 @@ from backend.app.coverage.leads import (
     check_due_leads,
     sync_leads,
 )
-from backend.app.coverage.recall import run_daily_check
+from backend.app.coverage.missed_boards import fix_latest_run
+from backend.app.coverage.recall import MISSED_ROLE_ORIGIN, run_daily_check
 from backend.app.coverage.recovery import (
     recover_dark_sources,
 )
@@ -95,6 +96,7 @@ from backend.scripts.register_network_boards import (
     Candidate,
     assess,
     declared_name,
+    known_boards,
     register as register_board,
 )
 from backend.app.scheduling import (
@@ -872,6 +874,65 @@ def main(
             checked.states,
         )
 
+    def fix_missed_boards() -> None:
+        """Try the boards the daily score's missed roles link, once a day."""
+
+        with SessionLocal() as session:
+            refused = refused_hosts(
+                session
+            )
+
+        reader = PoliteReader(
+            refused
+        )
+
+        def known() -> set:
+            with SessionLocal() as session:
+                return set(
+                    known_boards(
+                        session
+                    )
+                )
+
+        def allows(source_type, account, host) -> bool:
+            return all(
+                reader.allows(f"https://{target.host}{path}")
+                for target in read_targets(source_type, account, host)
+                for path in target.paths
+            )
+
+        def try_board(source_type, account, company, host):
+            return assess(
+                Candidate(
+                    source_type=source_type,
+                    source_account=account,
+                    company=company,
+                    source_host=host,
+                ),
+                lambda definition: dispatcher.fetch(
+                    definition
+                ).jobs,
+                partial(
+                    declared_name,
+                    fetch=reader.fetch,
+                    fetch_text=reader.fetch_text,
+                ),
+            )
+
+        fix_latest_run(
+            SessionLocal,
+            now=now_utc(),
+            known=known,
+            allows=allows,
+            try_board=try_board,
+            register=lambda session, outcome: register_board(
+                session,
+                outcome,
+                now=now_utc(),
+                origin=MISSED_ROLE_ORIGIN,
+            ),
+        )
+
     # When dark boards were last diagnosed. That reads companies'
     # websites, so it keeps its six-hour rhythm while the rest of the
     # maintenance runs every half hour.
@@ -902,6 +963,17 @@ def main(
                 LOGGER.exception(
                     "recall_check_failed"
                 )
+
+            # Then, once a day, the boards behind the roles it missed, through
+            # the same checks as every added board (owner, November 22).
+            if settings.lead_auto_add_enabled:
+                try:
+                    fix_missed_boards()
+
+                except Exception:
+                    LOGGER.exception(
+                        "missed_boards_failed"
+                    )
 
         register_feed_boards()
 

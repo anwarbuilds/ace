@@ -47,6 +47,10 @@ test("each tab says what it is, and opens from the others", async ({ page }) => 
   await expect(page.getByText("Which companies does ace know about?")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Found a job ace doesn’t have?" })).toBeVisible();
 
+  await tabs.getByRole("link", { name: /Needs you/ }).click();
+  await expect(page).toHaveURL(/tab=needs/);
+  await expect(page.getByText("What needs you?")).toBeVisible();
+
   await tabs.getByRole("link", { name: /Sources/ }).click();
   await expect(page).toHaveURL(/tab=sources/);
   await expect(page.getByText("Which job boards does ace really read, and are they working?")).toBeVisible();
@@ -69,6 +73,28 @@ test("the Scoreboard says how many test list roles ace found, and where from", a
   const missed = card.locator(".cov-recall-miss", { hasText: "Kestrel Grid" });
   await expect(missed).toContainText("ace has not heard of this company");
   await expect(card.locator(".cov-recall-miss")).toHaveCount(6);
+  expect(errors).toEqual([]);
+});
+
+test("Needs you lists every missed role with its posting and what ace did about the board", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/app/coverage?tab=needs");
+  const tabs = page.getByRole("navigation", { name: "Coverage views" });
+  await expect(tabs.getByRole("link", { name: /Needs you/ })).toHaveAttribute("aria-current", "page");
+  await expect(tabs.getByRole("link", { name: /Needs you/ })).toContainText("6");
+  const table = page.locator(".cov-needs");
+  await expect(table.locator("tbody tr")).toHaveCount(6);
+  const added = table.locator("tr", { hasText: "Driftmark" });
+  await expect(added).toContainText("Board added");
+  await expect(added.getByRole("link", { name: "Open posting" })).toHaveAttribute("href", "https://jobs.lever.co/driftmark/0a1b2c3d");
+  await expect(added.getByRole("link", { name: "Open posting" })).toHaveAttribute("target", "_blank");
+  const unknown = table.locator("tr", { hasText: "Kestrel Grid" });
+  await expect(unknown).toContainText("Can't add");
+  await expect(unknown.getByRole("link", { name: "Open posting" })).toHaveCount(0);
+  await expect(unknown.getByRole("link", { name: "Add the company" })).toHaveAttribute("href", "/app/coverage?tab=leads#cov-input");
+  await expect(table.locator("tr", { hasText: "Lumora Pay" })).toContainText("Not added");
+  await expect(table.locator("tr", { hasText: "Halcyon Bio" })).toContainText("ace reads it");
+  await expect(page.getByText("these roles never enter Pulls by themselves")).toBeVisible();
   expect(errors).toEqual([]);
 });
 
