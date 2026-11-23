@@ -113,15 +113,17 @@ NETWORK = "network"
 FEED = "feed"
 SEARCH = "search"
 FREEHIRE = "freehire"
+MISSED = "missed"
 
 # Strongest first: the one "Lead from" names when a lead has several.
-ORIGINS = (OWNER, CURATED, NETWORK, FEED, FREEHIRE, SEARCH)
+ORIGINS = (OWNER, CURATED, NETWORK, FEED, MISSED, FREEHIRE, SEARCH)
 
 ORIGIN_LABELS = {
     OWNER: "Added by you",
     CURATED: "Your list",
     NETWORK: "City network",
     FEED: "New grad list",
+    MISSED: "Daily check",
     FREEHIRE: "FreeHire",
     SEARCH: "ace search",
 }
@@ -131,6 +133,7 @@ ORIGIN_NOTES = {
     CURATED: "The companies you chose",
     NETWORK: "Lists of startups, collected once",
     FEED: "Names in the public lists ace reads",
+    MISSED: "Companies behind roles the daily check missed, looked up by name",
     FREEHIRE: "Boards FreeHire's public job list names, each read by ace before it is added",
     SEARCH: "Found by ace's earlier company searches",
 }

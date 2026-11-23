@@ -28,10 +28,11 @@ from datetime import datetime
 import sqlalchemy as sa
 
 from backend.app.coverage import recall
+from backend.app.coverage.benchmark import normalise_company
 from backend.app.coverage.held_out import is_held_out
 from backend.app.discovery.detector import detect_source_from_url
 from backend.app.discovery.feed_links import board_key
-from backend.app.db.models import RecallRunRecord
+from backend.app.db.models import EmployerLead, RecallRunRecord
 
 LOGGER = logging.getLogger(__name__)
 
@@ -60,6 +61,12 @@ _READ_CHECK_WORDS = {
     "no US software or ML roles today": "The board has no US software or ML role today",
     "empty: the board read, but holds nothing": "The board is empty today",
 }
+
+
+# A company ace had never heard of goes on Leads by itself (owner, November 22:
+# "I should not have any manual work"); the lead check looks for its board by
+# name and adds a good one.
+NAMED_NOTE = "ace put this company on Leads and looks for its board by name. A good board is added by itself"
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +102,13 @@ def held_fix(row: dict) -> BoardFix | None:
         return BoardFix(HELD, "ace has this company's board and reads it again soon")
     if reason in (recall.OFF_AS_AGENCY, recall.SWITCHED_OFF):
         return BoardFix(OFF, "This board was switched off earlier, so ace leaves it off")
+    # The company is on Leads: what the lead check found so far.
+    if reason in (recall.LEAD_REASONS["checking"], recall.LEAD_REASONS["waiting"]):
+        return BoardFix(TRYING, NAMED_NOTE)
+    if reason == recall.LEAD_REASONS["dormant"]:
+        return BoardFix(NOT_ADDED, "The board had no US software role when ace read it. ace looks again later")
+    if reason == recall.LEAD_REASONS["agency"]:
+        return BoardFix(OFF, "A staffing agency, not the employer, so ace leaves it off")
     return BoardFix(NO_BOARD, reason or "No board ace can read")
 
 
@@ -169,6 +183,40 @@ def fix_missed(
     return fixed, {"boards_read": tried, "roles": counts, "boards_added": sum(1 for f in done.values() if f.state == ADDED)}
 
 
+def name_leads(session, rows: list[dict], *, now: datetime) -> set[str]:
+    """Put each company ace had never heard of on Leads, with no board: the lead check searches by name.
+
+    Returns the keys of the companies on Leads now, new or not. A test list is never read to find jobs: only the
+    company's name is kept, and its board is found and read by ace itself."""
+
+    from backend.app.coverage.leads import CHECKING, MISSED, is_real_name
+
+    keys = set(session.scalars(sa.select(EmployerLead.company_key)))
+    named: set[str] = set()
+    for row in rows:
+        if row.get("reason") != recall.NO_LEAD:
+            continue
+        name = (row.get("company") or "").strip()
+        key = normalise_company(name)[:255]
+        if not key or not is_real_name(name):
+            continue
+        if key not in keys:
+            session.add(EmployerLead(
+                company_key=key, company_name=name[:255], origin=MISSED, origin_details=[MISSED], state=CHECKING,
+                reason="A role the daily check missed. ace looks for its board by name.", boards=[],
+                first_seen_at=now, next_check_at=now, updated_at=now,
+            ))
+            keys.add(key)
+            LOGGER.info("missed_company_named company=%r", name)
+        named.add(key)
+    session.flush()
+    return named
+
+
+def _counts(fixed: list[dict], base: dict) -> dict:
+    return {**base, "roles": {state: sum(1 for row in fixed if row["fix"]["state"] == state) for state in STATES}}
+
+
 def fix_latest_run(
     session_factory: Callable,
     *,
@@ -178,24 +226,43 @@ def fix_latest_run(
     try_board: Callable[[str, str, str, str | None], object],
     register: Callable[[object, object], bool],
 ) -> dict | None:
-    """Fix today's score's misses once. Returns the day's counts, or None when done already or not scored."""
+    """Fix today's score's misses once. Returns the day's counts, or None when done already or not scored.
+
+    A score fixed before companies were named (November 22) gets only the naming step."""
 
     with session_factory() as session:
         run = session.scalars(sa.select(RecallRunRecord).order_by(RecallRunRecord.day.desc()).limit(1)).first()
-        if run is None or (run.summary or {}).get("fixes"):
+        if run is None:
+            return None
+        done = (run.summary or {}).get("fixes")
+        if done and "named" in done:
             return None
         run_id, rows = run.id, list(run.missed or [])
 
-    def add_board(outcome) -> bool:
-        with session_factory.begin() as session:
-            return register(session, outcome)
+    if done:
+        fixed, counts = rows, {k: v for k, v in done.items() if k != "roles"}
+    else:
+        def add_board(outcome) -> bool:
+            with session_factory.begin() as session:
+                return register(session, outcome)
 
-    fixed, counts = fix_missed(rows, known=known(), allows=allows, try_board=try_board, add_board=add_board)
-    counts["checked_at"] = now.isoformat()
+        fixed, counts = fix_missed(rows, known=known(), allows=allows, try_board=try_board, add_board=add_board)
+        counts["checked_at"] = now.isoformat()
+
     with session_factory.begin() as session:
+        before = int(session.scalar(sa.select(sa.func.count()).select_from(EmployerLead)) or 0)
+        named = name_leads(session, fixed, now=now)
+        counts["named"] = int(session.scalar(sa.select(sa.func.count()).select_from(EmployerLead)) or 0) - before
+        fixed = [
+            {**row, "fix": {"state": TRYING, "note": NAMED_NOTE}}
+            if row.get("reason") == recall.NO_LEAD and normalise_company((row.get("company") or "").strip())[:255] in named
+            else row
+            for row in fixed
+        ]
+        counts = _counts(fixed, counts)
         run = session.get(RecallRunRecord, run_id)
         run.missed = fixed
         run.summary = {**(run.summary or {}), "fixes": counts}
-    LOGGER.info("missed_boards_checked boards_read=%d boards_added=%d roles=%s",
-                counts["boards_read"], counts["boards_added"], counts["roles"])
+    LOGGER.info("missed_boards_checked boards_read=%d boards_added=%d named=%d roles=%s",
+                counts["boards_read"], counts["boards_added"], counts["named"], counts["roles"])
     return counts

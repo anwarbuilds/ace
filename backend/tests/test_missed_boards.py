@@ -6,13 +6,14 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
 import pytest
+import sqlalchemy as sa
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.app.coverage import missed_boards as mb
 from backend.app.coverage import recall
-from backend.app.db.models import Base, RecallRunRecord
+from backend.app.db.models import Base, EmployerLead, RecallRunRecord
 
 NOW = datetime(2026, 11, 22, 14, 0, tzinfo=timezone.utc)
 GREENHOUSE = "https://boards.greenhouse.io/zephyrlabs/jobs/4012345"
@@ -152,3 +153,45 @@ def test_the_latest_score_is_fixed_once_and_the_report_carries_it(factory):
 def test_nothing_happens_before_the_first_score(factory):
     assert mb.fix_latest_run(factory, now=NOW, known=set, allows=lambda *a: True,
                              try_board=lambda *a: None, register=lambda s, o: True) is None
+
+
+def test_a_company_ace_never_heard_of_goes_on_leads_by_itself(factory):
+    from backend.app.coverage.leads import CHECKING, MISSED
+
+    with factory.begin() as session:
+        session.add(RecallRunRecord(day=date(2026, 11, 22), checked_at=NOW, summary={"total": {"listed": 3}}, missed=[
+            miss("Kestrel Robotics", None, reason=recall.NO_LEAD),
+            miss("Kestrel Robotics", None, reason=recall.NO_LEAD, title="Data Engineer I"),
+            miss("3f2b1c4d-0000-4000-8000-000000000001", None, reason=recall.NO_LEAD),
+        ]))
+    args = dict(now=NOW, known=set, allows=lambda *a: True, register=lambda s, o: pytest.fail("nothing to register"),
+                try_board=lambda *a: pytest.fail("no board to read"))
+    counts = mb.fix_latest_run(factory, **args)
+    assert counts["named"] == 1 and counts["roles"][mb.TRYING] == 2 and counts["roles"][mb.NO_BOARD] == 1
+    with factory() as session:
+        leads = session.scalars(sa.select(EmployerLead)).all()
+        assert [(row.company_name, row.origin, row.state, row.boards) for row in leads] == [("Kestrel Robotics", MISSED, CHECKING, [])]
+        run = session.scalars(sa.select(RecallRunRecord)).one()
+        assert run.missed[0]["fix"] == {"state": mb.TRYING, "note": mb.NAMED_NOTE}
+        assert run.missed[2]["fix"]["state"] == mb.NO_BOARD
+    assert mb.fix_latest_run(factory, **args) is None
+
+
+def test_a_score_fixed_before_naming_gets_only_the_naming_step(factory):
+    fixed = [{**miss("Kestrel Robotics", None, reason=recall.NO_LEAD), "fix": {"state": mb.NO_BOARD, "note": recall.NO_LEAD}},
+             {**miss("Zephyr Labs", GREENHOUSE), "fix": {"state": mb.ADDED, "note": "added"}}]
+    with factory.begin() as session:
+        session.add(RecallRunRecord(day=date(2026, 11, 22), checked_at=NOW, missed=fixed, summary={
+            "fixes": {"boards_read": 1, "boards_added": 1, "checked_at": NOW.isoformat(), "roles": {}}}))
+    counts = mb.fix_latest_run(factory, now=NOW, known=set, allows=lambda *a: True,
+                               try_board=lambda *a: pytest.fail("no board read again"),
+                               register=lambda s, o: pytest.fail("nothing registered again"))
+    assert counts["boards_added"] == 1 and counts["named"] == 1
+    assert counts["roles"][mb.ADDED] == 1 and counts["roles"][mb.TRYING] == 1
+
+
+def test_a_company_already_on_leads_shows_what_the_lead_check_found():
+    rows = [miss("Quill Works", None, reason=recall.LEAD_REASONS[state]) for state in ("checking", "dormant", "agency", "noreader")]
+    fixed, _, tried = run(rows)
+    assert tried == []
+    assert [row["fix"]["state"] for row in fixed] == [mb.TRYING, mb.NOT_ADDED, mb.OFF, mb.NO_BOARD]
