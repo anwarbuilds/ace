@@ -37,7 +37,9 @@ import urllib.request
 from urllib.parse import urlsplit
 
 from backend.app.coverage.benchmark import normalise_company
-from backend.app.coverage.identity import name_keys, read_board_evidence, resolve_employer, shared_board_reason
+from backend.app.coverage.identity import (
+    name_keys, read_board_evidence, resolve_employer, shared_board_reason, staging_host_reason,
+)
 from backend.app.coverage.companies import is_namesake
 
 
@@ -1002,7 +1004,7 @@ def board_belongs_to(
     ):
         return None
 
-    if shared_board_reason(source_type, token):
+    if shared_board_reason(source_type, token) or staging_host_reason(source_type, token, source_host):
         return None
 
     evidence = read_board_evidence(
@@ -2290,7 +2292,7 @@ def ref_belongs_to(
     whose board it is.
     """
 
-    if shared_board_reason(ref.source_type, ref.token):
+    if shared_board_reason(ref.source_type, ref.token) or staging_host_reason(ref.source_type, ref.token, ref.source_host):
         return None
     fetch = lru_cache(maxsize=8)(fetch) if fetch else (lambda url: None)
     fetch_text = lru_cache(maxsize=8)(fetch_text) if fetch_text else (lambda url: "")

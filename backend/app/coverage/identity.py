@@ -66,6 +66,33 @@ def shared_board_reason(source_type: str, account: str) -> str | None:
     return REVIEWED_SHARED_BOARDS.get((source_type.casefold(), account.strip().casefold()))
 
 
+# Oracle and Workday run their customers' test systems on hosts beside the
+# live careers site: on 2026-11-24 a lead added jpmc-dev6.fa.oraclecloud.com
+# and jpmc-dev7, copies of JPMorgan's live board with postings ending
+# _ORA_DELETED. A host label that names a test system is never an employer's
+# careers site. Labels only, so "testamerica" or "devry" are not caught.
+_TEST_SYSTEM_LABEL = re.compile(
+    r"(?:^|[.-])(?:dev|test|tst|uat|stg|stage|staging|qa|sit|impl|preprod|sandbox)\d*(?=[.-]|$)",
+    re.I,
+)
+_TENANT_HOSTED = frozenset({"oracle_recruiting", "workday"})
+
+
+def staging_host_reason(source_type: str, account: str, host: str | None = None) -> str | None:
+    """Why a provider-hosted board is a test system, or None."""
+    kind = (source_type or "").casefold()
+    if kind not in _TENANT_HOSTED:
+        return None
+    hosts = [host or ""]
+    if kind == "oracle_recruiting":
+        hosts.append((account or "").split("/", 1)[0])
+    for value in hosts:
+        value = value.strip().casefold()
+        if value and _TEST_SYSTEM_LABEL.search(value):
+            return f"{value} is a test system, not a live careers site"
+    return None
+
+
 def portfolio_name_hints(titles: Iterable[str], owner: str) -> tuple[str, ...]:
     """Unverified search leads from a board already reviewed as shared.
 

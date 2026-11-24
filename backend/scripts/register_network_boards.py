@@ -42,6 +42,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.coverage.identity import (
     BoardEvidence, read_board_evidence, registration_identity, registration_origin, resolve_employer, shared_board_reason,
+    staging_host_reason,
 )
 from backend.app.coverage.companies import (
     NETWORK_DISCOVERY_SOURCE,
@@ -266,6 +267,10 @@ def assess(
     shared = shared_board_reason(candidate.source_type, candidate.source_account)
     if shared:
         return Outcome(candidate=candidate, added=False, reason=f"shared: {shared}")
+
+    test_system = staging_host_reason(candidate.source_type, candidate.source_account, candidate.source_host)
+    if test_system:
+        return Outcome(candidate=candidate, added=False, reason=f"test system: {test_system}")
 
     try:
         jobs = list(

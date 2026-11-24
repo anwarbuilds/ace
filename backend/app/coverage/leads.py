@@ -620,6 +620,9 @@ def finding_from(outcome, board: dict) -> Finding:
     if reason.startswith("shared:"):
         return Finding(AGENCY, "A firm's shared portfolio board, not one employer.")
 
+    if reason.startswith("test system:"):
+        return Finding(CHECKING, f"Its {platform} address is a test system, not the live careers site.", gone=True)
+
     if reason.startswith("identity:"):
         return Finding(CHECKING, _clean(reason.split(":", 1)[1]))
 

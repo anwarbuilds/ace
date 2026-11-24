@@ -38,7 +38,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.coverage.benchmark import normalise_company
 from backend.app.coverage.companies import is_namesake
-from backend.app.coverage.identity import shared_board_reason
+from backend.app.coverage.identity import shared_board_reason, staging_host_reason
 from backend.app.db.models import EmployerLead, JobSourceRecord, RecallRunRecord
 from backend.app.discovery.detector import detect_source_from_url
 from backend.app.discovery.feed_links import board_key
@@ -236,6 +236,7 @@ def remember(session: Session, found: Harvest, *, now: datetime) -> dict:
             counts["already_leads"] += 1
             continue
         if (not is_real_name(board.company) or shared_board_reason(board.source_type, board.source_account)
+                or staging_host_reason(board.source_type, board.source_account, board.source_host)
                 or is_namesake(board.source_type, board.source_account)):
             counts["skipped"] += 1
             continue
