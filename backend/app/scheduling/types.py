@@ -42,6 +42,10 @@ class SourceType(StrEnum):
     # Zapply's public new grad software list (DIS-12): read as pointers
     # to employer postings, like Simplify's, never as coverage.
     ZAPPLY = "zapply"
+    # Workable's public job file (DIS-05): every posting on Workable's own
+    # job board in one file, read as pointers like Simplify's, never as
+    # coverage, and never closing a posting read from an employer's board.
+    WORKABLE_FEED = "workable_feed"
     EIGHTFOLD = "eightfold"
     # Eightfold's newer product line, found on Amdocs. Kept as a
     # distinct source type rather than a branch inside EIGHTFOLD

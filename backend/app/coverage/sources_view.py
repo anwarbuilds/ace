@@ -37,6 +37,7 @@ _SITE_LABELS = {
     "lever": "Lever",
     "smartrecruiters": "SmartRecruiters",
     "workable": "Workable",
+    "workable_feed": "Workable job file",
     "workday": "Workday",
     "oracle_recruiting": "Oracle",
     "gem": "Gem",

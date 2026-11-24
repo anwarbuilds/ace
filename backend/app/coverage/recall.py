@@ -5,7 +5,7 @@ reads of them anywhere in ACE, and asks of every open role on them:
 
 * **board**: ACE holds it from the employer's own board (any reader but a
   public list; RippleMatch counts, since employers post there themselves);
-* **feed**: ACE holds it only as a copy from a list it reads (Simplify or Zapply);
+* **feed**: ACE holds it only as a copy from a list it reads (Simplify, Zapply or Workable's job file);
 * **missed**: ACE does not hold it at all, with what ACE knows about the
   company, so a miss says what would fix it.
 
@@ -70,7 +70,7 @@ FEED = "feed"
 MISSED = "missed"
 
 # Readers that copy a public list rather than read an employer.
-FEED_SOURCES = frozenset({"simplify", "zapply"})
+FEED_SOURCES = frozenset({"simplify", "zapply", "workable_feed"})
 
 # Jobs ACE last saw longer ago than this cannot be today's list role.
 LOOKBACK_DAYS = 240

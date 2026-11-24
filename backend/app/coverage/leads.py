@@ -114,15 +114,17 @@ FEED = "feed"
 SEARCH = "search"
 FREEHIRE = "freehire"
 MISSED = "missed"
+WORKABLE_FILE = "workable_file"
 
 # Strongest first: the one "Lead from" names when a lead has several.
-ORIGINS = (OWNER, CURATED, NETWORK, FEED, MISSED, FREEHIRE, SEARCH)
+ORIGINS = (OWNER, CURATED, NETWORK, FEED, WORKABLE_FILE, MISSED, FREEHIRE, SEARCH)
 
 ORIGIN_LABELS = {
     OWNER: "Added by you",
     CURATED: "Your list",
     NETWORK: "City network",
     FEED: "New grad list",
+    WORKABLE_FILE: "Workable job file",
     MISSED: "Daily check",
     FREEHIRE: "FreeHire",
     SEARCH: "ace search",
@@ -133,6 +135,7 @@ ORIGIN_NOTES = {
     CURATED: "The companies you chose",
     NETWORK: "Lists of startups, collected once",
     FEED: "Names in the public lists ace reads",
+    WORKABLE_FILE: "Companies in Workable's public job file, each looked up by ace before a board is added",
     MISSED: "Companies behind roles the daily check missed, looked up by name",
     FREEHIRE: "Boards FreeHire's public job list names, each read by ace before it is added",
     SEARCH: "Found by ace's earlier company searches",
@@ -380,7 +383,9 @@ def gather_evidence(
         found = entry(company)
         if found:
             found[1].named(company, 5)
-            found[1].details.add(f"{FEED}:{source}")
+            # Workable's file is every posting on its job board, not a new
+            # grad list, so its companies say where they came from.
+            found[1].details.add(WORKABLE_FILE if source == "workable_feed" else f"{FEED}:{source}")
 
     # Shared boards are pointers, never employers. Existing stored public
     # titles supply unverified names without requesting the board again.

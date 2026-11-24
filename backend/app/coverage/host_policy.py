@@ -28,6 +28,7 @@ from backend.app.adapters.bytedance import PORTALS
 from backend.app.adapters.lever import LEVER_API_HOST_BY_JOB_HOST
 from backend.app.adapters.simplify import FEED_URLS
 from backend.app.adapters.zapply import LIST_URLS as ZAPPLY_LIST_URLS
+from backend.app.adapters.workable_feed import FEED_HOST as WORKABLE_FEED_HOST, FEED_URL as WORKABLE_FEED_URL
 from backend.app.adapters.sitemap_jobs import site_for
 from backend.app.coverage.held_out import is_held_out
 from backend.app.coverage.probing import (
@@ -231,6 +232,9 @@ def read_targets(
     if source_type == "zapply":
         paths = tuple(sorted(urlsplit(url).path for url in ZAPPLY_LIST_URLS.values()))
         return (HostTarget("raw.githubusercontent.com", "feed", paths),)
+
+    if source_type == "workable_feed":
+        return (HostTarget(WORKABLE_FEED_HOST, "feed", (urlsplit(WORKABLE_FEED_URL).path,)),)
 
     fixed = {
         "amazon": ("www.amazon.jobs", "employer_site", ("/search.json",)),

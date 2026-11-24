@@ -13,6 +13,7 @@ from collections.abc import (
     Sequence,
 )
 from datetime import datetime, timedelta, timezone
+import logging
 from typing import Protocol
 
 from backend.app.adapters.ashby import (
@@ -91,6 +92,11 @@ from backend.app.adapters.zapply import (
 )
 from backend.app.adapters.simplify import (
     fetch_simplify_jobs,
+)
+from backend.app.adapters.workable_feed import (
+    SOURCE as WORKABLE_FEED_SOURCE,
+    fetch_workable_feed_jobs,
+    posting_code as workable_posting_code,
 )
 from backend.app.adapters.workday import (
     fetch_workday_jobs,
@@ -2024,6 +2030,187 @@ class ZapplySourceFetcher:
         )
 
 
+class WorkableFeedSourceFetcher:
+    """Dispatch adapter for Workable's public job file (DIS-05).
+
+    One file of every posting on Workable's own job board. Its copies are
+    pointers like Simplify's: kept only for a US posting the gate could pass
+    whose shortcode ACE does not already hold open from the employer's
+    Workable board or another list, and never handed to the employer-page
+    check, since the file carries the employer's whole description and ACE
+    never opens a Workable posting page for a copy.
+    """
+
+    def __init__(
+        self,
+        *,
+        fetcher: Callable[..., tuple] = fetch_workable_feed_jobs,
+        clock: Clock = utc_now,
+        validator_lookup: (
+            ValidatorLookup | None
+        ) = None,
+        could_pass: (
+            Callable[[str, str], bool] | None
+        ) = None,
+        held: (
+            Callable[[set[str]], set[str]] | None
+        ) = None,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+        self._validator_lookup = validator_lookup
+        self._could_pass = could_pass
+        self._held = held
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Read Workable's file once."""
+
+        if source.source_type != SourceType.WORKABLE_FEED:
+            raise ValueError(
+                "WorkableFeedSourceFetcher requires a WORKABLE_FEED SourceDefinition."
+            )
+
+        from backend.app.adapters.http_cache import (
+            CacheValidators,
+        )
+
+        jobs, unchanged, validators, stats = self._fetcher(
+            could_pass=(
+                self._could_pass
+                if self._could_pass is not None
+                else _feed_title_could_pass()
+            ),
+            held=self._held,
+            validators=(
+                self._validator_lookup(source)
+                if self._validator_lookup is not None
+                else CacheValidators()
+            ),
+        )
+
+        if not unchanged:
+            _WORKABLE_FEED_LOG.info(
+                "workable_feed_read postings=%d us_kept_type=%d could_pass=%d held=%d copies=%d",
+                stats.postings,
+                stats.us_kept_type,
+                stats.could_pass,
+                stats.held,
+                stats.copies,
+            )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+            unchanged=unchanged,
+            etag=validators.etag,
+            last_modified=validators.last_modified,
+        )
+
+
+_WORKABLE_FEED_LOG = logging.getLogger(
+    "ace.scheduler.workable_feed"
+)
+
+
+def _feed_title_could_pass() -> Callable[[str, str], bool]:
+    """The gate's title test for one read of a file, remembered per title.
+
+    A file of hundreds of thousands of postings repeats its titles; the
+    same test the Workday detail fetch uses, so skipping a title cannot
+    change an outcome.
+    """
+
+    from functools import lru_cache
+
+    @lru_cache(maxsize=200_000)
+    def could_pass(
+        title: str,
+        company: str,
+    ) -> bool:
+        return build_detail_predicate(
+            source=WORKABLE_FEED_SOURCE,
+            company_name=company,
+        )(
+            title
+        )
+
+    return could_pass
+
+
+def _held_workable_postings(
+    codes: set[str],
+) -> set[str]:
+    """The shortcodes ACE holds open from a Workable board or another list.
+
+    A posting read from the employer's own Workable board carries its
+    shortcode as its identifier; a Simplify or Zapply copy names it in its
+    link. Read once per file, in a short session of its own.
+    """
+
+    from sqlalchemy import select
+
+    from backend.app.coverage.companies import (
+        MULTI_EMPLOYER_SOURCES,
+    )
+    from backend.app.db.models import (
+        JobRecord,
+    )
+    from backend.app.db.session import (
+        SessionLocal,
+    )
+
+    wanted = sorted(
+        code.upper()
+        for code in codes
+    )
+
+    held: set[str] = set()
+
+    with SessionLocal() as session:
+        for start in range(0, len(wanted), 1000):
+            held.update(
+                str(external_id).upper()
+                for (external_id,) in session.execute(
+                    select(
+                        JobRecord.external_id,
+                    ).where(
+                        JobRecord.source == SourceType.WORKABLE.value,
+                        JobRecord.external_id.in_(
+                            wanted[start:start + 1000]
+                        ),
+                        JobRecord.is_active.is_(True),
+                    )
+                ).all()
+            )
+
+        others = sorted(
+            MULTI_EMPLOYER_SOURCES - {WORKABLE_FEED_SOURCE}
+        )
+
+        lookup = set(wanted)
+
+        for (url,) in session.execute(
+            select(
+                JobRecord.official_url,
+            ).where(
+                JobRecord.source.in_(others),
+                JobRecord.is_active.is_(True),
+                JobRecord.official_url.like("%workable.com/%"),
+            )
+        ).all():
+            code = workable_posting_code(url)
+            if code is not None and code in lookup:
+                held.add(code)
+
+    return held
+
+
 class SourceDispatcher:
     """Dispatch configured sources to provider-specific fetch handlers."""
 
@@ -2702,6 +2889,14 @@ def build_default_source_dispatcher() -> (
                         _registered_board_check
                     ),
                     held=_held_by_employer,
+                )
+            ),
+            SourceType.WORKABLE_FEED: (
+                WorkableFeedSourceFetcher(
+                    validator_lookup=(
+                        _stored_validators
+                    ),
+                    held=_held_workable_postings,
                 )
             ),
             SourceType.SIMPLIFY: (
