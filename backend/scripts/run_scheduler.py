@@ -50,6 +50,7 @@ from backend.app.coverage.leads import (
 )
 from backend.app.coverage.missed_boards import fix_latest_run
 from backend.app.discovery.freehire import USER_AGENT as FREEHIRE_USER_AGENT, harvest_if_due as harvest_freehire_if_due
+from backend.app.discovery.yc_names import USER_AGENT as YC_USER_AGENT, harvest_if_due as harvest_yc_if_due
 from backend.app.coverage.recall import MISSED_ROLE_ORIGIN, run_daily_check
 from backend.app.coverage.recovery import (
     recover_dark_sources,
@@ -847,12 +848,13 @@ def main(
                 if settings.lead_auto_add_enabled
                 else None
             ),
-            diagnose_name=lambda company: diagnose(
+            diagnose_name=lambda company, hosts=(): diagnose(
                 company,
                 fetch=reader.fetch,
                 fetch_text=reader.fetch_text,
                 post=reader.post,
                 refuses=reader.refuses,
+                hosts=hosts,
             ),
         )
 
@@ -956,6 +958,28 @@ def main(
                 get=client.get,
             )
 
+    def harvest_yc() -> None:
+        """Once a day, YC companies marked hiring become name leads, from a public list on GitHub (DIS-06)."""
+
+        with SessionLocal() as session:
+            reader = PoliteReader(
+                refused_hosts(
+                    session
+                )
+            )
+
+        with httpx.Client(
+            headers={"User-Agent": YC_USER_AGENT, "Accept": "application/json"},
+            timeout=30.0,
+            follow_redirects=False,
+        ) as client:
+            harvest_yc_if_due(
+                SessionLocal,
+                now=now_utc(),
+                allows=reader.allows,
+                get=client.get,
+            )
+
     # When dark boards were last diagnosed. That reads companies'
     # websites, so it keeps its six-hour rhythm while the rest of the
     # maintenance runs every half hour.
@@ -1007,6 +1031,18 @@ def main(
                 except Exception:
                     LOGGER.exception(
                         "freehire_harvest_failed"
+                    )
+
+            # And once a day, YC companies marked hiring become name leads,
+            # from a public list; YC's own site is never opened (owner,
+            # November 27).
+            if settings.yc_names_enabled and settings.lead_ledger_enabled:
+                try:
+                    harvest_yc()
+
+                except Exception:
+                    LOGGER.exception(
+                        "yc_names_failed"
                     )
 
         register_feed_boards()

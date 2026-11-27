@@ -57,6 +57,7 @@ from backend.app.db.models import (
     SourceState,
 )
 from backend.app.discovery.feed_links import board_key
+from backend.app.discovery.yc_names import site_hints
 
 
 LOGGER = logging.getLogger("ace.coverage.leads")
@@ -115,9 +116,10 @@ SEARCH = "search"
 FREEHIRE = "freehire"
 MISSED = "missed"
 WORKABLE_FILE = "workable_file"
+YC = "yc"
 
 # Strongest first: the one "Lead from" names when a lead has several.
-ORIGINS = (OWNER, CURATED, NETWORK, FEED, WORKABLE_FILE, MISSED, FREEHIRE, SEARCH)
+ORIGINS = (OWNER, CURATED, NETWORK, FEED, WORKABLE_FILE, YC, MISSED, FREEHIRE, SEARCH)
 
 ORIGIN_LABELS = {
     OWNER: "Added by you",
@@ -125,6 +127,7 @@ ORIGIN_LABELS = {
     NETWORK: "City network",
     FEED: "New grad list",
     WORKABLE_FILE: "Workable job file",
+    YC: "YC companies",
     MISSED: "Daily check",
     FREEHIRE: "FreeHire",
     SEARCH: "ace search",
@@ -136,6 +139,7 @@ ORIGIN_NOTES = {
     NETWORK: "Lists of startups, collected once",
     FEED: "Names in the public lists ace reads",
     WORKABLE_FILE: "Companies in Workable's public job file, each looked up by ace before a board is added",
+    YC: "YC companies marked hiring, from a public list on GitHub; ace looks for each one's own job board and never opens YC's site",
     MISSED: "Companies behind roles the daily check missed, looked up by name",
     FREEHIRE: "Boards FreeHire's public job list names, each read by ace before it is added",
     SEARCH: "Found by ace's earlier company searches",
@@ -700,9 +704,9 @@ def check_due_leads(
         # have separate budgets, so a long line of old name-only leads must
         # not keep boards that are one request away from being read.
         due = [
-            (row.id, row.company_name, list(row.boards or []))
+            (row.id, row.company_name, list(row.boards or []), site_hints(row.origin_details))
             for row in session.execute(
-                sa.select(EmployerLead.id, EmployerLead.company_name, EmployerLead.boards)
+                sa.select(EmployerLead.id, EmployerLead.company_name, EmployerLead.boards, EmployerLead.origin_details)
                 .where(
                     EmployerLead.state != POLLING,
                     EmployerLead.next_check_at <= now(),
@@ -717,7 +721,7 @@ def check_due_leads(
 
     paged_used = 0
 
-    for lead_id, company, boards in due:
+    for lead_id, company, boards, hosts in due:
         if time.monotonic() - started > seconds:
             summary.stopped_early = True
             break
@@ -770,6 +774,7 @@ def check_due_leads(
             now=now,
             diagnose_name=diagnose_name,
             summary=summary,
+            hosts=hosts,
         )
 
         pause(PAUSE_SECONDS)
@@ -919,9 +924,11 @@ def _check_name(
     now,
     diagnose_name,
     summary: CheckSummary,
+    hosts: tuple[str, ...] = (),
 ) -> None:
     try:
-        diagnosis = diagnose_name(company)
+        # A lead that names its company's own website starts the search there.
+        diagnosis = diagnose_name(company, hosts=hosts) if hosts else diagnose_name(company)
     except Exception as exc:  # A read must never take the maintenance down.
         LOGGER.warning("lead_name_check_failed error=%s", type(exc).__name__)
         with sessions.begin() as session:

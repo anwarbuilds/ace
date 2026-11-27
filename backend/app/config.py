@@ -210,6 +210,7 @@ class Settings(BaseSettings):
     # names for US software postings become leads; the lead check reads each
     # one itself before it adds it (DIS-02, owner, November 22, 2026).
     freehire_harvest_enabled: bool = True
+    yc_names_enabled: bool = True
 
     # How many boards the scheduler reads at once, and how many of one
     # slow platform's boards may hold a worker together, as
