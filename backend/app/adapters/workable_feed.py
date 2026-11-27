@@ -36,7 +36,10 @@ from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+import gzip
 import re
+import tempfile
+import time
 from xml.etree import ElementTree
 
 import httpx
@@ -117,6 +120,8 @@ class FeedStats:
     """What one read of the file held, for the log and the release checks."""
 
     postings: int = 0
+    download_seconds: float = 0.0
+    compressed_bytes: int = 0
     us_kept_type: int = 0
     could_pass: int = 0
     held: int = 0
@@ -359,36 +364,69 @@ def fetch_workable_feed_jobs(
 
     found: dict[str, CanonicalJob] = {}
 
+    # Workable's server ends a response about a minute after it starts, and
+    # the file takes most of that minute to arrive (147 MB at 3.4 MB/s on
+    # 2026-11-27). Judging postings while they arrive slowed the transfer
+    # past that minute: 61 of 71 reads broke off ("incomplete chunked read").
+    # So the compressed file is saved to disk as fast as it comes, and read
+    # from there once it is whole.
+    spool = tempfile.TemporaryFile()
+
     try:
-        with http.stream(
-            "GET",
-            FEED_URL,
-            headers=headers,
-        ) as response:
-            if is_unchanged(response):
-                return [], True, validators or CacheValidators(), stats
+        try:
+            started = time.monotonic()
 
-            response.raise_for_status()
+            with http.stream(
+                "GET",
+                FEED_URL,
+                headers=headers,
+            ) as response:
+                if is_unchanged(response):
+                    return [], True, validators or CacheValidators(), stats
 
-            next_validators = validators_from_response(
-                response
-            )
+                response.raise_for_status()
 
-            for entry in entries(response.iter_bytes(CHUNK_BYTES)):
-                stats.postings += 1
-
-                job = posting(
-                    entry,
-                    could_pass=could_pass,
-                    stats=stats,
+                next_validators = validators_from_response(
+                    response
                 )
 
-                if job is not None and job.external_id not in found:
-                    found[job.external_id] = job
+                encoding = (response.headers.get("content-encoding") or "").strip().lower()
+
+                for chunk in response.iter_raw(CHUNK_BYTES):
+                    spool.write(chunk)
+                    stats.compressed_bytes += len(chunk)
+
+            stats.download_seconds = round(time.monotonic() - started, 1)
+
+        finally:
+            if owns_client:
+                http.close()
+
+        spool.seek(0)
+
+        if encoding == "gzip":
+            reader = gzip.GzipFile(fileobj=spool)
+        elif encoding in ("", "identity"):
+            reader = spool
+        else:
+            raise IncompleteWorkableFeed(
+                f"The Workable file came in an encoding ACE did not ask for: {encoding}."
+            )
+
+        for entry in entries(iter(lambda: reader.read(CHUNK_BYTES), b"")):
+            stats.postings += 1
+
+            job = posting(
+                entry,
+                could_pass=could_pass,
+                stats=stats,
+            )
+
+            if job is not None and job.external_id not in found:
+                found[job.external_id] = job
 
     finally:
-        if owns_client:
-            http.close()
+        spool.close()
 
     if stats.postings < min_postings:
         raise IncompleteWorkableFeed(

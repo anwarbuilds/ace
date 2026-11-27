@@ -2093,7 +2093,9 @@ class WorkableFeedSourceFetcher:
 
         if not unchanged:
             _WORKABLE_FEED_LOG.info(
-                "workable_feed_read postings=%d us_kept_type=%d could_pass=%d held=%d copies=%d",
+                "workable_feed_read download_seconds=%.1f compressed_bytes=%d postings=%d us_kept_type=%d could_pass=%d held=%d copies=%d",
+                stats.download_seconds,
+                stats.compressed_bytes,
                 stats.postings,
                 stats.us_kept_type,
                 stats.could_pass,

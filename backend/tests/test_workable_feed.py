@@ -135,7 +135,8 @@ class FileServer:
             return httpx.Response(304, headers={"last-modified": self.last_modified})
         if self.status != 200:
             return httpx.Response(self.status, text="Too many requests")
-        return httpx.Response(200, content=gzip.compress(self.body),
+        # A stream, as the network gives it: ACE saves the raw compressed bytes first.
+        return httpx.Response(200, stream=httpx.ByteStream(gzip.compress(self.body)),
                               headers={"content-encoding": "gzip", "content-type": "application/xml",
                                        "last-modified": self.last_modified})
 
@@ -151,6 +152,7 @@ def test_a_read_sends_an_honest_compressed_request_and_drops_what_ace_holds():
         client=client_for(server), min_postings=1)
     assert not unchanged and [job.external_id for job in jobs] == ["AB12CD34EF", "FA67BC89DE"]
     assert stats.postings == len(MIXED) and stats.held == 1 and stats.copies == 2
+    assert stats.compressed_bytes == len(gzip.compress(feed(*MIXED))) and stats.download_seconds >= 0
     assert validators.last_modified == "Tue, 24 Nov 2026 00:15:15 GMT"
     sent = server.seen[0].headers
     assert sent["user-agent"] == wf.USER_AGENT and sent["accept-encoding"] == "gzip"
@@ -160,6 +162,27 @@ def test_a_read_sends_an_honest_compressed_request_and_drops_what_ace_holds():
     again, unchanged, _validators, _stats = wf.fetch_workable_feed_jobs(
         could_pass=every_title, client=client_for(server), validators=validators, min_postings=1)
     assert unchanged and again == []
+
+
+class CutServer(FileServer):
+    """Ends the response partway, as Workable's server did after about a minute."""
+
+    def __call__(self, request):
+        class Cut(httpx.SyncByteStream):
+            def __init__(self, data):
+                self.data = data
+
+            def __iter__(self):
+                yield self.data[: len(self.data) // 2]
+                raise httpx.RemoteProtocolError("peer closed connection without sending complete message body")
+
+        return httpx.Response(200, stream=Cut(gzip.compress(self.body)),
+                              headers={"content-encoding": "gzip", "last-modified": self.last_modified})
+
+
+def test_a_read_cut_off_partway_raises_so_nothing_closes():
+    with pytest.raises(httpx.RemoteProtocolError):
+        wf.fetch_workable_feed_jobs(could_pass=every_title, client=client_for(CutServer(feed(*MIXED))), min_postings=1)
 
 
 def test_a_refusal_or_a_short_file_raises_so_nothing_closes():
