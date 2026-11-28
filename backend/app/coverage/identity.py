@@ -278,6 +278,14 @@ def read_board_evidence(source_type: str, account: str, *, source_host=None, fet
     if source_type == "greenhouse":
         owner = board_metadata_name(source_type=source_type, token=account, fetch=fetch or _fetch_json)
         return BoardEvidence(owner=owner, employers=posting_employers(jobs), basis="The board's own metadata.")
+    if source_type in ("bamboohr", "rippling"):
+        # The board's own company record (BambooHR) or its postings' (Rippling).
+        from backend.app.adapters import bamboohr, rippling
+
+        reader = bamboohr if source_type == "bamboohr" else rippling
+        owner = reader.company_name_of(fetch or _fetch_json, account)
+        return BoardEvidence(owner=owner, employers=posting_employers(jobs),
+                             basis="The board's own company record.", unavailable=owner is None)
     if source_type == "successfactors":
         # The feed names each posting's employer; it is the postings' claim, not
         # a separate owner record, so it counts as their structured employer.

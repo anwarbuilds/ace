@@ -1391,6 +1391,19 @@ def board_jobs(
 ) -> list[dict]:
     """Return a sample of a board's postings, whatever ATS it is on."""
 
+    if ref.source_type == "bamboohr":
+        from backend.app.adapters.bamboohr import base_url
+
+        body = fetch(base_url(ref.token) + "/list")
+        found = body.get("result") if isinstance(body, dict) else None
+        return [item for item in found or [] if isinstance(item, dict)]
+
+    if ref.source_type == "rippling":
+        from backend.app.adapters.rippling import list_url
+
+        body = fetch(list_url(ref.token))
+        return [item for item in body or [] if isinstance(item, dict)] if isinstance(body, list) else []
+
     if ref.source_type == "successfactors":
         # Its job feed is XML, read as text (DIS-08).
         from backend.app.adapters.successfactors import feed_url, sample

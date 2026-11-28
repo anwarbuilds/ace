@@ -601,6 +601,61 @@ def _detect_gem(
     )
 
 
+def _detect_bamboohr(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect BambooHR boards: <account>.bamboohr.com/careers[/<id>] (or /jobs)."""
+
+    if not host.endswith(".bamboohr.com"):
+        return None
+
+    account = host.removesuffix(".bamboohr.com")
+
+    if "." in account or account in ("www", "api", "app") or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", account):
+        return None
+
+    if segments and segments[0] not in ("careers", "jobs"):
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.BAMBOOHR,
+        source_account=account,
+        source_host=host,
+    )
+
+
+def _detect_rippling(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect Rippling boards: ats.rippling.com/<board>/jobs[/<id>], or the board API."""
+
+    if host == "ats.rippling.com" and len(segments) >= 1:
+        board = segments[0].lower()
+    elif host == "api.rippling.com" and segments[:5] == ("platform", "api", "ats", "v1", "board") and len(segments) >= 6:
+        board = segments[5].lower()
+    else:
+        return None
+
+    if board in ("internal", "api") or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", board):
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.RIPPLING,
+        source_account=board,
+        source_host="ats.rippling.com",
+    )
+
+
 # Hosts whose "/job/<slug>/<id>/" paths are not SuccessFactors careers sites.
 _NOT_SUCCESSFACTORS = (
     "linkedin.com",
@@ -692,6 +747,8 @@ def detect_source_from_url(
         _detect_oracle_recruiting,
         _detect_workable,
         _detect_gem,
+        _detect_bamboohr,
+        _detect_rippling,
         # Last: it reads only the path, so every named host is tried first.
         _detect_successfactors,
     )

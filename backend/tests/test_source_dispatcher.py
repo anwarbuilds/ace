@@ -480,6 +480,8 @@ def test_default_dispatcher_supports_all_implemented_sources() -> None:
                 SourceType.ZAPPLY,
                 SourceType.WORKABLE_FEED,
                 SourceType.SUCCESSFACTORS,
+                SourceType.BAMBOOHR,
+                SourceType.RIPPLING,
                 SourceType.EIGHTFOLD,
                 SourceType.EIGHTFOLD_PCSX,
                 SourceType.RIPPLEMATCH,

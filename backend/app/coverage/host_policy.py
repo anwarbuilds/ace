@@ -196,6 +196,13 @@ def read_targets(
             return ()
         return (HostTarget(parts.netloc.lower(), "avature", (parts.path or "/",)),)
 
+    if source_type == "bamboohr":
+        return (HostTarget(f"{account.strip().lower()}.bamboohr.com", "ats", ("/careers/list", "/careers/1/detail")),)
+
+    if source_type == "rippling":
+        board = account.strip().lower()
+        return (HostTarget("api.rippling.com", "ats", (f"/platform/api/ats/v1/board/{board}/jobs",)),)
+
     if source_type == "successfactors":
         host = _host_of(account)
         if not host:

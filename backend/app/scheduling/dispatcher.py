@@ -73,6 +73,12 @@ from backend.app.adapters.gem import (
 from backend.app.adapters.successfactors import (
     fetch_successfactors_jobs,
 )
+from backend.app.adapters.bamboohr import (
+    fetch_bamboohr_jobs,
+)
+from backend.app.adapters.rippling import (
+    fetch_rippling_jobs,
+)
 from backend.app.adapters.google import (
     fetch_google_jobs,
 )
@@ -1567,6 +1573,53 @@ class SuccessFactorsSourceFetcher:
         )
 
 
+class ListedBoardSourceFetcher:
+    """Dispatch adapter for boards that list, then describe each posting (BambooHR, Rippling; DIS-09).
+
+    Descriptions are fetched only for titles the gate could pass, and kept
+    between polls in the shared reading store.
+    """
+
+    def __init__(
+        self,
+        source_type: SourceType,
+        *,
+        fetcher: Callable[..., list],
+        clock: Clock = utc_now,
+    ) -> None:
+        self._source_type = source_type
+        self._fetcher = fetcher
+        self._clock = clock
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Read every posting on one board."""
+
+        if source.source_type != self._source_type:
+            raise ValueError(
+                f"This fetcher reads {self._source_type.value} boards, not {source.source_type.value}."
+            )
+
+        jobs = self._fetcher(
+            source_account=source.source_account,
+            company_name=source.company_name,
+            should_fetch_detail=build_detail_predicate(
+                source=self._source_type.value,
+                company_name=source.company_name,
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+        )
+
+
 class GemSourceFetcher:
     """Dispatch adapter for jobs.gem.com boards: one request a board."""
 
@@ -2924,6 +2977,18 @@ def build_default_source_dispatcher() -> (
             ),
             SourceType.GEM: (
                 GemSourceFetcher()
+            ),
+            SourceType.BAMBOOHR: (
+                ListedBoardSourceFetcher(
+                    SourceType.BAMBOOHR,
+                    fetcher=fetch_bamboohr_jobs,
+                )
+            ),
+            SourceType.RIPPLING: (
+                ListedBoardSourceFetcher(
+                    SourceType.RIPPLING,
+                    fetcher=fetch_rippling_jobs,
+                )
             ),
             SourceType.SUCCESSFACTORS: (
                 SuccessFactorsSourceFetcher(

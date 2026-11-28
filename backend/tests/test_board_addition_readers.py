@@ -29,6 +29,8 @@ BOARDS = {
     'workable': 'https://apply.workable.com/birchlabs/j/ONE/',
     'gem': 'https://jobs.gem.com/birchlabs/job-1',
     'successfactors': 'https://jobs.birchlabs.example/job/Seattle-Software-Engineer-New-Grad-WA-98101/1234567/',
+    'bamboohr': 'https://birchlabs.bamboohr.com/careers/1',
+    'rippling': 'https://ats.rippling.com/birchlabs/jobs/0f9d1c2e-1111-4222-8333-944455556666',
 }
 
 # A SuccessFactors careers site's job feed: its sitemap.xml (DIS-08), one posting per employer named.
@@ -51,7 +53,8 @@ def db():
 
 
 def raw_job(reader):
-    row = {'id': '1', 'title': 'Software Engineer, New Grad', 'name': 'Software Engineer, New Grad'}
+    row = {'id': '1', 'title': 'Software Engineer, New Grad', 'name': 'Software Engineer, New Grad',
+           'uuid': '0f9d1c2e-1111-4222-8333-944455556666', 'jobOpeningName': 'Software Engineer, New Grad'}
     if reader == 'smartrecruiters':
         row['company'] = {'name': 'Birch Labs'}
     return row
@@ -60,6 +63,11 @@ def raw_job(reader):
 def fetchers(reader, employers=()):
     rows = [dict(raw_job(reader), hiringOrganization={'name': name}) for name in employers] or [raw_job(reader)]
     def fetch(url, **kwargs):
+        if reader == 'bamboohr':
+            return {'result': {'name': 'Birch Labs'}} if url.endswith('/company-info') else {'result': rows}
+        if reader == 'rippling':
+            # The board's postings name its company; the list is a plain array.
+            return rows if url.endswith('/jobs') else {'companyName': 'Birch Labs', 'uuid': '0f9d1c2e'}
         if '/v1/boards/' in url and not url.endswith('/jobs'):
             return {'name': 'Birch Labs'}
         if 'oraclecloud.com' in url:

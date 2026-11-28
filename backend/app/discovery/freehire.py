@@ -52,7 +52,7 @@ USER_AGENT = "ACE/0.1 (personal career-intelligence project)"
 
 # FreeHire's own source names, for the platforms it reads plainly and ACE
 # has a reader for, with the board token's place in FreeHire's identifier.
-PLATFORMS = ("greenhouse", "lever", "ashby", "gem", "workday", "oracle", "successfactors")
+PLATFORMS = ("greenhouse", "lever", "ashby", "gem", "workday", "oracle", "successfactors", "bamboohr", "rippling")
 
 # Platforms FreeHire reads through a proxy, a browser disguise or an anti-bot
 # browser (its proxy.go, fingerprinthttp.go and scraplingtier.go, read
@@ -93,6 +93,8 @@ _BOARD_URLS = {
     "lever": "https://jobs.lever.co/{token}",
     "ashby": "https://jobs.ashbyhq.com/{token}",
     "gem": "https://jobs.gem.com/{token}",
+    "bamboohr": "https://{token}.bamboohr.com/careers",
+    "rippling": "https://ats.rippling.com/{token}/jobs",
 }
 
 

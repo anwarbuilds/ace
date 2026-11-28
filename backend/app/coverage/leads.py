@@ -217,6 +217,8 @@ _BOARD_LABELS = {
     "avature": "Avature",
     "jobposting_sitemap": "careers site",
     "successfactors": "SuccessFactors",
+    "bamboohr": "BambooHR",
+    "rippling": "Rippling",
 }
 
 

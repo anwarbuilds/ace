@@ -39,6 +39,8 @@ _SITE_LABELS = {
     "workable": "Workable",
     "workable_feed": "Workable job file",
     "successfactors": "SuccessFactors",
+    "bamboohr": "BambooHR",
+    "rippling": "Rippling",
     "workday": "Workday",
     "oracle_recruiting": "Oracle",
     "gem": "Gem",

@@ -49,6 +49,9 @@ class SourceType(StrEnum):
     # SAP SuccessFactors careers sites (DIS-08): one job feed per company,
     # named by the site's host.
     SUCCESSFACTORS = "successfactors"
+    # BambooHR and Rippling boards (DIS-09): a list, then each posting.
+    BAMBOOHR = "bamboohr"
+    RIPPLING = "rippling"
     EIGHTFOLD = "eightfold"
     # Eightfold's newer product line, found on Amdocs. Kept as a
     # distinct source type rather than a branch inside EIGHTFOLD
