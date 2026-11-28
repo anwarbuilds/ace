@@ -143,6 +143,10 @@ class Site:
     # JobPosting holds only a teaser: the class of that block's <div>.
     body_class: str | None = None
 
+    # Added to a posting's address to read the view that carries its
+    # JobPosting (iCIMS: "?in_iframe=1"; its plain page wraps that view).
+    page_query: str = ""
+
 
 # A stored reading taken from the page's own block says so, so a reading
 # taken before a site's block was known is read again.
@@ -182,6 +186,21 @@ def site_for(
                 re.IGNORECASE,
             ),
             titled=True,
+        )
+
+    # iCIMS (DIS-09): "careers-<company>.icims.com/sitemap.xml" lists every
+    # posting at "/jobs/<id>/<title>/job", each page with a JobPosting.
+    # robots.txt disallows only referral, login and candidate paths.
+    if host.endswith(".icims.com"):
+        return Site(
+            sitemap=f"https://{host}/sitemap.xml",
+            posting=re.compile(
+                rf"^https://{re.escape(host)}/jobs/"
+                r"(?P<id>\d+)/(?P<slug>[^/?#]+)/job/?$",
+                re.IGNORECASE,
+            ),
+            titled=True,
+            page_query="?in_iframe=1",
         )
 
     if host.endswith("metacareers.com"):
@@ -241,9 +260,12 @@ class Listed:
 def _words(
     slug: str,
 ) -> str:
+    # Addresses carry "%26" for "&" and the like.
+    from urllib.parse import unquote
+
     return " ".join(
         part.capitalize()
-        for part in slug.replace("_", "-").split("-")
+        for part in unquote(slug).replace("_", "-").split("-")
         if part
     )
 
@@ -663,8 +685,13 @@ def fetch_sitemap_jobs(
     now: Callable[[], datetime] | None = None,
     max_reads: int = MAX_READS_PER_POLL,
     pause_seconds: float = PAUSE_SECONDS,
+    source: str = SOURCE,
 ) -> JobList:
-    """Read one careers site's sitemap and the postings worth reading."""
+    """Read one careers site's sitemap and the postings worth reading.
+
+    ``source`` names the reader the postings are kept under: iCIMS sites
+    are read this way under their own name (DIS-09).
+    """
 
     site = site_for(
         host
@@ -755,7 +782,7 @@ def fetch_sitemap_jobs(
             try:
                 page = request_with_retry(
                     lambda: http.get(
-                        entry.url
+                        entry.url + site.page_query
                     )
                 )
 
@@ -867,6 +894,12 @@ def fetch_sitemap_jobs(
         len(fresh),
         len(jobs),
     )
+
+    if source != SOURCE:
+        jobs = [
+            job.model_copy(update={"source": source})
+            for job in jobs
+        ]
 
     return JobList(
         jobs,

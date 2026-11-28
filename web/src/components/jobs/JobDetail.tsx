@@ -19,6 +19,7 @@ import {
   expFit,
   exportCaveat,
   familyLabel,
+  priorTag,
   shortDate,
   tierLabel,
   tierOf,
@@ -92,6 +93,7 @@ export function JobDetail({ job: served, resumeLabel }: { job: Job; resumeLabel:
   const fit = expFit(job);
   const tier = job.company_tier || "OTHER";
   const applied = Boolean(job.applied_at);
+  const prior = applied ? null : priorTag(job, tz);
   const status = job.application_status;
   const why: string[] = [];
   if (job.role_family) why.push(familyLabel(job.role_family));
@@ -126,12 +128,12 @@ export function JobDetail({ job: served, resumeLabel }: { job: Job; resumeLabel:
                 {status ? (
                   <span className={`badge ${status}`}>
                     {STATUS_LABEL[status]}
-                    {job.applied_at ? ` · ${shortDate(job.applied_at, tz)}` : ""}
+                    {job.applied_at ? `${status === "applied" ? " on" : " ·"} ${shortDate(job.applied_at, tz)}` : ""}
                   </span>
                 ) : null}
-                {job.applied_before && !applied ? (
-                  <span className="badge before" title={beforeNote(job, tz)}>
-                    Applied before {"·"} {shortDate(job.applied_before.applied_at, tz)}
+                {prior ? (
+                  <span className={prior.cls} title={beforeNote(job, tz)}>
+                    {prior.text}
                   </span>
                 ) : null}
                 {exportCaveat(job) ? (
@@ -247,7 +249,7 @@ export function JobDetail({ job: served, resumeLabel }: { job: Job; resumeLabel:
               {applied ? (
                 <p className="why" style={{ margin: "0 0 12px" }}>
                   <b>{STATUS_LABEL[status ?? "applied"]}</b>
-                  {job.applied_at ? `, applied ${shortDate(job.applied_at, tz)}` : ""}
+                  {job.applied_at ? `${status && status !== "applied" ? ", applied" : ""} on ${shortDate(job.applied_at, tz)}` : ""}
                   {job.status_changed_at && status && status !== "applied" ? (
                     <>
                       <br />
@@ -257,9 +259,10 @@ export function JobDetail({ job: served, resumeLabel }: { job: Job; resumeLabel:
                 </p>
               ) : job.applied_before ? (
                 <p className="why" style={{ margin: "0 0 12px" }}>
-                  <b>Applied before.</b> {beforeNote(job, tz)} This posting is not marked applied.{" "}
+                  <b>{prior?.text}.</b> {beforeNote(job, tz)}
+                  {job.applied_before.same_opening ? "" : " This posting is not marked applied."}{" "}
                   <Link className="link-btn" href={`/app/jobs/${job.applied_before.job_id}`} prefetch={false}>
-                    See that application
+                    {job.applied_before.same_opening ? "See the posting you marked" : "See that application"}
                   </Link>
                 </p>
               ) : (

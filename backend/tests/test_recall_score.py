@@ -221,7 +221,8 @@ def test_the_daily_score_says_where_each_role_came_from(factory) -> None:
 
     reasons = {row["company"]: row["reason"] for row in result["missed"]}
     assert reasons == {
-        "Kestrel Grid": "Posted on iCIMS, which ace can't read yet",
+        # iCIMS has a reader since 2026-11-28 (DIS-09).
+        "Kestrel Grid": "On a board ace can read, not added yet",
         "Fabrikam": "Board read, role not there",
     }
 

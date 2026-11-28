@@ -552,8 +552,10 @@ def test_the_alert_says_a_role_was_applied_to_before(
 
     (note,) = notes.values()
 
+    # No requisition number on either posting: a resemblance, not
+    # the same opening.
     assert note.startswith(
-        "Applied before, "
+        "Similar role applied on "
     )
 
     _subject, text = render(
@@ -563,7 +565,7 @@ def test_the_alert_says_a_role_was_applied_to_before(
     )
 
     assert text.count(
-        "Applied before"
+        "Similar role applied on"
     ) == 1
 
     html = render_html(
@@ -573,7 +575,7 @@ def test_the_alert_says_a_role_was_applied_to_before(
     )
 
     assert html.count(
-        "Applied before"
+        "Similar role applied on"
     ) == 1
 
     # Nothing changes for an alert with no such role.
@@ -582,9 +584,9 @@ def test_the_alert_says_a_role_was_applied_to_before(
         jobs,
     )
 
-    assert "Applied before" not in plain
+    assert "applied on" not in plain
 
-    assert "Applied before" not in render_html(
+    assert "applied on" not in render_html(
         pull,
         jobs,
     )
@@ -649,3 +651,168 @@ def test_the_requisition_numbers_tell_two_openings_apart(
     assert other["applied_before"]["requisition_id"] == "R-108814"
     assert other["applied_before"]["is_active"] is True
     assert other["requisition_id"] == "R-110488"
+    assert other["applied_before"]["same_opening"] is False
+
+
+def test_the_same_requisition_on_another_board_is_the_same_opening(
+    session,
+) -> None:
+    # The employer moved boards: the posting applied to was read from
+    # one, and the same opening, with the same number, from the other,
+    # where the title and place are spelled differently.
+    old = add_job(
+        session,
+        external_id="1",
+        title="Data Scientist",
+        location="Fernhill, CA, United States",
+        requisition_id="R0100001",
+    )
+
+    applied(
+        session,
+        old,
+        days_ago=3,
+    )
+
+    marks_before = session.scalar(
+        select(
+            func.count()
+        ).select_from(
+            JobMarkRecord
+        )
+    )
+
+    copy = add_job(
+        session,
+        external_id="2",
+        title="Data Scientist (Risk)",
+        location="Fernhill, California, United States of America",
+        requisition_id=" r0100001 ",
+    )
+
+    item = listing(
+        session,
+        copy,
+    )
+
+    assert item.applied_before is not None
+    assert item.applied_before.job_id == old.id
+    assert item.applied_before.same_opening is True
+    assert _serialize_job(item)["applied_before"]["same_opening"] is True
+
+    # Still derived: the mark stays on the posting the user marked.
+    assert item.applied_at is None
+    assert item.application_status is None
+    assert session.scalar(
+        select(
+            func.count()
+        ).select_from(
+            JobMarkRecord
+        )
+    ) == marks_before
+
+
+def test_the_same_number_at_another_company_is_not_the_same_opening(
+    session,
+) -> None:
+    old = add_job(
+        session,
+        external_id="1",
+        requisition_id="R-200",
+    )
+
+    applied(
+        session,
+        old,
+    )
+
+    item = listing(
+        session,
+        add_job(
+            session,
+            external_id="2",
+            company="Contoso Systems",
+            title="Platform Engineer",
+            requisition_id="R-200",
+        ),
+    )
+
+    assert item.applied_before is None
+
+
+def test_the_same_title_without_numbers_is_only_similar(
+    session,
+) -> None:
+    old = add_job(
+        session,
+        external_id="1",
+    )
+
+    applied(
+        session,
+        old,
+    )
+
+    item = listing(
+        session,
+        add_job(
+            session,
+            external_id="2",
+            requisition_id="R-300",
+        ),
+    )
+
+    assert item.applied_before is not None
+    assert item.applied_before.same_opening is False
+
+
+def test_the_alert_says_applied_on_for_the_same_opening(
+    session,
+) -> None:
+    old = add_job(
+        session,
+        external_id="1",
+        requisition_id="R-400",
+        is_active=False,
+    )
+
+    applied(
+        session,
+        old,
+        days_ago=2,
+    )
+
+    pull = PollSessionRecord(
+        started_at=NOW,
+        last_activity_at=NOW,
+        jobs_discovered=1,
+        qualifying_discovered=1,
+    )
+
+    session.add(
+        pull
+    )
+
+    session.flush()
+
+    add_job(
+        session,
+        external_id="2",
+        title="Software Engineer I",
+        requisition_id="R-400",
+        pull_id=pull.id,
+    )
+
+    jobs = qualifying_jobs(
+        session,
+        pull,
+    )
+
+    (note,) = applied_before_notes(
+        session,
+        jobs,
+    ).values()
+
+    assert note.startswith(
+        "Applied on "
+    )

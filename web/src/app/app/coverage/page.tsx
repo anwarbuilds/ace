@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Icon } from "@/components/Icon";
-import { LeadsTab, ScoreboardTab, SourcesTab } from "@/components/coverage/CoverageTabs";
+import { LeadsTab, NeedsYouTab, ScoreboardTab, SourcesTab } from "@/components/coverage/CoverageTabs";
 import { ScrollArea } from "@/components/shell/ScrollArea";
 import { apiGet, apiGetOr } from "@/lib/api";
 import { getPrefs } from "@/lib/prefs";
@@ -23,6 +23,7 @@ export const metadata = { title: "Coverage · ace" };
 const TABS = [
   ["scoreboard", "Scoreboard"],
   ["leads", "Leads"],
+  ["needs", "Needs you"],
   ["sources", "Sources"],
 ] as const;
 
@@ -35,15 +36,20 @@ export default async function CoveragePage({ searchParams }: PageProps<"/app/cov
   const state = one("state");
   const show = one("show");
 
-  const [{ tz }, summary] = await Promise.all([
+  const [{ tz }, summary, recall] = await Promise.all([
     getPrefs(),
     apiGetOr<CoverageSummary>("/api/coverage/summary", { leads: 0, polling: 0, sources: 0 }),
+    apiGetOr<RecallReport | null>("/api/coverage/recall", null),
   ]);
 
   const params: Record<string, string> = { offset: String(offset) };
   if (q) params.q = q;
 
-  const count: Record<string, number> = { leads: summary.leads, sources: summary.sources };
+  const count: Record<string, number> = {
+    leads: summary.leads,
+    needs: recall?.checked ? recall.missed.length : 0,
+    sources: summary.sources,
+  };
 
   return (
     <>
@@ -73,10 +79,12 @@ export default async function CoveragePage({ searchParams }: PageProps<"/app/cov
                 c={await apiGet<Coverage>("/api/coverage")}
                 leads={summary.leads}
                 polling={summary.polling}
-                recall={await apiGetOr<RecallReport | null>("/api/coverage/recall", null)}
+                recall={recall}
                 counts={await apiGetOr<CountingReport | null>("/api/coverage/counts", null)}
                 tz={tz}
               />
+            ) : tab === "needs" ? (
+              <NeedsYouTab recall={recall} tz={tz} />
             ) : tab === "leads" ? (
               <LeadsTab
                 report={await apiGetOr<LeadsReport | null>("/api/coverage/leads", null, {

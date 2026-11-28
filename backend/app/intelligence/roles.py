@@ -20,7 +20,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict
 
 
-ROLE_RULE_VERSION = "2026-11-07-v8"
+ROLE_RULE_VERSION = "2026-11-20-v9"
 
 
 class RoleFamily(str, Enum):
@@ -343,6 +343,8 @@ SOFTWARE_ENGINEERING_PATTERNS = (
     # was rejected as non-target whatever its level.
     r"\bsde\b",
     r"\bsoftware dev\.? engineer\b",
+    # Honeywell's "Early Career Program-Software Engr I".
+    r"\bsoftware engr\b",
     r"\bsoftware developer\b",
     # The approved software title shapes and full-time programme names.
     # Internships, contracts and other eligibility rules still apply.
@@ -455,6 +457,52 @@ MTS_ML_INFRASTRUCTURE_PATTERNS = (
 )
 
 
+# A full-time early-career programme whose title names technology or
+# software work but no occupation: RELX's "Tech Accelarate Graduate
+# Program", Synchrony's "University Direct Hire Program - Technology",
+# Barclays' "Technology Developer Graduate Programme". Read as nothing
+# before v9, so every one was rejected as outside the roles. The title
+# alone decides, because many such postings arrive without a description.
+# Plain "Engineering" programmes stay out (civil, manufacturing and
+# chemical programmes share the name), and so do information technology
+# programmes and any title naming another occupation; internship,
+# apprenticeship, seniority and location rules still apply afterwards.
+TECH_PROGRAMME_PATTERN = (
+    r"\b(?:graduate|grad|new[- ]grads?|early[- ]careers?|campus|university|college|"
+    r"rotation(?:al)?|accelerat\w*|accelarat\w*|development|fellowship|direct hire)\b"
+    r"[^|]*\bprogram(?:me)?s?\b"
+    r"|\bprogram(?:me)?s?\b[^|]*\b(?:graduate|grad|new[- ]grads?|early[- ]careers?)\b"
+)
+
+TECH_PROGRAMME_DISCIPLINE_PATTERN = (
+    r"\b(?:tech|technology|software|developer|computer science|back[- ]?end|front[- ]?end|full[- ]?stack)\b"
+)
+
+TECH_PROGRAMME_OTHER_OCCUPATIONS = (
+    r"\b(?:information technology|it|analysts?|consultants?|managers?|management|lead|leader|director|"
+    r"administrator|coordinator|technician|supp\w*|designer|design|art|artist|trader|researcher|"
+    r"scientist|specialist|accountant|sales|marketing|recruit\w*|talent|hr|finance|change|"
+    r"operations|strategy|product|business|banking|security|cyber\w*|hardware|mechanical|"
+    r"electrical|civil|chemical|manufacturing|supply chain|mission|teacher|instructor|"
+    r"apprentice\w*|intern|internship|co-?op|military|"
+    # Infrastructure, cloud and DevOps stay off the list inside a programme too.
+    r"infrastructure|cloud|devops|sre|reliability|observability|operating systems?|storage|"
+    r"networks?|networking|platform|systems? admin\w*)\b"
+)
+
+
+def _is_tech_programme(
+    title: str,
+) -> bool:
+    """A technology or software programme title naming no occupation."""
+
+    return bool(
+        re.search(TECH_PROGRAMME_PATTERN, title, re.IGNORECASE)
+        and re.search(TECH_PROGRAMME_DISCIPLINE_PATTERN, title, re.IGNORECASE)
+        and not re.search(TECH_PROGRAMME_OTHER_OCCUPATIONS, title, re.IGNORECASE)
+    )
+
+
 def _first_matching_pattern(
     title: str,
     patterns: tuple[str, ...],
@@ -526,6 +574,10 @@ def classify_role(
     to protect discovery recall. Eligibility remains responsible for
     rejecting explicit seniority or experience blockers.
     """
+
+    # "Data Scientist_ SPLUNK", "Software Engineer_Python": an underscore
+    # is a word character to a regex, so the role words had no boundary.
+    title = title.replace("_", " ")
 
     is_technical_staff = bool(re.search(r"\bmember of technical staff\b", title, re.IGNORECASE))
     if is_technical_staff:
@@ -709,6 +761,15 @@ def classify_role(
                 ),
                 matched_pattern=data_match,
             )
+
+    if _is_tech_programme(
+        title
+    ):
+        return RoleClassification(
+            family=RoleFamily.SOFTWARE_ENGINEERING,
+            priority=RolePriority.PRIMARY,
+            matched_pattern=TECH_PROGRAMME_PATTERN,
+        )
 
     return RoleClassification(
         family=RoleFamily.OTHER,

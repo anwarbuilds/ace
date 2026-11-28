@@ -14,6 +14,7 @@ import type {
   HostsReport,
   LeadState,
   LeadsReport,
+  MissedFixState,
   RecallMissed,
   RecallReport,
   ScheduleReport,
@@ -263,7 +264,7 @@ function Recall({ r, tz }: { r: RecallReport | null; tz: string }) {
                 {n(t.feed)}
               </b>
               <span>Only as a feed copy</span>
-              <small>ace has it only because a list it reads (Simplify or Zapply) showed it.</small>
+              <small>ace has it only because a list it reads (Simplify, Zapply or Workable&rsquo;s job file) showed it.</small>
             </div>
             <div>
               <b>
@@ -705,6 +706,123 @@ export function ScoreboardTab({
           </div>
         </Section>
       ) : null}
+    </>
+  );
+}
+
+// Needs you (REC-02): the roles the daily check found that ace does not have, each with the employer's own link so
+// the owner can still apply, and what ace did about the company's board. The test lists never feed Pulls.
+const FIX: Record<MissedFixState, [string, string]> = {
+  added: ["Board added", "cov-good"],
+  trying: ["Trying again", "cov-plain"],
+  held: ["ace reads it", "cov-plain"],
+  off: ["Left off", "cov-plain"],
+  not_added: ["Not added", "cov-warn"],
+  no_board: ["Can't add", "cov-warn"],
+};
+
+const NOT_HEARD = "ace has not heard of this company";
+
+export function NeedsYouTab({ recall, tz }: { recall: RecallReport | null; tz: string }) {
+  const lead = (
+    <p className="why cov-lead">
+      <b>What needs you?</b> New grad roles the daily check found that ace does not have yet. Open a posting to apply.
+      ace tries to add each company&rsquo;s own board by itself, and once it reads that board, new roles reach Pulls from
+      the employer.
+    </p>
+  );
+  if (!recall) {
+    return (
+      <>
+        {lead}
+        <p className="why">The daily check could not be loaded just now. Refresh to try again.</p>
+      </>
+    );
+  }
+  if (!recall.checked) {
+    return (
+      <>
+        {lead}
+        <p className="why">The first daily check runs this morning.</p>
+      </>
+    );
+  }
+  const rows = recall.missed;
+  const states = rows.map((m) => m.fix?.state);
+  const added = states.filter((s) => s === "added").length;
+  const cannot = states.filter((s) => s === "no_board" || s === "not_added").length;
+  return (
+    <>
+      {lead}
+      <div className="cov-stats">
+        <Stat value={n(rows.length)} label="Roles to look at" note={`From the check ${readWhen(recall.checked_at, tz)}`} />
+        <Stat
+          value={recall.fixes ? n(added) : "Soon"}
+          label="Boards ace added for them"
+          note={recall.fixes ? "Their new roles reach Pulls from the employer" : "ace looks at the boards right after the check"}
+        />
+        <Stat value={recall.fixes ? n(cannot) : "Soon"} label="ace can't add" note="Apply from the posting. Each row says why" />
+      </div>
+
+      <Section
+        id="cov-needs-missed"
+        title={`Roles ace missed (${n(rows.length)})`}
+        intro="From two public lists ace never reads to find jobs. They only check ace, so these roles never enter Pulls by themselves."
+      >
+        {rows.length ? (
+          <div className="cov-table cov-needs">
+            <table>
+              <thead>
+                <tr>
+                  <th>Company and role</th>
+                  <th>Listed</th>
+                  <th>Company&rsquo;s board</th>
+                  <th>
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((m, i) => {
+                  const [label, tone] = m.fix ? FIX[m.fix.state] : ["Checking", "cov-plain"];
+                  return (
+                    <tr key={`${m.list}-${m.company}-${m.title}-${i}`}>
+                      <th scope="row">
+                        <CompanyIdentity name={m.company}>
+                          <b>{m.company}</b>, {clean(m.title)}
+                        </CompanyIdentity>
+                        {m.location ? <small>{clean(m.location)}</small> : null}
+                      </th>
+                      <td className="cov-n">
+                        {m.listed_on ? monthDay(m.listed_on) : "No date"}
+                        <small>{recall.lists.find((l) => l.key === m.list)?.label ?? m.list}</small>
+                      </td>
+                      <td>
+                        <span className={`badge ${tone}`}>{label}</span>
+                        <small>{clean(m.fix ? m.fix.note : "ace looks at this company's board shortly")}</small>
+                      </td>
+                      <td className="cov-needs-act">
+                        {m.link ? (
+                          <a className="btn" href={m.link} target="_blank" rel="noopener noreferrer">
+                            Open posting
+                          </a>
+                        ) : null}
+                        {m.fix?.state === "no_board" && m.reason === NOT_HEARD ? (
+                          <Link className="btn" href="/app/coverage?tab=leads#cov-input">
+                            Add the company
+                          </Link>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="why">Nothing needs you today. ace found every role on both lists.</p>
+        )}
+      </Section>
     </>
   );
 }

@@ -5,7 +5,7 @@ reads of them anywhere in ACE, and asks of every open role on them:
 
 * **board**: ACE holds it from the employer's own board (any reader but a
   public list; RippleMatch counts, since employers post there themselves);
-* **feed**: ACE holds it only as a copy from a list it reads (Simplify or Zapply);
+* **feed**: ACE holds it only as a copy from a list it reads (Simplify, Zapply or Workable's job file);
 * **missed**: ACE does not hold it at all, with what ACE knows about the
   company, so a miss says what would fix it.
 
@@ -70,7 +70,7 @@ FEED = "feed"
 MISSED = "missed"
 
 # Readers that copy a public list rather than read an employer.
-FEED_SOURCES = frozenset({"simplify", "zapply"})
+FEED_SOURCES = frozenset({"simplify", "zapply", "workable_feed"})
 
 # Jobs ACE last saw longer ago than this cannot be today's list role.
 LOOKBACK_DAYS = 240
@@ -92,14 +92,12 @@ MONTHS = {name: number for number, name in enumerate(
 )}
 
 # Hosts of hiring sites ACE has no reader for yet, for a missed role's reason.
+# BambooHR, Rippling, iCIMS and Paylocity have readers since 2026-11-28 (DIS-09); a link
+# the detector names is "on a board ace can read" before this list is asked.
 UNREAD_SITES = {
-    "icims.com": "iCIMS",
     "applytojob.com": "JazzHR",
     "jobvite.com": "Jobvite",
     "taleo.net": "Taleo",
-    "bamboohr.com": "BambooHR",
-    "rippling.com": "Rippling",
-    "paylocity.com": "Paylocity",
     "adp.com": "ADP",
     "dayforcehcm.com": "Dayforce",
     "successfactors.com": "SuccessFactors",

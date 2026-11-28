@@ -38,7 +38,9 @@ from backend.app.scheduling.holds import PlatformHeld
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
-from backend.app.coverage.identity import BoardEvidence, registration_identity, registration_origin, shared_board_reason
+from backend.app.coverage.identity import (
+    BoardEvidence, registration_identity, registration_origin, shared_board_reason, staging_host_reason,
+)
 from backend.app.coverage.companies import (
     MULTI_EMPLOYER_SOURCES,
     SOURCE_HOSTS,
@@ -488,6 +490,12 @@ def read_boards(
         shared = shared_board_reason(board.detected.source_type.value, board.detected.source_account)
         if shared:
             outcomes.append(BoardOutcome(board=board, registered=False, error=f"shared: {shared}"))
+            continue
+        test_system = staging_host_reason(
+            board.detected.source_type.value, board.detected.source_account, board.detected.source_host,
+        )
+        if test_system:
+            outcomes.append(BoardOutcome(board=board, registered=False, error=f"test system: {test_system}"))
             continue
         try:
             jobs = list(

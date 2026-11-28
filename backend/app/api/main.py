@@ -497,6 +497,11 @@ def _serialize_job(
                     .requisition_id
                 ),
                 "count": job.applied_before.count,
+                # Same company and requisition number: the opening the
+                # user applied to, read from another board.
+                "same_opening": (
+                    job.applied_before.same_opening
+                ),
             }
         ),
     }

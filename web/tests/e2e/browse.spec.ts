@@ -34,19 +34,39 @@ test("marking a job applied from a pull persists", async ({ page }) => {
   await expect(page.locator(".toast")).toContainText("Marked applied");
   await page.reload();
   const again = page.locator(".pull-results .job-line", { hasText: title }).first();
-  await expect(again.locator(".tag.green")).toHaveText("Applied");
+  await expect(again.locator(".tag.green")).toHaveText(/^Applied on [A-Z][a-z]{2} \d{1,2}$/);
   await again.getByRole("button", { name: "Clear applied" }).click();
 });
 
-test("Pulls shows the legacy experience and applied-before badges", async ({ page }) => {
+test("Pulls shows the legacy experience and applied-on badges", async ({ page }) => {
   await page.route("**/api/jobs?*", async (route) => {
     const response = await route.fetch();
     const body = await response.json();
-    if (body.items?.length >= 2) {
+    if (body.items?.length >= 3) {
       body.items[0] = {
         ...body.items[0],
         is_early_career: true,
         required_experience_years: null,
+        applied_at: "2026-10-21T18:00:00Z",
+        application_status: "applied",
+        applied_before: null,
+      };
+      // Same company and requisition number as an application: the same
+      // opening, read from another board.
+      body.items[2] = {
+        ...body.items[2],
+        applied_at: null,
+        application_status: null,
+        applied_before: {
+          job_id: 999998,
+          title: "Data Scientist",
+          location: "Fernhill, CA",
+          applied_at: "2026-10-17T18:00:00Z",
+          is_active: false,
+          requisition_id: "R0100001",
+          count: 1,
+          same_opening: true,
+        },
       };
       body.items[1] = {
         ...body.items[1],
@@ -72,7 +92,10 @@ test("Pulls shows the legacy experience and applied-before badges", async ({ pag
   await expect(lines.nth(1)).toBeVisible();
   await expect(lines.first().locator(".job-tags .exp-early")).toHaveText("Early career");
   await expect(lines.nth(1).locator(".job-tags .exp-known")).toHaveText("3 yrs max");
-  await expect(lines.nth(1).locator(".job-tags .badge.before")).toContainText("Applied before");
+  await expect(lines.first().locator(".job-actions .tag.green")).toHaveText(/^Applied on Oct 2[01]$/);
+  await expect(lines.nth(1).locator(".job-tags .badge.similar")).toHaveText(/^Similar role applied on Oct 19$/);
+  await expect(lines.nth(2).locator(".job-tags .badge.same")).toHaveText(/^Applied on Oct 1[67]$/);
+  await expect(page.locator(".job-tags .badge.before")).toHaveCount(0);
 });
 
 test("an opened Pull stays open after job navigation and reload until closed", async ({ page }) => {

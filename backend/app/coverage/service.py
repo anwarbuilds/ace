@@ -58,7 +58,9 @@ from backend.app.coverage.host_policy import (
     refusal_for,
     refused_hosts,
 )
-from backend.app.coverage.identity import read_board_evidence, registration_identity, registration_origin, shared_board_reason
+from backend.app.coverage.identity import (
+    read_board_evidence, registration_identity, registration_origin, shared_board_reason, staging_host_reason,
+)
 from backend.app.discovery.detector import detect_source_from_url
 from backend.app.coverage.leads import (
     AGENCY,
@@ -218,6 +220,10 @@ def _verify(
     if shared:
         return BoardCandidate(company=company, source_type=ref.source_type,
             source_account=ref.token, job_count=0, evidence=f"shared: {shared}", source_host=ref.source_host)
+    test_system = staging_host_reason(ref.source_type, ref.token, ref.source_host)
+    if test_system:
+        return BoardCandidate(company=company, source_type=ref.source_type,
+            source_account=ref.token, job_count=0, evidence=f"test system: {test_system}", source_host=ref.source_host)
 
     # Verification and the identity decision share responses, not requests.
     fetch = lru_cache(maxsize=8)(fetch)
@@ -226,6 +232,7 @@ def _verify(
         ref,
         fetch=fetch,
         post=post,
+        fetch_text=fetch_text,
     )
 
     if not jobs:
@@ -680,7 +687,7 @@ def add_source(
         candidate.source_account,
     )
 
-    if (existing is None or existing.enabled) and candidate.evidence.startswith("shared:"):
+    if (existing is None or existing.enabled) and candidate.evidence.startswith(("shared:", "test system:")):
         return _saved(
             session, status="saved_looking", company=candidate.company,
             state=AGENCY if candidate.evidence.startswith("shared:") else CHECKING,

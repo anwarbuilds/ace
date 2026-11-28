@@ -28,6 +28,7 @@ from backend.app.adapters.bytedance import PORTALS
 from backend.app.adapters.lever import LEVER_API_HOST_BY_JOB_HOST
 from backend.app.adapters.simplify import FEED_URLS
 from backend.app.adapters.zapply import LIST_URLS as ZAPPLY_LIST_URLS
+from backend.app.adapters.workable_feed import FEED_HOST as WORKABLE_FEED_HOST, FEED_URL as WORKABLE_FEED_URL
 from backend.app.adapters.sitemap_jobs import site_for
 from backend.app.coverage.held_out import is_held_out
 from backend.app.coverage.probing import (
@@ -195,6 +196,30 @@ def read_targets(
             return ()
         return (HostTarget(parts.netloc.lower(), "avature", (parts.path or "/",)),)
 
+    if source_type == "icims":
+        host = _host_of(account)
+        if not host:
+            return ()
+        return (HostTarget(host, "ats", ("/sitemap.xml", "/jobs/1/example/job")),)
+
+    if source_type == "paylocity":
+        board = account.strip().lower()
+        return (HostTarget("recruiting.paylocity.com", "ats",
+                           (f"/Recruiting/Jobs/All/{board}", "/Recruiting/Jobs/Details/1")),)
+
+    if source_type == "bamboohr":
+        return (HostTarget(f"{account.strip().lower()}.bamboohr.com", "ats", ("/careers/list", "/careers/1/detail")),)
+
+    if source_type == "rippling":
+        board = account.strip().lower()
+        return (HostTarget("api.rippling.com", "ats", (f"/platform/api/ats/v1/board/{board}/jobs",)),)
+
+    if source_type == "successfactors":
+        host = _host_of(account)
+        if not host:
+            return ()
+        return (HostTarget(host, "employer_site", ("/sitemap.xml", "/job/example/1/")),)
+
     if source_type == "jobposting_sitemap":
         sitemap_host = _host_of(account)
         if not sitemap_host:
@@ -231,6 +256,9 @@ def read_targets(
     if source_type == "zapply":
         paths = tuple(sorted(urlsplit(url).path for url in ZAPPLY_LIST_URLS.values()))
         return (HostTarget("raw.githubusercontent.com", "feed", paths),)
+
+    if source_type == "workable_feed":
+        return (HostTarget(WORKABLE_FEED_HOST, "feed", (urlsplit(WORKABLE_FEED_URL).path,)),)
 
     fixed = {
         "amazon": ("www.amazon.jobs", "employer_site", ("/search.json",)),

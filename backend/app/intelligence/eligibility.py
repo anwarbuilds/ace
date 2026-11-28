@@ -102,6 +102,9 @@ PROFILES: dict[str, CandidateProfile] = {
     # v55 changes no threshold either: site reliability and mobile roles
     # leave the list, at the owner's request on 2026-10-29; v56 the same
     # day takes infrastructure, platform, cloud and DevOps titles off too.
+    # v68 reads an underscore in a title as a space ("Software
+    # Engineer_Python"), and with roles v9 reads technology programme
+    # titles that name no occupation and "Software Engr" as software.
     # v67 keeps explicitly offered lower job levels separate from higher
     # alternatives, while retaining shared experience and sponsorship bars.
     # v66 preserves optional doctoral choices and reads written minimum
@@ -127,7 +130,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=3,
-        rule_version="2026-11-08-v67",
+        rule_version="2026-11-20-v68",
     ),
     # New grad roles stay the primary target (they sort first), and SDE
     # II comes in: with three years, a posting asking "3+ years" is one
@@ -138,7 +141,7 @@ PROFILES: dict[str, CandidateProfile] = {
         experience_years=3,
         max_required_years=4,
         max_open_ended_years=4,
-        rule_version="2026-11-08-v67-sde2",
+        rule_version="2026-11-20-v68-sde2",
     ),
 }
 
@@ -2995,6 +2998,11 @@ def evaluate_job(
     """
 
     profile = profile or ACTIVE_PROFILE
+
+    # Every title rule reads an underscore as a space, so seniority and
+    # specialty words joined by one are seen as well as the role words.
+    if "_" in job.title:
+        job = job.model_copy(update={"title": job.title.replace("_", " ")})
 
     role = classify_role(
         job.title

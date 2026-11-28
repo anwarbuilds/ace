@@ -4,6 +4,33 @@
 >
 > Read this when: you touch an adapter, the scheduler, conditional HTTP, retries, identity and diffing, or see a source misbehave.
 
+## Chat 8 readers and feeds (2026-11-20 to 2026-11-28 Pacific)
+
+- **Workable's job file** (`adapters/workable_feed.py`, source `workable_feed/jobs`, hourly): one compressed XML file of
+  every posting on Workable's job board. Read conditionally (304 when unchanged); US postings that are full-time or
+  state no type and whose title the gate could pass become list copies linked by Workable's own posting link; a
+  posting ACE holds open from a Workable board or another list is dropped by shortcode. Workable's server ends a
+  response about a minute after it starts, so the compressed body is saved to a temporary file as fast as it arrives
+  and read from disk; judging postings while streaming made most reads break off. Only a whole file closes anything,
+  and only its own copies. A burst of full downloads earns a 429: never download it repeatedly to measure.
+- **SuccessFactors** (`adapters/successfactors.py`, board = host): a careers site's `/sitemap.xml` is an RSS feed of
+  every posting with its whole description, one request a board. Detected from `/job/<city>-<title>/<id>/` links on
+  any host (tried last); every add route reads the feed as text; the feed's employer is the postings' claim.
+- **BambooHR and Rippling** (`adapters/bamboohr.py`, `adapters/rippling.py`, `adapters/listed_details.py`): a list,
+  then each promising posting's description, kept in the shared reading store (the Workable pattern).
+- **iCIMS** (source `icims`, board = host): read by the careers-site reader (`adapters/sitemap_jobs.py`) under its own
+  name; its sitemap lists every posting and the posting's `?in_iframe=1` view carries the JobPosting (the plain page's
+  JSON-LD is something else). Titles from addresses are now percent-decoded.
+- **Paylocity** (`adapters/paylocity.py`, board = the board id): the board page's `window.pageData` lists postings with
+  a teaser; each posting page carries the whole JobPosting.
+- **Not read:** Paycom (its job list answers 401 without the page's token; its sitemap is 404) and ADP (FreeHire reads
+  it only through a proxy and a browser fingerprint; no plain public route was found). Both are refusals by the rules.
+- **Test systems:** an Oracle or Workday host labelled dev, test, uat, stage, sandbox and the like is refused before it
+  is read on every route (`coverage/identity.py` `staging_host_reason`), after a lead added two test copies of a live
+  board and they reached Pulls (2026-11-24, repaired the same hour).
+- Labels for every new type are on Sources and Leads; FreeHire's weekly list names boards on SuccessFactors, BambooHR,
+  Rippling, iCIMS and Paylocity as leads.
+
 ## Detail fetches are predicated, not exhaustive
 
 Workday and SmartRecruiters return a cheap list and require a separate

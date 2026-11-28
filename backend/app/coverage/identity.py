@@ -66,6 +66,33 @@ def shared_board_reason(source_type: str, account: str) -> str | None:
     return REVIEWED_SHARED_BOARDS.get((source_type.casefold(), account.strip().casefold()))
 
 
+# Oracle and Workday run their customers' test systems on hosts beside the
+# live careers site: on 2026-11-24 a lead added jpmc-dev6.fa.oraclecloud.com
+# and jpmc-dev7, copies of JPMorgan's live board with postings ending
+# _ORA_DELETED. A host label that names a test system is never an employer's
+# careers site. Labels only, so "testamerica" or "devry" are not caught.
+_TEST_SYSTEM_LABEL = re.compile(
+    r"(?:^|[.-])(?:dev|test|tst|uat|stg|stage|staging|qa|sit|impl|preprod|sandbox)\d*(?=[.-]|$)",
+    re.I,
+)
+_TENANT_HOSTED = frozenset({"oracle_recruiting", "workday"})
+
+
+def staging_host_reason(source_type: str, account: str, host: str | None = None) -> str | None:
+    """Why a provider-hosted board is a test system, or None."""
+    kind = (source_type or "").casefold()
+    if kind not in _TENANT_HOSTED:
+        return None
+    hosts = [host or ""]
+    if kind == "oracle_recruiting":
+        hosts.append((account or "").split("/", 1)[0])
+    for value in hosts:
+        value = value.strip().casefold()
+        if value and _TEST_SYSTEM_LABEL.search(value):
+            return f"{value} is a test system, not a live careers site"
+    return None
+
+
 def portfolio_name_hints(titles: Iterable[str], owner: str) -> tuple[str, ...]:
     """Unverified search leads from a board already reviewed as shared.
 
@@ -251,6 +278,49 @@ def read_board_evidence(source_type: str, account: str, *, source_host=None, fet
     if source_type == "greenhouse":
         owner = board_metadata_name(source_type=source_type, token=account, fetch=fetch or _fetch_json)
         return BoardEvidence(owner=owner, employers=posting_employers(jobs), basis="The board's own metadata.")
+    if source_type == "icims":
+        # Each iCIMS posting's own JobPosting names its employer; up to three
+        # postings are read. It is the postings' claim, like a feed's.
+        from backend.app.adapters.sitemap_jobs import parse_sitemap, site_for
+
+        site = site_for(source_host or account)
+        listed = parse_sitemap((fetch_text or _fetch_text)(site.sitemap) or "", site)
+        named = []
+        for entry in listed[:3]:
+            page = (fetch_text or _fetch_text)(entry.url + site.page_query) or ""
+            found = re.search(r'"hiringOrganization"\s*:\s*\{[^{}]*?"name"\s*:\s*"([^"]{1,160})"', page)
+            if found:
+                named.append(html.unescape(found.group(1)).strip())
+        return BoardEvidence(employers=tuple(dict.fromkeys((*named, *posting_employers(jobs)))),
+                             basis="The employer its postings' own JobPosting names.", unavailable=not named)
+    if source_type == "paylocity":
+        # Each posting's own JobPosting names its employer; up to three are read.
+        from backend.app.adapters.paylocity import board_url, employer_of, listed, posting_url
+
+        try:
+            rows = listed((fetch_text or _fetch_text)(board_url(account)) or "")
+        except ValueError:
+            rows = []
+        named = [name for name in (employer_of((fetch_text or _fetch_text)(posting_url(str(row["JobId"]))) or "")
+                                   for row in rows[:3]) if name]
+        return BoardEvidence(employers=tuple(dict.fromkeys((*named, *posting_employers(jobs)))),
+                             basis="The employer its postings' own JobPosting names.", unavailable=not named)
+    if source_type in ("bamboohr", "rippling"):
+        # The board's own company record (BambooHR) or its postings' (Rippling).
+        from backend.app.adapters import bamboohr, rippling
+
+        reader = bamboohr if source_type == "bamboohr" else rippling
+        owner = reader.company_name_of(fetch or _fetch_json, account)
+        return BoardEvidence(owner=owner, employers=posting_employers(jobs),
+                             basis="The board's own company record.", unavailable=owner is None)
+    if source_type == "successfactors":
+        # The feed names each posting's employer; it is the postings' claim, not
+        # a separate owner record, so it counts as their structured employer.
+        from backend.app.adapters.successfactors import feed_url, sample
+
+        feed = (fetch_text or _fetch_text)(feed_url(source_host or account)) or ""
+        return BoardEvidence(employers=tuple(dict.fromkeys((*posting_employers(sample(feed)), *posting_employers(jobs)))),
+                             basis="The careers site's own job feed.", unavailable=not bool(feed))
     pages = {**BOARD_PAGE_URLS, 'workable': 'https://apply.workable.com/{token}/',
              'gem': 'https://jobs.gem.com/{token}'}
     if source_type in pages:

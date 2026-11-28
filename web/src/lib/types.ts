@@ -26,6 +26,8 @@ export interface AppliedBefore {
   is_active: boolean;
   requisition_id: string | null;
   count: number;
+  /** Same company and requisition number: the opening applied to, from another board. */
+  same_opening?: boolean;
 }
 
 export interface Job {
@@ -462,7 +464,11 @@ export interface RecallMissed {
   listed_on: string | null;
   link: string | null;
   reason: string;
+  // What ace did about the company's board after the score (REC-02); absent until it has looked.
+  fix?: { state: MissedFixState; note: string };
 }
+
+export type MissedFixState = "added" | "trying" | "held" | "off" | "not_added" | "no_board";
 
 export type RecallReport =
   | { checked: false }
@@ -474,6 +480,7 @@ export type RecallReport =
       lists: RecallList[];
       leaks: { boards: number; jobs: number; leads: number };
       missed: RecallMissed[];
+      fixes?: { checked_at: string; boards_read: number; boards_added: number; roles: Record<MissedFixState, number> };
       trend: { day: string; listed: number; found: number }[];
     };
 

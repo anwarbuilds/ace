@@ -9,7 +9,7 @@ import { useMarks } from "@/components/jobs/useMarks";
 import { useApp, withPatch } from "@/components/shell/AppProvider";
 import { NavIcon } from "@/components/shell/NavIcon";
 import { getJson } from "@/lib/client";
-import { ago, beforeNote, clean, clock, expFit, familyLabel, shortDate, timeRange, unscoredReason, UNSCORED } from "@/lib/format";
+import { ago, appliedOn, beforeNote, clean, clock, expFit, familyLabel, priorTag, timeRange, unscoredReason, UNSCORED } from "@/lib/format";
 import type { Job, JobPage, PullBucket, PullFilter } from "@/lib/types";
 
 const SHOWN = 20;
@@ -54,6 +54,7 @@ function JobLine({ job, tz, evidence, onCompanySelect }: { job: Job; tz: string;
   const { mark } = useMarks();
   const fit = expFit(job);
   const applied = Boolean(job.applied_at);
+  const prior = applied ? null : priorTag(job, tz);
   const dismissed = job.review_state === "dismissed";
   return (
     <div className={`job-line${dismissed ? " dim" : ""}`}>
@@ -71,9 +72,9 @@ function JobLine({ job, tz, evidence, onCompanySelect }: { job: Job; tz: string;
         </div>
         <div className="job-tags">
           <span className={fit.cls}>{fit.text}</span>
-          {job.applied_before && !applied ? (
-            <span className="badge before" title={beforeNote(job, tz)}>
-              Applied before {"·"} {shortDate(job.applied_before.applied_at, tz)}
+          {prior ? (
+            <span className={prior.cls} title={beforeNote(job, tz)}>
+              {prior.text}
             </span>
           ) : null}
         </div>
@@ -87,7 +88,7 @@ function JobLine({ job, tz, evidence, onCompanySelect }: { job: Job; tz: string;
         <span className={`pscore${job.match_score >= 70 ? "" : " mid"}`}>{job.match_score}%</span>
       )}
       <div className="job-actions">
-        {applied ? <span className="tag green">Applied</span> : null}
+        {applied ? <span className="tag green">{appliedOn(job.applied_at, tz)}</span> : null}
         <a className="sub-btn icon" href={job.official_url} target="_blank" rel="noreferrer" title="Open the official posting" aria-label={`Open the official posting for ${clean(job.title)}`}>
           <NavIcon name="external" size="sm" />
         </a>

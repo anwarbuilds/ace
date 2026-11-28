@@ -1202,8 +1202,18 @@ _DEMO_MISSED = (
     (_SHORT.key, "Halcyon Bio", "Associate Software Engineer", 2, None, "Board read, role not there"),
     (_LINKED.key, "Northwind Robotics", "Software Engineer, 2027", 3, "https://careers-northwind.icims.com/jobs/7844/job", "Posted on iCIMS, which ace can't read yet"),
     (_SHORT.key, "Fabrikam", "Machine Learning Engineer I", 4, None, "The site turned ace away"),
-    (_LINKED.key, "Lumora Pay", "Data Engineer, New Grad", 5, None, "Uses a hiring site ace can't read yet"),
+    (_LINKED.key, "Lumora Pay", "Data Engineer, New Grad", 5, "https://boards.greenhouse.io/lumorapay/jobs/5550123", "On a board ace can read, not added yet"),
 )
+
+# What ace did about each missed role's board (REC-02), as the Needs you tab shows it.
+_DEMO_FIXES = {
+    "Kestrel Grid": ("no_board", "ace has not heard of this company"),
+    "Driftmark": ("added", "ace added this company's board. New roles reach Pulls from it"),
+    "Halcyon Bio": ("held", "ace reads this company's board. The role was not on it at the last read"),
+    "Northwind Robotics": ("no_board", "Posted on iCIMS, which ace can't read yet"),
+    "Fabrikam": ("no_board", "The site turned ace away"),
+    "Lumora Pay": ("not_added", "ace could not confirm the board belongs to this company"),
+}
 
 
 def _store_recall(
@@ -1253,6 +1263,12 @@ def _store_recall(
                     },
                     "lists": lists,
                     "leaks": {"boards": 0, "jobs": 0, "leads": 0},
+                    "fixes": {
+                        "checked_at": "",
+                        "boards_read": 2,
+                        "boards_added": 1,
+                        "roles": {"added": 1, "trying": 0, "held": 1, "off": 0, "not_added": 1, "no_board": 3},
+                    },
                 },
                 missed=[
                     {
@@ -1263,6 +1279,7 @@ def _store_recall(
                         "listed_on": (day - timedelta(days=age)).isoformat(),
                         "link": link,
                         "reason": reason,
+                        "fix": {"state": _DEMO_FIXES[company][0], "note": _DEMO_FIXES[company][1]},
                     }
                     for key, company, title, age, link, reason in _DEMO_MISSED
                 ],

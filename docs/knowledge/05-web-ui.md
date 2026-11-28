@@ -8,6 +8,19 @@
 > Read this when: you change the old single-file UI or build its Next.js replacement; it records what each screen is for and what went wrong.
 
 
+## Applied on, Needs you and the Scoreboard wording (Chat 8, 2026-11-20 to 2026-11-28 Pacific)
+
+- **Applied on** (owner request, web `9bf29cd`): a posting of the same company with the same requisition number as an
+  applied one says "Applied on <date>" in green, whatever its title or place; another role at that company says
+  "Similar role applied on <date>" in grey. Derived on read; no mark is ever copied.
+- **Needs you** (REC-02, web `f158427`): a fourth Coverage tab listing every role the daily check missed, with its own
+  posting link and what ACE did about its company (added, trying, held, switched off, not added). Owner approved the
+  Day and Night screenshots before release. No click is needed anywhere (owner rule, 2026-11-23).
+- **Scoreboard** (web `2268f78`): "ace has it only because a list it reads (Simplify, Zapply or Workable's job file)
+  showed it."
+- "Partial" on a Pulls window means at least one board failed or refused during that window; it closes nothing and the
+  board is read again on its next turn.
+
 ## Assessment invitation headline LIVE, 2026-11-03 Pacific
 
 Exact tested web `1e39263`, PR #28, activated web-only at 17:26 Pacific. The card

@@ -48,7 +48,11 @@ from backend.app.coverage.leads import (
     check_due_leads,
     sync_leads,
 )
-from backend.app.coverage.recall import run_daily_check
+from backend.app.coverage.missed_boards import fix_latest_run
+from backend.app.discovery.freehire import USER_AGENT as FREEHIRE_USER_AGENT, harvest_if_due as harvest_freehire_if_due
+from backend.app.discovery.yc_names import USER_AGENT as YC_USER_AGENT, harvest_if_due as harvest_yc_if_due
+from backend.app.discovery.hn_hiring import USER_AGENT as HN_USER_AGENT, read_if_due as read_hn_if_due
+from backend.app.coverage.recall import MISSED_ROLE_ORIGIN, run_daily_check
 from backend.app.coverage.recovery import (
     recover_dark_sources,
 )
@@ -95,6 +99,7 @@ from backend.scripts.register_network_boards import (
     Candidate,
     assess,
     declared_name,
+    known_boards,
     register as register_board,
 )
 from backend.app.scheduling import (
@@ -844,12 +849,13 @@ def main(
                 if settings.lead_auto_add_enabled
                 else None
             ),
-            diagnose_name=lambda company: diagnose(
+            diagnose_name=lambda company, hosts=(): diagnose(
                 company,
                 fetch=reader.fetch,
                 fetch_text=reader.fetch_text,
                 post=reader.post,
                 refuses=reader.refuses,
+                hosts=hosts,
             ),
         )
 
@@ -871,6 +877,131 @@ def main(
             checked.added,
             checked.states,
         )
+
+    def fix_missed_boards() -> None:
+        """Try the boards the daily score's missed roles link, once a day."""
+
+        with SessionLocal() as session:
+            refused = refused_hosts(
+                session
+            )
+
+        reader = PoliteReader(
+            refused
+        )
+
+        def known() -> set:
+            with SessionLocal() as session:
+                return set(
+                    known_boards(
+                        session
+                    )
+                )
+
+        def allows(source_type, account, host) -> bool:
+            return all(
+                reader.allows(f"https://{target.host}{path}")
+                for target in read_targets(source_type, account, host)
+                for path in target.paths
+            )
+
+        def try_board(source_type, account, company, host):
+            return assess(
+                Candidate(
+                    source_type=source_type,
+                    source_account=account,
+                    company=company,
+                    source_host=host,
+                ),
+                lambda definition: dispatcher.fetch(
+                    definition
+                ).jobs,
+                partial(
+                    declared_name,
+                    fetch=reader.fetch,
+                    fetch_text=reader.fetch_text,
+                ),
+            )
+
+        fix_latest_run(
+            SessionLocal,
+            now=now_utc(),
+            known=known,
+            allows=allows,
+            try_board=try_board,
+            register=lambda session, outcome: register_board(
+                session,
+                outcome,
+                now=now_utc(),
+                origin=MISSED_ROLE_ORIGIN,
+            ),
+        )
+
+    def harvest_freehire() -> None:
+        """Once a week, FreeHire's boards for US software postings become leads (DIS-02)."""
+
+        with SessionLocal() as session:
+            reader = PoliteReader(
+                refused_hosts(
+                    session
+                )
+            )
+
+        with httpx.Client(
+            headers={"User-Agent": FREEHIRE_USER_AGENT, "Accept": "application/json"},
+            timeout=30.0,
+            follow_redirects=False,
+        ) as client:
+            harvest_freehire_if_due(
+                SessionLocal,
+                now=now_utc(),
+                allows=reader.allows,
+                get=client.get,
+            )
+
+    def harvest_yc() -> None:
+        """Once a day, YC companies marked hiring become name leads, from a public list on GitHub (DIS-06)."""
+
+        with SessionLocal() as session:
+            reader = PoliteReader(
+                refused_hosts(
+                    session
+                )
+            )
+
+        with httpx.Client(
+            headers={"User-Agent": YC_USER_AGENT, "Accept": "application/json"},
+            timeout=30.0,
+            follow_redirects=False,
+        ) as client:
+            harvest_yc_if_due(
+                SessionLocal,
+                now=now_utc(),
+                allows=reader.allows,
+                get=client.get,
+            )
+
+    def read_hn() -> None:
+        """Every six hours, the companies in Hacker News's Who is hiring? thread become leads (DIS-11)."""
+
+        with SessionLocal() as session:
+            reader = PoliteReader(
+                refused_hosts(
+                    session
+                )
+            )
+
+        with httpx.Client(
+            headers={"User-Agent": HN_USER_AGENT, "Accept": "application/json"},
+            timeout=30.0,
+            follow_redirects=False,
+        ) as client:
+            read_hn_if_due(
+                SessionLocal,
+                now=now_utc(),
+                allows=reader.allows,
+                get=client.get,
+            )
 
     # When dark boards were last diagnosed. That reads companies'
     # websites, so it keeps its six-hour rhythm while the rest of the
@@ -902,6 +1033,51 @@ def main(
                 LOGGER.exception(
                     "recall_check_failed"
                 )
+
+            # Then, once a day, the boards behind the roles it missed, through
+            # the same checks as every added board (owner, November 22).
+            if settings.lead_auto_add_enabled:
+                try:
+                    fix_missed_boards()
+
+                except Exception:
+                    LOGGER.exception(
+                        "missed_boards_failed"
+                    )
+
+            # And once a week, the boards FreeHire names become leads, which
+            # the lead check reads before it adds any (owner, November 22).
+            if settings.freehire_harvest_enabled and settings.lead_ledger_enabled:
+                try:
+                    harvest_freehire()
+
+                except Exception:
+                    LOGGER.exception(
+                        "freehire_harvest_failed"
+                    )
+
+            # And once a day, YC companies marked hiring become name leads,
+            # from a public list; YC's own site is never opened (owner,
+            # November 27).
+            if settings.yc_names_enabled and settings.lead_ledger_enabled:
+                try:
+                    harvest_yc()
+
+                except Exception:
+                    LOGGER.exception(
+                        "yc_names_failed"
+                    )
+
+            # And every six hours, the month's Hacker News Who is hiring?
+            # thread, through its public API (owner, November 28).
+            if settings.hn_hiring_enabled and settings.lead_ledger_enabled:
+                try:
+                    read_hn()
+
+                except Exception:
+                    LOGGER.exception(
+                        "hn_hiring_failed"
+                    )
 
         register_feed_boards()
 

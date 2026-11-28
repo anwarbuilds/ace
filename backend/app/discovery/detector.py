@@ -601,6 +601,157 @@ def _detect_gem(
     )
 
 
+def _detect_bamboohr(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect BambooHR boards: <account>.bamboohr.com/careers[/<id>] (or /jobs)."""
+
+    if not host.endswith(".bamboohr.com"):
+        return None
+
+    account = host.removesuffix(".bamboohr.com")
+
+    if "." in account or account in ("www", "api", "app") or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", account):
+        return None
+
+    if segments and segments[0] not in ("careers", "jobs"):
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.BAMBOOHR,
+        source_account=account,
+        source_host=host,
+    )
+
+
+def _detect_icims(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect iCIMS careers sites: <site>.icims.com/jobs/... (the site's host names the board)."""
+
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*\.icims\.com", host) or host.startswith(("www.", "api.", "cdn")):
+        return None
+
+    if not segments or segments[0] != "jobs":
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.ICIMS,
+        source_account=host,
+        source_host=host,
+    )
+
+
+def _detect_paylocity(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect Paylocity boards: recruiting.paylocity.com/Recruiting/Jobs/All/<board id>.
+
+    A posting link (/Recruiting/Jobs/Details/<id>) names no board, so only the
+    board's own address is a board.
+    """
+
+    if host != "recruiting.paylocity.com" or len(segments) < 4:
+        return None
+
+    if [part.lower() for part in segments[:3]] != ["recruiting", "jobs", "all"]:
+        return None
+
+    board = segments[3].lower()
+
+    if not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", board):
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.PAYLOCITY,
+        source_account=board,
+        source_host=host,
+    )
+
+
+def _detect_rippling(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect Rippling boards: ats.rippling.com/<board>/jobs[/<id>], or the board API."""
+
+    if host == "ats.rippling.com" and len(segments) >= 1:
+        board = segments[0].lower()
+    elif host == "api.rippling.com" and segments[:5] == ("platform", "api", "ats", "v1", "board") and len(segments) >= 6:
+        board = segments[5].lower()
+    else:
+        return None
+
+    if board in ("internal", "api") or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", board):
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.RIPPLING,
+        source_account=board,
+        source_host="ats.rippling.com",
+    )
+
+
+# Hosts whose "/job/<slug>/<id>/" paths are not SuccessFactors careers sites.
+_NOT_SUCCESSFACTORS = (
+    "linkedin.com",
+    "indeed.com",
+    "glassdoor.com",
+    "ycombinator.com",
+    "builtin.com",
+    "wellfound.com",
+)
+
+
+def _detect_successfactors(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect SuccessFactors careers sites: https://<host>/job/<city>-<title>/<id>/.
+
+    Only the path's shape names it, so the board is read before it is ever
+    trusted: a site whose /sitemap.xml is not a SuccessFactors job feed fails
+    that read and is never added.
+    """
+
+    if (
+        len(segments) != 3
+        or segments[0] != "job"
+        or not re.fullmatch(r"\d{6,}", segments[2])
+        or any(host == bad or host.endswith("." + bad) for bad in _NOT_SUCCESSFACTORS)
+    ):
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.SUCCESSFACTORS,
+        source_account=host,
+        source_host=host,
+    )
+
+
 def detect_source_from_url(
     url: str,
 ) -> DetectedSourceIdentity | None:
@@ -651,6 +802,12 @@ def detect_source_from_url(
         _detect_oracle_recruiting,
         _detect_workable,
         _detect_gem,
+        _detect_bamboohr,
+        _detect_rippling,
+        _detect_icims,
+        _detect_paylocity,
+        # Last: it reads only the path, so every named host is tried first.
+        _detect_successfactors,
     )
 
     for detector in detectors:

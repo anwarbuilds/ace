@@ -206,6 +206,12 @@ class Settings(BaseSettings):
     # (REC-01), the only reads of them anywhere. Reports only: it never adds
     # a board or a job.
     recall_check_enabled: bool = True
+    # Once a week, after the day's score, the boards FreeHire's public API
+    # names for US software postings become leads; the lead check reads each
+    # one itself before it adds it (DIS-02, owner, November 22, 2026).
+    freehire_harvest_enabled: bool = True
+    yc_names_enabled: bool = True
+    hn_hiring_enabled: bool = True
 
     # How many boards the scheduler reads at once, and how many of one
     # slow platform's boards may hold a worker together, as

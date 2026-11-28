@@ -28,7 +28,22 @@ BOARDS = {
     'oracle_recruiting': 'https://birchlabs.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/job/1',
     'workable': 'https://apply.workable.com/birchlabs/j/ONE/',
     'gem': 'https://jobs.gem.com/birchlabs/job-1',
+    'successfactors': 'https://jobs.birchlabs.example/job/Seattle-Software-Engineer-New-Grad-WA-98101/1234567/',
+    'bamboohr': 'https://birchlabs.bamboohr.com/careers/1',
+    'rippling': 'https://ats.rippling.com/birchlabs/jobs/0f9d1c2e-1111-4222-8333-944455556666',
+    'icims': 'https://careers-birchlabs.icims.com/jobs/1/software-engineer-new-grad/job',
+    'paylocity': 'https://recruiting.paylocity.com/Recruiting/Jobs/All/0b1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8',
 }
+
+# A SuccessFactors careers site's job feed: its sitemap.xml (DIS-08), one posting per employer named.
+def successfactors_feed(employers=('Birch Labs',)):
+    items = ''.join(
+        f'<item><title>Software Engineer, New Grad (Seattle, WA, US)</title><description>Build software.</description>'
+        f'<link>https://jobs.birchlabs.example/job/Seattle-Software-Engineer-New-Grad-WA-98101/123456{n}/</link>'
+        f'<guid>123456{n}</guid><g:id>123456{n}</g:id><g:employer>{name}</g:employer>'
+        f'<g:location>Seattle, WA, US</g:location></item>'
+        for n, name in enumerate(employers))
+    return f'<?xml version="1.0"?><rss version="2.0" xmlns:g="http://base.google.com/ns/1.0"><channel>{items}</channel></rss>'
 
 
 @pytest.fixture
@@ -40,7 +55,8 @@ def db():
 
 
 def raw_job(reader):
-    row = {'id': '1', 'title': 'Software Engineer, New Grad', 'name': 'Software Engineer, New Grad'}
+    row = {'id': '1', 'title': 'Software Engineer, New Grad', 'name': 'Software Engineer, New Grad',
+           'uuid': '0f9d1c2e-1111-4222-8333-944455556666', 'jobOpeningName': 'Software Engineer, New Grad'}
     if reader == 'smartrecruiters':
         row['company'] = {'name': 'Birch Labs'}
     return row
@@ -49,6 +65,11 @@ def raw_job(reader):
 def fetchers(reader, employers=()):
     rows = [dict(raw_job(reader), hiringOrganization={'name': name}) for name in employers] or [raw_job(reader)]
     def fetch(url, **kwargs):
+        if reader == 'bamboohr':
+            return {'result': {'name': 'Birch Labs'}} if url.endswith('/company-info') else {'result': rows}
+        if reader == 'rippling':
+            # The board's postings name its company; the list is a plain array.
+            return rows if url.endswith('/jobs') else {'companyName': 'Birch Labs', 'uuid': '0f9d1c2e'}
         if '/v1/boards/' in url and not url.endswith('/jobs'):
             return {'name': 'Birch Labs'}
         if 'oraclecloud.com' in url:
@@ -63,6 +84,29 @@ def fetchers(reader, employers=()):
         return {'results': rows, 'jobPostings': rows}
 
     def page(url, **kwargs):
+        if reader == 'paylocity' and '/Recruiting/Jobs/All/' in url:
+            import json as _json
+            rows = [{'JobId': str(n + 1), 'JobTitle': 'Software Engineer, New Grad', 'IsInternal': False,
+                     'JobLocation': {'City': 'Seattle', 'State': 'WA', 'Country': 'USA'}}
+                    for n in range(len(employers or ('Birch Labs',)))]
+            return '<script>window.pageData = ' + _json.dumps({'Jobs': rows}) + ';\n</script>'
+        if reader == 'paylocity' and '/Recruiting/Jobs/Details/' in url:
+            names = employers or ('Birch Labs',)
+            index = int(url.rsplit('/', 1)[1]) - 1
+            return ('<script type="application/ld+json">{"@type": "JobPosting", "title": "Software Engineer, New Grad", '
+                    f'"hiringOrganization": {{"@type": "Organization", "name": "{names[index]}"}}}}</script>')
+        if reader == 'icims' and url.endswith('/sitemap.xml'):
+            # One posting per employer named, each page naming its own employer.
+            return '<urlset>' + ''.join(
+                f'<url><loc>https://careers-birchlabs.icims.com/jobs/{n + 1}/software-engineer-new-grad/job</loc></url>'
+                for n in range(len(employers or ('Birch Labs',)))) + '</urlset>'
+        if reader == 'icims' and '/jobs/' in url:
+            names = employers or ('Birch Labs',)
+            index = int(url.split('/jobs/')[1].split('/')[0]) - 1
+            return ('<script type="application/ld+json">{"@type": "JobPosting", "title": "Software Engineer, New Grad", '
+                    f'"hiringOrganization": {{"@type": "Organization", "name": "{names[index]}"}}}}</script>')
+        if reader == 'successfactors' and url.endswith('/sitemap.xml'):
+            return successfactors_feed(employers or ('Birch Labs',))
         if reader == 'workable':
             return '<title>Birch Labs - Current Openings</title><h1>Open roles</h1>'
         if reader in ('ashby', 'lever', 'gem', 'workable'):

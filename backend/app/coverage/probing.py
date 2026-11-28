@@ -37,7 +37,9 @@ import urllib.request
 from urllib.parse import urlsplit
 
 from backend.app.coverage.benchmark import normalise_company
-from backend.app.coverage.identity import name_keys, read_board_evidence, resolve_employer, shared_board_reason
+from backend.app.coverage.identity import (
+    name_keys, read_board_evidence, resolve_employer, shared_board_reason, staging_host_reason,
+)
 from backend.app.coverage.companies import is_namesake
 
 
@@ -1002,7 +1004,7 @@ def board_belongs_to(
     ):
         return None
 
-    if shared_board_reason(source_type, token):
+    if shared_board_reason(source_type, token) or staging_host_reason(source_type, token, source_host):
         return None
 
     evidence = read_board_evidence(
@@ -1385,8 +1387,47 @@ def board_jobs(
     *,
     fetch=_fetch_json,
     post=_post_json,
+    fetch_text=None,
 ) -> list[dict]:
     """Return a sample of a board's postings, whatever ATS it is on."""
+
+    if ref.source_type == "icims":
+        # Its sitemap names every posting with its title (DIS-09).
+        from backend.app.adapters.sitemap_jobs import parse_sitemap, site_for
+
+        host = ref.source_host or ref.token
+        site = site_for(host)
+        markup = (fetch_text or _fetch_text)(site.sitemap) or ""
+        return [{"id": item.external_id, "title": item.title, "url": item.url} for item in parse_sitemap(markup, site)]
+
+    if ref.source_type == "paylocity":
+        from backend.app.adapters.paylocity import board_url, listed
+
+        try:
+            rows = listed((fetch_text or _fetch_text)(board_url(ref.token)) or "")
+        except ValueError:
+            return []
+        return [{"id": str(row["JobId"]), "title": row.get("JobTitle")} for row in rows]
+
+    if ref.source_type == "bamboohr":
+        from backend.app.adapters.bamboohr import base_url
+
+        body = fetch(base_url(ref.token) + "/list")
+        found = body.get("result") if isinstance(body, dict) else None
+        return [item for item in found or [] if isinstance(item, dict)]
+
+    if ref.source_type == "rippling":
+        from backend.app.adapters.rippling import list_url
+
+        body = fetch(list_url(ref.token))
+        return [item for item in body or [] if isinstance(item, dict)] if isinstance(body, list) else []
+
+    if ref.source_type == "successfactors":
+        # Its job feed is XML, read as text (DIS-08).
+        from backend.app.adapters.successfactors import feed_url, sample
+
+        host = ref.source_host or ref.token
+        return sample((fetch_text or _fetch_text)(feed_url(host)) or "") if host else []
 
     if ref.source_type == 'gem':
         return _jobs_from(fetch(f'https://api.gem.com/job_board/v0/{ref.token}/job_posts/'))
@@ -2290,7 +2331,7 @@ def ref_belongs_to(
     whose board it is.
     """
 
-    if shared_board_reason(ref.source_type, ref.token):
+    if shared_board_reason(ref.source_type, ref.token) or staging_host_reason(ref.source_type, ref.token, ref.source_host):
         return None
     fetch = lru_cache(maxsize=8)(fetch) if fetch else (lambda url: None)
     fetch_text = lru_cache(maxsize=8)(fetch_text) if fetch_text else (lambda url: "")
@@ -2460,6 +2501,7 @@ def find_board_via_careers_page(
                 ref,
                 fetch=fetch,
                 post=post,
+                fetch_text=fetch_text,
             )
 
             if not jobs:
