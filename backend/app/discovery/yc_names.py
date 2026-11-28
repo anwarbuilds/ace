@@ -139,16 +139,20 @@ def harvest(
     return parse(response.json())
 
 
+# Origins whose details may carry a company's own website, as "<origin>:<host>".
+SITE_HINT_ORIGINS = ("yc", "hn")
+
+
 def site_hints(
     details: list[str] | None,
 ) -> tuple[str, ...]:
     """The websites a lead's origin details name, in the order they were added."""
 
-    return tuple(
+    return tuple(dict.fromkeys(
         detail.split(":", 1)[1]
         for detail in details or []
-        if detail.startswith(f"{ORIGIN}:") and website_host(detail.split(":", 1)[1])
-    )
+        if detail.split(":", 1)[0] in SITE_HINT_ORIGINS and ":" in detail and website_host(detail.split(":", 1)[1])
+    ))
 
 
 def remember(

@@ -117,10 +117,11 @@ FREEHIRE = "freehire"
 MISSED = "missed"
 WORKABLE_FILE = "workable_file"
 YC = "yc"
+HN = "hn"
 VISA_FILINGS = "visa_filings"
 
 # Strongest first: the one "Lead from" names when a lead has several.
-ORIGINS = (OWNER, CURATED, NETWORK, FEED, WORKABLE_FILE, YC, VISA_FILINGS, MISSED, FREEHIRE, SEARCH)
+ORIGINS = (OWNER, CURATED, NETWORK, FEED, WORKABLE_FILE, YC, HN, VISA_FILINGS, MISSED, FREEHIRE, SEARCH)
 
 ORIGIN_LABELS = {
     OWNER: "Added by you",
@@ -129,6 +130,7 @@ ORIGIN_LABELS = {
     FEED: "New grad list",
     WORKABLE_FILE: "Workable job file",
     YC: "YC companies",
+    HN: "Hacker News",
     VISA_FILINGS: "Visa filings",
     MISSED: "Daily check",
     FREEHIRE: "FreeHire",
@@ -142,6 +144,7 @@ ORIGIN_NOTES = {
     FEED: "Names in the public lists ace reads",
     WORKABLE_FILE: "Companies in Workable's public job file, each looked up by ace before a board is added",
     YC: "YC companies marked hiring, from a public list on GitHub; ace looks for each one's own job board and never opens YC's site",
+    HN: "Companies in Hacker News's monthly Who is hiring? thread, read every six hours through its public API",
     VISA_FILINGS: "Employers with certified H-1B filings for software roles in the Department of Labor's files; a filing is not a promise of sponsorship",
     MISSED: "Companies behind roles the daily check missed, looked up by name",
     FREEHIRE: "Boards FreeHire's public job list names, each read by ace before it is added",
