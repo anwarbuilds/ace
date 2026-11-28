@@ -28,7 +28,18 @@ BOARDS = {
     'oracle_recruiting': 'https://birchlabs.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/job/1',
     'workable': 'https://apply.workable.com/birchlabs/j/ONE/',
     'gem': 'https://jobs.gem.com/birchlabs/job-1',
+    'successfactors': 'https://jobs.birchlabs.example/job/Seattle-Software-Engineer-New-Grad-WA-98101/1234567/',
 }
+
+# A SuccessFactors careers site's job feed: its sitemap.xml (DIS-08), one posting per employer named.
+def successfactors_feed(employers=('Birch Labs',)):
+    items = ''.join(
+        f'<item><title>Software Engineer, New Grad (Seattle, WA, US)</title><description>Build software.</description>'
+        f'<link>https://jobs.birchlabs.example/job/Seattle-Software-Engineer-New-Grad-WA-98101/123456{n}/</link>'
+        f'<guid>123456{n}</guid><g:id>123456{n}</g:id><g:employer>{name}</g:employer>'
+        f'<g:location>Seattle, WA, US</g:location></item>'
+        for n, name in enumerate(employers))
+    return f'<?xml version="1.0"?><rss version="2.0" xmlns:g="http://base.google.com/ns/1.0"><channel>{items}</channel></rss>'
 
 
 @pytest.fixture
@@ -63,6 +74,8 @@ def fetchers(reader, employers=()):
         return {'results': rows, 'jobPostings': rows}
 
     def page(url, **kwargs):
+        if reader == 'successfactors' and url.endswith('/sitemap.xml'):
+            return successfactors_feed(employers or ('Birch Labs',))
         if reader == 'workable':
             return '<title>Birch Labs - Current Openings</title><h1>Open roles</h1>'
         if reader in ('ashby', 'lever', 'gem', 'workable'):

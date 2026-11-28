@@ -116,6 +116,48 @@ def parse_feed(
     return jobs
 
 
+def feed_employer(
+    body: bytes | str,
+) -> str | None:
+    """The employer a feed names most often, or None when it is not a feed."""
+
+    data = body.encode() if isinstance(body, str) else body
+    if not data or _UNSAFE.search(data[:4096]):
+        return None
+    try:
+        root = ElementTree.fromstring(data)
+    except ElementTree.ParseError:
+        return None
+    names: dict[str, int] = {}
+    for item in root.findall("./channel/item"):
+        name = " ".join(_text(item, f"{_BASE}employer").split())
+        if name:
+            names[name] = names.get(name, 0) + 1
+    return max(names, key=names.get) if names else None
+
+
+def sample(
+    body: bytes | str,
+) -> list[dict]:
+    """A feed's postings as plain rows (id, title, place and each one's employer), or nothing when it is not a feed."""
+
+    data = body.encode() if isinstance(body, str) else body
+    try:
+        jobs = parse_feed(data, company_name="")
+        root = ElementTree.fromstring(data)
+    except (NotASuccessFactorsFeed, ElementTree.ParseError):
+        return []
+    employers = {
+        _text(item, f"{_BASE}id") or _text(item, "guid"): " ".join(_text(item, f"{_BASE}employer").split())
+        for item in root.findall("./channel/item")
+    }
+    return [
+        {"id": job.external_id, "title": job.title, "location": job.location,
+         **({"hiringOrganization": {"name": employers[job.external_id]}} if employers.get(job.external_id) else {})}
+        for job in jobs
+    ]
+
+
 def fetch_successfactors_jobs(
     *,
     source_account: str,
@@ -146,4 +188,5 @@ def fetch_successfactors_jobs(
     return parse_feed(bytes(body), company_name=company_name), False, next_validators
 
 
-__all__ = ["SOURCE", "NotASuccessFactorsFeed", "board_host", "feed_url", "fetch_successfactors_jobs", "parse_feed"]
+__all__ = ["SOURCE", "NotASuccessFactorsFeed", "board_host", "feed_employer", "feed_url", "fetch_successfactors_jobs",
+           "parse_feed", "sample"]

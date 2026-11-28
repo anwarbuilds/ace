@@ -327,6 +327,7 @@ def diagnose(
                 ref,
                 fetch=fetch,
                 post=post,
+                fetch_text=fetch_text,
             )
 
             if not jobs:

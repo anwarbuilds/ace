@@ -1387,8 +1387,16 @@ def board_jobs(
     *,
     fetch=_fetch_json,
     post=_post_json,
+    fetch_text=None,
 ) -> list[dict]:
     """Return a sample of a board's postings, whatever ATS it is on."""
+
+    if ref.source_type == "successfactors":
+        # Its job feed is XML, read as text (DIS-08).
+        from backend.app.adapters.successfactors import feed_url, sample
+
+        host = ref.source_host or ref.token
+        return sample((fetch_text or _fetch_text)(feed_url(host)) or "") if host else []
 
     if ref.source_type == 'gem':
         return _jobs_from(fetch(f'https://api.gem.com/job_board/v0/{ref.token}/job_posts/'))
@@ -2462,6 +2470,7 @@ def find_board_via_careers_page(
                 ref,
                 fetch=fetch,
                 post=post,
+                fetch_text=fetch_text,
             )
 
             if not jobs:

@@ -278,6 +278,14 @@ def read_board_evidence(source_type: str, account: str, *, source_host=None, fet
     if source_type == "greenhouse":
         owner = board_metadata_name(source_type=source_type, token=account, fetch=fetch or _fetch_json)
         return BoardEvidence(owner=owner, employers=posting_employers(jobs), basis="The board's own metadata.")
+    if source_type == "successfactors":
+        # The feed names each posting's employer; it is the postings' claim, not
+        # a separate owner record, so it counts as their structured employer.
+        from backend.app.adapters.successfactors import feed_url, sample
+
+        feed = (fetch_text or _fetch_text)(feed_url(source_host or account)) or ""
+        return BoardEvidence(employers=tuple(dict.fromkeys((*posting_employers(sample(feed)), *posting_employers(jobs)))),
+                             basis="The careers site's own job feed.", unavailable=not bool(feed))
     pages = {**BOARD_PAGE_URLS, 'workable': 'https://apply.workable.com/{token}/',
              'gem': 'https://jobs.gem.com/{token}'}
     if source_type in pages:
