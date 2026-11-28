@@ -31,6 +31,7 @@ BOARDS = {
     'successfactors': 'https://jobs.birchlabs.example/job/Seattle-Software-Engineer-New-Grad-WA-98101/1234567/',
     'bamboohr': 'https://birchlabs.bamboohr.com/careers/1',
     'rippling': 'https://ats.rippling.com/birchlabs/jobs/0f9d1c2e-1111-4222-8333-944455556666',
+    'icims': 'https://careers-birchlabs.icims.com/jobs/1/software-engineer-new-grad/job',
 }
 
 # A SuccessFactors careers site's job feed: its sitemap.xml (DIS-08), one posting per employer named.
@@ -82,6 +83,16 @@ def fetchers(reader, employers=()):
         return {'results': rows, 'jobPostings': rows}
 
     def page(url, **kwargs):
+        if reader == 'icims' and url.endswith('/sitemap.xml'):
+            # One posting per employer named, each page naming its own employer.
+            return '<urlset>' + ''.join(
+                f'<url><loc>https://careers-birchlabs.icims.com/jobs/{n + 1}/software-engineer-new-grad/job</loc></url>'
+                for n in range(len(employers or ('Birch Labs',)))) + '</urlset>'
+        if reader == 'icims' and '/jobs/' in url:
+            names = employers or ('Birch Labs',)
+            index = int(url.split('/jobs/')[1].split('/')[0]) - 1
+            return ('<script type="application/ld+json">{"@type": "JobPosting", "title": "Software Engineer, New Grad", '
+                    f'"hiringOrganization": {{"@type": "Organization", "name": "{names[index]}"}}}}</script>')
         if reader == 'successfactors' and url.endswith('/sitemap.xml'):
             return successfactors_feed(employers or ('Birch Labs',))
         if reader == 'workable':

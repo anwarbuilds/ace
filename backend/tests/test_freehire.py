@@ -79,7 +79,10 @@ def test_each_posting_names_its_employers_board():
     assert fh.board_of(ORBIT) == ("workday", "orbitpine/Careers", "orbitpine.wd5.myworkdayjobs.com")
     # A platform FreeHire reaches through a proxy or a disguise is never used, nor one ACE has no reader for.
     assert fh.board_of(posting("workable", "zephyr:1", "https://apply.workable.com/zephyr/j/1", "Zephyr Labs")) is None
-    assert fh.board_of(posting("icims", "orbit:9", "https://careers-orbit.icims.com/jobs/9/job", "Orbit Pine")) is None
+    assert fh.board_of(posting("paycor", "orbit:9", "https://recruitingbypaycor.com/career/9", "Orbit Pine")) is None
+    # iCIMS has a reader since 2026-11-28 (DIS-09): its site's host names the board.
+    assert fh.board_of(posting("icims", "orbit:9", "https://careers-orbit.icims.com/jobs/9/job", "Orbit Pine")) == (
+        "icims", "careers-orbit.icims.com", "careers-orbit.icims.com")
     # A link that names another platform than FreeHire says is not trusted.
     assert fh.board_of(posting("lever", "1", "https://jobs.ashbyhq.com/quill/1", "Quill Works")) is None
 

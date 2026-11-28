@@ -278,6 +278,21 @@ def read_board_evidence(source_type: str, account: str, *, source_host=None, fet
     if source_type == "greenhouse":
         owner = board_metadata_name(source_type=source_type, token=account, fetch=fetch or _fetch_json)
         return BoardEvidence(owner=owner, employers=posting_employers(jobs), basis="The board's own metadata.")
+    if source_type == "icims":
+        # Each iCIMS posting's own JobPosting names its employer; up to three
+        # postings are read. It is the postings' claim, like a feed's.
+        from backend.app.adapters.sitemap_jobs import parse_sitemap, site_for
+
+        site = site_for(source_host or account)
+        listed = parse_sitemap((fetch_text or _fetch_text)(site.sitemap) or "", site)
+        named = []
+        for entry in listed[:3]:
+            page = (fetch_text or _fetch_text)(entry.url + site.page_query) or ""
+            found = re.search(r'"hiringOrganization"\s*:\s*\{[^{}]*?"name"\s*:\s*"([^"]{1,160})"', page)
+            if found:
+                named.append(html.unescape(found.group(1)).strip())
+        return BoardEvidence(employers=tuple(dict.fromkeys((*named, *posting_employers(jobs)))),
+                             basis="The employer its postings' own JobPosting names.", unavailable=not named)
     if source_type in ("bamboohr", "rippling"):
         # The board's own company record (BambooHR) or its postings' (Rippling).
         from backend.app.adapters import bamboohr, rippling

@@ -1391,6 +1391,15 @@ def board_jobs(
 ) -> list[dict]:
     """Return a sample of a board's postings, whatever ATS it is on."""
 
+    if ref.source_type == "icims":
+        # Its sitemap names every posting with its title (DIS-09).
+        from backend.app.adapters.sitemap_jobs import parse_sitemap, site_for
+
+        host = ref.source_host or ref.token
+        site = site_for(host)
+        markup = (fetch_text or _fetch_text)(site.sitemap) or ""
+        return [{"id": item.external_id, "title": item.title, "url": item.url} for item in parse_sitemap(markup, site)]
+
     if ref.source_type == "bamboohr":
         from backend.app.adapters.bamboohr import base_url
 

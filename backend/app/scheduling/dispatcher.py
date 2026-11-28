@@ -1471,9 +1471,11 @@ class SitemapSourceFetcher:
         *,
         fetcher=fetch_sitemap_jobs,
         clock: Clock = utc_now,
+        source_type: SourceType = SourceType.JOBPOSTING_SITEMAP,
     ) -> None:
         self._fetcher = fetcher
         self._clock = clock
+        self._source_type = source_type
 
     def __call__(
         self,
@@ -1483,27 +1485,34 @@ class SitemapSourceFetcher:
 
         if (
             source.source_type
-            != SourceType.JOBPOSTING_SITEMAP
+            != self._source_type
         ):
             raise ValueError(
                 (
                     "SitemapSourceFetcher "
-                    "requires a JOBPOSTING_SITEMAP "
+                    f"requires a {self._source_type.name} "
                     "SourceDefinition."
                 )
             )
+
+        extra = (
+            {"source": self._source_type.value}
+            if self._source_type != SourceType.JOBPOSTING_SITEMAP
+            else {}
+        )
 
         jobs = self._fetcher(
             host=source.source_account,
             company_name=source.company_name,
             should_fetch_detail=(
                 build_detail_predicate(
-                    source="jobposting_sitemap",
+                    source=self._source_type.value,
                     company_name=(
                         source.company_name
                     ),
                 )
             ),
+            **extra,
         )
 
         return FetchedSourceSnapshot(
@@ -2977,6 +2986,11 @@ def build_default_source_dispatcher() -> (
             ),
             SourceType.GEM: (
                 GemSourceFetcher()
+            ),
+            SourceType.ICIMS: (
+                SitemapSourceFetcher(
+                    source_type=SourceType.ICIMS,
+                )
             ),
             SourceType.BAMBOOHR: (
                 ListedBoardSourceFetcher(

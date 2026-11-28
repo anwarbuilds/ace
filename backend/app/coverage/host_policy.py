@@ -196,6 +196,12 @@ def read_targets(
             return ()
         return (HostTarget(parts.netloc.lower(), "avature", (parts.path or "/",)),)
 
+    if source_type == "icims":
+        host = _host_of(account)
+        if not host:
+            return ()
+        return (HostTarget(host, "ats", ("/sitemap.xml", "/jobs/1/example/job")),)
+
     if source_type == "bamboohr":
         return (HostTarget(f"{account.strip().lower()}.bamboohr.com", "ats", ("/careers/list", "/careers/1/detail")),)
 

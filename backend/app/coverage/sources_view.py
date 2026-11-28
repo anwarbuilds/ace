@@ -40,6 +40,7 @@ _SITE_LABELS = {
     "workable_feed": "Workable job file",
     "successfactors": "SuccessFactors",
     "bamboohr": "BambooHR",
+    "icims": "iCIMS",
     "rippling": "Rippling",
     "workday": "Workday",
     "oracle_recruiting": "Oracle",

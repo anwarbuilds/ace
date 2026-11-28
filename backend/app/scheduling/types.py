@@ -52,6 +52,9 @@ class SourceType(StrEnum):
     # BambooHR and Rippling boards (DIS-09): a list, then each posting.
     BAMBOOHR = "bamboohr"
     RIPPLING = "rippling"
+    # iCIMS careers sites (DIS-09): read through their sitemap and each
+    # posting's JobPosting, by the site's host.
+    ICIMS = "icims"
     EIGHTFOLD = "eightfold"
     # Eightfold's newer product line, found on Amdocs. Kept as a
     # distinct source type rather than a branch inside EIGHTFOLD

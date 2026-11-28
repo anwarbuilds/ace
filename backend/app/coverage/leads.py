@@ -219,6 +219,7 @@ _BOARD_LABELS = {
     "successfactors": "SuccessFactors",
     "bamboohr": "BambooHR",
     "rippling": "Rippling",
+    "icims": "iCIMS",
 }
 
 

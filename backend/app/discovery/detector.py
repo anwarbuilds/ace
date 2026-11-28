@@ -629,6 +629,29 @@ def _detect_bamboohr(
     )
 
 
+def _detect_icims(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect iCIMS careers sites: <site>.icims.com/jobs/... (the site's host names the board)."""
+
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*\.icims\.com", host) or host.startswith(("www.", "api.", "cdn")):
+        return None
+
+    if not segments or segments[0] != "jobs":
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.ICIMS,
+        source_account=host,
+        source_host=host,
+    )
+
+
 def _detect_rippling(
     *,
     host: str,
@@ -749,6 +772,7 @@ def detect_source_from_url(
         _detect_gem,
         _detect_bamboohr,
         _detect_rippling,
+        _detect_icims,
         # Last: it reads only the path, so every named host is tried first.
         _detect_successfactors,
     )

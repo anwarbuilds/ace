@@ -92,13 +92,12 @@ MONTHS = {name: number for number, name in enumerate(
 )}
 
 # Hosts of hiring sites ACE has no reader for yet, for a missed role's reason.
+# BambooHR, Rippling and iCIMS have readers since 2026-11-28 (DIS-09); a link
+# the detector names is "on a board ace can read" before this list is asked.
 UNREAD_SITES = {
-    "icims.com": "iCIMS",
     "applytojob.com": "JazzHR",
     "jobvite.com": "Jobvite",
     "taleo.net": "Taleo",
-    "bamboohr.com": "BambooHR",
-    "rippling.com": "Rippling",
     "paylocity.com": "Paylocity",
     "adp.com": "ADP",
     "dayforcehcm.com": "Dayforce",
