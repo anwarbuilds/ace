@@ -66,6 +66,19 @@ def test_one_job_page_per_company_engineering_first_within_the_crawl_delay(monke
     assert data["networks"][0]["status"] == "read" and data["networks"][0]["companies"] == 2
 
 
+def test_a_slow_page_is_skipped_and_the_rest_are_read(monkeypatch):
+    monkeypatch.setattr(cn, "NETWORKS", (NETWORK,))
+
+    def get(url):
+        if "12-software-engineer" in url:
+            raise httpx.ReadTimeout("slow", request=httpx.Request("GET", url))
+        return fake_get(url)
+
+    data = cn.collect(get=get, sleep=lambda s: None)
+    assert [row["company"] for row in data["companies"]] == ["Quill Works"]
+    assert data["networks"][0]["pages_failed"] == 1 and data["networks"][0]["pages_read"] == 1
+
+
 def test_a_network_whose_robots_refuse_is_recorded_not_read(monkeypatch):
     monkeypatch.setattr(cn, "NETWORKS", (NETWORK,))
     refused = dict(PAGES, **{"/robots.txt": "User-agent: *\nDisallow: /\n"})

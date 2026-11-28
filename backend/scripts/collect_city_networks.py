@@ -72,13 +72,21 @@ def collect(get=None, sleep=time.sleep) -> dict:
         for network in NETWORKS:
             base = network["base"]
             robots = robotparser.RobotFileParser()
-            robots_response = get(base + "/robots.txt")
+            try:
+                robots_response = get(base + "/robots.txt")
+            except httpx.HTTPError as error:
+                notes.append({**network, "status": f"robots.txt unreachable: {type(error).__name__}"})
+                continue
             robots.parse(robots_response.text.splitlines() if robots_response.status_code == 200 else [])
             delay = max(float(robots.crawl_delay(USER_AGENT) or 0), 1.0)
             if not robots.can_fetch(USER_AGENT, base + "/sitemap.xml"):
                 notes.append({**network, "status": "robots refuse the sitemap"})
                 continue
-            sitemap = get(base + "/sitemap.xml")
+            try:
+                sitemap = get(base + "/sitemap.xml")
+            except httpx.HTTPError as error:
+                notes.append({**network, "status": f"sitemap unreachable: {type(error).__name__}"})
+                continue
             if sitemap.status_code != 200:
                 notes.append({**network, "status": f"sitemap answered {sitemap.status_code}"})
                 continue
@@ -88,12 +96,18 @@ def collect(get=None, sleep=time.sleep) -> dict:
                 if matched and urlsplit(loc).netloc == urlsplit(base).netloc:
                     jobs.setdefault(matched.group(1), []).append(loc)
             read = 0
+            failed = 0
             for company_slug, links in sorted(jobs.items()):
                 link = next((url for url in links if _ENGINEERING.search(url)), links[0])
                 if not robots.can_fetch(USER_AGENT, link):
                     continue
                 sleep(delay)
-                page = get(link)
+                try:
+                    page = get(link)
+                except httpx.HTTPError:
+                    # A slow page is skipped, not retried; the next company is read.
+                    failed += 1
+                    continue
                 read += 1
                 if page.status_code in (401, 403, 405, 429):
                     notes.append({**network, "status": f"stopped: a job page answered {page.status_code}"})
@@ -112,7 +126,7 @@ def collect(get=None, sleep=time.sleep) -> dict:
                                  "source_host": getattr(detected, "source_host", None)}
                 rows.append({"network": network["name"], "region": network["region"], "company": name[:255],
                              "host": website_host(organization.get("domain")), "board": board})
-            notes.append({**network, "status": "read", "companies": len(jobs), "pages_read": read})
+            notes.append({**network, "status": "read", "companies": len(jobs), "pages_read": read, "pages_failed": failed})
     finally:
         if client is not None:
             client.close()
