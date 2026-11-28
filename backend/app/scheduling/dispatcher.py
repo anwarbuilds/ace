@@ -79,6 +79,9 @@ from backend.app.adapters.bamboohr import (
 from backend.app.adapters.rippling import (
     fetch_rippling_jobs,
 )
+from backend.app.adapters.paylocity import (
+    fetch_paylocity_jobs,
+)
 from backend.app.adapters.google import (
     fetch_google_jobs,
 )
@@ -3002,6 +3005,12 @@ def build_default_source_dispatcher() -> (
                 ListedBoardSourceFetcher(
                     SourceType.RIPPLING,
                     fetcher=fetch_rippling_jobs,
+                )
+            ),
+            SourceType.PAYLOCITY: (
+                ListedBoardSourceFetcher(
+                    SourceType.PAYLOCITY,
+                    fetcher=fetch_paylocity_jobs,
                 )
             ),
             SourceType.SUCCESSFACTORS: (

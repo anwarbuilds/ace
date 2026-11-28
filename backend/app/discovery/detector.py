@@ -652,6 +652,38 @@ def _detect_icims(
     )
 
 
+def _detect_paylocity(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect Paylocity boards: recruiting.paylocity.com/Recruiting/Jobs/All/<board id>.
+
+    A posting link (/Recruiting/Jobs/Details/<id>) names no board, so only the
+    board's own address is a board.
+    """
+
+    if host != "recruiting.paylocity.com" or len(segments) < 4:
+        return None
+
+    if [part.lower() for part in segments[:3]] != ["recruiting", "jobs", "all"]:
+        return None
+
+    board = segments[3].lower()
+
+    if not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", board):
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.PAYLOCITY,
+        source_account=board,
+        source_host=host,
+    )
+
+
 def _detect_rippling(
     *,
     host: str,
@@ -773,6 +805,7 @@ def detect_source_from_url(
         _detect_bamboohr,
         _detect_rippling,
         _detect_icims,
+        _detect_paylocity,
         # Last: it reads only the path, so every named host is tried first.
         _detect_successfactors,
     )

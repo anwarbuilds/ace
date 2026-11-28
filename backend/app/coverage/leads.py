@@ -220,6 +220,7 @@ _BOARD_LABELS = {
     "bamboohr": "BambooHR",
     "rippling": "Rippling",
     "icims": "iCIMS",
+    "paylocity": "Paylocity",
 }
 
 

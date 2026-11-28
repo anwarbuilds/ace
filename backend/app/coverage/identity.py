@@ -293,6 +293,18 @@ def read_board_evidence(source_type: str, account: str, *, source_host=None, fet
                 named.append(html.unescape(found.group(1)).strip())
         return BoardEvidence(employers=tuple(dict.fromkeys((*named, *posting_employers(jobs)))),
                              basis="The employer its postings' own JobPosting names.", unavailable=not named)
+    if source_type == "paylocity":
+        # Each posting's own JobPosting names its employer; up to three are read.
+        from backend.app.adapters.paylocity import board_url, employer_of, listed, posting_url
+
+        try:
+            rows = listed((fetch_text or _fetch_text)(board_url(account)) or "")
+        except ValueError:
+            rows = []
+        named = [name for name in (employer_of((fetch_text or _fetch_text)(posting_url(str(row["JobId"]))) or "")
+                                   for row in rows[:3]) if name]
+        return BoardEvidence(employers=tuple(dict.fromkeys((*named, *posting_employers(jobs)))),
+                             basis="The employer its postings' own JobPosting names.", unavailable=not named)
     if source_type in ("bamboohr", "rippling"):
         # The board's own company record (BambooHR) or its postings' (Rippling).
         from backend.app.adapters import bamboohr, rippling

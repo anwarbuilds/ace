@@ -202,6 +202,11 @@ def read_targets(
             return ()
         return (HostTarget(host, "ats", ("/sitemap.xml", "/jobs/1/example/job")),)
 
+    if source_type == "paylocity":
+        board = account.strip().lower()
+        return (HostTarget("recruiting.paylocity.com", "ats",
+                           (f"/Recruiting/Jobs/All/{board}", "/Recruiting/Jobs/Details/1")),)
+
     if source_type == "bamboohr":
         return (HostTarget(f"{account.strip().lower()}.bamboohr.com", "ats", ("/careers/list", "/careers/1/detail")),)
 

@@ -41,6 +41,7 @@ _SITE_LABELS = {
     "successfactors": "SuccessFactors",
     "bamboohr": "BambooHR",
     "icims": "iCIMS",
+    "paylocity": "Paylocity",
     "rippling": "Rippling",
     "workday": "Workday",
     "oracle_recruiting": "Oracle",

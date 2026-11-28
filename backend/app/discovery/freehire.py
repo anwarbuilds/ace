@@ -52,7 +52,7 @@ USER_AGENT = "ACE/0.1 (personal career-intelligence project)"
 
 # FreeHire's own source names, for the platforms it reads plainly and ACE
 # has a reader for, with the board token's place in FreeHire's identifier.
-PLATFORMS = ("greenhouse", "lever", "ashby", "gem", "workday", "oracle", "successfactors", "bamboohr", "rippling", "icims")
+PLATFORMS = ("greenhouse", "lever", "ashby", "gem", "workday", "oracle", "successfactors", "bamboohr", "rippling", "icims", "paylocity")
 
 # Platforms FreeHire reads through a proxy, a browser disguise or an anti-bot
 # browser (its proxy.go, fingerprinthttp.go and scraplingtier.go, read
@@ -146,6 +146,10 @@ def board_of(item: dict) -> tuple[str, str, str | None] | None:
         token = external.split(":", 1)[0].strip()
         if token and "/" not in token and "." not in token:
             candidates.insert(0, template.format(token=token) + "/jobs/1")
+    if platform == "paylocity" and ":" in external:
+        # "<board id>:<posting id>".
+        board = external.split(":", 1)[0].strip().lower()
+        candidates.insert(0, f"https://recruiting.paylocity.com/Recruiting/Jobs/All/{board}")
     if platform == "icims" and ":" in external:
         # "uscareers-bruker.icims.com:19658", or "apogeeusa:2476" for the usual careers-<name> site.
         site, posting = external.split(":", 1)

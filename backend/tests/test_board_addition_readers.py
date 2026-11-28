@@ -32,6 +32,7 @@ BOARDS = {
     'bamboohr': 'https://birchlabs.bamboohr.com/careers/1',
     'rippling': 'https://ats.rippling.com/birchlabs/jobs/0f9d1c2e-1111-4222-8333-944455556666',
     'icims': 'https://careers-birchlabs.icims.com/jobs/1/software-engineer-new-grad/job',
+    'paylocity': 'https://recruiting.paylocity.com/Recruiting/Jobs/All/0b1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8',
 }
 
 # A SuccessFactors careers site's job feed: its sitemap.xml (DIS-08), one posting per employer named.
@@ -83,6 +84,17 @@ def fetchers(reader, employers=()):
         return {'results': rows, 'jobPostings': rows}
 
     def page(url, **kwargs):
+        if reader == 'paylocity' and '/Recruiting/Jobs/All/' in url:
+            import json as _json
+            rows = [{'JobId': str(n + 1), 'JobTitle': 'Software Engineer, New Grad', 'IsInternal': False,
+                     'JobLocation': {'City': 'Seattle', 'State': 'WA', 'Country': 'USA'}}
+                    for n in range(len(employers or ('Birch Labs',)))]
+            return '<script>window.pageData = ' + _json.dumps({'Jobs': rows}) + ';\n</script>'
+        if reader == 'paylocity' and '/Recruiting/Jobs/Details/' in url:
+            names = employers or ('Birch Labs',)
+            index = int(url.rsplit('/', 1)[1]) - 1
+            return ('<script type="application/ld+json">{"@type": "JobPosting", "title": "Software Engineer, New Grad", '
+                    f'"hiringOrganization": {{"@type": "Organization", "name": "{names[index]}"}}}}</script>')
         if reader == 'icims' and url.endswith('/sitemap.xml'):
             # One posting per employer named, each page naming its own employer.
             return '<urlset>' + ''.join(

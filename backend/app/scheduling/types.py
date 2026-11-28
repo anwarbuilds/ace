@@ -55,6 +55,8 @@ class SourceType(StrEnum):
     # iCIMS careers sites (DIS-09): read through their sitemap and each
     # posting's JobPosting, by the site's host.
     ICIMS = "icims"
+    # Paylocity boards (DIS-09): a list on the board page, then each posting.
+    PAYLOCITY = "paylocity"
     EIGHTFOLD = "eightfold"
     # Eightfold's newer product line, found on Amdocs. Kept as a
     # distinct source type rather than a branch inside EIGHTFOLD

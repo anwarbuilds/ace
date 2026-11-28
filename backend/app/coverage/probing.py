@@ -1400,6 +1400,15 @@ def board_jobs(
         markup = (fetch_text or _fetch_text)(site.sitemap) or ""
         return [{"id": item.external_id, "title": item.title, "url": item.url} for item in parse_sitemap(markup, site)]
 
+    if ref.source_type == "paylocity":
+        from backend.app.adapters.paylocity import board_url, listed
+
+        try:
+            rows = listed((fetch_text or _fetch_text)(board_url(ref.token)) or "")
+        except ValueError:
+            return []
+        return [{"id": str(row["JobId"]), "title": row.get("JobTitle")} for row in rows]
+
     if ref.source_type == "bamboohr":
         from backend.app.adapters.bamboohr import base_url
 
