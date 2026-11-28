@@ -149,6 +149,10 @@ def import_leads(data: dict, *, apply: bool, min_filings: int) -> dict:
                 counts["read_by_ace"] += 1
                 continue
             row = leads.get(key) or leads.get(employer["key"])
+            if row is True:
+                # Two filed names that reduce to one company: the first, with more filings, is already on Leads.
+                counts["same_company_again"] += 1
+                continue
             if row is not None:
                 if ORIGIN not in (row.origin_details or []):
                     row.origin_details = sorted(set(row.origin_details or []) | {ORIGIN})[:12]

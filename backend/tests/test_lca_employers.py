@@ -83,6 +83,7 @@ DATA = {"employers": [
     {"key": "quill works", "name": "Quill Works LLC", "filings": 12, "h1b_dependent_share": 0, "last_decision": "2026-08-01"},
     {"key": "orbit pine", "name": "Orbit Pine", "filings": 5, "h1b_dependent_share": 0, "last_decision": "2026-07-01"},
     {"key": "cobalt ferry", "name": "Cobalt Ferry", "filings": 1, "h1b_dependent_share": 0, "last_decision": "2026-06-01"},
+    {"key": "zephyr labs usa", "name": "Zephyr Labs", "filings": 3, "h1b_dependent_share": 0, "last_decision": "2026-05-01"},
 ]}
 
 
@@ -95,7 +96,8 @@ def test_employers_ace_does_not_read_become_leads_and_a_dry_run_writes_nothing(s
                                  origin_details=["network"], state="dormant", reason="Read before.", boards=[],
                                  first_seen_at=now, next_check_at=now, updated_at=now))
     dry = lca.import_leads(DATA, apply=False, min_filings=2)
-    assert dry == {"mode": "dry-run", "min_filings": 2, "read_by_ace": 1, "already_leads": 1, "leads_new": 1, "below_min": 1}
+    assert dry == {"mode": "dry-run", "min_filings": 2, "read_by_ace": 1, "already_leads": 1, "leads_new": 1, "below_min": 1,
+                   "same_company_again": 1}
     with sessions() as session:
         assert session.scalar(sa.select(sa.func.count()).select_from(EmployerLead)) == 1
     applied = lca.import_leads(DATA, apply=True, min_filings=2)

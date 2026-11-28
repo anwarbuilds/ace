@@ -140,7 +140,7 @@ def harvest(
 
 
 # Origins whose details may carry a company's own website, as "<origin>:<host>".
-SITE_HINT_ORIGINS = ("yc", "hn")
+SITE_HINT_ORIGINS = ("yc", "hn", "site")
 
 
 def site_hints(
