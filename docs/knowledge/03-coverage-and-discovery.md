@@ -10,6 +10,34 @@ Concurrent extension usage caused one safe scheduler rollback. A timestamp-only 
 >
 > Read this when: a company or role was missed, you add a company or reader, or you judge whether a site may be read at all.
 
+## Chat 8 discovery: leads from many lists, the daily fix and Needs you (2026-11-20 to 2026-11-28 Pacific)
+
+Owner rule (2026-11-23): no manual work. ACE adds companies and boards by itself after its checks; nothing waits for a
+click. Every source below only names companies or boards; the lead check reads each board before it is added, through
+the usual registration checks (agency, shared board, identity, test system, robots).
+
+- **Needs you and the daily fix** (REC-02): every role the daily test-list score missed is listed with its posting and
+  what ACE did about its company; each day the fix tries up to twelve of their boards through the registration checks
+  (`coverage/missed_boards.py`, origin `missed_role`). Companies ACE never heard of go on Leads by name (origin
+  "Daily check"). The test lists are still never read to find jobs: a missed role is shown, not ingested.
+- **FreeHire** (DIS-02, `discovery/freehire.py`): once a week, after the score, its public API's US full-time software
+  postings name boards on platforms ACE reads; providers FreeHire reaches through a proxy or a disguise are never asked
+  for. Its boards become leads (origin "FreeHire").
+- **YC companies** (DIS-06, `discovery/yc_names.py`): YC's Terms of Use forbid automated reading of its site, so ACE
+  never opens a YC page; with the owner's approval it reads daily a public list on GitHub Pages (yc-oss) for names and
+  each company's own website. The website travels as an origin detail and the name search tries it first.
+- **Hacker News "Who is hiring?"** (DIS-11, `discovery/hn_hiring.py`): the month's thread through the official public
+  API every six hours, only comments newer than the last read; company name plus a readable board link or website.
+- **Visa filings** (DIS-10, `scripts/import_lca_employers.py`): the owner downloads the DOL LCA files each quarter;
+  the script aggregates certified full-time H-1B software, data and ML filings by employer (no contact fields read)
+  and imports employers ACE does not read as leads, biggest filers first (dry run by default). A filing is never read
+  as a hire or a promise of sponsorship.
+- **Regional networks** (DIS-18, `scripts/collect_city_networks.py`): six public Getro boards in five regions read once
+  within robots and crawl delay, one job page a company; the other regions had no readable network (recorded).
+- **Not read:** Jobright (its terms forbid automated reading), YC's own pages (terms), Embarc (robots), Freeway Phx (429).
+- Leads origins, strongest first: Added by you, Your list, City network, New grad list, Workable job file, YC companies,
+  Hacker News, Visa filings, Daily check, FreeHire, ace search. Website hints: origin details `yc:`, `hn:` and `site:`.
+
 ## Three missed new grad roles (2026-11-12)
 
 The owner found three new grad roles ACE never stored. **Jamf** (Greenhouse): ACE knew Jamf only through the Simplify

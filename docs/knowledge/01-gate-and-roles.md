@@ -12,6 +12,18 @@ ELG-03 recognizes compressed US city/state forms and exact Any State after expli
 >
 > Read this when: you change who passes (experience, location, contract, security, new grad, sponsorship, role families) or wonder why a posting was rejected or admitted.
 
+## Gate v68: underscores and technology programmes (Chat 8, 2026-11-21 Pacific)
+
+An underscore after the role words ("Data Scientist_ SPLUNK") hid the role family, and a technology programme title
+that names no occupation ("Tech Accelerate Graduate Program") read as no target role. Gate `2026-11-20-v68` with
+roles v9 reads an underscore as a space in every title rule, reads a technology programme title that names no other
+occupation as software (a programme word plus technology, software, developer, computer science, backend, frontend
+or full stack; never with an IT, internship, apprenticeship, infrastructure, cloud or DevOps word) and reads "Software
+Engr" as software. The owner's rule held: no earlier filter changed (a production dry run found no PASS turning to
+REJECT; infrastructure and cloud tracks stay out). Released with the stale-row backfill and `refresh_stale_evaluations`
+to zero stale rows. Plain "Engineering" programmes stay unrecognised on purpose. Tests:
+`backend/tests/test_gate_programme_titles.py`. Figures: private requirements 13.5.
+
 ## The gate is binary - PASS or REJECT
 
 There was a `STRETCH` tier. It was removed 2026-09-05: the user wants
