@@ -216,6 +216,7 @@ _BOARD_LABELS = {
     "jibe": "iCIMS Jibe",
     "avature": "Avature",
     "jobposting_sitemap": "careers site",
+    "successfactors": "SuccessFactors",
 }
 
 

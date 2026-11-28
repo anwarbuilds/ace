@@ -52,7 +52,7 @@ USER_AGENT = "ACE/0.1 (personal career-intelligence project)"
 
 # FreeHire's own source names, for the platforms it reads plainly and ACE
 # has a reader for, with the board token's place in FreeHire's identifier.
-PLATFORMS = ("greenhouse", "lever", "ashby", "gem", "workday", "oracle")
+PLATFORMS = ("greenhouse", "lever", "ashby", "gem", "workday", "oracle", "successfactors")
 
 # Platforms FreeHire reads through a proxy, a browser disguise or an anti-bot
 # browser (its proxy.go, fingerprinthttp.go and scraplingtier.go, read
@@ -144,6 +144,11 @@ def board_of(item: dict) -> tuple[str, str, str | None] | None:
         token = external.split(":", 1)[0].strip()
         if token and "/" not in token and "." not in token:
             candidates.insert(0, template.format(token=token) + "/jobs/1")
+    if platform == "successfactors" and ":" in external:
+        # "jobs.example.com:1452291433": the careers site's host and the posting.
+        host, posting = external.split(":", 1)
+        if host and posting.isdigit():
+            candidates.insert(0, f"https://{host.strip().lower()}/job/posting/{posting}/")
     for link in candidates:
         detected = detect_source_from_url(link) if link else None
         if detected is None:

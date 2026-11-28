@@ -196,6 +196,12 @@ def read_targets(
             return ()
         return (HostTarget(parts.netloc.lower(), "avature", (parts.path or "/",)),)
 
+    if source_type == "successfactors":
+        host = _host_of(account)
+        if not host:
+            return ()
+        return (HostTarget(host, "employer_site", ("/sitemap.xml", "/job/example/1/")),)
+
     if source_type == "jobposting_sitemap":
         sitemap_host = _host_of(account)
         if not sitemap_host:

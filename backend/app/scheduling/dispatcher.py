@@ -70,6 +70,9 @@ from backend.app.adapters.jibe import (
 from backend.app.adapters.gem import (
     fetch_gem_jobs,
 )
+from backend.app.adapters.successfactors import (
+    fetch_successfactors_jobs,
+)
 from backend.app.adapters.google import (
     fetch_google_jobs,
 )
@@ -1511,6 +1514,59 @@ class SitemapSourceFetcher:
         )
 
 
+class SuccessFactorsSourceFetcher:
+    """Dispatch adapter for SuccessFactors careers sites: one job feed a board (DIS-08)."""
+
+    def __init__(
+        self,
+        *,
+        fetcher: Callable[..., tuple] = fetch_successfactors_jobs,
+        clock: Clock = utc_now,
+        validator_lookup: (
+            ValidatorLookup | None
+        ) = None,
+    ) -> None:
+        self._fetcher = fetcher
+        self._clock = clock
+        self._validator_lookup = validator_lookup
+
+    def __call__(
+        self,
+        source: SourceDefinition,
+    ) -> FetchedSourceSnapshot:
+        """Read one company's whole job feed."""
+
+        if source.source_type != SourceType.SUCCESSFACTORS:
+            raise ValueError(
+                "SuccessFactorsSourceFetcher requires a SUCCESSFACTORS SourceDefinition."
+            )
+
+        from backend.app.adapters.http_cache import (
+            CacheValidators,
+        )
+
+        jobs, unchanged, validators = self._fetcher(
+            source_account=source.source_account,
+            company_name=source.company_name,
+            validators=(
+                self._validator_lookup(source)
+                if self._validator_lookup is not None
+                else CacheValidators()
+            ),
+        )
+
+        return FetchedSourceSnapshot(
+            source_definition=source,
+            detected_at=self._clock(),
+            jobs=tuple(
+                jobs
+            ),
+            unchanged=unchanged,
+            etag=validators.etag,
+            last_modified=validators.last_modified,
+        )
+
+
 class GemSourceFetcher:
     """Dispatch adapter for jobs.gem.com boards: one request a board."""
 
@@ -2868,6 +2924,13 @@ def build_default_source_dispatcher() -> (
             ),
             SourceType.GEM: (
                 GemSourceFetcher()
+            ),
+            SourceType.SUCCESSFACTORS: (
+                SuccessFactorsSourceFetcher(
+                    validator_lookup=(
+                        _stored_validators
+                    ),
+                )
             ),
             SourceType.GOOGLE: (
                 GoogleSourceFetcher()

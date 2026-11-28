@@ -601,6 +601,47 @@ def _detect_gem(
     )
 
 
+# Hosts whose "/job/<slug>/<id>/" paths are not SuccessFactors careers sites.
+_NOT_SUCCESSFACTORS = (
+    "linkedin.com",
+    "indeed.com",
+    "glassdoor.com",
+    "ycombinator.com",
+    "builtin.com",
+    "wellfound.com",
+)
+
+
+def _detect_successfactors(
+    *,
+    host: str,
+    segments: tuple[
+        str,
+        ...,
+    ],
+) -> DetectedSourceIdentity | None:
+    """Detect SuccessFactors careers sites: https://<host>/job/<city>-<title>/<id>/.
+
+    Only the path's shape names it, so the board is read before it is ever
+    trusted: a site whose /sitemap.xml is not a SuccessFactors job feed fails
+    that read and is never added.
+    """
+
+    if (
+        len(segments) != 3
+        or segments[0] != "job"
+        or not re.fullmatch(r"\d{6,}", segments[2])
+        or any(host == bad or host.endswith("." + bad) for bad in _NOT_SUCCESSFACTORS)
+    ):
+        return None
+
+    return DetectedSourceIdentity(
+        source_type=SourceType.SUCCESSFACTORS,
+        source_account=host,
+        source_host=host,
+    )
+
+
 def detect_source_from_url(
     url: str,
 ) -> DetectedSourceIdentity | None:
@@ -651,6 +692,8 @@ def detect_source_from_url(
         _detect_oracle_recruiting,
         _detect_workable,
         _detect_gem,
+        # Last: it reads only the path, so every named host is tried first.
+        _detect_successfactors,
     )
 
     for detector in detectors:

@@ -46,6 +46,9 @@ class SourceType(StrEnum):
     # job board in one file, read as pointers like Simplify's, never as
     # coverage, and never closing a posting read from an employer's board.
     WORKABLE_FEED = "workable_feed"
+    # SAP SuccessFactors careers sites (DIS-08): one job feed per company,
+    # named by the site's host.
+    SUCCESSFACTORS = "successfactors"
     EIGHTFOLD = "eightfold"
     # Eightfold's newer product line, found on Amdocs. Kept as a
     # distinct source type rather than a branch inside EIGHTFOLD
